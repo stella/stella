@@ -39,6 +39,7 @@ import {
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
+import { ChatLocalRunQuestionContext } from "@/components/chat/chat-local-run-question-context";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { effectiveRunTarget } from "@/components/chat/chat-run-target-menu.logic";
@@ -300,6 +301,8 @@ export const ChatThreadPage = ({
     createDocumentMattersView,
     streamdownComponents,
     approvalPendingMessageId,
+    localRunQuestion,
+    answerLocalRunQuestion,
   } = useChatSession({
     exceptionScope: { type: "handler", handlerId: "chat-session.thread-page" },
     chat,
@@ -730,47 +733,54 @@ export const ChatThreadPage = ({
                           {t("common.reconnecting")}
                         </p>
                       )}
-                      <ChatThreadMessages
-                        activitySession={activitySession}
-                        onAnswerEdited={refreshAnswers}
-                        answerRewriteAvailability={
-                          data.usedAnonymization ? "anonymized" : "available"
-                        }
-                        approvalPendingMessageId={approvalPendingMessageId}
-                        branchSource={{
-                          contextMatterIds: selectedContextMatterIds,
-                          threadRef,
+                      <ChatLocalRunQuestionContext
+                        value={{
+                          pause: localRunQuestion,
+                          answer: answerLocalRunQuestion,
                         }}
-                        error={error}
-                        hasOlderMessages={olderCursor !== null}
-                        isGenerating={isGenerating}
-                        isLoadingOlder={isLoadingOlder}
-                        loadOlderError={loadOlderError}
-                        messages={messages}
-                        onLoadOlder={loadOlder}
-                        onAskUserEditAndRerun={handleAskUserEditAndRerun}
-                        onAskUserEditingChange={handleAskUserEditingChange}
-                        onAskUserSubmit={handleAskUserSubmit}
-                        onCreateDocumentResolve={handleCreateDocumentResolve}
-                        onOpenCreateDocumentDraft={
-                          handleOpenCreateDocumentDraft
-                        }
-                        onOpenCreatedDocument={handleOpenCreatedDocument}
-                        onOpenPlaybook={handleOpenPlaybook}
-                        onResend={resendLatestMessage}
-                        onSendWithoutAnonymization={sendWithoutAnonymization}
-                        queuedMessageActions={{
-                          remove: removeQueuedMessage,
-                          sendNow: sendQueuedMessageNow,
-                        }}
-                        queuedMessages={queuedMessages}
-                        stickyUserMessages
-                        streamdownComponents={streamdownComponents}
-                        waitingForComputer={waitingForComputer}
-                        threadRef={threadRef}
-                        userMessageEdit={userMessageEdit}
-                        workspaceId={workspaceId}
-                      />
+                      >
+                        <ChatThreadMessages
+                          activitySession={activitySession}
+                          onAnswerEdited={refreshAnswers}
+                          answerRewriteAvailability={
+                            data.usedAnonymization ? "anonymized" : "available"
+                          }
+                          approvalPendingMessageId={approvalPendingMessageId}
+                          branchSource={{
+                            contextMatterIds: selectedContextMatterIds,
+                            threadRef,
+                          }}
+                          error={error}
+                          hasOlderMessages={olderCursor !== null}
+                          isGenerating={isGenerating}
+                          isLoadingOlder={isLoadingOlder}
+                          loadOlderError={loadOlderError}
+                          messages={messages}
+                          onLoadOlder={loadOlder}
+                          onAskUserEditAndRerun={handleAskUserEditAndRerun}
+                          onAskUserEditingChange={handleAskUserEditingChange}
+                          onAskUserSubmit={handleAskUserSubmit}
+                          onCreateDocumentResolve={handleCreateDocumentResolve}
+                          onOpenCreateDocumentDraft={
+                            handleOpenCreateDocumentDraft
+                          }
+                          onOpenCreatedDocument={handleOpenCreatedDocument}
+                          onOpenPlaybook={handleOpenPlaybook}
+                          onResend={resendLatestMessage}
+                          onSendWithoutAnonymization={sendWithoutAnonymization}
+                          queuedMessageActions={{
+                            remove: removeQueuedMessage,
+                            sendNow: sendQueuedMessageNow,
+                          }}
+                          queuedMessages={queuedMessages}
+                          stickyUserMessages
+                          streamdownComponents={streamdownComponents}
+                          waitingForComputer={waitingForComputer}
+                          threadRef={threadRef}
+                          userMessageEdit={userMessageEdit}
+                          workspaceId={workspaceId}
+                        />
+                      </ChatLocalRunQuestionContext>
                       <ChatThreadRecap
                         activeOrganizationId={activeOrganizationId}
                         isGenerating={isGenerating}

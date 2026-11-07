@@ -1,13 +1,17 @@
 import * as v from "valibot";
 
 import type { AgentHarness } from "./agent-harness";
+import { apiDateTimeSchema } from "./api-date";
 import {
   DESKTOP_RUNNER_ANSWER_LIMITS,
+  DESKTOP_RUNNER_APPROVAL_MODES,
+  DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   DESKTOP_RUNNER_HARNESS_STATE,
   type DesktopRunnerHarnessReport,
   desktopRunnerQuestionAnswersSchema,
   desktopRunnerQuestionIdSchema,
 } from "./desktop-runner";
+import { USER_FILE_URL_PREFIX } from "./user-file-url";
 
 /**
  * Where a chat turn runs. `cloud` is stella's own model path and the default;
@@ -41,6 +45,14 @@ export const chatLocalRunTargetSchema = v.strictObject({
   kind: v.literal("local"),
   harness: v.picklist(CHAT_LOCAL_RUN_HARNESSES),
   model: localModelSchema,
+  /**
+   * How much the run asks before it acts; `ask` when omitted. Only a mode
+   * the computer reports for the harness is accepted.
+   */
+  approvals: v.optional(
+    v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
+    DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+  ),
 });
 export type ChatLocalRunTarget = v.InferOutput<typeof chatLocalRunTargetSchema>;
 
@@ -67,6 +79,8 @@ export const CHAT_LOCAL_RUN_REFUSAL = {
   harnessUnavailable: "local_run_harness_unavailable",
   /** The harness no longer offers the chosen model. */
   modelUnavailable: "local_run_model_unavailable",
+  /** The computer cannot run the harness in the chosen approval mode. */
+  approvalsUnavailable: "local_run_approvals_unavailable",
   /** The turn does not fit what one run may carry. */
   tooLarge: "local_run_too_large",
   /** A turn cannot both run in the agent sandbox and on a computer. */
@@ -151,6 +165,13 @@ export const chatLocalRunQuestionsSchema = v.pipe(
       new Set(questions.map(({ id }) => id)).size === questions.length,
     "Each question has its own id",
   ),
+  v.check(
+    (questions) =>
+      questions.every(
+        ({ allowsFreeText, options }) => allowsFreeText || options.length > 0,
+      ),
+    "Each question offers an option or free text",
+  ),
 );
 export type ChatLocalRunQuestion = Readonly<
   Omit<v.InferOutput<typeof chatLocalRunQuestionSchema>, "options">
@@ -215,3 +236,80 @@ export const chatLocalRunComputerEventSchema = v.strictObject({
 export type ChatLocalRunComputerEvent = v.InferOutput<
   typeof chatLocalRunComputerEventSchema
 >;
+
+/**
+ * What a turn on a computer tells the chat about the files it handed back, as
+ * metadata on the answer: every stream processor merges it and a rejoin's
+ * snapshot keeps it, so a live answer and a rejoined one read the same. The
+ * server alone writes these keys; a desktop's metadata never reaches a message.
+ *
+ * - `localRunFiles`: the shared files, each already checked against the
+ *   thread and its owner. Live only: the stored answer holds them as parts.
+ * - `localRunFilesNotShared`: the names of files left on the computer. Stored.
+ */
+export const CHAT_LOCAL_RUN_FILES_METADATA_KEY = "localRunFiles";
+export const CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY =
+  "localRunFilesNotShared";
+
+export const chatLocalRunFileSchema = v.strictObject({
+  url: v.pipe(v.string(), v.startsWith(USER_FILE_URL_PREFIX)),
+  filename: v.string(),
+  mimeType: v.string(),
+  placeholder: v.optional(v.string()),
+});
+export type ChatLocalRunFile = v.InferOutput<typeof chatLocalRunFileSchema>;
+
+export const chatLocalRunFilesNotSharedSchema = v.array(v.string());
+
+/** The message part a shared file reads as, live and once stored. */
+export const chatLocalRunFilePart = ({
+  url,
+  filename,
+  mimeType,
+  placeholder,
+}: ChatLocalRunFile) =>
+  ({
+    type: mimeType.startsWith("image/") ? "image" : "document",
+    source: { type: "url", value: url, mimeType },
+    metadata: {
+      filename,
+      ...(placeholder === undefined ? {} : { placeholder }),
+    },
+  }) as const;
+
+/**
+ * The file parts `metadata` adds to a message's `parts`. A file already among
+ * them adds none, so a stored answer that also carries the live metadata (a
+ * rejoin, a page's own message handed back to the client) shows it once.
+ */
+export const chatLocalRunFilePartsOf = (
+  metadata: unknown,
+  parts: readonly { type: string; source?: { value?: unknown } }[],
+) => {
+  if (typeof metadata !== "object" || metadata === null) {
+    return [];
+  }
+  const listed = v.safeParse(
+    v.array(chatLocalRunFileSchema),
+    Reflect.get(metadata, CHAT_LOCAL_RUN_FILES_METADATA_KEY),
+  );
+  if (!listed.success) {
+    return [];
+  }
+  const present = new Set(parts.map((part) => part.source?.value));
+  return listed.output
+    .filter(({ url }) => !present.has(url))
+    .map(chatLocalRunFilePart);
+};
+
+/**
+ * The run-error metadata key under which a turn that ended on the harness's
+ * usage limit says when the limit resets, as the harness reported it. The
+ * chat shows the time; a limit without a known reset carries none.
+ */
+export const CHAT_LOCAL_RUN_LIMIT_METADATA_KEY = "localRunLimit";
+
+export const chatLocalRunLimitSchema = v.strictObject({
+  resetsAt: v.pipe(apiDateTimeSchema, v.maxLength(32)),
+});
+export type ChatLocalRunLimit = v.InferOutput<typeof chatLocalRunLimitSchema>;

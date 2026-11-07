@@ -1,0 +1,7 @@
+# Authorizing a Lock Screen timer key
+
+Generated from `scripts/ownership/timer-activity-key-authorization.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                               | Owner                                             | Enforcement                                                          | Summary                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------ | ------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `timer-activity-key-authorization` — Authorizing a Lock Screen timer key | `apps/api/src/lib/push/timer-activity-actions.ts` | import `@/api/lib/push/timer-activity-actions` (plus 1 allowed file) | A Lock Screen button's key is its request's only credential, so the key is looked up on the owner connection by the phone and person it names; the person's current membership, role and time billing access are checked before anything acts for them. |

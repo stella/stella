@@ -1982,12 +1982,42 @@ describe("check failure reporting", () => {
       "execution warning budget exceeded; continuing checks",
     );
   });
+  test("a pull request run reports every failed command in one pass", async () => {
+    const executed: (readonly string[])[] = [];
+    const output: string[] = [];
+    expect(
+      await executeCheckCommands({
+        commands,
+        keepGoing: true,
+        runner: async (command) => {
+          executed.push(command);
+          return Result.err(
+            new CommandFailedError({
+              message: "Check failed",
+              command,
+              exitCode: 1,
+              output: "check error",
+            }),
+          );
+        },
+        write: (line) => {
+          output.push(line);
+        },
+      }),
+    ).toBe(1);
+    expect(executed).toEqual([...commands]);
+    expect(output.join("")).toContain(
+      `code-check: ${String(commands.length)} failed command(s)`,
+    );
+  });
+
   test("stops at the first failed command without retrying", async () => {
     const executed: (readonly string[])[] = [];
     const output: string[] = [];
     expect(
       await executeCheckCommands({
         commands,
+        keepGoing: false,
         runner: async (command) => {
           expect(output).toEqual([]);
           executed.push(command);
@@ -2214,6 +2244,8 @@ esac
           env: {
             ...process.env,
             ...LARGE_MACHINE,
+            // The stop-at-first behaviour, whichever event runs this test.
+            GITHUB_EVENT_NAME: "merge_group",
             PATH: `${directory}:${pathValue}`,
             CHECK_COMMAND_LOG: log,
             CHECK_REAL_BUN: process.execPath,

@@ -204,7 +204,7 @@ const CASE_NUMBER_BODY_COMMA = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}
 // (a dropped diacritic, likely an encoding fallback) is the same class.
 const US_MARK_SOURCE = String.raw`[ÚU]\p{Mn}*S`;
 
-const CZECH_REPORTER_CITATION_SOURCE = String.raw`[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NSS|NS)`;
+export const CZECH_REPORTER_CITATION_SOURCE = String.raw`[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NSS|NS)`;
 
 const CZECH_REPORTER_CITATION_RE = new RegExp(
   `^${CZECH_REPORTER_CITATION_SOURCE}$`,
@@ -234,7 +234,7 @@ const CZ_US_GAZETTE_LEAD_SOURCE = String.raw`(?<!\p{L})[Nn]ález(?:u|em|y|ů|ům
  * the form the court cites it: `N 53/26 SbNU 73` is nález 53 of volume 26,
  * printed on page 73 (`U` for an usnesení).
  */
-const CZ_US_REPORT_SOURCE = String.raw`(?<![\p{L}\p{N}])[NU]\s?\d{1,4}\/\d{1,3}\s+SbNU(?:\s+\d{1,4})?(?![\p{L}\p{N}])`;
+export const CZ_US_REPORT_SOURCE = String.raw`(?<![\p{L}\p{N}])[NU]\s?\d{1,4}\/\d{1,3}\s+SbNU(?:\s+\d{1,4})?(?![\p{L}\p{N}])`;
 
 /**
  * The same entry in the older spelled-out form, where the kind is written as
@@ -953,13 +953,15 @@ const CITATION_PATTERNS: RegExp[] = [
   // century mapping.
   new RegExp(String.raw`sp\.\s*zn\.?:?\s*${CASE_NUMBER_BODY}`, "gu"),
 
-  // Slovak Supreme Court extraordinary-review / grand-chamber panel: "sp.
-  // zn. 4 M Cdo 15/2010", "sp. zn. 2 M Obdo 1/2008", where "M"
-  // (mimoriadne dovolanie / veľký senát) sits between the chamber digit
-  // and the ordinary registry as its own word -- one word more than
-  // CASE_NUMBER_BODY allows. The period after "zn" is optional, matching
-  // the general sp. zn. pattern above ("sp. zn 4 M Cdo 15/2010").
-  /sp\.\s*zn\.?:?\s*(?<caseNumber>\d{1,3}\s+M\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+  // Slovak Supreme Court compound registers printed as separate words: "sp.
+  // zn. 4 M Cdo 15/2010", "sp. zn. 2 M Obdo 1/2008", where "M" (mimoriadne
+  // dovolanie / veľký senát) sits between the chamber digit and the ordinary
+  // registry, and "sp. zn. 1 Tdo V 14/2007", "sp. zn. 2 Cdo Pr 3/2016", where
+  // a "V" or "Pr" follows it; "sp. zn. 1 M Obdo V 13/2005" has both. One or
+  // two words more than CASE_NUMBER_BODY allows. The period after "zn" is
+  // optional, matching the general sp. zn. pattern above ("sp. zn 4 M Cdo
+  // 15/2010").
+  /sp\.\s*zn\.?:?\s*(?<caseNumber>\d{1,3}\s{0,3}(?:M\s+\p{L}{1,6}(?:\s+(?:V|Pr))?|\p{L}{1,6}\s+(?:V|Pr))[\s/]{1,3}\d{1,6}\/\d{2,4})(?!\d)/gu,
 
   // Slovak Special Court (Špeciálny súd v Pezinku, 2004-2009) case numbers
   // carry a "PK" panel prefix before the ordinary senate/registry/number
@@ -1204,6 +1206,19 @@ const SEPARATOR_NORMALIZE_RE =
   /^(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket>\d{1,6}\/\d{2,4})$/u;
 
 /**
+ * Matches a Slovak numeric-first case number whose compound register is
+ * printed in separate words ("4 M Cdo 15/2010", "1 Tdo V 14/2007", "2 Cdo Pr
+ * 3/2016", "1 M Obdo V 13/2005"), so the dedup key can rebuild it as the one
+ * word the glued spelling already keys under ("1MObdoV/13/2005"). The panel
+ * may be glued too, because "MObdoPr" is one letter wider than
+ * `SEPARATOR_NORMALIZE_RE` reads. A register with neither part is that
+ * pattern's. Case-insensitive because this normalizer also runs on stored
+ * publisher text and on lowercased input.
+ */
+const SPACED_COMPOUND_REGISTER_RE =
+  /^(?<number>\d{1,3})\s?(?<panel>M\s?)?(?<registry>\p{L}{1,6})(?:\s(?<part>V|Pr))?[\s/](?<docket>\d{1,6}\/\d{2,4})$/iu;
+
+/**
  * Matches a Czech/Slovak numeric-first case number whose docket joins a
  * second consolidated docket, comma- or slash-separated, sharing the
  * trailing year ("52,53/2023" or "52/53/2023"), after whitespace/comma
@@ -1356,6 +1371,8 @@ const hungarianDocketKey = (parts: RegExpGroups): string =>
  *    "KSCB 26INS/8270/2018"), including a court-code-prefixed
  *    consolidated docket join ("KSCB 26 INS 8270,8271/2018" vs "KSCB 26
  *    INS 8270/8271/2018");
+ *  - the words of a Slovak compound register, spaced or glued ("1 M Obdo V
+ *    13/2005" vs "1MObdoV/13/2005", "1 Tdo V 14/2007" vs "1 TdoV 14/2007");
  *  - the boundary between a Polish roman-numeral chamber and its division
  *    code, glued or spaced ("IC 1523/96" vs "I C 1523/96"), including a
  *    two-token division code ("III A Ua 2389/02" vs "III AUa 2389/02") and
@@ -1410,6 +1427,16 @@ const canonicalizeDedupKey = (text: string): string => {
   const cleaned = spaced
     .replace(/(\p{L})\.(?=[\s/]|$)/gu, "$1") // "Spr." / "K." -> "Spr" / "K"
     .trim();
+
+  const compound = SPACED_COMPOUND_REGISTER_RE.exec(cleaned)?.groups;
+  if (
+    compound !== undefined &&
+    (compound["panel"] !== undefined || compound["part"] !== undefined)
+  ) {
+    const panel = compound["panel"]?.trim() ?? "";
+    const canonical = `${requiredGroup(compound, "number")}${panel}${requiredGroup(compound, "registry")}${compound["part"] ?? ""}/${requiredGroup(compound, "docket")}`;
+    return canonical.toLowerCase();
+  }
 
   const numeric = SEPARATOR_NORMALIZE_RE.exec(cleaned);
   if (numeric?.groups) {

@@ -23,6 +23,7 @@ import {
 } from "@/api/lib/properties/create-schema";
 import { propertyKindsForTool } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
+import { CREATE_PROPERTIES_BATCH_TABLE_ANALYSIS_ACCESS } from "@/api/lib/properties/table-analysis-access";
 
 const config = {
   contract: "patch",
@@ -34,6 +35,7 @@ const config = {
     "dependency must be a property of this matter, and at most one " +
     "document-type classifier may exist. Returns the new property ids.",
   permissions: { property: ["create"] },
+  featureAccess: CREATE_PROPERTIES_BATCH_TABLE_ANALYSIS_ACCESS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: propertyRealtimeUpdates,
   mcp: {

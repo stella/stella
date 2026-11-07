@@ -214,6 +214,16 @@ export const FAKE_PERMISSION_SUGGESTION = {
   destination: "localSettings",
 };
 
+/** The host a sandboxed command reaches in the sandbox scenarios. */
+export const FAKE_SANDBOX_HOST = "registry.example.test";
+
+/** A command that writes outside the workspace, so it asks to leave the sandbox. */
+export const FAKE_ESCAPE_COMMAND = "touch ~/.config/example-tool/settings.json";
+
+/** What the CLI writes when the sandbox it was told to require cannot start. */
+export const FAKE_SANDBOX_REFUSAL =
+  "Sandbox required but unavailable: sandbox-exec is missing. Set sandbox.failIfUnavailable=false to allow unsandboxed execution.";
+
 const FAKE_SCENARIOS = {
   /**
    * The shared stella tool calls through the stella MCP binding, step by
@@ -630,6 +640,35 @@ const FAKE_SCENARIOS = {
       },
     },
   ],
+  /**
+   * Full auto: a sandboxed command reaches a new host, then a command asks
+   * to run outside the sandbox.
+   */
+  sandbox_network: [
+    ...freshTurn(),
+    canUseTool("call-net", "SandboxNetworkAccess", { host: FAKE_SANDBOX_HOST }),
+    canUseTool(
+      "call-escape",
+      "Bash",
+      { command: FAKE_ESCAPE_COMMAND, dangerouslyDisableSandbox: true },
+      { decision_reason: "Run outside of the sandbox" },
+    ),
+    result(),
+  ],
+  /** The CLI refuses to start: the sandbox it must use cannot start. */
+  sandbox_unavailable: [
+    {
+      emit: {
+        type: "result",
+        subtype: "error_during_execution",
+        is_error: true,
+        num_turns: 0,
+        session_id: "s",
+        errors: [FAKE_SANDBOX_REFUSAL],
+      },
+    },
+    { exit: 1 },
+  ],
   /** A full window whose reset has already passed: the snapshot is stale. */
   probe_reset_passed: [
     initialize(),
@@ -690,7 +729,7 @@ const IncomingSchema = v.looseObject({
 
 /** Environment variables the adapter sets or must drop, as the CLI saw them. */
 const OBSERVED_ENV =
-  /^(?:ANTHROPIC_|CLAUDE|AWS_BEARER_TOKEN_BEDROCK$|DISABLE_AUTOUPDATER$|ENABLE_CLAUDEAI_MCP_SERVERS$|FAKE_KEEP$)/u;
+  /^(?:ANTHROPIC_|CLAUDE|AWS_BEARER_TOKEN_BEDROCK$|DISABLE_AUTOUPDATER$|ENABLE_CLAUDEAI_MCP_SERVERS$|FAKE_KEEP$|BUN_INSTALL_CACHE_DIR$|npm_config_cache$|PIP_CACHE_DIR$|UV_CACHE_DIR$|PLAYWRIGHT_BROWSERS_PATH$|XDG_CACHE_HOME$)/u;
 
 const run = async (
   steps: readonly FakeStep[],

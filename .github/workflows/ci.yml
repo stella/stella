@@ -587,7 +587,10 @@ jobs:
                 });
                 for (const run of runs) {
                   if (run.id >= context.runId || run.head_sha !== pull.head.sha
-                      || !run.pull_requests?.some((linked) => linked.number === pull.number)
+                      || !(run.pull_requests?.some((linked) => linked.number === pull.number)
+                        // GitHub links no pull request to a run from a fork.
+                        || (!run.pull_requests?.length && run.head_repository?.id === pull.head.repo?.id
+                          && run.head_branch === pull.head.ref))
                       || run.conclusion === "cancelled") continue;
                   if (run.status !== "completed") {
                     mirrorsCodeRun = true;
@@ -4152,6 +4155,17 @@ jobs:
         # copies, so a change that rejects one of its writes cannot reach main.
         run: bun --env-file=.env.example run db:seed-local
 
+      - name: Replay the local dev seed
+        if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
+        timeout-minutes: 5
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella
+          NODE_ENV: development
+          STELLA_LOCAL_DEV: "1"
+        # Every later `bun run agent:up` seeds the database it already has.
+        run: bun --env-file=.env.example run db:seed-local
+
       - name: Configure ephemeral Postgres fixture maintenance
         working-directory: apps/api
         env:
@@ -7366,6 +7380,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || inputs.sha || github.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || needs.ci-plan.outputs.target_base_sha }}
           HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PATCH_ID: ${{ needs.ci-plan.outputs.patch_id }}
           WORKFLOW_VERSION: ${{ needs.ci-plan.outputs.pr_depth_workflow_version }}
           TESTED_TREE: ${{ needs.ci-plan.outputs.tested_tree }}
@@ -7546,10 +7561,15 @@ jobs:
                 echo "::error::Metadata mirror could not list CI code runs."
                 return 1
               }
-              candidates=$(jq -cr --argjson current "$GITHUB_RUN_ID" --argjson pr "$PR_NUMBER" --arg head "$HEAD_SHA" '
+              # GitHub links no pull request to a run from a fork, so a fork run
+              # counts when it ran this head from the pull request's own branch.
+              candidates=$(jq -cr --argjson current "$GITHUB_RUN_ID" --argjson pr "$PR_NUMBER" --arg head "$HEAD_SHA" \
+                --arg head_repo "${HEAD_REPO_ID:-}" --arg head_ref "${HEAD_REF:-}" '
                 [.[].workflow_runs[]
                   | select(.id < $current and .head_sha == $head)
-                  | select(any(.pull_requests[]?; .number == $pr))]
+                  | select(any(.pull_requests[]?; .number == $pr)
+                      or ((.pull_requests // [] | length) == 0 and $head_repo != "" and $head_ref != ""
+                        and (.head_repository.id | tostring) == $head_repo and .head_branch == $head_ref))]
                 | sort_by(.run_number, .id) | reverse | .[]
                 | select(.status | type == "string")
                 | "\(.id) \(.status)"

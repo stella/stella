@@ -22,6 +22,10 @@ import {
   organizationMemberSelectorSchema,
   taskDescriptionSchema,
 } from "@stll/api-contract/task-write";
+import {
+  WORKSPACE_STATUS,
+  workspaceAcceptsWrites,
+} from "@stll/api-contract/workspace-status";
 import { isCountryCode } from "@stll/country-codes";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -180,7 +184,10 @@ type MatterToolName =
   | "link_matter_contact";
 
 /** Statuses a matter can be flipped to through save_matter. */
-const MATTER_STATUSES = ["active", "archived"] as const;
+const MATTER_STATUSES = [
+  WORKSPACE_STATUS.active,
+  WORKSPACE_STATUS.archived,
+] as const;
 
 /**
  * Entity kinds save_task will link a task to. Mirrors link_entity_id's
@@ -462,15 +469,15 @@ const handleSaveMatterTool: TypedMcpToolHandler<
   // (mirrors the HTTP unarchive route, which is the sole mutation mounted
   // outside the active-only workspace group). Any field edit, or re-archiving an
   // already-archived matter, is rejected before touching the backing handlers.
-  if (getWorkspaceStatus({ context, workspaceId }) !== "active") {
+  if (!workspaceAcceptsWrites(getWorkspaceStatus({ context, workspaceId }))) {
     const isPureUnarchive =
-      input.status === "active" &&
+      input.status === WORKSPACE_STATUS.active &&
       input.name === undefined &&
       input.client_id === undefined &&
       input.reference === undefined &&
       input.billing_reference === undefined;
     if (!isPureUnarchive) {
-      if (input.status === "archived") {
+      if (input.status === WORKSPACE_STATUS.archived) {
         return errorResult("Matter is already archived");
       }
       return errorResult("Matter is archived; unarchive it first");
@@ -513,7 +520,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     }
   }
 
-  if (input.status === "archived") {
+  if (input.status === WORKSPACE_STATUS.archived) {
     const archived = await Result.gen(() =>
       archiveWorkspaceHandler({
         safeDb: context.safeDb,
@@ -527,7 +534,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
         "mcp.handleSaveMatterTool.archived_error",
       );
     }
-  } else if (input.status === "active") {
+  } else if (input.status === WORKSPACE_STATUS.active) {
     const unarchived = await Result.gen(() =>
       unarchiveWorkspaceHandler({
         safeDb: context.safeDb,

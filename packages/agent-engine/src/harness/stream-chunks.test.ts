@@ -11,7 +11,12 @@ import {
 } from "@tanstack/ai-codex";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
+import {
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  chatLocalRunLimitSchema,
+} from "@stll/api-contract/chat-run-target";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -422,6 +427,10 @@ describe("local harness chunks", () => {
         type: "protocol_violation",
         message: "Malformed message.",
       },
+      sandbox_unavailable: {
+        type: "sandbox_unavailable",
+        message: "The sandbox could not start.",
+      },
     } as const satisfies {
       [Type in HarnessFailure["type"]]: Extract<HarnessFailure, { type: Type }>;
     };
@@ -437,6 +446,42 @@ describe("local harness chunks", () => {
       codes.add(String(last.code));
     }
     expect(codes.size).toBe(Object.keys(failures).length);
+  });
+
+  test("a usage limit says when it resets, and only a limit with a known reset", async () => {
+    const limited = async (resetsAt: string | null) =>
+      (
+        await localChunks([
+          {
+            type: "turn.failed",
+            failure: {
+              type: "usage_limit",
+              message: "Limit reached.",
+              resetsAt,
+            },
+          },
+        ])
+      ).at(-1);
+    const known = await limited("2026-10-28T14:00:00.000Z");
+    expect(known).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: "harness.usage_limit",
+      metadata: {
+        [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: {
+          resetsAt: "2026-10-28T14:00:00.000Z",
+        },
+      },
+    });
+    expect(
+      v.is(
+        chatLocalRunLimitSchema,
+        known?.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+      ),
+    ).toBe(true);
+    const unknown = await limited(null);
+    expect(
+      unknown?.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+    ).toBeUndefined();
   });
 
   test("a stream that ends without a terminal event fails as a protocol violation", async () => {

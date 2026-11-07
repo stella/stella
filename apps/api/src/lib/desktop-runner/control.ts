@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
+  DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
   DESKTOP_RUNNER_HARNESS_STATE,
   DESKTOP_RUNNER_LIMITS,
@@ -10,6 +11,7 @@ import {
   DESKTOP_RUNNER_MAX_TOKEN_LENGTH,
   DESKTOP_RUNNER_SERVER_MESSAGE,
   DESKTOP_RUNNER_TIMING,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
   type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
@@ -37,7 +39,9 @@ import {
   readChatRunSession,
   readConnectedRunners,
   readMemberRunners,
+  readOpenRunChatThread,
   readRun,
+  readRunOutputFile,
   readStoredRunEvents,
   recordChatReadSeq,
   type RunOwner,
@@ -83,15 +87,27 @@ export type PickedDesktop =
       report: DesktopRunnerHarnessReport | null;
     };
 
+/** A file a run copies: where it lands and which stored file it is. */
+export type LocalRunAttachment = {
+  path: string;
+  fileId: string;
+  fileName: string;
+  s3Key: string;
+};
+
 export type StartLocalRunInput = {
   owner: RunOwner;
   desktopId: string;
   harness: AgentHarness;
   harnessVersion: string;
   model: string;
+  /** How much the run asks before it acts; the computer must report it. */
+  approvals: DesktopRunnerApprovalMode;
   harnessSessionId: string | null;
   instructions: string;
   messages: RunStart["messages"];
+  /** Files to copy into the run's folder; each link is signed on every send. */
+  attachments: readonly LocalRunAttachment[];
   /** Where the run reaches the workspace; its token is minted on every send. */
   mcp: Omit<RunStart["mcp"], "token" | "expiresAt">;
   /** Workspaces already authorized for this member and run. */
@@ -109,6 +125,7 @@ export type StartLocalRunOutcome =
       report: DesktopRunnerHarnessReport | null;
     }
   | { type: "model_unavailable" }
+  | { type: "approvals_unavailable" }
   /** The message would not fit one frame, even with the longest token. */
   | { type: "too_large" };
 
@@ -129,6 +146,9 @@ export type DesktopRunnerEventPage = {
  * with it fits a frame with any token.
  */
 const TOKEN_SHAPE = "t".repeat(DESKTOP_RUNNER_MAX_TOKEN_LENGTH);
+const ATTACHMENT_LINK_SHAPE = `https://${"l".repeat(
+  DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH - "https://".length,
+)}`;
 
 /** Whether `message`, as sent, fits one frame. */
 const fitsOneFrame = (message: unknown) =>
@@ -218,17 +238,24 @@ const startRun = async (
   const message = {
     type: DESKTOP_RUNNER_SERVER_MESSAGE.runStart,
     runId,
+    // A chat's turns share a folder; a run outside a chat keeps its own.
+    folderId: input.chat?.threadId ?? runId,
     harness: input.harness,
     harnessVersion: input.harnessVersion,
     model: input.model,
     harnessSessionId: input.harnessSessionId,
     instructions: input.instructions,
     messages: input.messages,
-    policy: { network: "open", fs: "workspace" },
+    attachments: input.attachments.map(({ path, s3Key }) => ({ path, s3Key })),
+    policy: { network: "open", fs: "workspace", approvals: input.approvals },
     mcp: input.mcp,
   } as const;
   const checked = v.safeParse(desktopRunnerServerMessageSchema, {
     ...message,
+    attachments: input.attachments.map(({ path }) => ({
+      path,
+      url: ATTACHMENT_LINK_SHAPE,
+    })),
     mcp: {
       ...message.mcp,
       token: TOKEN_SHAPE,
@@ -250,6 +277,7 @@ const startRun = async (
         harness: input.harness,
         harnessVersion: input.harnessVersion,
         model: input.model,
+        approvals: input.approvals,
         workspaceIds: input.workspaceIds,
         chat: input.chat ?? null,
         payload: message,
@@ -507,6 +535,22 @@ export const createDesktopRunnerControl = ({
     > =>
       await Result.tryPromise({
         try: async () => await readRun(db, { owner, runId }),
+        catch: toDatabaseError,
+      }),
+    /** The chat thread of the owner's run that is still going. */
+    readOpenRunChatThread: async (
+      options: RunOptions,
+    ): Promise<Result<SafeId<"chatThread"> | null, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => await readOpenRunChatThread(db, options),
+        catch: toDatabaseError,
+      }),
+    /** A file a run reported, if it is the owner's and in this thread. */
+    readRunOutputFile: async (
+      options: Parameters<typeof readRunOutputFile>[1],
+    ) =>
+      await Result.tryPromise({
+        try: async () => await readRunOutputFile(db, options),
         catch: toDatabaseError,
       }),
     /** The run's stored messages after `afterSeq`, in sequence order. */

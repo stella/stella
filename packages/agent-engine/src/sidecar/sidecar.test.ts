@@ -347,14 +347,16 @@ const startRun = (
     type: "run.start",
     runId,
     threadId: "thread-1",
+    attachments: [],
     ...launch,
     configDir,
     launch: PLAIN_LAUNCH,
     workspaceDir,
+    cacheDir: path.join(at.root, "agent-package-cache"),
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the lease decision." }],
     harnessSessionId: null,
-    policy: { network: "open", fs: "workspace" },
+    policy: { network: "open", fs: "workspace", approvals: "ask" },
     mcp: {
       serverName: "stella",
       url: `${API_ORIGIN}/mcp`,
@@ -569,6 +571,7 @@ describe("harness holder over its socket", () => {
         type: "ready",
         version: "0.166.0",
         capabilities: ["approvals", "interrupt", "resume"],
+        approvalModes: ["ask"],
         models: [{ id: "gpt-test", label: "GPT Test", isDefault: true }],
       },
     });
@@ -798,6 +801,42 @@ describe("harness holder over its socket", () => {
     expect(await holder.exited).toBe(0);
     expect(holder.log()).not.toContain(RUN_TOKEN);
     expect(holder.log()).not.toContain(secret);
+  });
+
+  test("hands the harness the run's approval mode and the computer's package cache", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "stella_tools");
+    await client.waitFor(is("run.finished", runId));
+    const threadStart = v.parse(
+      v.looseObject({
+        approvalPolicy: v.string(),
+        sandbox: v.string(),
+        config: v.record(v.string(), v.unknown()),
+      }),
+      holder.received().find(({ method }) => method === "thread/start")?.params,
+    );
+    expect(threadStart).toMatchObject({
+      approvalPolicy: "on-request",
+      sandbox: "workspace-write",
+    });
+    expect(
+      threadStart.config["sandbox_workspace_write.writable_roots"],
+    ).toEqual([path.join(holder.root, "agent-package-cache")]);
+    const claudeRunId = startRun(
+      client,
+      holder,
+      {
+        harness: "claude-code",
+        executable: fakeClaude(holder.root, "stella_tools"),
+        model: "sonnet",
+      },
+      { policy: { network: "open", fs: "workspace", approvals: "auto" } },
+    );
+    await client.waitFor(is("run.finished", claudeRunId));
+    expect(JSON.stringify(holder.startups())).toContain(
+      '"--permission-mode","auto"',
+    );
   });
 
   test("relays an approval with one request id and returns the decision", async () => {
@@ -1197,11 +1236,13 @@ describe("harness holder over its socket", () => {
       configDir,
       launch: PLAIN_LAUNCH,
       workspaceDir,
+      cacheDir: path.join(root, "agent-package-cache"),
       model: "gpt-test",
       instructions: "Use the stella MCP server.",
       messages: [{ role: "user", content: "Find the lease decision." }],
+      attachments: [],
       harnessSessionId: null,
-      policy: { network: "open", fs: "workspace" },
+      policy: { network: "open", fs: "workspace", approvals: "ask" },
       mcp: {
         serverName: "stella",
         url: `${API_ORIGIN}/mcp`,
@@ -1219,6 +1260,143 @@ describe("harness holder over its socket", () => {
     expect(refusedAt).toHaveLength(1);
     expect(written.slice(refusedAt[0])).toEqual([await finished]);
     await host.shutdown();
+  });
+
+  describe("files a turn writes to its outputs folder", () => {
+    /**
+     * A real host and fake harness against a real listener standing in for the
+     * API. The turn pauses on an approval: what is planted during the pause
+     * was written by the turn, as far as the folder can tell.
+     */
+    const runWritingOutputs = async (
+      answer: (request: Request) => Promise<Response>,
+    ) => {
+      const root = mkdtempSync(path.join(tmpdir(), "stella-sidecar-outputs-"));
+      const configDir = path.join(root, "codex-home");
+      const workspaceDir = path.join(root, "workspace");
+      const outputs = path.join(workspaceDir, "outputs");
+      mkdirSync(configDir);
+      mkdirSync(outputs, { recursive: true });
+      writeFileSync(path.join(outputs, "earlier.txt"), "an earlier turn");
+      const api = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: answer });
+      const apiOrigin = `http://127.0.0.1:${String(api.port)}`;
+      const written: SidecarHostOutput[] = [];
+      const { promise: finished, resolve } =
+        Promise.withResolvers<
+          Extract<SidecarHostOutput, { type: "run.finished" }>
+        >();
+      const { promise: paused, resolve: pause } =
+        Promise.withResolvers<string>();
+      const host = new SidecarHost({
+        send: (message) => {
+          written.push(message);
+          if (message.type === "run.approval_request") {
+            pause(message.requestId);
+          }
+          if (message.type === "run.finished") {
+            resolve(message);
+          }
+          return true;
+        },
+        log: () => {},
+        environment: {
+          PATH: process.env["PATH"] ?? "",
+          FAKE_HARNESS_LOG: path.join(root, "fake.log"),
+        },
+        processGrantTimeoutMs: WAIT_MS,
+      });
+      cleanups.push(async () => {
+        await host.shutdown();
+        await api.stop(true);
+        rmSync(root, { recursive: true, force: true });
+      });
+      host.configure("1.4.0", apiOrigin);
+      const runId = crypto.randomUUID();
+      host.handle({
+        type: "run.start",
+        runId,
+        threadId: "thread-1",
+        harness: "codex",
+        executable: fakeCodex(root, "approval"),
+        configDir,
+        launch: PLAIN_LAUNCH,
+        workspaceDir,
+        cacheDir: path.join(root, "agent-package-cache"),
+        model: "gpt-test",
+        instructions: "Use the stella MCP server.",
+        messages: [{ role: "user", content: "Write the report." }],
+        attachments: [],
+        harnessSessionId: null,
+        policy: { network: "open", fs: "workspace", approvals: "ask" },
+        mcp: {
+          serverName: "stella",
+          url: `${apiOrigin}/mcp`,
+          token: RUN_TOKEN,
+          expiresAt: "2026-10-28T12:00:00.000Z",
+        },
+      });
+      const requestId = await paused;
+      writeFileSync(path.join(outputs, "report.txt"), "written this turn");
+      host.handle({
+        type: "run.approval",
+        runId,
+        requestId,
+        decision: "deny",
+      });
+      return { finished: await finished, runId, written };
+    };
+
+    const chunksOfRun = (written: readonly SidecarHostOutput[]) =>
+      written.flatMap((message) =>
+        message.type === "run.event" ? [message.chunk] : [],
+      );
+
+    test("upload what the turn wrote, with the run's token, before the turn's finish", async () => {
+      const received: { body: string; authorization: string | null }[] = [];
+      const fileId = crypto.randomUUID();
+      const { finished, written } = await runWritingOutputs(async (request) => {
+        received.push({
+          body: await request.text(),
+          authorization: request.headers.get("authorization"),
+        });
+        return Response.json({ fileId });
+      });
+      // The file that was there when the run started stays out of it.
+      expect(received).toEqual([
+        {
+          body: expect.stringContaining('filename="report.txt"'),
+          authorization: `Bearer ${RUN_TOKEN}`,
+        },
+      ]);
+      expect(finished.outcome).toBe("completed");
+      const chunks = chunksOfRun(written);
+      const reportAt = chunks.findIndex(
+        (chunk) => chunk["name"] === "stella.run-output",
+      );
+      expect(chunks[reportAt]?.["value"]).toEqual({
+        status: "uploaded",
+        fileId,
+        fileName: "report.txt",
+      });
+      const lastFinish = chunks.findLastIndex(
+        (chunk) => chunk.type === "RUN_FINISHED",
+      );
+      expect(reportAt).toBeGreaterThanOrEqual(0);
+      expect(reportAt).toBeLessThan(lastFinish);
+    });
+
+    test("an API that refuses the file leaves the run completed and says so", async () => {
+      const { finished, written } = await runWritingOutputs(
+        async () => await Promise.resolve(new Response(null, { status: 500 })),
+      );
+      expect(finished.outcome).toBe("completed");
+      const reports = chunksOfRun(written).filter(
+        (chunk) => chunk["name"] === "stella.run-output",
+      );
+      expect(reports.map((chunk) => chunk["value"])).toEqual([
+        { status: "failed", fileName: "report.txt" },
+      ]);
+    });
   });
 
   test("closing the connection keeps runs going; shutdown cancels them and exits", async () => {

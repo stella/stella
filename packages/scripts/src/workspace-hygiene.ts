@@ -125,15 +125,10 @@ const TYPESCRIPT_TOOLCHAIN = {
   oxlint: "1.89.0",
   oxlintConfig: "1.7.0",
   tsgolint: "7.0.2005",
-  tsrs: "0.18.0-ts7.1.0-dev.20260929",
+  tsrs: "0.20.1-ts7.1.0-beta",
   typescript6Api: "npm:typescript@6.0.3",
   typescript6Astro: "6.0.3",
 } as const;
-// Workspaces whose own scripts import the TypeScript 6 compiler API; each
-// declares it so a filtered install links it.
-const TYPESCRIPT6_API_PACKAGE_PATHS: ReadonlySet<string> = new Set([
-  "apps/api/package.json",
-]);
 const TYPESCRIPT6_COMPATIBILITY = {
   astro: {
     dependency: "typescript",
@@ -147,9 +142,11 @@ const TYPESCRIPT6_COMPATIBILITY = {
     packagePath: "apps/landing/package.json",
     specifier: "^0.9.12",
   },
+  // Only root scripts still import the TypeScript 6 compiler API; every
+  // workspace reads syntax with oxc and programs with tsrs.
   compilerApi: {
     dependency: "typescript6",
-    packagePath: "apps/api/package.json",
+    packagePath: "package.json",
     specifier: "catalog:",
   },
 } as const;
@@ -353,9 +350,16 @@ const validateDeniedCargoDependencies = (rootDir: string): WorkspaceIssue[] =>
     });
   });
 
+/** The compiler under its own key, or aliased to any name as `npm:typescript@6`. */
+const declaresTypescript6Compiler = (packageJsonPath: string): boolean =>
+  readDependencySpecifier(packageJsonPath, "typescript6") !== null ||
+  readDependencySpecifier(packageJsonPath, (specifier) =>
+    /^npm:typescript@[~^]?6(?:\.|$)/u.test(specifier),
+  ) !== null;
+
 const readDependencySpecifier = (
   packageJsonPath: string,
-  dependencyName: string,
+  dependency: string | ((specifier: string) => boolean),
 ): string | null => {
   let packageJson: unknown;
   try {
@@ -374,7 +378,12 @@ const readDependencySpecifier = (
       continue;
     }
 
-    const specifier = dependencies[dependencyName];
+    const specifier =
+      typeof dependency === "string"
+        ? dependencies[dependency]
+        : Object.values(dependencies).find(
+            (value) => typeof value === "string" && dependency(value),
+          );
     if (typeof specifier === "string") {
       return specifier;
     }
@@ -677,13 +686,10 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
         });
       }
 
-      if (
-        readDependencySpecifier(packageJsonPath, "typescript6") !== null &&
-        !TYPESCRIPT6_API_PACKAGE_PATHS.has(relativePackagePath)
-      ) {
+      if (declaresTypescript6Compiler(packageJsonPath)) {
         issues.push({
           message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
           path: relativePackagePath,
         });
       }

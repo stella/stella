@@ -26,6 +26,7 @@
     "./organization-ai-availability": "./src/organization-ai-availability.ts",
     "./currency-code": "./src/currency-code.ts",
     "./billing": "./src/billing.ts",
+    "./workspace-status": "./src/workspace-status.ts",
     "./visual-preview": "./src/visual-preview.ts",
     "./ai-disclosure": "./src/ai-disclosure.ts",
     "./ai-decision-provider": "./src/ai-decision-provider.ts",

@@ -376,6 +376,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       "chatKeys.decisionThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
     },
   },
+  "chat/runs/list.ts": {
+    kind: "keyed",
+    calls: ["api.chat.runs.active.get"],
+    files: ["features/chat/active-runs.ts"],
+    keys: () => [chatKeys.activeRuns(ORG, USER)],
+  },
   "chat/threads/list.ts": {
     kind: "keyed",
     calls: ["api.chat.threads.get"],

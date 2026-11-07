@@ -187,6 +187,12 @@ export type ChatTurnOutcome =
        */
       providerDiagnostic?: ProviderDiagnostic;
       refusal?: ActionAdmissionRefusal;
+      /**
+       * When the usage limit of the harness that ran the turn on the
+       * member's computer resets (ISO 8601), for a `local_runner_limit_reached`
+       * failure whose harness reported it.
+       */
+      limitResetsAt?: string;
     }
   | {
       type: "interrupted";
@@ -233,6 +239,10 @@ export type ChatMessageMetadata = {
    * streamed; never stored. Incoming client metadata deliberately does not
    * accept this field. */
   contextNotice?: ChatContextNotice | null | undefined;
+  /** Server-owned: files a local run left on the member's computer because
+   * they could not be shared. Incoming client metadata deliberately does not
+   * accept this field. */
+  localRunFilesNotShared?: string[] | undefined;
   docxEditPreferences?:
     | {
         docxEditRepresentation?: "tracked-changes" | "direct" | undefined;

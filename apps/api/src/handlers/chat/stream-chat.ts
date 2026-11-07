@@ -33,6 +33,18 @@ import {
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
+import {
+  CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  chatLocalRunFilePartsOf,
+  chatLocalRunFilesNotSharedSchema,
+  chatLocalRunLimitSchema,
+} from "@stll/api-contract/chat-run-target";
+import {
+  desktopRunnerAttachmentPath,
+  MAX_RUN_ATTACHMENTS,
+} from "@stll/api-contract/desktop-runner";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
@@ -53,10 +65,12 @@ import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
   classifyChatPartForPersistence,
+  createChatTextPart,
   getAwaitingUserInteraction,
   getAwaitingUserInteractions,
   getChatAttachmentMimeType,
   getUserFileIdFromAttachmentPart,
+  isAnswerFilePart,
   isApprovedClientCallAwaitingResult,
   isChatAttachmentPart,
   isChatDocumentPart,
@@ -99,7 +113,10 @@ import {
   NO_DECISION_PASSAGE_NUMBERS,
 } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
-import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
+import {
+  LOCAL_RUN_OUTPUTS_INSTRUCTIONS,
+  type LocalChatRun,
+} from "@/api/handlers/chat/local-run-chunks";
 import {
   createLoopRecoverySystemPrompt,
   detectModelLoop,
@@ -160,7 +177,10 @@ import type {
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
-import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
+import {
+  canHydrateFilePartAsPlainText,
+  hydrateFilePart,
+} from "@/api/handlers/chat/upload-files";
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -225,6 +245,7 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
+import type { LocalRunAttachment } from "@/api/lib/desktop-runner/control";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import {
@@ -255,6 +276,7 @@ import {
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -794,6 +816,7 @@ export const streamChat = async ({
       response: new ChatTurnFailureResponse({
         failureCode: "unsupported-input",
         payload: {
+          code: CHAT_INPUT_REFUSAL_CODE.documentUnsupported,
           message:
             "This model cannot read one of the attached documents. Remove the attachment or switch to a model that supports it.",
         },
@@ -808,6 +831,7 @@ export const streamChat = async ({
       response: new ChatTurnFailureResponse({
         failureCode: "unsupported-input",
         payload: {
+          code: CHAT_INPUT_REFUSAL_CODE.toolsUnsupported,
           message:
             "This model cannot use tools while streaming, so it cannot answer chat questions about your matter. Switch to a model that supports tool use.",
         },
@@ -1605,7 +1629,7 @@ const runChatAttempts = async function* ({
       chatRunId: runId,
       chatTurnId,
       messages: convertMessagesToModelMessages([...surfaces.messages]),
-      instructions: surfaces.system,
+      instructions: `${surfaces.system}\n\n${LOCAL_RUN_OUTPUTS_INSTRUCTIONS}`,
       resume,
       // The run's own cut, as the provider gets it: a stop on any task, the
       // deadline, a lost owner or admission, a failed production.
@@ -2312,18 +2336,40 @@ const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
     providerMessage: chunk.message,
   });
   const usage = safeTokenUsageFromTerminalChunk(chunk);
+  const providerDiagnostic = providerDiagnosticFromChunk(chunk);
+  const limit =
+    kind === "local_runner_limit_reached"
+      ? localRunLimitFromChunk(chunk)
+      : undefined;
   return {
     type: EventType.RUN_ERROR,
     ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
     message: kind,
     code: kind,
     ...(usage === undefined ? {} : { usage }),
-    ...(providerDiagnosticFromChunk(chunk) === undefined
+    ...(providerDiagnostic === undefined && limit === undefined
       ? {}
       : {
-          metadata: { providerDiagnostic: providerDiagnosticFromChunk(chunk) },
+          metadata: {
+            ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
+            ...(limit === undefined
+              ? {}
+              : { [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: limit }),
+          },
         }),
   };
+};
+
+/**
+ * When the usage limit of a computer's harness resets, as the local turn's
+ * own run error carries it (`local-run-chunks.ts`), checked again here.
+ */
+const localRunLimitFromChunk = (chunk: RunErrorChunk) => {
+  const parsed = v.safeParse(
+    chatLocalRunLimitSchema,
+    chunk.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+  );
+  return parsed.success ? parsed.output : undefined;
 };
 
 /**
@@ -3183,6 +3229,7 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
     panic("Unhandled TanStack failed stream event");
   }
   const providerDiagnostic = providerDiagnosticFromChunk(chunk);
+  const limit = localRunLimitFromChunk(chunk);
   return {
     chunk,
     usage: tokenUsageFromTerminalChunk(chunk),
@@ -3190,6 +3237,7 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
       type: "failed",
       error: classifyRunErrorChunk(sourceChunk),
       ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
+      ...(limit === undefined ? {} : { limitResetsAt: limit.resetsAt }),
     } as const satisfies ChatTurnOutcome,
   };
 };
@@ -3598,11 +3646,14 @@ const processTurnForPersistence = ({
   const { processor, message } = createStreamMessageCapture({
     initialMessages,
     capture: (streamed) => {
-      const convertedMessage = toChatMessage(streamed, visualOrigin);
+      const convertedMessage = toChatMessage(
+        withLocalRunFileParts(streamed),
+        visualOrigin,
+      );
       return convertedMessage === null
         ? null
         : attachRestorationMetadata({
-            message: convertedMessage,
+            message: attachLocalRunFilesNotShared(convertedMessage, streamed),
             restorationPairs,
           });
     },
@@ -5050,6 +5101,37 @@ const deanonymizeToolInputText = (
   return typeof deanonymized === "string" ? deanonymized : text;
 };
 
+/**
+ * The answer with the files a local run handed back as its parts: the stream
+ * carries them as metadata (`CHAT_LOCAL_RUN_FILES_METADATA_KEY`), and the stored
+ * message holds them the way every other reader expects a file.
+ */
+const withLocalRunFileParts = (streamed: UIMessage): UIMessage => {
+  const files = chatLocalRunFilePartsOf(streamed.metadata, streamed.parts);
+  return files.length === 0
+    ? streamed
+    : { ...streamed, parts: [...streamed.parts, ...files] };
+};
+
+const attachLocalRunFilesNotShared = (
+  message: ChatMessage,
+  streamed: UIMessage,
+): ChatMessage => {
+  const notShared = v.safeParse(
+    chatLocalRunFilesNotSharedSchema,
+    streamed.metadata?.[CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY],
+  );
+  return notShared.success && notShared.output.length > 0
+    ? {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          [CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY]: notShared.output,
+        },
+      }
+    : message;
+};
+
 const attachRestorationMetadata = ({
   message,
   restorationPairs,
@@ -5150,11 +5232,53 @@ const toChatParts = (
 };
 
 type HydrateMessagesProps = {
+  /**
+   * The turn runs on the member's computer, whose agent gets each file in its
+   * folder. Never with anonymized text, which a raw copy would defeat.
+   */
+  copiesFilesToComputer: boolean;
   messages: ChatMessage[];
   safeDb: SafeDb;
   sendMode: ChatSendMode;
   userId: SafeId<"user">;
 };
+
+const localRunFilePath = (file: Pick<StoredUserFile, "fileName" | "id">) =>
+  desktopRunnerAttachmentPath(file.id, sanitizeFilename(file.fileName));
+
+/**
+ * The attached files of the turn's messages, newest first. Beyond the cap,
+ * older files were copied on the turn that attached them.
+ */
+export const localRunAttachmentsOf = async ({
+  messages,
+  safeDb,
+  userId,
+}: Pick<HydrateMessagesProps, "messages" | "safeDb" | "userId">) =>
+  await Result.gen(async function* () {
+    const files = yield* Result.await(
+      readUserFilesByIds({ messages, safeDb, userId }),
+    );
+    const attachments = new Map<string, LocalRunAttachment>();
+    for (const message of messages.toReversed()) {
+      for (const part of message.parts) {
+        const fileId =
+          isChatAttachmentPart(part) && !isAnswerFilePart(message.role, part)
+            ? getUserFileIdFromAttachmentPart(part)
+            : null;
+        const file = fileId === null ? undefined : files.get(fileId);
+        if (file !== undefined && attachments.size < MAX_RUN_ATTACHMENTS) {
+          attachments.set(file.id, {
+            path: localRunFilePath(file),
+            fileId: file.id,
+            fileName: sanitizeFilename(file.fileName),
+            s3Key: file.s3Key,
+          });
+        }
+      }
+    }
+    return Result.ok([...attachments.values()]);
+  });
 
 type XlsxCacheWrite = {
   file: StoredUserFile;
@@ -5203,6 +5327,7 @@ const persistXlsxCacheWrites = async ({
 };
 
 export const hydrateMessages = async ({
+  copiesFilesToComputer,
   messages,
   safeDb,
   sendMode,
@@ -5223,7 +5348,10 @@ export const hydrateMessages = async ({
       const parts: ChatMessage["parts"] = [];
 
       for (const part of message.parts) {
-        if (!isChatAttachmentPart(part)) {
+        if (
+          !isChatAttachmentPart(part) ||
+          isAnswerFilePart(message.role, part)
+        ) {
           parts.push(part);
           continue;
         }
@@ -5237,6 +5365,19 @@ export const hydrateMessages = async ({
         const userFile = userFilesById.get(fileId);
         if (!userFile) {
           panic("Persisted chat file reference missing user_files row");
+        }
+
+        if (copiesFilesToComputer) {
+          parts.push(
+            createChatTextPart(
+              `Attached file "${userFile.fileName}" is in your folder at ${localRunFilePath(userFile)}.`,
+            ),
+          );
+          // An image or PDF stays out of the run's stored messages: the agent
+          // reads the copy. Text it could not extract without tools stays too.
+          if (!canHydrateFilePartAsPlainText(userFile.mimeType)) {
+            continue;
+          }
         }
 
         const hydratedPart = yield* Result.await(
@@ -5355,7 +5496,7 @@ const collectMessageUserFileIds = (
 
   for (const message of messages) {
     for (const part of message.parts) {
-      if (!isChatAttachmentPart(part)) {
+      if (!isChatAttachmentPart(part) || isAnswerFilePart(message.role, part)) {
         continue;
       }
 

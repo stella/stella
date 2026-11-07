@@ -23,15 +23,15 @@
 //! - `run.input` is not supported: each chat turn is its own run that
 //!   resumes the harness's session. Input is answered with a `RUN_ERROR`
 //!   chunk (`input_unsupported`) on the run's stream; the run goes on.
-//! - Each run works in its own folder under the app's data, created for the
-//!   user alone and removed once the run finished.
+//! - A run works in its chat's folder under the app's data, so the next turn
+//!   finds what this one left (`run_folders`).
 
 use std::{
   collections::HashMap,
   num::NonZeroU32,
-  path::{Path, PathBuf},
+  path::PathBuf,
   sync::{Arc, Mutex, MutexGuard, PoisonError},
-  time::Duration,
+  time::{Duration, SystemTime},
 };
 
 use futures_util::future::BoxFuture;
@@ -43,6 +43,7 @@ use super::harness::{
   EmitError, Forwarded, HarnessHost, HarnessReports, JournaledRun, NotForwarded,
   RunOutput, RunSink,
 };
+use super::run_folders;
 use crate::harness_sidecar::{
   self, HarnessLaunchSettings, HarnessProbe, HarnessProcess, HarnessSidecar,
   ResumeError, SidecarDelivery, SidecarRunOutput, SidecarRunStart, SidecarSettings,
@@ -104,8 +105,10 @@ pub(crate) trait LocalHarnesses: Send + Sync + 'static {
 pub(crate) struct HostSettings {
   /// The supervisor's settings; `api_origin` is the connecting account's.
   pub(crate) sidecar: SidecarSettings,
-  /// Where each run's own folder is made.
+  /// Where each chat's folder is made.
   pub(crate) workspaces: PathBuf,
+  /// The package-manager cache every run on this computer shares.
+  pub(crate) package_cache: PathBuf,
   pub(crate) probe_interval: Duration,
 }
 
@@ -140,6 +143,8 @@ struct Shared {
   probes: Mutex<HashMap<String, ProcessGrant>>,
   /// Held grants, by run id or probe request id.
   grants: Mutex<HashMap<String, Box<dyn Send + Sync>>>,
+  /// Keeps a run starting in a folder apart from that folder's removal.
+  folders: Mutex<()>,
 }
 
 /// One per app: the supervisor and its holder connection outlive runner
@@ -160,6 +165,7 @@ impl SidecarHarnessHost {
   ) -> Self {
     Self {
       shared: Arc::new(Shared {
+        folders: Mutex::new(()),
         settings,
         harnesses,
         sidecar: Mutex::new(None),
@@ -210,8 +216,8 @@ impl Shared {
     }
   }
 
-  fn workspace(&self, run_id: Uuid) -> PathBuf {
-    self.settings.workspaces.join(run_id.to_string())
+  fn workspace(&self, folder_id: Uuid) -> PathBuf {
+    self.settings.workspaces.join(folder_id.to_string())
   }
 }
 
@@ -230,29 +236,13 @@ fn refusal(report: Option<&HarnessReport>, start: &RunStart) -> Option<RejectRea
         Some(RejectReason::HarnessVersionUnavailable)
       } else if !ready.models.iter().any(|model| model.id == start.model) {
         Some(RejectReason::ModelUnavailable)
+      } else if !ready.approval_modes.contains(&start.policy.approvals) {
+        Some(RejectReason::PolicyUnsupported)
       } else {
         None
       }
     }
   }
-}
-
-/// A folder for the user alone; the parent is made the same way.
-fn private_folder(dir: &Path) -> std::io::Result<()> {
-  if let Some(parent) = dir.parent() {
-    crate::local_store::create_private_dir(parent)?;
-  }
-  crate::local_store::create_private_dir(dir)
-}
-
-fn remove_workspace(dir: PathBuf) {
-  tokio::task::spawn_blocking(move || match std::fs::remove_dir_all(&dir) {
-    Ok(()) => {}
-    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-    Err(error) => {
-      tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "a run's folder was not removed");
-    }
-  });
 }
 
 fn sidecar_output(output: SidecarRunOutput) -> RunOutput {
@@ -402,9 +392,6 @@ async fn pump(
   locked(&shared.runs).remove(&run_id);
   locked(&shared.grants).remove(&run_id);
   drop(lease);
-  if let Ok(uuid) = Uuid::parse_str(&run_id) {
-    remove_workspace(shared.workspace(uuid));
-  }
   if matches!(outcome, RunOutcome::NeedsLogin | RunOutcome::LimitReached) {
     shared.refresh.notify_one();
   }
@@ -509,11 +496,23 @@ async fn grant_processes(
   }
 }
 
-/// Probe every harness now, then on the interval or when asked to.
+/// Probe every harness now, then on the interval or when asked to. Folders
+/// no run has used for too long are removed on the same beat.
 async fn refresh_reports(shared: Arc<Shared>, sidecar: HarnessSidecar) {
   loop {
     for &harness in Harness::ALL {
       probe(&shared, &sidecar, harness).await;
+    }
+    let held = Arc::clone(&shared);
+    let removal = tokio::task::spawn_blocking(move || {
+      run_folders::remove_idle(
+        &held.settings.workspaces,
+        SystemTime::now(),
+        &held.folders,
+      );
+    });
+    if removal.await.is_err() {
+      tracing::warn!(target: LOG_TARGET, "removing idle run folders stopped early");
     }
     tokio::select! {
       () = tokio::time::sleep(shared.settings.probe_interval) => {}
@@ -662,9 +661,6 @@ impl SidecarHarnessHost {
       return;
     };
     let sink = entry.sink.clone();
-    let workspace = Uuid::parse_str(&run.run_id)
-      .ok()
-      .map(|uuid| self.shared.workspace(uuid));
     tokio::spawn(async move {
       let failed = RunOutput::Finished {
         outcome: RunOutcome::Failed,
@@ -673,9 +669,6 @@ impl SidecarHarnessHost {
       // Keeps the sender alive while the end is relayed.
       let _entry = entry;
       emit(&sink, &failed).await;
-      if let Some(workspace) = workspace {
-        remove_workspace(workspace);
-      }
     });
   }
 
@@ -773,8 +766,8 @@ impl HarnessHost for SidecarHarnessHost {
 
   fn start(&self, start: RunStart, sink: RunSink) -> Result<(), RejectReason> {
     // Only a UUID names a folder.
-    let run_uuid =
-      Uuid::parse_str(&start.run_id).map_err(|_not_uuid| RejectReason::UnknownRun)?;
+    let folder_id = Uuid::parse_str(&start.folder_id)
+      .map_err(|_not_uuid| RejectReason::UnknownRun)?;
     let cached = self.shared.cached(start.harness);
     if let Some(reason) = refusal(cached.as_ref().map(|cached| &cached.report), &start)
     {
@@ -789,9 +782,18 @@ impl HarnessHost for SidecarHarnessHost {
     if installed.version != start.harness_version {
       return Err(RejectReason::HarnessVersionUnavailable);
     }
-    let workspace = self.shared.workspace(run_uuid);
-    if let Err(error) = private_folder(&workspace) {
+    let workspace = self.shared.workspace(folder_id);
+    let opened = {
+      let _held = locked(&self.shared.folders);
+      run_folders::open(&workspace, SystemTime::now())
+    };
+    if let Err(error) = opened {
       tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "a run's folder could not be made");
+      return Err(RejectReason::AtCapacity);
+    }
+    let package_cache = &self.shared.settings.package_cache;
+    if let Err(error) = crate::local_store::create_private_dir(package_cache) {
+      tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "the package cache could not be made");
       return Err(RejectReason::AtCapacity);
     }
     let credentials = cached.and_then(|cached| cached.credentials);
@@ -817,9 +819,11 @@ impl HarnessHost for SidecarHarnessHost {
       config_dir: installed.config_dir.to_string_lossy().into_owned(),
       launch: credentials.map(|held| held.settings).unwrap_or_default(),
       workspace_dir: workspace.to_string_lossy().into_owned(),
+      cache_dir: package_cache.to_string_lossy().into_owned(),
       model: start.model,
       instructions: start.instructions,
       messages: start.messages,
+      attachments: start.attachments,
       harness_session_id: start.harness_session_id,
       policy: start.policy,
       mcp: start.mcp,
@@ -829,7 +833,6 @@ impl HarnessHost for SidecarHarnessHost {
       Err(error) => {
         tracing::warn!(target: LOG_TARGET, ?error, "the harness holder took no run");
         locked(&self.shared.runs).remove(&run_id);
-        remove_workspace(workspace);
         return Err(error.reject_reason());
       }
     };

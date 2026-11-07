@@ -9,22 +9,34 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { HARNESS_CONTINUATION_EVENT } from "@stll/agent-engine";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
+import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
 import {
   CHAT_TOOL_EXECUTOR,
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
 } from "@stll/api-contract/chat";
+import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  CHAT_LOCAL_RUN_FILES_METADATA_KEY,
+  CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
   type ChatLocalRunComputerEvent,
+  type ChatLocalRunFile,
   type ChatLocalRunHarness,
+  type ChatLocalRunLimit,
+  chatLocalRunLimitSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
   type DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  DESKTOP_RUNNER_OUTPUT_EVENT,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
+  desktopRunnerOutputEventSchema,
 } from "@stll/api-contract/desktop-runner";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -39,6 +51,7 @@ import {
 import type {
   DesktopRunnerControl,
   DesktopRunnerControlError,
+  LocalRunAttachment,
   QueueCommandOutcome,
 } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
@@ -50,7 +63,10 @@ import type {
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
+import { toUserFileUrl } from "@/api/lib/user-files/types";
 
 /**
  * A chat turn run by a coding-agent harness on the member's computer, as a
@@ -73,6 +89,7 @@ type LocalRunControl = Pick<
   | "readChatRunSession"
   | "readEvents"
   | "readRun"
+  | "readRunOutputFile"
   | "recordChatReadSeq"
   | "startRun"
 >;
@@ -83,6 +100,7 @@ type LocalRunDestination = {
   harness: ChatLocalRunHarness;
   harnessVersion: string;
   model: string;
+  approvals: DesktopRunnerApprovalMode;
 };
 
 export type LocalRunContext = {
@@ -124,6 +142,10 @@ type LocalRunStreamInput = {
 /** A chat turn bound to a computer: started on a new turn, continued on a resume. */
 export type LocalChatRun = {
   readonly harness: ChatLocalRunHarness;
+  /** The same run, copying these files into its folder before it starts. */
+  readonly withAttachments: (
+    attachments: readonly LocalRunAttachment[],
+  ) => LocalChatRun;
   readonly stream: (
     input: LocalRunStreamInput,
   ) => AsyncIterable<PublicStreamChunk>;
@@ -290,6 +312,27 @@ const LOCAL_RUN_EVENT_DISPOSITION = {
 } as const satisfies Record<EventType, "carry" | "drop">;
 
 /**
+ * The named events a harness turn reports (`harnessEventsToChunks`). The name
+ * decides what a stream processor does with a CUSTOM event, and some write to
+ * the message (`ui-resource`, `approval-requested`, `structured-output.*`), so
+ * only these pass; the rest of what a desktop sends goes no further.
+ */
+const LOCAL_RUN_CUSTOM_EVENTS: ReadonlySet<string> = new Set([
+  ...AGENT_HARNESSES.map((harness) => `${harness}.session-id`),
+  HARNESS_CONTINUATION_EVENT,
+]);
+
+/** The chunks a stream processor merges metadata from into the message. */
+const MESSAGE_METADATA_EVENTS: ReadonlySet<string> = new Set([
+  EventType.TEXT_MESSAGE_START,
+  EventType.TEXT_MESSAGE_CONTENT,
+  EventType.TEXT_MESSAGE_END,
+  EventType.REASONING_MESSAGE_START,
+  EventType.REASONING_MESSAGE_CONTENT,
+  EventType.REASONING_MESSAGE_END,
+]);
+
+/**
  * The chunk as this chat run carries it: its run, thread and call ids, and
  * every call owned by the harness that ran it, whatever the desktop said, so
  * no call of a local turn ever reads as one the API or the browser runs.
@@ -347,13 +390,19 @@ const asChatChunk = (
     return { ...chunk, toolCallId: callId(chunk.toolCallId) };
   }
   if (chunk.type === EventType.CUSTOM) {
-    const value: unknown = chunk.value;
-    return isRecord(value) && typeof value["toolCallId"] === "string"
-      ? {
-          ...chunk,
-          value: { ...value, toolCallId: callId(value["toolCallId"]) },
-        }
-      : chunk;
+    return LOCAL_RUN_CUSTOM_EVENTS.has(chunk.name) ? chunk : null;
+  }
+  // Metadata on these merges into the answer, where the server's own notices
+  // and files live. A harness reports only its adapter's own `tanstack` block,
+  // so nothing else a desktop sends is carried.
+  if (MESSAGE_METADATA_EVENTS.has(chunk.type) && "metadata" in chunk) {
+    const { metadata, ...carried } = chunk;
+    const kept = Object.entries(isRecord(metadata) ? metadata : {}).filter(
+      ([key]) => key === "tanstack",
+    );
+    return kept.length === 0
+      ? carried
+      : { ...carried, metadata: Object.fromEntries(kept) };
   }
   return chunk;
 };
@@ -362,9 +411,16 @@ const asChatChunk = (
 const publicChunks = (chunk: AdapterYieldChunk): PublicStreamChunk[] =>
   normalizeStreamChunk(chunk);
 
+type LocalRunFailureDetails = {
+  code: string;
+  message: string;
+  /** When the harness's usage limit resets; only on a limit failure. */
+  limit?: ChatLocalRunLimit | undefined;
+};
+
 /** The run error that ends the turn; `code` names why for the member. */
 const runErrorChunks = (
-  { code, message }: { code: string; message: string },
+  { code, message, limit }: LocalRunFailureDetails,
   { chatRunId, threadId }: Pick<RewriteContext, "chatRunId" | "threadId">,
 ): PublicStreamChunk[] =>
   publicChunks({
@@ -374,6 +430,9 @@ const runErrorChunks = (
     message,
     code,
     error: { message, code },
+    ...(limit === undefined
+      ? {}
+      : { metadata: { [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: limit } }),
     timestamp: nowMs(),
   });
 
@@ -381,6 +440,20 @@ const failureOf = (code: LocalRunFailure, message?: string) => ({
   code,
   message: message ?? FAILURE_MESSAGE[code],
 });
+
+/**
+ * When the limit a harness's run error names resets. The desktop is not
+ * trusted: anything but a valid instant under the one key carries no time.
+ */
+const limitOfRunError = (
+  chunk: Extract<PublicStreamChunk, { type: EventType.RUN_ERROR }>,
+): ChatLocalRunLimit | undefined => {
+  const parsed = v.safeParse(
+    chatLocalRunLimitSchema,
+    chunk.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+  );
+  return parsed.success ? parsed.output : undefined;
+};
 
 /** The finish that ends the turn without an error. */
 const runFinishedChunks = (
@@ -396,7 +469,32 @@ const runFinishedChunks = (
     timestamp: nowMs(),
   });
 
-type HarnessError = { code: string; message: string };
+type HarnessError = {
+  code: string;
+  message: string;
+  limit: ChatLocalRunLimit | undefined;
+};
+
+/**
+ * Why a failed run ended the turn: the outcome's own failure, else the
+ * harness's error. Only a limit failure says when the limit resets.
+ */
+const failedRunDetails = (
+  code: LocalRunFailure | null,
+  harnessError: HarnessError | null,
+): LocalRunFailureDetails => {
+  if (code !== null) {
+    return {
+      ...failureOf(code, harnessError?.message),
+      ...(code === AI_FAILURE_CODES.local_runner_limit_reached
+        ? { limit: harnessError?.limit }
+        : {}),
+    };
+  }
+  return harnessError === null
+    ? failureOf(AI_FAILURE_CODES.local_runner_unavailable)
+    : { code: harnessError.code, message: harnessError.message };
+};
 
 /** The chunks that end the turn once the run said how it finished. */
 const finishedRunChunks = ({
@@ -420,10 +518,7 @@ const finishedRunChunks = ({
         : runFinishedChunks(rewrite, ending.type === "stopped");
     case "failed":
       return runErrorChunks(
-        ending.code === null
-          ? (harnessError ??
-              failureOf(AI_FAILURE_CODES.local_runner_unavailable))
-          : failureOf(ending.code, harnessError?.message),
+        failedRunDetails(ending.code, harnessError),
         rewrite,
       );
     default:
@@ -431,6 +526,9 @@ const finishedRunChunks = ({
       return panic("Unknown local run outcome");
   }
 };
+
+/** Telling a turn's agent where the member's files go, on local runs only. */
+export const LOCAL_RUN_OUTPUTS_INSTRUCTIONS = `Files meant for the member go in the outputs/ folder of your working folder, as ${RUN_OUTPUT_FILE_EXTENSIONS.join(", ")}: when your turn ends, the chat shows what you wrote there. Everything else in the working folder, scratch files and caches included, stays on this computer.`;
 
 /**
  * What an open read does once it has caught up: wait for more (with the
@@ -489,6 +587,112 @@ const storeUnavailable = (
     failureOf(AI_FAILURE_CODES.local_runner_unavailable),
     rewrite,
   );
+};
+
+class LocalRunOutputRefused extends TaggedError("LocalRunOutputRefused")<{
+  message: string;
+}> {}
+
+const LOCAL_RUN_OUTPUT_REFUSED_SINK = failureSink({
+  event: "chat.local_run_output_refused",
+  expected: [],
+});
+
+/** What a stored chunk reports about one output file, if that is what it is. */
+const runOutputReportOf = (
+  chunk: PublicStreamChunk,
+): { value: unknown } | null =>
+  chunk.type === EventType.CUSTOM && chunk.name === DESKTOP_RUNNER_OUTPUT_EVENT
+    ? { value: chunk.value }
+    : null;
+
+/**
+ * How many files one answer names. A computer's sidecar holds itself to less;
+ * this bounds what any desktop can make the stored answer carry.
+ */
+const MAX_ANSWER_RUN_FILES = 50;
+
+/**
+ * What one read of a run has told the chat about the files it handed back. Each
+ * report restates all of it: a stream processor merges metadata key by key.
+ */
+const createRunOutputs = (
+  context: LocalRunContext,
+  rewrite: RewriteContext,
+) => {
+  const files: ChatLocalRunFile[] = [];
+  const notShared: string[] = [];
+  /** The answer's own id, so the chunk opens it when nothing else has yet. */
+  const messageId = rewrite.runnerRunId;
+  const read = async (fileId: SafeId<"userFile">) => {
+    const row = await context.control.readRunOutputFile({
+      owner: context.owner,
+      chatThreadId: context.chatThreadId,
+      fileId,
+    });
+    if (row.isErr()) {
+      observeFailure(row.error, { sink: LOCAL_RUN_STORE_SINK });
+      return "unavailable" as const;
+    }
+    return row.value;
+  };
+  return async (value: unknown): Promise<PublicStreamChunk[]> => {
+    const report = v.safeParse(desktopRunnerOutputEventSchema, value);
+    if (
+      !report.success ||
+      files.length + notShared.length >= MAX_ANSWER_RUN_FILES
+    ) {
+      return [];
+    }
+    if (report.output.status === "failed") {
+      notShared.push(sanitizeFilename(report.output.fileName));
+    } else {
+      const row = await read(brandPersistedUserFileId(report.output.fileId));
+      if (row === "unavailable") {
+        notShared.push(sanitizeFilename(report.output.fileName));
+      } else if (row === null) {
+        // Not this member's file in this thread: a report like this names
+        // nothing the chat may show, and tells the member nothing true.
+        observeFailure(
+          new LocalRunOutputRefused({
+            message: "A computer reported a file its run may not show",
+          }),
+          { sink: LOCAL_RUN_OUTPUT_REFUSED_SINK },
+        );
+        return [];
+      } else {
+        const url = toUserFileUrl(row.id);
+        if (!files.some((file) => file.url === url)) {
+          files.push({
+            url,
+            filename: row.fileName,
+            mimeType: row.mimeType,
+            ...(row.placeholder === null
+              ? {}
+              : { placeholder: row.placeholder }),
+          });
+        }
+      }
+    }
+    return [
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+        timestamp: nowMs(),
+        metadata: {
+          ...(files.length === 0
+            ? {}
+            : { [CHAT_LOCAL_RUN_FILES_METADATA_KEY]: [...files] }),
+          ...(notShared.length === 0
+            ? {}
+            : {
+                [CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY]: [...notShared],
+              }),
+        },
+      },
+    ];
+  };
 };
 
 type ReadRunOptions = {
@@ -580,6 +784,7 @@ async function* readRunChunks({
     }
   };
   const computer = computerStatusChunks(start);
+  const runOutputChunks = createRunOutputs(context, rewrite);
   const fail = function* (
     code: LocalRunFailure,
     message?: string,
@@ -656,6 +861,12 @@ async function* readRunChunks({
             if (!isPublicStreamChunk(message.chunk)) {
               panic("A stored desktop runner chunk no longer folds");
             }
+            const output = runOutputReportOf(message.chunk);
+            if (output !== null) {
+              yield* start();
+              yield* await runOutputChunks(output.value);
+              continue;
+            }
             const chunk = asChatChunk(message.chunk, rewrite);
             if (chunk === null) {
               continue;
@@ -670,6 +881,7 @@ async function* readRunChunks({
               harnessError = {
                 code: chunk.code ?? AI_FAILURE_CODES.local_runner_unavailable,
                 message: chunk.message,
+                limit: limitOfRunError(chunk),
               };
               continue;
             }
@@ -787,6 +999,7 @@ const unavailableHarnessFailure = (
 };
 
 type StartOptions = {
+  attachments: readonly LocalRunAttachment[];
   context: LocalRunContext;
   destination: LocalRunDestination;
   input: LocalRunStreamInput;
@@ -798,6 +1011,7 @@ type StartOptions = {
  * @yields Chunks of the chat run, ending with its terminal one.
  */
 async function* startLocalRun({
+  attachments,
   context,
   destination,
   input,
@@ -832,10 +1046,12 @@ async function* startLocalRun({
       harness: destination.harness,
       harnessVersion: destination.harnessVersion,
       model: destination.model,
+      approvals: destination.approvals,
       harnessSessionId,
       instructions: input.instructions,
       // Copied to plain objects: the wire schema reads them as records.
       messages: messages.map((message) => ({ ...message })),
+      attachments,
       mcp: context.mcp,
       workspaceIds: context.workspaceIds,
       chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
@@ -882,6 +1098,7 @@ async function* startLocalRun({
       return;
     case "no_computer":
     case "model_unavailable":
+    case "approvals_unavailable":
       yield* refuse(AI_FAILURE_CODES.local_runner_unavailable);
       return;
     case "too_large":
@@ -1106,17 +1323,24 @@ export type LocalRunPlan =
   | { type: "resume"; harness: ChatLocalRunHarness };
 
 /** A local chat run for one turn. */
-export const createLocalChatRun = (
+const localChatRun = (
   context: LocalRunContext,
   plan: LocalRunPlan,
+  attachments: readonly LocalRunAttachment[],
 ): LocalChatRun => ({
   harness: plan.type === "start" ? plan.destination.harness : plan.harness,
+  withAttachments: (next) => localChatRun(context, plan, next),
   stream: (input) => {
     const { resume } = input;
     switch (plan.type) {
       case "start":
         return resume === undefined || resume.length === 0
-          ? startLocalRun({ context, destination: plan.destination, input })
+          ? startLocalRun({
+              attachments,
+              context,
+              destination: plan.destination,
+              input,
+            })
           : panic("A new local turn was handed approvals to resume");
       case "resume":
         return resume !== undefined && resume.length > 0
@@ -1128,3 +1352,8 @@ export const createLocalChatRun = (
     }
   },
 });
+
+export const createLocalChatRun = (
+  context: LocalRunContext,
+  plan: LocalRunPlan,
+): LocalChatRun => localChatRun(context, plan, []);

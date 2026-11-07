@@ -1,21 +1,35 @@
-export type MatterListStatus = "active" | "archived";
+import { panic } from "better-result";
 
-export const isMatterInStatusView = (status: string, view: MatterListStatus) =>
-  status === view;
+import {
+  type VisibleWorkspaceStatus,
+  WORKSPACE_STATUS,
+  workspaceAcceptsWrites,
+  type WorkspaceStatus,
+} from "@stll/api-contract/workspace-status";
 
-export const matterRouteView = (status: string) => {
+export type MatterListStatus = VisibleWorkspaceStatus;
+
+export const isMatterInStatusView = (
+  status: WorkspaceStatus,
+  view: MatterListStatus,
+) => status === view;
+
+export const matterRouteView = (status: WorkspaceStatus) => {
   switch (status) {
-    case "active":
+    case WORKSPACE_STATUS.active:
       return "active";
-    case "archived":
+    case WORKSPACE_STATUS.archived:
       return "archived-read-only";
-    default:
+    case WORKSPACE_STATUS.deleting:
       return "unavailable";
+    default:
+      status satisfies never;
+      return panic(`Unhandled workspace status: ${String(status)}`);
   }
 };
 
 export const matterCardDragMode = (
-  status: string,
+  status: WorkspaceStatus,
   canReassignClient: boolean,
 ): "client-group" | "none" =>
-  status === "active" && canReassignClient ? "client-group" : "none";
+  workspaceAcceptsWrites(status) && canReassignClient ? "client-group" : "none";

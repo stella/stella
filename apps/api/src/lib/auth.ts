@@ -33,6 +33,10 @@ import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
 } from "@stll/api-contract/professional-use";
+import {
+  WORKSPACE_STATUS,
+  workspaceIsVisible,
+} from "@stll/api-contract/workspace-status";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
 import { isUiLocale } from "@stll/locales";
@@ -255,6 +259,7 @@ import {
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
+import { socialTokenExchangePlugin } from "@/api/lib/auth/social-token-exchange";
 import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
 import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
 import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-runtime";
@@ -1314,21 +1319,30 @@ const socialSignInTwoFactorRedirectPlugin = {
 } satisfies BetterAuthPlugin;
 
 /**
- * Whether the current auth request is the organization page's continue step.
- * The provider re-enters its authorize logic from that endpoint under the
- * authorize path, so the step is recognised by the request it answers.
+ * Whether the current auth request is the organization page's pick or its
+ * continue step. The provider re-enters its authorize logic from both, under
+ * the authorize path, so each is recognised by the request it answers.
+ *
+ * The pick is the page's `set-active` with the signed authorization request:
+ * setting the session's organization makes the provider resume authorizing
+ * in that same request. Answering it with the organization page again would
+ * send the browser back to the picker it just used, before the page could
+ * take its continue step.
  */
 const isOrganizationPageContinuation = (): boolean => {
   const endpoint = tryGetCurrentAuthEndpointContext();
   const request = endpoint?.request;
-  if (!request || request.method !== "POST") {
+  if (!request || request.method !== "POST" || !isRecord(endpoint.body)) {
     return false;
   }
+  const path = new URL(request.url).pathname;
+  if (path === new URL(getAuthEndpointUrl("oauth2/continue")).pathname) {
+    return endpoint.body["postLogin"] === true;
+  }
   return (
-    new URL(request.url).pathname ===
-      new URL(getAuthEndpointUrl("oauth2/continue")).pathname &&
-    isRecord(endpoint.body) &&
-    endpoint.body["postLogin"] === true
+    path === new URL(getAuthEndpointUrl("organization/set-active")).pathname &&
+    typeof endpoint.body["organizationId"] === "string" &&
+    typeof endpoint.body["oauth_query"] === "string"
   );
 };
 
@@ -2588,6 +2602,8 @@ export const createAuth = (
       // Must be registered after `twoFactorWithSignInGate` so its after-hook
       // runs after the two-factor hook has set the pending-challenge response.
       socialSignInTwoFactorRedirectPlugin,
+      // Before the outcome log, so the log counts the redirect it settles.
+      socialTokenExchangePlugin,
       // After the two-factor redirect, so it counts the response the browser
       // actually receives.
       socialSignInOutcomePlugin,
@@ -3252,8 +3268,6 @@ const featureAccessColumns = (organizationId: SafeId<"organization">) => {
   };
 };
 
-const ACTIVE_WORKSPACE_STATUS = "active";
-
 export const resolveMemberAuthorization = async (
   { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
   db: MemberAuthorizationDb,
@@ -3494,7 +3508,7 @@ export const resolveWorkspaceRealtimeAudience = async (
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
-        eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
         memberReachesMatterSql(
           { organizationId: member.organizationId, userId: member.userId },
           workspaces.id,
@@ -4010,7 +4024,7 @@ const resolveValidateAuth = async ({
     activeWorkspaceIdsPromise ??= getAccessibleWorkspaces().then((items) => {
       const activeWorkspaceIds: SafeId<"workspace">[] = [];
       for (const item of items) {
-        if (item.status !== "deleting") {
+        if (workspaceIsVisible(item.status)) {
           activeWorkspaceIds.push(item.id);
         }
       }

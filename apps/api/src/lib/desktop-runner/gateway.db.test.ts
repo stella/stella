@@ -8,7 +8,7 @@ import {
 import { ChatClient } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
@@ -25,21 +25,28 @@ import {
 } from "@stll/api-contract/chat";
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  CHAT_LOCAL_RUN_FILES_METADATA_KEY,
+  CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
   chatLocalRunComputerEventSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
+  DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_FEATURE_ID,
   DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
+  DESKTOP_RUNNER_OUTPUT_EVENT,
   DESKTOP_RUNNER_PATH,
   DESKTOP_RUNNER_PROTOCOL,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
   type DesktopRunnerTiming,
 } from "@stll/api-contract/desktop-runner";
+import { USER_FILE_URL_PREFIX } from "@stll/api-contract/user-file-url";
 import { compareCodeUnit } from "@stll/collation";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
@@ -53,6 +60,8 @@ import {
   desktopRunnerEvents,
   desktopRunnerRuns,
   desktopRunners,
+  featureEnrolments,
+  userFiles,
 } from "@/api/db/schema";
 import {
   chatMessageContentFromMessage,
@@ -128,7 +137,8 @@ import {
   readNewestQueuedCommands,
 } from "@/api/lib/desktop-runner/store";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
-import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
+import { createUserFileKey } from "@/api/lib/file-key";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { isRecord } from "@/api/lib/type-guards";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
@@ -167,30 +177,19 @@ const TIMING = {
 
 const clock = { now: Date.now() };
 
-/** Both fixture organizations hold the runner feature unless a test takes it away. */
-const RUNNER_GRANTS: FeatureAccessGrants = {
-  [DESKTOP_RUNNER_FEATURE_ID]: [
-    { type: "organization", organizationId: ids.orgA },
-    { type: "organization", organizationId: ids.orgB },
-  ],
-};
-const runnerGrants: { current: FeatureAccessGrants } = {
-  current: RUNNER_GRANTS,
-};
 /** The real credential check over the test database. */
 const isKeyLive: DesktopKeyLiveness = async (key) =>
   // SAFETY: PGlite and Bun SQL expose the same Drizzle select API.
   await desktopKeyLiveness(
     asTestRaw<Parameters<typeof desktopKeyLiveness>[0]>(db),
   )(key);
-/** The real feature decision over the test database and the grants above. */
+/** The real feature decision over the test database. */
 const isRunnerEnabled: RunnerFeatureAccess = async (account) =>
   await runnerFeatureAccess({
     // SAFETY: PGlite and Bun SQL expose the same Drizzle select API.
     db: asTestRaw<
       NonNullable<NonNullable<Parameters<typeof runnerFeatureAccess>[0]>["db"]>
     >(db),
-    grants: () => runnerGrants.current,
   })(account);
 const now = () => new Date(clock.now);
 
@@ -203,6 +202,27 @@ const mintRunToken: MintRunToken = async () => {
     token: `run-token-${String(mintedTokens)}`,
     expiresAt: new Date(clock.now + 15 * 60_000),
   });
+};
+
+/** Every account the fixtures connect turns the runner feature on. */
+const enrolRunnerFeature = async () => {
+  await db
+    .insert(featureEnrolments)
+    .values(
+      [
+        { userId: ids.userA1, organizationId: ids.orgA },
+        { userId: ids.userA1, organizationId: ids.orgB },
+      ].map((account) => ({
+        ...account,
+        featureId: DESKTOP_RUNNER_FEATURE_ID,
+      })),
+    )
+    .onConflictDoNothing();
+};
+const leaveRunnerFeature = async () => {
+  await db
+    .delete(featureEnrolments)
+    .where(eq(featureEnrolments.featureId, DESKTOP_RUNNER_FEATURE_ID));
 };
 
 /** A transaction held open after its work, before it commits. */
@@ -248,6 +268,8 @@ const startInstance = async (
     instanceId,
     authorize: authorizeRunnerWith(credentials.authorizeDesktopAccount),
     mintRunToken,
+    signAttachmentLink: async ({ s3Key }) =>
+      await Promise.resolve(`https://files.example.test/${s3Key}?signed`),
     now,
     random: () => 0.5,
     timing: { ...TIMING, ...overrides.timing },
@@ -287,6 +309,7 @@ beforeAll(async () => {
     .update(user)
     .set({ emailVerified: true })
     .where(eq(user.id, ids.userA1));
+  await enrolRunnerFeature();
   // SAFETY: PGlite and Bun SQL expose the same Drizzle query and transaction
   // APIs the gateway uses; the transaction is wrapped to hold a commit open.
   const updateRows = db.update.bind(db);
@@ -469,6 +492,8 @@ const openDesktop = async (
             state: "ready",
             version: HARNESS_VERSION,
             capabilities: ["approvals", "interrupt"],
+            // This computer cannot sandbox the harness.
+            approvalModes: ["ask"],
             models: [{ id: MODEL, label: "GPT-5 Codex" }],
           },
           { id: "claude-code", state: "needs_login", version: "2.1.0" },
@@ -536,15 +561,21 @@ const runnerRows = async (
       ),
     );
 
-const startInput = (desktopId: string) => ({
+const startInput = (
+  desktopId: string,
+  approvals: DesktopRunnerApprovalMode = "ask",
+  harness: "codex" | "claude-code" = "codex",
+) => ({
   owner,
   desktopId,
-  harness: "codex" as const,
+  harness,
   harnessVersion: HARNESS_VERSION,
   model: MODEL,
+  approvals,
   harnessSessionId: null,
   instructions: "Summarize the matter.",
   messages: [{ role: "user" as const, content: "Summarize the matter." }],
+  attachments: [],
   mcp: { serverName: "stella", url: "https://api.example.test/mcp" },
   workspaceIds: [],
 });
@@ -748,6 +779,48 @@ describe("run messages", () => {
       reason: DESKTOP_RUNNER_CLOSE.sequenceGap.reason,
     });
     expect((await storedSeqs(runId)).map(({ seq }) => seq)).toEqual([1, 2]);
+  });
+
+  test("an attached file's link is signed on send and never stored", async () => {
+    const instance = await startInstance("api-attachments", sharedDoorbell);
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(instance, desktopId);
+    await desktop.hello();
+    const fileId = "019a0000-0000-7000-8000-000000000001";
+    const path = `attachments/${fileId}/a.pdf`;
+    const outcome = (
+      await control.startRun({
+        ...startInput(desktopId),
+        attachments: [
+          { path, fileId, fileName: "a.pdf", s3Key: "org/file.pdf" },
+        ],
+      })
+    ).unwrap();
+    if (outcome.type !== "assigned") {
+      panic(`the run was not assigned: ${outcome.type}`);
+    }
+    const start = await desktop.receive("run.start", ofRun(outcome.runId));
+    expect(start).toMatchObject({
+      attachments: [
+        { path, url: "https://files.example.test/org/file.pdf?signed" },
+      ],
+    });
+    const stored = JSON.stringify(
+      await db
+        .select({ payload: desktopRunnerCommands.payload })
+        .from(desktopRunnerCommands)
+        .where(eq(desktopRunnerCommands.runId, outcome.runId)),
+    );
+    expect(stored).toContain("org/file.pdf");
+    expect(stored).not.toContain("?signed");
+    await desktop.close();
+    // The account's other tests count its installations and open runs.
+    await db
+      .delete(desktopRunnerRuns)
+      .where(eq(desktopRunnerRuns.runId, outcome.runId));
+    await db
+      .delete(desktopRunners)
+      .where(eq(desktopRunners.desktopId, desktopId));
   });
 
   test("a chunk that is not a valid AG-UI event is refused unstored", async () => {
@@ -1004,6 +1077,78 @@ describe("leases", () => {
       .where(eq(desktopRunnerRuns.runId, accepted));
     expect(row?.desktopId).toBe(desktopId);
     await back.close();
+  });
+});
+
+describe("approval modes", () => {
+  test("a run starts in the thread's approval mode, and a mode the computer does not report is refused", async () => {
+    // A runner row as its socket's hello leaves it; no socket is needed to
+    // queue a start.
+    const desktopId = Bun.randomUUIDv7();
+    await db.insert(desktopRunners).values({
+      ...owner,
+      desktopId,
+      deviceJkt: credentials.a.deviceJkt,
+      keyId: credentials.a.keyId,
+      connection: "connected",
+      sessionId: Bun.randomUUIDv7(),
+      instanceId: "api-elsewhere",
+      protocol: DESKTOP_RUNNER_PROTOCOL.current,
+      appVersion: "1.4.0",
+      sidecarVersion: "1.4.0",
+      harnesses: [
+        {
+          id: "codex",
+          state: "ready",
+          version: HARNESS_VERSION,
+          capabilities: ["approvals"],
+          // Codex runs in one approval mode.
+          approvalModes: ["ask"],
+          models: [{ id: MODEL, label: "GPT-5 Codex" }],
+        },
+        {
+          id: "claude-code",
+          state: "ready",
+          version: HARNESS_VERSION,
+          capabilities: ["approvals"],
+          approvalModes: ["ask", "auto", "full_auto"],
+          models: [{ id: MODEL, label: "Model" }],
+        },
+      ],
+      connectedAt: now(),
+      lastSeenAt: now(),
+    });
+    const runIds: string[] = [];
+    for (const approvals of DESKTOP_RUNNER_APPROVAL_MODES) {
+      const outcome = (
+        await control.startRun(startInput(desktopId, approvals, "claude-code"))
+      ).unwrap();
+      const runId =
+        outcome.type === "assigned"
+          ? outcome.runId
+          : panic(`the run was not assigned: ${outcome.type}`);
+      runIds.push(runId);
+      const [queued] = await db
+        .select({ payload: desktopRunnerCommands.payload })
+        .from(desktopRunnerCommands)
+        .where(eq(desktopRunnerCommands.runId, runId));
+      expect(queued?.payload).toMatchObject({
+        type: "run.start",
+        policy: { network: "open", fs: "workspace", approvals },
+      });
+    }
+    for (const approvals of ["auto", "full_auto"] as const) {
+      expect(
+        (await control.startRun(startInput(desktopId, approvals))).unwrap(),
+      ).toEqual({ type: "approvals_unavailable" });
+    }
+    // The account's other tests count its installations and open runs.
+    await db
+      .delete(desktopRunnerRuns)
+      .where(inArray(desktopRunnerRuns.runId, runIds));
+    await db
+      .delete(desktopRunners)
+      .where(eq(desktopRunners.desktopId, desktopId));
   });
 });
 
@@ -1294,7 +1439,7 @@ describe("runner feature", () => {
   test("an account without the runner feature is refused before the upgrade and keeps no runner", async () => {
     const desktopId = Bun.randomUUIDv7();
     const openBefore = first.gateway.openSessions();
-    runnerGrants.current = {};
+    await leaveRunnerFeature();
     try {
       const refused = await first.gateway.upgrade(
         await upgradeRequest(first, desktopId),
@@ -1305,7 +1450,7 @@ describe("runner feature", () => {
         code: DESKTOP_RUNNER_CLOSE.featureDisabled.reason,
       });
     } finally {
-      runnerGrants.current = RUNNER_GRANTS;
+      await enrolRunnerFeature();
     }
     expect(first.gateway.openSessions()).toBe(openBefore);
     expect(
@@ -1331,14 +1476,14 @@ describe("runner feature", () => {
     );
     const desktop = await openDesktop(beating, Bun.randomUUIDv7());
     await desktop.hello();
-    runnerGrants.current = {};
+    await leaveRunnerFeature();
     try {
       expect(await desktop.closed).toEqual({
         code: DESKTOP_RUNNER_CLOSE.featureDisabled.code,
         reason: DESKTOP_RUNNER_CLOSE.featureDisabled.reason,
       });
     } finally {
-      runnerGrants.current = RUNNER_GRANTS;
+      await enrolRunnerFeature();
     }
   });
 });
@@ -1858,6 +2003,8 @@ describe("outbound frames", () => {
             state: "ready",
             version: HARNESS_VERSION,
             capabilities: ["approvals", "interrupt"],
+            // This computer cannot sandbox the harness.
+            approvalModes: ["ask"],
             models: [{ id: MODEL, label: "GPT-5 Codex" }],
           },
         ],
@@ -2090,6 +2237,7 @@ describe("chat turns on a computer", () => {
       harness: "codex",
       harnessVersion: HARNESS_VERSION,
       model: CHAT_MODEL,
+      approvals: "ask",
     },
   });
 
@@ -2334,6 +2482,259 @@ describe("chat turns on a computer", () => {
     expect(callIds.has("item_1")).toBe(false);
   });
 
+  describe("what a computer may say about a turn's files and message", () => {
+    const answer = async (
+      chatThreadId: SafeId<"chatThread">,
+      send: (
+        runId: string,
+        run: ReturnType<typeof desktopRun>,
+      ) => Promise<void>,
+    ) => {
+      const { desktopId, desktop } = shared();
+      const turn = collect(
+        createLocalChatRun(
+          contextFor(chatThreadId),
+          startPlan(desktopId),
+        ).stream({
+          chatRunId: "chat-run-files",
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "Write the report." }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+      const start = await desktop.receive("run.start");
+      desktop.send({ type: "run.accepted", runId: start.runId });
+      const run = desktopRun(desktop, start.runId);
+      await send(start.runId, run);
+      await run.finish("completed", "codex-session-files");
+      return await turn.done;
+    };
+
+    const storedFile = async (
+      threadId: SafeId<"chatThread">,
+      userId: string,
+      organizationId: SafeId<"organization"> = ids.orgA,
+    ) => {
+      const id = createSafeId<"userFile">();
+      await db.insert(userFiles).values({
+        id,
+        userId,
+        fileName: "report.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 10,
+        sha256Hex: "a".repeat(64),
+        s3Key: createUserFileKey({
+          fileId: id,
+          mimeType: "application/pdf",
+          organizationId,
+        }),
+        threadId,
+      });
+      return id;
+    };
+
+    const report = (value: unknown) => ({
+      type: EventType.CUSTOM,
+      name: DESKTOP_RUNNER_OUTPUT_EVENT,
+      value,
+    });
+
+    /** What the server told the answer about files, each time it said so. */
+    const answerMetadata = (chunks: readonly unknown[]) =>
+      chunks.flatMap((chunk) =>
+        isRecord(chunk) &&
+        chunk["type"] === EventType.TEXT_MESSAGE_START &&
+        isRecord(chunk["metadata"]) &&
+        (CHAT_LOCAL_RUN_FILES_METADATA_KEY in chunk["metadata"] ||
+          CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY in chunk["metadata"])
+          ? [chunk["metadata"]]
+          : [],
+      );
+
+    test("a reported file of this thread reaches the chat as the server read it", async () => {
+      const chatThreadId = await newThread();
+      const fileId = await storedFile(chatThreadId, ids.userA1);
+      const chunks = await answer(chatThreadId, async (_runId, run) => {
+        await run.events([
+          // The desktop's name and type are not what the chat is told.
+          report({ status: "uploaded", fileId, fileName: "forged.exe" }),
+        ]);
+      });
+      expect(answerMetadata(chunks)).toEqual([
+        {
+          [CHAT_LOCAL_RUN_FILES_METADATA_KEY]: [
+            {
+              url: `${USER_FILE_URL_PREFIX}${fileId}`,
+              filename: "report.pdf",
+              mimeType: "application/pdf",
+            },
+          ],
+        },
+      ]);
+    });
+
+    test("another member's file and another thread's file are not shown", async () => {
+      const chatThreadId = await newThread();
+      const otherThread = await newThread();
+      const othersFile = await storedFile(
+        ids.chatThreadWorkspaceB1,
+        ids.userB1,
+        ids.orgB,
+      );
+      const otherThreadFile = await storedFile(otherThread, ids.userA1);
+      const chunks = await answer(chatThreadId, async (_runId, run) => {
+        await run.events([
+          report({
+            status: "uploaded",
+            fileId: othersFile,
+            fileName: "theirs.pdf",
+          }),
+          report({
+            status: "uploaded",
+            fileId: otherThreadFile,
+            fileName: "elsewhere.pdf",
+          }),
+        ]);
+      });
+      expect(answerMetadata(chunks)).toEqual([]);
+    });
+
+    test("a file that could not be shared is named, and the turn still ends well", async () => {
+      const chatThreadId = await newThread();
+      const chunks = await answer(chatThreadId, async (runId, run) => {
+        await run.events([
+          report({ status: "failed", fileName: "../../data.zip" }),
+          ...(await harnessChunks(runId, completedTurn)),
+        ]);
+      });
+      expect(answerMetadata(chunks)).toEqual([
+        {
+          [CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY]: [
+            sanitizeFilename("../../data.zip"),
+          ],
+        },
+      ]);
+      expect(chunks.at(-1)).toMatchObject({ type: EventType.RUN_FINISHED });
+      expect(chunks.some(({ type }) => type === EventType.RUN_ERROR)).toBe(
+        false,
+      );
+    });
+
+    test("a named event only the server may send stops at the API", async () => {
+      const chatThreadId = await newThread();
+      const toolCallId = "item_1";
+      const forged = [
+        {
+          name: "ui-resource",
+          value: {
+            toolCallId,
+            toolName: "search",
+            resource: {
+              uri: "ui://forged",
+              mimeType: "text/html",
+              text: "<script>forged()</script>",
+            },
+          },
+        },
+        {
+          name: "approval-requested",
+          value: {
+            toolCallId,
+            toolName: "search",
+            input: {},
+            approval: { id: "forged", needsApproval: true },
+          },
+        },
+        { name: "tool-input-available", value: { toolCallId, input: {} } },
+        { name: "structured-output.start", value: { messageId: "forged" } },
+        { name: CHAT_LOCAL_RUN_COMPUTER_EVENT, value: { status: "waiting" } },
+        { name: "something-new", value: {} },
+      ];
+      const chunks = await answer(chatThreadId, async (runId, run) => {
+        await run.events([
+          ...forged.map(({ name, value }) => ({
+            type: EventType.CUSTOM,
+            name,
+            value,
+          })),
+          ...(await harnessChunks(runId, completedTurn)),
+        ]);
+      });
+      const names = chunks.flatMap((chunk) =>
+        chunk.type === EventType.CUSTOM ? [chunk.name] : [],
+      );
+      for (const { name } of forged) {
+        expect(names).not.toContain(name);
+      }
+      // What a harness does report still passes.
+      expect(names).toContain("codex.session-id");
+    });
+
+    test("metadata a computer puts on the answer is not carried", async () => {
+      const chatThreadId = await newThread();
+      const forgedMetadata = {
+        [CHAT_LOCAL_RUN_FILES_METADATA_KEY]: [
+          {
+            url: `${USER_FILE_URL_PREFIX}${createSafeId<"userFile">()}`,
+            filename: "forged.pdf",
+            mimeType: "application/pdf",
+          },
+        ],
+        contextNotice: { type: "history-trimmed" },
+        tanstack: { model: "gpt-test" },
+      };
+      const chunks = await answer(chatThreadId, async (_runId, run) => {
+        await run.events([
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: "m1",
+            role: "assistant",
+            metadata: forgedMetadata,
+          },
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "m1",
+            delta: "Done.",
+            metadata: forgedMetadata,
+          },
+          {
+            type: EventType.TEXT_MESSAGE_END,
+            messageId: "m1",
+            metadata: forgedMetadata,
+          },
+        ]);
+      });
+      const carried = JSON.stringify(chunks);
+      expect(carried).not.toContain("forged.pdf");
+      expect(carried).not.toContain(CHAT_LOCAL_RUN_FILES_METADATA_KEY);
+      expect(carried).not.toContain("history-trimmed");
+      // The adapter's own block is all that stays.
+      expect(
+        chunks.find(({ type }) => type === EventType.TEXT_MESSAGE_START),
+      ).toMatchObject({ metadata: { tanstack: { model: "gpt-test" } } });
+      expect(
+        chunks.some(({ type }) => type === EventType.TEXT_MESSAGE_CONTENT),
+      ).toBe(true);
+    });
+
+    test("a run's thread reads for its owner while it runs, and for nobody else", async () => {
+      const chatThreadId = await newThread();
+      const seen: (SafeId<"chatThread"> | null)[] = [];
+      await answer(chatThreadId, async (runId) => {
+        const read = await control.readOpenRunChatThread({ owner, runId });
+        seen.push(read.unwrap());
+        const foreign = await control.readOpenRunChatThread({
+          owner: { organizationId: ids.orgB, userId: ids.userB1 },
+          runId,
+        });
+        seen.push(foreign.unwrap());
+      });
+      expect(seen).toEqual([chatThreadId, null]);
+    });
+  });
+
   test("the thread's next turn on the same computer resumes the harness session", async () => {
     const chatThreadId = await newThread();
     const { desktopId, desktop } = shared();
@@ -2379,6 +2780,8 @@ describe("chat turns on a computer", () => {
         message.type === "run.start" && message.runId !== firstStart.runId,
     );
     expect(secondStart.harnessSessionId).toBe("codex-session-1");
+    expect(firstStart.folderId).toBe(chatThreadId);
+    expect(secondStart.folderId).toBe(chatThreadId);
     desktop.send({ type: "run.accepted", runId: secondStart.runId });
     const secondRun = desktopRun(desktop, secondStart.runId);
     await secondRun.events(
@@ -2842,6 +3245,10 @@ describe("chat turns on a computer", () => {
         { answers: { ...ANSWERS, tone: ["Casual"] } },
       ],
       ["a question left out", { answers: { tone: ["Formal"] } }],
+      [
+        "two answers to a single-choice question",
+        { answers: { ...ANSWERS, tone: ["Formal", "Friendly"] } },
+      ],
       ["a question never asked", { answers: { ...ANSWERS, venue: ["Brno"] } }],
     ];
     for (const [name, payload] of refusals) {
@@ -3077,6 +3484,79 @@ describe("chat turns on a computer", () => {
     expect(
       last?.type === EventType.RUN_ERROR ? classifyRunErrorChunk(last) : null,
     ).toBe("local_runner_limit_reached");
+  });
+
+  test("a run that reached its usage limit says when the limit resets, and a time the desktop made up is dropped", async () => {
+    const limitedTurn = async (
+      chunks: (runId: string) => Promise<unknown[]>,
+    ) => {
+      const chatThreadId = await newThread();
+      const { desktopId, desktop } = shared();
+      const turn = collect(
+        createLocalChatRun(
+          contextFor(chatThreadId),
+          startPlan(desktopId),
+        ).stream({
+          chatRunId: Bun.randomUUIDv7(),
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "Summarize" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+      const start = await desktop.receive("run.start");
+      desktop.send({ type: "run.accepted", runId: start.runId });
+      const run = desktopRun(desktop, start.runId);
+      await run.events(await chunks(start.runId));
+      await run.finish("limit_reached", null);
+      const last = (await turn.done).at(-1);
+      expect(last).toMatchObject({
+        type: EventType.RUN_ERROR,
+        code: AI_FAILURE_CODES.local_runner_limit_reached,
+      });
+      return last?.type === EventType.RUN_ERROR ? last : panic("no run error");
+    };
+    const limitFailure = (resetsAt: string | null) =>
+      [
+        {
+          type: "turn.failed",
+          failure: {
+            type: "usage_limit",
+            message: "Usage limit reached",
+            resetsAt,
+          },
+        },
+      ] satisfies HarnessEvent[];
+
+    const reported = await limitedTurn(
+      async (runId) =>
+        await harnessChunks(runId, limitFailure("2026-11-08T09:30:00.000Z")),
+    );
+    expect(reported.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]).toEqual({
+      resetsAt: "2026-11-08T09:30:00.000Z",
+    });
+
+    // A desktop is not trusted: a time that is not an instant, or extra
+    // fields beside it, never reach the turn.
+    for (const forged of [
+      { resetsAt: "tomorrow" },
+      { resetsAt: "2026-11-08T09:30:00.000Z", note: "<b>now</b>" },
+    ]) {
+      const dropped = await limitedTurn(async (runId) =>
+        (await harnessChunks(runId, limitFailure(null))).map((chunk) =>
+          isRecord(chunk) && chunk["type"] === EventType.RUN_ERROR
+            ? {
+                ...chunk,
+                metadata: { [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: forged },
+              }
+            : chunk,
+        ),
+      );
+      expect(
+        dropped.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+      ).toBeUndefined();
+    }
   });
 
   test("a computer that refuses the run fails the turn with the reason it gave", async () => {
@@ -4076,6 +4556,10 @@ describe("chat turns on a computer", () => {
       ["answers as text", { answers: { law: "Czech" } }],
       ["an option the question lacks", { answers: { law: ["Austrian"] } }],
       ["a question left out", { answers: {} }],
+      [
+        "two answers to a single choice",
+        { answers: { law: ["Czech", "Slovak"] } },
+      ],
       [
         "a question never asked",
         { answers: { law: ["Czech"], venue: ["Brno"] } },

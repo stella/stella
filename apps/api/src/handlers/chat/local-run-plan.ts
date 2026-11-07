@@ -45,6 +45,18 @@ export type ResolveChatLocalRunOptions = {
   runtime?: { control: DesktopRunnerControl; runBell: DesktopRunnerRunBell };
 };
 
+/**
+ * The chat thread of the member's run that is still going, for what the run's
+ * own token may write: the run's row names the thread, never the request.
+ */
+export const readOpenLocalRunThread = async (
+  options: Parameters<DesktopRunnerControl["readOpenRunChatThread"]>[0],
+  runtime: Pick<
+    ReturnType<typeof getDesktopRunnerControl>,
+    "control"
+  > = getDesktopRunnerControl(),
+) => await runtime.control.readOpenRunChatThread(options);
+
 const refuse = (
   status: 400 | 403 | 409,
   code: (typeof CHAT_LOCAL_RUN_REFUSAL)[keyof typeof CHAT_LOCAL_RUN_REFUSAL],
@@ -141,6 +153,13 @@ export const resolveChatLocalRun = async ({
           "The harness on your computer does not offer that model.",
         );
       }
+      if (!desktop.harness.approvalModes.includes(runTarget.approvals)) {
+        return refuse(
+          409,
+          CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable,
+          "Your computer cannot run the harness with those permissions.",
+        );
+      }
       const plan: LocalRunPlan = {
         type: "start",
         destination: {
@@ -148,6 +167,7 @@ export const resolveChatLocalRun = async ({
           harness: runTarget.harness,
           harnessVersion: desktop.harness.version,
           model: runTarget.model,
+          approvals: runTarget.approvals,
         },
       };
       return Result.ok(createLocalChatRun(context, plan));

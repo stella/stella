@@ -269,6 +269,7 @@ type MockOptions = {
   /** How each supplementary surface answers; unnamed ones serve their response. */
   supplementary?: Partial<Record<SupplementarySurface, SurfaceAnswer>>;
   collection?: SearchStub;
+  codelistBody?: string;
 };
 
 /** The responses served for one decision beside its listing row and its file. */
@@ -423,6 +424,7 @@ const mockFetch = ({
   searchFor,
   supplementary = {},
   collection = { type: "page", documents: [], numFound: 0 },
+  codelistBody = CODELIST_BODY,
 }: MockOptions): MockHandle => {
   let searchCall = 0;
   let downloadCall = 0;
@@ -471,7 +473,7 @@ const mockFetch = ({
       if (url.pathname === CODELIST_PATH) {
         return surfaceAnswer(
           supplementary.codelist,
-          () => new Response(CODELIST_BODY, { headers: JSON_HEADERS }),
+          () => new Response(codelistBody, { headers: JSON_HEADERS }),
         );
       }
       if (url.pathname.startsWith(COURT_FILE_PREFIX)) {
@@ -1073,7 +1075,15 @@ describe("sk-us buildDecision", () => {
   });
 
   test("every response the court served for the decision is in the envelope", async () => {
-    mockFetch({ search: [], dissenters: ["Peter Straka"] });
+    const codelistBody = JSON.stringify({
+      codelist: {
+        mkJudgeReporter: ["Ivan Fiačan", "Another published judge"],
+        mkDifferentViewJudges: ["Peter Straka"],
+        newlyPublishedRoster: [],
+      },
+      publisherRevision: "retained",
+    });
+    mockFetch({ search: [], dissenters: ["Peter Straka"], codelistBody });
 
     const outcome = await reconciliation.buildDecision(PLENARY_OPINION);
     if (outcome.type !== "built") {
@@ -1093,14 +1103,10 @@ describe("sk-us buildDecision", () => {
     ]);
     expect(JSON.parse(parts?.["listing"] ?? "null")).toEqual(PLENARY_OPINION);
     expect(parts?.["document"]).toContain("rozh od ol");
-    // The vocabularies are corpus-level, so the row keeps the digest of the
-    // response it read and the entries this decision resolved against it.
-    expect(JSON.parse(parts?.["codelists"] ?? "null")).toMatchObject({
-      used: {
-        mkJudgeReporter: ["Ivan Fiačan"],
-        mkDifferentViewJudges: ["Peter Straka"],
-      },
-    });
+    expect(parts?.["codelists"]).toBe(codelistBody);
+    expect(
+      await skUsAdapter.sourceFields.listSourceFields(parts ?? {}),
+    ).toContain("newlyPublishedRoster");
   });
 
   test("a collection listing the service states nothing for stays visible beside the publisher inclusion flag", async () => {

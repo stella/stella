@@ -152,6 +152,7 @@
     "emailPlaceholder": "vy@example.com",
     "error": {
       "generic": "Pri prihlasovaní sa niečo pokazilo. Skúste to znova.",
+      "providerUnavailable": "Poskytovateľ prihlásenia teraz neodpovedá. Skúste to prosím znova o minútu.",
       "title": "Nepodarilo sa vás prihlásiť"
     },
     "handoffAccount": "Pokračovať ako <account>{email}</account> v organizácii <organization>{organizationName}</organization>?",
@@ -162,7 +163,9 @@
       "declinedDescription": "Odmietli ste túto pozvánku. Môžete túto stránku zavrieť.",
       "description": "{inviterEmail} vás pozval/a do organizácie {organizationName} ako {role}.",
       "goToWorkspaces": "Prejsť na spisy",
-      "title": "Pozvánka do organizácie"
+      "title": "Pozvánka do organizácie",
+      "verifyEmailHint": "Ak chcete overiť adresu {email}, odhláste sa a prihláste sa jednorazovým kódom, ktorý na ňu odošleme.",
+      "wrongAccountHint": "Ste prihlásení ako {email}. Odhláste sa a prihláste sa adresou, na ktorú bola pozvánka odoslaná."
     },
     "lastUsed": "Naposledy použité",
     "oneTimeCodeExpired": "Platnosť jednorazového kódu vypršala. Požiadajte o nový kód.",
@@ -1684,13 +1687,23 @@
     "localRun": {
       "cloud": "Cloud stella",
       "errorLimitReached": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Skúste to znova, keď sa limit obnoví.",
+      "errorLimitResetsAt": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Znova to môžete skúsiť po {time}.",
       "errorNeedsLogin": "Programovací agent vo vašom počítači vyžaduje nové prihlásenie. Prihláste sa cez stella desktop a skúste to znova.",
       "errorUnavailable": "Váš počítač prestal túto odpoveď spracúvať. Overte, že je stella desktop spustený a pripojený, a skúste to znova.",
+      "filesNotShared": "Súbory, ktoré sa nepodarilo zdieľať, zostávajú vo vašom počítači: {fileNames}",
       "onThisComputer": "{harness} v tomto počítači",
+      "permissionAskDescription": "Súbory v priečinku chatu upravuje sám; na všetko ostatné sa opýta.",
+      "permissionAutoDescription": "Čo považuje za bezpečné, urobí sám; na zvyšok sa opýta.",
+      "permissionFullAuto": "Plne automaticky",
+      "permissionFullAutoDescription": "Na nič vnútri priečinka chatu sa nepýta; skôr než zmení niečo vo vašom počítači, vždy sa opýta.",
+      "permissionSandboxed": "Beží v izolovanom prostredí; skôr než zmení niečo vo vašom počítači, opýta sa.",
+      "permissionUnavailable": "V tomto počítači nie je k dispozícii",
+      "permissions": "Oprávnenia",
       "refusalConflictingRunMode": "Táto požiadavka sa má spustiť zároveň v cloudovom agentovi aj vo vašom počítači. Vyberte jedno v ponuke Spustiť na.",
       "refusalHarnessUnavailable": "Programovací agent vo vašom počítači teraz túto požiadavku nemôže prevziať. Skontrolujte ho v stella desktop.",
       "refusalModelUnavailable": "Programovací agent vo vašom počítači už tento model neponúka. Vyberte iný v ponuke Spustiť na.",
       "refusalNoComputer": "Žiadny z vašich počítačov nie je pripojený. Otvorte stella desktop a odošlite správu znova.",
+      "refusalPermissionUnavailable": "Programovací agent vo vašom počítači s týmito oprávneniami bežať nemôže. Vyberte inú možnosť v ponuke Oprávnenia.",
       "refusalTooLarge": "Táto konverzácia je príliš dlhá na odovzdanie do vášho počítača. Na spustenie tam začnite nový chat.",
       "refusalUnavailable": "Spúšťanie chatov vo vašom počítači nie je pre váš účet dostupné.",
       "runOn": "Spustiť na",
@@ -1702,6 +1715,16 @@
       "stateUnavailable": "Momentálne nedostupné",
       "stateUnsupported": "Táto verzia nie je podporovaná",
       "waitingForComputer": "Čaká sa, kým sa váš počítač znova pripojí…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Vyberte všetko, čo platí",
+      "dismiss": "Zamietnuť a zastaviť",
+      "secretAnswer": "Odpoveď je skrytá",
+      "secretPlaceholder": "Vaša odpoveď zostane skrytá"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {Na vás čaká # chat} few {Na vás čakajú # chaty} many {Na vás čaká # chatu} other {Na vás čaká # chatov}}",
+      "working": "{count, plural, one {Pracuje # chat} few {Pracujú # chaty} many {Pracuje # chatu} other {Pracuje # chatov}}"
     },
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mcpReconnect": {
@@ -1844,10 +1867,18 @@
       "toolbarLabel": "Vybraný text"
     },
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",
+    "sendErrorActiveFileNoText": "V otvorenom súbore nie je text, ktorý by stella dokázala prečítať. Zatvorte ho alebo otvorte iný súbor.",
+    "sendErrorActiveFileTooLarge": "Otvorený súbor je pre chat príliš veľký. Zatvorte ho alebo otvorte menší súbor.",
+    "sendErrorAgentRunsDisabled": "Behy agenta tu nie sú k dispozícii. Obráťte sa na správcu pracovného priestoru.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovať jednu prílohu, takže sa nič neodoslalo. Odstráňte súbor alebo odošlite správu bez anonymizácie.",
+    "sendErrorAttachmentNoText": "V priloženom súbore nie je text, ktorý by stella dokázala prečítať. Odstráňte ho alebo priložte iný súbor.",
+    "sendErrorAttachmentUnsupported": "Tento typ súboru nie je možné priložiť k chatu. Priložte iný súbor.",
     "sendErrorConnectionFailed": "Pripojenie k chatu zlyhalo. Skontrolujte pripojenie a skúste to znova.",
     "sendErrorContinuationRejected": "V chate sa nepodarilo pokračovať. Začnite znova odoslaním novej správy.",
+    "sendErrorDocumentUnsupported": "Tento model nedokáže prečítať jeden z priložených dokumentov. Odstráňte prílohu alebo prepnite na model, ktorý ju podporuje.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnu odpoveď. Skúste to znova alebo správu preformulujte.",
+    "sendErrorImageInvalid": "Tento obrázok sa pre model nepodarilo pripraviť. Nahrajte menší obrázok alebo prepnite model.",
+    "sendErrorImageUnsupported": "Tento model nedokáže prečítať priložené obrázky. Odstráňte obrázok alebo prepnite na model, ktorý obrázky podporuje.",
     "sendErrorLoopDetected": "Odpoveď AI sa príliš opakovala. Skúste to znova s užšou požiadavkou.",
     "sendErrorMessageEmpty": "Správa neobsahuje žiadny text na odoslanie. Napíšte otázku alebo priložte súbor a potom ju odošlite.",
     "sendErrorModelUnavailable": "Nastavený AI model už nie je dostupný. Požiadajte správcu pracovného priestoru, aby model aktualizoval v nastaveniach organizácie.",
@@ -1859,6 +1890,7 @@
     "sendErrorQuotaExhausted": "Kvóta poskytovateľa AI je vyčerpaná. Skúste to o minútu znova alebo sa obráťte na správcu pracovného priestoru.",
     "sendErrorStreamIncomplete": "Odpoveď AI sa prerušila skôr, ako bola dokončená. Skúste to znova.",
     "sendErrorTimedOut": "Chat neodpovedal včas. Skúste to znova.",
+    "sendErrorToolsUnsupported": "Tento model nevie používať nástroje, takže nemôže odpovedať na otázky k vášmu spisu. Prepnite na model, ktorý nástroje podporuje.",
     "sendPrompt": "Odoslať správu",
     "sendQueuedMessageNow": "Odoslať hneď",
     "sendWithoutAnonymization": "Odoslať bez anonymizácie",
@@ -3959,6 +3991,8 @@
     "reopenTab": "Znova otvoriť {name}",
     "resizePane": "Zmeniť veľkosť panela",
     "review": {
+      "acceptChange": "Prijať zmenu",
+      "acceptFinding": "Prijať zistenie",
       "actionNeeded": "Na riešenie",
       "addComment": "Pridať ako komentár",
       "addNote": "Pridať komentár pre protistranu",
@@ -3999,6 +4033,7 @@
         "dismissed": "Zamietnuté"
       },
       "description": "Vyberte pripravený playbook, referenčné dokumenty alebo oboje.",
+      "dismissFinding": "Zamietnuť zistenie",
       "documentChanged": "Dokument sa od tejto kontroly zmenil.",
       "export": {
         "counterparty": "Stiahnuť pre protistranu",
@@ -4022,6 +4057,7 @@
       "history": {
         "backToLatest": "Späť na najnovšiu",
         "decided": "rozhodnuté {decided, number} z {total, number}",
+        "fromTable": "Z tabuľky",
         "references": "{count, plural, one {# referencia} few {# referencie} other {# referencií} many {# referencie}}"
       },
       "impact": {
@@ -4046,7 +4082,6 @@
         "unanchored": "Bez väzby na ustanovenie"
       },
       "newTopic": "Nová téma kontroly",
-      "noChangeNeeded": "Zmena nie je potrebná",
       "noEditor": "Zmeny prijmete po otvorení dokumentu",
       "noMaterialDifferences": "Nenašli sa žiadne podstatné rozdiely",
       "noPassage": "Žiadna pasáž",
@@ -4129,6 +4164,11 @@
         "noSide": "bez strany",
         "proposedFromReferences": "pozície navrhnuté z referencií",
         "unnamedReferences": "{count, plural, one {# referenčný dokument} few {# referenčné dokumenty} many {# referenčného dokumentu} other {# referenčných dokumentov}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Úplná kontrola tejto verzie</link> s odkazmi a navrhovanými zmenami je k dispozícii v histórii kontrol.",
+        "origin": "<strong>Spustené z tabuľky.</strong> Tieto zistenia boli vyhodnotené podľa hodnôt vyťažených pre tabuľku, preto neodkazujú na dokument a neobsahujú navrhované zmeny.",
+        "runAnotherReview": "Odkazy a navrhované zmeny získate cez tlačidlo <action>{label}</action>."
       },
       "targetAsReference": "Kontrolovaný dokument nemôže byť vlastnou referenciou.",
       "targetColumn": "Tento dokument",
@@ -5249,6 +5289,8 @@
       "betaDescription": "Vyskúšajte funkcie, ktoré sú stále vo vývoji",
       "betaInbox": "Doručené a oznámenia",
       "betaInboxDescription": "Zobraziť Doručené a zvonček oznámení",
+      "betaLocalAgents": "Agenti na vašom počítači",
+      "betaLocalAgentsDescription": "Spúšťať chaty s Codexom alebo Claude Code na vašom počítači cez stella desktop",
       "betaTimeBillingDescription": "Zobraziť sledovanie času, faktúry a výdavky",
       "chatNotifications": "Upozornenia z chatu",
       "chatNotificationsBlocked": "Upozornenia sú pre stellu v tomto prehliadači zablokované. Povoľte ich v nastaveniach stránky v prehliadači.",
@@ -6477,6 +6519,10 @@
       },
       "noProperties": "Žiadna vlastnosť na výpočet",
       "unavailable": "—"
+    },
+    "cellOverride": {
+      "machineValue": "Pôvodná hodnota z AI",
+      "reasonPlaceholder": "Dôvod zmeny (nepovinné)"
     },
     "copyToMatter": {
       "copied": "Skopírované do spisu",

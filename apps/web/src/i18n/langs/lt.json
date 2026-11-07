@@ -152,6 +152,7 @@
     "emailPlaceholder": "jus@example.com",
     "error": {
       "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",
+      "providerUnavailable": "Prisijungimo paslauga šiuo metu neatsako. Bandykite dar kartą po minutės.",
       "title": "Nepavyko jūsų prijungti"
     },
     "handoffAccount": "Tęsti kaip <account>{email}</account> organizacijoje <organization>{organizationName}</organization>?",
@@ -162,7 +163,9 @@
       "declinedDescription": "Atmetėte šį kvietimą. Galite saugiai uždaryti šį puslapį.",
       "description": "{inviterEmail} pakvietė jus prisijungti prie {organizationName} kaip {role}.",
       "goToWorkspaces": "Eiti į bylas",
-      "title": "Kvietimas į organizaciją"
+      "title": "Kvietimas į organizaciją",
+      "verifyEmailHint": "Kad patvirtintumėte adresą {email}, atsijunkite ir prisijunkite vienkartiniu kodu, kurį išsiųsime šiuo adresu.",
+      "wrongAccountHint": "Esate prisijungę kaip {email}. Atsijunkite ir prisijunkite adresu, kuriuo buvo išsiųstas kvietimas."
     },
     "lastUsed": "Paskutinį kartą naudotas",
     "oneTimeCodeExpired": "Jūsų vienkartinio kodo galiojimas baigėsi. Paprašykite naujo kodo.",
@@ -1684,13 +1687,23 @@
     "localRun": {
       "cloud": "stella debesis",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
+      "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",
       "errorNeedsLogin": "Programavimo agentas jūsų kompiuteryje prašo prisijungti iš naujo. Prisijunkite per stella desktop ir bandykite dar kartą.",
       "errorUnavailable": "Jūsų kompiuteris nustojo apdoroti šį atsakymą. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
+      "filesNotShared": "Failai, kurių nepavyko bendrinti, lieka jūsų kompiuteryje: {fileNames}",
       "onThisComputer": "{harness} šiame kompiuteryje",
+      "permissionAskDescription": "Pokalbio aplanko failus redaguoja pats; dėl visko kito klausia.",
+      "permissionAutoDescription": "Tai, ką laiko saugiu, atlieka pats; dėl kito klausia.",
+      "permissionFullAuto": "Visiškai automatiškai",
+      "permissionFullAutoDescription": "Dėl nieko pokalbio aplanke neklausia; prieš ką nors keisdamas jūsų kompiuteryje, visada paklausia.",
+      "permissionSandboxed": "Veikia izoliuotoje aplinkoje; prieš ką nors keisdamas jūsų kompiuteryje, paklausia.",
+      "permissionUnavailable": "Šiame kompiuteryje nepasiekiama",
+      "permissions": "Leidimai",
       "refusalConflictingRunMode": "Ši užklausa prašo veikti ir su debesies agentu, ir jūsų kompiuteryje. Pasirinkite vieną meniu Paleisti.",
       "refusalHarnessUnavailable": "Programavimo agentas jūsų kompiuteryje dabar negali priimti šios užklausos. Patikrinkite jį per stella desktop.",
       "refusalModelUnavailable": "Programavimo agentas jūsų kompiuteryje šio modelio nebesiūlo. Pasirinkite kitą meniu Paleisti.",
       "refusalNoComputer": "Nė vienas jūsų kompiuteris neprijungtas. Atidarykite stella desktop ir siųskite dar kartą.",
+      "refusalPermissionUnavailable": "Programavimo agentas jūsų kompiuteryje negali veikti su šiais leidimais. Pasirinkite kitą parinktį meniu Leidimai.",
       "refusalTooLarge": "Šis pokalbis per ilgas, kad jį būtų galima perduoti jūsų kompiuteriui. Pradėkite naują pokalbį, kad paleistumėte jį ten.",
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
       "runOn": "Paleisti",
@@ -1702,6 +1715,16 @@
       "stateUnavailable": "Šiuo metu nepasiekiama",
       "stateUnsupported": "Ši versija nepalaikoma",
       "waitingForComputer": "Laukiama, kol jūsų kompiuteris vėl prisijungs…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Pasirinkite visus tinkamus",
+      "dismiss": "Atmesti ir sustabdyti",
+      "secretAnswer": "Atsakymas paslėptas",
+      "secretPlaceholder": "Jūsų atsakymas liks paslėptas"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# pokalbis laukia jūsų} few {# pokalbiai laukia jūsų} many {# pokalbio laukia jūsų} other {# pokalbių laukia jūsų}}",
+      "working": "{count, plural, one {# pokalbis vykdomas} few {# pokalbiai vykdomi} many {# pokalbio vykdoma} other {# pokalbių vykdoma}}"
     },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mcpReconnect": {
@@ -1844,10 +1867,18 @@
       "toolbarLabel": "Pažymėtas tekstas"
     },
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
+    "sendErrorActiveFileNoText": "Atidarytame faile nėra teksto, kurį stella galėtų perskaityti. Uždarykite jį arba atidarykite kitą failą.",
+    "sendErrorActiveFileTooLarge": "Atidarytas failas per didelis pokalbiui. Uždarykite jį arba atidarykite mažesnį failą.",
+    "sendErrorAgentRunsDisabled": "Agento vykdymai čia nepasiekiami. Kreipkitės į darbo srities administratorių.",
     "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
+    "sendErrorAttachmentNoText": "Pridėtame faile nėra teksto, kurį stella galėtų perskaityti. Pašalinkite jį arba pridėkite kitą failą.",
+    "sendErrorAttachmentUnsupported": "Šio tipo failo negalima pridėti prie pokalbio. Pridėkite kitą failą.",
     "sendErrorConnectionFailed": "Nepavyko prisijungti prie pokalbio. Patikrinkite ryšį ir bandykite dar kartą.",
     "sendErrorContinuationRejected": "Pokalbio tęsti nepavyko. Norėdami pradėti iš naujo, išsiųskite naują žinutę.",
+    "sendErrorDocumentUnsupported": "Šis modelis negali perskaityti vieno iš pridėtų dokumentų. Pašalinkite priedą arba perjunkite į modelį, kuris jį palaiko.",
     "sendErrorEmptyCompletion": "DI grąžino tuščią atsakymą. Bandykite dar kartą arba perfrazuokite žinutę.",
+    "sendErrorImageInvalid": "Šio vaizdo nepavyko paruošti modeliui. Įkelkite mažesnį vaizdą arba pakeiskite modelį.",
+    "sendErrorImageUnsupported": "Šis modelis negali perskaityti pridėtų vaizdų. Pašalinkite vaizdą arba perjunkite į modelį, kuris palaiko vaizdus.",
     "sendErrorLoopDetected": "DI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
     "sendErrorMessageEmpty": "Šioje žinutėje nėra teksto, kurį būtų galima išsiųsti. Įrašykite klausimą arba pridėkite failą ir tada išsiųskite žinutę.",
     "sendErrorModelUnavailable": "Sukonfigūruotas DI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",
@@ -1859,6 +1890,7 @@
     "sendErrorQuotaExhausted": "DI teikėjo kvota išnaudota. Pabandykite dar kartą po minutės arba susisiekite su darbo srities administratoriumi.",
     "sendErrorStreamIncomplete": "DI atsakymas nutrūko nepasibaigęs. Bandykite dar kartą.",
     "sendErrorTimedOut": "Pokalbio paslauga laiku neatsakė. Bandykite dar kartą.",
+    "sendErrorToolsUnsupported": "Šis modelis negali naudoti įrankių, todėl negali atsakyti į klausimus apie jūsų bylą. Perjunkite į modelį, kuris palaiko įrankius.",
     "sendPrompt": "Siųsti pranešimą",
     "sendQueuedMessageNow": "Siųsti dabar",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
@@ -3959,6 +3991,8 @@
     "reopenTab": "Iš naujo atidaryti {name}",
     "resizePane": "Keisti polangio dydį",
     "review": {
+      "acceptChange": "Priimti pakeitimą",
+      "acceptFinding": "Priimti išvadą",
       "actionNeeded": "Reikia veiksmų",
       "addComment": "Pridėti kaip komentarą",
       "addNote": "Pridėti komentarą priešingai šaliai",
@@ -3999,6 +4033,7 @@
         "dismissed": "Atmesta"
       },
       "description": "Pasirinkite parengtą peržiūros vadovą, referencinius dokumentus arba abu.",
+      "dismissFinding": "Atmesti išvadą",
       "documentChanged": "Šis dokumentas pasikeitė po šios peržiūros.",
       "export": {
         "counterparty": "Atsisiųsti priešingai šaliai",
@@ -4022,6 +4057,7 @@
       "history": {
         "backToLatest": "Grįžti prie naujausios",
         "decided": "{decided, number} iš {total, number} nuspręsta",
+        "fromTable": "Iš lentelės",
         "references": "{count, plural, one {# referencija} few {# referencijos} many {# referencijos} other {# referencijų}}"
       },
       "impact": {
@@ -4046,7 +4082,6 @@
         "unanchored": "Nesusieta su jokia sąlyga"
       },
       "newTopic": "Nauja peržiūros tema",
-      "noChangeNeeded": "Pakeitimo nereikia",
       "noEditor": "Atidarykite dokumentą, kad priimtumėte pakeitimus",
       "noMaterialDifferences": "Esminių skirtumų nerasta",
       "noPassage": "Ištraukos nėra",
@@ -4129,6 +4164,11 @@
         "noSide": "Nėra pusės",
         "proposedFromReferences": "Pozicijos, pasiūlytos iš referencijų",
         "unnamedReferences": "{count, plural, one {# referencinis dokumentas} few {# referenciniai dokumentai} many {# referencinio dokumento} other {# referencinių dokumentų}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Visa šios versijos peržiūra</link> su nuorodomis ir siūlomais pakeitimais pasiekiama peržiūrų istorijoje.",
+        "origin": "<strong>Paleista iš lentelės.</strong> Šios išvados įvertintos pagal lentelei išgautas reikšmes, todėl jos nesusietos su dokumentu ir neapima siūlomų pakeitimų.",
+        "runAnotherReview": "Kad gautumėte nuorodas ir siūlomus pakeitimus, naudokite mygtuką <action>{label}</action>."
       },
       "targetAsReference": "Peržiūrimas dokumentas negali būti pats sau referencinis dokumentas.",
       "targetColumn": "Šis dokumentas",
@@ -5249,6 +5289,8 @@
       "betaDescription": "Išbandykite funkcijas, kurios dar kuriamos",
       "betaInbox": "Gautieji ir pranešimai",
       "betaInboxDescription": "Rodyti gautuosius ir pranešimų varpelį",
+      "betaLocalAgents": "Agentai jūsų kompiuteryje",
+      "betaLocalAgentsDescription": "Vykdyti pokalbius su Codex arba Claude Code jūsų kompiuteryje per stella desktop",
       "betaTimeBillingDescription": "Rodyti laiko stebėjimą, sąskaitas ir išlaidas",
       "chatNotifications": "Pokalbių pranešimai",
       "chatNotificationsBlocked": "stellos pranešimai šioje naršyklėje užblokuoti. Leiskite juos naršyklės svetainės nustatymuose.",
@@ -6477,6 +6519,10 @@
       },
       "noProperties": "Nėra savybės, kurią būtų galima apskaičiuoti",
       "unavailable": "—"
+    },
+    "cellOverride": {
+      "machineValue": "Pradinė DI reikšmė",
+      "reasonPlaceholder": "Pakeitimo priežastis (neprivaloma)"
     },
     "copyToMatter": {
       "copied": "Nukopijuota į bylą",

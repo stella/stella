@@ -1,10 +1,11 @@
 import type { AnyTextAdapter } from "@tanstack/ai";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import {
   buildWorkflowAIAnalyticsProps,
@@ -12,6 +13,10 @@ import {
   generateWorkflowData,
   limitExtractedTextPromptContent,
 } from "@/api/lib/workflow/ai-generate-batch";
+import {
+  PROMPT_INPUT_TRUNCATED_EVENT,
+  PROMPT_TRUNCATION_MARKER,
+} from "@/api/lib/workflow/ai-prompts";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
@@ -84,6 +89,30 @@ describe("extracted-text prompt limits", () => {
     expect(limited.every((content) => content.includes("truncated"))).toBe(
       true,
     );
+  });
+
+  test("records each cut file and the characters it dropped", () => {
+    const logInfo = spyOn(logger, "info").mockImplementation(() => {});
+    try {
+      limitExtractedTextPromptContent({ content: "short", fileCount: 1 });
+      expect(logInfo).not.toHaveBeenCalled();
+
+      const content = "a".repeat(EXTRACTED_TEXT_PROMPT_LIMITS.perFileChars + 5);
+      limitExtractedTextPromptContent({ content, fileCount: 1 });
+
+      expect(logInfo).toHaveBeenCalledWith(PROMPT_INPUT_TRUNCATED_EVENT, {
+        input: "extracted_text",
+        truncated_parts: "1",
+        dropped_chars: String(
+          content.length -
+            (EXTRACTED_TEXT_PROMPT_LIMITS.perFileChars -
+              PROMPT_TRUNCATION_MARKER.length),
+        ),
+        max_chars: String(EXTRACTED_TEXT_PROMPT_LIMITS.perFileChars),
+      });
+    } finally {
+      logInfo.mockRestore();
+    }
   });
 });
 

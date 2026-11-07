@@ -1,6 +1,9 @@
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { routeExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
-import { reportErrorOnce } from "@/lib/analytics/reported-error";
+import {
+  leaveErrorToBoundary,
+  reportErrorOnce,
+} from "@/lib/analytics/reported-error";
 import type {
   Analytics,
   RouteErrorLifecycleProperties,
@@ -45,6 +48,21 @@ export const resolveCaughtRouteTemplate = (
   matches.findLast(({ status }) => status === "error")?.fullPath ??
   matches.at(-1)?.fullPath ??
   "unknown";
+
+/**
+ * A route's error boundary owns the capture of what it catches: the recovery
+ * panel reports with its support reference, the network state after its
+ * retries run out, and the permission states not at all.
+ */
+export const createRouteCatchHandler =
+  (
+    lifecycle: Pick<RouteErrorLifecycleController, "caught">,
+    readRouteTemplate: () => string,
+  ) =>
+  (error: unknown): void => {
+    leaveErrorToBoundary(error);
+    lifecycle.caught(readRouteTemplate());
+  };
 
 type LoadedRouteErrorLifecycleModule = {
   createLoadedRouteErrorLifecycleController: (

@@ -206,7 +206,10 @@ const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
 const IDLE_SCHEDULER_MESSAGE =
   "Use scheduleIdle from '@/lib/platform/schedule-idle': Safari does not support requestIdleCallback; the shared scheduler provides a cancellable timeout fallback.";
 const idleCallbackGlobals = ["requestIdleCallback", "cancelIdleCallback"].map(
-  (name) => ({ name, message: IDLE_SCHEDULER_MESSAGE }),
+  (name) => ({
+    name,
+    message: IDLE_SCHEDULER_MESSAGE,
+  }),
 );
 const idleCallbackProperties = idleCallbackGlobals.map(({ name, message }) => ({
   property: name,
@@ -578,6 +581,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("confine-aggregate-lock.fixture.ts", [
     "confine-aggregate-lock/confine-aggregate-lock",
   ]),
+  fixtureRuleOverride("count-gated-completion.fixture.ts", [
+    "count-gated-completion/count-gated-completion",
+  ]),
   fixtureRuleOverride("no-adhoc-loader.fixture.tsx", [
     "no-adhoc-loader/no-adhoc-loader",
   ]),
@@ -614,6 +620,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
     "no-inert-autofocus/no-inert-autofocus",
   ]),
+  fixtureRuleOverride("no-raw-workspace-status.fixture.ts", [
+    "no-raw-workspace-status/no-raw-workspace-status",
+  ]),
   fixtureRuleOverride("one-statement-time-per-row-write.fixture.ts", [
     "one-statement-time-per-row-write/one-statement-time-per-row-write",
   ]),
@@ -631,6 +640,9 @@ const fixtureRuleOverrides = [
     "no-raw-file-input/no-raw-file-input",
   ]),
   fixtureRuleOverride("no-native-ui.fixture.tsx", NO_NATIVE_UI_RULE_IDS),
+  fixtureRuleOverride("plain-button-placement-only.fixture.tsx", [
+    "plain-button-placement-only/plain-button-placement-only",
+  ]),
   fixtureRuleOverride("no-person-select.fixture.tsx", [
     "no-person-select/no-person-select",
   ]),
@@ -787,6 +799,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
   ]),
+  fixtureRuleOverride("no-nullable-join-nested-selection.fixture.ts", [
+    "no-nullable-join-nested-selection/no-nullable-join-nested-selection",
+  ]),
   fixtureRuleOverride("legislation-window.fixture.ts", [
     "legislation-window/legislation-window-through-helper",
     "legislation-window/legislation-window-hint-display-only",
@@ -914,7 +929,7 @@ const noCheerioImport = {
 const noClassicTypeScriptImport = {
   name: "typescript",
   message:
-    "'typescript' is only the copy linters peer on, not a dependency. Use 'typescript6' for the classic API, or 'tsrs/unstable/*' for the TypeScript 7 API.",
+    "'typescript' is only the copy linters peer on, not a dependency. Use 'typescript6' for the classic API, or 'tsrs/*' for the TypeScript 7 API.",
 };
 
 // The API serves its routes from its own HTTP core on Bun.serve
@@ -1515,6 +1530,7 @@ const config = defineConfig({
   },
   rules: {
     "confine-aggregate-lock/confine-aggregate-lock": "error",
+    "count-gated-completion/count-gated-completion": "error",
     "no-raw-sha256/no-raw-sha256": [
       "error",
       { allowedFiles: sha256AllowedFiles },
@@ -1750,6 +1766,7 @@ const config = defineConfig({
     "require-timestamptz-column/require-timestamptz-column": "error",
     "no-naive-timestamp-cast/no-naive-timestamp-cast": "error",
     "no-inline-timestamp-cursor-sql/no-inline-timestamp-cursor-sql": "error",
+    "no-variable-arity-values/no-variable-arity-values": "error",
     "require-timestamp-id-cursor-codec/require-timestamp-id-cursor-codec":
       "error",
     "require-tenant-page-limit/require-tenant-page-limit": "error",
@@ -2057,6 +2074,7 @@ const config = defineConfig({
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-native-ui.ts",
+    "./.oxlint-plugins/plain-button-placement-only.ts",
     "./.oxlint-plugins/no-raw-date-parsing.ts",
     "./.oxlint-plugins/prefer-temporal.ts",
     "./.oxlint-plugins/no-raw-locale-format.ts",
@@ -2096,6 +2114,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-em-dash-copy.ts",
     "./.oxlint-plugins/no-style-substring-match.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
+    "./.oxlint-plugins/no-raw-workspace-status.ts",
     "./.oxlint-plugins/one-statement-time-per-row-write.ts",
     "./.oxlint-plugins/no-optional-chain-null-compare.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
@@ -2166,6 +2185,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/no-source-raw-projection.ts",
     "./.oxlint-plugins/no-unguarded-case-law-replay-write.ts",
     "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
@@ -2245,10 +2265,12 @@ const config = defineConfig({
     "./.oxlint-plugins/no-hand-rolled-role-set.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
     "./.oxlint-plugins/no-hand-rolled-execute-rows.ts",
+    "./.oxlint-plugins/no-nullable-join-nested-selection.ts",
     "./.oxlint-plugins/require-derived-check-enum.ts",
     "./.oxlint-plugins/require-timestamptz-column.ts",
     "./.oxlint-plugins/no-naive-timestamp-cast.ts",
     "./.oxlint-plugins/no-inline-timestamp-cursor-sql.ts",
+    "./.oxlint-plugins/no-variable-arity-values.ts",
     "./.oxlint-plugins/legislation-window.ts",
     "./.oxlint-plugins/require-timestamp-id-cursor-codec.ts",
     "./.oxlint-plugins/require-tenant-page-limit.ts",
@@ -2269,11 +2291,15 @@ const config = defineConfig({
     "./.oxlint-plugins/no-dropped-fake-timers.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
+    "./.oxlint-plugins/no-ambient-time-in-tests.ts",
+    "./.oxlint-plugins/no-real-timers-in-tests.ts",
+    "./.oxlint-plugins/no-wallclock-assertions-in-tests.ts",
     "./.oxlint-plugins/no-global-fetch-replacement.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/inspector-header-title.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
+    "./.oxlint-plugins/radius-scale.ts",
     "./.oxlint-plugins/no-raw-context-menu.ts",
     "./.oxlint-plugins/no-hover-only-reveal.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
@@ -2338,6 +2364,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-unanchored-footnotes.ts",
     "./.oxlint-plugins/no-parser-inline-flatten.ts",
     "./.oxlint-plugins/confine-aggregate-lock.ts",
+    "./.oxlint-plugins/count-gated-completion.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
     "./.oxlint-plugins/no-discarded-transition-result.ts",
     "./.oxlint-plugins/queue-worker-error-sink.ts",
@@ -3879,6 +3906,28 @@ const config = defineConfig({
       rules: {
         "no-raw-browser-storage/no-raw-browser-storage": "error",
       },
+    },
+    {
+      // A workspace status is compared through its domain constants or
+      // predicates. The four aggregate-lock statements keep their text until
+      // they move to the lock owner, since the lock baseline pins it.
+      files: [
+        "apps/api/src/**/*.ts",
+        "apps/api/scripts/**/*.ts",
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/tests/**",
+        "apps/api/src/lib/billing/time-entry-approval.ts",
+        "apps/api/src/handlers/document-reviews/parties.ts",
+        "apps/api/src/lib/email/inbound/store.ts",
+        "apps/api/scripts/seed-email-viewer-demo.ts",
+      ],
+      rules: { "no-raw-workspace-status/no-raw-workspace-status": "error" },
     },
     {
       // In-app back navigation reads the router's history, never the
@@ -5925,6 +5974,15 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/**/*.ts",
+        "apps/api/src/lib/legal-search/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-source-raw-projection.fixture.ts",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: { "no-source-raw-projection/no-source-raw-projection": "error" },
+    },
+    {
       files: ["apps/api/src/**/*.ts"],
       excludeFiles: ["apps/api/src/**/*.test.ts"],
       rules: {
@@ -6494,6 +6552,18 @@ const config = defineConfig({
       },
     },
     {
+      // Drizzle reads a nested selection object over a left, right or full
+      // join back as null when its first column is NULL, whatever follows,
+      // so a matched row with a NULL first value looks like no row. The join
+      // key goes first, or the columns are selected flat with the join key
+      // and the object is built after the read.
+      files: ["apps/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts"],
+      rules: {
+        "no-nullable-join-nested-selection/no-nullable-join-nested-selection":
+          "error",
+      },
+    },
+    {
       // A queue worker's `error` event fires once per failed poll, so an
       // unthrottled sink turns a Valkey disruption into an unbounded run of
       // identical lines. `createQueueWorkerErrorLogger` bounds it, and the
@@ -6801,6 +6871,10 @@ const config = defineConfig({
       ],
       rules: {
         "no-direct-test-state/no-direct-test-state": "error",
+        "no-ambient-time-in-tests/no-ambient-time-in-tests": "error",
+        "no-real-timers-in-tests/no-real-timers-in-tests": "error",
+        "no-wallclock-assertions-in-tests/no-wallclock-assertions-in-tests":
+          "error",
         "no-shared-checkout-mutation/no-shared-checkout-mutation": "error",
       },
     },
@@ -7393,6 +7467,21 @@ const config = defineConfig({
       },
     },
     {
+      // Corner radii name a step of one scale (DESIGN.md, Border Radius). The
+      // design-system components are in scope: `shadcn/no-arbitrary-values`
+      // is off there, so nothing else holds their radii to the scale.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/radius-scale.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "radius-scale/radius-scale": "error",
+      },
+    },
+    {
       // Right-click opens an object's own actions through EntityActions
       // (@stll/ui/entity-actions), which renders the object's actions button
       // and its right-click menu from one list and keeps the native menu for
@@ -7440,6 +7529,21 @@ const config = defineConfig({
       rules: Object.fromEntries(
         NO_NATIVE_UI_RULE_IDS.map((rule) => [rule, "error"] as const),
       ),
+    },
+    {
+      // A plain Button draws no box, so its className only places it; the
+      // look belongs to its content or to a variant. Its own scope: the
+      // design pass (oxlint.design.config.ts) copies the scope above, and
+      // this rule carries no backlog to measure there.
+      files: [...DESIGN_SYSTEM_CONSUMER_FILES],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+      ],
+      rules: {
+        "plain-button-placement-only/plain-button-placement-only": "error",
+      },
     },
     {
       // `shadcn/no-restyle` judges a className by reading its classes. An

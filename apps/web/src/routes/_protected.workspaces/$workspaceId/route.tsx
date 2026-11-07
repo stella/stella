@@ -15,6 +15,7 @@ import {
   REALTIME_EVENT_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 
@@ -155,7 +156,10 @@ const knownMatterStatus = (
   return (
     queryClient.getQueryData(workspaceOptions(workspaceId).queryKey)?.status ??
     queryClient
-      .getQueryData(workspacesRouteOptions(organizationId, "archived").queryKey)
+      .getQueryData(
+        workspacesRouteOptions(organizationId, WORKSPACE_STATUS.archived)
+          .queryKey,
+      )
       ?.workspaces.find(isThisMatter)?.status ??
     queryClient
       .getQueryData(workspacesRouteOptions(organizationId).queryKey)

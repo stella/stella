@@ -19,6 +19,7 @@ import * as v from "valibot";
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   type DesktopRunnerHarnessReport,
   desktopRunnerHarnessReportSchema,
@@ -27,11 +28,13 @@ import {
 
 import type { RootDatabase, Transaction } from "@/api/db/root";
 import {
+  chatThreads,
   chatTurns,
   desktopRunnerCommands,
   desktopRunnerEvents,
   desktopRunnerRuns,
   desktopRunners,
+  userFiles,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
@@ -54,7 +57,10 @@ import {
   type DesktopRunnerEventType,
   type DesktopRunnerRunState,
 } from "@/api/lib/desktop-runner/states";
-import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedChatThreadId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 
 /**
  * The gateway's persistence. Postgres is the truth for what a desktop holds:
@@ -1299,6 +1305,7 @@ type InsertRunOptions = {
   harness: AgentHarness;
   harnessVersion: string;
   model: string;
+  approvals: DesktopRunnerApprovalMode;
   workspaceIds: readonly SafeId<"workspace">[];
   /** The chat turn that starts and reads the run, when one does. */
   chat?: ChatRunBinding | null;
@@ -1321,12 +1328,13 @@ export type InsertedRun =
       type: "harness_unavailable";
       report: DesktopRunnerHarnessReport | null;
     }
-  | { type: "model_unavailable" };
+  | { type: "model_unavailable" }
+  | { type: "approvals_unavailable" };
 
 /**
  * Bind a new run to a connected runner and queue its `run.start`, both or
  * neither. The runner must report the harness ready at the requested version
- * with the requested model. The caller mints the run id, so nothing here
+ * with the requested model and approval mode. The caller mints the run id, so nothing here
  * answers for a run id another tenant holds.
  */
 export const insertAssignedRun = async (
@@ -1366,6 +1374,9 @@ export const insertAssignedRun = async (
     }
     if (!report.models.some(({ id }) => id === options.model)) {
       return { type: "model_unavailable" };
+    }
+    if (!report.approvalModes.includes(options.approvals)) {
+      return { type: "approvals_unavailable" };
     }
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
     await tx.insert(runs).values({
@@ -1580,6 +1591,71 @@ export const readRun = async (
           eq(runs.runId, runId),
           eq(runs.userId, owner.userId),
           eq(runs.organizationId, owner.organizationId),
+        ),
+      )
+      .limit(1)
+  ).at(0) ?? null;
+
+/**
+ * The chat thread of the owner's run that is still going; `null` for a run of
+ * someone else, one that ended, or one no chat started. What a run's token may
+ * write is read from here, never from the request.
+ */
+export const readOpenRunChatThread = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, runId }: ReadRunOptions,
+): Promise<SafeId<"chatThread"> | null> => {
+  const chatThreadId = (
+    await db
+      .select({ chatThreadId: runs.chatThreadId })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.runId, runId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+        ),
+      )
+      .limit(1)
+  ).at(0)?.chatThreadId;
+  return chatThreadId === null || chatThreadId === undefined
+    ? null
+    : brandPersistedChatThreadId(chatThreadId);
+};
+
+type ReadRunOutputFileOptions = {
+  owner: RunOwner;
+  chatThreadId: SafeId<"chatThread">;
+  fileId: SafeId<"userFile">;
+};
+
+/**
+ * A stored file as a run's chat may show it; `null` unless it is the owner's
+ * and in this thread of the owner's organization. A computer's report names a
+ * file; this decides whether the chat gets one.
+ */
+export const readRunOutputFile = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, chatThreadId, fileId }: ReadRunOutputFileOptions,
+) =>
+  (
+    await db
+      .select({
+        id: userFiles.id,
+        fileName: userFiles.fileName,
+        mimeType: userFiles.mimeType,
+        placeholder: userFiles.placeholder,
+      })
+      .from(userFiles)
+      .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
+      .where(
+        and(
+          eq(userFiles.id, fileId),
+          eq(userFiles.userId, owner.userId),
+          eq(userFiles.threadId, chatThreadId),
+          eq(chatThreads.userId, owner.userId),
+          eq(chatThreads.organizationId, owner.organizationId),
         ),
       )
       .limit(1)

@@ -1,12 +1,18 @@
 #!/usr/bin/env bun
 
 import { spawnSync } from "node:child_process";
-import path from "node:path";
 
+import resolveTsrsBinary from "../../../node_modules/tsrs/lib/getExePath.js";
 import { childExitStatus } from "./child-exit-status";
 
-// tsrs, the Rust port of the TypeScript 7 compiler, compiles like `tsc`.
-const tsc = path.join(import.meta.dir, "../../../node_modules/tsrs/bin/tsrs");
+// tsrs, the Rust port of the TypeScript 7 compiler, compiles like `tsc`. Its
+// npm launcher would run under Bun here, and Bun makes a piped stdout
+// non-blocking once a script reads `process.stdout`, as the launcher does. The
+// binary inherits that descriptor and drops what a full pipe refuses, so a
+// piped `--listFilesOnly` stopped after its first 64 KiB. Spawning the binary
+// directly, found by tsrs's own platform lookup, keeps stdio blocking. Every
+// caller that runs the compiler takes the binary from here.
+export { resolveTsrsBinary };
 
 // Flags by which a caller takes over the checker split itself.
 const THREADING_FLAGS = new Set(["--singleThreaded", "--checkers"]);
@@ -37,8 +43,8 @@ export const withCheckerSplit = (args: readonly string[]): string[] =>
 
 if (import.meta.main) {
   const result = spawnSync(
-    process.execPath,
-    [tsc, ...withCheckerSplit(process.argv.slice(2))],
+    resolveTsrsBinary(),
+    withCheckerSplit(process.argv.slice(2)),
     { maxBuffer: 2 ** 30, stdio: "inherit" },
   );
 

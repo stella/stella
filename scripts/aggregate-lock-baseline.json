@@ -109,6 +109,12 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
+    "fingerprint": "0a40a7f4f3dd78b309c6b5692b814b8337598f057bda3f86d061c6dc0b43ba4d",
+    "count": 1,
+    "reason": "The general due diligence playbook seed inserts the same row, now built by an exported builder the seed test validates."
+  },
+  {
+    "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "0a7aee4081f07cd35a056cb0084a95707ba41bcc2afd246684852d091b2f9272",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
@@ -163,18 +169,6 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "2e32f4a1ba792f5e6e713733313c9ce85d6e9b6ce96811c3f63904f6b42e8807",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "3093a86d6d59138e1e50e4a3d9146e2211fa94750b6aae0dfdd193e8dbf1e834",
-    "count": 1,
-    "reason": "Existing seed transaction; the condition satisfies check changes its source fingerprint while preserving emitted JavaScript and transaction boundaries."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "3574339da7a6a2fd6b9484d7b820e1a11d0a284004bdf688de7d9755d6380caa",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
@@ -202,6 +196,12 @@
     "fingerprint": "4ff3e52119cd6b645b9cc1cc7179c626f30d4f9cc62506da52ba4a60e8752f62",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+  },
+  {
+    "file": "apps/api/scripts/seed-dev.ts",
+    "fingerprint": "50efad9df54010f4c637b1529c6538656a8e97e81495de144cd349cdbebd33d9",
+    "count": 1,
+    "reason": "The Czech commercial playbook seed inserts the same row, now built by an exported builder the seed test validates."
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
@@ -1077,7 +1077,7 @@
     "file": "apps/api/src/handlers/entities/copy-utils.ts",
     "fingerprint": "283d775750eceb2316124405129bd37a7c02e865c1714f888636ef9a59898fcd",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/entities/copy-utils.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "The field lock follows the moved versions, tombstones included; same lock, same count."
   },
   {
     "file": "apps/api/src/handlers/entities/copy-utils.ts",
@@ -1089,7 +1089,7 @@
     "file": "apps/api/src/handlers/entities/copy-utils.ts",
     "fingerprint": "967f4e5695ca1cc03734e94f136c8637c38fafda85d7fa1a37f86c24f6524c5e",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/entities/copy-utils.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "A move now locks the source's tombstoned versions with its live ones, since they travel with it; same lock, same count."
   },
   {
     "file": "apps/api/src/handlers/entities/delete.ts",
@@ -2007,7 +2007,7 @@
     "file": "apps/api/src/lib/auth.ts",
     "fingerprint": "315611668cb62502c22cbac5030a927c4d43bc519c31b4fc14d08018a56a450f",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/auth.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
+    "reason": "The organization deletion transaction now passes the deleting owner to the teardown owner, which requires the audit archive before writing; same transaction, same count."
   },
   {
     "file": "apps/api/src/lib/auth.ts",
@@ -2523,7 +2523,7 @@
     "file": "apps/api/src/lib/entity-versions/insert-entity-version.ts",
     "fingerprint": "a8c617873ab9527542001f85c1adce6b8f01d9f37b0dc1c00e7f45d77c804a1b",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/entity-versions/insert-entity-version.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Verification codes of tombstoned versions now travel with them, so the code lock reads those rows too; same lock, same count."
   },
   {
     "file": "apps/api/src/lib/entity-versions/write-file-version.ts",
@@ -3042,12 +3042,6 @@
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
-    "fingerprint": "fbd2020fb00b20becf01e77fef64b85ee4930ebb5abc396b301986886a29bb08",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/lib/legal-search/deferred-document-source-ownership.ts",
     "fingerprint": "0ac48437e8627501e57e5b67cd637033ea24b80bb0329a3894cbde77f0e6fbb4",
     "count": 1,
@@ -3523,9 +3517,9 @@
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/chat-turn-reaper.ts",
-    "fingerprint": "94656261c1ac343eaf1027d302de933204cd714883b81565e3bef86b6eccc741",
+    "fingerprint": "fdf882c6147e66866bcc39e7674999a42d0f769c3fccc2246567d08693da7ee5",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/scheduler/tasks/chat-turn-reaper.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+    "reason": "The reaper's transaction now runs inside the collector that pings each reaped turn's owner after commit; the transaction boundary and its single acquisition are unchanged."
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts",
