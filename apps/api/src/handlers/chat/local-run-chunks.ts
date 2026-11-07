@@ -21,9 +21,12 @@ import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
   type ChatLocalRunComputerEvent,
   type ChatLocalRunFile,
   type ChatLocalRunHarness,
+  type ChatLocalRunLimit,
+  chatLocalRunLimitSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
   type DESKTOP_RUNNER_APPROVAL_DECISIONS,
@@ -408,9 +411,16 @@ const asChatChunk = (
 const publicChunks = (chunk: AdapterYieldChunk): PublicStreamChunk[] =>
   normalizeStreamChunk(chunk);
 
+type LocalRunFailureDetails = {
+  code: string;
+  message: string;
+  /** When the harness's usage limit resets; only on a limit failure. */
+  limit?: ChatLocalRunLimit | undefined;
+};
+
 /** The run error that ends the turn; `code` names why for the member. */
 const runErrorChunks = (
-  { code, message }: { code: string; message: string },
+  { code, message, limit }: LocalRunFailureDetails,
   { chatRunId, threadId }: Pick<RewriteContext, "chatRunId" | "threadId">,
 ): PublicStreamChunk[] =>
   publicChunks({
@@ -420,6 +430,9 @@ const runErrorChunks = (
     message,
     code,
     error: { message, code },
+    ...(limit === undefined
+      ? {}
+      : { metadata: { [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: limit } }),
     timestamp: nowMs(),
   });
 
@@ -427,6 +440,20 @@ const failureOf = (code: LocalRunFailure, message?: string) => ({
   code,
   message: message ?? FAILURE_MESSAGE[code],
 });
+
+/**
+ * When the limit a harness's run error names resets. The desktop is not
+ * trusted: anything but a valid instant under the one key carries no time.
+ */
+const limitOfRunError = (
+  chunk: Extract<PublicStreamChunk, { type: EventType.RUN_ERROR }>,
+): ChatLocalRunLimit | undefined => {
+  const parsed = v.safeParse(
+    chatLocalRunLimitSchema,
+    chunk.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+  );
+  return parsed.success ? parsed.output : undefined;
+};
 
 /** The finish that ends the turn without an error. */
 const runFinishedChunks = (
@@ -442,7 +469,32 @@ const runFinishedChunks = (
     timestamp: nowMs(),
   });
 
-type HarnessError = { code: string; message: string };
+type HarnessError = {
+  code: string;
+  message: string;
+  limit: ChatLocalRunLimit | undefined;
+};
+
+/**
+ * Why a failed run ended the turn: the outcome's own failure, else the
+ * harness's error. Only a limit failure says when the limit resets.
+ */
+const failedRunDetails = (
+  code: LocalRunFailure | null,
+  harnessError: HarnessError | null,
+): LocalRunFailureDetails => {
+  if (code !== null) {
+    return {
+      ...failureOf(code, harnessError?.message),
+      ...(code === AI_FAILURE_CODES.local_runner_limit_reached
+        ? { limit: harnessError?.limit }
+        : {}),
+    };
+  }
+  return harnessError === null
+    ? failureOf(AI_FAILURE_CODES.local_runner_unavailable)
+    : { code: harnessError.code, message: harnessError.message };
+};
 
 /** The chunks that end the turn once the run said how it finished. */
 const finishedRunChunks = ({
@@ -466,10 +518,7 @@ const finishedRunChunks = ({
         : runFinishedChunks(rewrite, ending.type === "stopped");
     case "failed":
       return runErrorChunks(
-        ending.code === null
-          ? (harnessError ??
-              failureOf(AI_FAILURE_CODES.local_runner_unavailable))
-          : failureOf(ending.code, harnessError?.message),
+        failedRunDetails(ending.code, harnessError),
         rewrite,
       );
     default:
@@ -832,6 +881,7 @@ async function* readRunChunks({
               harnessError = {
                 code: chunk.code ?? AI_FAILURE_CODES.local_runner_unavailable,
                 message: chunk.message,
+                limit: limitOfRunError(chunk),
               };
               continue;
             }

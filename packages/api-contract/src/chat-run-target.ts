@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import type { AgentHarness } from "./agent-harness";
+import { apiDateTimeSchema } from "./api-date";
 import {
   DESKTOP_RUNNER_ANSWER_LIMITS,
   DESKTOP_RUNNER_APPROVAL_MODES,
@@ -300,3 +301,15 @@ export const chatLocalRunFilePartsOf = (
     .filter(({ url }) => !present.has(url))
     .map(chatLocalRunFilePart);
 };
+
+/**
+ * The run-error metadata key under which a turn that ended on the harness's
+ * usage limit says when the limit resets, as the harness reported it. The
+ * chat shows the time; a limit without a known reset carries none.
+ */
+export const CHAT_LOCAL_RUN_LIMIT_METADATA_KEY = "localRunLimit";
+
+export const chatLocalRunLimitSchema = v.strictObject({
+  resetsAt: v.pipe(apiDateTimeSchema, v.maxLength(32)),
+});
+export type ChatLocalRunLimit = v.InferOutput<typeof chatLocalRunLimitSchema>;

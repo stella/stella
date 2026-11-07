@@ -187,6 +187,12 @@ export type ChatTurnOutcome =
        */
       providerDiagnostic?: ProviderDiagnostic;
       refusal?: ActionAdmissionRefusal;
+      /**
+       * When the usage limit of the harness that ran the turn on the
+       * member's computer resets (ISO 8601), for a `local_runner_limit_reached`
+       * failure whose harness reported it.
+       */
+      limitResetsAt?: string;
     }
   | {
       type: "interrupted";

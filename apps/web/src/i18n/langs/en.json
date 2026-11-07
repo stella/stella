@@ -1686,6 +1686,7 @@
     "localRun": {
       "cloud": "stella cloud",
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
+      "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
       "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
       "filesNotShared": "Files that could not be shared stay on your computer: {fileNames}",

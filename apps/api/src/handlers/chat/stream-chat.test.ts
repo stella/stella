@@ -27,7 +27,10 @@ import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
-import { CHAT_DECISION_PASSAGE_HREF_PREFIX } from "@stll/api-contract";
+import {
+  AI_FAILURE_CODES,
+  CHAT_DECISION_PASSAGE_HREF_PREFIX,
+} from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
@@ -41,6 +44,7 @@ import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
+import { CHAT_LOCAL_RUN_LIMIT_METADATA_KEY } from "@stll/api-contract/chat-run-target";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
   type VisualPreviewOutput,
@@ -7161,6 +7165,52 @@ test("provider diagnostic matches the wire and persisted terminal outcome", asyn
     }),
   );
   expect(reloaded.metadata.turnOutcome).toEqual(response.metadata.turnOutcome);
+});
+
+test("a local run's usage limit reset is streamed, stored and reloaded, and only for that failure", async () => {
+  const limit = { resetsAt: "2026-11-08T09:30:00.000Z" };
+  const failedWith = async (code: string) => {
+    const chunks = async function* (): AsyncIterable<StreamChunk> {
+      yield {
+        type: EventType.RUN_ERROR,
+        message: "The harness on the computer reached its usage limit.",
+        code,
+        metadata: { [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: limit },
+      };
+    };
+    const result = await persistNativeInterruptTurn(chunks());
+    const response =
+      result.finish?.responseMessage ?? panic("Expected terminal response");
+    return {
+      streamed: result.emitted.find(
+        (chunk) => chunk.type === EventType.RUN_ERROR,
+      )?.metadata,
+      stored: response.metadata.turnOutcome,
+      reloaded: normalizePersistedChatMessageContent(
+        toPersistedChatMessageContentV3({
+          data: response.parts,
+          metadata: response.metadata,
+        }),
+      ).metadata.turnOutcome,
+    };
+  };
+
+  const limited = await failedWith(AI_FAILURE_CODES.local_runner_limit_reached);
+  expect(limited.streamed?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]).toEqual(limit);
+  expect(limited.stored).toEqual({
+    type: "failed",
+    error: "local_runner_limit_reached",
+    limitResetsAt: limit.resetsAt,
+  });
+  expect(limited.reloaded).toEqual(limited.stored);
+
+  // Another failure keeps no reset time, whatever its chunk carried.
+  const other = await failedWith(AI_FAILURE_CODES.local_runner_unavailable);
+  expect(other.streamed?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]).toBeUndefined();
+  expect(other.stored).toEqual({
+    type: "failed",
+    error: "local_runner_unavailable",
+  });
 });
 
 describe("decision passage court numbers", () => {

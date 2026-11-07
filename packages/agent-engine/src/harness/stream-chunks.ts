@@ -9,7 +9,11 @@ import {
 import { panic } from "better-result";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
-import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_QUESTION_TOOL,
+  type ChatLocalRunLimit,
+} from "@stll/api-contract/chat-run-target";
 
 import {
   approvalMessage,
@@ -272,6 +276,16 @@ class ChunkMapper {
       message: failure.message,
       code,
       error: { message: failure.message, code },
+      // When a usage limit resets, so the chat can say when to try again.
+      ...(failure.type === "usage_limit" && failure.resetsAt !== null
+        ? {
+            metadata: {
+              [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: {
+                resetsAt: failure.resetsAt,
+              } satisfies ChatLocalRunLimit,
+            },
+          }
+        : {}),
     };
   }
 

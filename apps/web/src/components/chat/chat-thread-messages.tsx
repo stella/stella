@@ -154,6 +154,7 @@ import {
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
+import { localRunLimitResetsAtFromThrown } from "@/features/chat/chat-local-run-limit";
 import {
   CHAT_REQUEST_ERROR_TRANSLATION_KEYS,
   type ChatRequestError,
@@ -180,6 +181,7 @@ import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -1230,6 +1232,7 @@ export const ChatErrorMessage = ({
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const canSendWithoutAnonymization =
     onSendWithoutAnonymization !== undefined &&
     isThirdPartyBoundaryRefusalError(error);
@@ -1238,6 +1241,7 @@ export const ChatErrorMessage = ({
   // A provider refusal shows its typed message and, for a known setup
   // problem, the fix; the provider's own wording is never shown.
   const setupCode = providerDiagnosticFromThrown(error)?.code ?? null;
+  const limitResetsAt = localRunLimitResetsAtFromThrown(error);
   const rejectedInput =
     refusal !== null &&
     (refusal.status === 400 || refusal.status === 422) &&
@@ -1249,6 +1253,18 @@ export const ChatErrorMessage = ({
     errorMessage = t(finalRefusalKey);
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
+  } else if (
+    limitResetsAt !== null &&
+    aiErrorKindFromMessage(error.message) === "local_runner_limit_reached"
+  ) {
+    // The harness said when its limit resets: shown in the member's own
+    // locale and time zone.
+    errorMessage = t("chat.localRun.errorLimitResetsAt", {
+      time: format.dateTime(
+        new Date(limitResetsAt),
+        MEDIUM_DATE_SHORT_TIME_FORMAT,
+      ),
+    });
   }
 
   if (actionAdmissionOutcome(error)) {

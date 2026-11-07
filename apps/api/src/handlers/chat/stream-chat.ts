@@ -36,8 +36,10 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
 import {
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
   chatLocalRunFilePartsOf,
   chatLocalRunFilesNotSharedSchema,
+  chatLocalRunLimitSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
   desktopRunnerAttachmentPath,
@@ -2334,18 +2336,40 @@ const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
     providerMessage: chunk.message,
   });
   const usage = safeTokenUsageFromTerminalChunk(chunk);
+  const providerDiagnostic = providerDiagnosticFromChunk(chunk);
+  const limit =
+    kind === "local_runner_limit_reached"
+      ? localRunLimitFromChunk(chunk)
+      : undefined;
   return {
     type: EventType.RUN_ERROR,
     ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
     message: kind,
     code: kind,
     ...(usage === undefined ? {} : { usage }),
-    ...(providerDiagnosticFromChunk(chunk) === undefined
+    ...(providerDiagnostic === undefined && limit === undefined
       ? {}
       : {
-          metadata: { providerDiagnostic: providerDiagnosticFromChunk(chunk) },
+          metadata: {
+            ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
+            ...(limit === undefined
+              ? {}
+              : { [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: limit }),
+          },
         }),
   };
+};
+
+/**
+ * When the usage limit of a computer's harness resets, as the local turn's
+ * own run error carries it (`local-run-chunks.ts`), checked again here.
+ */
+const localRunLimitFromChunk = (chunk: RunErrorChunk) => {
+  const parsed = v.safeParse(
+    chatLocalRunLimitSchema,
+    chunk.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+  );
+  return parsed.success ? parsed.output : undefined;
 };
 
 /**
@@ -3205,6 +3229,7 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
     panic("Unhandled TanStack failed stream event");
   }
   const providerDiagnostic = providerDiagnosticFromChunk(chunk);
+  const limit = localRunLimitFromChunk(chunk);
   return {
     chunk,
     usage: tokenUsageFromTerminalChunk(chunk),
@@ -3212,6 +3237,7 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
       type: "failed",
       error: classifyRunErrorChunk(sourceChunk),
       ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
+      ...(limit === undefined ? {} : { limitResetsAt: limit.resetsAt }),
     } as const satisfies ChatTurnOutcome,
   };
 };

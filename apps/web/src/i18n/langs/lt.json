@@ -1686,6 +1686,7 @@
     "localRun": {
       "cloud": "stella debesis",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
+      "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",
       "errorNeedsLogin": "Programavimo agentas jūsų kompiuteryje prašo prisijungti iš naujo. Prisijunkite per stella desktop ir bandykite dar kartą.",
       "errorUnavailable": "Jūsų kompiuteris nustojo apdoroti šį atsakymą. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
       "filesNotShared": "Failai, kurių nepavyko bendrinti, lieka jūsų kompiuteryje: {fileNames}",

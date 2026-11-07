@@ -1686,6 +1686,7 @@
     "localRun": {
       "cloud": "Nuvem da stella",
       "errorLimitReached": "O agente de programação do seu computador atingiu o limite de uso. Tente de novo quando o limite for renovado.",
+      "errorLimitResetsAt": "O agente de programação do seu computador atingiu o limite de uso. Você poderá tentar novamente a partir de {time}.",
       "errorNeedsLogin": "O agente de programação do seu computador precisa que você entre novamente. Entre pelo stella desktop e tente de novo.",
       "errorUnavailable": "Seu computador parou de processar esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
       "filesNotShared": "Os arquivos que não puderam ser compartilhados continuam no seu computador: {fileNames}",
