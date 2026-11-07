@@ -22,10 +22,18 @@ import {
   generatedVisualPartSchema,
 } from "@stll/api-contract/generated-visual";
 import { isOwnKey, ownEntry } from "@stll/api-contract/own-key";
+import {
+  STELLA_MCP_APP_MIME_TYPE,
+  stellaMcpAppPartSchema,
+} from "@stll/api-contract/stella-mcp-app";
 
 import { carriedChatPart } from "@/api/db/stored-chat-part-codec";
 import type { STORED_CHAT_PART_TYPES } from "@/api/db/stored-chat-part-codec";
 import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
+import {
+  appPresentsTool,
+  chatMcpAppByUri,
+} from "@/api/handlers/chat/mcp-apps/catalog";
 import {
   TANSTACK_TOOL_CALL_STATE_LIFECYCLE,
   TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
@@ -1192,6 +1200,16 @@ const isUiResourcePart = (part: Record<string, unknown>): boolean => {
   if (resource["mimeType"] === GENERATED_VISUAL_MIME_TYPE) {
     return v.is(generatedVisualPartSchema, part);
   }
+  if (resource["mimeType"] === STELLA_MCP_APP_MIME_TYPE) {
+    const app = v.safeParse(stellaMcpAppPartSchema, part);
+    if (!app.success) {
+      return false;
+    }
+    const presented = chatMcpAppByUri(app.output.resource.uri);
+    return (
+      presented !== undefined && appPresentsTool(presented, app.output.toolName)
+    );
+  }
   if (
     typeof resource["uri"] !== "string" ||
     !resource["uri"].startsWith("ui://") ||
@@ -1483,7 +1501,10 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
       };
     case "ui-resource": {
       const { resource } = part;
-      if (resource.mimeType === GENERATED_VISUAL_MIME_TYPE) {
+      if (
+        resource.mimeType === GENERATED_VISUAL_MIME_TYPE ||
+        resource.mimeType === STELLA_MCP_APP_MIME_TYPE
+      ) {
         return part;
       }
       const normalizedResource =
@@ -1542,10 +1563,12 @@ export const classifyChatPartForPersistence = (
     panic("Cannot classify a malformed chat part for persistence");
   }
   const type = part["type"];
+  // A server resource is persisted only as the server minted it.
   if (
     type === "ui-resource" &&
     isRecord(part["resource"]) &&
-    part["resource"]["mimeType"] === GENERATED_VISUAL_MIME_TYPE &&
+    (part["resource"]["mimeType"] === GENERATED_VISUAL_MIME_TYPE ||
+      part["resource"]["mimeType"] === STELLA_MCP_APP_MIME_TYPE) &&
     !visualOrigin?.accepts(part)
   ) {
     return { type: "drop", partType: type };

@@ -58,6 +58,7 @@
     "./visual-sandbox": "./src/visual-sandbox.ts",
     "./visual-bridge-policy": "./src/visual-bridge-policy.ts",
     "./generated-visual": "./src/generated-visual.ts",
+    "./stella-mcp-app": "./src/stella-mcp-app.ts",
     "./browser-control-json-schema": "./src/browser-control-json-schema.ts",
     "./chat": "./src/chat.ts",
     "./chat-message-content": "./src/chat-message-content.ts",

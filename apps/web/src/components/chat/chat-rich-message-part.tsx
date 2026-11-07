@@ -1,7 +1,10 @@
 import { createElement, lazy, Suspense, useMemo, useRef } from "react";
 
+import type { AppRendererProps } from "@mcp-ui/client";
+import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import {
   CHAT_RICH_PART_LIMITS,
@@ -9,13 +12,32 @@ import {
   MCP_APP_FRAME_TITLE_HASH_PARAM,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
+import {
+  readStellaMcpAppCall,
+  stellaMcpAppBundleSchema,
+  stellaMcpAppPartSchema,
+} from "@stll/api-contract/stella-mcp-app";
 
 import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import {
+  createStellaAppToolCaller,
+  openStellaAppLink,
+  STELLA_APP_HOST_CAPABILITIES,
+  stellaAppDirectory,
+  stellaAppHostContext,
+  stellaAppToolResult,
+} from "@/components/chat/stella-mcp-app-bridge";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
+import { useTheme } from "@/components/theme-provider";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useMessageLocale } from "@/i18n/message-locale";
+import { api } from "@/lib/api";
 import { mcpAppSandboxUrl } from "@/lib/api-url";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
+import { toSafeId } from "@/lib/safe-id";
 import { getUserFileContentUrl } from "@/lib/user-files";
 
 export type RichChatPart = Extract<
@@ -25,10 +47,24 @@ export type RichChatPart = Extract<
 type MediaChatPart = Extract<RichChatPart, { type: "audio" | "video" }>;
 type UiResourcePart = Extract<RichChatPart, { type: "ui-resource" }>;
 
-const LazyMcpAppResource = lazy(async () => {
-  const { MCPAppResource } = await import("@tanstack/ai-react/mcp-apps");
-  return { default: MCPAppResource };
+const LazyAppRenderer = lazy(async () => {
+  const { AppRenderer } = await import("@mcp-ui/client");
+  return { default: AppRenderer };
 });
+
+/**
+ * What a host answers an app with. Omitted, the app is display-only: a call
+ * or link it asks for is refused, as for an inline MCP App resource.
+ */
+type McpAppBridge = Pick<
+  AppRendererProps,
+  | "toolInput"
+  | "toolResult"
+  | "hostContext"
+  | "hostCapabilities"
+  | "onCallTool"
+  | "onOpenLink"
+>;
 
 const LazyGeneratedVisual = lazy(async () => {
   const { GeneratedVisual } =
@@ -190,13 +226,21 @@ export const applyMcpAppFrameTitle = (
 };
 
 const McpAppFrame = ({
+  bridge,
   frameTitle,
-  normalized,
+  html,
   sandboxUrl,
+  toolCallId,
+  toolName,
+  uri,
 }: {
+  bridge?: McpAppBridge | undefined;
   frameTitle: string;
-  normalized: UiResourcePart;
+  html: string;
   sandboxUrl: URL;
+  toolCallId: string;
+  toolName: string;
+  uri: string;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   useExternalSyncEffect(() => {
@@ -224,10 +268,16 @@ const McpAppFrame = ({
       <ChatRenderErrorBoundary
         surface="chat-rich-content"
         fallback={<RichContentStatus />}
-        key={`${normalized.toolCallId}:${normalized.resource.uri}`}
+        key={`${toolCallId}:${uri}`}
       >
         <Suspense fallback={<RichContentStatus loading />}>
-          <LazyMcpAppResource part={normalized} sandbox={{ url: sandboxUrl }} />
+          <LazyAppRenderer
+            html={html}
+            sandbox={{ url: sandboxUrl }}
+            toolName={toolName}
+            toolResourceUri={uri}
+            {...bridge}
+          />
         </Suspense>
       </ChatRenderErrorBoundary>
     </div>
@@ -292,10 +342,115 @@ const UiResource = ({ part }: { part: UiResourcePart }) => {
   return (
     <McpAppFrame
       frameTitle={frameTitle}
-      normalized={normalized}
+      html={normalized.resource.text ?? ""}
       sandboxUrl={sandboxUrl}
+      toolCallId={normalized.toolCallId}
+      toolName={normalized.toolName}
+      uri={normalized.resource.uri}
     />
   );
+};
+
+type StellaAppPart = v.InferOutput<typeof stellaMcpAppPartSchema>;
+
+/**
+ * One of stella's own apps, for the call the server ran. The document is the
+ * server's bundle; the app is handed the call's arguments and result, and
+ * its tool calls go back to the server, which holds them to the app's
+ * manifest and runs them as this member.
+ */
+const StellaAppFrame = ({
+  part,
+  threadRef,
+}: {
+  part: StellaAppPart;
+  threadRef: ChatThreadRef;
+}) => {
+  const t = useTranslations();
+  const locale = useMessageLocale();
+  const { resolvedTheme } = useTheme();
+  const frameTitle = t("chat.richContentTitle");
+  const sandboxUrl = useMemo(
+    () => withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle),
+    [frameTitle],
+  );
+  const directory = stellaAppDirectory(part.resource.uri) ?? "";
+  const bundle = useQuery({
+    queryKey: ["stella-mcp-app-bundle", directory],
+    queryFn: async ({ signal }) =>
+      v.parse(
+        stellaMcpAppBundleSchema,
+        unwrapApiResponse(
+          await api.chat["mcp-apps"]({ app: directory }).get({
+            fetch: { signal },
+          }),
+        ),
+      ),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const bridge = useMemo((): McpAppBridge => {
+    const call = readStellaMcpAppCall(part);
+    const thread = api.chat.threads({
+      threadId: toSafeId<"chatThread">(threadRef.threadId),
+    });
+    const appCalls = thread["mcp-apps"]({ toolCallId: part.toolCallId });
+    const callTool = createStellaAppToolCaller(async (request) =>
+      unwrapApiResponse(await appCalls.call.post(request)),
+    );
+    return {
+      toolInput: call.input,
+      toolResult: stellaAppToolResult(call),
+      hostContext: stellaAppHostContext({ theme: resolvedTheme, locale }),
+      hostCapabilities: STELLA_APP_HOST_CAPABILITIES,
+      onCallTool: callTool,
+      onOpenLink: async ({ url }) =>
+        await Promise.resolve(openStellaAppLink(url, openIsolatedWindow)),
+    };
+  }, [part, threadRef.threadId, resolvedTheme, locale]);
+  if (bundle.isPending) {
+    return (
+      <div className="min-h-32 w-full overflow-hidden rounded-md border">
+        <RichContentStatus loading />
+      </div>
+    );
+  }
+  if (
+    bundle.isError ||
+    bundle.data.uri !== part.resource.uri ||
+    sandboxUrl.origin === window.location.origin
+  ) {
+    return <RichContentStatus />;
+  }
+  return (
+    <McpAppFrame
+      bridge={bridge}
+      frameTitle={frameTitle}
+      html={bundle.data.html}
+      sandboxUrl={sandboxUrl}
+      toolCallId={part.toolCallId}
+      toolName={part.toolName}
+      uri={part.resource.uri}
+    />
+  );
+};
+
+const StellaAppResource = ({
+  part,
+  threadRef,
+}: {
+  part: UiResourcePart;
+  threadRef: ChatThreadRef | undefined;
+}) => {
+  const parsed = v.safeParse(stellaMcpAppPartSchema, part);
+  if (
+    !parsed.success ||
+    threadRef === undefined ||
+    typeof window === "undefined"
+  ) {
+    return <RichContentStatus />;
+  }
+  return <StellaAppFrame part={parsed.output} threadRef={threadRef} />;
 };
 
 type ChatRichMessagePartProps = {
@@ -318,6 +473,15 @@ export const ChatRichMessagePart = ({
       switch (renderer) {
         case "mcp-app":
           return <UiResource part={part} />;
+        case "stella-app":
+          return (
+            <ChatRenderErrorBoundary
+              surface="chat-rich-content"
+              fallback={<RichContentStatus />}
+            >
+              <StellaAppResource part={part} threadRef={threadRef} />
+            </ChatRenderErrorBoundary>
+          );
         case "generated-visual":
           if (organizationId === undefined || threadRef === undefined) {
             return <RichContentStatus />;
