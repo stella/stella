@@ -1318,21 +1318,30 @@ const socialSignInTwoFactorRedirectPlugin = {
 } satisfies BetterAuthPlugin;
 
 /**
- * Whether the current auth request is the organization page's continue step.
- * The provider re-enters its authorize logic from that endpoint under the
- * authorize path, so the step is recognised by the request it answers.
+ * Whether the current auth request is the organization page's pick or its
+ * continue step. The provider re-enters its authorize logic from both, under
+ * the authorize path, so each is recognised by the request it answers.
+ *
+ * The pick is the page's `set-active` with the signed authorization request:
+ * setting the session's organization makes the provider resume authorizing
+ * in that same request. Answering it with the organization page again would
+ * send the browser back to the picker it just used, before the page could
+ * take its continue step.
  */
 const isOrganizationPageContinuation = (): boolean => {
   const endpoint = tryGetCurrentAuthEndpointContext();
   const request = endpoint?.request;
-  if (!request || request.method !== "POST") {
+  if (!request || request.method !== "POST" || !isRecord(endpoint.body)) {
     return false;
   }
+  const path = new URL(request.url).pathname;
+  if (path === new URL(getAuthEndpointUrl("oauth2/continue")).pathname) {
+    return endpoint.body["postLogin"] === true;
+  }
   return (
-    new URL(request.url).pathname ===
-      new URL(getAuthEndpointUrl("oauth2/continue")).pathname &&
-    isRecord(endpoint.body) &&
-    endpoint.body["postLogin"] === true
+    path === new URL(getAuthEndpointUrl("organization/set-active")).pathname &&
+    typeof endpoint.body["organizationId"] === "string" &&
+    typeof endpoint.body["oauth_query"] === "string"
   );
 };
 
