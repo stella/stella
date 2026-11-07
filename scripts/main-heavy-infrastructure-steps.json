@@ -57,12 +57,8 @@
       "Upload planned Postgres test durations"
     ],
     "steps": [
-      "Checkout",
-      "Checkout patch-id inputs",
       "Fetch GitHub API tooling",
       "Install planner dependencies",
-      "Post Checkout",
-      "Post Checkout patch-id inputs",
       "Post Fetch GitHub API tooling",
       "Post Install planner dependencies",
       "Post Setup Bun for dependency scope",
@@ -112,10 +108,8 @@
       "parser-version-guard: Check parser version guard"
     ],
     "steps": [
-      "Checkout",
       "Checkout workflow classification tooling",
       "Install dependencies",
-      "Post Checkout",
       "Post Checkout workflow classification tooling",
       "Post Install dependencies",
       "Post Setup Bun",
@@ -186,9 +180,7 @@
       "npm release jobs match the package dependency graph"
     ],
     "steps": [
-      "Checkout",
       "Install dependencies",
-      "Post Checkout",
       "Post Install dependencies",
       "Post Setup Bun",
       "Setup Bun"
@@ -213,9 +205,7 @@
       "Turbo remote cache"
     ],
     "steps": [
-      "Checkout",
       "Install dependencies",
-      "Post Checkout",
       "Post Install dependencies",
       "Post Setup Bun",
       "Setup Bun"
@@ -255,9 +245,7 @@
       "Validate AI skills"
     ],
     "steps": [
-      "Checkout",
       "Install dependencies",
-      "Post Checkout",
       "Post Install dependencies",
       "Post Setup Bun",
       "Setup Bun"
@@ -343,10 +331,8 @@
       "Upload desktop browser failures"
     ],
     "steps": [
-      "Checkout",
       "Install UI browser test runtime",
       "Install dependencies",
-      "Post Checkout",
       "Post Install UI browser test runtime",
       "Post Install dependencies",
       "Post Restore Bun install cache",
@@ -368,9 +354,7 @@
       "Turbo remote cache"
     ],
     "steps": [
-      "Checkout",
       "Install dependencies",
-      "Post Checkout",
       "Post Install dependencies",
       "Post Setup Bun",
       "Setup Bun"
@@ -397,9 +381,7 @@
       "Typecheck coverage"
     ],
     "steps": [
-      "Checkout",
       "Install dependencies",
-      "Post Checkout",
       "Post Install dependencies",
       "Post Setup Bun",
       "Setup Bun"
@@ -556,10 +538,8 @@
       "Setup Bun"
     ],
     "steps": [
-      "Checkout",
       "Fetch GitHub API tooling",
       "Install dependencies",
-      "Post Checkout",
       "Post Fetch GitHub API tooling",
       "Post Install dependencies",
       "Post Setup Bun",
@@ -1063,10 +1043,8 @@
       "parser-version-guard: Check parser version guard"
     ],
     "steps": [
-      "Checkout",
       "Checkout workflow classification tooling",
       "Install dependencies",
-      "Post Checkout",
       "Post Checkout workflow classification tooling",
       "Post Install dependencies",
       "Post Setup Bun",
