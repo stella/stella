@@ -427,6 +427,22 @@ export const czUohsPrintedDecisionType = (text: string): string | undefined =>
     .find((line) => PRINTED_DECISION_TYPES.has(line))
     ?.toLocaleLowerCase("cs");
 
+/**
+ * What the decision's own text states about it. The date comes from the
+ * letterhead, so a text without one is a source that publishes none; the
+ * type is the printed title, since the export names it only by a code-list
+ * address (which stays in metadata). An unread document says neither.
+ */
+const czUohsPrintedFacts = (
+  fulltext: string | undefined,
+): { decisionDate: string | undefined; decisionType: string | undefined } =>
+  fulltext === undefined
+    ? { decisionDate: undefined, decisionType: undefined }
+    : {
+        decisionDate: czUohsLetterheadDate(fulltext),
+        decisionType: czUohsPrintedDecisionType(fulltext),
+      };
+
 /** Where a ÚOHS decision date was read from; the export states none. */
 export const CZ_UOHS_DECISION_DATE_SOURCE = "document";
 
