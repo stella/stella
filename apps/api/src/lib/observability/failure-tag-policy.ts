@@ -12,6 +12,7 @@ import type { FailureTag } from "@/api/lib/observability/failure-tags.gen";
 export const TAGGED_FAILURE_REASON = {
   AnalysisInputVersionChangedError: "conflict",
   AIColumnInputRequiredError: "tagged_failure",
+  AttachmentCopyFailed: "tagged_failure",
   AIGenerationCancelledError: "tagged_failure",
   AccountExportArchiveError: "tagged_failure",
   LimiterStoreUnavailableError: "limiter_store_unavailable",
@@ -300,6 +301,7 @@ export const TAGGED_FAILURE_REASON = {
   ListVerificationRunCapError: "tagged_failure",
   LocalModuleLoadError: "tagged_failure",
   LocalRunAnswerRefused: "request_invalid",
+  LocalRunOutputRefused: "request_invalid",
   LocalizedAppError: "tagged_failure",
   LoopbackCallbackError: "tagged_failure",
   LoopbackTimeoutError: "tagged_failure",
@@ -343,6 +345,7 @@ export const TAGGED_FAILURE_REASON = {
   OperatorEndpointError: "upstream_unavailable",
   OrganizationStorageTeardownBoundError: "tagged_failure",
   OrganizationStorageTeardownStateError: "tagged_failure",
+  OutputUploadFailed: "tagged_failure",
   OwnerAccessLostError: "tagged_failure",
   ParameterStoreError: "tagged_failure",
   ParseXmlError: "tagged_failure",

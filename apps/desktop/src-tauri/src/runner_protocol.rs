@@ -443,8 +443,18 @@ pub(crate) struct RunStart {
   pub(crate) harness_session_id: Option<String>,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
+  /// Files the sidecar copies into the run's folder before the harness starts.
+  #[serde(default)]
+  pub(crate) attachments: Vec<RunAttachment>,
   pub(crate) policy: RunPolicy,
   pub(crate) mcp: McpBinding,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RunAttachment {
+  pub(crate) path: String,
+  pub(crate) url: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -492,7 +502,7 @@ wire_union!(ServerMessage tagged "type" {
   Welcome(Welcome) => "welcome",
   UpgradeRequired(UpgradeRequired) => "upgrade_required",
   Reconnect(Reconnect) => "reconnect",
-  RunStart(RunStart) => "run.start",
+  RunStart(Box<RunStart>) => "run.start",
   RunInput(RunInput) => "run.input",
   RunApproval(RunApproval) => "run.approval",
   RunAnswer(RunAnswer) => "run.answer",

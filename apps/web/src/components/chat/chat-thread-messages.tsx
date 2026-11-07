@@ -115,7 +115,10 @@ import {
   isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
 import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
-import { ContextNotice } from "@/components/chat/context-notice";
+import {
+  ContextNotice,
+  LocalRunFilesNotSharedNotice,
+} from "@/components/chat/context-notice";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
@@ -295,7 +298,7 @@ const useOlderMessagePaging = ({
 const showsNothing = (message: ChatUIMessage, isLast: boolean) =>
   message.role === "assistant" &&
   !isLast &&
-  !carriesContextNotice(message) &&
+  !carriesAnswerNotice(message) &&
   !hasVisibleAssistantParts(message.parts);
 
 /** Only an answer offers message actions. Its whole box, gaps between its parts
@@ -866,7 +869,7 @@ const StickyUserTurn = ({
           >
             <MessageContent className={cn(messageEdit.editing && "hidden")}>
               <div className="group-data-[stuck=true]/sticky:hidden">
-                <UserAttachments parts={fileParts} />
+                <MessageAttachments parts={fileParts} />
               </div>
               {!hasVisibleText && fileParts.length > 0 && (
                 <span className="text-muted-foreground hidden items-center gap-1 text-xs group-data-[stuck=true]/sticky:flex">
@@ -1059,7 +1062,7 @@ const downloadDataAttachment = ({
 
 type UserAttachmentPart = ChatAttachmentPart | ChatPastedTextPart;
 
-const UserAttachments = ({
+const MessageAttachments = ({
   parts,
 }: {
   parts: readonly UserAttachmentPart[];
@@ -1634,7 +1637,7 @@ const TextMessageParts = ({
         }
       }
 
-      return <UserAttachments parts={fileParts} />;
+      return <MessageAttachments parts={fileParts} />;
     })()}
     {message.parts.map((part, partIndex) =>
       part.type === "text" && !isChatPastedTextPart(part) ? (
@@ -1822,9 +1825,10 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
  * answer text, or a finished web search or fetch, which shows in the sources
  * tray instead of as a step.
  */
-/** A message without metadata carries no context notice. */
-const carriesContextNotice = (message: ChatUIMessage): boolean =>
-  message.metadata?.contextNotice !== undefined;
+/** A message without metadata carries no notice of its own. */
+const carriesAnswerNotice = (message: ChatUIMessage): boolean =>
+  message.metadata?.contextNotice !== undefined ||
+  message.metadata?.localRunFilesNotShared !== undefined;
 
 const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
   toAssistantPartRenderEntries(parts).some((entry) => {
@@ -2225,6 +2229,8 @@ const AssistantMessageParts = ({
           </AssistantProcessGroup>
         );
       })}
+      <MessageAttachments parts={message.parts.filter(isChatAttachmentPart)} />
+      <LocalRunFilesNotSharedNotice metadata={message.metadata} />
       <WebSearchSources parts={message.parts} />
     </>
   );
@@ -2375,7 +2381,7 @@ const hasAssistantAnswerContent = (parts: readonly ChatPart[]): boolean => {
     if (part.type === "text" && part.content.trim()) {
       return true;
     }
-    if (isRichChatPart(part)) {
+    if (isRichChatPart(part) || isChatAttachmentPart(part)) {
       return true;
     }
   }

@@ -41,6 +41,7 @@ import {
 import { DESKTOP_EDIT_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { findDesktopEditableFileForProperty } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { CARRIED_FIELD_COLUMNS } from "@/api/lib/entity-versions/field-clone-policy";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import {
@@ -442,12 +443,7 @@ export const finalizeDesktopEditSessionHandler = async ({
           versionNumber: true,
         },
         with: {
-          fields: {
-            columns: {
-              content: true,
-              propertyId: true,
-            },
-          },
+          fields: { columns: CARRIED_FIELD_COLUMNS },
         },
       });
 

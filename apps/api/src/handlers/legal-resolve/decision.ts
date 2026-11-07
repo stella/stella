@@ -357,20 +357,11 @@ const resolveConstrainedDecision = async ({
     }
     case "unique":
       return await admit(resolution.decision);
-    case "incomplete_identifier": {
-      // A bare docket of a file that can hold several decisions. When the
-      // lookup finds exactly one, that is the decision: asking for a sheet
-      // the reader does not have only hides it. Several stay unresolved, and
-      // exact identity never picks one of them for the caller.
-      const [only, ...rest] = resolution.candidates;
-      if (only !== undefined && rest.length === 0) {
-        return await admit(only);
-      }
-      return withOtherCourts({
-        status: "incomplete_identifier",
-        missing: [...resolution.missing],
-      });
-    }
+    case "incomplete_identifier":
+      // A bare docket of a file that can hold several decisions, of which the
+      // lookup found exactly one: that is the decision. Asking for a sheet the
+      // reader does not have only hides it; several are `ambiguous`.
+      return await admit(resolution.decision);
     default:
       resolution satisfies never;
       return panic("Unhandled decision identity resolution");

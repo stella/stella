@@ -701,7 +701,7 @@ impl Runner {
               .insert(run_id.clone(), Decision::Accepted, now_ms())
               .map_err(log_journal_error)?;
             let sink = RunSink::new(run_id.clone(), Arc::clone(&self.journal));
-            let decision = match self.host.start(start, sink) {
+            let decision = match self.host.start(*start, sink) {
               Ok(()) => Decision::Accepted,
               Err(reason) => Decision::Rejected { reason },
             };

@@ -1688,6 +1688,7 @@
       "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
       "errorNeedsLogin": "Sinu arvutis töötav programmeerimisagent vajab uuesti sisselogimist. Logi sisse stella desktopi kaudu ja proovi uuesti.",
       "errorUnavailable": "Sinu arvuti lõpetas selle vastuse töötlemise. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti.",
+      "filesNotShared": "Failid, mida ei õnnestunud jagada, jäävad sinu arvutisse: {fileNames}",
       "onThisComputer": "{harness} selles arvutis",
       "permissionAskDescription": "Muudab vestluse kaustas olevaid faile ise; kõige muu kohta küsib.",
       "permissionAutoDescription": "Teeb ise seda, mida peab ohutuks; ülejäänu kohta küsib.",
@@ -1718,6 +1719,10 @@
       "dismiss": "Jäta kõrvale ja peata",
       "secretAnswer": "Vastus on peidetud",
       "secretPlaceholder": "Teie vastus jääb peidetuks"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# vestlus ootab teid} other {# vestlust ootab teid}}",
+      "working": "{count, plural, one {# vestlus on töös} other {# vestlust on töös}}"
     },
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mcpReconnect": {
@@ -3984,6 +3989,8 @@
     "reopenTab": "Ava {name} uuesti",
     "resizePane": "Muuda paneeli suurust",
     "review": {
+      "acceptChange": "Nõustu muudatusega",
+      "acceptFinding": "Aktsepteeri leid",
       "actionNeeded": "Vajab tegutsemist",
       "addComment": "Lisa kommentaarina",
       "addNote": "Lisa kommentaar vastaspoolele",
@@ -4024,6 +4031,7 @@
         "dismissed": "Kõrvale jäetud"
       },
       "description": "Valige koostatud kontrolljuhend, võrdlusdokumendid või mõlemad.",
+      "dismissFinding": "Jäta leid kõrvale",
       "documentChanged": "See dokument on pärast seda ülevaatust muutunud.",
       "export": {
         "counterparty": "Laadi vastaspoole jaoks alla",
@@ -4047,6 +4055,7 @@
       "history": {
         "backToLatest": "Tagasi uusima juurde",
         "decided": "{decided, number}/{total, number} otsustatud",
+        "fromTable": "Tabelist",
         "references": "{count, plural, one {# võrdlusdokument} other {# võrdlusdokumenti}}"
       },
       "impact": {
@@ -4071,7 +4080,6 @@
         "unanchored": "Ei ole seotud ühegi klausliga"
       },
       "newTopic": "Uus läbivaatuse teema",
-      "noChangeNeeded": "Muudatust pole vaja",
       "noEditor": "Avage dokument, et muudatusi aktsepteerida",
       "noMaterialDifferences": "Olulisi erinevusi ei leitud",
       "noPassage": "Väljavõtet pole",
@@ -4154,6 +4162,11 @@
         "noSide": "Pool puudub",
         "proposedFromReferences": "Võrdlustest pakutud seisukohad",
         "unnamedReferences": "{count, plural, one {# võrdlusdokument} other {# võrdlusdokumenti}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Selle versiooni täielik ülevaatus</link> koos linkide ja kavandatavate muudatustega on saadaval ülevaatuste ajaloos.",
+        "origin": "<strong>Käivitatud tabelist.</strong> Need leiud hinnati tabeli jaoks eraldatud väärtuste põhjal, mistõttu need ei viita dokumendile ega sisalda kavandatavaid muudatusi.",
+        "runAnotherReview": "Linkide ja kavandatavate muudatuste saamiseks kasutage nuppu <action>{label}</action>."
       },
       "targetAsReference": "Ülevaadatav dokument ei saa olla iseenda võrdlusdokument.",
       "targetColumn": "See dokument",

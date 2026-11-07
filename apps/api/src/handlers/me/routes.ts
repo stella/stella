@@ -6,6 +6,7 @@ import readProfessionalUse from "@/api/handlers/me/professional-use";
 import registerPushDevice from "@/api/handlers/me/push-devices/register";
 import unregisterPushDevice from "@/api/handlers/me/push-devices/unregister";
 import deleteAccountSendOtp from "@/api/handlers/me/send-otp";
+import actOnTimer from "@/api/handlers/me/timer-activity-devices/act";
 import registerTimerActivityDevice from "@/api/handlers/me/timer-activity-devices/register";
 import unregisterTimerActivityDevice from "@/api/handlers/me/timer-activity-devices/unregister";
 import twoFactorSendManageOtp from "@/api/handlers/me/two-factor-send-manage-otp";
@@ -38,6 +39,7 @@ export const meRoute = mount(
         PUT: registerTimerActivityDevice,
         DELETE: unregisterTimerActivityDevice,
       },
+      "/timer-activity-devices/:deviceId/actions": { POST: actOnTimer },
     }),
     mount([
       routes(

@@ -1727,6 +1727,9 @@
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/current-file-field-sync.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#1"
           },
           {
@@ -1796,7 +1799,7 @@
             "location": "apps/web/src/components/inspector/inspector-group-transfer.tsx#2"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-panel.tsx#9"
+            "location": "apps/web/src/components/inspector/inspector-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#1"
@@ -3206,6 +3209,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-override-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-drops.tsx#1"
           },
           {
@@ -3284,7 +3290,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#1"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#1"
@@ -7189,6 +7195,9 @@
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/current-file-field-sync.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#1"
           },
           {
@@ -7258,7 +7267,7 @@
             "location": "apps/web/src/components/inspector/inspector-group-transfer.tsx#2"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-panel.tsx#9"
+            "location": "apps/web/src/components/inspector/inspector-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#1"
@@ -8668,6 +8677,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-override-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-drops.tsx#1"
           },
           {
@@ -8746,7 +8758,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#1"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#1"
@@ -15555,6 +15567,9 @@
             "location": "apps/web/src/features/case-law/use-expanded-decision-filters.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/active-runs.ts#1"
+          },
+          {
             "location": "apps/web/src/features/chat/answer-edit/answer-edit-queries.ts#1"
           },
           {
@@ -16395,6 +16410,9 @@
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/current-file-field-sync.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#3"
           },
           {
@@ -16422,7 +16440,7 @@
             "location": "apps/web/src/components/inspector/inspector-group-transfer.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-panel.tsx#11"
+            "location": "apps/web/src/components/inspector/inspector-panel.tsx#10"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#3"
@@ -17026,6 +17044,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-override-card.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-assignee-field.tsx#1"
@@ -17700,7 +17721,7 @@
             "location": "apps/web/src/components/inspector/inspector-group-rail.tsx#5"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-panel.tsx#12"
+            "location": "apps/web/src/components/inspector/inspector-panel.tsx#11"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#4"
@@ -20707,6 +20728,9 @@
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/current-file-field-sync.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#1"
           },
           {
@@ -20776,7 +20800,7 @@
             "location": "apps/web/src/components/inspector/inspector-group-transfer.tsx#2"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-panel.tsx#9"
+            "location": "apps/web/src/components/inspector/inspector-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#1"
@@ -22186,6 +22210,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-override-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-drops.tsx#1"
           },
           {
@@ -22264,7 +22291,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#1"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#1"
@@ -25964,6 +25991,9 @@
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/current-file-field-sync.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#1"
           },
           {
@@ -26033,7 +26063,7 @@
             "location": "apps/web/src/components/inspector/inspector-group-transfer.tsx#2"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-panel.tsx#9"
+            "location": "apps/web/src/components/inspector/inspector-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#1"
@@ -27443,6 +27473,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-override-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-drops.tsx#1"
           },
           {
@@ -27521,7 +27554,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#1"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#1"
@@ -29698,6 +29731,9 @@
             "location": "apps/api/scripts/generate-online-unique-index-names.ts#1"
           },
           {
+            "location": "apps/api/scripts/generate-status-tables.ts#1"
+          },
+          {
             "location": "apps/api/scripts/generate-transition-triggers.ts#1"
           },
           {
@@ -30352,10 +30388,10 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/at-findok-throttle.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts#6"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts#7"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/at-ris-fields.ts#28"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/at-ris-fields.ts#29"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/at-ris-throttle.ts#1"
@@ -30487,10 +30523,10 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-court-directory.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts#9"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts#10"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts#12"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts#13"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/source-registrations.ts#1"
@@ -31133,6 +31169,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/rotate-template-thread.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/runs/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/saved-secret.ts#1"
@@ -34987,6 +35026,9 @@
             "location": "apps/api/src/lib/hosted-usage-provider/polar/events.ts#32"
           },
           {
+            "location": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts#16"
+          },
+          {
             "location": "apps/api/src/lib/huggingface.ts#1"
           },
           {
@@ -36805,6 +36847,9 @@
             "location": "apps/api/src/scripts/materialize-runtime-worker-native-assets.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/mcp-canary-case-law-identity.ts#7"
+          },
+          {
             "location": "apps/api/src/scripts/mcp-canary.ts#13"
           },
           {
@@ -37714,6 +37759,9 @@
             "location": "apps/web/src/features/case-law/use-provision-part-renderer.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/active-runs.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/features/chat/answer-edit/answer-edit-api.ts#1"
           },
           {
@@ -38188,6 +38236,9 @@
             "location": "apps/web/src/lib/use-shortcut-rebinding.ts#3"
           },
           {
+            "location": "apps/web/src/lib/user-events-sse.ts#3"
+          },
+          {
             "location": "apps/web/src/lib/uuid.ts#1"
           },
           {
@@ -38491,6 +38542,9 @@
             "location": "packages/agent-engine/src/sandbox.ts#9"
           },
           {
+            "location": "packages/agent-engine/src/sidecar/attachments.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/sidecar/holder-server.ts#1"
           },
           {
@@ -38654,6 +38708,9 @@
           },
           {
             "location": "packages/api-contract/src/visual-theme.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/workspace-status.ts#1"
           },
           {
             "location": "packages/brand/src/palette.ts#1"
@@ -40171,6 +40228,9 @@
             "location": "scripts/typecheck-coverage.ts#19"
           },
           {
+            "location": "scripts/ui-api-snapshot.ts#24"
+          },
+          {
             "location": "scripts/unsignalled-skip.ts#1"
           },
           {
@@ -40652,6 +40712,9 @@
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#16"
+          },
+          {
+            "location": "apps/web/src/components/matter-run-marks.tsx#1"
           },
           {
             "location": "apps/web/src/components/matter-target-picker.tsx#5"
@@ -42583,7 +42646,7 @@
             "location": "apps/api/scripts/generate-entity-feature-gate-propagation.ts#2"
           },
           {
-            "location": "apps/api/scripts/generate-status-tables.ts#1"
+            "location": "apps/api/scripts/generate-status-tables.ts#2"
           },
           {
             "location": "apps/api/scripts/ingestion-status.ts#1"
@@ -42731,6 +42794,15 @@
           },
           {
             "location": "apps/api/src/db/entity-feature-policies.ts#5"
+          },
+          {
+            "location": "apps/api/src/db/field-groups.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/field-groups.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/field-groups.ts#3"
           },
           {
             "location": "apps/api/src/db/import-provenance-columns.ts#1"
@@ -42944,6 +43016,18 @@
           },
           {
             "location": "apps/api/src/db/sql-client.ts#15"
+          },
+          {
+            "location": "apps/api/src/db/state-fields.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/state-fields.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/state-fields.ts#3"
+          },
+          {
+            "location": "apps/api/src/db/state-fields.ts#4"
           },
           {
             "location": "apps/api/src/handlers/audit-logs/export.ts#2"
@@ -43406,6 +43490,12 @@
           },
           {
             "location": "apps/api/src/handlers/chat/resolve-file-thread.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/runs/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/runs/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/saved-secret.ts#2"
@@ -45010,7 +45100,7 @@
             "location": "apps/api/src/lib/billing/time-entry-running.ts#3"
           },
           {
-            "location": "apps/api/src/lib/billing/time-entry-submission.ts#15"
+            "location": "apps/api/src/lib/billing/time-entry-submission.ts#14"
           },
           {
             "location": "apps/api/src/lib/billing/time-timers.ts#2"
@@ -45818,9 +45908,6 @@
           },
           {
             "location": "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts#16"
           },
           {
             "location": "apps/api/src/lib/idempotency/organization-replay-authorization.ts#2"
@@ -46798,6 +46885,9 @@
             "location": "apps/api/src/lib/workspaces/matter-access-proof.ts#3"
           },
           {
+            "location": "apps/api/src/lib/workspaces/visible-workspace-sql.ts#1"
+          },
+          {
             "location": "apps/api/src/mcp/billing-tools.ts#2"
           },
           {
@@ -47077,6 +47167,12 @@
             "location": "apps/api/src/db/entity-feature-policies.ts#5"
           },
           {
+            "location": "apps/api/src/db/field-groups.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/field-groups.ts#3"
+          },
+          {
             "location": "apps/api/src/db/import-provenance-columns.ts#2"
           },
           {
@@ -47132,6 +47228,12 @@
           },
           {
             "location": "apps/api/src/db/sql-client.ts#15"
+          },
+          {
+            "location": "apps/api/src/db/state-fields.ts#3"
+          },
+          {
+            "location": "apps/api/src/db/state-fields.ts#4"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#4"
@@ -54219,6 +54321,9 @@
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/current-file-field-sync.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#1"
           },
           {
@@ -54288,7 +54393,7 @@
             "location": "apps/web/src/components/inspector/inspector-group-transfer.tsx#2"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-panel.tsx#9"
+            "location": "apps/web/src/components/inspector/inspector-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#1"
@@ -55698,6 +55803,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-override-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-drops.tsx#1"
           },
           {
@@ -55776,7 +55884,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#1"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#1"
@@ -58040,8 +58148,8 @@
       "version": "7.4.19"
     },
     {
-      "bom-ref": "pkg:npm/tsrs@0.18.0-ts7.1.0-dev.20260929",
-      "description": "A Rust port of the TypeScript 7 compiler (tsc) and language server, with TypeScript 7's unstable JS API",
+      "bom-ref": "pkg:npm/tsrs@0.20.1-ts7.1.0-beta",
+      "description": "A Rust port of the TypeScript 7 compiler (tsc), language server, and JavaScript API",
       "evidence": {
         "identity": [
           {
@@ -58059,7 +58167,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/scripts/generate-web-api-types.ts#53"
+            "location": "apps/api/scripts/generate-web-api-types.ts#52"
           },
           {
             "location": "apps/api/scripts/lib/web-api-program.ts#10"
@@ -58083,13 +58191,13 @@
             "location": "scripts/test-subject-reachability.ts#4"
           },
           {
-            "location": "apps/api/scripts/generate-web-api-types.ts#53"
+            "location": "apps/api/scripts/generate-web-api-types.ts#52"
           },
           {
-            "location": "apps/api/scripts/generate-web-api-types.ts#58"
+            "location": "apps/api/scripts/generate-web-api-types.ts#57"
           },
           {
-            "location": "apps/api/scripts/generate-web-api-types.ts#80"
+            "location": "apps/api/scripts/generate-web-api-types.ts#79"
           },
           {
             "location": "apps/api/scripts/lib/compiler-input-stamp.ts#21"
@@ -58128,13 +58236,13 @@
             "location": "packages/scripts/src/query-cache-types.ts#3"
           },
           {
-            "location": "packages/scripts/src/query-cache-types.ts#9"
+            "location": "packages/scripts/src/query-cache-types.ts#4"
           },
           {
             "location": "packages/scripts/src/result-consumption.ts#5"
           },
           {
-            "location": "packages/scripts/src/result-consumption.ts#11"
+            "location": "packages/scripts/src/result-consumption.ts#6"
           },
           {
             "location": "packages/scripts/src/typecheck-cache-contract.ts#4"
@@ -58173,16 +58281,16 @@
             "location": "scripts/test-subject-reachability.ts#4"
           },
           {
-            "location": "scripts/test-subject-reachability.ts#9"
+            "location": "scripts/test-subject-reachability.ts#5"
           },
           {
             "location": "scripts/typecheck-coverage.ts#28"
           },
           {
-            "location": "apps/api/scripts/generate-web-api-types.ts#58"
+            "location": "apps/api/scripts/generate-web-api-types.ts#57"
           },
           {
-            "location": "apps/api/scripts/generate-web-api-types.ts#80"
+            "location": "apps/api/scripts/generate-web-api-types.ts#79"
           },
           {
             "location": "apps/api/scripts/lib/web-api-program.ts#16"
@@ -58203,10 +58311,10 @@
             "location": "packages/scripts/src/browser-runtime-safety.ts#4"
           },
           {
-            "location": "packages/scripts/src/query-cache-types.ts#9"
+            "location": "packages/scripts/src/query-cache-types.ts#4"
           },
           {
-            "location": "packages/scripts/src/result-consumption.ts#11"
+            "location": "packages/scripts/src/result-consumption.ts#6"
           },
           {
             "location": "packages/scripts/src/typecheck-cache-contract.ts#4"
@@ -58227,7 +58335,7 @@
             "location": "scripts/schema-introspection.ts#11"
           },
           {
-            "location": "scripts/test-subject-reachability.ts#9"
+            "location": "scripts/test-subject-reachability.ts#5"
           },
           {
             "location": "scripts/typecheck-coverage.ts#28"
@@ -58330,10 +58438,10 @@
           "value": "apps/api/node_modules/tsrs/package.json"
         }
       ],
-      "purl": "pkg:npm/tsrs@0.18.0-ts7.1.0-dev.20260929",
+      "purl": "pkg:npm/tsrs@0.20.1-ts7.1.0-beta",
       "scope": "required",
       "type": "library",
-      "version": "0.18.0-ts7.1.0-dev.20260929"
+      "version": "0.20.1-ts7.1.0-beta"
     },
     {
       "authors": [
@@ -59754,7 +59862,7 @@
             "location": "apps/web/src/components/inspector/inspector-group-transfer.tsx#6"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-panel.tsx#13"
+            "location": "apps/web/src/components/inspector/inspector-panel.tsx#12"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-pdf-error-fallback.tsx#2"
@@ -59866,6 +59974,9 @@
           },
           {
             "location": "apps/web/src/components/matter-number-hint.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/matter-run-marks.tsx#2"
           },
           {
             "location": "apps/web/src/components/matter-target-picker.tsx#6"
@@ -61095,6 +61206,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#6"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-override-card.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/correspondence-assignee-field.tsx#2"
           },
           {
@@ -61176,7 +61290,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#3"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/uploaded-mail-source.tsx#2"
@@ -62130,7 +62244,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/replay-parser-fingerprints.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts#13"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts#14"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/uk-fcl.ts#6"
@@ -62260,6 +62374,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/rotate-template-thread.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/runs/list.ts#4"
           },
           {
             "location": "apps/api/src/handlers/chat/saved-secret.ts#3"
@@ -64776,6 +64893,9 @@
             "location": "apps/api/src/scripts/grant-manual-entitlement.ts#14"
           },
           {
+            "location": "apps/api/src/scripts/mcp-canary-case-law-identity.ts#8"
+          },
+          {
             "location": "apps/api/src/scripts/mcp-canary.ts#21"
           },
           {
@@ -65754,6 +65874,12 @@
             "location": "scripts/tanstack-drift.ts#34"
           },
           {
+            "location": "scripts/ui-api-snapshot.ts#27"
+          },
+          {
+            "location": "scripts/ui-drift-ledgers.ts#26"
+          },
+          {
             "location": "apps/api/src/lib/email/email.tsx#2"
           },
           {
@@ -66678,7 +66804,7 @@
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#7"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-panel.tsx#14"
+            "location": "apps/web/src/components/inspector/inspector-panel.tsx#13"
           },
           {
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#14"
@@ -66831,7 +66957,7 @@
             "location": "apps/web/src/components/docx/docx-editor-host.tsx#16"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-panel.tsx#14"
+            "location": "apps/web/src/components/inspector/inspector-panel.tsx#13"
           },
           {
             "location": "apps/web/src/components/workspaces/create-matter-dialog.tsx#8"

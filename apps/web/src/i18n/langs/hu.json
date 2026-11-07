@@ -1688,6 +1688,7 @@
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
       "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
       "errorUnavailable": "A számítógépe leállította ennek a válasznak a feldolgozását. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
+      "filesNotShared": "A meg nem osztható fájlok a számítógépén maradnak: {fileNames}",
       "onThisComputer": "{harness} ezen a számítógépen",
       "permissionAskDescription": "A csevegés mappájában lévő fájlokat magától szerkeszti; minden más előtt rákérdez.",
       "permissionAutoDescription": "Amit biztonságosnak ítél, magától elvégzi; a többire rákérdez.",
@@ -1718,6 +1719,10 @@
       "dismiss": "Elvetés és leállítás",
       "secretAnswer": "Rejtett válasz",
       "secretPlaceholder": "Az Ön válasza rejtve marad"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# csevegés vár Önre} other {# csevegés vár Önre}}",
+      "working": "{count, plural, one {# csevegés fut} other {# csevegés fut}}"
     },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mcpReconnect": {
@@ -3984,6 +3989,8 @@
     "reopenTab": "{name} újranyitása",
     "resizePane": "Panel átméretezése",
     "review": {
+      "acceptChange": "Módosítás elfogadása",
+      "acceptFinding": "Megállapítás elfogadása",
       "actionNeeded": "Teendő",
       "addComment": "Hozzáadás megjegyzésként",
       "addNote": "Megjegyzés hozzáadása az ellenfélnek",
@@ -4024,6 +4031,7 @@
         "dismissed": "Elvetve"
       },
       "description": "Válasszon egy kidolgozott playbookot, referenciadokumentumokat vagy mindkettőt.",
+      "dismissFinding": "Megállapítás elvetése",
       "documentChanged": "A dokumentum az ellenőrzés óta megváltozott.",
       "export": {
         "counterparty": "Letöltés az ellenfélnek",
@@ -4047,6 +4055,7 @@
       "history": {
         "backToLatest": "Vissza a legutóbbihoz",
         "decided": "{decided, number}/{total, number} eldöntve",
+        "fromTable": "A táblázatból",
         "references": "{count, plural, one {# referencia} other {# referencia}}"
       },
       "impact": {
@@ -4071,7 +4080,6 @@
         "unanchored": "Nincs kikötéshez kötve"
       },
       "newTopic": "Új ellenőrzési téma",
-      "noChangeNeeded": "Nincs szükség módosításra",
       "noEditor": "Nyissa meg a dokumentumot a módosítások elfogadásához",
       "noMaterialDifferences": "Nem találtunk lényeges eltérést",
       "noPassage": "Nincs szövegrész",
@@ -4154,6 +4162,11 @@
         "noSide": "nincs oldal",
         "proposedFromReferences": "a referenciákból javasolt álláspontok",
         "unnamedReferences": "{count, plural, one {# referenciadokumentum} other {# referenciadokumentum}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Ennek a verziónak a teljes ellenőrzése</link> hivatkozásokkal és javasolt módosításokkal elérhető az ellenőrzési előzményekben.",
+        "origin": "<strong>A táblázatból indítva.</strong> Ezek a megállapítások a táblázathoz kinyert értékek alapján készültek, ezért nem hivatkoznak a dokumentumra, és nem tartalmaznak javasolt módosításokat.",
+        "runAnotherReview": "A hivatkozásokhoz és a javasolt módosításokhoz használja a következő gombot: <action>{label}</action>."
       },
       "targetAsReference": "Az ellenőrzött dokumentum nem lehet saját referenciája.",
       "targetColumn": "Ez a dokumentum",
