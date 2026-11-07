@@ -1773,10 +1773,7 @@ const noteReferencesOf = (
   line.marks === undefined
     ? []
     : line.marks.flatMap((mark) => {
-        if (
-          mark.type !== "superscript" &&
-          !(mark.type === "on-line" && mark.raised === true)
-        ) {
+        if (mark.type === "on-line" && mark.raised !== true) {
           return [];
         }
         const { after, text } = mark;
