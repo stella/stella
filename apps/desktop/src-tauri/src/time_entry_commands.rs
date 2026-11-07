@@ -1,5 +1,4 @@
 //! The activity window's explicit confirmation boundary. Block references stay local.
-use crate::logging::best_effort;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 

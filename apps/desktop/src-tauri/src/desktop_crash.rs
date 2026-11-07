@@ -1,4 +1,3 @@
-use crate::logging::best_effort;
 use serde::{Deserialize, Serialize};
 use std::{
   fs,

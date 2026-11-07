@@ -4,7 +4,6 @@
 //! `activity_settings`. Changes are announced with a payload-free event; the
 //! window reads the data back through `activity_get_day`.
 
-use crate::logging::best_effort;
 use chrono::Utc;
 use tauri::{AppHandle, State};
 
