@@ -1343,6 +1343,7 @@
   "chat.loadingEarlierMessages": "Loading earlier messages…",
   "chat.localRun.cloud": "stella cloud",
   "chat.localRun.errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
+  "chat.localRun.errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
   "chat.localRun.errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
   "chat.localRun.errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
   "chat.localRun.filesNotShared": "Files that could not be shared stay on your computer: {fileNames}",

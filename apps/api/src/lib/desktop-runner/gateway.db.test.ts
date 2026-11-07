@@ -27,6 +27,7 @@ import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
   chatLocalRunComputerEventSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
@@ -3483,6 +3484,79 @@ describe("chat turns on a computer", () => {
     expect(
       last?.type === EventType.RUN_ERROR ? classifyRunErrorChunk(last) : null,
     ).toBe("local_runner_limit_reached");
+  });
+
+  test("a run that reached its usage limit says when the limit resets, and a time the desktop made up is dropped", async () => {
+    const limitedTurn = async (
+      chunks: (runId: string) => Promise<unknown[]>,
+    ) => {
+      const chatThreadId = await newThread();
+      const { desktopId, desktop } = shared();
+      const turn = collect(
+        createLocalChatRun(
+          contextFor(chatThreadId),
+          startPlan(desktopId),
+        ).stream({
+          chatRunId: Bun.randomUUIDv7(),
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "Summarize" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+      const start = await desktop.receive("run.start");
+      desktop.send({ type: "run.accepted", runId: start.runId });
+      const run = desktopRun(desktop, start.runId);
+      await run.events(await chunks(start.runId));
+      await run.finish("limit_reached", null);
+      const last = (await turn.done).at(-1);
+      expect(last).toMatchObject({
+        type: EventType.RUN_ERROR,
+        code: AI_FAILURE_CODES.local_runner_limit_reached,
+      });
+      return last?.type === EventType.RUN_ERROR ? last : panic("no run error");
+    };
+    const limitFailure = (resetsAt: string | null) =>
+      [
+        {
+          type: "turn.failed",
+          failure: {
+            type: "usage_limit",
+            message: "Usage limit reached",
+            resetsAt,
+          },
+        },
+      ] satisfies HarnessEvent[];
+
+    const reported = await limitedTurn(
+      async (runId) =>
+        await harnessChunks(runId, limitFailure("2026-11-08T09:30:00.000Z")),
+    );
+    expect(reported.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]).toEqual({
+      resetsAt: "2026-11-08T09:30:00.000Z",
+    });
+
+    // A desktop is not trusted: a time that is not an instant, or extra
+    // fields beside it, never reach the turn.
+    for (const forged of [
+      { resetsAt: "tomorrow" },
+      { resetsAt: "2026-11-08T09:30:00.000Z", note: "<b>now</b>" },
+    ]) {
+      const dropped = await limitedTurn(async (runId) =>
+        (await harnessChunks(runId, limitFailure(null))).map((chunk) =>
+          isRecord(chunk) && chunk["type"] === EventType.RUN_ERROR
+            ? {
+                ...chunk,
+                metadata: { [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: forged },
+              }
+            : chunk,
+        ),
+      );
+      expect(
+        dropped.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+      ).toBeUndefined();
+    }
   });
 
   test("a computer that refuses the run fails the turn with the reason it gave", async () => {
