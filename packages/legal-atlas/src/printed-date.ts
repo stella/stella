@@ -1,4 +1,8 @@
 // parser-output-unchanged: the printed-date reader moved here verbatim from provision-version-grammar.ts.
+import { Result } from "better-result";
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 /**
  * Calendar dates as courts and authorities print them: "1. listopadu 2018",
  * "17. 10. 2016", "7. decembra 2020". One owner, so a citation's applied
@@ -40,14 +44,23 @@ export const printedDateOf = (
   groups: Readonly<Record<string, string | undefined>> | undefined,
   monthNames: PrintedMonthNames,
 ): string | undefined => {
-  const day = Number(groups?.["day"]);
-  const year = Number(groups?.["year"]);
+  const digits = (name: string): number | undefined => {
+    const parsed = parseIntegerToken(groups?.[name], { sign: "unsigned" });
+    return Result.isOk(parsed) ? parsed.value : undefined;
+  };
+  const day = digits("day");
+  const year = digits("year");
   const monthName = groups?.["monthName"];
   const month =
     monthName === undefined
-      ? Number(groups?.["month"])
+      ? digits("month")
       : monthNames[monthName.toLowerCase()];
-  if (month === undefined || !validDate(year, month, day)) {
+  if (
+    day === undefined ||
+    year === undefined ||
+    month === undefined ||
+    !validDate(year, month, day)
+  ) {
     return undefined;
   }
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;

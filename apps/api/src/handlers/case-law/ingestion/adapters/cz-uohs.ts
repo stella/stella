@@ -413,28 +413,19 @@ const LETTERHEAD_DATES = [
  * The decision's own title line in the letterhead ("ROZHODNUTÍ", "USNESENÍ",
  * "PŘÍKAZ"), as its type in Czech; undefined when the head prints none.
  */
-const PRINTED_DECISION_TYPE = /^\s*(ROZHODNUTÍ|USNESENÍ|PŘÍKAZ)\s*$/mu;
+const PRINTED_DECISION_TYPES: ReadonlySet<string> = new Set([
+  "ROZHODNUTÍ",
+  "USNESENÍ",
+  "PŘÍKAZ",
+]);
 
 export const czUohsPrintedDecisionType = (text: string): string | undefined =>
-  PRINTED_DECISION_TYPE.exec(
-    text.slice(0, LETTERHEAD_SPAN),
-  )?.[1]?.toLocaleLowerCase("cs");
-
-/**
- * What the decision's own text states about it. The date comes from the
- * letterhead, so a text without one is a source that publishes none; the
- * type is the printed title, since the export names it only by a code-list
- * address (which stays in metadata). An unread document says neither.
- */
-const czUohsPrintedFacts = (
-  fulltext: string | undefined,
-): { decisionDate: string | undefined; decisionType: string | undefined } =>
-  fulltext === undefined
-    ? { decisionDate: undefined, decisionType: undefined }
-    : {
-        decisionDate: czUohsLetterheadDate(fulltext),
-        decisionType: czUohsPrintedDecisionType(fulltext),
-      };
+  text
+    .slice(0, LETTERHEAD_SPAN)
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => PRINTED_DECISION_TYPES.has(line))
+    ?.toLocaleLowerCase("cs");
 
 /** Where a ÚOHS decision date was read from; the export states none. */
 export const CZ_UOHS_DECISION_DATE_SOURCE = "document";

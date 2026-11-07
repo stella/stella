@@ -125,7 +125,7 @@ export const normalizeDecisionType = (
   const value = [
     ...new Set(
       stated
-        .split(/\s*,\s*/u)
+        .split(",")
         .map((part) => part.trim())
         .filter((part) => part.length > 0),
     ),
