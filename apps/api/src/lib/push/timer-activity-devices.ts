@@ -360,7 +360,7 @@ export const createTimerActivityActionKeySecret = (
   return createOpaqueToken();
 };
 
-export const hashTimerActivityActionKey = hashOpaqueToken;
+const hashTimerActivityActionKey = hashOpaqueToken;
 
 /**
  * Give a signed-in phone a new key for its Lock Screen buttons. The key is

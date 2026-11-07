@@ -11,6 +11,7 @@ import type { TokenHandlerConfig, VerifyCaller } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { timerStateTransition } from "@/api/lib/billing/time-timers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { authorizeTimerActivityKey } from "@/api/lib/push/timer-activity-actions";
 import type { TimerActivityActor } from "@/api/lib/push/timer-activity-actions";
@@ -79,5 +80,11 @@ const actOnTimer = createSafeTokenHandler(
     });
   },
 );
+
+declareAggregateMutation(actOnTimer, {
+  type: "independent",
+  reason:
+    "Pauses or resumes one of the key holder's own timers under their timer owner lock, as the timer routes do; no aggregate spans other rows.",
+});
 
 export default actOnTimer;
