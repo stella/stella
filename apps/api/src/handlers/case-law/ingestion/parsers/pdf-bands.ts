@@ -1347,7 +1347,7 @@ const BAND_GAP_PITCHES = 2;
  * address, or a telephone or fax number after its label.
  */
 const CONTACT_LINE =
-  /[\p{L}\d._%+-]+@[\p{L}\d-]+(?:\.[\p{L}\d-]+)+|\bwww\.|:\/\/|\b(?:tel|telefon|fax|faks)\b\.?:?\s*\+?\d/iu;
+  /[\p{L}\d]@[\p{L}\d-]+\.\p{L}|\bwww\.|:\/\/|\b(?:tel|telefon|fax|faks)\b\.?:?\s*\+?\d/iu;
 
 /**
  * A Code 39 barcode as its font prints it: the payload between the
@@ -1400,10 +1400,11 @@ const pageBandsOf = (
   });
   const firstPageFooter = ((): ReadonlySet<PdfTextLine> => {
     const first = pages.at(0);
-    const printed = printedByHeight.at(0) ?? [];
     if (first === undefined) {
       return new Set();
     }
+    const printed =
+      printedByHeight.at(0) ?? panic("The first page has its printed lines");
     const end = printed.findIndex(
       (line) => !inEdgeZone(line, first.height) || !setSmall(line, bodySize),
     );
@@ -1427,7 +1428,8 @@ const pageBandsOf = (
     if (payload === undefined) {
       return false;
     }
-    const printed = printedByHeight.at(page) ?? [];
+    const printed =
+      printedByHeight.at(page) ?? panic("Every page has its printed lines");
     const at = printed.indexOf(line);
     const below = at > 0 ? printed.at(at - 1) : undefined;
     return below !== undefined && normalizeSpanText(below.text) === payload;
