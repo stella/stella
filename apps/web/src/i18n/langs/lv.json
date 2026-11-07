@@ -152,6 +152,7 @@
     "emailPlaceholder": "jus@example.com",
     "error": {
       "generic": "Pieslēdzoties kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",
+      "providerUnavailable": "Pieteikšanās pakalpojums pašlaik neatbild. Lūdzu, mēģiniet vēlreiz pēc minūtes.",
       "title": "Neizdevās jūs pieslēgt"
     },
     "handoffAccount": "Vai turpināt kā <account>{email}</account> organizācijā <organization>{organizationName}</organization>?",

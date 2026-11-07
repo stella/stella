@@ -152,6 +152,7 @@
     "emailPlaceholder": "teie@example.com",
     "error": {
       "generic": "Sisselogimisel läks midagi valesti. Palun proovige uuesti.",
+      "providerUnavailable": "Sisselogimise teenus ei vasta praegu. Palun proovige minuti pärast uuesti.",
       "title": "Sisselogimine ebaõnnestus"
     },
     "handoffAccount": "Kas jätkata kasutajana <account>{email}</account> organisatsioonis <organization>{organizationName}</organization>?",

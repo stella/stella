@@ -152,6 +152,7 @@
     "emailPlaceholder": "te@example.com",
     "error": {
       "generic": "A bejelentkezés során hiba történt. Kérjük, próbálja újra.",
+      "providerUnavailable": "A bejelentkezési szolgáltató most nem válaszol. Kérjük, próbálja újra egy perc múlva.",
       "title": "Nem sikerült bejelentkeztetni"
     },
     "handoffAccount": "Folytatja <account>{email}</account> fiókkal a(z) <organization>{organizationName}</organization> szervezetben?",

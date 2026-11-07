@@ -152,6 +152,7 @@
     "emailPlaceholder": "you@example.com",
     "error": {
       "generic": "Something went wrong while signing you in. Please try again.",
+      "providerUnavailable": "The sign-in provider isn't responding right now. Please try again in a minute.",
       "title": "We couldn't sign you in"
     },
     "handoffAccount": "Continue as <account>{email}</account> in <organization>{organizationName}</organization>?",

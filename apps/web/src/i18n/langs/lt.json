@@ -152,6 +152,7 @@
     "emailPlaceholder": "jus@example.com",
     "error": {
       "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",
+      "providerUnavailable": "Prisijungimo paslauga šiuo metu neatsako. Bandykite dar kartą po minutės.",
       "title": "Nepavyko jūsų prijungti"
     },
     "handoffAccount": "Tęsti kaip <account>{email}</account> organizacijoje <organization>{organizationName}</organization>?",
