@@ -10,7 +10,6 @@
 import type { ReviewFlag } from "@stll/api-contract";
 
 import type { ReferenceFile } from "@/components/ai-suggestions/document-review-basis.logic";
-import { REVIEW_DECISION } from "@/components/ai-suggestions/document-review-queries";
 import type {
   DecidedReviewDecision,
   ReviewFinding,
@@ -73,23 +72,11 @@ export const buildReviewResultItems = ({
  *  than rendering as nothing. */
 const DECISION_LABEL = {
   accepted: "inspector.review.decisions.accepted",
-  reviewed: "inspector.review.decisions.reviewed",
   dismissed: "inspector.review.decisions.dismissed",
-} as const satisfies Record<DecidedReviewDecision | "reviewed", TranslationKey>;
+} as const satisfies Record<DecidedReviewDecision, TranslationKey>;
 
-type DecisionLabelArgs = {
-  decision: DecidedReviewDecision;
-  suggestionId: ReviewResultItem["suggestionId"];
-};
-
-/** Accepting a finding with no proposed change only records that it was
- *  looked at, which is what its button says, so the card says the same. */
-export const decisionLabel = ({ decision, suggestionId }: DecisionLabelArgs) =>
-  DECISION_LABEL[
-    decision === REVIEW_DECISION.ACCEPTED && suggestionId === null
-      ? "reviewed"
-      : decision
-  ];
+export const decisionLabel = (decision: DecidedReviewDecision) =>
+  DECISION_LABEL[decision];
 
 export const isReviewDeviation = ({ finding }: ReviewResultItem): boolean => {
   if (finding.impact === "unfavourable") {

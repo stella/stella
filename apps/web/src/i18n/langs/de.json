@@ -3989,6 +3989,7 @@
     "resizePane": "Bereich in der Größe ändern",
     "review": {
       "acceptChange": "Änderung annehmen",
+      "acceptFinding": "Ergebnis annehmen",
       "actionNeeded": "Handlungsbedarf",
       "addComment": "Als Kommentar hinzufügen",
       "addNote": "Kommentar für die Gegenpartei hinzufügen",
@@ -4026,10 +4027,10 @@
       "decisionFailed": "Entscheidung konnte nicht gespeichert werden",
       "decisions": {
         "accepted": "Angenommen",
-        "dismissed": "Verworfen",
-        "reviewed": "Geprüft"
+        "dismissed": "Verworfen"
       },
       "description": "Wählen Sie ein erstelltes Playbook, Referenzdokumente oder beides.",
+      "dismissFinding": "Ergebnis verwerfen",
       "documentChanged": "Dieses Dokument hat sich seit dieser Prüfung geändert.",
       "export": {
         "counterparty": "Für die Gegenpartei herunterladen",
@@ -4077,9 +4078,7 @@
         "label": "Ergebnisse neben den betreffenden Klauseln",
         "unanchored": "Nicht an eine Klausel gebunden"
       },
-      "markAsReviewed": "Als geprüft markieren",
       "newTopic": "Neues Prüfthema",
-      "noChangeNeeded": "Keine Änderung nötig",
       "noEditor": "Öffnen Sie das Dokument, um Änderungen anzunehmen",
       "noMaterialDifferences": "Keine wesentlichen Unterschiede gefunden",
       "noPassage": "Keine Textstelle",

@@ -3989,6 +3989,7 @@
     "resizePane": "Změnit šířku panelu",
     "review": {
       "acceptChange": "Přijmout změnu",
+      "acceptFinding": "Přijmout zjištění",
       "actionNeeded": "K řešení",
       "addComment": "Přidat jako komentář",
       "addNote": "Přidat komentář pro protistranu",
@@ -4026,10 +4027,10 @@
       "decisionFailed": "Rozhodnutí se nepodařilo uložit",
       "decisions": {
         "accepted": "Přijato",
-        "dismissed": "Zamítnuto",
-        "reviewed": "Zkontrolováno"
+        "dismissed": "Zamítnuto"
       },
       "description": "Vyberte schválený playbook, referenční dokumenty nebo obojí.",
+      "dismissFinding": "Zamítnout zjištění",
       "documentChanged": "Dokument se od této kontroly změnil.",
       "export": {
         "counterparty": "Stáhnout pro protistranu",
@@ -4077,9 +4078,7 @@
         "label": "Zjištění vedle ustanovení, kterých se týkají",
         "unanchored": "Bez vazby na ustanovení"
       },
-      "markAsReviewed": "Označit jako zkontrolované",
       "newTopic": "Nové téma kontroly",
-      "noChangeNeeded": "Není třeba měnit",
       "noEditor": "Změny přijmete po otevření dokumentu",
       "noMaterialDifferences": "Nenalezeny žádné podstatné rozdíly",
       "noPassage": "Žádná pasáž",

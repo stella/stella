@@ -3989,6 +3989,7 @@
     "resizePane": "تغيير حجم اللوحة",
     "review": {
       "acceptChange": "قبول التغيير",
+      "acceptFinding": "قبول النتيجة",
       "actionNeeded": "تحتاج إلى إجراء",
       "addComment": "إضافة كتعليق",
       "addNote": "إضافة تعليق للطرف المقابل",
@@ -4026,10 +4027,10 @@
       "decisionFailed": "تعذر تسجيل قرارك",
       "decisions": {
         "accepted": "مقبول",
-        "dismissed": "مستبعد",
-        "reviewed": "تمت المراجعة"
+        "dismissed": "مستبعد"
       },
       "description": "اختر دليل مراجعة مُعدًا أو مستندات مرجعية أو كليهما.",
+      "dismissFinding": "استبعاد النتيجة",
       "documentChanged": "تغيّر هذا المستند بعد هذه المراجعة.",
       "export": {
         "counterparty": "تنزيل للطرف المقابل",
@@ -4077,9 +4078,7 @@
         "label": "النتائج إلى جانب البنود التي تتعلق بها",
         "unanchored": "غير مرتبط ببند"
       },
-      "markAsReviewed": "وضع علامة «تمت المراجعة»",
       "newTopic": "موضوع مراجعة جديد",
-      "noChangeNeeded": "لا حاجة إلى تغيير",
       "noEditor": "افتح المستند لقبول التغييرات",
       "noMaterialDifferences": "لم تُعثر على فروق جوهرية",
       "noPassage": "لا يوجد مقتطف",
