@@ -77,7 +77,6 @@ import {
 } from "../helpers/smoke-route-coverage";
 import {
   type RouteExpectation,
-  scaleSmokeRouteDef,
   SMOKE_ROUTE_DEFS,
   type SmokeRouteDef,
   type SmokeWorld,
@@ -361,7 +360,6 @@ const declareRouteSmokeGroup = ({
     // browser/world/results it closes over are group-scoped and assigned once in
     // beforeAll.
     const declareRouteTest = (def: SmokeRouteDef) => {
-      const scaleDef = scaleSmokeRouteDef(def);
       test(def.template, async () => {
         // timeout: three isolated worlds each retain the former 60s navigation allowance.
         test.setTimeout(180_000);
@@ -381,20 +379,20 @@ const declareRouteSmokeGroup = ({
               browser: browserForPages,
               results: smallScaleResults,
               renderResults: smallRenderResults,
-              route: resolveRoute(scaleDef, worlds.small),
+              route: resolveRoute(def, worlds.small),
             }),
           large: async () =>
             await smokeRoute({
               browser: browserForPages,
               results: scaleResults,
               renderResults: largeRenderResults,
-              route: resolveRoute(scaleDef, worlds.large),
+              route: resolveRoute(def, worlds.large),
             }),
         });
         if (measured.isErr()) {
           throw measured.error;
         }
-        const key = networkBaselineKey(scaleDef);
+        const key = networkBaselineKey(def);
         const small = smallScaleResults.get(key);
         const large = scaleResults.get(key);
         const smallRenders = smallRenderResults.get(key);
@@ -627,7 +625,7 @@ const declareRouteSmokeGroup = ({
         return joined;
       };
       const problems = routeScaleCensus({
-        routes: defs.map(scaleSmokeRouteDef).map(networkBaselineKey),
+        routes: defs.map(networkBaselineKey),
         small: measurements(smallScaleResults, smallRenderResults),
         large: measurements(scaleResults, largeRenderResults),
         ledger: SCALE_LEDGER,
@@ -659,9 +657,7 @@ test("route coverage matches the authenticated route tree", async () => {
     routeScaleLedgerAdditions(),
     "route scale allowances only shrink",
   ).toEqual([]);
-  const routeKeys = new Set(
-    SMOKE_ROUTE_DEFS.map(scaleSmokeRouteDef).map(networkBaselineKey),
-  );
+  const routeKeys = new Set(SMOKE_ROUTE_DEFS.map(networkBaselineKey));
   expect(
     SCALE_LEDGER.filter(({ route }) => !routeKeys.has(route)),
     "scale allowances reference smoke routes",

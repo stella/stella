@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import type { TestWorkspace } from "./workspace";
 
 const NONEXISTENT_VERIFICATION_CODE = "abcdmnp239";
-const LISTS_ROUTE_TEMPLATE = "/workspaces/$workspaceId/lists";
 
 export type RouteExpectation =
   | { kind: "rendersInPlace" }
@@ -181,8 +180,8 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   {
     // The baseline caller has no list grant, so the route answers the shared
     // not-found page in place, the same as an unknown link. Granted rendering is
-    // covered by the route gate tests; scale callers are enrolled below.
-    template: LISTS_ROUTE_TEMPLATE,
+    // covered by the route gate tests.
+    template: "/workspaces/$workspaceId/lists",
     path: (world) => `/workspaces/${world.workspace.id}/lists`,
     expectation: { kind: "rendersInPlace" },
   },
@@ -256,14 +255,6 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
 ];
 
 /** The validated scale fixture grants lists to both measured organizations. */
-export const scaleSmokeRouteDef = (def: SmokeRouteDef) =>
-  def.template === LISTS_ROUTE_TEMPLATE
-    ? ({
-        ...def,
-        expectation: { kind: "rendersInPlace" },
-      } satisfies SmokeRouteDef)
-    : def;
-
 // These routes need richer domain setup than cheap route smoke should own.
 // Keeping them explicit means a newly added authenticated route fails the
 // coverage assertion until it is either smoked or deliberately placed here.
