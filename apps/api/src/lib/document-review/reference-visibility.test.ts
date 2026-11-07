@@ -369,7 +369,7 @@ const STORED_BASIS_READERS = {
   // Refuses unless every reference matter is readable.
   "handlers/playbooks/from-run/create.ts": "gated",
   "lib/document-review/run-queue.ts": "internal",
-  "lib/document-review/table-run-findings.ts": "internal",
+  "lib/db/aggregate-lock.ts": "internal",
   "lib/document-review/review-suggestion-staging.ts": "internal",
   // Compares the pinned position rules of two runs; answers with nothing.
   "lib/document-review/decision-carry-over.ts": "internal",
