@@ -3,7 +3,10 @@ import * as v from "valibot";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { answerSchemaForContent } from "@/api/lib/workflow/ai-answer-schema";
-import { buildBatchSchema } from "@/api/lib/workflow/ai-prompts";
+import {
+  buildBatchSchema,
+  buildDocxBlocksMessage,
+} from "@/api/lib/workflow/ai-prompts";
 import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
 
@@ -129,5 +132,35 @@ describe("buildBatchSchema — select answers pass through for downstream valida
       [multiSelectProperty.id]: { answer: ["A", "Z"], justification: [] },
     });
     expect(output[multiSelectProperty.id]?.answer).toEqual(["A", "Z"]);
+  });
+});
+
+describe("buildDocxBlocksMessage", () => {
+  const messageFor = (text: string) =>
+    buildDocxBlocksMessage({
+      simplifiedName: "F0",
+      blocks: [
+        {
+          id: "b1",
+          kind: "paragraph",
+          statedNumbering: { kind: "inherit" },
+          text,
+        },
+      ],
+    });
+
+  test("keeps a term at the end of a long paragraph", () => {
+    const clause = `${"Supplier shall provide the services. ".repeat(200)}Either party may terminate on 90 days' notice.`;
+
+    expect(messageFor(clause)).toContain(JSON.stringify(clause));
+  });
+
+  test("cuts only a paragraph above the guard", () => {
+    const longest = "a".repeat(40_000);
+
+    expect(messageFor(longest)).toContain(JSON.stringify(longest));
+    expect(messageFor(`${longest}a`)).toContain(
+      JSON.stringify(`${"a".repeat(39_999)}…`),
+    );
   });
 });

@@ -4019,12 +4019,7 @@ const ReviewResultCard = ({
                 />
                 {item.decision !== REVIEW_DECISION.OPEN && (
                   <span className={POSITION_HEADER_META_CLASS}>
-                    {t(
-                      decisionLabel({
-                        decision: item.decision,
-                        suggestionId: item.suggestionId,
-                      }),
-                    )}
+                    {t(decisionLabel(item.decision))}
                   </span>
                 )}
                 <span className={cn(POSITION_HEADER_META_CLASS, "text-end")}>
@@ -4484,8 +4479,8 @@ const FindingResolution = ({
       />
     );
   }
-  // The run staged a redline for this finding, but the document has not been
-  // opened in this session yet, so the suggestion it lives on is not loaded.
+  // The run staged a redline for this finding, but the suggestion it lives on
+  // is not loaded: the document's editor is not open, or not ready to build it.
   // Deciding here would answer the finding without touching the change it
   // stands for; the reviewer opens the document and resolves it there.
   return (
@@ -4528,7 +4523,7 @@ const FindingDecisionButtons = ({
         size="sm"
       >
         <CheckIcon className="me-1 size-3.5" />
-        {t("inspector.review.markAsReviewed")}
+        {t("inspector.review.acceptFinding")}
       </Button>
       <Button
         className="h-7 px-2.5"
@@ -4538,7 +4533,7 @@ const FindingDecisionButtons = ({
         variant="ghost"
       >
         <XIcon className="me-1 size-3.5" />
-        {t("inspector.review.noChangeNeeded")}
+        {t("inspector.review.dismissFinding")}
       </Button>
     </>
   );

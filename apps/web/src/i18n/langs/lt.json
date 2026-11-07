@@ -3989,6 +3989,7 @@
     "resizePane": "Keisti polangio dydį",
     "review": {
       "acceptChange": "Priimti pakeitimą",
+      "acceptFinding": "Priimti išvadą",
       "actionNeeded": "Reikia veiksmų",
       "addComment": "Pridėti kaip komentarą",
       "addNote": "Pridėti komentarą priešingai šaliai",
@@ -4026,10 +4027,10 @@
       "decisionFailed": "Nepavyko įrašyti sprendimo",
       "decisions": {
         "accepted": "Priimta",
-        "dismissed": "Atmesta",
-        "reviewed": "Peržiūrėta"
+        "dismissed": "Atmesta"
       },
       "description": "Pasirinkite parengtą peržiūros vadovą, referencinius dokumentus arba abu.",
+      "dismissFinding": "Atmesti išvadą",
       "documentChanged": "Šis dokumentas pasikeitė po šios peržiūros.",
       "export": {
         "counterparty": "Atsisiųsti priešingai šaliai",
@@ -4077,9 +4078,7 @@
         "label": "Išvados šalia sąlygų, apie kurias jos yra",
         "unanchored": "Nesusieta su jokia sąlyga"
       },
-      "markAsReviewed": "Pažymėti kaip peržiūrėtą",
       "newTopic": "Nauja peržiūros tema",
-      "noChangeNeeded": "Pakeitimo nereikia",
       "noEditor": "Atidarykite dokumentą, kad priimtumėte pakeitimus",
       "noMaterialDifferences": "Esminių skirtumų nerasta",
       "noPassage": "Ištraukos nėra",
