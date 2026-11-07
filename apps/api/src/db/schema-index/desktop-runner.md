@@ -78,3 +78,18 @@ desktop_runner_events.request_id  uuid         null              desktop-runner.
 desktop_runner_events.message     jsonb        not null          desktop-runner.ts:315  The desktop message as validated.
 desktop_runner_events.created_at  timestamptz  default,not null  desktop-runner.ts:316
 ```
+
+## desktop_runner_app_calls · `desktopRunnerAppCalls` · desktop-runner.ts:355 · rls
+
+The calls a run's MCP token made to a stella tool that one of chat's apps presents, in the order the server answered them: what the tool returned to that run,…
+
+```text
+desktop_runner_app_calls.run_id               uuid         fk,not null       desktop-runner.ts:358
+desktop_runner_app_calls.seq                  integer      not null          desktop-runner.ts:362
+desktop_runner_app_calls.tool_name            varchar      not null          desktop-runner.ts:363
+desktop_runner_app_calls.arguments_hash       char         not null          desktop-runner.ts:365  SHA-256 of the call's arguments as the server received them.
+desktop_runner_app_calls.resource_uri         varchar      not null          desktop-runner.ts:366
+desktop_runner_app_calls.result               jsonb        not null          desktop-runner.ts:368  The tool's `structuredContent`, as the server answered the run.
+desktop_runner_app_calls.paired_tool_call_id  varchar      null              desktop-runner.ts:370  The chat call this row was paired with; null while it is unpaired.
+desktop_runner_app_calls.created_at           timestamptz  default,not null  desktop-runner.ts:371
+```
