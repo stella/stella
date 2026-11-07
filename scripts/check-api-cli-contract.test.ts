@@ -181,7 +181,7 @@ describe("API and CLI release contract", () => {
       "source_sha must be a full lowercase commit SHA.",
     );
     expect(publishWorkflow).toContain(
-      "source_sha is not reachable from protected main.",
+      'bash "$GITHUB_WORKSPACE/.pack-tooling/scripts/check-release-source-on-main.sh" "$source_sha"',
     );
     expect(publishWorkflow).toContain(
       `git rev-parse "refs/tags/\${tag}^{commit}"`,
