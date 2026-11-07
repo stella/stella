@@ -43,6 +43,7 @@ import {
   caseLawSources,
   contacts,
   corpusIndexProjectionStates,
+  documentReviewRuns,
   entities,
   entityVersions,
   fields,
@@ -61,6 +62,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import {
+  DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
+  DOCUMENT_REVIEW_RUN_EXECUTOR,
+} from "@/api/lib/document-review/run-contract";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
@@ -3154,6 +3159,46 @@ export const lockBillingCode = async (
       .from(billingCodes)
       .where(
         and(eq(billingCodes.id, id), eq(billingCodes.workspaceId, workspaceId)),
+      )
+      .limit(1)
+      .for("update")
+  ).at(0);
+
+type LockActiveTableRunOptions = {
+  workspaceId: SafeId<"workspace">;
+  entityId: SafeId<"entity">;
+};
+
+/**
+ * Verdict batches of one document run in parallel, and each counts the run's
+ * findings to decide whether it is complete. The lock makes them take turns:
+ * without it, the last two would each count without the other's uncommitted
+ * rows, and neither would complete the run. Take it before writing findings,
+ * because each insert holds a key-share lock on this row, which a later FOR
+ * UPDATE would deadlock against.
+ */
+export const lockActiveTableRun = async (
+  tx: Transaction,
+  { workspaceId, entityId }: LockActiveTableRunOptions,
+) =>
+  (
+    await tx
+      .select({
+        id: documentReviewRuns.id,
+        entityVersionId: documentReviewRuns.entityVersionId,
+        fileFieldId: documentReviewRuns.fileFieldId,
+        basis: documentReviewRuns.basis,
+      })
+      .from(documentReviewRuns)
+      .where(
+        and(
+          eq(documentReviewRuns.workspaceId, workspaceId),
+          eq(documentReviewRuns.entityId, entityId),
+          eq(documentReviewRuns.executor, DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE),
+          inArray(documentReviewRuns.status, [
+            ...DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
+          ]),
+        ),
       )
       .limit(1)
       .for("update")

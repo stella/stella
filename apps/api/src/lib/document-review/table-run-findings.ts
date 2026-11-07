@@ -21,6 +21,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { documentReviewRuns, properties } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockActiveTableRun } from "@/api/lib/db/aggregate-lock";
 import {
   buildDocumentReviewFindingRow,
   upsertDocumentReviewFindings,
@@ -32,10 +33,7 @@ import {
   DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
   DOCUMENT_REVIEW_RUN_EXECUTOR,
 } from "@/api/lib/document-review/run-contract";
-import type {
-  DocumentReviewRunBasis,
-  DocumentReviewRunErrorCode,
-} from "@/api/lib/document-review/run-contract";
+import type { DocumentReviewRunErrorCode } from "@/api/lib/document-review/run-contract";
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import { logger } from "@/api/lib/observability/logger";
@@ -58,14 +56,6 @@ export type RecordTableRunVerdictsResult =
   | { type: "no-run" }
   | { type: "written"; findingCount: number; completed: boolean }
   | { type: "failed"; errorCode: DocumentReviewRunErrorCode };
-
-/** The run row this path executes against. */
-type TableRun = {
-  id: SafeId<"documentReviewRun">;
-  entityVersionId: SafeId<"entityVersion">;
-  fileFieldId: SafeId<"field">;
-  basis: DocumentReviewRunBasis;
-};
 
 const failRun = async (
   tx: Transaction,
@@ -104,26 +94,7 @@ export const recordTableRunVerdicts = async ({
   return await scopedDb(async (tx): Promise<RecordTableRunVerdictsResult> => {
     // At most one active run per document, and only a table-executed one is
     // ours to write into.
-    const runs = await tx
-      .select({
-        id: documentReviewRuns.id,
-        entityVersionId: documentReviewRuns.entityVersionId,
-        fileFieldId: documentReviewRuns.fileFieldId,
-        basis: documentReviewRuns.basis,
-      })
-      .from(documentReviewRuns)
-      .where(
-        and(
-          eq(documentReviewRuns.workspaceId, workspaceId),
-          eq(documentReviewRuns.entityId, entityId),
-          eq(documentReviewRuns.executor, DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE),
-          inArray(documentReviewRuns.status, [
-            ...DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
-          ]),
-        ),
-      )
-      .limit(1);
-    const run: TableRun | undefined = runs.at(0);
+    const run = await lockActiveTableRun(tx, { workspaceId, entityId });
     if (run === undefined) {
       return { type: "no-run" };
     }
