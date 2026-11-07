@@ -969,7 +969,7 @@ async function* startLocalRun({
   const { control, owner } = context;
   const session = await control.readChatRunSession({
     owner,
-    chatThreadId: context.chatThreadId,
+    chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
     desktopId: destination.desktopId,
     harness: destination.harness,
   });

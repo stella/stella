@@ -5,15 +5,18 @@ import {
   desc,
   eq,
   gt,
+  gte,
   inArray,
   isNotNull,
   isNull,
   lt,
   max,
+  notExists,
   or,
   type SQL,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
@@ -28,6 +31,8 @@ import {
 
 import type { RootDatabase, Transaction } from "@/api/db/root";
 import {
+  chatMessageRevisions,
+  chatMessages,
   chatThreads,
   chatTurns,
   desktopRunnerCommands,
@@ -1748,37 +1753,105 @@ export const readMemberRunners = async (
 
 type ChatRunSessionOptions = {
   owner: RunOwner;
-  chatThreadId: SafeId<"chatThread">;
+  /** The thread and the turn about to start on the computer. */
+  chat: ChatRunBinding;
   desktopId: string;
   harness: AgentHarness;
 };
 
+const askingTurn = alias(chatTurns, "asking_turn");
+const askingMessage = alias(chatMessages, "asking_message");
+
 /**
- * The harness session the thread's newest finished run on this computer and
- * harness left behind, for the next turn to resume; `null` when none did.
+ * The harness session turn `chat.turnId` resumes on this computer and
+ * harness, or `null` when the turn starts a fresh one and hands the harness
+ * the chat's own history.
+ *
+ * A session holds every turn the runs that continued it were given and
+ * answered, so it is resumed only while the chat still holds exactly those:
+ * the newest run of the thread on this computer and harness left it, and its
+ * turn's answer is still the message right before the one this turn answers.
+ * An edit or a regeneration deletes that answer and every later message, and
+ * an answer from the cloud or from another computer or harness takes its
+ * place, so any of them starts fresh; a revision of any message of the thread
+ * since that run started does too, because the session holds the text it
+ * replaced. A fork is another thread and holds no run, so it starts fresh.
  */
 export const readChatRunSession = async (
   db: Pick<DesktopRunnerDb, "select">,
-  { owner, chatThreadId, desktopId, harness }: ChatRunSessionOptions,
-): Promise<string | null> =>
-  (
-    await db
-      .select({ harnessSessionId: runs.harnessSessionId })
-      .from(runs)
-      .where(
-        and(
-          eq(runs.chatThreadId, chatThreadId),
-          eq(runs.desktopId, desktopId),
-          eq(runs.harness, harness),
-          eq(runs.userId, owner.userId),
-          eq(runs.organizationId, owner.organizationId),
-          eq(runs.state, "finished"),
-          isNotNull(runs.harnessSessionId),
+  { owner, chat, desktopId, harness }: ChatRunSessionOptions,
+): Promise<string | null> => {
+  // The run that last wrote the session: a later one resumed it or replaced
+  // it, whatever state it ended in.
+  const newest = db
+    .select({
+      state: runs.state,
+      harnessSessionId: runs.harnessSessionId,
+      chatTurnId: runs.chatTurnId,
+      createdAt: runs.createdAt,
+    })
+    .from(runs)
+    .where(
+      and(
+        eq(runs.chatThreadId, chat.threadId),
+        eq(runs.desktopId, desktopId),
+        eq(runs.harness, harness),
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+      ),
+    )
+    .orderBy(desc(runs.createdAt), desc(runs.runId))
+    .limit(1)
+    .as("newest_run");
+  // The message right before the one this turn answers, in the thread's
+  // order: the answer this turn continues.
+  const continued = db
+    .select({ id: chatMessages.id })
+    .from(chatMessages)
+    .innerJoin(
+      askingTurn,
+      and(
+        eq(askingTurn.id, chat.turnId),
+        eq(askingTurn.threadId, chat.threadId),
+      ),
+    )
+    .innerJoin(askingMessage, eq(askingMessage.id, askingTurn.userMessageId))
+    .where(
+      and(
+        eq(chatMessages.threadId, chat.threadId),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are columns compared in the database, at full precision
+        sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (${askingMessage.createdAt}, ${askingMessage.id})`,
+      ),
+    )
+    .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+    .limit(1);
+  const rows = await db
+    .select({ harnessSessionId: newest.harnessSessionId })
+    .from(newest)
+    .innerJoin(chatTurns, eq(chatTurns.id, newest.chatTurnId))
+    .where(
+      and(
+        eq(newest.state, "finished"),
+        isNotNull(newest.harnessSessionId),
+        eq(chatTurns.threadId, chat.threadId),
+        eq(chatTurns.assistantMessageId, sql`(${continued})`),
+        notExists(
+          db
+            .select({ id: chatMessageRevisions.id })
+            .from(chatMessageRevisions)
+            .where(
+              and(
+                eq(chatMessageRevisions.threadId, chat.threadId),
+                // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are columns compared in the database, at full precision
+                gte(chatMessageRevisions.createdAt, newest.createdAt),
+              ),
+            ),
         ),
-      )
-      .orderBy(desc(runs.updatedAt))
-      .limit(1)
-  ).at(0)?.harnessSessionId ?? null;
+      ),
+    )
+    .limit(1);
+  return rows.at(0)?.harnessSessionId ?? null;
+};
 
 type ChatRunForRequestOptions = {
   owner: RunOwner;
