@@ -11,6 +11,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  notInArray,
   or,
   SQL,
   sql,
@@ -42,6 +43,8 @@ import {
   caseLawReplayBatches,
   caseLawSources,
   contacts,
+  corpusIndexGenerations,
+  corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   documentReviewRuns,
   entities,
@@ -66,6 +69,12 @@ import {
   DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
   DOCUMENT_REVIEW_RUN_EXECUTOR,
 } from "@/api/lib/document-review/run-contract";
+import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import {
+  corpusIndexProjectionAppendIsUnblocked,
+  corpusIndexProjectionIntentIsOutstanding,
+  corpusIndexProjectionNeedsWork,
+} from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
@@ -3342,6 +3351,136 @@ type CaseLawProjectionRepairStatesOptions = {
   decisionIds: readonly SafeId<"caseLawDecision">[];
   generations: readonly string[];
 };
+
+const pendingDesiredState = corpusIndexProjectionNeedsWork(
+  corpusIndexProjectionStates,
+);
+
+const appendIsUnblocked = corpusIndexProjectionAppendIsUnblocked(
+  corpusIndexProjectionStates,
+);
+
+const noOutstandingIntent = sql`NOT EXISTS (
+      SELECT 1
+      FROM ${corpusIndexProjectionIntents} outstanding
+      WHERE outstanding.family = ${corpusIndexProjectionStates.family}
+        AND outstanding.generation = ${corpusIndexProjectionStates.generation}
+        AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
+        AND ${corpusIndexProjectionIntentIsOutstanding(sql`outstanding.status`)}
+    )`;
+
+type CorpusProjectionReservationQueueOptions = {
+  family: CorpusFamily;
+  generation: string;
+  limit: number;
+  eligibilityAt: Date;
+  scopedEntityIds: readonly string[] | null;
+  scopedIndexId: string | null;
+  /** Physical indexes no append may reach yet (`unattestedCorpusIndexIdsTx`). */
+  excludedIndexIds: readonly string[];
+};
+
+/**
+ * The reservation queue read. Exported so the plan guard explains the exact
+ * statement the append cycle issues rather than a copy of it.
+ */
+export const corpusProjectionReservationQueue = (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    limit,
+    eligibilityAt,
+    scopedEntityIds,
+    scopedIndexId,
+    excludedIndexIds,
+  }: CorpusProjectionReservationQueueOptions,
+) => {
+  const runnableAt = sql<Date>`coalesce(
+    ${corpusIndexProjectionStates.retryNotBefore},
+    ${corpusIndexProjectionStates.updatedAt}
+  )`;
+  return tx
+    .select({
+      entityId: corpusIndexProjectionStates.entityId,
+      epoch: corpusIndexProjectionStates.desiredEpoch,
+      fingerprint: corpusIndexProjectionStates.desiredFingerprint,
+      indexId: corpusIndexProjectionStates.desiredIndexId,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
+      lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
+      appendMode: corpusIndexProjectionStates.appendMode,
+    })
+    .from(corpusIndexProjectionStates)
+    .innerJoin(
+      corpusIndexGenerations,
+      and(
+        eq(corpusIndexGenerations.family, corpusIndexProjectionStates.family),
+        eq(
+          corpusIndexGenerations.generation,
+          corpusIndexProjectionStates.generation,
+        ),
+      ),
+    )
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionStates.entityId, scopedEntityIds),
+        scopedIndexId === null
+          ? undefined
+          : eq(corpusIndexProjectionStates.desiredIndexId, scopedIndexId),
+        // An unattested group's desired state stays eligible and waits here:
+        // it is appended once the group is attested, never before.
+        excludedIndexIds.length === 0
+          ? undefined
+          : notInArray(corpusIndexProjectionStates.desiredIndexId, [
+              ...excludedIndexIds,
+            ]),
+        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        inArray(corpusIndexProjectionStates.workStatus, [
+          "eligible",
+          "retry_scheduled",
+          "repair_scheduled",
+        ]),
+        lte(runnableAt, eligibilityAt),
+        inArray(corpusIndexGenerations.status, ["building", "serving"]),
+        pendingDesiredState,
+        appendIsUnblocked,
+        noOutstandingIntent,
+      ),
+    )
+    .orderBy(asc(runnableAt), asc(corpusIndexProjectionStates.entityId))
+    .limit(limit)
+    .for("update", {
+      of: corpusIndexProjectionStates,
+      skipLocked: true,
+    });
+};
+
+/**
+ * State rows precede their revisions in the projection lock order. Settling a
+ * revision writes its state row through a trigger, so settlement takes these
+ * first and cannot wait on replacement preparation over one revision.
+ */
+export const lockCorpusProjectionStatesByAppliedRevision = async (
+  tx: Transaction,
+  revisionIds: readonly SafeId<"corpusIndexProjectionIntent">[],
+) =>
+  await tx
+    .select({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
+    .where(
+      inArray(corpusIndexProjectionStates.appliedRevision, [...revisionIds]),
+    )
+    .orderBy(
+      asc(corpusIndexProjectionStates.family),
+      asc(corpusIndexProjectionStates.generation),
+      asc(corpusIndexProjectionStates.entityId),
+    )
+    .limit(revisionIds.length)
+    .for("update");
 
 /** Canonical rows precede desired-state rows in the projection lock order. */
 export const lockCaseLawProjectionRepairStates = async (

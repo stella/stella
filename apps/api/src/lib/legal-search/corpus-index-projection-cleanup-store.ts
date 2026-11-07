@@ -23,6 +23,7 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockCorpusProjectionStatesByAppliedRevision } from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type {
   CorpusIndexClient,
@@ -910,6 +911,7 @@ export const settleCorpusProjectionCleanupTx = async (
   { proof, testNow }: SettleCorpusProjectionCleanupOptions,
 ): Promise<number> => {
   await lockCorpusIndexProjectionIntentMutationsTx(tx, proof.intentIds);
+  await lockCorpusProjectionStatesByAppliedRevision(tx, proof.intentIds);
   await lockCorpusProjectionIntentsById(tx, proof.intentIds);
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
