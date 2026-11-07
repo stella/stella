@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -27,12 +27,15 @@ import {
 import type { TierStandardPosition } from "@/api/lib/workflow/position-runtime";
 
 // Auto-ASK derivation (save-time). A graded position with `ask.mode === "auto"`
-// derives its extraction question + content type from the issue and tier rules
-// so run/review consume `derived` exactly like a manual ask. Derivation is
-// gated on a `rulesHash` over the grading inputs: unchanged inputs skip the LLM
-// call and reuse the stored `derived`. Derivation never blocks a save — a failed
-// or timed-out call persists with `derived` absent, and run/review fall back to
-// a generic text ask over the issue.
+// derives its extraction question from the issue and tier rules so run/review
+// consume `derived` exactly like a manual ask. The position's check decides the
+// content type: a tier match reads the clause's wording and a presence check
+// reads whether there is any, so both store text; only a constraint compares a
+// number or date, so only a constraint lets the model choose a type. Derivation
+// is gated on a `rulesHash` over the grading inputs: unchanged inputs skip the
+// LLM call and reuse the stored `derived`. Derivation never blocks a save — a
+// failed or timed-out call persists with `derived` absent, and run/review fall
+// back to a generic text ask over the issue.
 
 const DERIVE_ASK_TIMEOUT_MS = 20_000;
 // Bound the per-save fan-out so a first save of a large playbook (up to 200
@@ -43,7 +46,19 @@ const DERIVE_ASK_CONCURRENCY = 4;
 // resolve to the same model.
 const DERIVE_ASK_TASK = "pdf" as const;
 
-const DERIVE_ASK_SYSTEM_PROMPT =
+export const DERIVE_CLAUSE_ASK_SYSTEM_PROMPT =
+  "You turn a contract-review issue and its tiered rules into ONE extraction " +
+  "question. A reviewer will judge the contract against every rule while seeing " +
+  "only the answer to your question, so the question must ask for the contract's " +
+  "own wording on every term the rules cover, naming each term. Never narrow it " +
+  "to a single value. Ask WHAT the contract says, not whether it meets a rule, " +
+  "and do not mention the rules, tiers, or grading. Ask for the wording to be " +
+  "quoted verbatim and in full, at whatever length that takes, with no commentary " +
+  "and nothing said about a term the contract does not address, and for no answer " +
+  "at all when the contract does not address the issue. Write the question in " +
+  "the language of the issue, in under 800 characters.";
+
+export const DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT =
   "You turn a contract-review issue and its tiered rules into ONE extraction " +
   "question for reading a single value from a contract, plus that value's " +
   "content type. Return a concise question that captures WHAT to extract, not " +
@@ -51,16 +66,20 @@ const DERIVE_ASK_SYSTEM_PROMPT =
   'for a whole number or monetary amount, otherwise "text".';
 
 /** Read by the structured-output role contract test. @public */
-export const deriveAskSchema = v.strictObject({
+export const deriveClauseAskSchema = v.strictObject({
+  question: v.pipe(v.string(), v.maxLength(1000)),
+});
+
+/** Read by the structured-output role contract test. @public */
+export const deriveConstraintAskSchema = v.strictObject({
   question: v.pipe(v.string(), v.maxLength(1000)),
   contentType: v.picklist(["text", "date", "int"]),
 });
 
-export type DeriveAskResult = v.InferOutput<typeof deriveAskSchema>;
-
-const contentForType = (
-  contentType: DeriveAskResult["contentType"],
-): ScalarPropertyContent => ({ version: 1, type: contentType });
+export type DeriveClauseAskResult = v.InferOutput<typeof deriveClauseAskSchema>;
+export type DeriveConstraintAskResult = v.InferOutput<
+  typeof deriveConstraintAskSchema
+>;
 
 export const computeRulesHash = (position: TierStandardPosition): string =>
   hashSha256Hex(JSON.stringify(canonicalRulesInput(position)));
@@ -89,9 +108,7 @@ const buildDeriveAskUserMessage = (position: TierStandardPosition): string => {
   return lines.join("\n");
 };
 
-// The structured-output call that derives one ask. Injectable so callers (tests)
-// can substitute it without a live model; the default runs the real LLM task.
-export type DeriveAskGenerate = (input: {
+export type DeriveAskInput = {
   admission: ModelDispatchAdmission;
   system: string;
   prompt: string;
@@ -99,21 +116,22 @@ export type DeriveAskGenerate = (input: {
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
-}) => Promise<DeriveAskResult>;
+};
 
-// Not destructured in the parameter: the ownership-id lint rule needs the
-// branded type visible on the binding, which the aliased object type hides.
-const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
-  const {
-    admission,
-    system,
-    prompt,
-    organizationId,
-    orgAIConfig,
-    managedAIResidency,
-    promptCachingEnabled,
-  } = input;
-  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+// The structured-output calls that derive one ask, one per shape. Injectable so
+// callers (tests) can substitute them without a live model; the defaults run the
+// real LLM task.
+export type DeriveAskGenerate = {
+  clause: (input: DeriveAskInput) => Promise<DeriveClauseAskResult>;
+  constraint: (input: DeriveAskInput) => Promise<DeriveConstraintAskResult>;
+};
+
+const deriveAskAnalytics = ({
+  admission,
+  organizationId,
+  orgAIConfig,
+}: DeriveAskInput) =>
+  createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "playbook.derive-ask",
     modelTask: DERIVE_ASK_TASK,
@@ -124,36 +142,76 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
     traceId: Bun.randomUUIDv7(),
   });
 
+const deriveAskRequest = (
+  {
+    admission,
+    system,
+    prompt,
+    organizationId,
+    orgAIConfig,
+    managedAIResidency,
+    promptCachingEnabled,
+  }: DeriveAskInput,
+  analytics: ReturnType<typeof deriveAskAnalytics>,
+) => ({
+  userId: admission.userId,
+  dataClass: "customer" as const,
+  task: DERIVE_ASK_TASK,
+  orgAIConfig,
+  managedAIResidency,
+  organizationId,
+  admission,
+  // DeriveAskInput carries no workspace id; playbook grading runs at
+  // organization scope.
+  tenantWorkspaceIds: [],
+  analytics,
+  caching: resolveCaching({
+    promptCachingEnabled,
+    task: DERIVE_ASK_TASK,
+    scopeKey: null,
+  }),
+  serviceTier: "standard" as const,
+  system,
+  prompt,
+  deadlineMs: DERIVE_ASK_TIMEOUT_MS,
+});
+
+const withDeriveAskRequest = async <TResult>(
+  input: DeriveAskInput,
+  generateObject: (
+    request: ReturnType<typeof deriveAskRequest>,
+  ) => Promise<TResult>,
+): Promise<TResult> => {
+  const aiAnalytics = deriveAskAnalytics(input);
   try {
-    return await generateTanStackObjectForTask({
-      userId: admission.userId,
-      dataClass: "customer",
-      task: DERIVE_ASK_TASK,
-      orgAIConfig,
-      managedAIResidency,
-      organizationId,
-      admission,
-      // DeriveAskGenerate carries no workspace id; playbook grading runs at
-      // organization scope.
-      tenantWorkspaceIds: [],
-      analytics: aiAnalytics,
-      caching: resolveCaching({
-        promptCachingEnabled,
-        task: DERIVE_ASK_TASK,
-        scopeKey: null,
-      }),
-      serviceTier: "standard",
-      system,
-      prompt,
-      deadlineMs: DERIVE_ASK_TIMEOUT_MS,
-      outputSchema: deriveAskSchema,
-    });
+    return await generateObject(deriveAskRequest(input, aiAnalytics));
   } catch (error) {
     // Boundary capture: the caller turns the failure into a `derived`-absent
     // save; capture telemetry here before it is swallowed there.
     aiAnalytics.captureError(error);
     throw error;
   }
+};
+
+const defaultDeriveAskGenerate: DeriveAskGenerate = {
+  clause: async (input) =>
+    await withDeriveAskRequest(
+      input,
+      async (request) =>
+        await generateTanStackObjectForTask({
+          ...request,
+          outputSchema: deriveClauseAskSchema,
+        }),
+    ),
+  constraint: async (input) =>
+    await withDeriveAskRequest(
+      input,
+      async (request) =>
+        await generateTanStackObjectForTask({
+          ...request,
+          outputSchema: deriveConstraintAskSchema,
+        }),
+    ),
 };
 
 export type DeriveAutoAsksDeps = {
@@ -180,6 +238,39 @@ const needsDerivation = (
   return position.ask.derived?.rulesHash !== rulesHash;
 };
 
+type DerivedAsk = { question: string; content: ScalarPropertyContent };
+
+const deriveAskForCheck = async (
+  position: TierStandardPosition,
+  input: Omit<DeriveAskInput, "system" | "prompt">,
+  generate: DeriveAskGenerate,
+): Promise<DerivedAsk> => {
+  const prompt = buildDeriveAskUserMessage(position);
+  const kind = position.check?.kind;
+  switch (kind) {
+    case undefined:
+    case "presence": {
+      const { question } = await generate.clause({
+        ...input,
+        system: DERIVE_CLAUSE_ASK_SYSTEM_PROMPT,
+        prompt,
+      });
+      return { question, content: { version: 1, type: "text" } };
+    }
+    case "constraint": {
+      const { question, contentType } = await generate.constraint({
+        ...input,
+        system: DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT,
+        prompt,
+      });
+      return { question, content: { version: 1, type: contentType } };
+    }
+    default:
+      kind satisfies never;
+      return panic(`Unhandled position check: ${String(kind)}`);
+  }
+};
+
 type DeriveOneOptions = {
   admission: ModelDispatchAdmission;
   deps: DeriveAutoAsksDeps & {
@@ -200,15 +291,17 @@ const deriveOne = async ({
 }: DeriveOneOptions): Promise<Position> => {
   const derived = await Result.tryPromise({
     try: async () =>
-      await generate({
-        admission,
-        system: DERIVE_ASK_SYSTEM_PROMPT,
-        prompt: buildDeriveAskUserMessage(position),
-        organizationId: deps.organizationId,
-        orgAIConfig: deps.orgAIConfig,
-        managedAIResidency: deps.managedAIResidency,
-        promptCachingEnabled: deps.promptCachingEnabled,
-      }),
+      await deriveAskForCheck(
+        position,
+        {
+          admission,
+          organizationId: deps.organizationId,
+          orgAIConfig: deps.orgAIConfig,
+          managedAIResidency: deps.managedAIResidency,
+          promptCachingEnabled: deps.promptCachingEnabled,
+        },
+        generate,
+      ),
     catch: (error) => error,
   });
 
@@ -226,11 +319,7 @@ const deriveOne = async ({
     ...position,
     ask: {
       mode: "auto",
-      derived: {
-        question: derived.value.question,
-        content: contentForType(derived.value.contentType),
-        rulesHash,
-      },
+      derived: { ...derived.value, rulesHash },
     },
   };
 };

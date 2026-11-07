@@ -40,8 +40,11 @@ const ANSWER_CONTEXT = {
   text: {
     description:
       "Answer for property. Keep it plain text, keep it " +
-      "short and concise, less than 100 characters. Answer null if the " +
-      "source does not state this value; never guess.",
+      "short and concise, less than 100 characters, unless the prompt asks " +
+      "for the source's wording to be quoted: then quote that wording " +
+      "verbatim and in full, at whatever length it takes, and add no " +
+      "commentary of your own. Answer null if the source does not state " +
+      "this value; never guess.",
     examples: ["Contract for sale of goods", null],
     hint: "short text",
   },

@@ -24,6 +24,10 @@ import {
   registerMockAI,
 } from "@/api/dev/register-mock-ai";
 import { env } from "@/api/env";
+import {
+  deriveClauseAskSchema,
+  deriveConstraintAskSchema,
+} from "@/api/handlers/playbooks/derive-ask";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
@@ -87,12 +91,6 @@ const tierMatchSchema = v.strictObject({
       rank: v.number(),
     }),
   ),
-});
-
-// Mirrors apps/api/src/handlers/playbooks/derive-ask.ts's `deriveAskSchema`.
-const deriveAskSchema = v.strictObject({
-  question: v.pipe(v.string(), v.maxLength(1000)),
-  contentType: v.picklist(["text", "date", "int"]),
 });
 
 // A schema shape none of the curated fixtures recognize: a nested object, an
@@ -230,14 +228,24 @@ describe("mockStructuredData", () => {
     });
   });
 
-  test("keeps the curated playbook.derive-ask fixture", () => {
-    const data = mockStructuredData(
-      structuredOutputSchemaFor(deriveAskSchema, "openai"),
-    );
-    expect(v.parse(deriveAskSchema, data)).toEqual({
-      question: "What does the contract say about this issue?",
-      contentType: "text",
-    });
+  test("keeps the curated playbook.derive-ask fixture for both shapes", () => {
+    const question = "What does the contract say about this issue?";
+    expect(
+      v.parse(
+        deriveClauseAskSchema,
+        mockStructuredData(
+          structuredOutputSchemaFor(deriveClauseAskSchema, "openai"),
+        ),
+      ),
+    ).toEqual({ question });
+    expect(
+      v.parse(
+        deriveConstraintAskSchema,
+        mockStructuredData(
+          structuredOutputSchemaFor(deriveConstraintAskSchema, "openai"),
+        ),
+      ),
+    ).toEqual({ question, contentType: "text" });
   });
 
   test("throws rather than silently returning an unsatisfiable schema", () => {

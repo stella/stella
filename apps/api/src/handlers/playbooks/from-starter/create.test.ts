@@ -14,6 +14,7 @@ import { isUuid } from "@stll/uuid-codec";
 import { documentTypes, playbookDefinitions } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
+import type { DeriveAskGenerate } from "@/api/handlers/playbooks/derive-ask";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter/create";
 import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiate-starter";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
@@ -225,12 +226,15 @@ describe("starter playbook content", () => {
 
   test("bundled starters require no AI derivation before creation", async () => {
     let generationCalls = 0;
-    const generate = async () => {
-      generationCalls += 1;
-      return {
-        question: "Generated question",
-        contentType: "text" as const,
-      };
+    const generate: DeriveAskGenerate = {
+      clause: async () => {
+        generationCalls += 1;
+        return { question: "Generated question" };
+      },
+      constraint: async () => {
+        generationCalls += 1;
+        return { question: "Generated question", contentType: "text" };
+      },
     };
 
     for (const starter of STARTER_PLAYBOOKS) {

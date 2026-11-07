@@ -11,11 +11,13 @@ import { createTestState } from "@stll/test-state";
 import { env } from "@/api/env";
 import {
   computeRulesHash,
+  DERIVE_CLAUSE_ASK_SYSTEM_PROMPT,
+  DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT,
   deriveAutoAsks,
 } from "@/api/handlers/playbooks/derive-ask";
 import type {
   DeriveAskGenerate,
-  DeriveAskResult,
+  DeriveClauseAskResult,
 } from "@/api/handlers/playbooks/derive-ask";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -64,6 +66,43 @@ const container = (position: TierStandardPosition): PlaybookPositions => ({
   items: [position],
 });
 
+const presenceCheck = {
+  kind: "presence",
+  expectation: "required",
+} as const satisfies TierStandardPosition["check"];
+
+const constraintCheck = {
+  kind: "constraint",
+  condition: {
+    type: "group",
+    combinator: "and",
+    children: [
+      {
+        type: "compare",
+        left: {
+          type: "property",
+          propertyId: "11111111-1111-4111-8111-111111111111",
+        },
+        op: "lte",
+        right: { type: "literal", value: 30 },
+      },
+    ],
+  },
+} as const satisfies TierStandardPosition["check"];
+
+const unexpectedCall = async (): Promise<never> =>
+  await Promise.reject(new Error("generator must not be called"));
+
+const answeringClause = (question: string): DeriveAskGenerate => ({
+  clause: async () => ({ question }),
+  constraint: unexpectedCall,
+});
+
+const storedAsk = (result: PlaybookPositions) => {
+  const [item] = result.items;
+  return item?.mode === "graded" ? item.ask : null;
+};
+
 const deps = {
   admitModelAction: testModelActionAdmitter(toSafeId<"organization">("org_1")),
   organizationId: toSafeId<"organization">("org_1"),
@@ -102,6 +141,108 @@ describe("computeRulesHash — stability", () => {
   });
 });
 
+describe("deriveAutoAsks — the check decides the shape", () => {
+  test.each([
+    ["no check", undefined],
+    ["a presence check", presenceCheck],
+  ])("%s stores a text ask from the clause prompt", async (_label, check) => {
+    const systems: string[] = [];
+    const position = graded(check === undefined ? {} : { check });
+
+    const result = await deriveAutoAsks(container(position), {
+      ...deps,
+      generate: {
+        clause: async ({ system }) => {
+          systems.push(system);
+          return { question: "What does the contract say about the law?" };
+        },
+        constraint: unexpectedCall,
+      },
+    });
+
+    expect(systems).toEqual([DERIVE_CLAUSE_ASK_SYSTEM_PROMPT]);
+    expect(storedAsk(result)).toEqual({
+      mode: "auto",
+      derived: {
+        question: "What does the contract say about the law?",
+        content: textContent,
+        rulesHash: computeRulesHash(position),
+      },
+    });
+  });
+
+  test.each(["int", "date", "text"] as const)(
+    "a constraint check stores the %s type the generator chose, from the constraint prompt",
+    async (contentType) => {
+      const systems: string[] = [];
+      const position = graded({ check: constraintCheck });
+
+      const result = await deriveAutoAsks(container(position), {
+        ...deps,
+        generate: {
+          clause: unexpectedCall,
+          constraint: async ({ system }) => {
+            systems.push(system);
+            return { question: "How many days?", contentType };
+          },
+        },
+      });
+
+      expect(systems).toEqual([DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT]);
+      expect(storedAsk(result)).toEqual({
+        mode: "auto",
+        derived: {
+          question: "How many days?",
+          content: { version: 1, type: contentType },
+          rulesHash: computeRulesHash(position),
+        },
+      });
+    },
+  );
+
+  test("the two prompts differ, and only the clause prompt forbids a single value", () => {
+    expect(DERIVE_CLAUSE_ASK_SYSTEM_PROMPT).toContain(
+      "every term the rules cover",
+    );
+    expect(DERIVE_CLAUSE_ASK_SYSTEM_PROMPT).not.toContain("contentType");
+    expect(DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT).toContain("contentType");
+  });
+
+  test("a stored ask is replaced only when a grading input changes", async () => {
+    const position = graded();
+    const narrow = graded({
+      ask: {
+        mode: "auto",
+        derived: {
+          question: "How many days of notice?",
+          content: { version: 1, type: "int" },
+          rulesHash: computeRulesHash(position),
+        },
+      },
+    });
+
+    const unchanged = await deriveAutoAsks(container(narrow), {
+      ...deps,
+      generate: { clause: unexpectedCall, constraint: unexpectedCall },
+    });
+    expect(storedAsk(unchanged)).toEqual(narrow.ask);
+
+    const edited = { ...narrow, issue: "Governing law and forum" };
+    const rederived = await deriveAutoAsks(container(edited), {
+      ...deps,
+      generate: answeringClause("What does the contract say?"),
+    });
+    expect(storedAsk(rederived)).toEqual({
+      mode: "auto",
+      derived: {
+        question: "What does the contract say?",
+        content: textContent,
+        rulesHash: computeRulesHash(edited),
+      },
+    });
+  });
+});
+
 describe("deriveAutoAsks — save resilience", () => {
   test("the default generator resolves the PDF override and saves the provider's derived ask", async () => {
     testState.setConfig("USE_MOCK_AI", false);
@@ -118,8 +259,7 @@ describe("deriveAutoAsks — save resilience", () => {
     } satisfies OrgAIConfig;
     const generatedAsk = {
       question: "What law governs the agreement?",
-      contentType: "text",
-    } satisfies DeriveAskResult;
+    } satisfies DeriveClauseAskResult;
     const providerResponse = {
       id: "derive-ask-response",
       created_at: 0,
@@ -176,7 +316,7 @@ describe("deriveAutoAsks — save resilience", () => {
         response: providerResponse,
       },
     ] satisfies ResponseStreamEvent[];
-    const requests: string[] = [];
+    const requests: { model: string; outputProperties: string[] }[] = [];
     const analytics = installRecordingAnalytics();
     const logs = installRecordingLogger();
     const fetchSpy = Object.assign(
@@ -189,10 +329,23 @@ describe("deriveAutoAsks — save resilience", () => {
             const request = effectiveRequest(input, init);
             expect(new URL(request.url).pathname).toBe("/v1/responses");
             const body = v.parse(
-              v.object({ model: v.string(), stream: v.literal(true) }),
+              v.object({
+                model: v.string(),
+                stream: v.literal(true),
+                text: v.object({
+                  format: v.object({
+                    schema: v.object({
+                      properties: v.record(v.string(), v.unknown()),
+                    }),
+                  }),
+                }),
+              }),
               await request.json(),
             );
-            requests.push(body.model);
+            requests.push({
+              model: body.model,
+              outputProperties: Object.keys(body.text.format.schema.properties),
+            });
             return new Response(
               providerEvents
                 .map((event) => `data: ${JSON.stringify(event)}\n\n`)
@@ -216,7 +369,9 @@ describe("deriveAutoAsks — save resilience", () => {
         orgAIConfig,
       });
 
-      expect(requests).toEqual([pdfModelId]);
+      expect(requests).toEqual([
+        { model: pdfModelId, outputProperties: ["question"] },
+      ]);
       expect(analytics.exceptions()).toEqual([]);
       expect(result.items.at(0)).toEqual({
         ...position,
@@ -238,10 +393,7 @@ describe("deriveAutoAsks — save resilience", () => {
   });
 
   test("a successful derivation stores the derived ask with its rulesHash", async () => {
-    const generate: DeriveAskGenerate = async () => ({
-      question: "What law governs the agreement?",
-      contentType: "text",
-    });
+    const generate = answeringClause("What law governs the agreement?");
 
     const position = graded();
     const result = await deriveAutoAsks(container(position), {
@@ -267,9 +419,12 @@ describe("deriveAutoAsks — save resilience", () => {
     "an unusable AI config (%s) makes no model call and still saves, dropping a stale `derived`",
     async (orgAIConfigStatus) => {
       let calls = 0;
-      const generate: DeriveAskGenerate = async () => {
-        calls += 1;
-        return { question: "Derived on the wrong key", contentType: "text" };
+      const generate: DeriveAskGenerate = {
+        clause: async () => {
+          calls += 1;
+          return { question: "Derived on the wrong key" };
+        },
+        constraint: unexpectedCall,
       };
       const stale = graded();
       stale.ask = {
@@ -296,8 +451,11 @@ describe("deriveAutoAsks — save resilience", () => {
   );
 
   test("a thrown derivation still saves, with `derived` absent", async () => {
-    const generate: DeriveAskGenerate = async () => {
-      throw new Error("model unavailable");
+    const generate: DeriveAskGenerate = {
+      clause: async () => {
+        throw new Error("model unavailable");
+      },
+      constraint: unexpectedCall,
     };
 
     const result = await deriveAutoAsks(container(graded()), {
@@ -328,9 +486,12 @@ describe("deriveAutoAsks — save resilience", () => {
     });
 
     let called = false;
-    const generate: DeriveAskGenerate = async () => {
-      called = true;
-      return { question: "New?", contentType: "text" };
+    const generate: DeriveAskGenerate = {
+      clause: async () => {
+        called = true;
+        return { question: "New?" };
+      },
+      constraint: unexpectedCall,
     };
 
     const result = await deriveAutoAsks(container(withDerived), {
@@ -347,9 +508,12 @@ describe("deriveAutoAsks — save resilience", () => {
 
   test("manual asks and extract positions pass through untouched", async () => {
     let called = false;
-    const generate: DeriveAskGenerate = async () => {
-      called = true;
-      return { question: "x", contentType: "text" };
+    const generate: DeriveAskGenerate = {
+      clause: async () => {
+        called = true;
+        return { question: "x" };
+      },
+      constraint: unexpectedCall,
     };
 
     const manual = graded({
