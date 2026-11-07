@@ -4059,6 +4059,7 @@
       "failed": "Neizdevās pārbaudīt dokumentu",
       "filterCoverage": "Aptvērums",
       "filterDeviations": "Novirzes",
+      "fixesWithheldNotice": "Šai pārbaudei ierosinātās izmaiņas netika izveidotas, jo tajā izmantots atsauces dokuments no lietas, kas nav pieejama personai, kura to palaida. Secinājumus tas neietekmē.",
       "flag": "Atzīmēt",
       "flaggedPositions": "{total, plural, zero {Nav atzīmētu pozīciju} one {{flagged, number} no # pozīcijas atzīmēta} other {{flagged, number} no # pozīcijām atzīmētas}}",
       "fromChat": "No tērzēšanas",

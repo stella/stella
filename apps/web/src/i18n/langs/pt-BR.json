@@ -4059,6 +4059,7 @@
       "failed": "A revisão do documento falhou",
       "filterCoverage": "Cobertura",
       "filterDeviations": "Desvios",
+      "fixesWithheldNotice": "Não foram criadas alterações propostas para esta revisão porque ela usou um documento de referência de um caso que não está disponível para a pessoa que a iniciou. As constatações não foram afetadas.",
       "flag": "Sinalizar",
       "flaggedPositions": "{total, plural, one {{flagged, number} de # posição sinalizada} other {{flagged, number} de # posições sinalizadas} many {{flagged, number} de # posições sinalizadas}}",
       "fromChat": "Do chat",

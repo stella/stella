@@ -3373,6 +3373,7 @@
   "inspector.review.failed": "Document review failed",
   "inspector.review.filterCoverage": "Coverage",
   "inspector.review.filterDeviations": "Deviations",
+  "inspector.review.fixesWithheldNotice": "Proposed changes weren't created for this review because it used a reference document from a matter that isn't available to the person who ran it. Findings are unaffected.",
   "inspector.review.flag": "Flag",
   "inspector.review.flaggedPositions": "{total, plural, one {{flagged, number} of # position flagged} other {{flagged, number} of # positions flagged}}",
   "inspector.review.fromChat": "From chat",

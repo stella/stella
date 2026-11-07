@@ -4059,6 +4059,7 @@
       "failed": "Dokumendi ülevaatamine ebaõnnestus",
       "filterCoverage": "Kaetus",
       "filterDeviations": "Kõrvalekalded",
+      "fixesWithheldNotice": "Selle ülevaatuse jaoks kavandatavaid muudatusi ei loodud, sest see kasutas võrdlusdokumenti toimikust, mis ei ole selle käivitanud isikule kättesaadav. Leide see ei mõjuta.",
       "flag": "Märgista",
       "flaggedPositions": "{total, plural, one {{flagged, number} ühest seisukohast märgistatud} other {{flagged, number} #-st seisukohast märgistatud}}",
       "fromChat": "Vestlusest",

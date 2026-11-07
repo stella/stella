@@ -4059,6 +4059,7 @@
       "failed": "Nie udało się sprawdzić dokumentu",
       "filterCoverage": "Pokrycie",
       "filterDeviations": "Odstępstwa",
+      "fixesWithheldNotice": "Dla tej weryfikacji nie utworzono proponowanych zmian, ponieważ użyto w niej dokumentu referencyjnego ze sprawy, która nie jest dostępna dla osoby, która ją uruchomiła. Nie ma to wpływu na ustalenia.",
       "flag": "Oznacz",
       "flaggedPositions": "{total, plural, one {oznaczono {flagged, number} z # stanowiska} few {oznaczono {flagged, number} z # stanowisk} many {oznaczono {flagged, number} z # stanowisk} other {oznaczono {flagged, number} z # stanowisk}}",
       "fromChat": "Z czatu",

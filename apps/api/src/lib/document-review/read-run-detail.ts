@@ -77,6 +77,7 @@ export const readDocumentReviewRunDetail = async function* ({
           withheldSources: documentReviewRuns.withheldSources,
           total: documentReviewRuns.total,
           completed: documentReviewRuns.completed,
+          fixesWithheld: documentReviewRuns.fixesWithheld,
           pipelineVersion: documentReviewRuns.pipelineVersion,
           createdAt: documentReviewRuns.createdAt,
           startedAt: documentReviewRuns.startedAt,

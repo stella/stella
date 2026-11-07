@@ -142,6 +142,7 @@ export const finalizeReviewRun = async (
       status: "completed",
       errorCode: null,
       completed: committed,
+      fixesWithheld: staging.skippedForUnreadableReference,
       finishedAt: new Date(),
     })
     .where(

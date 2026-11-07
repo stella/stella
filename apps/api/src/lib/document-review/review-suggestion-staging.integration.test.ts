@@ -726,12 +726,15 @@ describe("a review whose reference text comes from another matter", () => {
     return rows.map(({ sources }) => sources);
   };
 
-  const runStatus = async (runId: SafeId<"documentReviewRun">) => {
+  const runState = async (runId: SafeId<"documentReviewRun">) => {
     const rows = await testDb
-      .select({ status: documentReviewRuns.status })
+      .select({
+        status: documentReviewRuns.status,
+        fixesWithheld: documentReviewRuns.fixesWithheld,
+      })
       .from(documentReviewRuns)
       .where(eq(documentReviewRuns.id, runId));
-    return rows.at(0)?.status;
+    return rows.at(0);
   };
 
   const withoutReferenceMembership = async <T>(
@@ -783,7 +786,10 @@ describe("a review whose reference text comes from another matter", () => {
       const { runId, findingId, finish } = await finalizeAsWorker(runBasis());
 
       expect(await finish()).toEqual(STAGED);
-      expect(await runStatus(runId)).toBe("completed");
+      expect(await runState(runId)).toEqual({
+        status: "completed",
+        fixesWithheld: 0,
+      });
       expect(await stagedSources(findingId)).toEqual([[ids.wsA2]]);
 
       // A replay converges on the rows the first pass wrote.
@@ -808,7 +814,10 @@ describe("a review whose reference text comes from another matter", () => {
       );
 
       expect(await finish()).toEqual(WITHHELD);
-      expect(await runStatus(runId)).toBe("completed");
+      expect(await runState(runId)).toEqual({
+        status: "completed",
+        fixesWithheld: 1,
+      });
       expect(await stagedSources(findingId)).toEqual([]);
       expect(await findingState(findingId)).toMatchObject({ decision: "open" });
 
@@ -824,7 +833,10 @@ describe("a review whose reference text comes from another matter", () => {
     );
 
     expect(await finish()).toEqual(WITHHELD);
-    expect(await runStatus(runId)).toBe("completed");
+    expect(await runState(runId)).toEqual({
+      status: "completed",
+      fixesWithheld: 1,
+    });
     expect(await stagedSources(findingId)).toEqual([]);
   });
 
@@ -838,7 +850,10 @@ describe("a review whose reference text comes from another matter", () => {
       .where(eq(workspaces.id, ids.wsA2));
     try {
       expect(await finish()).toEqual(WITHHELD);
-      expect(await runStatus(runId)).toBe("completed");
+      expect(await runState(runId)).toEqual({
+        status: "completed",
+        fixesWithheld: 1,
+      });
       expect(await stagedSources(findingId)).toEqual([]);
     } finally {
       await testDb
