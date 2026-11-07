@@ -1,23 +1,22 @@
 import type { AnyTextAdapter } from "@tanstack/ai";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId } from "@/api/lib/branded-types";
-import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
-import { logger } from "@/api/lib/observability/logger";
+import {
+  DocumentTooLargeError,
+  WorkflowIntegrationError,
+} from "@/api/lib/errors/tagged-errors";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import {
   buildWorkflowAIAnalyticsProps,
-  EXTRACTED_TEXT_PROMPT_LIMITS,
   generateWorkflowData,
-  limitExtractedTextPromptContent,
 } from "@/api/lib/workflow/ai-generate-batch";
-import {
-  PROMPT_INPUT_TRUNCATED_EVENT,
-  PROMPT_TRUNCATION_MARKER,
-} from "@/api/lib/workflow/ai-prompts";
+import { buildJustificationFilenames } from "@/api/lib/workflow/generate-batch";
+import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import { requestBudgetBytesForTask } from "@/api/lib/workflow/request-budget";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
@@ -60,59 +59,6 @@ describe("buildWorkflowAIAnalyticsProps", () => {
       sessionId: "entity-version-1",
       usageMetering,
     });
-  });
-});
-
-describe("extracted-text prompt limits", () => {
-  test("enforces per-file and aggregate bounds with visible truncation", () => {
-    const contents = [
-      "a".repeat(80_000),
-      "b".repeat(80_000),
-      "c".repeat(80_000),
-    ];
-    const limited = contents.map((content) =>
-      limitExtractedTextPromptContent({
-        content,
-        fileCount: contents.length,
-      }),
-    );
-
-    expect(
-      limited.every(
-        (content) =>
-          content.length <= EXTRACTED_TEXT_PROMPT_LIMITS.perFileChars,
-      ),
-    ).toBe(true);
-    expect(
-      limited.reduce((total, content) => total + content.length, 0),
-    ).toBeLessThanOrEqual(EXTRACTED_TEXT_PROMPT_LIMITS.totalChars);
-    expect(limited.every((content) => content.includes("truncated"))).toBe(
-      true,
-    );
-  });
-
-  test("records each cut file and the characters it dropped", () => {
-    const logInfo = spyOn(logger, "info").mockImplementation(() => {});
-    try {
-      limitExtractedTextPromptContent({ content: "short", fileCount: 1 });
-      expect(logInfo).not.toHaveBeenCalled();
-
-      const content = "a".repeat(EXTRACTED_TEXT_PROMPT_LIMITS.perFileChars + 5);
-      limitExtractedTextPromptContent({ content, fileCount: 1 });
-
-      expect(logInfo).toHaveBeenCalledWith(PROMPT_INPUT_TRUNCATED_EVENT, {
-        input: "extracted_text",
-        truncated_parts: "1",
-        dropped_chars: String(
-          content.length -
-            (EXTRACTED_TEXT_PROMPT_LIMITS.perFileChars -
-              PROMPT_TRUNCATION_MARKER.length),
-        ),
-        max_chars: String(EXTRACTED_TEXT_PROMPT_LIMITS.perFileChars),
-      });
-    } finally {
-      logInfo.mockRestore();
-    }
   });
 });
 
@@ -186,5 +132,96 @@ test("a fully planned workflow batch propagates a generative provider failure", 
     propertyId: property.id,
     reason: "failed",
     source: "generative",
+  });
+});
+
+describe("a request over its model's budget", () => {
+  const property = {
+    id: toSafeId<"property">("governing-law"),
+    status: "stale",
+    content: { version: 1, type: "text" },
+    dependencies: [],
+    tool: { version: 1, type: "ai-model", prompt: "Which law governs?" },
+  } satisfies AIBatchProperty;
+
+  const docxWithBlocks = (texts: readonly string[]): PreparedDocxFile => ({
+    kind: "docx",
+    fileFieldId: toSafeId<"field">("field-1"),
+    fileId: "file-1",
+    simplifiedName: "F0",
+    blocks: texts.map((text, index) => ({
+      id: `seq-${String(index)}`,
+      kind: "paragraph",
+      statedNumbering: { kind: "inherit" },
+      text,
+    })),
+  });
+
+  // The same budget generateWorkflowData resolves for this organization.
+  const taskBudget = () =>
+    requestBudgetBytesForTask("pdf", null, {
+      dataClass: "customer",
+      organizationId,
+      modelTier: testModelAdmission(organizationId).modelTier,
+    });
+
+  const generate = async (file: PreparedDocxFile) => {
+    const sentRequests: unknown[] = [];
+    const record = (request: unknown) => {
+      sentRequests.push(request);
+      throw new Error("Synthetic provider failure");
+    };
+    const adapter = {
+      ...createScriptedTextAdapter([]),
+      chatStream: record,
+      structuredOutput: record,
+    } satisfies AnyTextAdapter;
+    const result = await generateWorkflowData({
+      files: [file],
+      properties: [property],
+      filenames: buildJustificationFilenames([file]),
+      textInputs: [],
+      linkedSkillsMessage: null,
+      abortSignal: new AbortController().signal,
+      entityVersionId: "entity-version-1",
+      organizationId,
+      workspaceId,
+      admission: testModelAdmission(organizationId),
+      orgAIConfig: null,
+      managedAIResidency: "eu",
+      promptCachingEnabled: false,
+      serviceTier: "standard",
+      decisionModel: null,
+      resolveTextModel: async () => ({
+        adapter,
+        keySource: "byok",
+        modelId: "test-model",
+        provider: "openai",
+        modelOptions: {},
+      }),
+    });
+    return { result, sentRequests };
+  };
+
+  test("sends the model a cut document, within the budget", async () => {
+    const budget = taskBudget();
+    const file = docxWithBlocks(["c".repeat(budget + 50_000)]);
+
+    const { sentRequests } = await generate(file);
+    const sent = JSON.stringify(sentRequests.at(0));
+
+    expect(sent).toContain("characters withheld");
+    expect(sent).toContain("seq-0");
+    expect(sent).not.toContain("c".repeat(budget));
+  });
+
+  test("refuses with a typed error, with no model call", async () => {
+    const budget = taskBudget();
+    const file = docxWithBlocks(["c".repeat(budget * 3)]);
+
+    const { result, sentRequests } = await generate(file);
+
+    expect(sentRequests).toEqual([]);
+    expect(result.isErr() && DocumentTooLargeError.is(result.error)).toBe(true);
   });
 });

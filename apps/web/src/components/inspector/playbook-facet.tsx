@@ -117,6 +117,7 @@ import {
   reviewHistoryPresentation,
   reviewRunView,
   reviewSkeletonCardCount,
+  withheldTextShare,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   PinnedPosition,
@@ -124,6 +125,7 @@ import type {
   RestoredReviewFinding,
   ReviewPlaybookFreshness,
   ReviewRunFreshness,
+  ReviewRunWithheldSource,
   TableRunNotice,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import {
@@ -1406,7 +1408,11 @@ const ReviewRunPanel = ({
     return (
       <ErrorState
         detail={run.errorCode}
-        message={t("inspector.review.failed")}
+        message={t(
+          run.errorCode === "document_too_large"
+            ? "inspector.review.documentTooLarge"
+            : "inspector.review.failed",
+        )}
         onChangeBasis={onReviewAgain}
         onRetry={() => onRetry(restored.basis)}
       />
@@ -1476,6 +1482,7 @@ const ReviewRunPanel = ({
       })}
       targetFileFieldId={targetFileFieldId}
       targetName={reviewedVersion?.file?.fileName ?? ""}
+      withheldSources={run.withheldSources}
       targetVersionNumber={reviewedVersion?.versionNumber ?? null}
       workspaceId={workspaceId}
     />
@@ -2752,6 +2759,7 @@ type ResultsViewProps = {
   decisionPending: boolean;
   freshness: ReviewRunFreshness;
   tableRunNotice: TableRunNotice;
+  withheldSources: readonly ReviewRunWithheldSource[];
   history: ReviewRunHistoryView;
   /** Set while the worker is still committing findings; `null` once the run
    *  has settled. */
@@ -2811,6 +2819,7 @@ const ResultsView = ({
   decisionPending,
   freshness,
   tableRunNotice,
+  withheldSources,
   history,
   progress: runProgress,
   readOnly,
@@ -3037,6 +3046,8 @@ const ResultsView = ({
       </header>
 
       <ReviewHistorySection history={history} />
+
+      <DocumentCutNotice documentName={targetName} sources={withheldSources} />
 
       <TableRunNoticeSection
         notice={tableRunNotice}
@@ -3475,6 +3486,41 @@ const TableRunNextStep = ({
       notice satisfies never;
       return panic("Unhandled table run notice");
   }
+};
+
+/**
+ * Says the findings rest on part of the document. It sits with the table-run
+ * notice so the margin layout shows it too.
+ */
+const DocumentCutNotice = ({
+  documentName,
+  sources,
+}: {
+  documentName: string;
+  sources: readonly ReviewRunWithheldSource[];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const share = withheldTextShare(sources);
+  if (share === null) {
+    return null;
+  }
+  return (
+    <section
+      className="text-muted-foreground shrink-0 border-b px-3 py-1.5 text-xs"
+      role="note"
+    >
+      <p>
+        {t.rich("inspector.review.documentCutNotice", {
+          documentName,
+          percent: format.number(share, { style: "percent" }),
+          strong: (chunks) => (
+            <strong className="text-foreground font-medium">{chunks}</strong>
+          ),
+        })}
+      </p>
+    </section>
+  );
 };
 
 /**

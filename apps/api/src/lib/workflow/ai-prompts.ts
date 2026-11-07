@@ -3,8 +3,11 @@ import * as v from "valibot";
 import type { FolioAIBlock } from "@stll/folio-core/server";
 
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
-import { logger } from "@/api/lib/observability/logger";
-import { sanitizeForPrompt, stripPromptUnsafeChars, untrustedText } from "@/api/lib/prompt-safety";
+import {
+  sanitizeForPrompt,
+  stripPromptUnsafeChars,
+  untrustedText,
+} from "@/api/lib/prompt-safety";
 import type { PromptSafeText } from "@/api/lib/prompt-safety";
 import { answerSchemaForContent } from "@/api/lib/workflow/ai-answer-schema";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
@@ -43,40 +46,10 @@ export const WORKFLOW_SYSTEM_PROMPT =
   "language, additions, redlines, or comments. Otherwise answer without " +
   "showing the tag syntax.";
 
-// A guard against a malformed document, not a budget: one paragraph can hold a
-// whole clause, and grading sees only what extraction could read. Matches the
-// per-file limit on extracted text.
-export const DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS = 40_000;
-
-/** Ends any prompt input that was cut, so the model knows text is missing. */
-export const PROMPT_TRUNCATION_MARKER = "\n\n[… content truncated to fit AI prompt limits …]";
-
-export const PROMPT_INPUT_TRUNCATED_EVENT = "workflow.prompt_input_truncated";
-
-type PromptInputTruncation = {
-  input: "docx_blocks" | "extracted_text";
-  truncatedParts: number;
-  droppedChars: number;
-  maxChars: number;
-};
-
-/** Records each cut prompt input, so a cut is counted rather than silent. */
-export const recordPromptInputTruncation = ({
-  input,
-  truncatedParts,
-  droppedChars,
-  maxChars,
-}: PromptInputTruncation): void => {
-  if (truncatedParts === 0) {
-    return;
-  }
-  logger.info(PROMPT_INPUT_TRUNCATED_EVENT, {
-    input,
-    truncated_parts: String(truncatedParts),
-    dropped_chars: String(droppedChars),
-    max_chars: String(maxChars),
-  });
-};
+const WITHHELD_TEXT_INSTRUCTION =
+  "A marker such as [… 1200 characters withheld …] means that part of the " +
+  "document was left out for length. Say nothing about what the withheld " +
+  "text contains or omits.";
 
 export const buildExtractedFileMessage = ({
   content,
@@ -89,6 +62,7 @@ export const buildExtractedFileMessage = ({
     `EXTRACTED FILE ${simplifiedName}:`,
     "This source has text content but no navigable citation locator. Analyze it normally; the justification schema will omit it.",
     UNTRUSTED_DOCUMENT_INSTRUCTION,
+    WITHHELD_TEXT_INSTRUCTION,
     content,
   ].join("\n\n");
 
@@ -111,7 +85,8 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
   const citationGuide: string[] = [];
   if (hasPdf) {
     citationGuide.push(
-      "PDF files: each citation is the full Bates stamp shown on " + "the page (e.g., F0-0002).",
+      "PDF files: each citation is the full Bates stamp shown on " +
+        "the page (e.g., F0-0002).",
     );
   }
   if (hasDocx) {
@@ -129,7 +104,9 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
 
   const exampleFile = filenames[0];
   const exampleCitation =
-    exampleFile?.kind === "docx-folio" ? "seq-0010" : `${exampleFile?.simplified ?? "F0"}-0002`;
+    exampleFile?.kind === "docx-folio"
+      ? "seq-0010"
+      : `${exampleFile?.simplified ?? "F0"}-0002`;
 
   // Schema is converted to JSON Schema for TanStack tools with
   // `@valibot/to-json-schema`. That
@@ -144,25 +121,32 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
       statements: v.array(
         v.strictObject({
           text: v.pipe(v.string(), v.minLength(1)),
-          citations: v.pipe(v.array(v.pipe(v.string(), v.minLength(1))), v.nonEmpty()),
+          citations: v.pipe(
+            v.array(v.pipe(v.string(), v.minLength(1))),
+            v.nonEmpty(),
+          ),
         }),
       ),
     }),
   );
-  const constrainedItems = hasCitableFiles ? items : v.pipe(items, v.maxLength(0));
+  const constrainedItems = hasCitableFiles
+    ? items
+    : v.pipe(items, v.maxLength(0));
 
   return v.pipe(
     constrainedItems,
     v.description(
       [
         hasCitableFiles
-          ? "Generate structured justifications that reference the file " + "context you received."
+          ? "Generate structured justifications that reference the file " +
+            "context you received."
           : "Return an empty justification array. The supplied " +
             "extracted-text sources have no supported citation locator.",
         hasCitableFiles
           ? 'Create one array item per cited source file with "file" equal ' +
             "to the exact filename attached with the file in the message."
-          : "Do not invent a filename or citation for an extracted-text " + "source.",
+          : "Do not invent a filename or citation for an extracted-text " +
+            "source.",
         `Citable filenames:\n${filenamesList || "- none"}`,
         ...(hasCitableFiles
           ? [
@@ -171,7 +155,8 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
             ]
           : []),
         ...citationGuide,
-        "Do not include markup, HTML, Markdown, or narrative outside " + "the object.",
+        "Do not include markup, HTML, Markdown, or narrative outside " +
+          "the object.",
         `Example: ${JSON.stringify(
           hasCitableFiles
             ? [
@@ -226,71 +211,84 @@ type DocxBlocksMessageProps = {
   blocks: readonly FolioAIBlock[];
 };
 
-const DOCX_PROMPT_BLOCK_KEPT_CHARS =
-  DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS - PROMPT_TRUNCATION_MARKER.length;
-
-const truncateBlockText = (text: string): string => {
-  if (text.length <= DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS) {
-    return text;
-  }
-  return `${text.slice(0, DOCX_PROMPT_BLOCK_KEPT_CHARS)}${PROMPT_TRUNCATION_MARKER}`;
-};
-
 // The list is sanitized as one string, where `<|` in one block and `|>` in a
 // later one would read as a control token and delete the blocks between them.
-const HALF_CONTROL_TOKEN = /<\|+|\|+>/gu;
+const stripControlTokenHalves = (text: string): string => {
+  if (!text.includes("<|") && !text.includes("|>")) {
+    return text;
+  }
+  const kept: string[] = [];
+  for (const character of text) {
+    const previous = kept.at(-1);
+    if (
+      (previous === "<" && character === "|") ||
+      (previous === "|" && character === ">")
+    ) {
+      kept.pop();
+      continue;
+    }
+    kept.push(character);
+  }
+  return kept.join("");
+};
 
 // JSON escapes control characters, which would hide them from the sanitizer.
 const cleanBlockField = (text: string): string =>
-  stripPromptUnsafeChars(text).replace(HALF_CONTROL_TOKEN, "");
+  stripControlTokenHalves(stripPromptUnsafeChars(text));
+
+const toPromptBlock = (block: FolioAIBlock, text: string) => {
+  const out: {
+    blockId: string;
+    kind: typeof block.kind;
+    text: string;
+    label?: string;
+    styleId?: string;
+  } = {
+    blockId: block.id,
+    kind: block.kind,
+    text,
+  };
+  if (block.displayLabel) {
+    out.label = cleanBlockField(block.displayLabel);
+  }
+  if (block.styleId) {
+    out.styleId = cleanBlockField(block.styleId);
+  }
+  return out;
+};
+
+/** Bytes one block adds to its file's message beyond its text. */
+export const docxBlockOverheadBytes = (block: FolioAIBlock): number =>
+  Buffer.byteLength(`${JSON.stringify(toPromptBlock(block, ""))},`);
 
 export const buildDocxBlocksMessage = ({
   simplifiedName,
   blocks,
 }: DocxBlocksMessageProps): string => {
-  const cut = blocks.filter((block) => block.text.length > DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS);
-  recordPromptInputTruncation({
-    input: "docx_blocks",
-    truncatedParts: cut.length,
-    droppedChars: cut.reduce(
-      (total, block) => total + block.text.length - DOCX_PROMPT_BLOCK_KEPT_CHARS,
-      0,
-    ),
-    maxChars: DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS,
-  });
-  const promptBlocks = blocks.map((block) => {
-    const out: {
-      blockId: string;
-      kind: typeof block.kind;
-      text: string;
-      label?: string;
-      styleId?: string;
-    } = {
-      blockId: block.id,
-      kind: block.kind,
-      text: cleanBlockField(truncateBlockText(block.text)),
-    };
-    if (block.displayLabel) {
-      out.label = cleanBlockField(block.displayLabel);
-    }
-    if (block.styleId) {
-      out.styleId = cleanBlockField(block.styleId);
-    }
-    return out;
-  });
+  const promptBlocks = blocks.map((block) =>
+    toPromptBlock(block, cleanBlockField(block.text)),
+  );
 
   return [
     `DOCX file ${simplifiedName} — folio block list. Cite blocks by ` +
       `their "blockId" in any justification that references this file.`,
     UNTRUSTED_DOCUMENT_INSTRUCTION,
-    sanitizeForPrompt(untrustedText(`\`\`\`json\n${JSON.stringify(promptBlocks)}\n\`\`\``)),
+    WITHHELD_TEXT_INSTRUCTION,
+    sanitizeForPrompt(
+      untrustedText(`\`\`\`json\n${JSON.stringify(promptBlocks)}\n\`\`\``),
+    ),
   ].join("\n");
 };
 
 export const buildTextInputsMessage = (textInputs: readonly TextInput[]) => {
-  const list = textInputs.map(({ propertyId, value }) => `- ${propertyId}: ${value}`).join("\n");
+  const list = textInputs
+    .map(({ propertyId, value }) => `- ${propertyId}: ${value}`)
+    .join("\n");
 
-  return "The following text inputs were provided " + `(keyed by propertyId):\n${list}`;
+  return (
+    "The following text inputs were provided " +
+    `(keyed by propertyId):\n${list}`
+  );
 };
 
 export const buildPromptsMessage = (
@@ -299,7 +297,9 @@ export const buildPromptsMessage = (
     tool: { prompt: string };
   }[],
 ) => {
-  const list = properties.map(({ id, tool }) => `- ${id}: ${tool.prompt}`).join("\n");
+  const list = properties
+    .map(({ id, tool }) => `- ${id}: ${tool.prompt}`)
+    .join("\n");
 
   return (
     "Analyze the attached documents and text inputs, " +

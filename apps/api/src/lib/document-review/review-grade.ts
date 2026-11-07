@@ -47,6 +47,7 @@ import type {
 import {
   askPresence,
   askText,
+  CUT_DOCUMENT_RATIONALE,
   extractedFromContent,
   gradePresence,
   gradePropertyConstraint,
@@ -146,6 +147,8 @@ export type BuildFindingsArgs = AiGradingDeps & {
   /** The words behind every passage the positions pin, keyed by passage id.
    *  A passage whose row is gone is graded as if it were never quoted. */
   passageTextById: ReadonlyMap<string, string>;
+  /** Whether the model read the target whole, or with text withheld for length. */
+  documentRead: "whole" | "cut";
   /** Progress, per completed batch. The full set still comes back from the
    *  return value; this only lets a caller commit early. */
   onGraded: OnFindingsGraded;
@@ -219,14 +222,23 @@ const gradeWithoutModel = ({
   position,
   askContent,
   fieldContentBySourceId,
+  documentRead,
 }: {
   position: Position;
   askContent: FieldContent | undefined;
   fieldContentBySourceId: ReadonlyMap<string, FieldContent>;
+  documentRead: "whole" | "cut";
 }): GradingOutcome | null => {
   // Extract-only positions capture a value with no verdict.
   if (position.mode === "extract") {
     return { status: "graded", verdict: null, rationale: null };
+  }
+  if (documentRead === "cut" && askPresence(askContent) !== "present") {
+    return {
+      status: "ungraded",
+      verdict: "deviation",
+      rationale: CUT_DOCUMENT_RATIONALE,
+    };
   }
 
   const { check } = position;
@@ -565,6 +577,7 @@ export const buildFindings = async ({
   perspective,
   referenceEntityVersionIds,
   passageTextById,
+  documentRead,
   onGraded,
   ...deps
 }: BuildFindingsArgs): Promise<ReviewFinding[]> => {
@@ -589,6 +602,7 @@ export const buildFindings = async ({
       position,
       askContent: contentBySourceId.get(position.sourceId)?.content,
       fieldContentBySourceId,
+      documentRead,
     });
     if (verdict === null) {
       forModel.push(position);

@@ -92,6 +92,7 @@
     "countSummary": "{columns} stulpeliai × {rows} eilutės = {answers, plural, one {# atsakymas} few {# atsakymai} many {# atsakymo} other {# atsakymų}}. Atsakymai naudoja biudžetą.",
     "modelRefused": "Modelis atsisakė atsakyti",
     "nothingFound": "Nieko nerasta",
+    "nothingFoundInCutDocument": "Perskaitytoje dalyje nieko nerasta",
     "refusedBudget": "Nevykdyta: atsakymų biudžetas nepasiekiamas",
     "rerunAllPage": "Vykdyti viską iš naujo (šiame puslapyje)",
     "rerunColumnPage": "Vykdyti stulpelį iš naujo (šiame puslapyje)",
@@ -4039,6 +4040,8 @@
       "description": "Pasirinkite parengtą peržiūros vadovą, referencinius dokumentus arba abu.",
       "dismissFinding": "Atmesti išvadą",
       "documentChanged": "Šis dokumentas pasikeitė po šios peržiūros.",
+      "documentCutNotice": "<strong>Dokumentas {documentName} nebuvo perskaitytas visas.</strong> Šiam modeliui jis per ilgas, todėl praleista apie {percent} jo teksto. Pozicija be atsakymo pažymima peržiūrai, nes atsakymas gali būti praleistoje dalyje.",
+      "documentTooLarge": "Šis dokumentas per ilgas, kad šis modelis perskaitytų pakankamą jo dalį. Išbandykite modelį su didesniu konteksto langu.",
       "export": {
         "counterparty": "Atsisiųsti priešingai šaliai",
         "counterpartyFailed": "Nepavyko eksportuoti dokumento",

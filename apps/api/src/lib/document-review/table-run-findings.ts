@@ -15,6 +15,7 @@
  * inspector is never touched.
  */
 
+import { panic } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -22,6 +23,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { documentReviewRuns, properties } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockActiveTableRun } from "@/api/lib/db/aggregate-lock";
+import type { ReviewWithheldSource } from "@/api/lib/document-review/contract";
 import {
   buildDocumentReviewFindingRow,
   upsertDocumentReviewFindings,
@@ -57,16 +59,21 @@ export type RecordTableRunVerdictsResult =
   | { type: "written"; findingCount: number; completed: boolean }
   | { type: "failed"; errorCode: DocumentReviewRunErrorCode };
 
-const failRun = async (
+const updateActiveRun = async (
   tx: Transaction,
-  workspaceId: SafeId<"workspace">,
-  runId: SafeId<"documentReviewRun">,
-  errorCode: DocumentReviewRunErrorCode,
+  {
+    workspaceId,
+    runId,
+  }: {
+    workspaceId: SafeId<"workspace">;
+    runId: SafeId<"documentReviewRun">;
+  },
+  values: Partial<typeof documentReviewRuns.$inferInsert>,
 ): Promise<void> => {
-  // audit: skip — failure bookkeeping on the run row audited at create.
+  // audit: skip — bookkeeping on the run row audited at create.
   await tx
     .update(documentReviewRuns)
-    .set({ status: "failed", errorCode, finishedAt: new Date() })
+    .set(values)
     .where(
       and(
         eq(documentReviewRuns.id, runId),
@@ -76,6 +83,81 @@ const failRun = async (
         ]),
       ),
     );
+};
+
+const failRun = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+  runId: SafeId<"documentReviewRun">,
+  errorCode: DocumentReviewRunErrorCode,
+): Promise<void> => {
+  await updateActiveRun(
+    tx,
+    { workspaceId, runId },
+    { status: "failed", errorCode, finishedAt: new Date() },
+  );
+};
+
+type RecordRunWithheldSourcesArgs = {
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"documentReviewRun">;
+  withheld: readonly ReviewWithheldSource[];
+};
+
+/** Notes on a run which sources it read only in part. Every batch of a run reads
+ *  the same document under the same model, so a later batch writes the same record. */
+export const recordRunWithheldSources = async (
+  tx: Transaction,
+  { workspaceId, runId, withheld }: RecordRunWithheldSourcesArgs,
+): Promise<void> => {
+  await updateActiveRun(
+    tx,
+    { workspaceId, runId },
+    { withheldSources: [...withheld] },
+  );
+};
+
+type RecordTableRunDocumentReadArgs = {
+  scopedDb: ScopedDb;
+  workspaceId: SafeId<"workspace">;
+  entityId: SafeId<"entity">;
+  read:
+    | { type: "tooLarge" }
+    | { type: "cut"; withheld: readonly ReviewWithheldSource[] };
+};
+
+/**
+ * Tells the document's active table run how its extraction read the document.
+ * Grading runs a level later and sees only stored cells, so the run hears it
+ * from the extraction batch that made the cut.
+ */
+export const recordTableRunDocumentRead = async ({
+  scopedDb,
+  workspaceId,
+  entityId,
+  read,
+}: RecordTableRunDocumentReadArgs): Promise<void> => {
+  await scopedDb(async (tx) => {
+    const run = await lockActiveTableRun(tx, { workspaceId, entityId });
+    if (run === undefined) {
+      return;
+    }
+    switch (read.type) {
+      case "tooLarge":
+        await failRun(tx, workspaceId, run.id, "document_too_large");
+        return;
+      case "cut":
+        await recordRunWithheldSources(tx, {
+          workspaceId,
+          runId: run.id,
+          withheld: read.withheld,
+        });
+        return;
+      default:
+        read satisfies never;
+        panic(`Unhandled document read: ${String(read)}`);
+    }
+  });
 };
 
 export const recordTableRunVerdicts = async ({

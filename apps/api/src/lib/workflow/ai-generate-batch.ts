@@ -3,7 +3,7 @@ import type {
   AnthropicDocumentMetadata,
   AnthropicTextMetadata,
 } from "@tanstack/ai-anthropic";
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
@@ -13,6 +13,7 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import type { DocumentTooLargeError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -31,8 +32,6 @@ import {
   buildExtractedFileMessage,
   buildPromptsMessage,
   buildTextInputsMessage,
-  PROMPT_TRUNCATION_MARKER,
-  recordPromptInputTruncation,
   WORKFLOW_SYSTEM_PROMPT,
 } from "@/api/lib/workflow/ai-prompts";
 import {
@@ -49,6 +48,12 @@ import type {
   AIJustificationOutput,
   JustificationFilenames,
 } from "@/api/lib/workflow/parse-justifications";
+import {
+  fitFilesToRequestBudget,
+  logRequestFit,
+  requestBudgetBytesForTask,
+} from "@/api/lib/workflow/request-budget";
+import type { RequestFit } from "@/api/lib/workflow/request-budget";
 import { getWorkflowBatchAITimeoutMs } from "@/api/lib/workflow/run-logic";
 import {
   consumePartialAnswers,
@@ -98,6 +103,7 @@ export type WorkflowDataOutput = Record<
 export type WorkflowDataGeneration = {
   output: WorkflowDataOutput;
   refusedPropertyIds: ReadonlySet<SafeId<"property">>;
+  fit: RequestFit<PreparedInputFile>;
 };
 
 /** Everything but the tier, which only the chunk's admission can state. */
@@ -113,46 +119,6 @@ type BuildWorkflowAIAnalyticsPropsInput = {
   propertyCount: number;
   usageMetering?: AIUsageMetering | undefined;
   workspaceId: SafeId<"workspace">;
-};
-
-export const EXTRACTED_TEXT_PROMPT_LIMITS = {
-  perFileChars: 40_000,
-  totalChars: 100_000,
-} as const;
-
-type LimitExtractedTextPromptContentOptions = {
-  content: string;
-  fileCount: number;
-};
-
-export const limitExtractedTextPromptContent = ({
-  content,
-  fileCount,
-}: LimitExtractedTextPromptContentOptions): string => {
-  if (fileCount < 1) {
-    panic("Extracted-text prompt file count must be positive");
-  }
-  const fairShare = Math.floor(
-    EXTRACTED_TEXT_PROMPT_LIMITS.totalChars / fileCount,
-  );
-  const maxChars = Math.min(
-    EXTRACTED_TEXT_PROMPT_LIMITS.perFileChars,
-    fairShare,
-  );
-  if (content.length <= maxChars) {
-    return content;
-  }
-  const keptChars = Math.max(maxChars - PROMPT_TRUNCATION_MARKER.length, 0);
-  recordPromptInputTruncation({
-    input: "extracted_text",
-    truncatedParts: 1,
-    droppedChars: content.length - keptChars,
-    maxChars,
-  });
-  if (maxChars <= PROMPT_TRUNCATION_MARKER.length) {
-    return PROMPT_TRUNCATION_MARKER.slice(0, maxChars);
-  }
-  return `${content.slice(0, maxChars - PROMPT_TRUNCATION_MARKER.length)}${PROMPT_TRUNCATION_MARKER}`;
 };
 
 export const buildWorkflowAIAnalyticsProps = ({
@@ -333,8 +299,24 @@ export const generateWorkflowData = async ({
   decisionModel,
   resolveTextModel,
 }: GenerateWorkflowDataProps): Promise<
-  Result<WorkflowDataGeneration, WorkflowIntegrationError>
+  Result<
+    WorkflowDataGeneration,
+    WorkflowIntegrationError | DocumentTooLargeError
+  >
 > => {
+  const fit = fitFilesToRequestBudget({
+    files,
+    budgetBytes: requestBudgetBytesForTask("pdf", orgAIConfig, {
+      dataClass: "customer",
+      organizationId,
+      modelTier: admission.modelTier,
+    }),
+  });
+  if (Result.isError(fit)) {
+    return Result.err(fit.error);
+  }
+  logRequestFit(fit.value);
+
   const cachingDecision = resolveCaching({
     promptCachingEnabled,
     task: "pdf",
@@ -345,11 +327,8 @@ export const generateWorkflowData = async ({
     DocumentPart<AnthropicDocumentMetadata> | TextPart<AnthropicTextMetadata>;
 
   const messageContent: WorkflowMessagePart[] = [];
-  const extractedTextFileCount = files.filter(
-    (file) => file.kind === "extracted-text",
-  ).length;
 
-  for (const file of files) {
+  for (const file of fit.value.files) {
     if (file.kind === "pdf") {
       messageContent.push({
         type: "document",
@@ -365,14 +344,7 @@ export const generateWorkflowData = async ({
       messageContent.push({
         type: "text",
         content: buildExtractedFileMessage({
-          content: sanitizeForPrompt(
-            untrustedText(
-              limitExtractedTextPromptContent({
-                content: file.content,
-                fileCount: extractedTextFileCount,
-              }),
-            ),
-          ),
+          content: sanitizeForPrompt(untrustedText(file.content)),
           simplifiedName: file.simplifiedName,
         }),
       });
@@ -470,6 +442,7 @@ export const generateWorkflowData = async ({
     return Result.ok({
       output: systemOneOutput,
       refusedPropertyIds: new Set(refusedPropertyIds),
+      fit: fit.value,
     });
   }
 
@@ -653,5 +626,6 @@ export const generateWorkflowData = async ({
   return generated.map((output) => ({
     output,
     refusedPropertyIds: new Set(refusedPropertyIds),
+    fit: fit.value,
   }));
 };

@@ -19,6 +19,7 @@ import type {
 import {
   buildTierMatchUserMessage,
   computeVerdictBatch,
+  CUT_DOCUMENT_RATIONALE,
   gradeTierMatch,
   gradeTierMatches,
   resolveMatchedRef,
@@ -543,6 +544,31 @@ describe("computeVerdictBatch — a failed extraction is not a missing clause", 
       expect(output.gradedVerdicts.map(({ verdict }) => verdict)).toEqual([
         "missing",
       ]);
+    },
+  );
+
+  test.each(ruleCases)(
+    "%s: no answer in a cut document is flagged, never missing",
+    async (_, rule) => {
+      const output = await gradeCell(rule, {
+        content: { type: "unsupported", version: 1 },
+        aiSettlement: {
+          type: "notFoundInCutDocument",
+          runId: "run",
+          settledAt,
+        },
+      });
+
+      expect(output.settlements.get(verdictPropertyId)).toBe("answered");
+      expect(output.gradedVerdicts).toEqual([
+        {
+          propertyId: verdictPropertyId,
+          verdict: "deviation",
+          rationale: CUT_DOCUMENT_RATIONALE,
+          extracted: null,
+        },
+      ]);
+      expect(output.aiJustifications).toHaveLength(1);
     },
   );
 

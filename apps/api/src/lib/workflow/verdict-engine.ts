@@ -91,25 +91,49 @@ export const askPresence = (
   }
 };
 
-/**
- * True when the ASK cell says nothing about the document, because extraction
- * failed, is unfinished, was refused, or could not read the file. Such a cell
- * must never grade as a missing clause. A model's "not stated" answer is stored
- * as `unsupported` too, and only its settlement tells the two apart. No cell at
- * all stays gradable: a failed extraction always leaves a cell.
- */
-export const askExtractionUnfinished = (
-  cell:
-    | { content: FieldContent; aiSettlement: AiCellSettlement | null }
-    | undefined,
-): boolean => {
-  if (cell === undefined) {
-    return false;
-  }
-  return cell.content.type === "unsupported"
-    ? cell.aiSettlement?.type !== "notStated"
-    : askPresence(cell.content) === "missing";
+type AskCell = {
+  content: FieldContent;
+  aiSettlement: AiCellSettlement | null;
 };
+
+/**
+ * What an ASK cell can support. `unfinished` means it says nothing about the
+ * document, because extraction failed, is unfinished, was refused or could not
+ * read the file, so it must never grade as a missing clause. `cutUnanswered`
+ * means no answer turned up in a document that was only partly read. A model's
+ * "not stated" answer is stored as `unsupported` too, and only its settlement
+ * tells these apart. No cell at all stays gradable: a failed extraction always
+ * leaves a cell.
+ */
+export const askCellStanding = (
+  cell: AskCell | undefined,
+): "gradable" | "unfinished" | "cutUnanswered" => {
+  if (cell === undefined) {
+    return "gradable";
+  }
+  if (cell.content.type !== "unsupported") {
+    return askPresence(cell.content) === "missing" ? "unfinished" : "gradable";
+  }
+  switch (cell.aiSettlement?.type) {
+    case "notStated":
+      return "gradable";
+    case "notFoundInCutDocument":
+      return "cutUnanswered";
+    case "value":
+    case "refused":
+    case "failed":
+    case undefined:
+      return "unfinished";
+    default:
+      cell.aiSettlement satisfies never;
+      return panic("Unhandled AI cell settlement");
+  }
+};
+
+/** Why a position with no answer in a partly read document needs a person. */
+export const CUT_DOCUMENT_RATIONALE =
+  "No answer was found, but this document was too long to read in full, so " +
+  "the answer may be in the part that was withheld.";
 
 /** The ASK value a finding records: the raw value and the prose rendering of
  *  it. Null when the cell holds no answer (or a placeholder). */
@@ -699,6 +723,28 @@ export type ComputeVerdictBatchArgs = {
   usageMetering?: AIUsageMetering | undefined;
 };
 
+// The same flag the review panel raises: a deviation a person must look at, with
+// the reason in its rationale.
+const cutDocumentFlag = (propertyId: SafeId<"property">) => {
+  const result = buildVerdictResult(propertyId, "deviation");
+  const justification: AIJustification = {
+    fieldId: result.fieldId,
+    justificationId: createSafeId<"justification">(),
+    content: {
+      version: 1,
+      blocks: [{ kind: "playbook-verdict", rationale: CUT_DOCUMENT_RATIONALE }],
+    },
+    fileFieldIds: [],
+  };
+  const graded: GradedVerdict = {
+    propertyId,
+    verdict: "deviation",
+    rationale: CUT_DOCUMENT_RATIONALE,
+    extracted: null,
+  };
+  return { result, justification, graded };
+};
+
 // Each positionMatch verdict issues one LLM compare. Up to
 // MAX_CONCURRENT_ENTITIES entities grade in parallel upstream, so bound the
 // per-entity fan-out here: a large playbook (many positions per document) must
@@ -789,12 +835,20 @@ export const computeVerdictBatch = async ({
     const askContent = fieldContentByPropertyId.get(tool.askPropertyId);
     const rule: PositionRule = tool.rule;
 
-    if (
-      rule.kind !== "extractOnly" &&
-      askExtractionUnfinished(inputFieldByPropertyId.get(tool.askPropertyId))
-    ) {
+    const standing = askCellStanding(
+      inputFieldByPropertyId.get(tool.askPropertyId),
+    );
+    if (rule.kind !== "extractOnly" && standing === "unfinished") {
       erroredPropertyIds.push(property.id);
       settlements.set(property.id, "failedTransient");
+      continue;
+    }
+    if (rule.kind !== "extractOnly" && standing === "cutUnanswered") {
+      const flag = cutDocumentFlag(property.id);
+      aiResults.push(flag.result);
+      aiJustifications.push(flag.justification);
+      gradedVerdicts.push(flag.graded);
+      settlements.set(property.id, "answered");
       continue;
     }
 

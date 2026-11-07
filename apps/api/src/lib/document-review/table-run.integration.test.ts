@@ -12,8 +12,10 @@
  *    judgment standing.
  */
 
+import { panic } from "better-result";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   describe,
   expect,
@@ -25,6 +27,7 @@ import { and, count, eq, inArray } from "drizzle-orm";
 import type { PlaybookRunProjection } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentReviewFindings,
   documentReviewRuns,
@@ -42,6 +45,7 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import { recordTableRunDocumentRead } from "@/api/lib/document-review/table-run-findings";
 import {
   deletePlaybookColumns,
   deletePlaybookPositionColumns,
@@ -543,6 +547,73 @@ describe("opening runs for a files table", () => {
     expect(carried).toEqual([{ decision: "accepted", decidedBy: ids.userA1 }]);
 
     await clearRuns();
+  });
+});
+
+describe("telling a table run how its document was read", () => {
+  const scopedDb: ScopedDb = async (run) =>
+    await run(asTestRaw<Transaction>(testDb));
+  const source = (charactersWithheld: number) => ({
+    fileFieldId: ids.fileFieldA1,
+    passagesCut: 1,
+    charactersWithheld,
+    charactersTotal: 1000,
+  });
+  const openRun = async () => {
+    const opened = await openTableRuns(await seedPlaybookDefinition());
+    const runId = opened.runs.at(0)?.runId ?? panic("No run was opened");
+    await testDb
+      .update(documentReviewRuns)
+      .set({
+        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+        status: "running",
+      })
+      .where(eq(documentReviewRuns.id, runId));
+    const read = async () =>
+      (
+        await testDb
+          .select({
+            status: documentReviewRuns.status,
+            errorCode: documentReviewRuns.errorCode,
+            withheldSources: documentReviewRuns.withheldSources,
+          })
+          .from(documentReviewRuns)
+          .where(eq(documentReviewRuns.id, runId))
+      ).at(0);
+    return { read };
+  };
+  const report = async (
+    read: Parameters<typeof recordTableRunDocumentRead>[0]["read"],
+  ) =>
+    await recordTableRunDocumentRead({
+      scopedDb,
+      workspaceId: ids.wsA1,
+      entityId: ids.entityA1,
+      read,
+    });
+
+  afterEach(clearRuns);
+
+  test("a later batch repeats a file's record instead of adding to it", async () => {
+    const { read } = await openRun();
+
+    await report({ type: "cut", withheld: [source(100)] });
+    await report({ type: "cut", withheld: [source(200)] });
+
+    expect(await read()).toMatchObject({
+      withheldSources: [source(200)],
+    });
+  });
+
+  test("a document too large fails the run with its own code", async () => {
+    const { read } = await openRun();
+
+    await report({ type: "tooLarge" });
+
+    expect(await read()).toMatchObject({
+      status: "failed",
+      errorCode: "document_too_large",
+    });
   });
 });
 

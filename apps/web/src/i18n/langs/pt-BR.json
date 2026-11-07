@@ -92,6 +92,7 @@
     "countSummary": "{columns} colunas × {rows} linhas = {answers, plural, one {# resposta} other {# respostas} many {# respostas}}. As respostas consomem o orçamento.",
     "modelRefused": "O modelo se recusou a responder",
     "nothingFound": "Nada encontrado",
+    "nothingFoundInCutDocument": "Nada encontrado na parte lida",
     "refusedBudget": "Não executado: orçamento de respostas indisponível",
     "rerunAllPage": "Executar tudo novamente (esta página)",
     "rerunColumnPage": "Executar coluna novamente (esta página)",
@@ -4039,6 +4040,8 @@
       "description": "Escolha um playbook elaborado, documentos de referência ou ambos.",
       "dismissFinding": "Descartar constatação",
       "documentChanged": "Este documento mudou após esta revisão.",
+      "documentCutNotice": "<strong>{documentName} não foi lido por inteiro.</strong> Ele é longo demais para este modelo, então cerca de {percent} do texto foi omitido. Uma posição sem resposta é marcada para revisão, pois a resposta pode estar na parte omitida.",
+      "documentTooLarge": "Este documento é longo demais para que este modelo leia uma parte suficiente dele. Tente um modelo com uma janela de contexto maior.",
       "export": {
         "counterparty": "Baixar para a contraparte",
         "counterpartyFailed": "Não foi possível exportar o documento",

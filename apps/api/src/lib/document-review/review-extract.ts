@@ -9,7 +9,9 @@ import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import type { ReviewWithheldSource } from "@/api/lib/document-review/contract";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import type { DocumentTooLargeError } from "@/api/lib/errors/tagged-errors";
 import { createDefaultTool } from "@/api/lib/properties/create-schema";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandDerivedPropertyId } from "@/api/lib/safe-id-boundaries";
@@ -84,6 +86,8 @@ export type ReviewExtractionResult = {
   // Last folio block id of the active DOCX, used as the insert anchor when a
   // FIX has no clause citation to replace. Null when no DOCX block exists.
   lastBlockId: string | null;
+  // Sources cut to fit the request, empty when all were read whole.
+  withheld: readonly ReviewWithheldSource[];
 };
 
 export type ExtractAskContentsArgs = {
@@ -104,6 +108,7 @@ export type ExtractAskContentsArgs = {
 const EMPTY_RESULT: ReviewExtractionResult = {
   contentBySourceId: new Map(),
   lastBlockId: null,
+  withheld: [],
 };
 
 // Reuse the canonical AI-model tool builder, then narrow to `AIModelTool`. The
@@ -224,7 +229,10 @@ export const extractAskContents = async ({
   serviceTier,
   usageMetering,
 }: ExtractAskContentsArgs): Promise<
-  Result<ReviewExtractionResult, WorkflowIntegrationError>
+  Result<
+    ReviewExtractionResult,
+    WorkflowIntegrationError | DocumentTooLargeError
+  >
 > =>
   await Result.gen(async function* () {
     const supportedFiles = resolvedFiles.filter(isAISupportedFile);
@@ -346,5 +354,9 @@ export const extractAskContents = async ({
       });
     }
 
-    return Result.ok({ contentBySourceId, lastBlockId });
+    return Result.ok({
+      contentBySourceId,
+      lastBlockId,
+      withheld: generation.fit.type === "cut" ? generation.fit.withheld : [],
+    });
   });

@@ -12,11 +12,15 @@ import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import type { ReviewWithheldSource } from "@/api/lib/document-review/contract";
 import {
   Unreachable,
   WorkflowValidationError,
 } from "@/api/lib/errors/tagged-errors";
-import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import type {
+  DocumentTooLargeError,
+  WorkflowIntegrationError,
+} from "@/api/lib/errors/tagged-errors";
 import { recordText } from "@/api/lib/fields/record-text";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type {
@@ -66,7 +70,11 @@ export type GenerateBatchProps = {
 };
 
 export type BatchSettlement =
-  "answered" | "notStated" | "unsupported" | "refused";
+  | "answered"
+  | "notStated"
+  | "notFoundInCutDocument"
+  | "unsupported"
+  | "refused";
 
 export type GenerateBatchResult = Result<
   {
@@ -76,8 +84,10 @@ export type GenerateBatchResult = Result<
     unsupportedPropertyIds: SafeId<"property">[];
     /** One terminal disposition for every property claimed by this batch. */
     settlements: ReadonlyMap<SafeId<"property">, BatchSettlement>;
+    /** Sources cut to fit the request, empty when all were read whole. */
+    withheld: readonly ReviewWithheldSource[];
   },
-  WorkflowValidationError | WorkflowIntegrationError
+  WorkflowValidationError | WorkflowIntegrationError | DocumentTooLargeError
 >;
 
 const isFieldContentEmpty = (content: FieldContentForAI): boolean => {

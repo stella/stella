@@ -118,6 +118,7 @@ describe("review_folder_consistency", () => {
       );
       return Result.ok({
         lastBlockId: null,
+        withheld: [],
         contentBySourceId: new Map([
           [
             "cross-document-consistency",
@@ -227,6 +228,7 @@ describe("review_folder_consistency", () => {
         );
         return Result.ok({
           lastBlockId: null,
+          withheld: [],
           contentBySourceId: new Map([
             [
               "cross-document-consistency",
