@@ -57,6 +57,8 @@ export {
   collapseSpacedLetters,
   documentWordCounts,
   isLetterSpacedEmphasis,
+  joinWordSeams,
+  letterGapCounts,
   letterSpacingJoins,
 } from "./letter-spacing.js";
 export type { LetterSpacingOptions } from "./letter-spacing.js";

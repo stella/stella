@@ -343,6 +343,10 @@ const chunkOf = (token: Token | undefined): Chunk | undefined => {
     : { letters, mark: groups?.["mark"] ?? "" };
 };
 
+/** Letters, not code units: a decomposed `ú` is one letter. */
+const letterCount = (text: string): number =>
+  text.match(/\p{L}/gu)?.length ?? 0;
+
 /** A letter standing alone that no one-letter word spells: a piece of one. */
 const isFragment = (letters: string): boolean =>
   LOWERCASE_LETTER_RE.test(letters) && !ONE_LETTER_WORDS.has(wordKey(letters));
@@ -372,29 +376,51 @@ const isUnattestedSpacedWord = (
   counts: ReadonlyMap<string, number>,
 ): boolean => {
   const rare = (letters: string) => (counts.get(wordKey(letters)) ?? 0) <= 1;
+  const size = letterCount;
   const [first] = chunks;
   if (first === undefined || chunks.length < MIN_UNATTESTED_CHUNKS) {
     return false;
   }
   const pieces = chunks.filter(
     ({ letters }) =>
-      isFragment(letters) || (letters.length > 1 && rare(letters)),
+      isFragment(letters) || (size(letters) > 1 && rare(letters)),
   );
   return (
     chunks.some(({ letters }) => isFragment(letters)) &&
-    chunks.some(({ letters }) => letters.length > 1) &&
+    chunks.some(({ letters }) => size(letters) > 1) &&
     pieces.length >= 2 &&
     chunks.every(
       ({ letters }) =>
-        letters.length <= MAX_UNATTESTED_PIECE_LETTERS &&
-        (letters.length <= 2 || rare(letters)),
+        size(letters) <= MAX_UNATTESTED_PIECE_LETTERS &&
+        (size(letters) <= 2 || rare(letters)),
     ) &&
     (isFragment(first.letters) ||
-      (first.letters.length > 1 &&
-        first.letters.length <= MAX_LEADING_PIECE_LETTERS &&
+      (size(first.letters) > 1 &&
+        size(first.letters) <= MAX_LEADING_PIECE_LETTERS &&
         rare(first.letters))) &&
-    chunks.reduce((sum, { letters }) => sum + letters.length, 0) >=
+    chunks.reduce((sum, { letters }) => sum + size(letters), 0) >=
       STRONG_RUN_LETTERS
+  );
+};
+
+/**
+ * Whether a word starts at `start`: at the edge of the text, after a wide
+ * gap or a mark, or after a word the document prints more than once. A
+ * piece the document prints nowhere else before it (`poru šen é`) means the
+ * word started earlier.
+ */
+const opensWord = (
+  tokens: readonly Token[],
+  start: number,
+  counts: ReadonlyMap<string, number>,
+): boolean => {
+  const previous = chunkOf(tokens[start - 1]);
+  return (
+    start === 0 ||
+    tokens[start]?.gap !== LETTER_GAP ||
+    previous === undefined ||
+    previous.mark !== "" ||
+    (counts.get(wordKey(previous.letters)) ?? 0) > 1
   );
 };
 
@@ -474,12 +500,19 @@ const collapseUnevenChunks = (
       continue;
     }
     const { chunks, attestedEnd, closed } = readChunks(tokens, start, options);
-    // The whole word up to the gap or mark that ends it, over a shorter
-    // attested prefix: `p ri k azu je` is `prikazuje`, not `pri k azu je`.
-    let end =
-      counts !== undefined && closed && isUnattestedSpacedWord(chunks, counts)
-        ? start + chunks.length - 1
-        : attestedEnd;
+    // The whole word up to the gap or mark that ends it, over a short
+    // attested prefix (`p ri k azu je` is `prikazuje`, not `pri k azu je`);
+    // a whole word the document prints (`m ů že` is `může`) stands.
+    const attestedLetters = chunks
+      .slice(0, attestedEnd - start + 1)
+      .reduce((sum, { letters }) => sum + letterCount(letters), 0);
+    const unattested =
+      counts !== undefined &&
+      closed &&
+      (attestedEnd === start || attestedLetters < STRONG_RUN_LETTERS) &&
+      opensWord(tokens, start, counts) &&
+      isUnattestedSpacedWord(chunks, counts);
+    let end = unattested ? start + chunks.length - 1 : attestedEnd;
     result += first.gap;
     result += tokens
       .slice(start, end + 1)
@@ -593,6 +626,66 @@ export const documentWordCounts = (
   }
   return counts;
 };
+
+/** A gap between two letters, and which space sets it. */
+const LETTER_GAP_RE = /\p{L}\p{M}*(?<gap>[ \u00a0])(?=\p{L})/gu;
+
+/**
+ * How many gaps between two letters the texts set as a plain space, and how
+ * many as a no-break space: a file that sets its word gaps as no-break
+ * spaces tells itself apart this way (see {@link joinWordSeams}).
+ */
+export const letterGapCounts = (
+  texts: Iterable<string>,
+): { plain: number; noBreak: number } => {
+  let plain = 0;
+  let noBreak = 0;
+  for (const text of texts) {
+    for (const match of text.matchAll(LETTER_GAP_RE)) {
+      if (match.groups?.["gap"] === " ") {
+        plain += 1;
+      } else {
+        noBreak += 1;
+      }
+    }
+  }
+  return { plain, noBreak };
+};
+
+/**
+ * A seam inside a word: a letter (with at most a few combining marks), then
+ * the lowercase rest of the word. Bounded repeats keep every match linear.
+ */
+const WORD_SEAM_RE = /(?<=\p{L}\p{M}{0,4}) (?=\p{Ll})/gu;
+
+/** The word that ends a text, and the one that opens it, at most 64 letters. */
+const LAST_WORD_RE = /\p{L}[\p{L}\p{M}]{0,63}$/u;
+const FIRST_WORD_RE = /^\p{L}[\p{L}\p{M}]{0,63}/u;
+
+/**
+ * A text with each plain space inside a word removed, for a file that sets
+ * every word gap as a no-break space: there a plain space is a seam where
+ * the text layer joined two runs of one spaced word (`zru šuje`, `Pou
+ * čenie:`). A plain space between two words the file prints whole
+ * (`wholeWords`, lowercased in NFC) is a gap the court set (`v súde`), and
+ * stays.
+ */
+export const joinWordSeams = (
+  text: string,
+  wholeWords: ReadonlySet<string>,
+): string =>
+  text.replaceAll(WORD_SEAM_RE, (seam: string, offset: number) => {
+    const before = LAST_WORD_RE.exec(
+      text.slice(Math.max(0, offset - 64), offset),
+    );
+    const after = FIRST_WORD_RE.exec(text.slice(offset + 1, offset + 65));
+    return before !== null &&
+      after !== null &&
+      wholeWords.has(wordKey(before[0])) &&
+      wholeWords.has(wordKey(after[0]))
+      ? seam
+      : "";
+  });
 
 const SPACES_RE = / {2,}/gu;
 

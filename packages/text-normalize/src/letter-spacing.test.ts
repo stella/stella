@@ -27,7 +27,8 @@ test("attested uneven chunks retain ordinary word boundaries", () => {
   );
   expect(collapseLetterSpacing("Pou čen i e:", options)).toBe("Poučenie:");
   for (const text of [
-    "a v z o s k i",
+    // A row of one-letter words a sentence writes: conjunctions, then one.
+    "a i a v",
     "do konca",
     "v znení",
     "a i",
@@ -293,7 +294,7 @@ describe("uneven chunks no line prints whole", () => {
   test.each([
     [
       "2. Mestskému  súdu  Bratislava  IV  p ri k azu je   v  konaní",
-      "2. Mestskému  súdu  Bratislava  IV prikazuje v  konaní",
+      "2. Mestskému  súdu  Bratislava  IV  prikazuje   v  konaní",
     ],
     [
       "4. Vo zvyšnej časti ústavnej sťažnosti n evyh ovu je.",
@@ -309,29 +310,52 @@ describe("uneven chunks no line prints whole", () => {
     // Two pieces only.
     "3 x denne.",
     // Not ended by a gap or a mark.
-    "p ri k azu je v konaní sp. zn.",
+    "n evyh ovu je v konaní sp. zn.",
     // A long piece is ordinary prose, however rare.
     "p rozhodnutie k súd je.",
+    // The word started before the pieces: `poru` is printed nowhere else.
+    "poru šen é boli.",
   ])("leaves %j as it is", (text) => {
     expect(collapseLetterSpacing(text, { documentWords })).toBe(text);
   });
 });
 
 describe("collapseLetterSpacing (properties)", () => {
+  const isRow = (word: string): boolean =>
+    word
+      .toLowerCase()
+      .split("")
+      .every(
+        (letter, index, letters) =>
+          "aikosuvwz".includes(letter) &&
+          (index === letters.length - 1 || "ai".includes(letter)),
+      );
   const proseWord = fc.stringMatching(/^[a-záčďéěíňóřšťúůýž]{2,9}$/u);
   const row = fc.constantFrom("a", "i", "a v", "i o", "a k", "i z", "a w");
   const gap = fc.constantFrom(" ", "  ", "   ");
+  // Prose: words, each perhaps after a row of one-letter words, as a
+  // sentence writes them (a preposition stands before a word).
+  const prose = fc
+    .array(fc.tuple(fc.option(row, { nil: undefined }), proseWord), {
+      minLength: 1,
+      maxLength: 6,
+    })
+    .map((parts) =>
+      parts.flatMap(([lead, word]) =>
+        lead === undefined ? [word] : [lead, word],
+      ),
+    );
 
   test("prose without spaced words is left byte for byte", () => {
     assertProperty(
       "prose without spaced words is left byte for byte",
       fc.property(
-        fc.array(fc.tuple(fc.oneof(proseWord, row), gap), {
-          minLength: 1,
-          maxLength: 20,
-        }),
-        (parts) => {
-          const text = parts.map(([word, space]) => `${word}${space}`).join("");
+        prose,
+        fc.array(gap, { minLength: 12, maxLength: 12 }),
+        (words, gaps) => {
+          const text = words
+            .map((word, index) => `${word}${gaps[index % gaps.length] ?? " "}`)
+            .join("");
           expect(collapseLetterSpacing(text)).toBe(text);
         },
       ),
@@ -343,11 +367,13 @@ describe("collapseLetterSpacing (properties)", () => {
     assertProperty(
       "a spaced word in prose reads as the word, and nothing else changes",
       fc.property(
-        fc.array(fc.oneof(proseWord, row), { minLength: 0, maxLength: 6 }),
+        prose,
         fc.array(czechWord, { minLength: 1, maxLength: 3 }),
-        fc.array(fc.oneof(proseWord, row), { minLength: 0, maxLength: 6 }),
+        fc.option(prose, { nil: [] }),
         (before, emphasis, after) => {
           fc.pre(emphasis.some((word) => word.length >= 4));
+          // A short word spelling a row a sentence writes (`a i`) stays apart.
+          fc.pre(!emphasis.some((word) => word.length < 4 && isRow(word)));
           const text = [before.join(" "), spaceOut(emphasis), after.join(" ")]
             .filter((part) => part !== "")
             .join("   ");

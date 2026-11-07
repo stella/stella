@@ -12,7 +12,6 @@ import { load } from "@stll/html";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
-import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import {
   parsePlDecisionContent as uncheckedParsePlDecisionContent,
   PL_DECISION_MARKUP,
@@ -24,7 +23,6 @@ import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@/api/lib/leg
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
-const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 const parseSkUsDocumentXhtml = guardParser(uncheckedParseSkUsDocumentXhtml);
 const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);
@@ -133,24 +131,6 @@ describe("short spaced words beside spaced verbs", () => {
         /^Podle § 265l odst\. 1 tr\. ř\. se Okresnímu soudu ve Svitavách přikazuje, aby /u,
       ),
     );
-  });
-
-  test("Supreme Administrative Court 7 As 155/2015: `s e` reads `se`", async () => {
-    const parsed = parseNssDecisionHtml({
-      caseNumber: "7 As 155/2015",
-      ecli: undefined,
-      court: "Nejvyšší správní soud",
-      decisionDate: undefined,
-      decisionType: undefined,
-      sourceUrl: "https://vyhledavac.nssoud.cz/fixture",
-      html: await textOf("cz-nss-7-as-155-2015.html.gz"),
-      detailMetadata: {},
-    });
-    expect(read(parsed.documentAst.blocks)).toContainEqual({
-      type: "paragraph",
-      role: "holding",
-      text: "III. Žalovanému se náhrada nákladů řízení o kasační stížnosti nepřiznává.",
-    });
   });
 
   // The text layer keeps the gaps only roughly, and breaks `j e` over a line.

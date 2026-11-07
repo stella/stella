@@ -63,7 +63,12 @@ import {
   skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
-import { documentWordCounts, normalizeUnicode } from "@stll/text-normalize";
+import {
+  documentWordCounts,
+  joinWordSeams,
+  letterGapCounts,
+  normalizeUnicode,
+} from "@stll/text-normalize";
 
 import {
   ANONYMIZED_CLASS,
@@ -617,10 +622,6 @@ const setInlines = (line: MarkupLine, inlines: readonly Inline[]): void => {
  */
 type WordGap = "no-break" | "plain";
 
-/** A gap between two letters, and which space sets it. */
-// oxlint-disable-next-line no-local-letter-spacing/no-local-letter-spacing -- counts which space a file sets between letters, to tell its word gap; joins nothing
-const LETTER_GAP = /\p{L}\p{M}*(?<gap>[  ])(?=\p{L})/gu;
-
 /**
  * No-break gaps between letters outnumber plain ones by at least this much
  * in a file that sets its words apart with no-break spaces. The recorded
@@ -630,17 +631,7 @@ const LETTER_GAP = /\p{L}\p{M}*(?<gap>[  ])(?=\p{L})/gu;
 const NO_BREAK_GAP_DOMINANCE = 50;
 
 const wordGapOf = (lines: readonly MarkupLine[]): WordGap => {
-  let noBreak = 0;
-  let plain = 0;
-  for (const { text } of lines) {
-    for (const match of text.matchAll(LETTER_GAP)) {
-      if (match.groups?.["gap"] === " ") {
-        plain += 1;
-      } else {
-        noBreak += 1;
-      }
-    }
-  }
+  const { plain, noBreak } = letterGapCounts(lines.map(({ text }) => text));
   return noBreak > 0 && plain * NO_BREAK_GAP_DOMINANCE <= noBreak
     ? "no-break"
     : "plain";
@@ -652,20 +643,9 @@ const wordGapOf = (lines: readonly MarkupLine[]): WordGap => {
  */
 const LOST_LINE_BREAK = /(?<=[.!?][“”"»)]{0,3}) (?=\d{1,3}\.[  ]{1,4}\p{Lu})/gu;
 
-/**
- * A seam inside a word: a letter (with at most a few combining marks), then
- * the lowercase rest of the word. Bounded repeats keep every match linear.
- */
-// oxlint-disable-next-line no-local-letter-spacing/no-local-letter-spacing -- a text-layer seam of a no-break-gap file is a plain space, a gap the owner cannot tell from a word gap
-const SPACED_WORD_SEAM = /(?<=\p{L}\p{M}{0,4}) (?=\p{Ll})/gu;
-
 /** A word's letters, read the same however the file composed or cased them. */
 const wordKey = (word: string): string =>
   normalizeUnicode(word, "NFC").toLowerCase();
-
-/** The word that ends a text, and the one that opens it, at most 64 letters. */
-const LAST_WORD = /\p{L}[\p{L}\p{M}]{0,63}$/u;
-const FIRST_WORD = /^\p{L}[\p{L}\p{M}]{0,63}/u;
 
 /**
  * The words a file prints whole: letter runs in stretches no plain space
@@ -685,23 +665,6 @@ const wholeWordsOf = (lines: readonly MarkupLine[]): Set<string> => {
   }
   return words;
 };
-
-/**
- * A text with each plain space inside a word removed. A plain space between
- * two words the file prints whole is a gap the court set (`v súde`), and
- * stays.
- */
-const joinWordSeams = (text: string, words: ReadonlySet<string>): string =>
-  text.replaceAll(SPACED_WORD_SEAM, (seam: string, offset: number) => {
-    const before = LAST_WORD.exec(text.slice(Math.max(0, offset - 64), offset));
-    const after = FIRST_WORD.exec(text.slice(offset + 1, offset + 65));
-    return before !== null &&
-      after !== null &&
-      words.has(wordKey(before[0])) &&
-      words.has(wordKey(after[0]))
-      ? seam
-      : "";
-  });
 
 /** A line split before the given offsets of its text. */
 const splitLineAt = (

@@ -54,7 +54,8 @@ describe("letterSpacingJoins", () => {
     // The spaced word's gaps, its spaced colon's included; the gaps of
     // "a b c" and every word gap stay.
     expect(joins).toEqual([5, 7, 9, 11, 13, 15, 17, 19]);
-    const drawn = [...text]
+    const drawn = text
+      .split("")
       .filter((_, index) => !joins.includes(index))
       .join("");
     expect(drawn).toBe(collapseSpacedLetters(text));
