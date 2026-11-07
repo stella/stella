@@ -3988,6 +3988,7 @@
     "reopenTab": "Ava {name} uuesti",
     "resizePane": "Muuda paneeli suurust",
     "review": {
+      "acceptChange": "Nõustu muudatusega",
       "actionNeeded": "Vajab tegutsemist",
       "addComment": "Lisa kommentaarina",
       "addNote": "Lisa kommentaar vastaspoolele",
@@ -4025,7 +4026,8 @@
       "decisionFailed": "Otsust ei õnnestunud salvestada",
       "decisions": {
         "accepted": "Aktsepteeritud",
-        "dismissed": "Kõrvale jäetud"
+        "dismissed": "Kõrvale jäetud",
+        "reviewed": "Üle vaadatud"
       },
       "description": "Valige koostatud kontrolljuhend, võrdlusdokumendid või mõlemad.",
       "documentChanged": "See dokument on pärast seda ülevaatust muutunud.",
@@ -4051,6 +4053,7 @@
       "history": {
         "backToLatest": "Tagasi uusima juurde",
         "decided": "{decided, number}/{total, number} otsustatud",
+        "fromTable": "Tabelist",
         "references": "{count, plural, one {# võrdlusdokument} other {# võrdlusdokumenti}}"
       },
       "impact": {
@@ -4074,6 +4077,7 @@
         "label": "Leiud nende klauslite kõrval, mida need puudutavad",
         "unanchored": "Ei ole seotud ühegi klausliga"
       },
+      "markAsReviewed": "Märgi ülevaadatuks",
       "newTopic": "Uus läbivaatuse teema",
       "noChangeNeeded": "Muudatust pole vaja",
       "noEditor": "Avage dokument, et muudatusi aktsepteerida",
@@ -4158,6 +4162,11 @@
         "noSide": "Pool puudub",
         "proposedFromReferences": "Võrdlustest pakutud seisukohad",
         "unnamedReferences": "{count, plural, one {# võrdlusdokument} other {# võrdlusdokumenti}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Selle versiooni täielik ülevaatus</link> koos linkide ja kavandatavate muudatustega on saadaval ülevaatuste ajaloos.",
+        "origin": "<strong>Käivitatud tabelist.</strong> Need leiud hinnati tabeli jaoks eraldatud väärtuste põhjal, mistõttu need ei viita dokumendile ega sisalda kavandatavaid muudatusi.",
+        "runAnotherReview": "Linkide ja kavandatavate muudatuste saamiseks kasutage nuppu <action>{label}</action>."
       },
       "targetAsReference": "Ülevaadatav dokument ei saa olla iseenda võrdlusdokument.",
       "targetColumn": "See dokument",

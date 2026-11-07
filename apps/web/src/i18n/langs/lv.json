@@ -3988,6 +3988,7 @@
     "reopenTab": "Atkārtoti atvērt {name}",
     "resizePane": "Mainīt paneļa izmēru",
     "review": {
+      "acceptChange": "Pieņemt izmaiņas",
       "actionNeeded": "Nepieciešama rīcība",
       "addComment": "Pievienot kā komentāru",
       "addNote": "Pievienot komentāru pretpusei",
@@ -4025,7 +4026,8 @@
       "decisionFailed": "Lēmumu neizdevās saglabāt",
       "decisions": {
         "accepted": "Pieņemts",
-        "dismissed": "Noraidīts"
+        "dismissed": "Noraidīts",
+        "reviewed": "Pārbaudīts"
       },
       "description": "Izvēlieties sagatavotu pārbaudes ceļvedi, atsauces dokumentus vai abus.",
       "documentChanged": "Šis dokuments pēc šīs pārbaudes ir mainījies.",
@@ -4051,6 +4053,7 @@
       "history": {
         "backToLatest": "Atpakaļ pie jaunākās",
         "decided": "{decided, number} no {total, number} izlemts",
+        "fromTable": "No tabulas",
         "references": "{count, plural, zero {# atsauču} one {# atsauce} other {# atsauces}}"
       },
       "impact": {
@@ -4074,6 +4077,7 @@
         "label": "Secinājumi blakus klauzulām, par kurām tie ir",
         "unanchored": "Nav saistīts ar klauzulu"
       },
+      "markAsReviewed": "Atzīmēt kā pārbaudītu",
       "newTopic": "Jauna pārbaudes tēma",
       "noChangeNeeded": "Izmaiņas nav nepieciešamas",
       "noEditor": "Atveriet dokumentu, lai apstiprinātu izmaiņas",
@@ -4158,6 +4162,11 @@
         "noSide": "Nav puses",
         "proposedFromReferences": "Pozīcijas, kas ierosinātas no atsaucēm",
         "unnamedReferences": "{count, plural, zero {# atsauces dokumentu} one {# atsauces dokuments} other {# atsauces dokumenti}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Šīs versijas pilna pārbaude</link> ar saitēm un ierosinātajām izmaiņām ir pieejama pārbaužu vēsturē.",
+        "origin": "<strong>Palaists no tabulas.</strong> Šie secinājumi novērtēti pēc tabulai iegūtajām vērtībām, tāpēc tie nav saistīti ar dokumentu un neietver ierosinātās izmaiņas.",
+        "runAnotherReview": "Lai iegūtu saites un ierosinātās izmaiņas, izmantojiet pogu <action>{label}</action>."
       },
       "targetAsReference": "Pārbaudāmais dokuments nevar būt savs paša atsauces dokuments.",
       "targetColumn": "Šis dokuments",

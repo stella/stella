@@ -371,6 +371,8 @@ const STORED_BASIS_READERS = {
   "lib/document-review/run-queue.ts": "internal",
   "lib/document-review/table-run-findings.ts": "internal",
   "lib/document-review/review-suggestion-staging.ts": "internal",
+  // Compares the pinned position rules of two runs; answers with nothing.
+  "lib/document-review/decision-carry-over.ts": "internal",
 } as const satisfies Record<
   string,
   "projects" | "summary" | "gated" | "internal"

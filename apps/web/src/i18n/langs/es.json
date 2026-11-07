@@ -3988,6 +3988,7 @@
     "reopenTab": "Reabrir {name}",
     "resizePane": "Cambiar el tamaño del panel",
     "review": {
+      "acceptChange": "Aceptar el cambio",
       "actionNeeded": "Requiere acción",
       "addComment": "Añadir como comentario",
       "addNote": "Añadir comentario para la contraparte",
@@ -4025,7 +4026,8 @@
       "decisionFailed": "No se pudo registrar tu decisión",
       "decisions": {
         "accepted": "Aceptado",
-        "dismissed": "Descartado"
+        "dismissed": "Descartado",
+        "reviewed": "Revisado"
       },
       "description": "Elige un playbook elaborado, documentos de referencia o ambos.",
       "documentChanged": "Este documento cambió después de esta revisión.",
@@ -4051,6 +4053,7 @@
       "history": {
         "backToLatest": "Volver a la última versión",
         "decided": "{decided, number} de {total, number} decidido",
+        "fromTable": "Desde la tabla",
         "references": "{count, plural, one {# referencia} other {# referencias} many {# referencias}}"
       },
       "impact": {
@@ -4074,6 +4077,7 @@
         "label": "Hallazgos junto a las cláusulas correspondientes",
         "unanchored": "No vinculado a ninguna cláusula"
       },
+      "markAsReviewed": "Marcar como revisado",
       "newTopic": "Nuevo tema de revisión",
       "noChangeNeeded": "No se necesita ningún cambio",
       "noEditor": "Abre el documento para aceptar los cambios",
@@ -4158,6 +4162,11 @@
         "noSide": "ninguna parte",
         "proposedFromReferences": "posiciones propuestas a partir de las referencias",
         "unnamedReferences": "{count, plural, one {# documento de referencia} other {# documentos de referencia} many {# documentos de referencia}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Una revisión completa de esta versión</link>, con enlaces y cambios propuestos, está disponible en el historial de revisiones.",
+        "origin": "<strong>Iniciada desde la tabla.</strong> Estos resultados se evaluaron con los valores extraídos para la tabla, por lo que no enlazan con el documento ni incluyen cambios propuestos.",
+        "runAnotherReview": "Para obtener enlaces y cambios propuestos, usa el botón <action>{label}</action>."
       },
       "targetAsReference": "El documento revisado no puede ser su propia referencia.",
       "targetColumn": "Este documento",

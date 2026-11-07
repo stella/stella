@@ -3988,6 +3988,7 @@
     "reopenTab": "Reopen {name}",
     "resizePane": "Resize pane",
     "review": {
+      "acceptChange": "Accept change",
       "actionNeeded": "Action needed",
       "addComment": "Add as comment",
       "addNote": "Add comment for counterparty",
@@ -4025,7 +4026,8 @@
       "decisionFailed": "Couldn't record your decision",
       "decisions": {
         "accepted": "Accepted",
-        "dismissed": "Dismissed"
+        "dismissed": "Dismissed",
+        "reviewed": "Reviewed"
       },
       "description": "Choose an authored playbook, reference documents, or both.",
       "documentChanged": "This document changed after this review.",
@@ -4051,6 +4053,7 @@
       "history": {
         "backToLatest": "Back to latest",
         "decided": "{decided, number} of {total, number} decided",
+        "fromTable": "From the table",
         "references": "{count, plural, one {# reference} other {# references}}"
       },
       "impact": {
@@ -4074,6 +4077,7 @@
         "label": "Findings beside the clauses they are about",
         "unanchored": "Not tied to a clause"
       },
+      "markAsReviewed": "Mark as reviewed",
       "newTopic": "New review topic",
       "noChangeNeeded": "No change needed",
       "noEditor": "Open the document to accept changes",
@@ -4158,6 +4162,11 @@
         "noSide": "no side",
         "proposedFromReferences": "positions proposed from the references",
         "unnamedReferences": "{count, plural, one {# reference document} other {# reference documents}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>A full review of this version</link>, with links and proposed changes, is available in the review history.",
+        "origin": "<strong>From a table run.</strong> These findings were graded on the values extracted for the table, so they don't link to the document and include no proposed changes.",
+        "runAnotherReview": "To get links and proposed changes, use <action>{label}</action>."
       },
       "targetAsReference": "The reviewed document cannot be its own reference.",
       "targetColumn": "This document",

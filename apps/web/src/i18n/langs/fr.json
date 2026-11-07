@@ -3988,6 +3988,7 @@
     "reopenTab": "Rouvrir {name}",
     "resizePane": "Redimensionner le volet",
     "review": {
+      "acceptChange": "Accepter la modification",
       "actionNeeded": "Action requise",
       "addComment": "Ajouter comme commentaire",
       "addNote": "Ajouter un commentaire pour la contrepartie",
@@ -4025,7 +4026,8 @@
       "decisionFailed": "Impossible d’enregistrer votre décision",
       "decisions": {
         "accepted": "Accepté",
-        "dismissed": "Écarté"
+        "dismissed": "Écarté",
+        "reviewed": "Révisé"
       },
       "description": "Choisissez un playbook rédigé, des documents de référence ou les deux.",
       "documentChanged": "Ce document a changé depuis cette révision.",
@@ -4051,6 +4053,7 @@
       "history": {
         "backToLatest": "Retour à la dernière version",
         "decided": "{decided, number} sur {total, number} décidé",
+        "fromTable": "Depuis le tableau",
         "references": "{count, plural, one {# référence} other {# références} many {# références}}"
       },
       "impact": {
@@ -4074,6 +4077,7 @@
         "label": "Constats à côté des clauses concernées",
         "unanchored": "Non rattaché à une clause"
       },
+      "markAsReviewed": "Marquer comme révisé",
       "newTopic": "Nouveau thème de revue",
       "noChangeNeeded": "Aucune modification nécessaire",
       "noEditor": "Ouvrez le document pour accepter les modifications",
@@ -4158,6 +4162,11 @@
         "noSide": "aucune partie",
         "proposedFromReferences": "critères proposés à partir des références",
         "unnamedReferences": "{count, plural, one {# document de référence} other {# documents de référence} many {# documents de référence}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Une révision complète de cette version</link>, avec liens et modifications proposées, est disponible dans l’historique des révisions.",
+        "origin": "<strong>Lancée depuis le tableau.</strong> Ces constats ont été évalués à partir des valeurs extraites pour le tableau : ils ne renvoient donc pas au document et ne comportent aucune modification proposée.",
+        "runAnotherReview": "Pour obtenir les liens et les modifications proposées, utilisez le bouton <action>{label}</action>."
       },
       "targetAsReference": "Le document examiné ne peut pas être sa propre référence.",
       "targetColumn": "Ce document",

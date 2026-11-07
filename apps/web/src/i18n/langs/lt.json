@@ -3988,6 +3988,7 @@
     "reopenTab": "Iš naujo atidaryti {name}",
     "resizePane": "Keisti polangio dydį",
     "review": {
+      "acceptChange": "Priimti pakeitimą",
       "actionNeeded": "Reikia veiksmų",
       "addComment": "Pridėti kaip komentarą",
       "addNote": "Pridėti komentarą priešingai šaliai",
@@ -4025,7 +4026,8 @@
       "decisionFailed": "Nepavyko įrašyti sprendimo",
       "decisions": {
         "accepted": "Priimta",
-        "dismissed": "Atmesta"
+        "dismissed": "Atmesta",
+        "reviewed": "Peržiūrėta"
       },
       "description": "Pasirinkite parengtą peržiūros vadovą, referencinius dokumentus arba abu.",
       "documentChanged": "Šis dokumentas pasikeitė po šios peržiūros.",
@@ -4051,6 +4053,7 @@
       "history": {
         "backToLatest": "Grįžti prie naujausios",
         "decided": "{decided, number} iš {total, number} nuspręsta",
+        "fromTable": "Iš lentelės",
         "references": "{count, plural, one {# referencija} few {# referencijos} many {# referencijos} other {# referencijų}}"
       },
       "impact": {
@@ -4074,6 +4077,7 @@
         "label": "Išvados šalia sąlygų, apie kurias jos yra",
         "unanchored": "Nesusieta su jokia sąlyga"
       },
+      "markAsReviewed": "Pažymėti kaip peržiūrėtą",
       "newTopic": "Nauja peržiūros tema",
       "noChangeNeeded": "Pakeitimo nereikia",
       "noEditor": "Atidarykite dokumentą, kad priimtumėte pakeitimus",
@@ -4158,6 +4162,11 @@
         "noSide": "Nėra pusės",
         "proposedFromReferences": "Pozicijos, pasiūlytos iš referencijų",
         "unnamedReferences": "{count, plural, one {# referencinis dokumentas} few {# referenciniai dokumentai} many {# referencinio dokumento} other {# referencinių dokumentų}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Visa šios versijos peržiūra</link> su nuorodomis ir siūlomais pakeitimais pasiekiama peržiūrų istorijoje.",
+        "origin": "<strong>Paleista iš lentelės.</strong> Šios išvados įvertintos pagal lentelei išgautas reikšmes, todėl jos nesusietos su dokumentu ir neapima siūlomų pakeitimų.",
+        "runAnotherReview": "Kad gautumėte nuorodas ir siūlomus pakeitimus, naudokite mygtuką <action>{label}</action>."
       },
       "targetAsReference": "Peržiūrimas dokumentas negali būti pats sau referencinis dokumentas.",
       "targetColumn": "Šis dokumentas",
