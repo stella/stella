@@ -27,6 +27,8 @@ export const SITEMAP_MULTILINGUAL_URL_WEIGHT =
  * A scalar, capped sibling probe keeps the language-group index condition;
  * null group keys match no sibling and therefore remain representatives.
  * Callers pass a published row, so the probe compares published siblings only.
+ * `case_law_decisions_language_group_published_idx` carries everything both
+ * probes read, so a month's probes visit no heap page of an all-visible table.
  */
 export const sitemapDocumentRepresentativeFor = (decision: {
   id: SQLWrapper;

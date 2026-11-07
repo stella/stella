@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 
@@ -19,8 +20,8 @@ export const ChatGptPasteCallback = ({
   const [url, setUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   return (
-    <form
-      className="space-y-2"
+    <Form
+      className="gap-2"
       onSubmit={(event) => {
         event.preventDefault();
         setSubmitting(true);
@@ -59,6 +60,6 @@ export const ChatGptPasteCallback = ({
           {t("pasteSubmit")}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };

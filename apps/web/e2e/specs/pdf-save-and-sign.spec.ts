@@ -8,6 +8,10 @@ import {
 } from "../helpers/scenario-diagnostics";
 import { expect, test } from "../helpers/test";
 import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
   type TestWorkspace,
@@ -169,7 +173,7 @@ test.describe("PDF save and sign on the document route", () => {
       .poll(
         async () =>
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
-        { timeout: 10_000 },
+        { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS },
       )
       .toBe(200);
     await page.goto(
@@ -177,10 +181,10 @@ test.describe("PDF save and sign on the document route", () => {
       { waitUntil: "domcontentloaded" },
     );
     await expect(page.locator("[data-text-layer]").first()).toBeVisible({
-      timeout: 45_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
     });
     await expect(viewerSignControl(page)).toBeVisible({
-      timeout: 45_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
     });
     return { originalFieldId: uploaded.fieldId };
   };

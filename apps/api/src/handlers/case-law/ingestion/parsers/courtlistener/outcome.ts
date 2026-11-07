@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * What a CourtListener text parser returns, and the bounds every parser of
  * one cluster shares.
@@ -8,8 +9,7 @@
  * shared budget ran out).
  */
 
-import type { AnyNode } from "domhandler";
-
+import type { AnyNode } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block } from "@stll/legal-ast/document-ast";
 

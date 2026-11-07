@@ -20,6 +20,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 /** Both the global slug population and the active organization's membership grow. */
 const seedOrganizationSlugScaling = async (db: GatedTestDb, size: number) => {
@@ -66,11 +67,9 @@ const seedOrganizationSlugScaling = async (db: GatedTestDb, size: number) => {
     userId: actor.id,
     slug: `new-${target.id.toLowerCase()}`,
     cleanup: async () => {
-      await db.delete(organization).where(
-        inArray(
-          organization.id,
-          organizations.map(({ id }) => id),
-        ),
+      await deleteOrganizationsForTest(
+        db,
+        organizations.map(({ id }) => id),
       );
       await db.delete(user).where(
         inArray(

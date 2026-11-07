@@ -183,6 +183,14 @@ const RAW_ROUTES: ReadonlyMap<ApiRouteKey, RawRouteReview> = new Map([
     },
   ],
   [
+    "GET /v1/desktop/runner",
+    {
+      access: RAW_ROUTE_ACCESS.sessionless,
+      reason:
+        "Runner socket upgrade, authorized by the desktop account token and a single-use device proof.",
+    },
+  ],
+  [
     "GET /v1/dev/public-law-connection",
     {
       access: RAW_ROUTE_ACCESS.localDevelopment,

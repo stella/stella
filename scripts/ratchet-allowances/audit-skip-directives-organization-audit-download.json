@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Marking an organization audit archive downloaded is recorded on the account trail by the same download, so the ledger update itself carries a skip directive."
+}

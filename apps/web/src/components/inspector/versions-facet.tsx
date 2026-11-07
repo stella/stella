@@ -31,7 +31,7 @@ import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { fileContentQueryKey } from "@/lib/files/file-metadata-query.logic";
+import { filesQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import {
@@ -316,10 +316,17 @@ export const useSelectedFileVersionMissing = ({
       return false;
     }
 
-    const error = queryClient.getQueryState(
-      fileContentQueryKey({ workspaceId, fieldId }),
-    )?.error;
-    return APIError.is(error) && error.status === 404;
+    // Each viewer reads the file under a key of its own (display, text, email).
+    return queryClient
+      .getQueryCache()
+      .findAll({ queryKey: filesQueryRoot() })
+      .some(
+        ({ queryKey, state: { error } }) =>
+          queryKey.includes(workspaceId) &&
+          queryKey.includes(fieldId) &&
+          APIError.is(error) &&
+          error.status === 404,
+      );
   }, [enabled, fieldId, queryClient, workspaceId]);
   const isMissing = useSyncExternalStore(subscribe, getSnapshot, () => false);
 

@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 
 import {
+  chatRunsChangedRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
   newNotificationRealtimeEvent,
   type OrganizationRealtimeEvent,
@@ -38,7 +39,9 @@ import { realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  type QueryCounter,
   queryCountLogger,
+  runOutsideQueryCounter,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
 import {
@@ -125,7 +128,7 @@ const FANOUT_CASES: { [C in RealtimeChannel]: readonly ChannelEvent[C][] } = {
     },
   ],
   organization: [resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY)],
-  user: [newNotificationRealtimeEvent()],
+  user: [newNotificationRealtimeEvent(), chatRunsChangedRealtimeEvent()],
   session: [
     {
       type: REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED,
@@ -207,6 +210,12 @@ let testDb: TestDatabase;
 /** Redis stand-in: a publish reaches every attached subscriber callback. */
 const subscriberCallbacks = new Set<(message: string) => void>();
 let redisPublishes = 0;
+/**
+ * One counter per Redis delivery. A real subscriber receives the message on
+ * its own connection, outside the publisher's context, so its statements
+ * (the audience reauthorization) are counted there and added to the publish.
+ */
+const deliveryCounters: Readonly<QueryCounter>[] = [];
 
 type FakeSubscriberClient = {
   close: ReturnType<typeof mock>;
@@ -237,7 +246,12 @@ const loopbackPublisher = createSseBroadcastPublisher({
     publish: async (_channel, message) => {
       redisPublishes += 1;
       for (const deliver of subscriberCallbacks) {
-        deliver(message);
+        runOutsideQueryCounter(() => {
+          runWithQueryCounter((counter) => {
+            deliveryCounters.push(counter);
+            deliver(message);
+          });
+        });
       }
       return subscriberCallbacks.size;
     },
@@ -498,19 +512,42 @@ const HARNESSES: { [C in RealtimeChannel]: ChannelHarness<C> } = {
       broadcast(audience.workspaceId, event);
     },
   },
-  // Every open matter stream of the organization; the event carries no
-  // content, so it reaches them without a membership read.
+  // Every open matter stream and every user stream of the organization, so a
+  // tab with no matter open still hears it; the event carries no content, so
+  // it reaches them without a membership read. Excluded: another
+  // organization's matter and user streams, including the same person's tab
+  // on that organization.
   organization: {
     statementsPerPublish: 0,
     delivery: () => "frame",
     open: async ({ entitled, excluded }, signal) => ({
-      entitled: workspaceStreams({ target: audience, count: entitled, signal }),
+      entitled: [
+        ...userStreams({
+          userId: userAt(audience, 0),
+          organizationId: audience.organizationId,
+          count: Math.ceil(entitled / 2),
+          signal,
+        }),
+        ...workspaceStreams({
+          target: audience,
+          count: Math.floor(entitled / 2),
+          signal,
+        }),
+      ],
       excluded: excluded
-        ? workspaceStreams({
-            target: otherOrganization,
-            count: LARGE_AUDIENCE,
-            signal,
-          })
+        ? [
+            ...workspaceStreams({
+              target: otherOrganization,
+              count: LARGE_AUDIENCE,
+              signal,
+            }),
+            ...userStreams({
+              userId: userAt(audience, 0),
+              organizationId: otherOrganization.organizationId,
+              count: LARGE_AUDIENCE,
+              signal,
+            }),
+          ]
         : [],
     }),
     publish: (event) => {
@@ -616,6 +653,7 @@ const measurePublish = async <C extends RealtimeChannel>({
   const entitled = subscribers.entitled.map((stream) => stream.getReader());
   const excluded = subscribers.excluded.map((stream) => stream.getReader());
   const publishesBefore = redisPublishes;
+  const deliveriesBefore = deliveryCounters.length;
   const encode = spyOn(TextEncoder.prototype, "encode");
   try {
     const { reads, statements } = await runWithQueryCounter(async (counter) => {
@@ -625,6 +663,9 @@ const measurePublish = async <C extends RealtimeChannel>({
       );
       return { reads: received, statements: counter.count };
     });
+    const deliveryStatements = deliveryCounters
+      .slice(deliveriesBefore)
+      .reduce((total, counter) => total + counter.count, 0);
     const sseFrameEncodes = encode.mock.calls.filter(isSseFrameEncode).length;
     return {
       entitled: reads.map(({ done }) => (done ? "closed" : "frame")),
@@ -634,7 +675,7 @@ const measurePublish = async <C extends RealtimeChannel>({
       ),
       redisPublishes: redisPublishes - publishesBefore,
       sseFrameEncodes,
-      statements,
+      statements: statements + deliveryStatements,
     };
   } finally {
     encode.mockRestore();

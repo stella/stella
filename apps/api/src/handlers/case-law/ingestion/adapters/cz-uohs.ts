@@ -60,6 +60,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
+  SourceFieldDisposition,
   StoredRawReparseInput,
   StoredRawReparseValue,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -113,6 +114,9 @@ const recordSchema = v.looseObject({
   dokument: statedList(v.looseObject({ typ: v.string(), url: v.string() })),
 });
 type CzUohsRecord = v.InferOutput<typeof recordSchema>;
+type CzUohsPublisherRecord = {
+  [TField in keyof typeof recordSchema.entries]: CzUohsRecord[TField];
+};
 
 const listingSchema = v.looseObject({ rozhodnutí: v.array(recordSchema) });
 
@@ -270,7 +274,7 @@ export const czUohsDocumentAst = ({
         ? { type: "text", text }
         : {
             type: "link",
-            href: `#footnote-${footnoteReference}`,
+            href: `#${encodeURIComponent(footnoteReference.noteId)}`,
             children: [
               {
                 type: "superscript" as const,
@@ -858,7 +862,10 @@ export const czUohsAdapter = defineSourceAdapter({
         disposition: "stored",
         target: { type: "metadata", key: "documents" },
       },
-    },
+    } as const satisfies Record<
+      keyof CzUohsPublisherRecord,
+      SourceFieldDisposition
+    >,
     listSourceFields: ({ listing }) => {
       const parsed: unknown = JSON.parse(listing ?? "{}");
       return isRecord(parsed) ? Object.keys(parsed) : [];

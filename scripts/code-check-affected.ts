@@ -111,7 +111,7 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
   "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
   "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
-  "$TURBO_ROOT$/scripts/guard-rollouts/*.json",
+  "$TURBO_ROOT$/scripts/guard-rollouts/**",
   "$TURBO_ROOT$/scripts/guard-rollouts.ts",
   "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
   "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
@@ -129,6 +129,9 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
   "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
   "$TURBO_ROOT$/scripts/test-state-baseline.json",
+  "$TURBO_ROOT$/scripts/test-ambient-time-baseline.json",
+  "$TURBO_ROOT$/scripts/test-real-timers-baseline.json",
+  "$TURBO_ROOT$/scripts/test-wallclock-assertion-baseline.json",
   "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
   "$TURBO_ROOT$/scripts/baseline-paths.ts",
   "$TURBO_ROOT$/scripts/ledger-membership.ts",
@@ -149,6 +152,7 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
   "$TURBO_ROOT$/scripts/generated-artifacts.ts",
   "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+  "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
   "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
   "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
   "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -850,9 +854,19 @@ type ExecuteCheckCommandsOptions = {
   ) => Result<void, CodeCheckError> | Promise<Result<void, CodeCheckError>>;
   write?: (output: string) => void;
   dryRun?: boolean;
+  /** Run every command after a failure, to report them all in one pass. */
+  keepGoing?: boolean;
   budgetDeadlineMs?: number;
   now?: () => number;
 };
+
+/**
+ * A pull request learns every finding in one run. A merge group keeps stopping
+ * at the first failure: it cannot merge anyway, and its runners are wanted by
+ * the groups behind it.
+ */
+const keepsGoingByDefault = () =>
+  process.env["GITHUB_EVENT_NAME"] === "pull_request";
 
 export const executeCheckCommands = async ({
   commands,
@@ -861,6 +875,7 @@ export const executeCheckCommands = async ({
     process.stdout.write(output);
   },
   dryRun = false,
+  keepGoing = keepsGoingByDefault(),
   now = Date.now,
   budgetDeadlineMs = now() + CODE_CHECK_EXECUTION_BUDGET_MS,
 }: ExecuteCheckCommandsOptions): Promise<number> => {
@@ -883,7 +898,9 @@ export const executeCheckCommands = async ({
       : runner(command, timeoutMs));
     if (result.isErr()) {
       failures.push(result.error);
-      break;
+      if (!keepGoing) {
+        break;
+      }
     }
   }
   if (failures.length === 0) {

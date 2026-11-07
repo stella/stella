@@ -44,6 +44,15 @@ describe("browser extension capability policy", () => {
         "to install the stella browser extension for Chrome, as the chat composer shows",
     },
     {
+      status: BROWSER_EXTENSION_STATUS.extensionOutdated,
+      guidance:
+        "that Chrome updates the stella browser extension automatically, usually within a few hours, and that you can use their browser once it has",
+    },
+    {
+      status: BROWSER_EXTENSION_STATUS.stellaOutdated,
+      guidance: "to reload this stella tab to use the browser extension",
+    },
+    {
       status: BROWSER_EXTENSION_STATUS.unsupportedBrowser,
       guidance:
         "to open stella in Google Chrome on this computer and install the stella browser extension there",

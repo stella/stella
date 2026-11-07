@@ -1,14 +1,19 @@
 import { useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
+import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { answerQuoteKey, quotePieces } from "@stll/legal-ast/answer-quote";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
+  AlertTriangleIcon,
   BookTextIcon,
   ChevronDownIcon,
   CircleCheckIcon,
@@ -18,42 +23,55 @@ import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import {
-  locateQuoteInBlocks,
-  quotePieces,
+  answerQuoteState,
   quoteTextOf,
 } from "@/components/chat/answer-quote.logic";
-import type { LocatedQuote } from "@/components/chat/answer-quote.logic";
+import type { AnswerQuoteState } from "@/components/chat/answer-quote.logic";
 import { openReadCaseLawDecision } from "@/components/chat/case-law-open";
-import { useAnswerCitedDecisions } from "@/components/chat/chat-decision-citation";
-import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
+import {
+  useAnswerCitedDecisions,
+  useAnswerQuoteChecks,
+} from "@/components/chat/chat-decision-citation";
 import { CitationCopyOptions } from "@/components/legal-reader/citation-copy-options";
 import { quotationMarksFor } from "@/components/legal-reader/citation-copy.logic";
 import { decisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { formatDecisionCitation } from "@/features/case-law/citation-format";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
-import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
-type VerifiedQuote = {
-  decision: PublicCaseLawDecision;
-  located: LocatedQuote;
+type VerifiedQuote = Extract<AnswerQuoteState, { type: "verified" }>;
+
+const answerQuoteMarker = (state: AnswerQuoteState): string => {
+  switch (state.type) {
+    case "verified":
+    case "unverified":
+      return state.type;
+    case "plain":
+      return "";
+    default:
+      state satisfies never;
+      return panic("Unhandled answer quote state");
+  }
 };
 
-/** The first decision the answer cites that holds the quotation verbatim. */
-const verifyQuote = (
-  quote: string,
-  decisions: readonly PublicCaseLawDecision[],
-): VerifiedQuote | null => {
-  for (const decision of decisions) {
-    const blocks = parseDocumentAst(decision.documentAst)?.blocks;
-    const located =
-      blocks === undefined ? null : locateQuoteInBlocks(quote, blocks);
-    if (located !== null) {
-      return { decision, located };
-    }
-  }
-  return null;
+const UnverifiedQuoteNote = () => {
+  const t = useTranslations();
+  return (
+    <figcaption className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 ps-3.5 text-xs not-italic">
+      <span className="text-warning-foreground inline-flex items-center gap-1 font-medium">
+        <AlertTriangleIcon aria-hidden="true" className="size-3.5" />
+        {t("chat.answerQuote.unverified")}
+      </span>
+      <span aria-hidden="true" className="text-foreground-placeholder">
+        ·
+      </span>
+      <span>{t("chat.answerQuote.unverifiedHint")}</span>
+    </figcaption>
+  );
 };
 
 const QuoteAttribution = ({
@@ -165,31 +183,69 @@ const QuoteAttribution = ({
   );
 };
 
+const QuoteCaption = ({
+  quote,
+  state,
+}: {
+  quote: string;
+  state: AnswerQuoteState;
+}): ReactNode => {
+  switch (state.type) {
+    case "verified":
+      return (
+        <QuoteAttribution
+          quote={quotePieces(quote).join(" […] ")}
+          verified={state}
+        />
+      );
+    case "unverified":
+      return <UnverifiedQuoteNote />;
+    case "plain":
+      return null;
+    default:
+      state satisfies never;
+      return panic("Unhandled answer quote state");
+  }
+};
+
 /**
  * A quotation in an answer. Set apart as a callout on a hairline rule, in
  * italics, the way a brief sets quoted authority. When a decision the
  * answer cites holds it word for word, it says so, names the paragraph it
  * comes from, and offers the readers' copy formats with a proper citation.
+ * When the decisions it cites were checked and none holds it, it says that.
  */
 export const AnswerQuote = ({ children }: { children?: ReactNode }) => {
-  const decisions = useAnswerCitedDecisions();
+  const citedDecisions = useAnswerCitedDecisions();
+  const checks = useAnswerQuoteChecks();
   const text = quoteTextOf(children);
-  const verified = text.length === 0 ? null : verifyQuote(text, decisions);
+  const check = checks?.get(answerQuoteKey(text));
+  // A decision cited through its reader link is not read by the answer; the
+  // server's verification names it, and its attribution needs it.
+  const verifiedId = check?.type === "verified" ? check.decisionId : null;
+  const missingId =
+    verifiedId !== null && !citedDecisions.some(({ id }) => id === verifiedId)
+      ? verifiedId
+      : null;
+  const verifiedRead = queryView(
+    useQuery({
+      ...decisionOptions(missingId ?? ""),
+      enabled: missingId !== null,
+    }),
+  );
+  useQueryViewError(verifiedRead, "AnswerQuote:verified-decision");
+  const decisions =
+    missingId !== null && verifiedRead.type === "items"
+      ? [...citedDecisions, verifiedRead.items]
+      : citedDecisions;
+  const state = answerQuoteState({ quote: text, decisions, checks });
 
   return (
-    <figure
-      className="my-3"
-      data-answer-quote={verified === null ? "" : "verified"}
-    >
+    <figure className="my-3" data-answer-quote={answerQuoteMarker(state)}>
       <blockquote className="text-foreground-strong-muted border-border border-s-2 ps-3 italic [&>p]:my-1.5">
         {children}
       </blockquote>
-      {verified !== null && (
-        <QuoteAttribution
-          quote={quotePieces(text).join(" […] ")}
-          verified={verified}
-        />
-      )}
+      <QuoteCaption quote={text} state={state} />
     </figure>
   );
 };

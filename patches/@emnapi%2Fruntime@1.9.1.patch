@@ -1,0 +1,29 @@
+The web app's content security policy blocks string evaluation, and the
+browser build of emnapi probed `new Function()` when it loaded, so every page
+using the regex-set or aho-corasick WASM packages reported a violation. Under
+the policy the probe already failed, which selects the fallback that names
+functions with `Object.defineProperty`; the bundler entry now selects it
+without probing.
+Browser regression: apps/web/e2e/specs/content-security-policy-surfaces.spec.ts.
+
+diff --git a/dist/emnapi.esm-bundler.js b/dist/emnapi.esm-bundler.js
+--- a/dist/emnapi.esm-bundler.js
++++ b/dist/emnapi.esm-bundler.js
+@@ -22,16 +22,7 @@
+     return externalValue.get(external);
+ }
+
+-var supportNewFunction = /*#__PURE__*/ (function () {
+-    var f;
+-    try {
+-        f = new Function();
+-    }
+-    catch (_) {
+-        return false;
+-    }
+-    return typeof f === 'function';
+-})();
++var supportNewFunction = false;
+ var _global = /*#__PURE__*/ (function () {
+     if (typeof globalThis !== 'undefined')
+         return globalThis;

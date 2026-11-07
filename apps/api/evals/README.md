@@ -86,6 +86,12 @@ the default provider chain (see `getTanStackTextModelById`).
 - `extraction.ts`: does the structured-extraction path (`generateWorkflowData`)
   match ground truth across text, date, int, and select fields, and does it
   answer a question the source never states?
+- `playbook-clause-extraction.ts`: from a position's rules to its question, to
+  the extraction, to the verdict, does a model-graded position get the expected
+  verdict from an answer that covers every term of its rules, does a term the
+  contract never states come back empty rather than as prose, and does a
+  constraint position still read a number? Scored on `gpt-5.6-luna` and
+  `gpt-6-sol`.
 - `agent-orientation.ts`: given stella's MCP tool list or CLI skill, does a
   model pick the right tool or command and arguments for a natural-language
   task, scored without executing anything?

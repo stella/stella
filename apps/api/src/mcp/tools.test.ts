@@ -9,7 +9,6 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import JSZip from "jszip";
 import * as v from "valibot";
 
 import {
@@ -34,6 +33,7 @@ import {
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+  SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
   SEARCH_SORTS,
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
@@ -51,7 +51,7 @@ import type {
   EntityCheckResult,
   runEntityCheck as runEntityCheckForTest,
 } from "@stll/business-registries/entity-checks";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -73,6 +73,7 @@ import {
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/search";
 import * as searchInterpretation from "@/api/handlers/case-law/decisions/search-interpretation";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -111,6 +112,7 @@ import {
   encodeCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
+import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import { LIMITS } from "@/api/lib/limits";
 import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
 import { currentReadWork } from "@/api/lib/observability/request-work";
@@ -119,6 +121,7 @@ import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import * as actionCostContext from "@/api/lib/usage/action-costs/context";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import { decisionTextVersion } from "@/api/mcp/case-law-decision-read";
+import { CASE_LAW_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/case-law-search-input";
 import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import {
@@ -130,7 +133,6 @@ import type { ReadCaseLawDecisionSuccess } from "@/api/mcp/public-law-handlers";
 import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
-  CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
   READ_DECISION_BATCH_MAX_TEXT_CHARS,
   READ_DECISION_FULL_MAX_TEXT_CHARS,
 } from "@/api/mcp/stella-tools";
@@ -286,9 +288,8 @@ const handleMcpToolCallWithCapturedObserver = async (
  * `read_content_across_matters`'s markdown branch.
  */
 const makeDocxBytes = async (bodyText = "Signed below.") => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -307,15 +308,14 @@ const makeDocxBytes = async (bodyText = "Signed below.") => {
   <w:p><w:r><w:t>${bodyText}</w:t></w:r></w:p>
 </w:body></w:document>`,
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="xml" ContentType="application/xml"/>
 </Types>`,
   );
-  const bytes = await zip.generateAsync({ type: "uint8array" });
+  const bytes = await zip.generate({ compression: "store" });
   return bytes.buffer.slice(
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength,
@@ -822,17 +822,19 @@ const createStatuteVersionsPage = () => ({
 
 const createProvisionVersionRow = ({
   allowsDerivedAi = true,
+  country = "CZE",
   eli = STATUTE_ELI,
   id = STATUTE_ID,
   versionValidFrom = "2014-01-01",
 }: {
   allowsDerivedAi?: boolean;
+  country?: string;
   eli?: string;
   id?: string;
   versionValidFrom?: string | null;
 } = {}) => ({
   allowsDerivedAi,
-  country: "CZE",
+  country,
   slug: "89-2012-sb-obcansky-zakonik",
   sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
   astS3Key: null,
@@ -1841,6 +1843,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "open_case_law_decision",
       "read_case_law_decision_blocks",
       "preview_cited_provision",
+      "list_case_law_courts",
       "search_legislation",
       "read_statute",
       "read_statute_provisions",
@@ -1882,6 +1885,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "open_case_law_decision",
       "read_case_law_decision_blocks",
       "preview_cited_provision",
+      "list_case_law_courts",
       "search_legislation",
       "read_statute",
       "read_statute_provisions",
@@ -2711,6 +2715,19 @@ describe("OpenAI-compatible MCP tools", () => {
       const requests: { query: string; aggs: Record<string, unknown> }[] = [];
       searchDecisionsHandlerMock.mockImplementation(
         async ({ body }: Parameters<typeof searchCorpusIndexDecisions>[0]) => {
+          // The handler reads no aggregation for a body that opts out
+          // (`search-describe-result-set.test.ts` pins that side).
+          if (body.describeResultSet === false) {
+            return {
+              facets: null,
+              hits: [],
+              nextCursor: null,
+              queryUsed: body.query,
+              warnings: [],
+              paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+              total: SEARCH_TOTAL_NOT_COUNTED,
+            };
+          }
           const read = await readCorpusSearchFacets({
             aggregate: async (request) => {
               requests.push(request);
@@ -2767,7 +2784,13 @@ describe("OpenAI-compatible MCP tools", () => {
           toolName: "search_case_law",
         });
         expect(result.isError).not.toBe(true);
-        expect(requests).toHaveLength(queries.length);
+        // One aggregation read for a single phrasing (its total is returned)
+        // or for the first phrasing when facets were asked for; none for a
+        // phrasing whose facets and total the response would drop. Before
+        // the opt-out, every phrasing read one.
+        expect(requests).toHaveLength(
+          queries.length === 1 || (facets?.length ?? 0) > 0 ? 1 : 0,
+        );
         expect(
           requests.filter(({ aggs }) =>
             Object.keys(aggs).some((name) => name !== "total"),
@@ -2978,7 +3001,6 @@ describe("OpenAI-compatible MCP tools", () => {
             matchingPassages: 4,
             match: "all_terms",
             snippet: 'Relevant holding on "smlouva"',
-            sourceUrl: "https://example.test/decision",
           },
         ],
         total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
@@ -3018,6 +3040,51 @@ describe("OpenAI-compatible MCP tools", () => {
       });
     },
   );
+
+  test("search_case_law carries a publisher link only through the link rule", async () => {
+    const hitWith = (sourceUrl: string | null) => ({
+      ...createCaseLawHit(DECISION_ID, "holding"),
+      sourceUrl,
+    });
+    const linksOf = async (sourceUrl: string | null) => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: null,
+        hits: [hitWith(sourceUrl)],
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: "smlouva",
+        warnings: [],
+      });
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", queries: ["smlouva"] },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      );
+      return v
+        .parse(
+          v.object({ results: v.array(v.record(v.string(), v.unknown())) }),
+          payload,
+        )
+        .results.at(0);
+    };
+
+    const http = await linksOf("https://example.test/decision");
+    expect(http).toHaveProperty("source_url", "https://example.test/decision");
+    expect(http).not.toHaveProperty("sourceUrl");
+
+    // A stored value the rule does not accept reaches the caller nowhere.
+    const other = await linksOf("ftp://example.test/decision");
+    expect(other).not.toHaveProperty("source_url");
+    expect(other).not.toHaveProperty("sourceUrl");
+    expect(JSON.stringify(other)).not.toContain("ftp://");
+
+    const none = await linksOf(null);
+    expect(none).not.toHaveProperty("source_url");
+    expect(none).not.toHaveProperty("sourceUrl");
+  });
 
   test("search_case_law withholds a result's text when its source licence keeps it from AI use", async () => {
     const hit = {
@@ -3304,7 +3371,6 @@ describe("OpenAI-compatible MCP tools", () => {
           matchingPassages: 1,
           match: "all_terms",
           snippet: "Relevant holding",
-          sourceUrl: "https://example.test/decision",
         },
       ],
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
@@ -3816,6 +3882,189 @@ describe("OpenAI-compatible MCP tools", () => {
       caseLawDb: caseLawPublicReadDb,
       observer,
       signal: undefined,
+    });
+  });
+
+  describe("a phrasing that runs out of its time budget", () => {
+    const timedOut = () =>
+      new HttpStatusResponse(503, {
+        code: PUBLIC_READ_TIMEOUT_CODE,
+        message: "Public read timed out. Please try again.",
+      });
+    const answered = (query: string, nextCursor: string | null) => ({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      facets: null,
+      hits: [createCaseLawHit(`dec-${query}`, query)],
+      nextCursor,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      queryUsed: query,
+      warnings: [],
+    });
+    // The time-budget outcome is the agent tool's own, wider than the
+    // contract's HTTP pagination outcome, so the page reads it as sent.
+    type PaginationOutcomeAsSent =
+      SearchPaginationOutcome | typeof SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
+    type PartialPage = MergedSearchPage & {
+      paginationOutcome: PaginationOutcomeAsSent;
+      searches: {
+        query: string;
+        paginationOutcome: PaginationOutcomeAsSent;
+        warnings: { code: string; hint: string }[];
+      }[];
+    };
+
+    test("leaves the phrasings that finished on the page and says it timed out", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) =>
+          query === "slow" ? timedOut() : answered(query, null),
+      );
+
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["fast", "slow"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(result.isError).not.toBe(true);
+      const page = asTestRaw<PartialPage>(parseToolPayload(result));
+      expect(page.results.map(({ decisionId }) => decisionId)).toEqual([
+        "dec-fast",
+      ]);
+      // The page is not the whole answer, and the slow phrasing is named
+      // rather than left to read as "found nothing".
+      expect(page.paginationOutcome).toEqual(
+        SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+      );
+      const slow = page.searches.at(1);
+      expect(slow?.query).toBe("slow");
+      expect(slow?.paginationOutcome).toEqual(
+        SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+      );
+      expect(slow?.warnings.map(({ code }) => code)).toEqual([
+        "phrasing_timed_out",
+      ]);
+      // A first page has no cursor to carry, so the hint names the rerun.
+      expect(slow?.warnings.at(0)?.hint).toContain('queries: ["slow"]');
+      expect(page.searches.at(0)?.paginationOutcome).toEqual(
+        SEARCH_PAGINATION_COMPLETE,
+      );
+    });
+
+    test("keeps a timed-out continuation in the cursor, so the next page retries it", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) =>
+          query === "slow" ? timedOut() : answered(query, "engine-fast-2"),
+      );
+
+      const page = asTestRaw<PartialPage>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: {
+              country: "CZE",
+              cursor: encodePaginationCursor([
+                "engine-fast-1",
+                "engine-slow-2",
+              ]),
+              queries: ["fast", "slow"],
+            },
+            context: createContext(),
+            toolName: "search_case_law",
+          }),
+        ),
+      );
+
+      // The slow phrasing keeps the cursor it ran from, so passing the
+      // returned cursor runs that page again; the hint says so.
+      expect(page.nextCursor).toBe(
+        encodePaginationCursor(["engine-fast-2", "engine-slow-2"]),
+      );
+      expect(page.searches.at(1)?.warnings.at(0)?.hint).toContain(
+        "returned cursor",
+      );
+    });
+
+    test("fails the call with the retryable timeout when no phrasing finished", async () => {
+      searchDecisionsHandlerMock.mockImplementation(async () => timedOut());
+
+      expectErrorEnvelope(
+        await handleMcpToolCall({
+          args: { country: "CZE", queries: ["one", "two"] },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+        {
+          code: "upstream_unavailable",
+          message: "Case-law search exceeded its time budget.",
+          hint: "Retry search_case_law with fewer queries or a narrower court, date range or provision filter. If it still times out, retry shortly.",
+          retryable: true,
+        },
+      );
+    });
+
+    test("any other phrasing failure still fails the call", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) =>
+          query === "broken"
+            ? new HttpStatusResponse(500, { message: "Case-law search failed" })
+            : answered(query, null),
+      );
+
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["fast", "broken"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(result.isError).toBe(true);
+    });
+
+    test("a thrown failure that is not the time budget still fails the call", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => {
+          if (query === "broken") {
+            throw new Error("private failure detail");
+          }
+          return answered(query, null);
+        },
+      );
+
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["fast", "broken"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(validationEnvelope(result)["code"]).toBe("internal_error");
+      expect(JSON.stringify(result)).not.toContain("private failure detail");
+    });
+
+    test("two timed-out continuations each keep their own note", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) =>
+          query === "fast" ? answered(query, null) : timedOut(),
+      );
+
+      const page = asTestRaw<PartialPage>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: {
+              country: "CZE",
+              cursor: encodePaginationCursor(["engine-fast-1", "a-2", "b-2"]),
+              queries: ["fast", "slow a", "slow b"],
+            },
+            context: createContext(),
+            toolName: "search_case_law",
+          }),
+        ),
+      );
+
+      // The call keeps each distinct note once, so each names its phrasing.
+      for (const query of ["slow a", "slow b"]) {
+        const search = page.searches.find((entry) => entry.query === query);
+        expect(search?.warnings.map(({ code }) => code)).toEqual([
+          "phrasing_timed_out",
+        ]);
+      }
     });
   });
 
@@ -4625,7 +4874,6 @@ describe("OpenAI-compatible MCP tools", () => {
             resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
             score: 1.5,
             snippet: "nahrada skody",
-            sourceUrl: "https://example.test/89-2012",
             status: "in_force",
             title: STATUTE_TITLE,
           },
@@ -4777,7 +5025,6 @@ describe("OpenAI-compatible MCP tools", () => {
         ],
         outlineTruncated: false,
         resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
-        sourceUrl: "https://example.test/89-2012",
         status: "in_force",
         text: expectedText.slice(0, 8000),
         title: STATUTE_TITLE,
@@ -5029,6 +5276,84 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(typeof text === "string" ? text.length : null).toBe(
       LIMITS.legislationProvisionTextChars,
     );
+  });
+
+  test("read_statute_provisions narrows to a sub-anchor in each publisher's grammar", async () => {
+    const slovakEli = "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2015/160";
+    const slovakId = "00000000-0000-4000-8000-000000021003";
+    const paragraph = (anchorId: string, text: string) => ({
+      anchorId,
+      id: anchorId,
+      inlines: [{ type: "text", text }],
+      plainText: text,
+      type: "paragraph",
+    });
+    const slovakBlocks = [
+      {
+        anchorId: "paragraf-36",
+        id: "paragraf-36",
+        inlines: [{ type: "text", text: "§ 36" }],
+        level: 3,
+        plainText: "§ 36",
+        type: "heading",
+      },
+      paragraph("paragraf-36.odsek-1", "(1) Návrh obsahuje"),
+      paragraph("paragraf-36.pismeno-a", "a) označenie súdu,"),
+      paragraph("paragraf-36.pismeno-a.bod-1", "1. sídlo súdu,"),
+      paragraph("paragraf-36.pismeno-b", "b) označenie účastníkov."),
+    ];
+    resolveStatuteExpressionMock.mockImplementation(
+      async ({ eli }: { eli: string }) =>
+        await Promise.resolve({
+          type: "expression",
+          id: eli === slovakEli ? slovakId : STATUTE_ID,
+        }),
+    );
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow(),
+      createProvisionVersionRow({
+        country: "SVK",
+        eli: slovakEli,
+        id: slovakId,
+      }),
+    ]);
+    readVersionBlocksMock.mockImplementation(
+      async ({ row }: { row: { id: string } }) =>
+        await Promise.resolve(
+          row.id === slovakId ? slovakBlocks : createStatuteBlocks(),
+        ),
+    );
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            { anchor: "paragraf-36.pismeno-a", eli: slovakEli },
+            { anchor: `${PROVISION_ANCHOR}-odst_1`, eli: STATUTE_ELI },
+            // Malformed in the publisher's grammar, or written in another's.
+            { anchor: "paragraf-36.", eli: slovakEli },
+            { anchor: "paragraf-36-pismeno-a", eli: slovakEli },
+            { anchor: `${PROVISION_ANCHOR}.odst_1`, eli: STATUTE_ELI },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+
+    expect(payload).toMatchObject({
+      items: [
+        {
+          anchor: "paragraf-36.pismeno-a",
+          status: "found",
+          text: "a) označenie súdu,\n1. sídlo súdu,",
+        },
+        { anchor: `${PROVISION_ANCHOR}-odst_1`, status: "found" },
+        { anchor: "paragraf-36.", status: "provision_not_found" },
+        { anchor: "paragraf-36-pismeno-a", status: "provision_not_found" },
+        { anchor: `${PROVISION_ANCHOR}.odst_1`, status: "provision_not_found" },
+      ],
+    });
   });
 
   test("read_statute_provisions reads an open-start consolidation by document handle", async () => {
@@ -6277,6 +6602,51 @@ describe("OpenAI-compatible MCP tools", () => {
       );
     });
 
+    test.each([
+      [
+        [
+          "Krajský soud v Plzni",
+          "Krajský soud v Plzni – pobočka v Karlových Varech",
+        ],
+        { court: "Krajský soud v Plzni – pobočka v Karlových Varech" },
+      ],
+      [["Krajský soud v Plzni"], {}],
+    ] as const)(
+      "a branch filter with stored courts %p filters the branch or nothing, never its main court",
+      async (stored, sent) => {
+        const baseContext = createContext();
+        const result = await handleMcpToolCall({
+          args: {
+            queries: ["náhrada škody"],
+            country: "CZE",
+            courts: ["KS Plzeň pobočka Karlovy Vary"],
+          },
+          context: {
+            ...baseContext,
+            testDependencies: {
+              ...baseContext.testDependencies,
+              readCaseLawCourtNames: async () => stored,
+            },
+          },
+          toolName: "search_case_law",
+        });
+
+        const body = searchedBody();
+        expect(body["court"]).toBeUndefined();
+        expect(body["courts"]).toEqual(
+          "court" in sent ? [sent.court] : undefined,
+        );
+        if (!("court" in sent)) {
+          expect(searchWarnings(result)).toContainEqual(
+            expect.objectContaining({
+              code: "filter_dropped",
+              message: expect.stringContaining("no stored decision"),
+            }),
+          );
+        }
+      },
+    );
+
     test("a several-spelling court the court list excludes notes only the spelling sent", async () => {
       const baseContext = createContext();
       const result = await handleMcpToolCall({
@@ -6639,6 +7009,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: string;
         }[];
         truncated?: true;
+        warnings?: { code: string; message: string; hint: string }[];
       };
       outline?: { page: number; title: string; url?: string }[];
       page?: number;
@@ -7703,6 +8074,47 @@ describe("OpenAI-compatible MCP tools", () => {
     // fields unless asked.
     expect(entry.decision).not.toHaveProperty("text");
     expect(entry.decision).not.toHaveProperty("court");
+  });
+
+  test("read_case_law_decision names the words of a query no paragraph holds whole", async () => {
+    const paragraphs = ["Nájemce zaplatil včas.", "Soud posoudil výpověď."];
+    const base = createReadDecisionResult();
+    readDecisionHandlerMock.mockResolvedValue({
+      ...base,
+      documentAst: {
+        ...base.documentAst,
+        blocks: paragraphs.map((plainText, index) => ({
+          anchorId: `p-${String(index + 1)}`,
+          id: `b-${String(index + 1)}`,
+          inlines: [],
+          plainText,
+          type: "paragraph",
+        })),
+      },
+    });
+
+    const apart = await readOne({ query: "soud nájemce výpověď Listina" });
+    expect(apart.decision?.matches).toMatchObject({
+      hitCount: 0,
+      paragraphs: [],
+      warnings: [{ code: "query_words_apart", audience: "agent" }],
+    });
+    expect(apart.decision?.matches?.warnings?.[0]?.message).toContain(
+      "Nowhere in the decision: Listina.",
+    );
+    expect(apart.decision?.matches?.warnings?.[0]?.hint).toContain(
+      'query "soud výpověď"',
+    );
+
+    const absent = await readOne({ query: "Listina" });
+    expect(absent.decision?.matches).toMatchObject({
+      hitCount: 0,
+      paragraphs: [],
+      warnings: [{ code: "query_words_absent", audience: "agent" }],
+    });
+
+    const found = await readOne({ query: "soud výpověď" });
+    expect(found.decision?.matches).not.toHaveProperty("warnings");
   });
 
   test("read_case_law_decision uses court paragraphs in match and outline links", async () => {

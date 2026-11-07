@@ -185,7 +185,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - via `--input` only: change
   - change: type="body": body:string; type="color": color:"yellow" | "green" | "sky" | "violet" | "red"; type="style": style:string; type="visibility": visibility:"private" | "shared". Example: `--input '{"change":{"type":"body","body":"x"}}'`
 - `stella audit-log list`
-  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
+  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --performer (people|automations), --from, --to
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
 - `stella capability list`
@@ -268,7 +268,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--entity-id` — Document entity ID whose cell to set (string)
   - `--property-id` — Property ID, as returned by list_properties (string)
   - via `--input` only: content
-  - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
+  - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer|null, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
 - `stella document list`
   - `--matter-id` — Matter ID to list documents in. (string)
   - optional: --mode (flat|children), --parent-id

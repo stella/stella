@@ -4,8 +4,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
+import { assertProperty, drawPropertySamples } from "@stll/property-testing";
 
+import { PENDING_CONTRACT_MIGRATIONS } from "../apps/api/src/lib/db/pending-contract-migrations/registry";
 import {
   checkMigrationSources,
   parseMigrationStatements,
@@ -340,9 +341,16 @@ describe("check-migration-safety", () => {
     });
 
     it("allows the same SQL in the pending-contract registry", () => {
+      // A live entry: a named one leaves the registry when its contract ships.
+      const pending = PENDING_CONTRACT_MIGRATIONS.at(0);
+      if (pending === undefined) {
+        throw new Error(
+          "the pending-contract registry is empty: give this case a fixture registry",
+        );
+      }
       const [result] = checkMigrationSources([
         {
-          file: "apps/api/src/lib/db/pending-contract-migrations/20261015060000_case_law_decisions_base_table_contract.sql",
+          file: `apps/api/src/lib/db/pending-contract-migrations/${pending.name}.sql`,
           source: `${TIMEOUTS}CREATE UNIQUE INDEX "documents_external_id_unique" ON "documents" ("external_id");`,
         },
       ]);
@@ -1157,20 +1165,22 @@ DO $$ BEGIN UPDATE probe SET title = 'updated'; DROP TABLE retired; END $$;`;
       });
 
     it("never fires on unsafe SQL inside comments, literals, or identifiers", () => {
-      fc.assert(
+      assertProperty(
+        "never fires on unsafe SQL inside comments, literals, or identifiers",
         fc.property(maskedSql, (sql) => {
           expect(findingsIn(sql)).toEqual([]);
         }),
-        propertyConfig({ numRuns: 30 }),
+        { numRuns: 30 },
       );
     });
 
     it("always fires on the same unsafe SQL when it executes", () => {
-      fc.assert(
+      assertProperty(
+        "always fires on the same unsafe SQL when it executes",
         fc.property(executedSql, (sql) => {
           expect(findingsIn(sql).length).toBeGreaterThan(0);
         }),
-        propertyConfig({ numRuns: 20 }),
+        { numRuns: 20 },
       );
     });
 
