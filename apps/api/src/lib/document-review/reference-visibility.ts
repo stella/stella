@@ -23,7 +23,7 @@ import { inArray } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaces } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
-import type { SafeId } from "@/api/lib/branded-types";
+import { basisReferenceWorkspaceIds } from "@/api/lib/document-review/reference-passages";
 import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import type {
@@ -31,7 +31,6 @@ import type {
   PinnedPlaybook,
   PinnedReference,
 } from "@/api/lib/document-review/run-contract";
-import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import type {
   PlaybookPositions,
   PlaybookScope,
@@ -56,18 +55,6 @@ export const referenceWorkspacesByPosition = (
   return byPosition;
 };
 
-const referencedWorkspaceIds = (
-  basis: DocumentReviewRunBasis,
-): SafeId<"workspace">[] => {
-  const ids = new Set<string>(basis.references.map((r) => r.workspaceId));
-  for (const workspaceIds of referenceWorkspacesByPosition(basis).values()) {
-    for (const id of workspaceIds) {
-      ids.add(id);
-    }
-  }
-  return [...ids].map(brandPersistedWorkspaceId);
-};
-
 /**
  * The subset of the run's reference matters this reader can open. Read through
  * the reader's own scoped connection, so row security decides.
@@ -81,7 +68,7 @@ export const readableReferenceWorkspaces = async function* ({
   safeDb: SafeDb;
   basis: DocumentReviewRunBasis;
 }) {
-  const ids = referencedWorkspaceIds(basis);
+  const ids = basisReferenceWorkspaceIds(basis);
   if (ids.length === 0) {
     return new Set<string>();
   }
