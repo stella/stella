@@ -478,6 +478,7 @@
   "billing.globalTimer.title": "Timers",
   "billing.hourlyRateMustBeNonNegative": "Hourly rate cannot be negative",
   "billing.hours": "Hours",
+  "billing.invalidNumberFormat": "Check the number format",
   "billing.invoiceComposer.addSellerProfile": "Add a seller profile in billing settings",
   "billing.invoiceComposer.billedHours": "Billed hours",
   "billing.invoiceComposer.buyer": "Client (buyer)",
