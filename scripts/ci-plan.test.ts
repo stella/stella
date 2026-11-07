@@ -944,21 +944,16 @@ const PULL_REQUEST_HEAD = { repoId: 456, ref: "fork-branch" } as const;
 
 // GitHub links no pull request to a run from a fork: such a run carries only
 // the repository and branch it ran.
-const metadataCodeRunLink = (state: MetadataCodeRun | undefined) => {
-  switch (state) {
-    case "fork-green":
-    case "other-fork":
-      return {
+const metadataCodeRunLink = (state: MetadataCodeRun | undefined) =>
+  state === "fork-green" || state === "other-fork"
+    ? {
         pull_requests: [],
         head_repository: {
           id: state === "fork-green" ? PULL_REQUEST_HEAD.repoId : 999,
         },
         head_branch: PULL_REQUEST_HEAD.ref,
-      };
-    default:
-      return { pull_requests: [{ number: Number(PULL_REQUEST.number) }] };
-  }
-};
+      }
+    : { pull_requests: [{ number: Number(PULL_REQUEST.number) }] };
 
 const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
   const head = state === "other-head" ? "b".repeat(40) : "a".repeat(40);
