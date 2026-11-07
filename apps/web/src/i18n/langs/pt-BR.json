@@ -1688,6 +1688,7 @@
       "errorLimitReached": "O agente de programação do seu computador atingiu o limite de uso. Tente de novo quando o limite for renovado.",
       "errorNeedsLogin": "O agente de programação do seu computador precisa que você entre novamente. Entre pelo stella desktop e tente de novo.",
       "errorUnavailable": "Seu computador parou de processar esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
+      "filesNotShared": "Os arquivos que não puderam ser compartilhados continuam no seu computador: {fileNames}",
       "onThisComputer": "{harness} neste computador",
       "permissionAskDescription": "Edita sozinho os arquivos da pasta do chat; pergunta antes de qualquer outra coisa.",
       "permissionAutoDescription": "Faz sozinho o que julga seguro; pergunta sobre o resto.",

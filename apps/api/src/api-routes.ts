@@ -20,6 +20,7 @@ import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { catalogueRoute } from "@/api/handlers/catalogue/routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
+import { chatRunOutputsRoute } from "@/api/handlers/chat/run-outputs/routes";
 import {
   clauseCategoriesRoute,
   clausesRoute,
@@ -270,6 +271,7 @@ export const apiRoutes = mount([
       legalReaderRoute,
       legalResolveRoute,
       chatRoute,
+      chatRunOutputsRoute,
       dictationRoute,
       userFilesRoute,
       skillsRoute,

@@ -35,6 +35,11 @@ import {
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
 import {
+  CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
+  chatLocalRunFilePartsOf,
+  chatLocalRunFilesNotSharedSchema,
+} from "@stll/api-contract/chat-run-target";
+import {
   desktopRunnerAttachmentPath,
   MAX_RUN_ATTACHMENTS,
 } from "@stll/api-contract/desktop-runner";
@@ -63,6 +68,7 @@ import {
   getAwaitingUserInteractions,
   getChatAttachmentMimeType,
   getUserFileIdFromAttachmentPart,
+  isAnswerFilePart,
   isApprovedClientCallAwaitingResult,
   isChatAttachmentPart,
   isChatDocumentPart,
@@ -105,7 +111,10 @@ import {
   NO_DECISION_PASSAGE_NUMBERS,
 } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
-import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
+import {
+  LOCAL_RUN_OUTPUTS_INSTRUCTIONS,
+  type LocalChatRun,
+} from "@/api/handlers/chat/local-run-chunks";
 import {
   createLoopRecoverySystemPrompt,
   detectModelLoop,
@@ -1618,7 +1627,7 @@ const runChatAttempts = async function* ({
       chatRunId: runId,
       chatTurnId,
       messages: convertMessagesToModelMessages([...surfaces.messages]),
-      instructions: surfaces.system,
+      instructions: `${surfaces.system}\n\n${LOCAL_RUN_OUTPUTS_INSTRUCTIONS}`,
       resume,
       // The run's own cut, as the provider gets it: a stop on any task, the
       // deadline, a lost owner or admission, a failed production.
@@ -3611,11 +3620,14 @@ const processTurnForPersistence = ({
   const { processor, message } = createStreamMessageCapture({
     initialMessages,
     capture: (streamed) => {
-      const convertedMessage = toChatMessage(streamed, visualOrigin);
+      const convertedMessage = toChatMessage(
+        withLocalRunFileParts(streamed),
+        visualOrigin,
+      );
       return convertedMessage === null
         ? null
         : attachRestorationMetadata({
-            message: convertedMessage,
+            message: attachLocalRunFilesNotShared(convertedMessage, streamed),
             restorationPairs,
           });
     },
@@ -5063,6 +5075,37 @@ const deanonymizeToolInputText = (
   return typeof deanonymized === "string" ? deanonymized : text;
 };
 
+/**
+ * The answer with the files a local run handed back as its parts: the stream
+ * carries them as metadata (`CHAT_LOCAL_RUN_FILES_METADATA_KEY`), and the stored
+ * message holds them the way every other reader expects a file.
+ */
+const withLocalRunFileParts = (streamed: UIMessage): UIMessage => {
+  const files = chatLocalRunFilePartsOf(streamed.metadata, streamed.parts);
+  return files.length === 0
+    ? streamed
+    : { ...streamed, parts: [...streamed.parts, ...files] };
+};
+
+const attachLocalRunFilesNotShared = (
+  message: ChatMessage,
+  streamed: UIMessage,
+): ChatMessage => {
+  const notShared = v.safeParse(
+    chatLocalRunFilesNotSharedSchema,
+    streamed.metadata?.[CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY],
+  );
+  return notShared.success && notShared.output.length > 0
+    ? {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          [CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY]: notShared.output,
+        },
+      }
+    : message;
+};
+
 const attachRestorationMetadata = ({
   message,
   restorationPairs,
@@ -5193,9 +5236,10 @@ export const localRunAttachmentsOf = async ({
     const attachments = new Map<string, LocalRunAttachment>();
     for (const message of messages.toReversed()) {
       for (const part of message.parts) {
-        const fileId = isChatAttachmentPart(part)
-          ? getUserFileIdFromAttachmentPart(part)
-          : null;
+        const fileId =
+          isChatAttachmentPart(part) && !isAnswerFilePart(message.role, part)
+            ? getUserFileIdFromAttachmentPart(part)
+            : null;
         const file = fileId === null ? undefined : files.get(fileId);
         if (file !== undefined && attachments.size < MAX_RUN_ATTACHMENTS) {
           attachments.set(file.id, {
@@ -5278,7 +5322,10 @@ export const hydrateMessages = async ({
       const parts: ChatMessage["parts"] = [];
 
       for (const part of message.parts) {
-        if (!isChatAttachmentPart(part)) {
+        if (
+          !isChatAttachmentPart(part) ||
+          isAnswerFilePart(message.role, part)
+        ) {
           parts.push(part);
           continue;
         }
@@ -5423,7 +5470,7 @@ const collectMessageUserFileIds = (
 
   for (const message of messages) {
     for (const part of message.parts) {
-      if (!isChatAttachmentPart(part)) {
+      if (!isChatAttachmentPart(part) || isAnswerFilePart(message.role, part)) {
         continue;
       }
 

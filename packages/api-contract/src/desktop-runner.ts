@@ -589,6 +589,49 @@ export type DesktopRunnerAttachment = v.InferOutput<
   typeof desktopRunnerAttachmentSchema
 >;
 
+/**
+ * Where a run's output file is posted, over HTTP and with the run's agent
+ * token: a file does not fit a socket frame or what one run may store.
+ */
+export const desktopRunnerOutputPath = (runId: string) =>
+  `${STELLA_API_VERSION_PREFIX}/chat/local-runs/${encodeURIComponent(runId)}/outputs` as const;
+
+/** The largest file a run hands back; both ends hold it to this. */
+export const DESKTOP_RUNNER_OUTPUT_MAX_BYTES = 50 * 1024 * 1024;
+
+/** What the API answers once it stored a run's output file. */
+export const desktopRunnerOutputUploadedSchema = v.strictObject({
+  fileId: v.pipe(v.string(), v.uuid()),
+});
+
+/**
+ * The CUSTOM chunk a desktop reports one output file with, before the run's
+ * finish. It names a file; it never makes one: the API checks an uploaded id
+ * against the run's thread and owner and mints the message part itself.
+ */
+export const DESKTOP_RUNNER_OUTPUT_EVENT = "stella.run-output";
+
+const outputFileNameSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(255),
+);
+
+export const desktopRunnerOutputEventSchema = v.variant("status", [
+  v.strictObject({
+    status: v.literal("uploaded"),
+    fileId: v.pipe(v.string(), v.uuid()),
+    fileName: outputFileNameSchema,
+  }),
+  v.strictObject({
+    status: v.literal("failed"),
+    fileName: outputFileNameSchema,
+  }),
+]);
+export type DesktopRunnerOutputEvent = v.InferOutput<
+  typeof desktopRunnerOutputEventSchema
+>;
+
 export const desktopRunnerDesktopMessageSchema = v.variant("type", [
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.hello),

@@ -39,6 +39,13 @@ import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import { copyAttachments } from "./attachments";
 import { type McpProxy, startMcpProxy } from "./mcp-proxy";
+import {
+  outputReportChunk,
+  type OutputSnapshot,
+  runOutputUploader,
+  shareOutputs,
+  snapshotOutputs,
+} from "./outputs";
 import type {
   SidecarHarnessLaunchSettings,
   SidecarHostMessage,
@@ -138,6 +145,10 @@ type HeldRun = {
    * approvals and blocking questions.
    */
   requests: Map<string, string>;
+  /** The run's `outputs/` folder when it started; `null` until it opened. */
+  outputs: OutputSnapshot | null;
+  /** Cut by a stop, so sharing a stopped run's files ends at once. */
+  outputSharing: AbortController;
 };
 
 type Config = { appVersion: string; apiOrigin: string; proxy: McpProxy };
@@ -559,6 +570,8 @@ export class SidecarHost {
       stop: this.stopping ? RUN_STOP.cancel : RUN_STOP.none,
       stopCopying: new AbortController(),
       requests: new Map(),
+      outputs: null,
+      outputSharing: new AbortController(),
     };
     this.runs.set(message.runId, run);
     this.track(
@@ -575,6 +588,7 @@ export class SidecarHost {
         ? RUN_STOP.cancel
         : RUN_STOP.interrupt;
     run.stopCopying.abort();
+    run.outputSharing.abort();
     if (run.turn !== null) {
       this.detached(run.turn.interrupt(), "sidecar.interrupt");
     }
@@ -671,6 +685,9 @@ export class SidecarHost {
         signal: null,
       });
     }
+    // Read after the copies and before the harness: what is there now was not
+    // written by this turn.
+    run.outputs = await snapshotOutputs(message.workspaceDir);
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
@@ -736,6 +753,40 @@ export class SidecarHost {
     };
 
     /**
+     * Hand the member what the turn wrote to its `outputs/` folder, reported
+     * ahead of the finish that ends the chat turn. A failure stays with the
+     * files it concerns: the run has done its work whatever happens here.
+     */
+    const shareRunOutputs = async () => {
+      if (run.outputs === null) {
+        return;
+      }
+      const reports = shareOutputs({
+        workspaceDir: message.workspaceDir,
+        before: run.outputs,
+        upload: runOutputUploader({
+          apiOrigin: config.apiOrigin,
+          runId,
+          token: () => config.proxy.tokenOf(runId),
+        }),
+        signal: run.outputSharing.signal,
+      });
+      const shared = await Result.tryPromise(async () => {
+        for await (const report of reports) {
+          const timestamp = Temporal.Now.instant().epochMilliseconds;
+          send({
+            type: "run.event",
+            runId,
+            chunk: { ...outputReportChunk(report, timestamp) },
+          });
+        }
+      });
+      if (Result.isError(shared)) {
+        this.options.log("sharing a run's output files stopped early");
+      }
+    };
+
+    /**
      * The adapter's events with harness request ids replaced by runner UUIDs.
      * An approval request is announced after the chunks of its event: the
      * mapper asks for the next event only once those are written.
@@ -776,6 +827,7 @@ export class SidecarHost {
             break;
           case "turn.completed":
             outcome.value = "completed";
+            await shareRunOutputs();
             yield event;
             break;
           case "turn.interrupted":
