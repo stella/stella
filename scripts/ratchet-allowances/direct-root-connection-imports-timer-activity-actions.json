@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/push/timer-activity-actions.ts",
+  "delta": 1,
+  "reason": "The timer-activity-key-authorization door: a Lock Screen button's key is its request's only credential, so the key is looked up on the owner connection by the phone and person it names, and only the Lock Screen endpoint may import the door."
+}

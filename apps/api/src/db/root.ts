@@ -97,8 +97,8 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
 // the header gate in index.ts.
 const queryLogger = isLocalDevOpen() ? queryCountLogger : undefined;
 
-// Optional pool recycling. Defaults remain disabled until the Bun SQL runtime
-// retires only idle connections; values are seconds and apply to both pools.
+// Pool recycling in seconds, both pools. Deployed services must set a lifetime:
+// prepared statements stay on a connection until it retires, and Bun waits for running work.
 const poolRecycling = {
   maxLifetime: envBase.DATABASE_POOL_MAX_LIFETIME_S,
   idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -27,12 +27,15 @@ import {
 import type { TierStandardPosition } from "@/api/lib/workflow/position-runtime";
 
 // Auto-ASK derivation (save-time). A graded position with `ask.mode === "auto"`
-// derives its extraction question + content type from the issue and tier rules
-// so run/review consume `derived` exactly like a manual ask. Derivation is
-// gated on a `rulesHash` over the grading inputs: unchanged inputs skip the LLM
-// call and reuse the stored `derived`. Derivation never blocks a save — a failed
-// or timed-out call persists with `derived` absent, and run/review fall back to
-// a generic text ask over the issue.
+// derives its extraction question from the issue and tier rules so run/review
+// consume `derived` exactly like a manual ask. The position's check decides the
+// content type: a tier match reads the clause's wording and a presence check
+// reads whether there is any, so both store text; only a constraint compares a
+// number or date, so only a constraint keeps the type the model chooses.
+// Derivation is gated on a `rulesHash` over the grading inputs: unchanged inputs
+// skip the LLM call and reuse the stored `derived`. Derivation never blocks a
+// save — a failed or timed-out call persists with `derived` absent, and
+// run/review fall back to a generic text ask over the issue.
 
 const DERIVE_ASK_TIMEOUT_MS = 20_000;
 // Bound the per-save fan-out so a first save of a large playbook (up to 200
@@ -43,7 +46,19 @@ const DERIVE_ASK_CONCURRENCY = 4;
 // resolve to the same model.
 const DERIVE_ASK_TASK = "pdf" as const;
 
-const DERIVE_ASK_SYSTEM_PROMPT =
+export const DERIVE_CLAUSE_ASK_SYSTEM_PROMPT =
+  "You turn a contract-review issue and its tiered rules into ONE extraction " +
+  "question. A reviewer will judge the contract against every rule while seeing " +
+  "only the answer to your question, so the question must ask for the contract's " +
+  "own wording on every term the rules cover, naming each term. Never narrow it " +
+  "to a single value. Ask WHAT the contract says, not whether it meets a rule, " +
+  "and do not mention the rules, tiers, or grading. Ask for the wording to be " +
+  "quoted verbatim and in full, at whatever length that takes, with no commentary " +
+  "and nothing said about a term the contract does not address, and for no answer " +
+  "at all when the contract does not address the issue. Write the question in " +
+  'the language of the issue, in under 800 characters. Set contentType to "text".';
+
+export const DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT =
   "You turn a contract-review issue and its tiered rules into ONE extraction " +
   "question for reading a single value from a contract, plus that value's " +
   "content type. Return a concise question that captures WHAT to extract, not " +
@@ -57,10 +72,6 @@ export const deriveAskSchema = v.strictObject({
 });
 
 export type DeriveAskResult = v.InferOutput<typeof deriveAskSchema>;
-
-const contentForType = (
-  contentType: DeriveAskResult["contentType"],
-): ScalarPropertyContent => ({ version: 1, type: contentType });
 
 export const computeRulesHash = (position: TierStandardPosition): string =>
   hashSha256Hex(JSON.stringify(canonicalRulesInput(position)));
@@ -180,6 +191,40 @@ const needsDerivation = (
   return position.ask.derived?.rulesHash !== rulesHash;
 };
 
+type DerivedAsk = { question: string; content: ScalarPropertyContent };
+
+const deriveAskForCheck = async (
+  position: TierStandardPosition,
+  input: Omit<Parameters<DeriveAskGenerate>[0], "system" | "prompt">,
+  generate: DeriveAskGenerate,
+): Promise<DerivedAsk> => {
+  const prompt = buildDeriveAskUserMessage(position);
+  const kind = position.check?.kind;
+  switch (kind) {
+    case undefined:
+    case "presence": {
+      // The model must return a contentType, but this check always reads text.
+      const { question } = await generate({
+        ...input,
+        system: DERIVE_CLAUSE_ASK_SYSTEM_PROMPT,
+        prompt,
+      });
+      return { question, content: { version: 1, type: "text" } };
+    }
+    case "constraint": {
+      const { question, contentType } = await generate({
+        ...input,
+        system: DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT,
+        prompt,
+      });
+      return { question, content: { version: 1, type: contentType } };
+    }
+    default:
+      kind satisfies never;
+      return panic(`Unhandled position check: ${String(kind)}`);
+  }
+};
+
 type DeriveOneOptions = {
   admission: ModelDispatchAdmission;
   deps: DeriveAutoAsksDeps & {
@@ -200,15 +245,17 @@ const deriveOne = async ({
 }: DeriveOneOptions): Promise<Position> => {
   const derived = await Result.tryPromise({
     try: async () =>
-      await generate({
-        admission,
-        system: DERIVE_ASK_SYSTEM_PROMPT,
-        prompt: buildDeriveAskUserMessage(position),
-        organizationId: deps.organizationId,
-        orgAIConfig: deps.orgAIConfig,
-        managedAIResidency: deps.managedAIResidency,
-        promptCachingEnabled: deps.promptCachingEnabled,
-      }),
+      await deriveAskForCheck(
+        position,
+        {
+          admission,
+          organizationId: deps.organizationId,
+          orgAIConfig: deps.orgAIConfig,
+          managedAIResidency: deps.managedAIResidency,
+          promptCachingEnabled: deps.promptCachingEnabled,
+        },
+        generate,
+      ),
     catch: (error) => error,
   });
 
@@ -226,11 +273,7 @@ const deriveOne = async ({
     ...position,
     ask: {
       mode: "auto",
-      derived: {
-        question: derived.value.question,
-        content: contentForType(derived.value.contentType),
-        rulesHash,
-      },
+      derived: { ...derived.value, rulesHash },
     },
   };
 };

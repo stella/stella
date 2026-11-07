@@ -5,5 +5,7 @@
   "noMatter": "Be bylos",
   "noDescription": "Be aprašymo",
   "more": "{count, plural, one {dar # laikmatis} few {dar # laikmačiai} other {dar # laikmačių}}",
-  "startedElsewhere": "Kitame įrenginyje paleistas laikmatis"
+  "startedElsewhere": "Kitame įrenginyje paleistas laikmatis",
+  "pause": "Pristabdyti",
+  "resume": "Tęsti"
 }

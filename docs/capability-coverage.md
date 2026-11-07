@@ -777,7 +777,7 @@ mechanics, and similar), not gaps in coverage.
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
-| native_device | 4 |
+| native_device | 5 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
 | public_indexing | 9 |
@@ -785,5 +785,5 @@ mechanics, and similar), not gaps in coverage.
 | search_ui | 20 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 21 |
+| upload_mechanics | 22 |
 | url_preview | 2 |

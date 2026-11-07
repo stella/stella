@@ -27,6 +27,7 @@ import {
   lockDesktopEditTarget,
   lockDocxEditTarget,
 } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { CARRIED_FIELD_COLUMNS } from "@/api/lib/entity-versions/field-clone-policy";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   buildVersionStamp,
@@ -459,7 +460,7 @@ export const writeFileVersion = async ({
     },
     columns: { versionNumber: true },
     with: {
-      fields: { columns: { id: true, content: true, propertyId: true } },
+      fields: { columns: { id: true, ...CARRIED_FIELD_COLUMNS } },
     },
   });
   if (!fieldSourceVersion) {
@@ -583,6 +584,8 @@ export const writeFileVersion = async ({
     revisionFields.push({
       id: fieldId,
       content: replacementContent,
+      // A new file is no run's outcome.
+      aiSettlement: null,
       entityVersionId,
       propertyId: filePropertyId,
       workspaceId,

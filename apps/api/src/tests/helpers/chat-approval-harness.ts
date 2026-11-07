@@ -22,6 +22,7 @@ import type {
 } from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
+import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -268,6 +269,7 @@ export const createApprovalHarness = ({
   failingApprovalNames = [],
   grantableApprovalConnectorId,
   ids,
+  localRunOf,
   model,
   organizationAIConfig = orgAIConfig,
   promptCachingEnabled = false,
@@ -283,6 +285,12 @@ export const createApprovalHarness = ({
 }: {
   /** Observe or control the real send's pre-model compaction boundary. */
   compactMessages?: typeof compactMessagesForContext | undefined;
+  /**
+   * The run on the member's computer a thread's next turn answers through, as
+   * the send's routing would hand it over. `undefined` is a cloud turn.
+   */
+  localRunOf?:
+    ((threadId: SafeId<"chatThread">) => LocalChatRun | undefined) | undefined;
   /**
    * Replaces the anonymizer an anonymized turn's provider boundary calls, so a
    * test can make it fail. The real pipeline by default.
@@ -536,6 +544,9 @@ export const createApprovalHarness = ({
       );
       return await streamChat({
         ...props,
+        ...(localRunOf === undefined
+          ? {}
+          : { localRun: localRunOf(props.threadId) }),
         onFinish: async (event) => {
           await beforeTurnSettles?.({
             outcome: event.outcome,
