@@ -584,6 +584,8 @@ export const writeFileVersion = async ({
     revisionFields.push({
       id: fieldId,
       content: replacementContent,
+      // A new file is no run's outcome.
+      aiSettlement: null,
       entityVersionId,
       propertyId: filePropertyId,
       workspaceId,
