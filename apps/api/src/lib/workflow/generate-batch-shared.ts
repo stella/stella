@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
+import type { AiCellSettlement } from "@stll/api-contract";
 import { toMajorUnitsText } from "@stll/money";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -123,10 +124,11 @@ type PrepareBatchInputResult = Result<
   WorkflowValidationError
 >;
 
-type InputFieldRow = {
+export type InputFieldRow = {
   id: SafeId<"field">;
   propertyId: SafeId<"property">;
   content: FieldContent;
+  aiSettlement: AiCellSettlement | null;
 };
 
 type FetchInputFieldsForBatchProps = {
@@ -150,6 +152,7 @@ export const fetchInputFieldsForBatch = async ({
         id: fields.id,
         propertyId: fields.propertyId,
         content: fields.content,
+        aiSettlement: fields.aiSettlement,
       })
       .from(fields)
       .where(
@@ -171,7 +174,7 @@ export type ResolvedFile = {
 };
 
 export const prepareBatchInput = (
-  inputFields: InputFieldRow[],
+  inputFields: Omit<InputFieldRow, "aiSettlement">[],
   batch: PropertyBatch,
 ): PrepareBatchInputResult => {
   const skippedPropertyIds: SafeId<"property">[] = [];

@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import type { AiCellSettlement } from "@stll/api-contract";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { ConditionNode } from "@stll/conditions";
 
@@ -23,6 +24,7 @@ import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type {
   AIJustification,
   AIResult,
+  InputFieldRow,
 } from "@/api/lib/workflow/generate-batch-shared";
 import { fetchInputFieldsForBatch } from "@/api/lib/workflow/generate-batch-shared";
 import type { VerdictBatchProperty } from "@/api/lib/workflow/get-execution-plan";
@@ -85,6 +87,26 @@ export const askPresence = (
       return panic(`Unhandled content: ${String(content)}`);
     }
   }
+};
+
+/**
+ * True when the ASK cell says nothing about the document, because extraction
+ * failed, is unfinished, was refused, or could not read the file. Such a cell
+ * must never grade as a missing clause. A model's "not stated" answer is stored
+ * as `unsupported` too, and only its settlement tells the two apart. No cell at
+ * all stays gradable: a failed extraction always leaves a cell.
+ */
+export const askExtractionUnfinished = (
+  cell:
+    | { content: FieldContent; aiSettlement: AiCellSettlement | null }
+    | undefined,
+): boolean => {
+  if (cell === undefined) {
+    return false;
+  }
+  return cell.content.type === "unsupported"
+    ? cell.aiSettlement?.type !== "notStated"
+    : askPresence(cell.content) === "missing";
 };
 
 /** The ASK value a finding records: the raw value and the prose rendering of
@@ -709,6 +731,9 @@ export const computeVerdictBatch = async ({
   const fieldContentByPropertyId = new Map<string, FieldContent>(
     inputFields.map((field) => [field.propertyId, field.content]),
   );
+  const inputFieldByPropertyId = new Map<string, InputFieldRow>(
+    inputFields.map((field) => [field.propertyId, field]),
+  );
 
   const aiResults: AIResult[] = [];
   const aiJustifications: AIJustification[] = [];
@@ -757,6 +782,15 @@ export const computeVerdictBatch = async ({
     const { tool } = property;
     const askContent = fieldContentByPropertyId.get(tool.askPropertyId);
     const rule: PositionRule = tool.rule;
+
+    if (
+      rule.kind !== "extractOnly" &&
+      askExtractionUnfinished(inputFieldByPropertyId.get(tool.askPropertyId))
+    ) {
+      erroredPropertyIds.push(property.id);
+      settlements.set(property.id, "failedTransient");
+      continue;
+    }
 
     switch (rule.kind) {
       case "extractOnly":
