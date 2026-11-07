@@ -511,7 +511,7 @@ const scoreCase = ({
   rationale,
 }: {
   evalCase: EvalCase;
-  position: Position;
+  position: TierStandardPosition;
   content: FieldContent | undefined;
   verdict: VerdictTier;
   rationale: string | null;
@@ -520,6 +520,9 @@ const scoreCase = ({
   const answer = askText(content);
   const defects: string[] = [];
   const { expected } = evalCase;
+  if (position.ask.mode === "auto" && position.ask.derived === undefined) {
+    defects.push("the ask was not derived, so this ran the fallback question");
+  }
   if (askContent.type !== expected.contentType) {
     defects.push(`type ${askContent.type}, expected ${expected.contentType}`);
   }
@@ -675,27 +678,49 @@ const main = async () => {
     panic(`Unknown case ${String(options.caseFilter)}`);
   }
 
-  const record: { modelId: string; run: number; scores: CaseScore[] }[] = [];
+  const runs: { modelId: string; run: number; scores: CaseScore[] }[] = [];
+  // `run` is null when the model never resolved, so no run was attempted.
+  const failures: { modelId: string; run: number | null; message: string }[] =
+    [];
   for (const target of resolveModelTargets(options.models)) {
     if (target.type === "resolution-error") {
       process.stderr.write(`${target.id}: ${target.message}\n`);
+      failures.push({ modelId: target.id, run: null, message: target.message });
       continue;
     }
     const scores: CaseScore[] = [];
     for (let run = 1; run <= options.runs; run += 1) {
       process.stderr.write(`${target.id} · run ${String(run)}\n`);
-      const runScores = await runOnce(
-        target.orgAIConfig,
-        `${target.id}-${String(run)}`,
-        cases,
-      );
-      record.push({ modelId: target.id, run, scores: runScores });
-      scores.push(...runScores);
+      const runScores = await Result.tryPromise({
+        try: async () =>
+          await runOnce(
+            target.orgAIConfig,
+            `${target.id}-${String(run)}`,
+            cases,
+          ),
+        catch: (error) =>
+          error instanceof Error ? error.message : String(error),
+      });
+      if (Result.isError(runScores)) {
+        process.stderr.write(
+          `${target.id} · run ${String(run)} failed: ${runScores.error}\n`,
+        );
+        failures.push({ modelId: target.id, run, message: runScores.error });
+        continue;
+      }
+      runs.push({ modelId: target.id, run, scores: runScores.value });
+      scores.push(...runScores.value);
     }
     process.stdout.write(`${renderTable(target.id, scores)}\n`);
   }
   if (options.jsonPath !== null) {
-    await writeFile(options.jsonPath, JSON.stringify(record, null, 2));
+    await writeFile(
+      options.jsonPath,
+      JSON.stringify({ runs, failures }, null, 2),
+    );
+  }
+  if (failures.length > 0) {
+    process.exitCode = 1;
   }
 };
 
