@@ -1219,6 +1219,18 @@ const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   return "chat.sendError";
 };
 
+/**
+ * A local run's usage limit with the time the harness said it resets, in the
+ * member's own locale and time zone.
+ */
+const LocalRunLimitResetMessage = ({ resetsAt }: { resetsAt: string }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return t("chat.localRun.errorLimitResetsAt", {
+    time: format.dateTime(new Date(resetsAt), MEDIUM_DATE_SHORT_TIME_FORMAT),
+  });
+};
+
 export const ChatErrorMessage = ({
   error,
   isGenerating,
@@ -1232,7 +1244,6 @@ export const ChatErrorMessage = ({
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
   const canSendWithoutAnonymization =
     onSendWithoutAnonymization !== undefined &&
     isThirdPartyBoundaryRefusalError(error);
@@ -1241,7 +1252,6 @@ export const ChatErrorMessage = ({
   // A provider refusal shows its typed message and, for a known setup
   // problem, the fix; the provider's own wording is never shown.
   const setupCode = providerDiagnosticFromThrown(error)?.code ?? null;
-  const limitResetsAt = localRunLimitResetsAtFromThrown(error);
   const rejectedInput =
     refusal !== null &&
     (refusal.status === 400 || refusal.status === 422) &&
@@ -1253,19 +1263,11 @@ export const ChatErrorMessage = ({
     errorMessage = t(finalRefusalKey);
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
-  } else if (
-    limitResetsAt !== null &&
-    aiErrorKindFromMessage(error.message) === "local_runner_limit_reached"
-  ) {
-    // The harness said when its limit resets: shown in the member's own
-    // locale and time zone.
-    errorMessage = t("chat.localRun.errorLimitResetsAt", {
-      time: format.dateTime(
-        new Date(limitResetsAt),
-        MEDIUM_DATE_SHORT_TIME_FORMAT,
-      ),
-    });
   }
+  const limitResetsAt =
+    aiErrorKindFromMessage(error.message) === "local_runner_limit_reached"
+      ? localRunLimitResetsAtFromThrown(error)
+      : null;
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1290,7 +1292,13 @@ export const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        <p className="text-sm">{errorMessage}</p>
+        <p className="text-sm">
+          {limitResetsAt === null ? (
+            errorMessage
+          ) : (
+            <LocalRunLimitResetMessage resetsAt={limitResetsAt} />
+          )}
+        </p>
         <ProviderSetupGuidanceNotice code={setupCode} />
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
