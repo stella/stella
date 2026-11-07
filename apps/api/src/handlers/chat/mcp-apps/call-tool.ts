@@ -31,6 +31,8 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveCredentialMemberExecutionContext } from "@/api/lib/chat/credential-member-execution-context";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -50,6 +52,11 @@ const config = {
   }),
   // Validated inside the handler so a refusal never echoes the arguments.
   body: v.unknown(),
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Answers an app's read in the MCP result shape; it returns no stored-file grant.",
+  },
 } satisfies HandlerConfig;
 
 const refusal = (
@@ -83,24 +90,31 @@ const readShownApp = async ({
   toolCallId,
 }: ShownAppLookup) =>
   await safeDb(async (tx) => {
-    const rows = await tx
-      .select({ id: chatMessages.id, content: chatMessages.content })
-      .from(chatMessages)
-      .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
-      .where(
-        and(
-          eq(chatMessages.threadId, threadId),
-          eq(chatMessages.userId, userId),
-          eq(chatMessages.role, "assistant"),
-          eq(chatThreads.userId, userId),
-          eq(chatThreads.organizationId, organizationId),
-          sql`${chatMessages.content} -> 'data' @> ${JSON.stringify([
-            { type: "ui-resource", toolCallId },
-          ])}::text::jsonb`,
+    // A call id names one call of the thread; a second message claiming the
+    // same id leaves the app unresolved rather than picking one.
+    const read = await readBounded(
+      tx
+        .select({ id: chatMessages.id, content: chatMessages.content })
+        .from(chatMessages)
+        .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
+        .where(
+          and(
+            eq(chatMessages.threadId, threadId),
+            eq(chatMessages.userId, userId),
+            eq(chatMessages.role, "assistant"),
+            eq(chatThreads.userId, userId),
+            eq(chatThreads.organizationId, organizationId),
+            sql`${chatMessages.content} -> 'data' @> ${JSON.stringify([
+              { type: "ui-resource", toolCallId },
+            ])}::text::jsonb`,
+          ),
         ),
-      )
-      .limit(2);
-    for (const row of rows) {
+      1,
+    );
+    if (read.type === "overflow") {
+      return null;
+    }
+    for (const row of read.rows) {
       const parts = normalizePersistedChatMessageContent(
         row.content,
         row.id,
@@ -266,4 +280,12 @@ export const createCallChatMcpAppTool = ({
     },
   );
 
-export default createCallChatMcpAppTool();
+const callChatMcpAppTool = createCallChatMcpAppTool();
+
+declareAggregateMutation(callChatMcpAppTool, {
+  type: "independent",
+  reason:
+    "Runs one read an app asks for and writes nothing; the POST only carries the app's arguments.",
+});
+
+export default callChatMcpAppTool;

@@ -40,7 +40,7 @@ describe("the host side of a stella app's bridge", () => {
 
   test("forwards an app's tool call to the server and returns its answer", async () => {
     const answer = {
-      content: [{ type: "text", text: "{}" }],
+      content: [{ type: "text" as const, text: "{}" }],
       structuredContent: {},
     };
     const server = recordingServer(answer);
