@@ -1,5 +1,16 @@
 # @stll/workspace-ui
 
+## 0.16.0
+
+### Minor Changes
+
+- [#7941](https://github.com/stella/stella/pull/7941) [`c06a3b7`](https://github.com/stella/stella/commit/c06a3b75576febd3108abf6c769c62ecf5d47624) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `record` field content type: a cell holding typed records from a data source or a structured AI answer. `FieldValue` renders it as a summary (the record's values, a record count, a prompt to choose among unselected candidates, or a review or not-found note), and `RecordFieldValue`, `summarizeRecordField` and the `RecordField*` types are exported. `GenericProperty` and `PropertyIconType` accept `record`.
+
+### Patch Changes
+
+- Updated dependencies [[`4c623bb`](https://github.com/stella/stella/commit/4c623bbc19a13167e06f819783849e10c8cbddc0), [`61932c3`](https://github.com/stella/stella/commit/61932c325b3ce81881dbd917961a301891b7d949), [`50c904c`](https://github.com/stella/stella/commit/50c904c50877280367403165f00ef5d92663b23c), [`fa90f18`](https://github.com/stella/stella/commit/fa90f18c69c45e42359e2c5dc2e4511bf69466df), [`b137d1b`](https://github.com/stella/stella/commit/b137d1b048e6d36123ba60d24ab99baaf8208de7)]:
+  - @stll/ui@0.67.0
+
 ## 0.15.8
 
 ### Patch Changes
