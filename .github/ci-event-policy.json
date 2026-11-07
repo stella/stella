@@ -80,6 +80,7 @@
     "release-desktop.yml/manifest": "main",
     "release-desktop.yml/promote-latest": "main",
     "release-desktop.yml/carry-forward": "main",
+    "release-desktop.yml/release-complete": "main",
     "release-mobile-ios.yml/testflight": "main",
     "publish-mobile-update.yml/publish": "main",
     "mobile-release-plan.yml/builds": "main",
