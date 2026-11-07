@@ -152,6 +152,7 @@
     "emailPlaceholder": "sie@beispiel.de",
     "error": {
       "generic": "Bei der Anmeldung ist etwas schiefgelaufen. Bitte versuchen Sie es erneut.",
+      "providerUnavailable": "Der Anmeldedienst antwortet gerade nicht. Bitte versuchen Sie es in einer Minute erneut.",
       "title": "Wir konnten Sie nicht anmelden"
     },
     "handoffAccount": "Als <account>{email}</account> in <organization>{organizationName}</organization> fortfahren?",

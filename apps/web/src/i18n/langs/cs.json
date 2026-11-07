@@ -152,6 +152,7 @@
     "emailPlaceholder": "vy@priklad.cz",
     "error": {
       "generic": "Při přihlašování se něco pokazilo. Zkuste to prosím znovu.",
+      "providerUnavailable": "Poskytovatel přihlášení teď neodpovídá. Zkuste to prosím znovu za minutu.",
       "title": "Nepodařilo se vás přihlásit"
     },
     "handoffAccount": "Pokračovat jako <account>{email}</account> v organizaci <organization>{organizationName}</organization>?",

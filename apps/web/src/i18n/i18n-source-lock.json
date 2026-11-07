@@ -126,6 +126,7 @@
   "auth.createOrganizationButton": "Create organization",
   "auth.emailPlaceholder": "you@example.com",
   "auth.error.generic": "Something went wrong while signing you in. Please try again.",
+  "auth.error.providerUnavailable": "The sign-in provider isn't responding right now. Please try again in a minute.",
   "auth.error.title": "We couldn't sign you in",
   "auth.handoffAccount": "Continue as <account>{email}</account> in <organization>{organizationName}</organization>?",
   "auth.handoffTitle": "Continue to stella",

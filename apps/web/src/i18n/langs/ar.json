@@ -152,6 +152,7 @@
     "emailPlaceholder": "you@example.com",
     "error": {
       "generic": "حدث خطأ ما أثناء تسجيل دخولك. يُرجى المحاولة مرة أخرى.",
+      "providerUnavailable": "مزوّد تسجيل الدخول لا يستجيب حاليًا. يُرجى المحاولة مرة أخرى بعد دقيقة.",
       "title": "تعذّر تسجيل دخولك"
     },
     "handoffAccount": "هل تريد المتابعة باسم <account>{email}</account> في <organization>{organizationName}</organization>؟",

@@ -152,6 +152,7 @@
     "emailPlaceholder": "ty@example.com",
     "error": {
       "generic": "Coś poszło nie tak podczas logowania. Spróbuj ponownie.",
+      "providerUnavailable": "Dostawca logowania nie odpowiada w tej chwili. Spróbuj ponownie za minutę.",
       "title": "Nie udało się Cię zalogować"
     },
     "handoffAccount": "Kontynuować jako <account>{email}</account> w organizacji <organization>{organizationName}</organization>?",

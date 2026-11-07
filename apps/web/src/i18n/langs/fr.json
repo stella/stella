@@ -152,6 +152,7 @@
     "emailPlaceholder": "vous@example.com",
     "error": {
       "generic": "Une erreur est survenue lors de votre connexion. Veuillez réessayer.",
+      "providerUnavailable": "Le service de connexion ne répond pas pour le moment. Veuillez réessayer dans une minute.",
       "title": "Nous n'avons pas pu vous connecter"
     },
     "handoffAccount": "Continuer en tant que <account>{email}</account> dans <organization>{organizationName}</organization> ?",

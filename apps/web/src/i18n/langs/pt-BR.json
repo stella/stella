@@ -152,6 +152,7 @@
     "emailPlaceholder": "você@exemplo.com",
     "error": {
       "generic": "Algo deu errado ao fazer seu login. Tente novamente.",
+      "providerUnavailable": "O provedor de login não está respondendo agora. Tente novamente em um minuto.",
       "title": "Não foi possível fazer seu login"
     },
     "handoffAccount": "Continuar como <account>{email}</account> em <organization>{organizationName}</organization>?",

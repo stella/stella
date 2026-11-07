@@ -152,6 +152,7 @@
     "emailPlaceholder": "usted@example.com",
     "error": {
       "generic": "Algo salió mal al iniciar tu sesión. Inténtalo de nuevo.",
+      "providerUnavailable": "El proveedor de inicio de sesión no responde en este momento. Inténtalo de nuevo en un minuto.",
       "title": "No pudimos iniciar tu sesión"
     },
     "handoffAccount": "¿Continuar como <account>{email}</account> en <organization>{organizationName}</organization>?",
