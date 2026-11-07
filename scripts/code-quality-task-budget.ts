@@ -540,16 +540,74 @@ const machineResources = () => {
   return `Machine: memory_free_mib=${Math.round(os.freemem() / MIB)} memory_total_mib=${Math.round(os.totalmem() / MIB)} disk_free_mib=${diskFree} load=${load} cpus=${os.availableParallelism()}`;
 };
 
+const MACHINE_TRAIL_PROCESSES = 3;
+const MACHINE_TRAIL_COMMAND_CHARS = 120;
+
+/**
+ * The largest resident processes of a command's group, so a trail that ends in
+ * an out-of-memory kill names the process that grew, not only the machine.
+ */
+export const largestOwnedProcesses = (snapshot: string, group: number) =>
+  ownedProcessTreeRows(snapshot, group)
+    .flatMap((row) => {
+      const match = /^\d+\s+\d+\s+\d+\s+\S+\s+(\d+)\s+(.*)$/u.exec(row);
+      return match
+        ? [{ rssKb: Number(match[1]), command: match[2] ?? "" }]
+        : [];
+    })
+    .toSorted((left, right) => right.rssKb - left.rssKb)
+    .slice(0, MACHINE_TRAIL_PROCESSES)
+    .map(
+      ({ rssKb, command }) =>
+        `rss_mib=${Math.round(rssKb / 1024)} ${command.slice(0, MACHINE_TRAIL_COMMAND_CHARS)}`,
+    );
+
 /**
  * A runner can be stopped without warning, so the trail has to exist before
- * the stop: the last lines show how the machine looked on the way there.
+ * the stop: the last lines show how the machine looked on the way there, and
+ * which of the command's processes held its memory.
  */
+const reportLargestProcesses = async (
+  group: number,
+  stallMs: number,
+  report: (message: string) => void,
+) => {
+  const snapshot = await Result.tryPromise(
+    async () =>
+      await processSnapshot({
+        columns: "pid=,ppid=,pgid=,stat=,rss=,command=",
+        stallMs,
+        report,
+      }),
+  );
+  if (snapshot.isErr()) {
+    return;
+  }
+  for (const line of largestOwnedProcesses(snapshot.value, group)) {
+    report(`Machine process: ${line}\n`);
+  }
+};
+
+/**
+ * The spawned command leads its own process group only when this supervisor
+ * owns the group; otherwise the trail has no group of its own to list.
+ */
+const ownedGroupLeader = (
+  child: { readonly pid?: number | undefined },
+  ownsGroup: boolean,
+) => (ownsGroup && process.platform !== "win32" ? child.pid : undefined);
+
 const startMachineTrail = (
   report: (message: string) => void,
   startedAt: number,
+  stallMs: number,
+  group: number | undefined,
 ) => {
   const trail = setInterval(() => {
     report(`${machineResources()} elapsed_ms=${Date.now() - startedAt}\n`);
+    if (group !== undefined) {
+      void reportLargestProcesses(group, stallMs, report);
+    }
   }, MACHINE_TRAIL_MS);
   trail.unref();
   return trail;
@@ -888,7 +946,6 @@ export const runBudgetedCheck = async ({
   let termination: string | undefined;
   let killTimer: ReturnType<typeof setTimeout> | undefined;
   const startedAt = Date.now();
-  const machineTrail = startMachineTrail(reportDiagnostic, startedAt);
   // A delegated supervisor shares the outer group so its descendants cannot
   // outlive the owner when equal cleanup deadlines race.
   const ownsGroup = process.env[PROCESS_GROUP_ENV] !== "inherited";
@@ -898,6 +955,8 @@ export const runBudgetedCheck = async ({
     env: { ...process.env, ...env, [PROCESS_GROUP_ENV]: "inherited" },
     stdio: ["ignore", "pipe", "pipe"],
   });
+  const leader = ownedGroupLeader(child, ownsGroup);
+  const trail = startMachineTrail(reportDiagnostic, startedAt, stallMs, leader);
   const inspectedSignals = new Set<NodeJS.Signals>();
   const pendingDiagnostics: Promise<void>[] = [];
   const killGroup = (signal: NodeJS.Signals) =>
@@ -976,7 +1035,7 @@ export const runBudgetedCheck = async ({
       resolve(signalExitCode(code, signal));
     });
   });
-  clearInterval(machineTrail);
+  clearInterval(trail);
   const endedAt = Date.now();
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
   const pipesDrained = Promise.race([
