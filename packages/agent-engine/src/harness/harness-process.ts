@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { createLineReader } from "./json-lines";
+import { spawnHarnessProcessTree } from "./process-tree";
 import type { Detached, HarnessExit } from "./turn-lifecycle";
 
 /**
@@ -8,7 +9,8 @@ import type { Detached, HarnessExit } from "./turn-lifecycle";
  * transport every harness client shares. It owns the process and bounds every
  * wait on it: a request the harness does not answer in time ends the process,
  * a process that outlives its termination signal is killed outright, and when
- * it exits every pending request settles as unanswered.
+ * it exits every pending request settles as unanswered. Ending it ends every
+ * process it started too (`process-tree.ts`), and so does its own exit.
  */
 
 /** A line longer than this is refused rather than buffered without bound. */
@@ -17,7 +19,10 @@ const MAX_LINE_BYTES = 16 * 1024 * 1024;
 export type HarnessProcessDeadlines = {
   /** How long a request waits for its answer before the process is ended. */
   requestMs: number;
-  /** How long the process gets to exit on SIGTERM before SIGKILL. */
+  /**
+   * How long the process, and every process it started, gets to exit on
+   * SIGTERM before SIGKILL.
+   */
   terminateMs: number;
 };
 
@@ -58,7 +63,10 @@ type HarnessProcess<TId, TError> = {
   exited: Promise<HarnessExit>;
   /** Ends stdin, which asks the harness to finish and exit. */
   closeInput: () => void;
-  /** SIGTERM, then SIGKILL once the termination deadline passes. */
+  /**
+   * SIGTERM to the process and every process it started, then SIGKILL once
+   * the termination deadline passes.
+   */
   kill: () => Promise<HarnessExit>;
 };
 
@@ -74,37 +82,27 @@ export const startHarnessProcess = <TId, TError>({
   violation,
   exit,
 }: StartHarnessProcessOptions<TError>): HarnessProcess<TId, TError> => {
-  const child = Bun.spawn([...command], {
+  const tree = spawnHarnessProcessTree({
+    command,
     cwd,
-    env: { ...env },
-    stdin: "pipe",
-    stdout: "pipe",
-    // Drained, never surfaced: harness logs may carry account details.
-    stderr: "ignore",
+    env,
+    terminateMs: deadlines.terminateMs,
   });
+  const { child } = tree;
   const pending = new Map<TId, (result: Result<unknown, TError>) => void>();
   const state = { closed: false, terminating: false };
 
   /**
-   * The one way the process is ended: SIGTERM, then SIGKILL if it has not
-   * exited by the deadline, so no wait on its exit is unbounded.
+   * The one way the process is ended: SIGTERM to it and everything it
+   * started, then SIGKILL to what is left by the deadline, so no wait on its
+   * exit is unbounded.
    */
   const terminate = () => {
     if (state.closed || state.terminating) {
       return;
     }
     state.terminating = true;
-    child.kill("SIGTERM");
-    const escalation = setTimeout(() => {
-      child.kill("SIGKILL");
-    }, deadlines.terminateMs);
-    detached(
-      (async () => {
-        await child.exited;
-        clearTimeout(escalation);
-      })(),
-      `${name}.terminate`,
-    );
+    detached(tree.end(), `${name}.terminate`);
   };
 
   /**
@@ -160,8 +158,14 @@ export const startHarnessProcess = <TId, TError>({
     lines.end();
   };
 
+  const reading = Promise.allSettled([readStdout()]);
   const exited = (async (): Promise<HarnessExit> => {
-    await Promise.allSettled([readStdout(), child.exited]);
+    await child.exited;
+    // What it started goes with it, however it exited: a turn's end, a stop
+    // or a crash leaves nothing running in the chat's folder. They may hold
+    // its stdout, which ends only once they are gone.
+    await tree.end();
+    await reading;
     state.closed = true;
     for (const settle of pending.values()) {
       settle(
