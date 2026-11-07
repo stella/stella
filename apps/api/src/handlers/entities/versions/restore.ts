@@ -10,6 +10,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { carryCellCompanions } from "@/api/lib/entity-versions/cell-companions";
 import {
   CARRIED_FIELD_COLUMNS,
   carriedFieldValues,
@@ -60,7 +61,7 @@ export default createSafeHandler(
           },
           columns: { id: true, versionNumber: true },
           with: {
-            fields: { columns: CARRIED_FIELD_COLUMNS },
+            fields: { columns: { id: true, ...CARRIED_FIELD_COLUMNS } },
           },
         }),
       ),
@@ -165,16 +166,30 @@ export default createSafeHandler(
           workspaceId,
         });
 
-        // Clone all fields from the source version
+        // Clone all fields from the source version, with what they carry.
+        const fieldClones = new Map(
+          version.fields.map((field) => [field.id, createSafeId<"field">()]),
+        );
         if (version.fields.length > 0) {
           await tx.insert(fields).values(
             version.fields.map((field) => ({
               ...carriedFieldValues(field),
+              id: fieldClones.get(field.id) ?? createSafeId<"field">(),
               entityVersionId: nextVersionId,
               workspaceId,
             })),
           );
         }
+        await carryCellCompanions({
+          tx,
+          kind: "restore",
+          sourceWorkspaceId: workspaceId,
+          targetWorkspaceId: workspaceId,
+          versions: [
+            { sourceVersionId: version.id, targetVersionId: nextVersionId },
+          ],
+          fieldClones,
+        });
 
         // Point entity to the new version
 

@@ -26,6 +26,7 @@ import {
   lockWorkspacesForEntityCap,
   lockWorkspacesForEntityTransfer,
 } from "@/api/lib/entity-cap-lock";
+import { carryCellCompanions } from "@/api/lib/entity-versions/cell-companions";
 import {
   CARRIED_FIELD_COLUMNS,
   type CarriedFieldColumns,
@@ -1207,6 +1208,8 @@ type CopyRows = {
   versionTransfers: VersionTransfer[];
   currentVersions: CurrentVersionAssignment[];
   fieldRows: CopiedFieldInsert[];
+  /** Every source cell and the id of its clone. */
+  fieldClones: Map<SafeId<"field">, SafeId<"field">>;
   copiedEntities: CopiedEntity[];
   copiedField: CopiedField | null;
   entityIdsBySearchIndexOwner: Record<SearchIndexOwner, SafeId<"entity">[]>;
@@ -1389,6 +1392,7 @@ const appendFieldRows = ({
         content,
       };
       rows.fieldRows.push(fieldRow);
+      rows.fieldClones.set(field.id, fieldId);
       if (isCurrentVersion) {
         currentFieldRows.push(fieldRow);
       }
@@ -1514,6 +1518,7 @@ const planEntityCopies = async ({
     versionTransfers: [],
     currentVersions: [],
     fieldRows: [],
+    fieldClones: new Map(),
     copiedEntities: [],
     copiedField: null,
     // Split by which mechanism owns each copy's search projection, so every
@@ -1580,6 +1585,16 @@ const writeCopyPlan = async ({
     stampOrigin: transfer.type === "copy" ? "issued" : "copied",
     currentVersions: plan.currentVersions,
     fieldRows: plan.fieldRows,
+  });
+  // A cell's lock, override and citations travel with it; a move deletes the
+  // source rows afterwards, so they are carried before that.
+  await carryCellCompanions({
+    tx,
+    kind: transfer.type,
+    sourceWorkspaceId: sourceWorkspaceId ?? targetWorkspaceId,
+    targetWorkspaceId,
+    versions: plan.versionTransfers,
+    fieldClones: plan.fieldClones,
   });
 
   // A copy's versions were minted their own codes by the insert above. A move

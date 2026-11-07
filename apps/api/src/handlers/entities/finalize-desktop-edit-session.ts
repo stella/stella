@@ -39,6 +39,7 @@ import {
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
 import { DESKTOP_EDIT_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import { carryCellCompanions } from "@/api/lib/entity-versions/cell-companions";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { findDesktopEditableFileForProperty } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { CARRIED_FIELD_COLUMNS } from "@/api/lib/entity-versions/field-clone-policy";
@@ -638,6 +639,21 @@ export const finalizeDesktopEditSessionHandler = async ({
         .insert(fields)
         .values(clonedFields)
         .returning({ id: fields.id, propertyId: fields.propertyId });
+      // A cell a member locked stays locked across the edit; the edited
+      // file's own cell describes new bytes.
+      await carryCellCompanions({
+        tx,
+        kind: "desktop-edit",
+        sourceWorkspaceId: authorizedSession.value.workspaceId,
+        targetWorkspaceId: authorizedSession.value.workspaceId,
+        versions: [
+          {
+            sourceVersionId: editSession.baseVersionId,
+            targetVersionId: nextVersionId,
+          },
+        ],
+        replacedPropertyIds: [editSession.propertyId],
+      });
 
       const nextField = insertedFields.find(
         (field) => field.propertyId === editSession.propertyId,
