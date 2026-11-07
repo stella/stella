@@ -278,6 +278,26 @@ describe("coalescing invariants", () => {
     return chunks;
   };
 
+  test("a harness's own text stream merges into fewer chunks", async () => {
+    const streamed = await streamedChunks([
+      { type: "text.delta", messageId: "m1", delta: "Hel" },
+      { type: "text.delta", messageId: "m1", delta: "lo, " },
+      { type: "text.delta", messageId: "m1", delta: "world" },
+    ]);
+    const { coalescer, sent } = coalesced({});
+    for (const chunk of streamed) {
+      coalescer.push(chunk);
+    }
+    coalescer.flush();
+    const contents = (chunks: readonly StreamChunk[]) =>
+      chunks.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_CONTENT);
+    expect(contents(streamed)).toHaveLength(3);
+    expect(contents(sent)).toEqual([
+      expect.objectContaining({ delta: "Hello, world" }),
+    ]);
+    expect(stored(sent)).toEqual(stored(streamed));
+  });
+
   test("whatever the timing, the coalesced stream stores the same message, keeps every other chunk in order and stays within its bound", async () => {
     await assertProperty(
       "whatever the timing, the coalesced stream stores the same message, keeps every other chunk in order and stays within its bound",
