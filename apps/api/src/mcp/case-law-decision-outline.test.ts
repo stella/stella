@@ -208,3 +208,19 @@ test("anonymised initials are not numbered sections", () => {
     "V. Posouzení věci",
   ]);
 });
+
+test("a lettered run keeps its lower-case sections, a party line with a second initial does not", () => {
+  const text = [
+    "I. A. zasądza od pozwanego na rzecz powoda kwotę",
+    "I. B. oddala powództwo w pozostałym zakresie",
+    "M. T. Pozwana wniosła o oddalenie powództwa.",
+    "V. K. poznała pozwanego w 2010 r.",
+    "C. Rozważania sądu",
+  ].join("\n\n");
+  const { entries } = decisionOutline({ text, blocks: null });
+  expect(entries.map(({ title }) => title)).toEqual([
+    "I. A. zasądza od pozwanego na rzecz powoda kwotę",
+    "I. B. oddala powództwo w pozostałym zakresie",
+    "C. Rozważania sądu",
+  ]);
+});
