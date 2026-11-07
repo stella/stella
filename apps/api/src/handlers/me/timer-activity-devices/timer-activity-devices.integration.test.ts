@@ -11,6 +11,7 @@ import { eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  TIMER_ACTIVITY_ACTION_KEY_HOURS,
   TIMER_ACTIVITY_DEVICES_PER_USER_MAX,
   timerActivityDeviceRegistrationSchema,
 } from "@stll/api-contract/timer-activity";
@@ -362,7 +363,21 @@ describe("registering a phone for the Lock Screen timer", () => {
     if (issued === null) {
       expect.unreachable("a signed-in phone gets a key");
     }
-    expect(Date.parse(issued.expiresAt)).toBeGreaterThan(Date.now());
+    // The key lasts a day from the registration that issued it, by the
+    // database's own clock.
+    const [row] = await testDb
+      .select({
+        expiresAt: timerActivityDevices.actionKeyExpiresAt,
+        seenAt: timerActivityDevices.lastSeenAt,
+      })
+      .from(timerActivityDevices)
+      .where(eq(timerActivityDevices.userId, ids.userA1));
+    expect(row?.expiresAt?.toISOString()).toBe(issued.expiresAt);
+    const lifetime =
+      (row?.expiresAt?.getTime() ?? 0) - (row?.seenAt.getTime() ?? 0);
+    expect(Math.round(lifetime / 3_600_000)).toBe(
+      TIMER_ACTIVITY_ACTION_KEY_HOURS,
+    );
 
     expect(
       await verifyTimerActivityActionKey(ownerDb(), {
