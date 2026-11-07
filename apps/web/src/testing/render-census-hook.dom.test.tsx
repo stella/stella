@@ -7,7 +7,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { createRequire } from "node:module";
 import path from "node:path";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { RouteNetworkMetrics } from "../../e2e/helpers/network";
 import { parseRenderCensus } from "../../e2e/helpers/render-census";
