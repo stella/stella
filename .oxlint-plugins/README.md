@@ -359,6 +359,7 @@ runtime validation, or integration tests.
 - [`suppression-hygiene`](./suppression-hygiene.ts) (`require-description`, `no-foreign-directive`, `canonical-rule-id`): requires explained suppressions, autofixes rule IDs to their configured spelling, and rejects directives for another lint engine.
 
 - [`confine-aggregate-lock`](./confine-aggregate-lock.ts) (`confine-aggregate-lock`): confines raw aggregate acquisitions and API transaction/savepoint boundaries to the owner and migrations, with an enumerated shrinking legacy baseline.
+- [`count-gated-completion`](./count-gated-completion.ts) (`count-gated-completion`): in document review and workflow code, a named function that reads an aggregate count and writes a terminal status must be registered with a `*.postgres.test.ts` suite that overlaps two transactions through `withGatedTestClients`, because PGlite cannot overlap transactions and overlapping writers each count without the other's uncommitted rows. A registration whose function no longer matches is reported as stale.
 
 ## Native and shared rules
 
