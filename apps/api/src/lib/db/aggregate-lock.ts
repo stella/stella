@@ -3173,9 +3173,10 @@ type LockActiveTableRunOptions = {
  * Verdict batches of one document run in parallel, and each counts the run's
  * findings to decide whether it is complete. The lock makes them take turns:
  * without it, the last two would each count without the other's uncommitted
- * rows, and neither would complete the run. Take it before writing findings,
- * because each insert holds a key-share lock on this row, which a later FOR
- * UPDATE would deadlock against.
+ * rows, and neither would complete the run. FOR NO KEY UPDATE conflicts with
+ * itself but not with the key-share lock each finding insert takes on this row,
+ * so a writer that does not take this lock cannot form a deadlock with one that
+ * does.
  */
 export const lockActiveTableRun = async (
   tx: Transaction,
@@ -3201,7 +3202,7 @@ export const lockActiveTableRun = async (
         ),
       )
       .limit(1)
-      .for("update")
+      .for("no key update")
   ).at(0);
 
 /** Fence matter-client assignments while a bulk delete classifies contacts. */

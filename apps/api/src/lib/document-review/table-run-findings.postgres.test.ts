@@ -26,6 +26,7 @@ import {
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockActiveTableRun } from "@/api/lib/db/aggregate-lock";
 import { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
 import { recordTableRunVerdicts } from "@/api/lib/document-review/table-run-findings";
 import type { RecordTableRunVerdictsArgs } from "@/api/lib/document-review/table-run-findings";
@@ -134,6 +135,7 @@ const seedDocument = async (
     id: filePropertyId,
     workspaceId: ids.workspaceId,
     name: "File",
+    system: true,
     content: { version: 1, type: "file" },
     tool: { version: 1, type: "manual-input" },
     status: "fresh",
@@ -298,7 +300,8 @@ const recordOverlapping = async ({
         return result;
       });
     const firstRecorded = record(firstScopedDb, first);
-    await firstDidItsWork.promise;
+    // A first batch that rejects before signalling must fail the test, not hang it.
+    await Promise.race([firstDidItsWork.promise, firstRecorded]);
 
     let secondPid: number | undefined;
     let secondSettled = false;
@@ -313,6 +316,7 @@ const recordOverlapping = async ({
     const secondRecorded = record(secondScopedDb, second).finally(() => {
       secondSettled = true;
     });
+    const bothSettled = Promise.allSettled([firstRecorded, secondRecorded]);
 
     // The second batch either commits while the first is still open, which is
     // the overlap, or waits on the first. Both leave the first one to commit.
@@ -334,6 +338,8 @@ const recordOverlapping = async ({
       });
     } finally {
       commitFirst.resolve(undefined);
+      // The clients close when this callback returns.
+      await bothSettled;
     }
 
     return {
@@ -406,6 +412,26 @@ if (!databaseUrl || !runPostgresTests) {
           completed: 2,
           errorCode: null,
           positionIds: [FIRST_POSITION_ID, SECOND_POSITION_ID],
+        });
+      });
+    });
+
+    test("the run lock leaves the key-share lock a finding insert needs free", async () => {
+      await withRun(async ({ db, ids, fixture }) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db: holderDb } = openClient();
+          await holderDb.transaction(async (tx) => {
+            await lockActiveTableRun(asTestRaw<Transaction>(tx), {
+              workspaceId: ids.workspaceId,
+              entityId: ids.entityId,
+            });
+            const shared = await db
+              .select({ id: documentReviewRuns.id })
+              .from(documentReviewRuns)
+              .where(eq(documentReviewRuns.id, fixture.runId))
+              .for("key share", { noWait: true });
+            expect(shared).toEqual([{ id: fixture.runId }]);
+          });
         });
       });
     });
