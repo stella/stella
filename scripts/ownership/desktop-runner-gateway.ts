@@ -27,6 +27,11 @@ export default {
           "Routes a chat turn bound for the member's computer through the control and reads its run back.",
       },
       {
+        path: "apps/api/src/mcp/agent-run-app-calls.ts",
+        reason:
+          "Keeps what the MCP server answered a run's token for a tool a chat app presents, so the chat turn can pair the run's reported calls with it.",
+      },
+      {
         path: "apps/api/src/handlers/chat/local-runners.ts",
         reason:
           "Reads the member's computers and harness reports for the chat composer.",

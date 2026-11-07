@@ -53,6 +53,10 @@ export const TABLE_RETENTION = {
     boundedBy:
       "At most DESKTOP_RUNNER_LIMITS.maxCommandsPerRun commands per run, cascade-deleted when pruneEndedRuns deletes the ended run.",
   },
+  desktop_runner_app_calls: {
+    boundedBy:
+      "At most MAX_APP_CALLS_PER_RUN rows per run, each holding one app's call within the chat app part limit, cascade-deleted when pruneEndedRuns deletes the ended run.",
+  },
   desktop_runner_events: {
     boundedBy:
       "At most DESKTOP_RUNNER_LIMITS.maxMessagesPerRun messages and maxMessageBytesPerRun bytes per run, cascade-deleted when pruneEndedRuns deletes the ended run.",

@@ -258,6 +258,7 @@ import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
 import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
@@ -2387,10 +2388,12 @@ const turnCopiesFiles = (
   sendMode: ChatSendMode,
 ) => localRun !== undefined && sendMode !== CHAT_SEND_MODE.anonymized;
 
-const localRunWithAttachments = (
+const localRunForTurn = (
   localRun: LocalChatRun | undefined,
   attachments: readonly LocalRunAttachment[],
-): LocalChatRun | undefined => localRun?.withAttachments(attachments);
+  origin: VisualResourceOrigin,
+): LocalChatRun | undefined =>
+  localRun?.withAttachments(attachments).withResourceOrigin(origin);
 
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
@@ -3604,9 +3607,10 @@ export const createSendMessage = (
                   promptCachingEnabled,
                   runMode: turnRunModeOf(body),
                   sandboxRun,
-                  localRun: localRunWithAttachments(
+                  localRun: localRunForTurn(
                     localRun,
                     chatContext.localRunAttachments,
+                    visualOrigin,
                   ),
                   usageLane: turnLane.lane,
                   decisionPassageStamper: createTurnDecisionPassageStamper({

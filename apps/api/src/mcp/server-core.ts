@@ -57,6 +57,7 @@ import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
+import { recordAgentRunAppCall } from "@/api/mcp/agent-run-app-calls";
 import {
   resolveMachineApiKeySession,
   revalidateMachineApiKeySession,
@@ -1199,6 +1200,13 @@ export const createMcpHttpRequestHandler = ({
               }),
           ),
       );
+      // Before the answer leaves, so a chat turn reading the run finds it.
+      await recordAgentRunAppCall({
+        context,
+        toolName,
+        args: toolRequest.params.arguments ?? {},
+        result,
+      });
       const decoratedResult =
         toolName === MCP_WEB_HANDOFF_TOOL || mode === "anonymized"
           ? result
