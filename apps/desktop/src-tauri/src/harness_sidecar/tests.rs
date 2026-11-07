@@ -198,6 +198,7 @@ fn run_start(model: &str) -> SidecarRunStart {
         .unwrap()
         .clone(),
     ],
+    attachments: Vec::new(),
     harness_session_id: None,
     policy: RunPolicy {
       network: NetworkPolicy::Open,

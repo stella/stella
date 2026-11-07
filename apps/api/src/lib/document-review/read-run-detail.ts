@@ -64,6 +64,7 @@ export const readDocumentReviewRunDetail = async function* ({
         .select({
           id: documentReviewRuns.id,
           status: documentReviewRuns.status,
+          executor: documentReviewRuns.executor,
           errorCode: documentReviewRuns.errorCode,
           entityId: documentReviewRuns.entityId,
           fileFieldId: documentReviewRuns.fileFieldId,

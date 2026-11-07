@@ -297,6 +297,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // The OAuth provider consumes a client discovery's refusal as a rejected
   // APIError, which the stale-if-error wrapper passes through unchanged.
   "apps/api/src/lib/auth/cimd-stale-if-error.ts",
+  // Better Auth maps a rejected code exchange to its callback error, so the
+  // retry wrapper hands the provider's rejection back unchanged.
+  "apps/api/src/lib/auth/social-token-exchange.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",

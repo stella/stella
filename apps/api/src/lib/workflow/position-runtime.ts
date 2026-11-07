@@ -27,6 +27,19 @@ export const isTierStandard = (
 ): position is TierStandardPosition =>
   position.mode === "graded" && position.standard.source === "tiers";
 
+// A tier-standard position's grading inputs, in stored order. Ideal language is
+// excluded: it drives FIX, not what is extracted or how a clause is graded.
+export const canonicalRulesInput = (position: TierStandardPosition) => {
+  const { tiers } = position.standard;
+  return {
+    issue: position.issue,
+    acceptableRuleTexts: tiers.acceptable.rules.map((rule) => rule.text),
+    fallbackTexts: tiers.fallback.entries.map((entry) => entry.text),
+    notAcceptableRuleTexts: tiers.notAcceptable.rules.map((rule) => rule.text),
+    check: position.check ?? null,
+  };
+};
+
 // Materialize/grade only enabled positions: a disabled position is skipped by
 // run, review, and auto-run. Centralizing the filter keeps the call sites from
 // drifting on the skip semantics.

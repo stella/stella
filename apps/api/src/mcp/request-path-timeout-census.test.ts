@@ -36,6 +36,7 @@ const REQUEST_PATH_ROOTS = [
   "apps/api/src/handlers/documents/compare.ts",
   "apps/api/src/lib/legal-search/corpus-index-client.ts",
   "apps/api/src/lib/legal-search/corpus-index-pagination.ts",
+  "apps/api/src/lib/legal-search/document-fetch-budget.ts",
   "apps/api/src/lib/public-law-read-db.ts",
 ] as const;
 
@@ -476,11 +477,6 @@ const CENSUS: readonly CensusEntry[] = [
     why: "Records the fetch request inside the read's own READ_BUDGET_MS wait, which the read stops at; the recording finishes for the next reader.",
   },
   {
-    site: "apps/api/src/handlers/case-law/decisions/document-on-demand-deps.ts#DOCUMENT_FETCH_BUDGET_MS",
-    path: "off-request",
-    why: "The publisher download a read starts and stops waiting for at READ_BUDGET_MS; it keeps running for the next reader.",
-  },
-  {
     site: "apps/api/src/handlers/case-law/decisions/dev-reparse.ts#FETCH_TIMEOUT_MS",
     path: "off-request",
     why: "A local-development route, not mounted in deployments.",
@@ -634,6 +630,11 @@ const CENSUS: readonly CensusEntry[] = [
     bound: "request",
     onExpiry: "fails-fast",
     why: "Page highlighting shares one search deadline, itself clamped to the request.",
+  },
+  {
+    site: "apps/api/src/lib/legal-search/document-fetch-budget.ts#budgetMs",
+    path: "off-request",
+    why: "The publisher download a deferred-document fetch starts: a read stops waiting for it at READ_BUDGET_MS and it keeps running for the next reader; the background drain holds no request.",
   },
   {
     site: "apps/api/src/lib/public-law-read-db.ts#statement_timeout 30s",

@@ -823,6 +823,7 @@ impl HarnessHost for SidecarHarnessHost {
       model: start.model,
       instructions: start.instructions,
       messages: start.messages,
+      attachments: start.attachments,
       harness_session_id: start.harness_session_id,
       policy: start.policy,
       mcp: start.mcp,

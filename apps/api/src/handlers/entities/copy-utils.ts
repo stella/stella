@@ -6,7 +6,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
-import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import type { EntityKind } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -26,6 +26,11 @@ import {
   lockWorkspacesForEntityCap,
   lockWorkspacesForEntityTransfer,
 } from "@/api/lib/entity-cap-lock";
+import {
+  CARRIED_FIELD_COLUMNS,
+  type CarriedFieldColumns,
+  carriedFieldValues,
+} from "@/api/lib/entity-versions/field-clone-policy";
 import {
   type CurrentVersionAssignment,
   insertEntityBatch,
@@ -68,10 +73,8 @@ import type {
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 
-export type EntityFieldSnapshot = {
+export type EntityFieldSnapshot = CarriedFieldColumns & {
   id: SafeId<"field">;
-  propertyId: SafeId<"property">;
-  content: FieldContent;
 };
 
 /**
@@ -141,9 +144,7 @@ export type EntitySnapshot = {
   versions: EntityVersionSnapshot[];
 };
 
-type WritableEntityFieldSnapshot = {
-  id: SafeId<"field">;
-  propertyId: SafeId<"property">;
+type WritableEntityFieldSnapshot = Omit<EntityFieldSnapshot, "content"> & {
   content: WritableFieldContent;
 };
 
@@ -178,7 +179,7 @@ const VERSION_FIELDS_SELECT = {
   // `findExtractionFileField` requires, so the copy resolves the
   // same extraction source as the entity it came from. At most
   // one field per property bounds the read.
-  columns: { id: true, propertyId: true, content: true },
+  columns: { id: true, ...CARRIED_FIELD_COLUMNS },
   orderBy: { id: "asc" },
   limit: LIMITS.propertiesCount,
 } as const;
@@ -264,10 +265,9 @@ export type CopiedField = {
   fieldId: SafeId<"field">;
 };
 
-type CopiedFieldInsert = {
+type CopiedFieldInsert = Omit<CarriedFieldColumns, "content"> & {
   id: SafeId<"field">;
   workspaceId: SafeId<"workspace">;
-  propertyId: SafeId<"property">;
   entityVersionId: SafeId<"entityVersion">;
   content: WritableFieldContent;
 };
@@ -518,11 +518,7 @@ const remapFieldFileId = ({
   idMap,
 }: RemapFieldFileIdOptions): WritableEntityFieldSnapshot => {
   if (field.content.type !== "file") {
-    return {
-      id: field.id,
-      content: field.content,
-      propertyId: field.propertyId,
-    };
+    return { ...field, content: field.content };
   }
 
   const newFileId = idMap.get(
@@ -1386,9 +1382,9 @@ const appendFieldRows = ({
             }
           : field.content;
       const fieldRow = {
+        ...carriedFieldValues(field),
         id: fieldId,
         workspaceId: targetWorkspaceId,
-        propertyId: field.propertyId,
         entityVersionId,
         content,
       };

@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode, SyntheticEvent } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { WorkspaceStatus } from "@stll/api-contract/workspace-status";
 import { Button } from "@stll/ui/button";
 import {
   ColorPicker,
@@ -28,7 +29,7 @@ type MatterColorIdentity = {
    * Required so no caller can offer the picker without knowing the matter is
    * writable: an archived matter is read-only, so it shows its icon only.
    */
-  status: string;
+  status: WorkspaceStatus;
 };
 
 const canChangeMatterColor = (matter: MatterColorIdentity) =>

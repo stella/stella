@@ -31,6 +31,7 @@ const device = (
   seenToken: asTestRaw<TimestampCasToken>("2026-11-04 09:00:00+00"),
   startToken: `${deviceId}b`.padEnd(64, "b"),
   starting: false,
+  actions: true,
   ...overrides,
 });
 

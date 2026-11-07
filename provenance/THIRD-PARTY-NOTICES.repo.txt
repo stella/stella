@@ -201,7 +201,7 @@ Project: root
 - tailwind-merge 3.7.0 — MIT
 - temporal-polyfill 1.0.5 — MIT
 - tldts 7.4.19 — MIT
-- tsrs 0.18.0-ts7.1.0-dev.20260929 — Apache-2.0
+- tsrs 0.20.1-ts7.1.0-beta — Apache-2.0
 - unified 11.0.5 — MIT
 - uniwind 1.13.0 — MIT
 - uqr 0.1.3 — MIT

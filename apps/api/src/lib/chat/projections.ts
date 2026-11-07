@@ -48,6 +48,7 @@ import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
 } from "@/api/lib/case-law/decision-read-vocabulary";
+import { DECISION_QUERY_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
@@ -1812,6 +1813,17 @@ const caseLawDecisionProjection = v.strictObject({
         }),
       ),
       truncated: v.optional(v.literal(true)),
+      // Only on an empty answer: which words matched nothing, and the next call.
+      warnings: v.optional(
+        v.array(
+          v.strictObject({
+            code: v.picklist(DECISION_QUERY_WARNING_CODES),
+            audience: v.picklist(["agent", "user"]),
+            message: v.string(),
+            hint: v.string(),
+          }),
+        ),
+      ),
     }),
   ),
   // Why there is no text, when there is none. At most one is present, and
@@ -1940,9 +1952,6 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
           resourceName: passthroughId(),
           score: v.number(),
           snippet: v.nullable(contentText()),
-          // The publisher's own document URL, which may embed the publisher's
-          // own UUID — never a Stella tenant id, so it is forwarded unchanged.
-          sourceUrl: v.nullable(publicUrl()),
           status: v.string(),
           title: v.string(),
         }),
@@ -1988,9 +1997,6 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     ),
     outlineTruncated: v.optional(v.boolean()),
     resourceName: passthroughId(),
-    // The publisher's own document URL, which may embed the publisher's own
-    // UUID — never a Stella tenant id, so it is forwarded unchanged.
-    sourceUrl: v.nullable(publicUrl()),
     status: v.string(),
     text: v.nullable(contentText()),
     // Present only where the source permits displaying wording but bars

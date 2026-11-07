@@ -998,6 +998,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/agent-engine/src/sidecar/attachments.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Copies a chat's attached file into a local run's folder from the signed storage link the API issued for that run.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "packages/agent-engine/src/sidecar/holder-server.ts",
     class: "package-owned-client",
     reason:
@@ -1009,6 +1016,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Forwards a local harness's MCP requests only to the run's MCP URL on the configured stella API origin, without following redirects.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/outputs.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Posts a file a local run wrote to the configured stella API origin with the run's agent token, under a bounded deadline and refusing redirects.",
     transports: ["global:fetch"],
   },
   {

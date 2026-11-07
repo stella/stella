@@ -1051,7 +1051,7 @@
     "apps/api/evals/template-fill.ts": 1,
     "apps/api/scripts/export-capability-catalog.ts": 2,
     "apps/api/scripts/generate-web-api-types.ts": 1,
-    "apps/api/scripts/seed-dev.ts": 4,
+    "apps/api/scripts/seed-dev.ts": 3,
     "apps/api/scripts/seed-matter-activity.ts": 2,
     "apps/api/scripts/seed-templates.ts": 1,
     "apps/api/src/db/schema/corpus-index-projections.ts": 1,

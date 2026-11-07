@@ -525,6 +525,13 @@ export const caseLawCorpusJurisdictions = p.pgTable(
   () => [...globalCaseLawPolicies()],
 );
 
+// ECLI identity ignores letter case while the column keeps the published spelling.
+const ecliUpperIndex = (ecli: PgColumn) =>
+  p
+    .index("case_law_decisions_ecli_upper_idx")
+    .on(sql`upper(${ecli})`)
+    .where(isNotNull(ecli));
+
 type ParsedSourceSchemaColumns = {
   id: PgColumn;
   parsedSourceHash: SQLWrapper;
@@ -1024,6 +1031,7 @@ export const caseLawDecisions = p.pgTable(
       .on(t.country, t.language, t.id),
     p.index("case_law_decisions_date_idx").on(t.decisionDate),
     p.index("case_law_decisions_ecli_idx").on(t.ecli).where(isNotNull(t.ecli)),
+    ecliUpperIndex(t.ecli),
     // A bare docket's lookup reads its whole case file by this key, siblings
     // stored with their sheet included.
     p

@@ -31,3 +31,27 @@ export const ContextNotice = ({
     </p>
   );
 };
+
+/**
+ * Names the files a local run could not share. The server stores them with the
+ * answer and the live stream carries the same list, so it reads the same live
+ * and after reload.
+ */
+export const LocalRunFilesNotSharedNotice = ({
+  metadata,
+}: {
+  metadata: ChatMessageMetadata | undefined;
+}) => {
+  const t = useTranslations();
+  const fileNames = metadata?.localRunFilesNotShared;
+  if (fileNames === undefined || fileNames.length === 0) {
+    return null;
+  }
+  return (
+    <p className="text-muted-foreground max-w-xl py-1 text-xs" role="status">
+      {t("chat.localRun.filesNotShared", {
+        fileNames: fileNames.join(", "),
+      })}
+    </p>
+  );
+};

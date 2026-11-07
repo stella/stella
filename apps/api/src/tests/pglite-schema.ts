@@ -152,6 +152,11 @@ const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
     "20260901060000_concurrent_corpus_projection_revision_fence",
     "migration.sql",
   ),
+  nodePath.join(
+    DRIZZLE_DIR,
+    "20261107183000_corpus_projection_revision_settled",
+    "migration.sql",
+  ),
 ] as const;
 
 type PgliteSchemaDb = {

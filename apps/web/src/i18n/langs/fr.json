@@ -152,6 +152,7 @@
     "emailPlaceholder": "vous@example.com",
     "error": {
       "generic": "Une erreur est survenue lors de votre connexion. Veuillez réessayer.",
+      "providerUnavailable": "Le service de connexion ne répond pas pour le moment. Veuillez réessayer dans une minute.",
       "title": "Nous n'avons pas pu vous connecter"
     },
     "handoffAccount": "Continuer en tant que <account>{email}</account> dans <organization>{organizationName}</organization> ?",
@@ -1688,6 +1689,7 @@
       "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",
       "errorNeedsLogin": "L’agent de code de votre ordinateur vous demande de vous reconnecter. Connectez-vous depuis stella desktop, puis réessayez.",
       "errorUnavailable": "Votre ordinateur a cessé de traiter cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
+      "filesNotShared": "Les fichiers qui n'ont pas pu être partagés restent sur votre ordinateur : {fileNames}",
       "onThisComputer": "{harness} sur cet ordinateur",
       "permissionAskDescription": "Modifie seul les fichiers du dossier de la conversation ; demande avant tout le reste.",
       "permissionAutoDescription": "Fait seul ce qu’il juge sûr ; demande pour le reste.",
@@ -1718,6 +1720,10 @@
       "dismiss": "Ignorer et arrêter",
       "secretAnswer": "Réponse masquée",
       "secretPlaceholder": "Votre réponse reste masquée"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# conversation vous attend} other {# conversations vous attendent} many {# conversations vous attendent}}",
+      "working": "{count, plural, one {# conversation en cours} other {# conversations en cours} many {# conversations en cours}}"
     },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mcpReconnect": {
@@ -3984,6 +3990,8 @@
     "reopenTab": "Rouvrir {name}",
     "resizePane": "Redimensionner le volet",
     "review": {
+      "acceptChange": "Accepter la modification",
+      "acceptFinding": "Accepter le constat",
       "actionNeeded": "Action requise",
       "addComment": "Ajouter comme commentaire",
       "addNote": "Ajouter un commentaire pour la contrepartie",
@@ -4024,6 +4032,7 @@
         "dismissed": "Écarté"
       },
       "description": "Choisissez un playbook rédigé, des documents de référence ou les deux.",
+      "dismissFinding": "Écarter le constat",
       "documentChanged": "Ce document a changé depuis cette révision.",
       "export": {
         "counterparty": "Télécharger pour la contrepartie",
@@ -4047,6 +4056,7 @@
       "history": {
         "backToLatest": "Retour à la dernière version",
         "decided": "{decided, number} sur {total, number} décidé",
+        "fromTable": "Depuis le tableau",
         "references": "{count, plural, one {# référence} other {# références} many {# références}}"
       },
       "impact": {
@@ -4071,7 +4081,6 @@
         "unanchored": "Non rattaché à une clause"
       },
       "newTopic": "Nouveau thème de revue",
-      "noChangeNeeded": "Aucune modification nécessaire",
       "noEditor": "Ouvrez le document pour accepter les modifications",
       "noMaterialDifferences": "Aucune différence importante trouvée",
       "noPassage": "Aucun passage",
@@ -4154,6 +4163,11 @@
         "noSide": "aucune partie",
         "proposedFromReferences": "critères proposés à partir des références",
         "unnamedReferences": "{count, plural, one {# document de référence} other {# documents de référence} many {# documents de référence}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Une révision complète de cette version</link>, avec liens et modifications proposées, est disponible dans l’historique des révisions.",
+        "origin": "<strong>Lancée depuis le tableau.</strong> Ces constats ont été évalués à partir des valeurs extraites pour le tableau : ils ne renvoient donc pas au document et ne comportent aucune modification proposée.",
+        "runAnotherReview": "Pour obtenir les liens et les modifications proposées, utilisez le bouton <action>{label}</action>."
       },
       "targetAsReference": "Le document examiné ne peut pas être sa propre référence.",
       "targetColumn": "Ce document",

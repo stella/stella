@@ -152,6 +152,7 @@
     "emailPlaceholder": "jus@example.com",
     "error": {
       "generic": "Pieslēdzoties kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",
+      "providerUnavailable": "Pieteikšanās pakalpojums pašlaik neatbild. Lūdzu, mēģiniet vēlreiz pēc minūtes.",
       "title": "Neizdevās jūs pieslēgt"
     },
     "handoffAccount": "Vai turpināt kā <account>{email}</account> organizācijā <organization>{organizationName}</organization>?",
@@ -1688,6 +1689,7 @@
       "errorLimitReached": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Mēģiniet vēlreiz, kad limits tiks atjaunots.",
       "errorNeedsLogin": "Programmēšanas aģents jūsu datorā prasa pieteikties vēlreiz. Piesakieties lietotnē stella desktop un mēģiniet vēlreiz.",
       "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
+      "filesNotShared": "Faili, kurus neizdevās kopīgot, paliek jūsu datorā: {fileNames}",
       "onThisComputer": "{harness} šajā datorā",
       "permissionAskDescription": "Tērzēšanas mapes failus rediģē pats; par visu citu jautā.",
       "permissionAutoDescription": "To, ko uzskata par drošu, dara pats; par pārējo jautā.",
@@ -1718,6 +1720,10 @@
       "dismiss": "Noraidīt un apturēt",
       "secretAnswer": "Atbilde ir paslēpta",
       "secretPlaceholder": "Jūsu atbilde paliks paslēpta"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, zero {# tērzēšanu gaida jūs} one {# tērzēšana gaida jūs} other {# tērzēšanas gaida jūs}}",
+      "working": "{count, plural, zero {# tērzēšanu darbojas} one {# tērzēšana darbojas} other {# tērzēšanas darbojas}}"
     },
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mcpReconnect": {
@@ -3984,6 +3990,8 @@
     "reopenTab": "Atkārtoti atvērt {name}",
     "resizePane": "Mainīt paneļa izmēru",
     "review": {
+      "acceptChange": "Pieņemt izmaiņas",
+      "acceptFinding": "Pieņemt secinājumu",
       "actionNeeded": "Nepieciešama rīcība",
       "addComment": "Pievienot kā komentāru",
       "addNote": "Pievienot komentāru pretpusei",
@@ -4024,6 +4032,7 @@
         "dismissed": "Noraidīts"
       },
       "description": "Izvēlieties sagatavotu pārbaudes ceļvedi, atsauces dokumentus vai abus.",
+      "dismissFinding": "Noraidīt secinājumu",
       "documentChanged": "Šis dokuments pēc šīs pārbaudes ir mainījies.",
       "export": {
         "counterparty": "Lejupielādēt pretpusei",
@@ -4047,6 +4056,7 @@
       "history": {
         "backToLatest": "Atpakaļ pie jaunākās",
         "decided": "{decided, number} no {total, number} izlemts",
+        "fromTable": "No tabulas",
         "references": "{count, plural, zero {# atsauču} one {# atsauce} other {# atsauces}}"
       },
       "impact": {
@@ -4071,7 +4081,6 @@
         "unanchored": "Nav saistīts ar klauzulu"
       },
       "newTopic": "Jauna pārbaudes tēma",
-      "noChangeNeeded": "Izmaiņas nav nepieciešamas",
       "noEditor": "Atveriet dokumentu, lai apstiprinātu izmaiņas",
       "noMaterialDifferences": "Būtiskas atšķirības nav atrastas",
       "noPassage": "Fragmenta nav",
@@ -4154,6 +4163,11 @@
         "noSide": "Nav puses",
         "proposedFromReferences": "Pozīcijas, kas ierosinātas no atsaucēm",
         "unnamedReferences": "{count, plural, zero {# atsauces dokumentu} one {# atsauces dokuments} other {# atsauces dokumenti}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Šīs versijas pilna pārbaude</link> ar saitēm un ierosinātajām izmaiņām ir pieejama pārbaužu vēsturē.",
+        "origin": "<strong>Palaists no tabulas.</strong> Šie secinājumi novērtēti pēc tabulai iegūtajām vērtībām, tāpēc tie nav saistīti ar dokumentu un neietver ierosinātās izmaiņas.",
+        "runAnotherReview": "Lai iegūtu saites un ierosinātās izmaiņas, izmantojiet pogu <action>{label}</action>."
       },
       "targetAsReference": "Pārbaudāmais dokuments nevar būt savs paša atsauces dokuments.",
       "targetColumn": "Šis dokuments",

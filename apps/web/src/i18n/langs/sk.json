@@ -152,6 +152,7 @@
     "emailPlaceholder": "vy@example.com",
     "error": {
       "generic": "Pri prihlasovaní sa niečo pokazilo. Skúste to znova.",
+      "providerUnavailable": "Poskytovateľ prihlásenia teraz neodpovedá. Skúste to prosím znova o minútu.",
       "title": "Nepodarilo sa vás prihlásiť"
     },
     "handoffAccount": "Pokračovať ako <account>{email}</account> v organizácii <organization>{organizationName}</organization>?",
@@ -1688,6 +1689,7 @@
       "errorLimitReached": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Skúste to znova, keď sa limit obnoví.",
       "errorNeedsLogin": "Programovací agent vo vašom počítači vyžaduje nové prihlásenie. Prihláste sa cez stella desktop a skúste to znova.",
       "errorUnavailable": "Váš počítač prestal túto odpoveď spracúvať. Overte, že je stella desktop spustený a pripojený, a skúste to znova.",
+      "filesNotShared": "Súbory, ktoré sa nepodarilo zdieľať, zostávajú vo vašom počítači: {fileNames}",
       "onThisComputer": "{harness} v tomto počítači",
       "permissionAskDescription": "Súbory v priečinku chatu upravuje sám; na všetko ostatné sa opýta.",
       "permissionAutoDescription": "Čo považuje za bezpečné, urobí sám; na zvyšok sa opýta.",
@@ -1718,6 +1720,10 @@
       "dismiss": "Zamietnuť a zastaviť",
       "secretAnswer": "Odpoveď je skrytá",
       "secretPlaceholder": "Vaša odpoveď zostane skrytá"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {Na vás čaká # chat} few {Na vás čakajú # chaty} many {Na vás čaká # chatu} other {Na vás čaká # chatov}}",
+      "working": "{count, plural, one {Pracuje # chat} few {Pracujú # chaty} many {Pracuje # chatu} other {Pracuje # chatov}}"
     },
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mcpReconnect": {
@@ -3984,6 +3990,8 @@
     "reopenTab": "Znova otvoriť {name}",
     "resizePane": "Zmeniť veľkosť panela",
     "review": {
+      "acceptChange": "Prijať zmenu",
+      "acceptFinding": "Prijať zistenie",
       "actionNeeded": "Na riešenie",
       "addComment": "Pridať ako komentár",
       "addNote": "Pridať komentár pre protistranu",
@@ -4024,6 +4032,7 @@
         "dismissed": "Zamietnuté"
       },
       "description": "Vyberte pripravený playbook, referenčné dokumenty alebo oboje.",
+      "dismissFinding": "Zamietnuť zistenie",
       "documentChanged": "Dokument sa od tejto kontroly zmenil.",
       "export": {
         "counterparty": "Stiahnuť pre protistranu",
@@ -4047,6 +4056,7 @@
       "history": {
         "backToLatest": "Späť na najnovšiu",
         "decided": "rozhodnuté {decided, number} z {total, number}",
+        "fromTable": "Z tabuľky",
         "references": "{count, plural, one {# referencia} few {# referencie} other {# referencií} many {# referencie}}"
       },
       "impact": {
@@ -4071,7 +4081,6 @@
         "unanchored": "Bez väzby na ustanovenie"
       },
       "newTopic": "Nová téma kontroly",
-      "noChangeNeeded": "Zmena nie je potrebná",
       "noEditor": "Zmeny prijmete po otvorení dokumentu",
       "noMaterialDifferences": "Nenašli sa žiadne podstatné rozdiely",
       "noPassage": "Žiadna pasáž",
@@ -4154,6 +4163,11 @@
         "noSide": "bez strany",
         "proposedFromReferences": "pozície navrhnuté z referencií",
         "unnamedReferences": "{count, plural, one {# referenčný dokument} few {# referenčné dokumenty} many {# referenčného dokumentu} other {# referenčných dokumentov}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Úplná kontrola tejto verzie</link> s odkazmi a navrhovanými zmenami je k dispozícii v histórii kontrol.",
+        "origin": "<strong>Spustené z tabuľky.</strong> Tieto zistenia boli vyhodnotené podľa hodnôt vyťažených pre tabuľku, preto neodkazujú na dokument a neobsahujú navrhované zmeny.",
+        "runAnotherReview": "Odkazy a navrhované zmeny získate cez tlačidlo <action>{label}</action>."
       },
       "targetAsReference": "Kontrolovaný dokument nemôže byť vlastnou referenciou.",
       "targetColumn": "Tento dokument",

@@ -490,6 +490,7 @@ export type {
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
 export {
+  chatRunsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
   newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,

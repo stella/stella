@@ -233,6 +233,10 @@ export type ChatMessageMetadata = {
    * streamed; never stored. Incoming client metadata deliberately does not
    * accept this field. */
   contextNotice?: ChatContextNotice | null | undefined;
+  /** Server-owned: files a local run left on the member's computer because
+   * they could not be shared. Incoming client metadata deliberately does not
+   * accept this field. */
+  localRunFilesNotShared?: string[] | undefined;
   docxEditPreferences?:
     | {
         docxEditRepresentation?: "tracked-changes" | "direct" | undefined;
