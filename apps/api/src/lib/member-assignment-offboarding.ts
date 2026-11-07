@@ -46,6 +46,7 @@ import {
   sharepointOAuthState,
   taskAssignees,
   timeEntries,
+  timerActivityDevices,
   WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
   workObligationEvents,
@@ -1568,6 +1569,16 @@ const clearMemberScopedData = async (options: ClearMemberScopedDataOptions) => {
             eq(billingDraftUserSettings.userId, userId),
           ),
         );
+      // The member's phones in this organization, with the keys their Lock
+      // Screen buttons act with.
+      await scopedTx
+        .delete(timerActivityDevices)
+        .where(
+          and(
+            eq(timerActivityDevices.organizationId, organizationId),
+            eq(timerActivityDevices.userId, userId),
+          ),
+        );
       await recordAuditEvent(scopedTx, {
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
@@ -1831,6 +1842,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [requestIdempotencyReceipts.responseBody, "cleared"],
   [member.userId, "cleared"],
   [desktopPresence.userId, "cleared"],
+  [timerActivityDevices.userId, "cleared"],
   // Removal deletes the member's runners; their runs, queued commands and
   // events cascade, and an open runner socket closes on its next heartbeat.
   [desktopRunners.userId, "cleared"],

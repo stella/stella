@@ -792,6 +792,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/time-entries/approve": "crud",
   "POST /v1/time-entries/internal": "crud",
   "POST /v1/time-timers/:id/confirm": "crud",
+  "POST /v1/me/timer-activity-devices/:deviceId/actions": "crud",
   "POST /v1/time-timers/:id/pause": "crud",
   "POST /v1/time-timers/:id/resume": "crud",
   "POST /v1/time-timers/admin/:id/stop": "crud",
