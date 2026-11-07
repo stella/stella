@@ -355,25 +355,14 @@ describe("what a history row says a run was measured against", () => {
 });
 
 describe("how a decided finding is labelled", () => {
-  test("accepting a proposed change reads as accepted", () => {
-    expect(decisionLabel({ decision: "accepted", suggestionId: "s1" })).toBe(
+  test("accepting reads as accepted", () => {
+    expect(decisionLabel("accepted")).toBe(
       "inspector.review.decisions.accepted",
     );
   });
 
-  // The button on a finding with no proposed change says "Mark as reviewed",
-  // so the card must not then call it accepted.
-  test("accepting a finding with no proposed change reads as reviewed", () => {
-    expect(decisionLabel({ decision: "accepted", suggestionId: null })).toBe(
-      "inspector.review.decisions.reviewed",
-    );
-  });
-
-  test("dismissing reads the same with or without a proposed change", () => {
-    expect(decisionLabel({ decision: "dismissed", suggestionId: null })).toBe(
-      "inspector.review.decisions.dismissed",
-    );
-    expect(decisionLabel({ decision: "dismissed", suggestionId: "s1" })).toBe(
+  test("dismissing reads as dismissed", () => {
+    expect(decisionLabel("dismissed")).toBe(
       "inspector.review.decisions.dismissed",
     );
   });

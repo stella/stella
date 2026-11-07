@@ -3989,6 +3989,7 @@
     "resizePane": "Cambiar el tamaño del panel",
     "review": {
       "acceptChange": "Aceptar el cambio",
+      "acceptFinding": "Aceptar el hallazgo",
       "actionNeeded": "Requiere acción",
       "addComment": "Añadir como comentario",
       "addNote": "Añadir comentario para la contraparte",
@@ -4026,10 +4027,10 @@
       "decisionFailed": "No se pudo registrar tu decisión",
       "decisions": {
         "accepted": "Aceptado",
-        "dismissed": "Descartado",
-        "reviewed": "Revisado"
+        "dismissed": "Descartado"
       },
       "description": "Elige un playbook elaborado, documentos de referencia o ambos.",
+      "dismissFinding": "Descartar el hallazgo",
       "documentChanged": "Este documento cambió después de esta revisión.",
       "export": {
         "counterparty": "Descargar para la contraparte",
@@ -4077,9 +4078,7 @@
         "label": "Hallazgos junto a las cláusulas correspondientes",
         "unanchored": "No vinculado a ninguna cláusula"
       },
-      "markAsReviewed": "Marcar como revisado",
       "newTopic": "Nuevo tema de revisión",
-      "noChangeNeeded": "No se necesita ningún cambio",
       "noEditor": "Abre el documento para aceptar los cambios",
       "noMaterialDifferences": "No se encontraron diferencias relevantes",
       "noPassage": "Ningún pasaje",

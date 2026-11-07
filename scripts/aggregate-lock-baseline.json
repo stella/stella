@@ -3042,12 +3042,6 @@
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
-    "fingerprint": "fbd2020fb00b20becf01e77fef64b85ee4930ebb5abc396b301986886a29bb08",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/lib/legal-search/deferred-document-source-ownership.ts",
     "fingerprint": "0ac48437e8627501e57e5b67cd637033ea24b80bb0329a3894cbde77f0e6fbb4",
     "count": 1,

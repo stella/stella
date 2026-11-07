@@ -3989,6 +3989,7 @@
     "resizePane": "Redimensionner le volet",
     "review": {
       "acceptChange": "Accepter la modification",
+      "acceptFinding": "Accepter le constat",
       "actionNeeded": "Action requise",
       "addComment": "Ajouter comme commentaire",
       "addNote": "Ajouter un commentaire pour la contrepartie",
@@ -4026,10 +4027,10 @@
       "decisionFailed": "Impossible d’enregistrer votre décision",
       "decisions": {
         "accepted": "Accepté",
-        "dismissed": "Écarté",
-        "reviewed": "Révisé"
+        "dismissed": "Écarté"
       },
       "description": "Choisissez un playbook rédigé, des documents de référence ou les deux.",
+      "dismissFinding": "Écarter le constat",
       "documentChanged": "Ce document a changé depuis cette révision.",
       "export": {
         "counterparty": "Télécharger pour la contrepartie",
@@ -4077,9 +4078,7 @@
         "label": "Constats à côté des clauses concernées",
         "unanchored": "Non rattaché à une clause"
       },
-      "markAsReviewed": "Marquer comme révisé",
       "newTopic": "Nouveau thème de revue",
-      "noChangeNeeded": "Aucune modification nécessaire",
       "noEditor": "Ouvrez le document pour accepter les modifications",
       "noMaterialDifferences": "Aucune différence importante trouvée",
       "noPassage": "Aucun passage",
