@@ -6,6 +6,7 @@ import type {
   RecordInputIssue,
   RecordProvenance,
 } from "@stll/api-contract/record-cell";
+import { recordResultSchema } from "@stll/api-contract/record-cell";
 import {
   recordFieldValueSchema,
   recordValueSchema,
@@ -83,9 +84,12 @@ const checkFilledInput = (
       });
     }
   }
+  // A field already refused as missing or invalid needs no second issue: one
+  // per field keeps the cell within its issue limit.
+  const refused = new Set(issues.map(({ key }) => key));
   for (const key of new Set(filled.uncertainKeys)) {
     const field = tool.input.fields.find((candidate) => candidate.key === key);
-    if (field !== undefined) {
+    if (field !== undefined && !refused.has(key)) {
       issues.push({
         key,
         code: "uncertain",
@@ -138,7 +142,7 @@ const provenanceOf = (
     : { sourceDataAsOf: answer.sourceDataAsOf }),
 });
 
-const resultOf = (
+const shapedResultOf = (
   tool: DataSourceTool,
   records: readonly RecordValue[],
 ): Result<
@@ -174,6 +178,24 @@ const resultOf = (
       tool.output.schema.cardinality satisfies never;
       return panic("Unknown record cardinality");
   }
+};
+
+/**
+ * The cell result for an answer, refused when the cell could not hold it (more
+ * records than a cell stores): the answer is never cut to fit.
+ */
+const resultOf = (
+  tool: DataSourceTool,
+  records: readonly RecordValue[],
+): ReturnType<typeof shapedResultOf> => {
+  const shaped = shapedResultOf(tool, records);
+  if (shaped.isErr() || v.is(recordResultSchema, shaped.value)) {
+    return shaped;
+  }
+  return unavailable(
+    tool,
+    `${tool.id} answered ${records.length} records, more than a cell holds`,
+  );
 };
 
 export type RunDataSourceToolOptions = {

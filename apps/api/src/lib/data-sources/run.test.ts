@@ -4,7 +4,10 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { recordCellStateSchema } from "@stll/api-contract/record-cell";
-import { recordSchemaSchema } from "@stll/api-contract/record-schema";
+import {
+  RECORD_LIMITS,
+  recordSchemaSchema,
+} from "@stll/api-contract/record-schema";
 import type { RecordValue } from "@stll/api-contract/record-schema";
 import { assertProperty, propertySeed } from "@stll/property-testing";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -138,6 +141,19 @@ describe("input gating", () => {
     );
   });
 
+  test("a field refused and also doubted carries one issue", async () => {
+    const { tool, calls } = fakeTool({ answer: found(["A"]) });
+    const cell = (
+      await run(tool, { values: { code: null }, uncertainKeys: ["code"] })
+    ).unwrap();
+    expect(calls).toEqual([]);
+    expect(cell.state).toMatchObject({
+      status: "input-needs-review",
+      issues: [{ key: "code", code: "missing" }],
+    });
+    expect(v.is(recordCellStateSchema, cell.state)).toBe(true);
+  });
+
   test("a valid input is normalized by the tool before the call", async () => {
     const { tool, calls } = fakeTool({ answer: found(["A"]) });
     await run(tool, {
@@ -189,6 +205,19 @@ describe("answers", () => {
 
   test("a one-record tool answering two records is a source failure", async () => {
     const { tool } = fakeTool({ answer: found(["A", "B"]) });
+    const outcome = await run(tool, {
+      values: { code: "7" },
+      uncertainKeys: [],
+    });
+    expect(outcome.isErr()).toBe(true);
+  });
+
+  test("an answer larger than a cell holds is a source failure, never cut", async () => {
+    const names = Array.from(
+      { length: RECORD_LIMITS.records + 1 },
+      (_, index) => `Name ${index}`,
+    );
+    const { tool } = fakeTool({ cardinality: "many", answer: found(names) });
     const outcome = await run(tool, {
       values: { code: "7" },
       uncertainKeys: [],
