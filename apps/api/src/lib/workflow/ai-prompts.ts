@@ -3,6 +3,7 @@ import * as v from "valibot";
 import type { FolioAIBlock } from "@stll/folio-core/server";
 
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
+import { logger } from "@/api/lib/observability/logger";
 import type { PromptSafeText } from "@/api/lib/prompt-safety";
 import { answerSchemaForContent } from "@/api/lib/workflow/ai-answer-schema";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
@@ -40,7 +41,38 @@ export const WORKFLOW_SYSTEM_PROMPT =
 // A guard against a malformed document, not a budget: one paragraph can hold a
 // whole clause, and grading sees only what extraction could read. Matches the
 // per-file limit on extracted text.
-const DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS = 40_000;
+export const DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS = 40_000;
+
+/** Ends any prompt input that was cut, so the model knows text is missing. */
+export const PROMPT_TRUNCATION_MARKER =
+  "\n\n[… content truncated to fit AI prompt limits …]";
+
+export const PROMPT_INPUT_TRUNCATED_EVENT = "workflow.prompt_input_truncated";
+
+type PromptInputTruncation = {
+  input: "docx_blocks" | "extracted_text";
+  truncatedParts: number;
+  droppedChars: number;
+  maxChars: number;
+};
+
+/** Records each cut prompt input, so a cut is counted rather than silent. */
+export const recordPromptInputTruncation = ({
+  input,
+  truncatedParts,
+  droppedChars,
+  maxChars,
+}: PromptInputTruncation): void => {
+  if (truncatedParts === 0) {
+    return;
+  }
+  logger.info(PROMPT_INPUT_TRUNCATED_EVENT, {
+    input,
+    truncated_parts: String(truncatedParts),
+    dropped_chars: String(droppedChars),
+    max_chars: String(maxChars),
+  });
+};
 
 export const buildExtractedFileMessage = ({
   content,
@@ -200,17 +232,33 @@ type DocxBlocksMessageProps = {
   blocks: readonly FolioAIBlock[];
 };
 
+const DOCX_PROMPT_BLOCK_KEPT_CHARS =
+  DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS - PROMPT_TRUNCATION_MARKER.length;
+
 const truncateBlockText = (text: string): string => {
   if (text.length <= DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS) {
     return text;
   }
-  return `${text.slice(0, DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS - 1)}…`;
+  return `${text.slice(0, DOCX_PROMPT_BLOCK_KEPT_CHARS)}${PROMPT_TRUNCATION_MARKER}`;
 };
 
 export const buildDocxBlocksMessage = ({
   simplifiedName,
   blocks,
 }: DocxBlocksMessageProps): string => {
+  const cut = blocks.filter(
+    (block) => block.text.length > DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS,
+  );
+  recordPromptInputTruncation({
+    input: "docx_blocks",
+    truncatedParts: cut.length,
+    droppedChars: cut.reduce(
+      (total, block) =>
+        total + block.text.length - DOCX_PROMPT_BLOCK_KEPT_CHARS,
+      0,
+    ),
+    maxChars: DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS,
+  });
   const promptBlocks = blocks.map((block) => {
     const out: {
       blockId: string;
