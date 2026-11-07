@@ -38,6 +38,14 @@ test("rejects SQL comparisons of the workspace status column with a literal", as
   ).toEqual([2]);
 });
 
+test("rejects a namespaced SQL comparison", async () => {
+  expect(
+    await lint(
+      'declare const d: { ne: Function }, workspaces: { status: unknown };\nconst a = d.ne(workspaces.status, "deleting");',
+    ),
+  ).toEqual([2]);
+});
+
 test("allows the domain's constants and other statuses", async () => {
   expect(
     await lint(
@@ -55,4 +63,15 @@ test("allows the domain's constants and other statuses", async () => {
       'const a = (workspace: { kind: string }) => workspace.kind === "active";',
     ),
   ).toEqual([]);
+  // An entity named after a workspace is not one.
+  expect(
+    await lint(
+      'const a = (workspaceMemory: { status: string }) => workspaceMemory.status === "archived";',
+    ),
+  ).toEqual([]);
+  expect(
+    await lint(
+      'const a = (targetWorkspace: { status: string }) => targetWorkspace.status === "archived";',
+    ),
+  ).toEqual([1]);
 });

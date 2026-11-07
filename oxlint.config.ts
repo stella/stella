@@ -3910,6 +3910,8 @@ const config = defineConfig({
         "**/*.test.ts",
         "**/*.test.tsx",
         "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/tests/**",
         "apps/api/src/lib/billing/time-entry-approval.ts",
         "apps/api/src/handlers/document-reviews/parties.ts",
         "apps/api/src/lib/email/inbound/store.ts",

@@ -21,7 +21,9 @@ import type { ESTree } from "@oxlint/plugins";
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 const WORKSPACE_STATUS_LITERALS = new Set(["active", "deleting", "archived"]);
-const WORKSPACE_HOLDER = /workspace|matter/iu;
+// The holder is a workspace (`workspace`, `targetWorkspace`, `matter`,
+// `workspaces`), not an entity named after one (`workspaceMemory`).
+const WORKSPACE_HOLDER = /(?:workspace|matter)s?$/iu;
 const COMPARISON_OPERATORS = new Set(["===", "!==", "==", "!="]);
 const SQL_COMPARISONS = new Set(["eq", "ne", "inArray", "notInArray"]);
 
@@ -94,9 +96,15 @@ export default eslintCompatPlugin({
           },
           CallExpression(node) {
             const [column, value] = node.arguments;
+            // `ne(...)` or a namespaced `d.ne(...)`.
+            const callee =
+              node.callee.type === "MemberExpression" &&
+              node.callee.property.type === "Identifier"
+                ? node.callee.property
+                : node.callee;
             if (
-              node.callee.type === "Identifier" &&
-              SQL_COMPARISONS.has(node.callee.name) &&
+              callee.type === "Identifier" &&
+              SQL_COMPARISONS.has(callee.name) &&
               column !== undefined &&
               value !== undefined &&
               isWorkspaceStatus(column) &&
