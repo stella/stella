@@ -17,7 +17,8 @@
 // Syntax only: a status reached through a renamed binding (`const s =
 // workspace.status`) is out of scope; the predicates' type guards cover it.
 
-import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
+import type { ESTree } from "@oxlint/plugins";
+import { eslintCompatPlugin } from "@oxlint/plugins";
 
 const WORKSPACE_STATUS_LITERALS = new Set(["active", "deleting", "archived"]);
 const WORKSPACE_HOLDER = /workspace|matter/iu;
@@ -29,7 +30,7 @@ const MESSAGE =
   "(workspaceAcceptsWrites, workspaceIsVisible, visibleWorkspaceSql) from " +
   "@stll/api-contract/workspace-status, not a string literal.";
 
-const holderName = (node: Node): string | null => {
+const holderName = (node: ESTree.Node): string | null => {
   if (node.type === "Identifier") {
     return node.name;
   }
@@ -43,7 +44,7 @@ const holderName = (node: Node): string | null => {
 };
 
 /** `workspace.status`, `matter?.status`, `row.workspace.status`. */
-const isWorkspaceStatus = (node: Node): boolean => {
+const isWorkspaceStatus = (node: ESTree.Node): boolean => {
   const member = node.type === "ChainExpression" ? node.expression : node;
   if (
     member.type !== "MemberExpression" ||
@@ -57,12 +58,12 @@ const isWorkspaceStatus = (node: Node): boolean => {
   return holder !== null && WORKSPACE_HOLDER.test(holder);
 };
 
-const isStatusLiteral = (node: Node): boolean =>
+const isStatusLiteral = (node: ESTree.Node): boolean =>
   node.type === "Literal" &&
   typeof node.value === "string" &&
   WORKSPACE_STATUS_LITERALS.has(node.value);
 
-const holdsStatusLiteral = (node: Node): boolean =>
+const holdsStatusLiteral = (node: ESTree.Node): boolean =>
   isStatusLiteral(node) ||
   (node.type === "ArrayExpression" &&
     node.elements.some(
