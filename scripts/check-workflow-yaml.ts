@@ -321,6 +321,14 @@ export const ARTIFACT_DOWNLOAD_EXCEPTIONS: readonly ArtifactDownloadException[] 
       detail: "Reads the selected capture run through run-id.",
     },
     {
+      file: ".github/workflows/publish-npm.yml",
+      job: "cli-native-sign",
+      step: "Download built standalone CLI",
+      reason: ARTIFACT_DOWNLOAD_EXCEPTION_REASON.noActionsRead,
+      detail:
+        "The artifact-only signer grants no repository-token permissions and has no checkout or repository scripts.",
+    },
+    {
       file: ".github/workflows/type-cost-measurement.yml",
       job: "measure",
       step: "Download compiler inputs",

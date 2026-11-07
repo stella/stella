@@ -8,8 +8,16 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import packageJson from "../package.json" with { type: "json" };
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import { CLI_REQUIRED_RESOURCE_SCOPES } from "./auth/constants.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
+import {
+  CLI_MINIMUM_SERVER_REVISION,
+  CLI_REQUIRED_CAPABILITIES,
+  CLI_SUPPORTED_API_PROTOCOLS,
+} from "./generated/api-contract.js";
+import { MCP_DISCOVERY_PATH, MCP_HTTP_PATH } from "./generated/mcp-contract.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
@@ -103,6 +111,26 @@ const startMockServer = (
     port: 0,
     async fetch(req) {
       if (req.method === "GET") {
+        const url = new URL(req.url);
+        if (url.pathname === MCP_DISCOVERY_PATH) {
+          const protocol = Math.max(...CLI_SUPPORTED_API_PROTOCOLS);
+          return Response.json({
+            resource: new URL(MCP_HTTP_PATH, url.origin).toString(),
+            scopes_supported: CLI_REQUIRED_RESOURCE_SCOPES,
+            stella_contract: {
+              protocol,
+              revision: CLI_MINIMUM_SERVER_REVISION,
+              capabilities: CLI_REQUIRED_CAPABILITIES,
+            },
+            stella_compatibility: {
+              api_contract_version: protocol,
+              cli_version: {
+                minimum: packageJson.version,
+                maximum: packageJson.version,
+              },
+            },
+          });
+        }
         return new Response(null, { status: 405 });
       }
       if (req.method === "PUT") {
@@ -306,10 +334,9 @@ describe("--server (every command)", () => {
     });
     await server.stop();
 
-    // The mock has no compatibility contract, so the check fails — but on the
-    // resolved origin, not on stricli's "expected input for flag" usage error.
-    expect(result.stderr).toContain(server.url);
-    expect(result.stderr).not.toContain("--server");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain(server.url);
+    expect(result.stderr).toBe("");
   });
 });
 

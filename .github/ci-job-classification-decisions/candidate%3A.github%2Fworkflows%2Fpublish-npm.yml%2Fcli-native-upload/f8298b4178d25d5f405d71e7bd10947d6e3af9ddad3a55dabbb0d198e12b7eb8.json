@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes signed standalone CLI binaries and checksums on the existing production release after npm publication succeeds.",
+  "reviewedDigest": "f8298b4178d25d5f405d71e7bd10947d6e3af9ddad3a55dabbb0d198e12b7eb8"
+}

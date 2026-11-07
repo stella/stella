@@ -32,6 +32,8 @@ const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
 const DESKTOP_WINDOWS_BUILD_CACHE_USE =
   "baptiste0928/cargo-install caches installed Rust binaries";
 const REVIEWED_LOCAL_ACTIONS: Record<string, string> = {
+  "./.github/actions/provenance":
+    "subject validation and pinned attestation actions only; no cache",
   "./.github/actions/desktop-windows-build": DESKTOP_WINDOWS_BUILD_CACHE_USE,
   "./.github/actions/ci-install":
     "exact scoped store restore; save only after a successful frozen install on main",
