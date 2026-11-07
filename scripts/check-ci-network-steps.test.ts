@@ -86,6 +86,27 @@ describe("run step fetches", () => {
 
     expect(report.errors).toEqual([]);
   });
+
+  test("an outer request deadline preserves the retry classification", () => {
+    for (const bound of ["60", '"$request_timeout_seconds"']) {
+      const report = check({
+        [WORKFLOW]: workflow(`      - name: Download assets
+        timeout-minutes: 3
+        run: timeout ${bound} bash "$GH_RETRY_SCRIPT" release download v1 --dir assets
+`),
+      });
+      expect(report.errors).toEqual([]);
+      const bare = check({
+        [WORKFLOW]: workflow(`      - name: Download assets
+        timeout-minutes: 3
+        run: timeout ${bound} gh release download v1 --dir assets
+`),
+      });
+      expect(bare.errors).toEqual([
+        `${WORKFLOW}: build: Download assets: route gh release download (${WORKFLOW}) through scripts/retry.sh`,
+      ]);
+    }
+  });
 });
 
 describe("cargo dependency resolution", () => {

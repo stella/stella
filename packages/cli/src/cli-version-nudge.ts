@@ -75,7 +75,7 @@ export const buildVersionNudge = ({
   latest: string | undefined;
   minimum: string | undefined;
   lastNudged: string | undefined;
-  updateCommand?: string;
+  updateCommand?: string | undefined;
 }): VersionNudge => {
   if (minimum !== undefined && compareVersions(current, minimum) === -1) {
     return {

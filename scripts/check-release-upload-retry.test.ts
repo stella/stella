@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 const WORKFLOWS_URL = new URL("../.github/workflows/", import.meta.url);
 const UPLOAD_COMMAND = "release upload";
+const IMMUTABLE_UPLOAD = "bash scripts/upload-release-assets.sh ";
 /** Tolerates a checkout-path prefix, as in `.workflow-source/scripts/…`. */
 const WRAPPED_UPLOAD = /\bbash\s+"\$GH_RETRY_SCRIPT"\s+release\s+upload\b/u;
 /**
@@ -31,7 +32,10 @@ const collectUploadSites = async (): Promise<UploadSite[]> => {
 
     for (const [index, line] of lines.entries()) {
       // A comment naming the command documents a permission, it does not run it.
-      if (!line.includes(UPLOAD_COMMAND) || line.trimStart().startsWith("#")) {
+      if (
+        (!line.includes(UPLOAD_COMMAND) && !line.includes(IMMUTABLE_UPLOAD)) ||
+        line.trimStart().startsWith("#")
+      ) {
         continue;
       }
       sites.push({ file, line: index + 1, text: line.trim() });
@@ -48,7 +52,9 @@ describe("release asset uploads", () => {
     expect(sites.length).toBeGreaterThanOrEqual(MINIMUM_UPLOAD_SITES);
 
     const bare = sites.filter(
-      ({ text }) => !WRAPPED_UPLOAD.test(text) || !text.includes("--clobber"),
+      ({ text }) =>
+        !text.startsWith(IMMUTABLE_UPLOAD) &&
+        (!WRAPPED_UPLOAD.test(text) || !text.includes("--clobber")),
     );
     const report = bare
       .map(
@@ -59,5 +65,17 @@ describe("release asset uploads", () => {
       .join("\n");
 
     expect(report).toBe("");
+  });
+
+  test("immutable asset uploads use the retry owner without replacing published content", async () => {
+    const source = await Bun.file(
+      new URL("upload-release-assets.sh", import.meta.url),
+    ).text();
+    const uploads = source
+      .split("\n")
+      .filter((line) => line.includes(UPLOAD_COMMAND));
+    expect(uploads).toHaveLength(1);
+    expect(uploads.every((line) => WRAPPED_UPLOAD.test(line))).toBe(true);
+    expect(source).not.toContain("--clobber");
   });
 });

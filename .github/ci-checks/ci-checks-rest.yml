@@ -581,6 +581,18 @@ checks:
       bash scripts/install-actionlint.sh "$ACTIONLINT_VERSION" "$ACTIONLINT_SHA256" "$RUNNER_TEMP"
       ACTIONLINT_BIN="$RUNNER_TEMP/actionlint" bun scripts/check-actionlint-baseline.ts
 
+  - name: Action commit pins
+    timeout-minutes: 5
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Action commit pins')) }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Verifies changed action pins against authenticated GitHub commit objects."
+      BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
+      GITHUB_TOKEN: ${{ github.token }}
+    run: |
+      bun test scripts/check-action-commit-pins.test.ts
+      bash scripts/retry.sh bun scripts/check-action-commit-pins.ts "$BASE_SHA"
+
   - name: Workflow YAML
     env:
       CI_CHECK_KIND: STATIC

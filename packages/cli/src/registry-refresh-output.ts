@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { UPDATE_CHECK_ENABLED } from "./env.js";
 import {
   type RefreshOutcome,
   refreshRegistryCache,
@@ -15,10 +16,16 @@ export const refreshRegistryWithDiagnostics = async (
   const outcome = await refreshRegistryCache(options);
   switch (outcome.status) {
     case "refreshed":
-      for (const message of [outcome.cacheWarning, outcome.nudge]) {
-        if (message !== undefined) {
-          warn(message);
-        }
+      if (outcome.cacheWarning !== undefined) {
+        warn(outcome.cacheWarning);
+      }
+      // An unsupported version always warns; an optional update only when
+      // background update checks are enabled.
+      if (
+        outcome.nudge !== undefined &&
+        (outcome.unsupported === true || UPDATE_CHECK_ENABLED)
+      ) {
+        warn(outcome.nudge);
       }
       return outcome;
     case "failed":

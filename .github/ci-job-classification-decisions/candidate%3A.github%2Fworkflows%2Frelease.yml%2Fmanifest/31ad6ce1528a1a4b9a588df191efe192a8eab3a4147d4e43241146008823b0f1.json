@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes immutable release image tags and creates the draft GitHub release with its artifacts.",
+  "reviewedDigest": "31ad6ce1528a1a4b9a588df191efe192a8eab3a4147d4e43241146008823b0f1"
+}
