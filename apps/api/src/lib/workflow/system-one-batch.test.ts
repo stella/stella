@@ -66,6 +66,7 @@ const property = (
 ): AIBatchProperty => ({
   id: propertyId(id),
   status: "stale",
+  answerShape: "value",
   content,
   dependencies: [],
   tool: { version: 1, type: "ai-model", prompt: `What is ${id}?` },

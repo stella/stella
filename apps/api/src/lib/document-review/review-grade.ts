@@ -300,12 +300,17 @@ const gradeTierMatchPositions = async ({
     }
 
     const graded = await gradeTierMatchesForReview({
-      items: batch.map((position) => ({
-        key: position.sourceId,
-        askValue:
-          askText(contentBySourceId.get(position.sourceId)?.content) ?? "",
-        tiers: tiersBySourceId.get(position.sourceId) ?? EMPTY_TIERS,
-      })),
+      items: batch.map((position) => {
+        const extraction = contentBySourceId.get(position.sourceId);
+        return {
+          key: position.sourceId,
+          askValue: askText(extraction?.content) ?? "",
+          tiers: tiersBySourceId.get(position.sourceId) ?? EMPTY_TIERS,
+          passages: arrayOrEmpty(extraction?.citations).flatMap((citation) =>
+            citation.kind === "docx-folio" ? [citation.text] : [],
+          ),
+        };
+      }),
       abortSignal: deps.abortSignal,
       organizationId: deps.organizationId,
       admission: deps.admission,

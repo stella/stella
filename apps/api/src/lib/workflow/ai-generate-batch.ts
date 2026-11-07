@@ -313,9 +313,32 @@ const askSystemOne = async ({
   });
 };
 
+type ClauseAnswerSources = {
+  files: readonly PreparedInputFile[];
+  textInputs: readonly TextInput[];
+};
+
+/**
+ * A clause summary relies on citations that resolve to exact wording, which
+ * only a DOCX block offers. One source without blocks makes the whole batch
+ * quote: the citation rules and the prompt are shared across its sources.
+ */
+export const resolveClauseAnswerShapes = (
+  properties: readonly AIBatchProperty[],
+  { files, textInputs }: ClauseAnswerSources,
+): AIBatchProperty[] => {
+  const everySourceHasBlocks =
+    textInputs.length === 0 && files.every((file) => file.kind === "docx");
+  return properties.map((property) =>
+    property.answerShape === "clause-summary" && !everySourceHasBlocks
+      ? { ...property, answerShape: "clause-quote" }
+      : property,
+  );
+};
+
 export const generateWorkflowData = async ({
   files,
-  properties,
+  properties: requestedProperties,
   filenames,
   textInputs,
   linkedSkillsMessage,
@@ -335,6 +358,10 @@ export const generateWorkflowData = async ({
 }: GenerateWorkflowDataProps): Promise<
   Result<WorkflowDataGeneration, WorkflowIntegrationError>
 > => {
+  const properties = resolveClauseAnswerShapes(requestedProperties, {
+    files,
+    textInputs,
+  });
   const cachingDecision = resolveCaching({
     promptCachingEnabled,
     task: "pdf",

@@ -5,13 +5,14 @@
  * has to judge?
  *
  * Each case runs the production functions in order: `deriveAutoAsks`,
- * `resolveEffectiveAsk`, `generateWorkflowData` over the contract fixture with
- * every case of that contract in one batch (as a run does), `validateAIOutput`,
- * and the verdict engine's graders. No database, no document parsing. Scoring
- * is code:
+ * `resolveEffectiveAsk`, `generateWorkflowData` over the contract fixture, sent
+ * as DOCX blocks, with every case of that contract in one batch (as a run does),
+ * `validateAIOutput`, `normalizeJustification`, and the verdict engine's
+ * graders. No database. Scoring is code:
  *
  *   type        the stored content type is the expected one
- *   coverage    every expected term appears in the extracted answer
+ *   coverage    every expected term appears in what the grader reads: the answer
+ *               plus the wording of the verified citations
  *   absence     a term the contract never states comes back with no answer,
  *               not as prose saying so (prose would read as present)
  *   verdict     the graded tier is the expected one
@@ -21,17 +22,38 @@
  * Usage (from apps/api):
  *   bun run eval:playbook-clause
  *   bun run eval:playbook-clause -- --models gpt-5.6-luna --runs 3 --json out.json
+ *   bun run eval:playbook-clause -- --variant quoted
+ *   bun run eval:playbook-clause -- --pad-docx src/lib/docx/fixtures/spa-template.docx
+ *
+ * Variants: `cited` is the production path, a short answer plus citations that
+ * the server resolves to exact wording. `quoted` asks for the clause verbatim in
+ * the answer and grades the answer alone, the path `cited` has to match.
+ * `--pad-docx` surrounds each fixture with a real document's blocks, to measure
+ * duration and token use on a long file. Only pass files from this repository.
  */
 import { panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
 
+import type { FolioAIBlock } from "@stll/folio-core/server";
+
 import type { FieldContent } from "@/api/db/schema-validators";
 import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
-import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
+import {
+  defaultDeriveAskGenerate,
+  DERIVE_CLAUSE_ASK_SYSTEM_PROMPT,
+  deriveAutoAsks,
+} from "@/api/handlers/playbooks/derive-ask";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import {
+  getServerAnalytics,
+  setAnalyticsForTesting,
+} from "@/api/lib/analytics/client";
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
+import type { ServerAnalytics } from "@/api/lib/analytics/server-analytics";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
 import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
@@ -39,10 +61,14 @@ import {
   fieldContentFromValidated,
   validateAIOutput,
 } from "@/api/lib/workflow/ai-validators";
-import type { PreparedExtractedTextFile } from "@/api/lib/workflow/generate-batch";
+import { verifiedPassageTexts } from "@/api/lib/workflow/cited-passages";
+import { buildJustificationFilenames } from "@/api/lib/workflow/generate-batch";
+import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import { normalizeJustification } from "@/api/lib/workflow/parse-justifications";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import {
+  answerShapeForPosition,
   isTierStandard,
   resolveEffectiveAsk,
 } from "@/api/lib/workflow/position-runtime";
@@ -56,13 +82,31 @@ import {
   gradeTierMatch,
 } from "@/api/lib/workflow/verdict-engine";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { testModelActionAdmitter } from "@/api/tests/helpers/model-dispatch-admission";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 import { resolveModelTargets } from "./lib/org-model-targets";
 
 const DEFAULT_MODELS = ["gpt-5.6-luna", "gpt-6-sol"];
 const DEFAULT_RUNS = 1;
 const MODEL_REQUEST_TIMEOUT_MS = 120_000;
+
+type Variant = "cited" | "quoted";
+
+// The question prompt the `quoted` variant runs. It answers through the value
+// shape, whose description lets a question ask for wording at any length.
+const QUOTING_ASK_SYSTEM_PROMPT =
+  "You turn a contract-review issue and its tiered rules into ONE extraction " +
+  "question. A reviewer will judge the contract against every rule while seeing " +
+  "only the answer to your question, so the question must ask for the contract's " +
+  "own wording on every term the rules cover, naming each term. Never narrow it " +
+  "to a single value. Ask WHAT the contract says, not whether it meets a rule, " +
+  "and do not mention the rules, tiers, or grading. Ask for the wording to be " +
+  "quoted verbatim and in full, at whatever length that takes, with no commentary " +
+  "and nothing said about a term the contract does not address, and for no answer " +
+  "at all when the contract does not address the issue. Write the question in " +
+  'the language of the issue, in under 800 characters. Set contentType to "text".';
 
 // --------------- Fixtures (fictional parties) ---------------
 
@@ -356,7 +400,24 @@ const admission = admitFixtureModelDispatch({
   modelTier: MANAGED_MODEL_TIER.standard,
 });
 
-const toProperty = (position: Position): AIBatchProperty => {
+const contractBlocks = (
+  contract: ContractKey,
+  padding: readonly FolioAIBlock[],
+): FolioAIBlock[] => {
+  const clauses: FolioAIBlock[] = CONTRACTS[contract]
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .map((text, index) => ({
+      id: `c${String(index).padStart(7, "0")}`,
+      kind: "paragraph",
+      text,
+      statedNumbering: { kind: "inherit" },
+    }));
+  const middle = Math.floor(padding.length / 2);
+  return [...padding.slice(0, middle), ...clauses, ...padding.slice(middle)];
+};
+
+const toProperty = (position: Position, variant: Variant): AIBatchProperty => {
   const { question, content } = resolveEffectiveAsk(position);
   if (!isAiExtractablePropertyContent(content)) {
     return panic(`A derived ask cannot extract ${content.type}`);
@@ -364,17 +425,62 @@ const toProperty = (position: Position): AIBatchProperty => {
   return {
     id: toSafeId<"property">(position.sourceId),
     status: "stale",
+    answerShape:
+      variant === "cited" ? answerShapeForPosition(position) : "value",
     content,
     dependencies: [],
     tool: { version: 1, type: "ai-model", prompt: question },
   };
 };
 
+type RequestUsage = {
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+};
+
+const usageTotals: RequestUsage = {
+  requests: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+};
+
+const readTokenCount = (value: unknown): number =>
+  typeof value === "number" ? value : 0;
+
+// Every model call reports its tokens through analytics, so the eval reads them
+// where production does.
+const countGenerationUsage: ServerAnalytics["capture"] = ({
+  event,
+  properties,
+}) => {
+  if (event !== SERVER_ANALYTICS_EVENTS.aiGeneration) {
+    return;
+  }
+  usageTotals.requests += 1;
+  usageTotals.inputTokens += readTokenCount(properties["$ai_input_tokens"]);
+  usageTotals.outputTokens += readTokenCount(properties["$ai_output_tokens"]);
+};
+
+const usageSince = (before: RequestUsage): RequestUsage => ({
+  requests: usageTotals.requests - before.requests,
+  inputTokens: usageTotals.inputTokens - before.inputTokens,
+  outputTokens: usageTotals.outputTokens - before.outputTokens,
+});
+
 type ExtractContractOptions = {
   contract: ContractKey;
   positions: readonly Position[];
   orgAIConfig: OrgAIConfig;
   runLabel: string;
+  variant: Variant;
+  padding: readonly FolioAIBlock[];
+};
+
+type ExtractedContract = {
+  contentBySourceId: ReadonlyMap<string, FieldContent>;
+  passagesBySourceId: ReadonlyMap<string, string[]>;
+  usage: RequestUsage & { durationMs: number };
 };
 
 const extractContract = async ({
@@ -382,19 +488,24 @@ const extractContract = async ({
   positions,
   orgAIConfig,
   runLabel,
-}: ExtractContractOptions): Promise<ReadonlyMap<string, FieldContent>> => {
-  const properties = positions.map(toProperty);
-  const file: PreparedExtractedTextFile = {
-    kind: "extracted-text",
+  variant,
+  padding,
+}: ExtractContractOptions): Promise<ExtractedContract> => {
+  const properties = positions.map((position) => toProperty(position, variant));
+  const file: PreparedDocxFile = {
+    kind: "docx",
     fileFieldId: createSafeId<"field">(),
     fileId: `${contract}-fixture`,
-    content: CONTRACTS[contract],
+    blocks: contractBlocks(contract, padding),
     simplifiedName: "F0",
   };
+  const filenames = buildJustificationFilenames([file]);
+  const startedAt = performance.now();
+  const usageBefore = { ...usageTotals };
   const generated = await generateWorkflowData({
     files: [file],
     properties,
-    filenames: [],
+    filenames,
     textInputs: [],
     linkedSkillsMessage: null,
     abortSignal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS),
@@ -410,7 +521,10 @@ const extractContract = async ({
   if (Result.isError(generated)) {
     return panic(`Extraction failed: ${generated.error.message}`);
   }
+  const durationMs = performance.now() - startedAt;
+  const usage = { ...usageSince(usageBefore), durationMs };
   const contentBySourceId = new Map<string, FieldContent>();
+  const passagesBySourceId = new Map<string, string[]>();
   for (const property of properties) {
     const result = generated.value.output[property.id];
     if (result === undefined) {
@@ -424,13 +538,22 @@ const extractContract = async ({
     if (content !== null) {
       contentBySourceId.set(property.id, content);
     }
+    const justification = normalizeJustification({
+      justification: result.justification,
+      filenames,
+    }).unwrap();
+    passagesBySourceId.set(
+      property.id,
+      justification === null ? [] : verifiedPassageTexts(justification.content),
+    );
   }
-  return contentBySourceId;
+  return { contentBySourceId, passagesBySourceId, usage };
 };
 
 type GradeOptions = {
   position: TierStandardPosition;
   content: FieldContent | undefined;
+  passages: readonly string[];
   contentBySourceId: ReadonlyMap<string, FieldContent>;
   orgAIConfig: OrgAIConfig;
   runLabel: string;
@@ -439,6 +562,7 @@ type GradeOptions = {
 const gradePosition = async ({
   position,
   content,
+  passages,
   contentBySourceId,
   orgAIConfig,
   runLabel,
@@ -470,6 +594,7 @@ const gradePosition = async ({
       const graded = await gradeTierMatch({
         askValue,
         tiers: resolveTiers(position, new Map()),
+        passages,
         abortSignal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS),
         organizationId: EVAL_ORGANIZATION_ID,
         admission,
@@ -501,18 +626,24 @@ type CaseScore = {
   question: string;
   contentType: string;
   answer: string | null;
+  passages: readonly string[];
+  /** Expected terms in the wording the grader reads, for a case that has any. */
+  termsCovered: number;
+  termsExpected: number;
 };
 
 const scoreCase = ({
   evalCase,
   position,
   content,
+  passages,
   verdict,
   rationale,
 }: {
   evalCase: EvalCase;
   position: TierStandardPosition;
   content: FieldContent | undefined;
+  passages: readonly string[];
   verdict: VerdictTier;
   rationale: string | null;
 }): CaseScore => {
@@ -529,10 +660,13 @@ const scoreCase = ({
   if (expected.covers === null && answer !== null) {
     defects.push("an absent term came back with an answer");
   }
-  for (const term of expected.covers ?? []) {
-    if (answer === null || !term.test(answer)) {
-      defects.push(`answer does not cover ${term.source}`);
-    }
+  const graderText = answer === null ? null : [answer, ...passages].join("\n");
+  const expectedTerms = expected.covers ?? [];
+  const missingTerms = expectedTerms.filter(
+    (term) => graderText === null || !term.test(graderText),
+  );
+  for (const term of missingTerms) {
+    defects.push(`the grader's text does not cover ${term.source}`);
   }
   if (!expected.verdicts.includes(verdict)) {
     defects.push(
@@ -548,14 +682,34 @@ const scoreCase = ({
     question,
     contentType: askContent.type,
     answer,
+    passages,
+    termsCovered: expectedTerms.length - missingTerms.length,
+    termsExpected: expectedTerms.length,
   };
 };
 
-const runOnce = async (
-  orgAIConfig: OrgAIConfig,
-  runLabel: string,
-  cases: readonly EvalCase[],
-): Promise<CaseScore[]> => {
+type RunOnceOptions = {
+  orgAIConfig: OrgAIConfig;
+  runLabel: string;
+  cases: readonly EvalCase[];
+  variant: Variant;
+  padding: readonly FolioAIBlock[];
+};
+
+type RunOutcome = {
+  scores: CaseScore[];
+  extractions: (ExtractedContract["usage"] & { contract: ContractKey })[];
+  allRequests: RequestUsage;
+};
+
+const runOnce = async ({
+  orgAIConfig,
+  runLabel,
+  cases,
+  variant,
+  padding,
+}: RunOnceOptions): Promise<RunOutcome> => {
+  const runUsageBefore = { ...usageTotals };
   const derived = await deriveAutoAsks(
     { version: 3, items: cases.map(({ position }) => position) },
     {
@@ -565,6 +719,13 @@ const runOnce = async (
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu",
       promptCachingEnabled: false,
+      generate: async (input) =>
+        await defaultDeriveAskGenerate(
+          variant === "quoted" &&
+            input.system === DERIVE_CLAUSE_ASK_SYSTEM_PROMPT
+            ? { ...input, system: QUOTING_ASK_SYSTEM_PROMPT }
+            : input,
+        ),
     },
   );
   const positionById = new Map(
@@ -574,12 +735,9 @@ const runOnce = async (
     positionById.get(evalCase.position.sourceId) ??
     panic(`Lost position ${evalCase.id}`);
 
-  const contentByContract = new Map<
-    ContractKey,
-    ReadonlyMap<string, FieldContent>
-  >();
+  const extractedByContract = new Map<ContractKey, ExtractedContract>();
   for (const contract of new Set(cases.map((item) => item.contract))) {
-    contentByContract.set(
+    extractedByContract.set(
       contract,
       await extractContract({
         contract,
@@ -588,29 +746,52 @@ const runOnce = async (
           .map(positionOf),
         orgAIConfig,
         runLabel,
+        variant,
+        padding,
       }),
     );
   }
 
-  return await Promise.all(
+  const scores = await Promise.all(
     cases.map(async (evalCase) => {
       const position = positionOf(evalCase);
       if (!isTierStandard(position)) {
         return panic(`Case ${evalCase.id} is not a tier position`);
       }
-      const contentBySourceId =
-        contentByContract.get(evalCase.contract) ?? new Map();
+      const extracted = extractedByContract.get(evalCase.contract);
+      const contentBySourceId = extracted?.contentBySourceId ?? new Map();
       const content = contentBySourceId.get(position.sourceId);
+      // The `quoted` path grades its answer alone.
+      const passages =
+        variant === "cited"
+          ? (extracted?.passagesBySourceId.get(position.sourceId) ?? [])
+          : [];
       const { verdict, rationale } = await gradePosition({
         position,
         content,
+        passages,
         contentBySourceId,
         orgAIConfig,
         runLabel,
       });
-      return scoreCase({ evalCase, position, content, verdict, rationale });
+      return scoreCase({
+        evalCase,
+        position,
+        content,
+        passages,
+        verdict,
+        rationale,
+      });
     }),
   );
+  return {
+    scores,
+    extractions: [...extractedByContract].map(([contract, { usage }]) => ({
+      contract,
+      ...usage,
+    })),
+    allRequests: usageSince(runUsageBefore),
+  };
 };
 
 // --------------- CLI ---------------
@@ -620,6 +801,8 @@ type CliOptions = {
   runs: number;
   caseFilter: string | null;
   jsonPath: string | null;
+  variant: Variant;
+  padDocxPath: string | null;
 };
 
 const parseArgs = (argv: readonly string[]): CliOptions => {
@@ -628,6 +811,8 @@ const parseArgs = (argv: readonly string[]): CliOptions => {
     runs: DEFAULT_RUNS,
     caseFilter: null,
     jsonPath: null,
+    variant: "cited",
+    padDocxPath: null,
   };
   for (let index = 0; index < argv.length; index += 2) {
     const flag = argv.at(index);
@@ -648,6 +833,15 @@ const parseArgs = (argv: readonly string[]): CliOptions => {
       case "--json":
         options.jsonPath = value;
         break;
+      case "--variant":
+        if (value !== "cited" && value !== "quoted") {
+          return panic(`Unknown variant ${value}`);
+        }
+        options.variant = value;
+        break;
+      case "--pad-docx":
+        options.padDocxPath = value;
+        break;
       default:
         return panic(`Unknown flag ${flag}`);
     }
@@ -658,18 +852,24 @@ const parseArgs = (argv: readonly string[]): CliOptions => {
 const renderTable = (modelId: string, scores: readonly CaseScore[]): string =>
   [
     `\n### ${modelId}\n`,
-    "| case | outcome | verdict | type | answer chars | defects |",
-    "| --- | --- | --- | --- | ---: | --- |",
+    "| case | outcome | verdict | type | answer chars | passages | terms | defects |",
+    "| --- | --- | --- | --- | ---: | ---: | ---: | --- |",
     ...scores.map(
       (score) =>
         `| ${score.caseId} | ${score.outcome} | ${score.verdict} | ${score.contentType} | ` +
-        `${String(score.answer?.length ?? 0)} | ${score.defects.join("; ")} |`,
+        `${String(score.answer?.length ?? 0)} | ${String(score.passages.length)} | ` +
+        `${String(score.termsCovered)}/${String(score.termsExpected)} | ` +
+        `${score.defects.join("; ")} |`,
     ),
     "",
     `passed ${String(scores.filter((score) => score.outcome === "pass").length)}/${String(scores.length)}`,
   ].join("\n");
 
 const main = async () => {
+  setAnalyticsForTesting({
+    ...getServerAnalytics(),
+    capture: countGenerationUsage,
+  });
   const options = parseArgs(process.argv.slice(2));
   const cases = CASES.filter(
     (item) => options.caseFilter === null || item.id === options.caseFilter,
@@ -678,7 +878,19 @@ const main = async () => {
     panic(`Unknown case ${String(options.caseFilter)}`);
   }
 
-  const runs: { modelId: string; run: number; scores: CaseScore[] }[] = [];
+  const padding =
+    options.padDocxPath === null
+      ? []
+      : (
+          await openScannedDocxReviewer(
+            testScannedFile({
+              bytes: await Bun.file(options.padDocxPath).arrayBuffer(),
+              mimeType: DOCX_MIME_TYPE,
+            }),
+          )
+        ).getContent();
+
+  const runs: ({ modelId: string; run: number } & RunOutcome)[] = [];
   // `run` is null when the model never resolved, so no run was attempted.
   const failures: { modelId: string; run: number | null; message: string }[] =
     [];
@@ -691,25 +903,39 @@ const main = async () => {
     const scores: CaseScore[] = [];
     for (let run = 1; run <= options.runs; run += 1) {
       process.stderr.write(`${target.id} · run ${String(run)}\n`);
-      const runScores = await Result.tryPromise({
+      const outcome = await Result.tryPromise({
         try: async () =>
-          await runOnce(
-            target.orgAIConfig,
-            `${target.id}-${String(run)}`,
+          await runOnce({
+            orgAIConfig: target.orgAIConfig,
+            runLabel: `${target.id}-${String(run)}`,
             cases,
-          ),
+            variant: options.variant,
+            padding,
+          }),
         catch: (error) =>
           error instanceof Error ? error.message : String(error),
       });
-      if (Result.isError(runScores)) {
+      if (Result.isError(outcome)) {
         process.stderr.write(
-          `${target.id} · run ${String(run)} failed: ${runScores.error}\n`,
+          `${target.id} · run ${String(run)} failed: ${outcome.error}\n`,
         );
-        failures.push({ modelId: target.id, run, message: runScores.error });
+        failures.push({ modelId: target.id, run, message: outcome.error });
         continue;
       }
-      runs.push({ modelId: target.id, run, scores: runScores.value });
-      scores.push(...runScores.value);
+      runs.push({ modelId: target.id, run, ...outcome.value });
+      scores.push(...outcome.value.scores);
+      for (const extraction of outcome.value.extractions) {
+        const seconds = extraction.durationMs / 1000;
+        process.stderr.write(
+          `  ${extraction.contract}: ${String(extraction.inputTokens)} in, ` +
+            `${String(extraction.outputTokens)} out, ${seconds.toFixed(1)}s, ` +
+            `${(extraction.outputTokens / seconds).toFixed(0)} tokens/s\n`,
+        );
+      }
+      const { inputTokens, outputTokens } = outcome.value.allRequests;
+      process.stderr.write(
+        `  whole run: ${String(inputTokens)} in, ${String(outputTokens)} out\n`,
+      );
     }
     process.stdout.write(`${renderTable(target.id, scores)}\n`);
   }

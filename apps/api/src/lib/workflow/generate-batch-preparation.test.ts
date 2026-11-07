@@ -42,6 +42,7 @@ const inputObjectKey = `org_test/workspace_test/${fileContent.id}.pdf`;
 const aiProperty = {
   id: propertyId,
   status: "stale",
+  answerShape: "value",
   content: { version: 1, type: "text" },
   dependencies: [],
   tool: { version: 1, type: "ai-model", prompt: "Extract the parties." },

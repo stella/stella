@@ -83,6 +83,7 @@ import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 import type { ResolvedTiers } from "@/api/lib/workflow/playbook-positions";
 import {
+  answerShapeForPosition,
   isTierStandard,
   resolveEffectiveAsk,
 } from "@/api/lib/workflow/position-runtime";
@@ -791,6 +792,7 @@ const runGradingPass = async ({
       sourceId: position.sourceId,
       question: ask.question.trim(),
       content,
+      answerShape: answerShapeForPosition(position),
     });
   }
 

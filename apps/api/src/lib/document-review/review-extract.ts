@@ -13,6 +13,7 @@ import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { createDefaultTool } from "@/api/lib/properties/create-schema";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandDerivedPropertyId } from "@/api/lib/safe-id-boundaries";
+import type { AnswerShape } from "@/api/lib/workflow/ai-answer-schema";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import {
   fieldContentFromValidated,
@@ -76,6 +77,7 @@ export type ReviewAsk = {
   sourceId: string;
   question: string;
   content: AiExtractablePropertyContent;
+  answerShape: AnswerShape;
 };
 
 export type ReviewExtractionResult = {
@@ -272,6 +274,7 @@ export const extractAskContents = async ({
         id: propertyId,
         status: "stale",
         content: ask.content,
+        answerShape: ask.answerShape,
         dependencies: [],
         tool: buildAiTool(ask.question),
       });

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type { FolioAIBlock } from "@stll/folio-core/server";
@@ -5,10 +6,10 @@ import type { FolioAIBlock } from "@stll/folio-core/server";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import { logger } from "@/api/lib/observability/logger";
 import type { PromptSafeText } from "@/api/lib/prompt-safety";
-import { answerSchemaForContent } from "@/api/lib/workflow/ai-answer-schema";
-import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
+import { answerSchemaForShape } from "@/api/lib/workflow/ai-answer-schema";
+import type { Answer, AnswerShape } from "@/api/lib/workflow/ai-answer-schema";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
-import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type {
   AIJustificationOutput,
   JustificationFilenames,
@@ -89,7 +90,31 @@ export const buildExtractedFileMessage = ({
 
 // --------------- Schema builders ---------------
 
-const createJustificationSchema = (filenames: JustificationFilenames) => {
+const CITE_EVERY_TERM_INSTRUCTION =
+  "Cite every block that states a term the question covers, including any " +
+  "definition or sub-clause those terms rely on: a reviewer reads the exact " +
+  "wording of the cited blocks and nothing else, so a term in an uncited block " +
+  "counts as absent. Cite the block holding the main term first, and do not " +
+  'cite a block that only holds a heading. Keep "text" to a few words; one ' +
+  "statement can carry all the citations.";
+
+const citationInstructions = (shape: AnswerShape): string[] => {
+  switch (shape) {
+    case "clause-summary":
+      return [CITE_EVERY_TERM_INSTRUCTION];
+    case "value":
+    case "clause-quote":
+      return [];
+    default:
+      shape satisfies never;
+      return panic(`Unhandled answer shape: ${String(shape)}`);
+  }
+};
+
+const createJustificationSchema = (
+  filenames: JustificationFilenames,
+  shape: AnswerShape,
+) => {
   const hasPdf = filenames.some((file) => file.kind === "pdf-bates");
   const hasDocx = filenames.some((file) => file.kind === "docx-folio");
 
@@ -176,6 +201,7 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
             ]
           : []),
         ...citationGuide,
+        ...citationInstructions(shape),
         "Do not include markup, HTML, Markdown, or narrative outside " +
           "the object.",
         `Example: ${JSON.stringify(
@@ -199,11 +225,9 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
 };
 
 export const buildBatchSchema = (
-  properties: readonly BatchProperty[],
+  properties: readonly AIBatchProperty[],
   filenames: JustificationFilenames,
 ) => {
-  const justificationSchema = createJustificationSchema(filenames);
-
   const schemaShape: Record<
     string,
     v.GenericSchema<{ answer: Answer; justification: AIJustificationOutput }>
@@ -212,13 +236,13 @@ export const buildBatchSchema = (
   for (const property of properties) {
     // Null only for a select with no options: there is nothing to choose from,
     // so the column is left out of the batch rather than asked unanswerably.
-    const answer = answerSchemaForContent(property.content);
+    const answer = answerSchemaForShape(property.content, property.answerShape);
     if (answer === null) {
       continue;
     }
     schemaShape[property.id] = v.strictObject({
       answer,
-      justification: justificationSchema,
+      justification: createJustificationSchema(filenames, property.answerShape),
     });
   }
 

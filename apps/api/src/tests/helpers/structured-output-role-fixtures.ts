@@ -50,7 +50,7 @@ import { fieldSuggestionsSchema } from "@/api/lib/templates/suggest-template-fie
 import { buildBatchSchema } from "@/api/lib/workflow/ai-prompts";
 import { generativeDecisionsSchema } from "@/api/lib/workflow/decisions/decide";
 import { choice, noul } from "@/api/lib/workflow/decisions/system-one";
-import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import {
   tierMatchBatchSchema,
   tierMatchSchema,
@@ -71,10 +71,11 @@ const batchTool = {
   type: "ai-model",
   prompt: "Extract it.",
 } as const;
-const batchProperties: BatchProperty[] = [
+const batchProperties: AIBatchProperty[] = [
   {
     id: toSafeId<"property">("prop-governing-law"),
     status: "stale",
+    answerShape: "value",
     content: { version: 1, type: "text" },
     dependencies: [],
     tool: batchTool,
@@ -82,6 +83,7 @@ const batchProperties: BatchProperty[] = [
   {
     id: toSafeId<"property">("prop-assignment"),
     status: "stale",
+    answerShape: "value",
     content: {
       version: 1,
       type: "single-select",

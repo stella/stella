@@ -16,6 +16,7 @@ const batch: PropertyBatch = {
     {
       id: summaryId,
       status: "stale",
+      answerShape: "value",
       content: { version: 1, type: "text" },
       dependencies: [
         { dependsOnPropertyId: priceId, condition: null },

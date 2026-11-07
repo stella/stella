@@ -7,7 +7,7 @@ import {
   fieldContentFromValidated,
   validateAIOutput,
 } from "@/api/lib/workflow/ai-validators";
-import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type { AIJustificationOutput } from "@/api/lib/workflow/parse-justifications";
 
 const justification: AIJustificationOutput = [];
@@ -18,17 +18,19 @@ const aiModelTool = {
   prompt: "test",
 };
 
-const textProperty: BatchProperty = {
+const textProperty: AIBatchProperty = {
   id: toSafeId<"property">("prop-text"),
   status: "stale",
+  answerShape: "value",
   content: { version: 1, type: "text" },
   dependencies: [],
   tool: aiModelTool,
 };
 
-const intProperty: BatchProperty = {
+const intProperty: AIBatchProperty = {
   id: toSafeId<"property">("prop-int"),
   status: "stale",
+  answerShape: "value",
   content: { version: 1, type: "int" },
   dependencies: [],
   tool: aiModelTool,
@@ -36,9 +38,10 @@ const intProperty: BatchProperty = {
 
 const selectPropertyWithFallback = (
   fallback: string | null,
-): BatchProperty => ({
+): AIBatchProperty => ({
   id: toSafeId<"property">("prop-select"),
   status: "stale",
+  answerShape: "value",
   content: {
     version: 1,
     type: "single-select",
@@ -52,9 +55,10 @@ const selectPropertyWithFallback = (
   tool: aiModelTool,
 });
 
-const multiSelectProperty: BatchProperty = {
+const multiSelectProperty: AIBatchProperty = {
   id: toSafeId<"property">("prop-multi"),
   status: "stale",
+  answerShape: "value",
   content: {
     version: 1,
     type: "multi-select",
@@ -193,9 +197,10 @@ describe("validateAIOutput — select answers", () => {
   });
 });
 
-const moneyProperty = (currency: string | null): BatchProperty => ({
+const moneyProperty = (currency: string | null): AIBatchProperty => ({
   id: toSafeId<"property">("prop-money"),
   status: "stale",
+  answerShape: "value",
   content: { version: 1, type: "money", currency },
   dependencies: [],
   tool: aiModelTool,

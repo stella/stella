@@ -17,6 +17,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
+import type { AnswerShape } from "@/api/lib/workflow/ai-answer-schema";
+import { answerShapeForRule } from "@/api/lib/workflow/position-runtime";
 
 /**
  * Whether a property is queued for the workflow to (re)compute it.
@@ -58,6 +60,7 @@ type BatchPropertyBase = {
 // An extraction column the LLM fills from the document.
 export type AIBatchProperty = BatchPropertyBase & {
   tool: AIModelTool;
+  answerShape: AnswerShape;
 };
 
 // A derived verdict column graded after its ASK extraction (see
@@ -115,6 +118,8 @@ type DependencyGraph = {
   inDegree: Map<string, number>;
   dependents: Map<string, string[]>;
   propertyIds: Set<string>;
+  /** The shape each verdict column asks of the ask column it reads. */
+  answerShapeByAskId: Map<string, AnswerShape>;
 };
 
 type ExecutionPlanData = {
@@ -214,7 +219,15 @@ export const buildDependencyGraph = ({
     dependents.get(edge.dependsOnPropertyId)?.push(edge.propertyId);
   }
 
+  const answerShapeByAskId = new Map<string, AnswerShape>();
+  for (const { tool } of properties) {
+    if (tool.type === "playbook-verdict") {
+      answerShapeByAskId.set(tool.askPropertyId, answerShapeForRule(tool.rule));
+    }
+  }
+
   return {
+    answerShapeByAskId,
     propertyDependenciesMap,
     dependsOn,
     inDegree,
@@ -270,7 +283,11 @@ export const buildLevelBatches = (
     // cannot distribute AIModelTool | PlaybookVerdictTool across the spread.
     const computed = signatureToProperties.get(signature);
     if (property.tool.type === "ai-model") {
-      computed?.push({ ...base, tool: property.tool });
+      computed?.push({
+        ...base,
+        tool: property.tool,
+        answerShape: graph.answerShapeByAskId.get(propId) ?? "value",
+      });
     }
     if (property.tool.type === "playbook-verdict") {
       computed?.push({ ...base, tool: property.tool });

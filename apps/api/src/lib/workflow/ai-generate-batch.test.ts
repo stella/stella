@@ -7,16 +7,23 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import type { AnswerShape } from "@/api/lib/workflow/ai-answer-schema";
 import {
   buildWorkflowAIAnalyticsProps,
   EXTRACTED_TEXT_PROMPT_LIMITS,
   generateWorkflowData,
   limitExtractedTextPromptContent,
+  resolveClauseAnswerShapes,
 } from "@/api/lib/workflow/ai-generate-batch";
 import {
   PROMPT_INPUT_TRUNCATED_EVENT,
   PROMPT_TRUNCATION_MARKER,
 } from "@/api/lib/workflow/ai-prompts";
+import type {
+  PreparedDocxFile,
+  PreparedInputFile,
+} from "@/api/lib/workflow/generate-batch";
+import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
@@ -120,6 +127,7 @@ test("a fully planned workflow batch propagates a generative provider failure", 
   const property = {
     id: toSafeId<"property">("planned-contract-kind"),
     status: "stale",
+    answerShape: "value",
     content: {
       version: 1,
       type: "single-select",
@@ -186,5 +194,73 @@ test("a fully planned workflow batch propagates a generative provider failure", 
     propertyId: property.id,
     reason: "failed",
     source: "generative",
+  });
+});
+
+describe("resolveClauseAnswerShapes", () => {
+  const property = (answerShape: AnswerShape): AIBatchProperty => ({
+    id: toSafeId<"property">(answerShape),
+    status: "stale",
+    answerShape,
+    content: { version: 1, type: "text" },
+    dependencies: [],
+    tool: { version: 1, type: "ai-model", prompt: "Question?" },
+  });
+  const docx = {
+    kind: "docx",
+    fileFieldId: toSafeId<"field">("docx_field"),
+    fileId: "docx",
+    simplifiedName: "F0",
+    blocks: [],
+  } as const satisfies PreparedDocxFile;
+  const pdf = {
+    kind: "pdf",
+    fileFieldId: toSafeId<"field">("pdf_field"),
+    fileId: "pdf",
+    simplifiedName: "F1",
+    content: new Uint8Array(),
+    mimeType: "application/pdf",
+    pageCount: 1,
+  } as const satisfies PreparedInputFile;
+  const extracted = {
+    kind: "extracted-text",
+    fileFieldId: toSafeId<"field">("text_field"),
+    fileId: "text",
+    simplifiedName: "F2",
+    content: "Text.",
+  } as const satisfies PreparedInputFile;
+  const textInput = {
+    propertyId: toSafeId<"property">("input"),
+    value: "A value.",
+  };
+
+  const shapeFor = (
+    files: readonly PreparedInputFile[],
+    textInputs: readonly TextInput[] = [],
+  ) =>
+    resolveClauseAnswerShapes([property("clause-summary")], {
+      files,
+      textInputs,
+    }).at(0)?.answerShape;
+
+  test("only a batch of DOCX blocks answers with a summary", () => {
+    expect(shapeFor([docx])).toBe("clause-summary");
+    expect(shapeFor([pdf])).toBe("clause-quote");
+    expect(shapeFor([extracted])).toBe("clause-quote");
+  });
+
+  test("one source without blocks makes the whole batch quote", () => {
+    expect(shapeFor([docx, pdf])).toBe("clause-quote");
+    expect(shapeFor([docx, extracted])).toBe("clause-quote");
+    expect(shapeFor([docx], [textInput])).toBe("clause-quote");
+  });
+
+  test("a value answer is the same whatever the sources", () => {
+    expect(
+      resolveClauseAnswerShapes([property("value")], {
+        files: [pdf],
+        textInputs: [],
+      }).at(0)?.answerShape,
+    ).toBe("value");
   });
 });

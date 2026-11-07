@@ -2,8 +2,10 @@ import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { logger } from "@/api/lib/observability/logger";
 import { answerSchemaForContent } from "@/api/lib/workflow/ai-answer-schema";
+import type { AnswerShape } from "@/api/lib/workflow/ai-answer-schema";
 import {
   buildBatchSchema,
   buildDocxBlocksMessage,
@@ -11,7 +13,7 @@ import {
   PROMPT_INPUT_TRUNCATED_EVENT,
   PROMPT_TRUNCATION_MARKER,
 } from "@/api/lib/workflow/ai-prompts";
-import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
 
 const noFilenames: JustificationFilenames = [];
@@ -22,25 +24,28 @@ const aiModelTool = {
   prompt: "test",
 };
 
-const textProperty: BatchProperty = {
+const textProperty: AIBatchProperty = {
   id: toSafeId<"property">("prop-text"),
   status: "stale",
+  answerShape: "value",
   content: { version: 1, type: "text" },
   dependencies: [],
   tool: aiModelTool,
 };
 
-const intProperty: BatchProperty = {
+const intProperty: AIBatchProperty = {
   id: toSafeId<"property">("prop-int"),
   status: "stale",
+  answerShape: "value",
   content: { version: 1, type: "int" },
   dependencies: [],
   tool: aiModelTool,
 };
 
-const selectProperty: BatchProperty = {
+const selectProperty: AIBatchProperty = {
   id: toSafeId<"property">("prop-select"),
   status: "stale",
+  answerShape: "value",
   content: {
     version: 1,
     type: "single-select",
@@ -54,9 +59,10 @@ const selectProperty: BatchProperty = {
   tool: aiModelTool,
 };
 
-const multiSelectProperty: BatchProperty = {
+const multiSelectProperty: AIBatchProperty = {
   id: toSafeId<"property">("prop-multi"),
   status: "stale",
+  answerShape: "value",
   content: {
     version: 1,
     type: "multi-select",
@@ -220,5 +226,52 @@ describe("buildDocxBlocksMessage", () => {
         logInfo.mockRestore();
       }
     });
+  });
+});
+
+describe("buildBatchSchema — answer shapes", () => {
+  const docxFilenames: JustificationFilenames = [
+    {
+      kind: "docx-folio",
+      original: "file",
+      simplified: "F0",
+      fileFieldId: toSafeId<"field">("file_field"),
+      blocksById: new Map([["b1", "A clause."]]),
+    },
+  ];
+  const withShape = (answerShape: AnswerShape): AIBatchProperty => ({
+    ...textProperty,
+    answerShape,
+  });
+  const propertySchema = (property: AIBatchProperty) =>
+    JSON.stringify(toJsonSchema(buildBatchSchema([property], docxFilenames)));
+
+  test("a clause summary asks for a short answer and for every term's block", () => {
+    const schema = propertySchema(withShape("clause-summary"));
+    expect(schema).toContain("less than 100 characters");
+    expect(schema).toContain("Cite every block");
+    expect(schema).not.toContain("verbatim and in full");
+  });
+
+  test("a clause quote asks for the wording and keeps the ordinary citations", () => {
+    const schema = propertySchema(withShape("clause-quote"));
+    expect(schema).toContain("verbatim and in full");
+    expect(schema).not.toContain("Cite every block");
+  });
+
+  test("a value answer has no clause instructions", () => {
+    const schema = propertySchema(withShape("value"));
+    expect(schema).not.toContain("Cite every block");
+    expect(schema).not.toContain("A reviewer reads");
+    expect(schema).not.toContain("every term the question covers");
+  });
+
+  test("a non-text clause answer keeps its type and still cites every term", () => {
+    const schema = propertySchema({
+      ...intProperty,
+      answerShape: "clause-summary",
+    });
+    expect(schema).toContain('"amount"');
+    expect(schema).toContain("Cite every block");
   });
 });
