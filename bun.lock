@@ -383,7 +383,7 @@
         "@expo-google-fonts/dm-sans": "0.4.2",
         "@expo/ui": "58.0.25",
         "@expo/vector-icons": "15.1.1",
-        "@formatjs/intl-pluralrules": "6.3.16",
+        "@formatjs/intl-pluralrules": "7.0.2",
         "@stll/agent-input": "workspace:*",
         "@stll/api-contract": "workspace:*",
         "@stll/brand": "workspace:*",
@@ -2557,7 +2557,7 @@
 
     "@fontsource-variable/source-serif-4": ["@fontsource-variable/source-serif-4@5.3.1", "", {}, "sha512-4Rtay22SC4lMvw11r/+9kxANB6P3M0X8s1NudBC2v0J1KU2y3DcMoNcT3lBoZ/CqLirzf+StlO6UlJilyrvaUg=="],
 
-    "@formatjs/bigdecimal": ["@formatjs/bigdecimal@0.2.7", "", {}, "sha512-B4+XY/e4u5v261r3a37Kq2ax91gPZSKGyVpx8X5dygAggLlUz+6MeBpmAhaBFGB8WQ4JB1qD+QtKHk9aJkEb9Q=="],
+    "@formatjs/bigdecimal": ["@formatjs/bigdecimal@0.2.10", "", {}, "sha512-npIs6UARNOg5amJY5UOVsd6HUQQfzYjet0sa0SWIqzsnVhxLSpaIx2DjoIVrr/vqmjURjvroeW6dItjfy3Uf8A=="],
 
     "@formatjs/fast-memoize": ["@formatjs/fast-memoize@3.1.7", "", {}, "sha512-zXfhLpvA6T7+efdt9JLbBwZ00tT7NsBMDVnDu8rpHeNNv8KfRZAMo2gkG0k9lK/Nzc//3kJ9pImsfuJxk3KhUA=="],
 
@@ -2565,9 +2565,9 @@
 
     "@formatjs/icu-skeleton-parser": ["@formatjs/icu-skeleton-parser@2.1.12", "", {}, "sha512-ca7tZMLpfHX3sUD7hP6gE/qr6Iq89EDd3ZLeRhbsB7r0UD55DGJq+tmFLzrGrnx5StahUevQmQQVtbDRHsfDHA=="],
 
-    "@formatjs/intl-localematcher": ["@formatjs/intl-localematcher@0.9.0", "", { "dependencies": { "@formatjs/fast-memoize": "3.1.7" } }, "sha512-Z7TD3ssNry1Av1dVDoq/mzpxGyxqWwU0ClWEo+BB3k0JQTeQvUGmeK9WZGYvlqStS0UqkaKXk3dfjsb6NaHAxw=="],
+    "@formatjs/intl-localematcher": ["@formatjs/intl-localematcher@0.10.1", "", { "dependencies": { "@formatjs/fast-memoize": "3.1.7" } }, "sha512-gBqglQK9rXuHsLmM8wzTMBy4Xo4d0jamirIVKuEL8F1rwbskWdpMA1kZarSkny+uvr5q/K6GSzE0Rcq1wZLl3g=="],
 
-    "@formatjs/intl-pluralrules": ["@formatjs/intl-pluralrules@6.3.16", "", { "dependencies": { "@formatjs/bigdecimal": "0.2.7", "@formatjs/intl-localematcher": "0.9.0" } }, "sha512-iOqCpBM2fo7bbbWqno+yN9WioepV01N2q3KawFZhRYADzijpzmIIA6cbFXrriCI1Mt2q5c7mceiKHoQkEFf0/Q=="],
+    "@formatjs/intl-pluralrules": ["@formatjs/intl-pluralrules@7.0.2", "", { "dependencies": { "@formatjs/bigdecimal": "0.2.10", "@formatjs/intl-localematcher": "0.10.1" } }, "sha512-PJ4+ldlqXlo3csmP02u2HqyXw09TDB/fatYpDCyWryfEQeVWl2EbMzij9SBksPaW2U//+q69lXR3IMnCRQAmrw=="],
 
     "@gdp-ts/core": ["@gdp-ts/core@0.1.0", "", { "peerDependencies": { "eslint": ">=9", "oxlint": ">=1.86", "typescript": ">=5.4" }, "optionalPeers": ["eslint", "oxlint", "typescript"] }, "sha512-eH3PdZALOGZNv4m1L3Zz+cbMK6/g4AaRJbL7VXWFhZ9g8ukykjXRgMPPYoXvv/2cVcxBcl36d+7c3Z81BLqyLQ=="],
 

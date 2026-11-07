@@ -28,7 +28,7 @@
     "@expo-google-fonts/dm-sans": "0.4.2",
     "@expo/ui": "58.0.25",
     "@expo/vector-icons": "15.1.1",
-    "@formatjs/intl-pluralrules": "6.3.16",
+    "@formatjs/intl-pluralrules": "7.0.2",
     "@stll/agent-input": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/brand": "workspace:*",
