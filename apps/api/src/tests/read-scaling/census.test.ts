@@ -15,6 +15,7 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
+import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
@@ -67,6 +68,7 @@ const measuredApiScenarios = [
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
+  chatActiveRunsScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   ...dataBoxSettingsScalingScenarios,
@@ -246,9 +248,9 @@ for (const { kind, surface, ledger, measured } of [
           repoRoot,
           parseLedger: parseScalingLedger,
           // A write route this change mounts may enter with its reason.
-          normalizeBaseEntries: (base) =>
+          normalizeBaseEntries: ({ entries }) =>
             withNewWriteRoutes({
-              base,
+              base: entries,
               current: parseScalingLedger(
                 JSON.stringify(ledger),
                 `${kind}-scaling`,

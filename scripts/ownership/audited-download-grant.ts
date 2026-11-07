@@ -21,6 +21,11 @@ export default {
           "Signs the result of the requester's own report export, audited when the export runs.",
       },
       {
+        path: "apps/api/src/lib/desktop-runner/attachment-links.ts",
+        reason:
+          "Signs a chat attachment a local run copies to the member's computer, audited as their download when they send the turn.",
+      },
+      {
         path: "apps/api/src/lib/entity-versions/desktop-edit-session-utils.ts",
         reason:
           "Signs the working copy of a desktop edit session or collaboration room, audited when it opens.",

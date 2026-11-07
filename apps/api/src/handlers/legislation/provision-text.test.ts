@@ -48,6 +48,19 @@ const blocks: Block[] = [
 ];
 
 describe("extractProvisionText", () => {
+  test("a cited paragraph reads through its unnumbered wording to the next one", () => {
+    const section = [
+      heading("par_185", 2, "Section 185"),
+      paragraph("par_185-odst_1", "(1) Whoever acts,"),
+      paragraph("frag_149950285", "whoever compels,"),
+      paragraph("frag_149950289", "shall be punished."),
+      paragraph("par_185-odst_2", "(2) Preparation is punishable."),
+    ];
+    expect(extractProvisionText(czech(section), "par_185-odst_1")).toBe(
+      "(1) Whoever acts,\nwhoever compels,\nshall be punished.",
+    );
+  });
+
   test("keeps the provision's own blocks and its nested subdivisions", () => {
     expect(extractProvisionText(czech(blocks), "sec-1")).toBe(
       ["Section 1", "First rule.", "Section 1a", "Nested rule."].join("\n"),

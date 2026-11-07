@@ -7,10 +7,14 @@ import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
+  DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
   DESKTOP_RUNNER_RUN_OUTCOMES,
+  desktopRunnerAttachmentSchema,
+  desktopRunnerQuestionAnswersSchema,
+  MAX_RUN_ATTACHMENTS,
 } from "@stll/api-contract/desktop-runner";
 
 /**
@@ -121,9 +125,6 @@ const MAX_RUN_MESSAGES = 1000;
 const MAX_LAUNCH_ENTRIES = 32;
 /** Process ids are unsigned 32-bit on every platform the desktop runs on. */
 const MAX_PID = 4_294_967_295;
-const MAX_ANSWERED_QUESTIONS = 32;
-const MAX_ANSWERS_PER_QUESTION = 64;
-const MAX_ANSWER_LENGTH = 16_384;
 
 const runIdSchema = v.pipe(v.string(), v.uuid());
 const requestIdSchema = v.pipe(v.string(), v.uuid());
@@ -279,12 +280,19 @@ export const sidecarHostMessageSchema = v.variant("type", [
     ...harnessLaunchEntries,
     /** The directory the harness runs in and may write to. */
     workspaceDir: absolutePathSchema,
+    /** The computer's package-manager cache, writable in every sandbox. */
+    cacheDir: absolutePathSchema,
     model: modelIdSchema,
     instructions: v.pipe(v.string(), v.maxLength(65_536)),
     messages: v.pipe(
       v.array(modelMessageSchema),
       v.minLength(1),
       v.maxLength(MAX_RUN_MESSAGES),
+    ),
+    /** Files to copy into `workspaceDir` before the harness starts. */
+    attachments: v.pipe(
+      v.array(desktopRunnerAttachmentSchema),
+      v.maxLength(MAX_RUN_ATTACHMENTS),
     ),
     /** The native session to resume; `null` starts fresh. */
     harnessSessionId: v.nullable(
@@ -293,6 +301,7 @@ export const sidecarHostMessageSchema = v.variant("type", [
     policy: v.object({
       network: v.picklist(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: v.picklist(DESKTOP_RUNNER_FS_POLICIES),
+      approvals: v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
     }),
     mcp: v.object({
       serverName: v.pipe(v.string(), v.regex(/^[a-z][a-z\d_]{0,63}$/u)),
@@ -316,19 +325,7 @@ export const sidecarHostMessageSchema = v.variant("type", [
     type: v.literal(SIDECAR_HOST_MESSAGE.runAnswer),
     runId: runIdSchema,
     requestId: requestIdSchema,
-    answers: v.pipe(
-      v.record(
-        v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-        v.pipe(
-          v.array(v.pipe(v.string(), v.maxLength(MAX_ANSWER_LENGTH))),
-          v.maxLength(MAX_ANSWERS_PER_QUESTION),
-        ),
-      ),
-      v.check(
-        (answers) => Object.keys(answers).length <= MAX_ANSWERED_QUESTIONS,
-        "At most 32 questions are answered at once",
-      ),
-    ),
+    answers: desktopRunnerQuestionAnswersSchema,
   }),
   v.object({
     type: v.literal(SIDECAR_HOST_MESSAGE.runInterrupt),
@@ -381,6 +378,8 @@ const probeOutcomeSchema = v.variant("type", [
     type: v.literal("ready"),
     version: desktopVersionSchema,
     capabilities: v.array(v.picklist(DESKTOP_RUNNER_HARNESS_CAPABILITIES)),
+    /** The approval modes this computer can run the harness in. */
+    approvalModes: v.array(v.picklist(DESKTOP_RUNNER_APPROVAL_MODES)),
     models: v.pipe(
       v.array(
         v.object({

@@ -124,7 +124,6 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
                     className="shrink-0"
                     role="img"
                     aria-label={statusLabel}
-                    title={statusLabel}
                   >
                     <StatuteStatusDot
                       expression={trail.expression}
@@ -154,6 +153,11 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
                         </>
                       )}
                     <BidiText>{trail.fullTitle}</BidiText>
+                    {/* The status dot's own hover hint: it sits inside this
+                        trigger, so it shares this popup instead of opening a
+                        second one over it. */}
+                    <br />
+                    <span className="text-muted-foreground">{statusLabel}</span>
                   </span>
                 </TooltipPopup>
               </Tooltip>

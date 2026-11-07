@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { PACKAGE_CACHE_FOLDERS } from "../src/harness/package-cache";
 import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
@@ -609,6 +610,29 @@ const FAKE_SCENARIOS = {
     ).flat(),
   ],
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
+  /** One blocking question asking two questions under one id. */
+  question_twice_named: [
+    ...freshTurn(),
+    {
+      request: "item/tool/requestUserInput",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "ask-twice",
+        isBlocking: true,
+        autoResolutionMs: null,
+        questions: ["Czech", "Slovak"].map((law) => ({
+          id: "law",
+          header: "Governing law",
+          question: `Does ${law} law govern the lease?`,
+          isOther: true,
+          isSecret: false,
+          options: null,
+        })),
+      },
+    },
+    { sleep: 5000 },
+  ],
   crash: [
     ...freshTurn(),
     item("started", command("call-x", "inProgress")),
@@ -773,6 +797,12 @@ if (import.meta.main) {
       pid: process.pid,
       /** What follows the scenario: the launch's own arguments. */
       args: process.argv.slice(3),
+      /** Where the turn points package managers' caches. */
+      packageCache: Object.fromEntries(
+        Object.entries(process.env).filter(([name]) =>
+          Object.hasOwn(PACKAGE_CACHE_FOLDERS, name),
+        ),
+      ),
       /** The variables a launch may set or remove. */
       launchEnvironment: Object.fromEntries(
         Object.entries(process.env).filter(

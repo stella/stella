@@ -6,9 +6,18 @@ import { PreviewSurface } from "./PreviewSurface";
 // Animation is pure CSS (@keyframes) so the component stays hook-free and client-JS-free.
 
 const ENTITY = {
-  person: { bg: "rgba(22,163,74,.16)", fg: "rgb(22,163,74)" },
-  organization: { bg: "rgba(37,99,235,.16)", fg: "rgb(37,99,235)" },
-  id: { bg: "rgba(217,119,6,.16)", fg: "rgb(217,119,6)" },
+  person: {
+    bg: "color-mix(in srgb, var(--preview-green) 16%, transparent)",
+    fg: "var(--preview-green)",
+  },
+  organization: {
+    bg: "color-mix(in srgb, var(--preview-blue) 16%, transparent)",
+    fg: "var(--preview-blue)",
+  },
+  id: {
+    bg: "color-mix(in srgb, var(--preview-amber) 16%, transparent)",
+    fg: "var(--preview-amber)",
+  },
 } as const;
 
 type EntityType = keyof typeof ENTITY;

@@ -294,7 +294,6 @@
     "eslint": "10.13.0",
     "fast-check": "^4.10.2",
     "franc": "6.2.0",
-    "jszip": "3.10.2",
     "lucide-react": "1.61.0",
     "lucide-react-native": "1.41.0",
     "lucide-static": "1.41.0",
@@ -311,7 +310,7 @@
     "tailwindcss": "4.3.3",
     "temporal-polyfill": "1.0.5",
     "tsdown": "0.23.1",
-    "tsrs": "0.18.0-ts7.1.0-dev.20260929",
+    "tsrs": "0.20.1-ts7.1.0-beta",
     "typescript6": "npm:typescript@6.0.3",
     "use-intl": "4.14.9",
     "icu-minify": "4.14.9",
@@ -345,6 +344,7 @@
     }
   },
   "patchedDependencies": {
+    "@emnapi/runtime@1.9.1": "patches/@emnapi%2Fruntime@1.9.1.patch",
     "@stll/aho-corasick@1.0.4": "patches/@stll%2Faho-corasick@1.0.4.patch",
     "@stll/regex-set@1.0.5": "patches/@stll%2Fregex-set@1.0.5.patch",
     "@mcp-ui/client@7.1.1": "patches/@mcp-ui%2Fclient@7.1.1.patch",

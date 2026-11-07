@@ -183,6 +183,11 @@
       </div>
     </main>
     <script type="module">
+      import { installNativeContextMenuPolicy } from "../shared/native-context-menu";
+
+      installNativeContextMenuPolicy(document);
+    </script>
+    <script type="module">
       import { fitStaticDialog } from "./static-dialog-fit.js";
       // Origins and wording both arrive in the URL hash, set by Rust when it
       // opens the window: the dialog carries no strings of its own, so it

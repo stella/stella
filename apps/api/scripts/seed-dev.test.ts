@@ -1,10 +1,16 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { MARKETING_LOCALES } from "@stll/playwright-tools/marketing-locales";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { getPropertyExecutionPlan } from "@/api/lib/workflow/get-execution-plan";
+
 import { SEED_CONTENT_BY_LOCALE } from "./seed-content/locales";
 import {
+  buildAllPropertySeeds,
+  buildPropertySeedDependencies,
   createMockDocx,
   createSeedEmail,
   seedRequiredCaseLaw,
@@ -27,9 +33,8 @@ const nonEmptyBlockTexts = (title: string, bodyText: string): string[] =>
 // text list, so the guard exercises the real generator instead of only
 // re-deriving the same layout by hand.
 const paragraphTextsFromDocx = async (docx: Buffer): Promise<string[]> => {
-  const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(docx);
-  const documentXml = await zip.file("word/document.xml")?.async("string");
+  const zip = await ZipArchive.read(docx);
+  const documentXml = await zip.entry("word/document.xml")?.text();
   if (documentXml === undefined) {
     throw new Error("seeded docx is missing word/document.xml");
   }
@@ -142,4 +147,22 @@ test("a case-law backfill failure rejects the dev seed phase", async () => {
 
   expect(await rejectionOf(outcome)).toBe(unitFailure);
   expect(marketingStarted).toBe(false);
+});
+
+test("the workflow planner accepts every seeded column", () => {
+  const seeds = buildAllPropertySeeds();
+  const dependencies = buildPropertySeedDependencies(seeds);
+
+  const planned = getPropertyExecutionPlan({
+    properties: seeds.map(({ id, content, tool }) => ({
+      id,
+      content,
+      tool,
+      status: "stale",
+    })),
+    dependencies,
+  });
+
+  expect(Result.isOk(planned)).toBe(true);
+  expect(dependencies.length).toBeGreaterThan(0);
 });

@@ -16,6 +16,7 @@ import {
 } from "@/api/lib/errors/handler-error-resolution";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
+import { drainCaseLawRankingSignalChanges } from "@/api/lib/legal-search/case-law-ranking-signal-drain";
 import {
   CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
   type CorpusIndexClient,
@@ -1595,6 +1596,12 @@ export const executeCorpusProjectionAppendCycle = async <
     ingestMs: 0,
     storeCommitMs: 0,
   };
+  // A case-law cycle first reconciles a bounded batch of decisions whose
+  // ranking signals moved, so a generation that stores them converges on the
+  // corpus as it changes; their re-projections are reserved like any other.
+  if (family === "case_law") {
+    await drainCaseLawRankingSignalChanges({ runInTransaction });
+  }
   const { replacements, leases } = await measured(
     async () =>
       await runInTransaction(async (tx) => ({

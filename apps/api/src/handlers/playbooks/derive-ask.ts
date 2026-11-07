@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { PropertyContent } from "@/api/db/schema-validators";
+import type { ScalarPropertyContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -20,7 +20,10 @@ import type {
   PlaybookPositions,
   Position,
 } from "@/api/lib/workflow/playbook-positions";
-import { isTierStandard } from "@/api/lib/workflow/position-runtime";
+import {
+  canonicalRulesInput,
+  isTierStandard,
+} from "@/api/lib/workflow/position-runtime";
 import type { TierStandardPosition } from "@/api/lib/workflow/position-runtime";
 
 // Auto-ASK derivation (save-time). A graded position with `ask.mode === "auto"`
@@ -57,20 +60,7 @@ export type DeriveAskResult = v.InferOutput<typeof deriveAskSchema>;
 
 const contentForType = (
   contentType: DeriveAskResult["contentType"],
-): PropertyContent => ({ version: 1, type: contentType });
-
-// The canonical grading inputs the derived question depends on, in stored order.
-// Ideal language is deliberately excluded: it drives FIX, not what to extract.
-const canonicalRulesInput = (position: TierStandardPosition) => {
-  const { tiers } = position.standard;
-  return {
-    issue: position.issue,
-    acceptableRuleTexts: tiers.acceptable.rules.map((rule) => rule.text),
-    fallbackTexts: tiers.fallback.entries.map((entry) => entry.text),
-    notAcceptableRuleTexts: tiers.notAcceptable.rules.map((rule) => rule.text),
-    check: position.check ?? null,
-  };
-};
+): ScalarPropertyContent => ({ version: 1, type: contentType });
 
 export const computeRulesHash = (position: TierStandardPosition): string =>
   hashSha256Hex(JSON.stringify(canonicalRulesInput(position)));

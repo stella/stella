@@ -33,6 +33,10 @@ import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
 } from "@stll/api-contract/professional-use";
+import {
+  WORKSPACE_STATUS,
+  workspaceIsVisible,
+} from "@stll/api-contract/workspace-status";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
 import { isUiLocale } from "@stll/locales";
@@ -88,7 +92,11 @@ import {
 } from "@/api/lib/auth-artifacts";
 import { revokeCredentialsForAccessReset } from "@/api/lib/auth/access-reset-revocation";
 import { ACCESS_TOKEN_EXPIRES_IN_SECONDS } from "@/api/lib/auth/access-token-lifetime";
-import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import {
+  type AccessibleWorkspace,
+  admitsWorkspaceStatus,
+  type WorkspaceStatusAccess,
+} from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import {
   admitApiAccessTokenRoute,
@@ -350,6 +358,7 @@ import {
 } from "@/api/lib/rate-limit/otp-account-budget";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { memoizePerRequest } from "@/api/lib/request-memo";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -2140,6 +2149,8 @@ export const createAuth = (
           }
           throw removal.error;
         }
+        // The removal cleared the member's attorney assignments on contacts.
+        announceContactSetChanged(organizationId);
       },
     },
     async sendInvitationEmail(data, request) {
@@ -3124,7 +3135,10 @@ type ValidateAuthRejection = { ok: false } & ValidateAuthRefusal;
 
 const rejectValidateAuth = (
   rejection: ValidateAuthRefusal,
-): ValidateAuthRejection => ({ ok: false, ...rejection });
+): ValidateAuthRejection => ({
+  ok: false,
+  ...rejection,
+});
 
 /**
  * Account routes confirm the session still exists in storage. Organization
@@ -3241,8 +3255,6 @@ const featureAccessColumns = (organizationId: SafeId<"organization">) => {
           >`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId} and ${featureEnrolments.featureId} = ANY(${typedPgArray(enrolmentFeatureIds, "text")})), '{}')`,
   };
 };
-
-const ACTIVE_WORKSPACE_STATUS = "active";
 
 export const resolveMemberAuthorization = async (
   { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
@@ -3484,7 +3496,7 @@ export const resolveWorkspaceRealtimeAudience = async (
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
-        eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
         memberReachesMatterSql(
           { organizationId: member.organizationId, userId: member.userId },
           workspaces.id,
@@ -4000,7 +4012,7 @@ const resolveValidateAuth = async ({
     activeWorkspaceIdsPromise ??= getAccessibleWorkspaces().then((items) => {
       const activeWorkspaceIds: SafeId<"workspace">[] = [];
       for (const item of items) {
-        if (item.status !== "deleting") {
+        if (workspaceIsVisible(item.status)) {
           activeWorkspaceIds.push(item.id);
         }
       }
@@ -4208,9 +4220,6 @@ export type {
   WorkspaceCaller,
 } from "@/api/lib/auth/member-caller";
 
-/** Which matter statuses a workspace route admits; archived only where it says so. */
-export type WorkspaceStatusAccess = "active" | "active-or-archived";
-
 /**
  * Matter access for a member: the matter the validated `:workspaceId` names
  * must be one the member may use, in a status the route admits. Its audit
@@ -4223,10 +4232,7 @@ export const authorizeWorkspace = async (
   admitted: WorkspaceStatusAccess,
 ): Promise<CallerOutcome<WorkspaceCaller>> => {
   const workspace = await memberCaller.getWorkspaceAccess(workspaceId);
-  const admittedStatus =
-    workspace?.status === "active" ||
-    (admitted === "active-or-archived" && workspace?.status === "archived");
-  if (!admittedStatus) {
+  if (!admitsWorkspaceStatus(workspace?.status, admitted)) {
     return { ok: false, answer: status(404, AUTH_REJECTION_BODY[404]) };
   }
   return {

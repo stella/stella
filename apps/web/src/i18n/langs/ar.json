@@ -40,7 +40,6 @@
     "organizationId": "معرّف المؤسسة",
     "organizationLeft": "لقد غادرت المؤسسة.",
     "planAndUsage": "الخطة والاستخدام",
-    "title": "إدارة المؤسسة",
     "toolsDescription": "تفعيل الأدوات المدمجة أو تعطيلها لجميع الأشخاص في هذه المؤسسة."
   },
   "agentClaim": {
@@ -163,7 +162,9 @@
       "declinedDescription": "لقد رفضت هذه الدعوة. يمكنك إغلاق هذه الصفحة بأمان.",
       "description": "تمت دعوتك للانضمام إلى {organizationName} من قِبل {inviterEmail} بصفة {role}.",
       "goToWorkspaces": "الانتقال إلى الملفات القانونية",
-      "title": "دعوة المؤسسة"
+      "title": "دعوة المؤسسة",
+      "verifyEmailHint": "لتأكيد {email}، سجّل الخروج، ثم سجّل الدخول برمز لمرة واحدة سنرسله إلى هذا العنوان.",
+      "wrongAccountHint": "سجّلت الدخول باستخدام {email}. سجّل الخروج، ثم سجّل الدخول بالعنوان الذي أُرسلت إليه الدعوة."
     },
     "lastUsed": "آخر استخدام",
     "oneTimeCodeExpired": "انتهت صلاحية رمزك لمرة واحدة. اطلب رمزًا جديدًا.",
@@ -1461,6 +1462,8 @@
     },
     "answerQuote": {
       "showInDecision": "عرض في القرار",
+      "unverified": "تعذّر التحقق من الاقتباس",
+      "unverifiedHint": "لا تتضمن القرارات المستشهد بها هذا النص حرفيًا",
       "verified": "اقتباس موثَّق",
       "verifiedHint": "حرفيًا في {source}"
     },
@@ -1686,10 +1689,18 @@
       "errorNeedsLogin": "يطلب وكيل البرمجة على حاسوبك تسجيل الدخول مجددًا. سجّل الدخول عبر stella desktop ثم حاول مرة أخرى.",
       "errorUnavailable": "توقف حاسوبك عن معالجة هذا الرد. تأكد من أن stella desktop مفتوح ومتصل، ثم حاول مرة أخرى.",
       "onThisComputer": "{harness} على هذا الحاسوب",
+      "permissionAskDescription": "يعدّل الملفات في مجلد الدردشة من تلقاء نفسه، ويسأل قبل أي شيء آخر.",
+      "permissionAutoDescription": "ينفّذ من تلقاء نفسه ما يراه آمنًا، ويسأل عن الباقي.",
+      "permissionFullAuto": "تلقائي بالكامل",
+      "permissionFullAutoDescription": "لا يسأل عن أي شيء داخل مجلد الدردشة، ويسأل دائمًا قبل تغيير أي شيء على حاسوبك.",
+      "permissionSandboxed": "يعمل في بيئة معزولة، ويسأل قبل تغيير أي شيء على حاسوبك.",
+      "permissionUnavailable": "غير متاح على هذا الحاسوب",
+      "permissions": "الأذونات",
       "refusalConflictingRunMode": "يطلب هذا الطلب التشغيل مع الوكيل السحابي وعلى حاسوبك معًا. اختر واحدًا من قائمة التشغيل على.",
       "refusalHarnessUnavailable": "لا يستطيع وكيل البرمجة على حاسوبك تولّي هذا الطلب الآن. تحقّق منه في stella desktop.",
       "refusalModelUnavailable": "لم يعد وكيل البرمجة على حاسوبك يقدّم هذا النموذج. اختر نموذجًا آخر من قائمة التشغيل على.",
       "refusalNoComputer": "لا يوجد أي حاسوب من حواسيبك متصل. افتح stella desktop ثم أرسل مجددًا.",
+      "refusalPermissionUnavailable": "لا يمكن لوكيل البرمجة على حاسوبك العمل بهذه الأذونات. اختر خيارًا آخر من قائمة الأذونات.",
       "refusalTooLarge": "هذه الدردشة أطول من أن تُنقل إلى حاسوبك. ابدأ دردشة جديدة لتشغيلها هناك.",
       "refusalUnavailable": "تشغيل الدردشات على حاسوبك غير متاح لحسابك.",
       "runOn": "التشغيل على",
@@ -1701,6 +1712,16 @@
       "stateUnavailable": "غير متاح حاليًا",
       "stateUnsupported": "هذا الإصدار غير مدعوم",
       "waitingForComputer": "في انتظار إعادة اتصال حاسوبك…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "اختر كل ما ينطبق",
+      "dismiss": "تجاهل وإيقاف",
+      "secretAnswer": "الإجابة مخفية",
+      "secretPlaceholder": "تبقى إجابتك مخفية"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, zero {لا توجد دردشات بانتظارك} one {دردشة واحدة بانتظارك} two {دردشتان بانتظارك} few {# دردشات بانتظارك} many {# دردشة بانتظارك} other {# دردشة بانتظارك}}",
+      "working": "{count, plural, zero {لا توجد دردشات قيد العمل} one {دردشة واحدة قيد العمل} two {دردشتان قيد العمل} few {# دردشات قيد العمل} many {# دردشة قيد العمل} other {# دردشة قيد العمل}}"
     },
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mcpReconnect": {
@@ -1843,10 +1864,18 @@
       "toolbarLabel": "النص المحدد"
     },
     "sendError": "حدثت مشكلة أثناء إرسال رسالتك. تواصل مع الدعم إذا استمرّ الخطأ.",
+    "sendErrorActiveFileNoText": "لا يحتوي الملف المفتوح على نص يمكن لـ stella قراءته. أغلقه أو افتح ملفًا آخر.",
+    "sendErrorActiveFileTooLarge": "الملف المفتوح كبير جدًا بالنسبة إلى الدردشة. أغلقه أو افتح ملفًا أصغر.",
+    "sendErrorAgentRunsDisabled": "عمليات تشغيل الوكيل غير متاحة هنا. تواصل مع مسؤول مساحة العمل.",
     "sendErrorAnonymizationBlocked": "تعذّر على stella تجهيل أحد المرفقات، لذا لم يُرسَل شيء. أزِل الملف أو أرسِل هذه الرسالة دون تجهيل.",
+    "sendErrorAttachmentNoText": "لا يحتوي أحد الملفات المرفقة على نص يمكن لـ stella قراءته. أزِله أو أرفق ملفًا آخر.",
+    "sendErrorAttachmentUnsupported": "لا يمكن إرفاق هذا النوع من الملفات بالدردشة. أرفق ملفًا آخر.",
     "sendErrorConnectionFailed": "تعذّر الاتصال بالدردشة. تحقّق من اتصالك وحاول مرة أخرى.",
     "sendErrorContinuationRejected": "تعذّر متابعة الدردشة. أرسل رسالة جديدة للبدء من جديد.",
+    "sendErrorDocumentUnsupported": "لا يستطيع هذا النموذج قراءة أحد المستندات المرفقة. أزِل المرفق أو انتقل إلى نموذج يدعمه.",
     "sendErrorEmptyCompletion": "أعاد الذكاء الاصطناعي ردّاً فارغاً. حاول مجدداً أو أعد صياغة رسالتك.",
+    "sendErrorImageInvalid": "تعذّر تجهيز هذه الصورة للنموذج. ارفع صورة أصغر أو غيّر النموذج.",
+    "sendErrorImageUnsupported": "لا يستطيع هذا النموذج قراءة الصور المرفقة. أزِل الصورة أو انتقل إلى نموذج يدعم الصور.",
     "sendErrorLoopDetected": "تكرّر ردّ الذكاء الاصطناعي مرّات كثيرة جداً. حاول مجدداً بطلب أكثر تحديداً.",
     "sendErrorMessageEmpty": "لا تحتوي هذه الرسالة على نص لإرساله. اكتب سؤالك أو أرفق ملفاً، ثم أرسِل الرسالة.",
     "sendErrorModelUnavailable": "نموذج الذكاء الاصطناعي المُهيّأ لم يعد متاحاً. اطلب من مسؤول مساحة العمل تحديث النموذج في إعدادات المؤسسة.",
@@ -1858,6 +1887,7 @@
     "sendErrorQuotaExhausted": "نفدت حصة مزوّد الذكاء الاصطناعي. حاول مجدداً بعد دقيقة، أو تواصل مع مسؤول مساحة العمل.",
     "sendErrorStreamIncomplete": "انقطع ردّ الذكاء الاصطناعي قبل أن يكتمل. حاول مجدداً.",
     "sendErrorTimedOut": "لم تستجب خدمة الدردشة في الوقت المحدد. حاول مرة أخرى.",
+    "sendErrorToolsUnsupported": "لا يستطيع هذا النموذج استخدام الأدوات، لذا لا يمكنه الإجابة عن أسئلة تخص ملفك القانوني. انتقل إلى نموذج يدعم الأدوات.",
     "sendPrompt": "إرسال الرسالة",
     "sendQueuedMessageNow": "إرسال الآن",
     "sendWithoutAnonymization": "إرسال دون تجهيل",
@@ -1904,7 +1934,7 @@
       "unavailable": "تعذّر اختيار رسم بياني. يتم عرض الجدول.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "العمل مع السياق",
+    "thinking": "جارٍ التفكير",
     "threadFiles": {
       "title": "الملفات في هذه الدردشة"
     },
@@ -2032,6 +2062,11 @@
       "replyReadyBody": "أنهت stella الرد في الدردشة.",
       "replyReadyTitle": "الرد جاهز"
     },
+    "turnStatus": {
+      "waitingForApproval": "في انتظار الموافقة",
+      "waitingForInput": "في انتظار الإدخال",
+      "writing": "جارٍ الكتابة"
+    },
     "unsupportedFileType": "نوع ملف غير مدعوم",
     "uploadFailed": "تعذّرت معالجة الملف",
     "usageFallbackNotice": "استُنفدت الحصة اليومية للذكاء الاصطناعي؛ تستمر الردود على النموذج القياسي.",
@@ -2040,7 +2075,6 @@
       "answer": "ملخّص البحث على الويب",
       "answerDisclaimer": "تجميع من نتائج الويب العامة أدناه. تحقّق منها مقابل المصادر المرتبطة.",
       "fetchedFrom": "من {source}",
-      "openSource": "فتح {source} في علامة تبويب جديدة",
       "sources": "المصادر",
       "toggleDescription": "اسمح للنموذج بالبحث في الويب العام وقراءة الصفحات لهذه المحادثة.",
       "toggleLabel": "البحث على الويب",
@@ -2394,6 +2428,7 @@
     "notes": "الملاحظات",
     "open": "فتح",
     "openInNewTab": "فتح في علامة تبويب جديدة",
+    "openInSidePanel": "فتح في اللوحة الجانبية",
     "openInStella": "فتح في stella",
     "openOriginalSource": "فتح المصدر الأصلي",
     "options": "الخيارات",
@@ -3233,7 +3268,6 @@
     "noFileInVersion": "لا يوجد ملف في هذا الإصدار",
     "noFullScreenPreview": "لا تتوفر معاينة بملء الشاشة لهذا النوع من الملفات.",
     "noLabel": "بلا تسمية",
-    "openInSidePanel": "فتح في اللوحة الجانبية",
     "redlinePreview": "التغييرات المتعقَّبة",
     "removeLabel": "إزالة التسمية",
     "saveComparison": "حفظ المقارنة",
@@ -3954,6 +3988,7 @@
     "reopenTab": "إعادة فتح {name}",
     "resizePane": "تغيير حجم اللوحة",
     "review": {
+      "acceptChange": "قبول التغيير",
       "actionNeeded": "تحتاج إلى إجراء",
       "addComment": "إضافة كتعليق",
       "addNote": "إضافة تعليق للطرف المقابل",
@@ -3991,7 +4026,8 @@
       "decisionFailed": "تعذر تسجيل قرارك",
       "decisions": {
         "accepted": "مقبول",
-        "dismissed": "مستبعد"
+        "dismissed": "مستبعد",
+        "reviewed": "تمت المراجعة"
       },
       "description": "اختر دليل مراجعة مُعدًا أو مستندات مرجعية أو كليهما.",
       "documentChanged": "تغيّر هذا المستند بعد هذه المراجعة.",
@@ -4017,6 +4053,7 @@
       "history": {
         "backToLatest": "العودة إلى الأحدث",
         "decided": "{decided, number} من {total, number} مقرَّر",
+        "fromTable": "من الجدول",
         "references": "{count, plural, zero {لا مراجع} one {مرجع واحد} two {مرجعان} few {# مراجع} many {# مرجعًا} other {# مرجع}}"
       },
       "impact": {
@@ -4040,6 +4077,7 @@
         "label": "النتائج إلى جانب البنود التي تتعلق بها",
         "unanchored": "غير مرتبط ببند"
       },
+      "markAsReviewed": "وضع علامة «تمت المراجعة»",
       "newTopic": "موضوع مراجعة جديد",
       "noChangeNeeded": "لا حاجة إلى تغيير",
       "noEditor": "افتح المستند لقبول التغييرات",
@@ -4124,6 +4162,11 @@
         "noSide": "بلا طرف",
         "proposedFromReferences": "مواقف مقترحة من المراجع",
         "unnamedReferences": "{count, plural, zero {لا مستندات مرجعية} one {مستند مرجعي واحد} two {مستندان مرجعيان} few {# مستندات مرجعية} many {# مستندًا مرجعيًا} other {# مستند مرجعي}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>تتوفر مراجعة كاملة لهذا الإصدار</link>، مع روابط وتغييرات مقترحة، في سجل المراجعات.",
+        "origin": "<strong>من تشغيل عبر الجدول.</strong> قُيّمت هذه النتائج استنادًا إلى القيم المستخرجة للجدول، لذا لا ترتبط بالمستند ولا تتضمن تغييرات مقترحة.",
+        "runAnotherReview": "للحصول على الروابط والتغييرات المقترحة، استخدم زر <action>{label}</action>."
       },
       "targetAsReference": "لا يمكن أن يكون المستند قيد المراجعة مرجعًا لنفسه.",
       "targetColumn": "هذا المستند",
@@ -5244,6 +5287,8 @@
       "betaDescription": "جرّب ميزات لا تزال قيد التطوير",
       "betaInbox": "صندوق الوارد والإشعارات",
       "betaInboxDescription": "إظهار صندوق الوارد وجرس الإشعارات",
+      "betaLocalAgents": "الوكلاء على حاسوبك",
+      "betaLocalAgentsDescription": "تشغيل الدردشات باستخدام Codex أو Claude Code على حاسوبك عبر stella desktop",
       "betaTimeBillingDescription": "إظهار تتبع الوقت والفواتير والمصروفات",
       "chatNotifications": "إشعارات الدردشة",
       "chatNotificationsBlocked": "الإشعارات محظورة لـ stella في هذا المتصفح. اسمح بها من إعدادات الموقع في المتصفح.",
@@ -5761,7 +5806,6 @@
     "leadingDecisionsExplanation": "أول إشارة في كل قرار، مرتبة حسب حجية الاستشهاد: الاستشهادات الواردة الموزونة، مع مراعاة مرتبة المحكمة ودلالة الاستشهاد وحداثته.",
     "noVersionInForce": "لم تكن أي نسخة من هذا النص نافذة في التاريخ المحدد.",
     "openEnded": "الآن",
-    "openProvision": "فتح الحكم",
     "outline": "المحتويات",
     "outlineJumpLabel": "الانتقال إلى حكم",
     "outlineJumpPlaceholder": "§ 10 أو عنوان",
@@ -6474,6 +6518,10 @@
       "noProperties": "لا توجد خاصية لحسابها",
       "unavailable": "—"
     },
+    "cellOverride": {
+      "machineValue": "القيمة الأصلية من الذكاء الاصطناعي",
+      "reasonPlaceholder": "سبب التغيير (اختياري)"
+    },
     "copyToMatter": {
       "copied": "تم النسخ إلى الملف القانوني",
       "copyOption": "نسخ (مع الاحتفاظ بالأصل)",
@@ -6540,6 +6588,9 @@
       "calculating": "جارٍ الحساب...",
       "errored": "حدث خطأ",
       "formatNotSupported": "التنسيق غير مدعوم",
+      "recordChoose": "{count, plural, zero {لا توجد تطابقات} one {أكّد التطابق} two {اختر من تطابقَين} few {اختر من # تطابقات} many {اختر من # تطابقًا} other {اختر من # تطابق}}",
+      "recordCount": "{count, plural, zero {لا توجد سجلات} one {سجل واحد} two {سجلان} few {# سجلات} many {# سجلًا} other {# سجل}}",
+      "recordNotFound": "غير موجود",
       "selectAValue": "اختر قيمة",
       "selectValues": "اختر القيم",
       "wholeNumberOnly": "أدخل عددًا صحيحًا"
@@ -7232,6 +7283,7 @@
       "previewSubject": "جرِّبه على عينة",
       "previewUnsupported": "المعاينة غير مدعومة لهذا النوع من المستندات.",
       "readingFrom": "يقرأ الذكاء الاصطناعي من",
+      "record": "سجل",
       "referencesItself": "الخاصية تشير إلى نفسها عبر خصائص أخرى",
       "resultType": "نوع النتيجة",
       "returnsLabel": "التنسيق",

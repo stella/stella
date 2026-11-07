@@ -60,7 +60,7 @@ pub(crate) use endpoint::EndpointError;
 use endpoint::Endpoints;
 pub(crate) use protocol::{
   HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
-  RunAnswer, SidecarRunStart,
+  SidecarRunStart,
 };
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProbeFailure,
@@ -68,18 +68,15 @@ use protocol::{
 };
 
 use crate::runner_protocol::{
-  Ack, ApprovalKind, Harness, HarnessModel, HarnessReport, HarnessUnavailableReason,
-  JsonObject, LimitedHarness, ReadyHarness, RejectReason, RunApproval, RunOutcome,
-  RunRef, RunTokenRefresh, SignedOutHarness, UnavailableHarness, UnsupportedHarness,
+  Ack, ApprovalKind, ApprovalMode, Harness, HarnessModel, HarnessReport,
+  HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, RejectReason,
+  RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
+  UnavailableHarness, UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
 /// Bound on queued commands; beyond it a command is refused as busy.
 const COMMAND_QUEUE: usize = 256;
-/// Bound on a run's undelivered outputs. The last slot is kept for the run's
-/// final message: a run whose consumer lets the others fill up ends `failed`
-/// in it and is cancelled, so no consumer can stall the supervisor.
-pub(crate) const RUN_OUTPUT_QUEUE: usize = 256;
 const LINK_EVENT_QUEUE: usize = 256;
 /// What the sidecar is named next to the app executable in a bundle.
 const BUNDLED_NAME: &str = "stella-agent-sidecar";
@@ -285,11 +282,11 @@ enum Control {
     run_id: String,
     harness: Harness,
     line: HostLine,
-    outputs: mpsc::Sender<SidecarDelivery>,
+    outputs: mpsc::UnboundedSender<SidecarDelivery>,
   },
   ResumeRun {
     point: ResumePoint,
-    outputs: mpsc::Sender<SidecarDelivery>,
+    outputs: mpsc::UnboundedSender<SidecarDelivery>,
     reply: oneshot::Sender<Result<(), ResumeError>>,
   },
   HeldRuns(oneshot::Sender<Vec<HeldRun>>),
@@ -386,11 +383,11 @@ impl HarnessSidecar {
   pub(crate) fn start_run(
     &self,
     start: SidecarRunStart,
-  ) -> Result<mpsc::Receiver<SidecarDelivery>, SidecarUnavailable> {
+  ) -> Result<mpsc::UnboundedReceiver<SidecarDelivery>, SidecarUnavailable> {
     let run_id = start.run_id.clone();
     let harness = start.harness;
     let line = HostLine::encode(&HostMessage::RunStart(Box::new(start)))?;
-    let (outputs, receiver) = mpsc::channel(RUN_OUTPUT_QUEUE);
+    let (outputs, receiver) = mpsc::unbounded_channel();
     self.control(Control::StartRun {
       run_id,
       harness,
@@ -416,8 +413,8 @@ impl HarnessSidecar {
     &self,
     run_id: &str,
     after_seq: u32,
-  ) -> Result<mpsc::Receiver<SidecarDelivery>, ResumeError> {
-    let (outputs, receiver) = mpsc::channel(RUN_OUTPUT_QUEUE);
+  ) -> Result<mpsc::UnboundedReceiver<SidecarDelivery>, ResumeError> {
+    let (outputs, receiver) = mpsc::unbounded_channel();
     let (reply, answer) = oneshot::channel();
     self
       .control(Control::ResumeRun {
@@ -455,13 +452,6 @@ impl HarnessSidecar {
   }
 
   /// Answers to a blocking question the run asked.
-  #[cfg_attr(
-    not(all(test, unix)),
-    allow(
-      dead_code,
-      reason = "the runner socket has no answer message yet; the host relays one once it does"
-    )
-  )]
   pub(crate) fn answer(&self, answer: RunAnswer) -> Result<(), SidecarUnavailable> {
     self.forward(answer.run_id.clone(), &HostMessage::RunAnswer(answer))
   }
@@ -554,6 +544,7 @@ pub(crate) fn harness_report(
     ProbeOutcome::Ready {
       version,
       capabilities,
+      approval_modes,
       models,
     } => {
       let mut seen = std::collections::HashSet::new();
@@ -577,10 +568,17 @@ pub(crate) fn harness_report(
         .copied()
         .filter(|capability| listed.insert(capability.wire_name()))
         .collect();
+      // Each mode once, in the contract's order; `Ask` is always offered.
+      let approval_modes = ApprovalMode::ALL
+        .iter()
+        .copied()
+        .filter(|mode| *mode == ApprovalMode::Ask || approval_modes.contains(mode))
+        .collect();
       HarnessReport::Ready(ReadyHarness {
         id: harness,
         version: version.clone(),
         capabilities,
+        approval_modes,
         models,
       })
     }
@@ -862,7 +860,7 @@ struct Event {
 /// Who receives a run's outputs.
 struct Claim {
   /// `None` once the run's last output was delivered.
-  outputs: Option<mpsc::Sender<SidecarDelivery>>,
+  outputs: Option<mpsc::UnboundedSender<SidecarDelivery>>,
   /// The last `seq` delivered on the channel.
   delivered: u32,
 }
@@ -877,9 +875,6 @@ struct Run {
   finished: Option<NonZeroU32>,
   /// `None` for a run a holder listed that no caller resumed yet.
   claim: Option<Claim>,
-  /// Cancelled because its consumer stopped draining it: never routed or
-  /// resumed again.
-  abandoned: bool,
 }
 
 struct Supervisor {
@@ -1112,7 +1107,6 @@ impl Supervisor {
         last_seq: 0,
         finished: None,
         claim: None,
-        abandoned: false,
       });
       run.last_seq = run.last_seq.max(held.last_seq);
     }
@@ -1186,7 +1180,7 @@ impl Supervisor {
     run_id: String,
     harness: Harness,
     line: &HostLine,
-    outputs: mpsc::Sender<SidecarDelivery>,
+    outputs: mpsc::UnboundedSender<SidecarDelivery>,
   ) {
     if self.runs.contains_key(&run_id) {
       tracing::warn!(target: LOG_TARGET, "a run was started twice");
@@ -1207,7 +1201,6 @@ impl Supervisor {
           outputs: Some(outputs),
           delivered: 0,
         }),
-        abandoned: false,
       },
     );
     self.write_line(&dir, line).await;
@@ -1216,13 +1209,11 @@ impl Supervisor {
   async fn resume_run(
     &mut self,
     point: ResumePoint,
-    outputs: mpsc::Sender<SidecarDelivery>,
+    outputs: mpsc::UnboundedSender<SidecarDelivery>,
     reply: oneshot::Sender<Result<(), ResumeError>>,
   ) {
     let claimed = match self.runs.get_mut(&point.run_id) {
       None => Err(ResumeError::UnknownRun),
-      // Cancelled for an undrained channel: it ends, nobody takes it over.
-      Some(run) if run.abandoned => Err(ResumeError::UnknownRun),
       Some(run) if run.claim.is_some() => Err(ResumeError::AlreadyClaimed),
       Some(run) => {
         run.claim = Some(Claim {
@@ -1247,7 +1238,6 @@ impl Supervisor {
     self
       .runs
       .iter()
-      .filter(|(_run_id, run)| !run.abandoned)
       .map(|(run_id, run)| HeldRun {
         run_id: run_id.clone(),
         harness: run.harness,
@@ -1324,7 +1314,7 @@ impl Supervisor {
       return;
     }
     match event {
-      LinkEvent::Message(message) => self.dispatch(message).await,
+      LinkEvent::Message(message) => self.dispatch(message),
       LinkEvent::Broken(error) => {
         // The kind only: a line may carry run data.
         let kind = match error {
@@ -1387,7 +1377,7 @@ impl Supervisor {
     }
   }
 
-  async fn dispatch(&mut self, message: SidecarMessage) {
+  fn dispatch(&mut self, message: SidecarMessage) {
     match message {
       SidecarMessage::Hello(_) => {
         tracing::warn!(target: LOG_TARGET, "harness holder repeated its hello");
@@ -1407,38 +1397,32 @@ impl Supervisor {
         }
       }
       SidecarMessage::RunEvent(event) => {
-        self
-          .deliver(
-            &event.run_id,
-            event.seq,
-            SidecarRunOutput::Event(event.chunk.0),
-          )
-          .await;
+        self.deliver(
+          &event.run_id,
+          event.seq,
+          SidecarRunOutput::Event(event.chunk.0),
+        );
       }
       SidecarMessage::RunApprovalRequest(request) => {
-        self
-          .deliver(
-            &request.run_id,
-            request.seq,
-            SidecarRunOutput::ApprovalRequest {
-              request_id: request.request_id,
-              kind: request.kind,
-              summary: request.summary,
-            },
-          )
-          .await;
+        self.deliver(
+          &request.run_id,
+          request.seq,
+          SidecarRunOutput::ApprovalRequest {
+            request_id: request.request_id,
+            kind: request.kind,
+            summary: request.summary,
+          },
+        );
       }
       SidecarMessage::RunFinished(finished) => {
-        self
-          .deliver(
-            &finished.run_id,
-            finished.seq,
-            SidecarRunOutput::Finished {
-              outcome: finished.outcome,
-              harness_session_id: finished.harness_session_id,
-            },
-          )
-          .await;
+        self.deliver(
+          &finished.run_id,
+          finished.seq,
+          SidecarRunOutput::Finished {
+            outcome: finished.outcome,
+            harness_session_id: finished.harness_session_id,
+          },
+        );
       }
       SidecarMessage::Rejected(rejected) => {
         tracing::warn!(
@@ -1469,11 +1453,10 @@ impl Supervisor {
   /// order, without waiting on its consumer. A gap means the holder lost
   /// messages: the run fails here.
   ///
-  /// The channel's last slot is kept for the run's final message. When only
-  /// that slot is left, the run ends `failed` in it, is cancelled in the
-  /// holder and is never routed or resumed again; its own end is acked here
-  /// so the holder forgets it.
-  async fn deliver(&mut self, run_id: &str, seq: NonZeroU32, output: SidecarRunOutput) {
+  /// The channel never refuses an output, so how fast its consumer reads ends
+  /// no run. What it can hold is bounded by the holder, which keeps a run's
+  /// messages until they are acked and ends a run past its storage limits.
+  fn deliver(&mut self, run_id: &str, seq: NonZeroU32, output: SidecarRunOutput) {
     let Some(run) = self.runs.get_mut(run_id) else {
       return;
     };
@@ -1481,18 +1464,6 @@ impl Supervisor {
     let last = matches!(output, SidecarRunOutput::Finished { .. });
     if last {
       run.finished = Some(seq);
-    }
-    if run.abandoned {
-      if last {
-        let dir = run.holder.clone();
-        self.runs.remove(run_id);
-        let ack = Ack {
-          run_id: run_id.to_owned(),
-          seq,
-        };
-        self.write(&dir, &HostMessage::Ack(ack)).await;
-      }
-      return;
     }
     let Some(claim) = run.claim.as_mut() else {
       return;
@@ -1508,48 +1479,16 @@ impl Supervisor {
       return;
     }
     claim.delivered = seq.get();
-    if last {
-      if let Some(outputs) = claim.outputs.take() {
-        // The reserved slot always holds the final message; a dropped
-        // receiver means nobody waits for the run any more.
-        let _queued = outputs.try_send(SidecarDelivery {
-          holder_seq: Some(seq),
-          output,
-        });
-      }
-      return;
-    }
-    let Some(outputs) = claim.outputs.as_ref() else {
-      return;
-    };
-    if outputs.capacity() > 1 {
+    if let Some(outputs) = claim.outputs.as_ref() {
       // A dropped receiver means nobody waits for the run any more.
-      let _queued = outputs.try_send(SidecarDelivery {
+      let _queued = outputs.send(SidecarDelivery {
         holder_seq: Some(seq),
         output,
       });
-      return;
     }
-    tracing::warn!(
-      target: LOG_TARGET,
-      "a run's outputs were not drained; cancelling the run"
-    );
-    if let Some(outputs) = claim.outputs.take() {
-      let _queued = outputs.try_send(SidecarDelivery {
-        holder_seq: None,
-        output: SidecarRunOutput::Finished {
-          outcome: RunOutcome::Failed,
-          harness_session_id: None,
-        },
-      });
+    if last {
+      claim.outputs = None;
     }
-    run.claim = None;
-    run.abandoned = true;
-    let dir = run.holder.clone();
-    let cancel = HostMessage::RunCancel(RunRef {
-      run_id: run_id.to_owned(),
-    });
-    self.write(&dir, &cancel).await;
   }
 
   fn fail_run(&mut self, run_id: &str) {
@@ -1609,7 +1548,7 @@ impl Supervisor {
         continue;
       }
       match event {
-        LinkEvent::Message(message) => self.dispatch(message).await,
+        LinkEvent::Message(message) => self.dispatch(message),
         LinkEvent::Broken(_) | LinkEvent::Closed => {
           self.links.remove(&dir);
         }
@@ -1622,19 +1561,15 @@ impl Supervisor {
   }
 }
 
-/// A run's channel ends with `failed`; the send waits for room on its own.
-fn finish_failed(outputs: mpsc::Sender<SidecarDelivery>) {
-  tokio::spawn(async move {
-    // A dropped receiver means nobody waits for the run any more.
-    let _delivered = outputs
-      .send(SidecarDelivery {
-        holder_seq: None,
-        output: SidecarRunOutput::Finished {
-          outcome: RunOutcome::Failed,
-          harness_session_id: None,
-        },
-      })
-      .await;
+/// A run's channel ends with `failed`.
+fn finish_failed(outputs: mpsc::UnboundedSender<SidecarDelivery>) {
+  // A dropped receiver means nobody waits for the run any more.
+  let _delivered = outputs.send(SidecarDelivery {
+    holder_seq: None,
+    output: SidecarRunOutput::Finished {
+      outcome: RunOutcome::Failed,
+      harness_session_id: None,
+    },
   });
 }
 

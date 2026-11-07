@@ -2131,6 +2131,26 @@
   },
   {
     "schema": "public",
+    "table": "case_law_ranking_signal_changes",
+    "policy": "case_law_ingestion_access",
+    "command": "ALL",
+    "roles": ["stella_ingestion"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
+    "table": "case_law_ranking_signal_changes",
+    "policy": "case_law_ranking_signal_changes_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
     "table": "case_law_raw_sweeps",
     "policy": "case_law_ingestion_access",
     "command": "ALL",

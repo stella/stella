@@ -16,6 +16,7 @@ import {
   type HarnessTurn,
   type HarnessTurnInput,
 } from "../adapter";
+import { packageCacheEnvironment } from "../package-cache";
 import { buildTurnPrompt } from "../transcript-handoff";
 import { settlesWithin } from "../turn-lifecycle";
 import {
@@ -32,7 +33,7 @@ import {
   ModelListResponseSchema,
   TurnStartResponseSchema,
 } from "./protocol";
-import { openThread } from "./thread";
+import { CODEX_APPROVAL_MODE, openThread } from "./thread";
 import { type CodexCapacityRetry, CodexTurnSession } from "./turn";
 
 /**
@@ -144,6 +145,8 @@ type ConnectOptions = {
   options: CodexHarnessAdapterOptions;
   cwd: string;
   handlers: AppServerHandlers;
+  /** Set over the base environment for this process. */
+  environment: Readonly<Record<string, string>>;
 };
 
 /** Spawn the server and complete the handshake; `initialize` is once only. */
@@ -151,6 +154,7 @@ const connect = async ({
   options,
   cwd,
   handlers,
+  environment,
 }: ConnectOptions): Promise<Result<Connection, ConnectFailure>> => {
   const started = Result.try(() =>
     startAppServer({
@@ -161,7 +165,11 @@ const connect = async ({
         terminateMs: options.gracePeriodMs,
       },
       cwd,
-      env: { ...options.environment, CODEX_HOME: options.codexHome },
+      env: {
+        ...options.environment,
+        ...environment,
+        CODEX_HOME: options.codexHome,
+      },
       handlers,
     }),
   );
@@ -292,6 +300,7 @@ const probe = async (
   const connected = await connect({
     options,
     cwd: options.codexHome,
+    environment: {},
     handlers: {
       notification: () => undefined,
       request: (id, method) => {
@@ -336,6 +345,7 @@ const probe = async (
       auth,
       models,
       capabilities: capabilities(),
+      approvalModes: [CODEX_APPROVAL_MODE],
       // The probe does not read rate limits; a limited turn reports them.
       usageLimit: null,
     });
@@ -358,6 +368,14 @@ const startTurn = async (
   if (!path.isAbsolute(input.workspaceDir)) {
     panic("Codex adapter: the workspace directory must be an absolute path");
   }
+  if (input.policy.approvals !== CODEX_APPROVAL_MODE) {
+    return Result.err(
+      new HarnessStartError({
+        reason: "start_rejected",
+        message: "The harness runs in one approval mode only.",
+      }),
+    );
+  }
   const session = new CodexTurnSession({
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
@@ -367,6 +385,7 @@ const startTurn = async (
   const connected = await connect({
     options,
     cwd: input.workspaceDir,
+    environment: packageCacheEnvironment(input.cacheDir),
     handlers: session.handlers,
   });
   if (Result.isError(connected)) {

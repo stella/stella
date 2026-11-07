@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import {
   createDocx,
   createEmptyDocument,
@@ -73,9 +73,9 @@ describe("style set source extraction", () => {
       return;
     }
 
-    const zip = await JSZip.loadAsync(result.value.bytes);
-    const documentXml = await zip.file("word/document.xml")?.async("text");
-    const stylesXml = await zip.file("word/styles.xml")?.async("text");
+    const zip = await ZipArchive.read(result.value.bytes);
+    const documentXml = await zip.entry("word/document.xml")?.text();
+    const stylesXml = await zip.entry("word/styles.xml")?.text();
     expect(documentXml).not.toContain(sourceText);
     expect(stylesXml).toContain('w:styleId="BodyText"');
   });

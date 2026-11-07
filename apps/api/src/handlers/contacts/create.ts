@@ -31,6 +31,7 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -283,6 +284,7 @@ export const createContactHandler = async function* ({
     "contacts-create.flush-contact-search-repairs",
   );
 
+  announceContactSetChanged(organizationId);
   return Result.ok(created);
 };
 

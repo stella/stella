@@ -106,7 +106,8 @@ export const DESKTOP_RUNNER_DESKTOP_ID_HEADER = "stella-desktop-id";
  *   (`not_json`, `unknown_type`, `invalid`), a message before `hello`
  *   (`hello_required`), a second `hello` (`hello_repeated`), a run message its
  *   run's state does not allow (`run_state`), a chunk that is not a valid
- *   AG-UI event (`unfoldable_chunk`), or a run message past what one run may
+ *   AG-UI event or pauses for a question without a UUID request id
+ *   (`unfoldable_chunk`), or a run message past what one run may
  *   store (`run_limit`; the API ends that run as lost).
  * - `tooLarge`: a frame above `DESKTOP_RUNNER_MAX_FRAME_BYTES`.
  * - `overloaded`: the desktop sent frames faster than they could be stored.
@@ -220,6 +221,7 @@ export const DESKTOP_RUNNER_SERVER_MESSAGE = {
   runStart: "run.start",
   runInput: "run.input",
   runApproval: "run.approval",
+  runAnswer: "run.answer",
   runInterrupt: "run.interrupt",
   runCancel: "run.cancel",
   runToken: "run.token",
@@ -305,15 +307,101 @@ export const DESKTOP_RUNNER_RUN_OUTCOMES = [
 export const DESKTOP_RUNNER_NETWORK_POLICIES = ["open"] as const;
 export const DESKTOP_RUNNER_FS_POLICIES = ["workspace"] as const;
 
+/**
+ * How much a local run asks before it acts, chosen per thread.
+ * - `ask`: edits inside the run workspace go ahead; commands and anything
+ *   else are asked about.
+ * - `auto`: the harness decides what is safe to do on its own and asks
+ *   about the rest.
+ * - `full_auto`: everything inside the harness's OS sandbox (writes confined
+ *   to the run workspace and its caches) runs without asking; leaving the
+ *   sandbox is always asked about. A desktop that cannot sandbox the
+ *   harness does not offer it.
+ */
+export const DESKTOP_RUNNER_APPROVAL_MODES = [
+  "ask",
+  "auto",
+  "full_auto",
+] as const;
+export type DesktopRunnerApprovalMode =
+  (typeof DESKTOP_RUNNER_APPROVAL_MODES)[number];
+/** The mode every harness supports, and a thread's mode until one is chosen. */
+export const DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE =
+  "ask" satisfies DesktopRunnerApprovalMode;
+
 const MAX_SEQ = 4_294_967_295;
 const MAX_ACTIVE_RUNS = 64;
 const MAX_MODELS = 100;
 const MAX_RUN_MESSAGES = 1000;
 const MAX_RECONNECT_DELAY_MS = 600_000;
+/** Files one `run.start` may copy; a chat's earlier files are already there. */
+export const MAX_RUN_ATTACHMENTS = 32;
 const MAX_MESSAGE_TYPE_LENGTH = 64;
 
 const listsOnce = (keys: readonly string[]) =>
   new Set(keys).size === keys.length;
+
+/**
+ * What one `run.answer` may carry. A run asks a blocking question as a chunk
+ * whose `RUN_FINISHED` interrupt has `metadata.kind: "question"`; the answers
+ * name each question by its id. Lengths are UTF-16 code units, as JavaScript
+ * counts them.
+ */
+export const DESKTOP_RUNNER_ANSWER_LIMITS = {
+  maxQuestions: 32,
+  maxAnswersPerQuestion: 64,
+  maxAnswerLength: 16_384,
+  maxQuestionIdLength: 256,
+} as const;
+
+/** The keys `v.record` leaves out of what it parses, without an issue. */
+const RECORD_DROPPED_KEYS: ReadonlySet<string> = new Set([
+  "__proto__",
+  "prototype",
+  "constructor",
+]);
+
+/**
+ * The id a blocking question names one of its questions by, in the pause
+ * that asks it and in the answers alike. Answers are a record keyed by this
+ * id, so an id the record would drop could never be answered.
+ */
+export const desktopRunnerQuestionIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestionIdLength),
+  v.check(
+    (id) => !RECORD_DROPPED_KEYS.has(id),
+    "A question id must survive as an answer key",
+  ),
+);
+
+/**
+ * Answers to a blocking question, keyed by question id: option labels or
+ * free text. A question may be answered by several options.
+ */
+export const desktopRunnerQuestionAnswersSchema = v.pipe(
+  v.record(
+    desktopRunnerQuestionIdSchema,
+    v.pipe(
+      v.array(
+        v.pipe(
+          v.string(),
+          v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxAnswerLength),
+        ),
+      ),
+      v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxAnswersPerQuestion),
+    ),
+  ),
+  v.check(
+    (answers) =>
+      Object.keys(answers).length <= DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestions,
+    `At most ${String(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestions)} questions are answered at once`,
+  ),
+);
+export type DesktopRunnerQuestionAnswers = v.InferOutput<
+  typeof desktopRunnerQuestionAnswersSchema
+>;
 
 const runIdSchema = v.pipe(v.string(), v.uuid());
 const requestIdSchema = v.pipe(v.string(), v.uuid());
@@ -366,6 +454,21 @@ const harnessReportSchema = v.variant("state", [
         (capabilities) => listsOnce(capabilities),
         "Capabilities are listed once",
       ),
+    ),
+    /**
+     * The approval modes this desktop can run the harness in. A desktop or a
+     * stored report from before modes existed offers the default alone.
+     */
+    approvalModes: v.optional(
+      v.pipe(
+        v.array(v.picklist(DESKTOP_RUNNER_APPROVAL_MODES)),
+        v.check((modes) => listsOnce(modes), "Approval modes are listed once"),
+        v.check(
+          (modes) => modes.includes(DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE),
+          "Every harness supports the default approval mode",
+        ),
+      ),
+      [DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE],
     ),
     models: v.pipe(
       v.array(harnessModelSchema),
@@ -429,6 +532,62 @@ export const DESKTOP_RUNNER_MESSAGE_ROLES = [
 const modelMessageSchema = v.looseObject({
   role: v.picklist(DESKTOP_RUNNER_MESSAGE_ROLES),
 });
+
+export const DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH = 8192;
+
+const ATTACHMENT_PATH = /^attachments\/[\da-f-]{36}\/[^/\\\0]{1,255}$/u;
+
+/**
+ * Where a chat's attached file lands in the run's folder, relative to it. The
+ * file's id keeps two files of one name apart and a name out of the path's
+ * structure; the name stays readable for the agent and the member.
+ */
+export const desktopRunnerAttachmentPathSchema = v.pipe(
+  v.string(),
+  v.regex(ATTACHMENT_PATH),
+  v.check(
+    (path) => !path.split("/").some((part) => part === ".." || part === "."),
+    "An attachment stays inside its folder",
+  ),
+);
+
+/** Short of every filesystem's limit, with room for a long extension. */
+const ATTACHMENT_NAME_MAX_CHARS = 120;
+const ATTACHMENT_EXTENSION = /\.[^.]{1,16}$/u;
+
+const boundedAttachmentName = (name: string) => {
+  const characters = Array.from(name);
+  if (characters.length <= ATTACHMENT_NAME_MAX_CHARS) {
+    return name;
+  }
+  const suffix = ATTACHMENT_EXTENSION.exec(name)?.[0] ?? "";
+  return `${characters
+    .slice(0, ATTACHMENT_NAME_MAX_CHARS - Array.from(suffix).length)
+    .join("")}${suffix}`;
+};
+
+export const desktopRunnerAttachmentPath = (
+  fileId: string,
+  sanitizedFileName: string,
+): string =>
+  `attachments/${fileId}/${boundedAttachmentName(sanitizedFileName)}`;
+
+/**
+ * A file to copy before the run starts. The link is signed when the command is
+ * sent and expires soon after, so a stored `run.start` never holds one.
+ */
+export const desktopRunnerAttachmentSchema = v.object({
+  path: desktopRunnerAttachmentPathSchema,
+  url: v.pipe(
+    v.string(),
+    v.maxLength(DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH),
+    v.url(),
+    v.startsWith("https://"),
+  ),
+});
+export type DesktopRunnerAttachment = v.InferOutput<
+  typeof desktopRunnerAttachmentSchema
+>;
 
 export const desktopRunnerDesktopMessageSchema = v.variant("type", [
   v.object({
@@ -529,6 +688,8 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runStart),
     runId: runIdSchema,
+    /** The folder the run works in; a chat's runs share one, so files stay between turns. */
+    folderId: v.pipe(v.string(), v.uuid()),
     harness: harnessSchema,
     harnessVersion: desktopVersionSchema,
     model: modelIdSchema,
@@ -540,9 +701,14 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
       v.minLength(1),
       v.maxLength(MAX_RUN_MESSAGES),
     ),
+    attachments: v.pipe(
+      v.array(desktopRunnerAttachmentSchema),
+      v.maxLength(MAX_RUN_ATTACHMENTS),
+    ),
     policy: v.object({
       network: v.picklist(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: v.picklist(DESKTOP_RUNNER_FS_POLICIES),
+      approvals: v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
     }),
     mcp: v.object({
       serverName: v.pipe(v.string(), v.regex(/^[a-z][a-z\d_]{0,63}$/u)),
@@ -562,6 +728,16 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     runId: runIdSchema,
     requestId: requestIdSchema,
     decision: v.picklist(DESKTOP_RUNNER_APPROVAL_DECISIONS),
+  }),
+  /**
+   * Answers to a blocking question the run asked; `requestId` is the id of
+   * the question's interrupt in the run's chunks.
+   */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer),
+    runId: runIdSchema,
+    requestId: requestIdSchema,
+    answers: desktopRunnerQuestionAnswersSchema,
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runInterrupt),

@@ -364,6 +364,14 @@ const CENSUS: readonly CensusEntry[] = [
     why: "Reads the stored courts a court filter is matched against; without them the filter runs as sent and the search reports filter_unread.",
   },
   {
+    site: "apps/api/src/mcp/case-law-court-catalog-tool.ts#LIST_CASE_LAW_COURTS_READ_BUDGET_MS",
+    path: "request",
+    tools: ["list_case_law_courts"],
+    bound: "own",
+    onExpiry: "fails-fast",
+    why: "Reads one page of a country's admitted courts; a page it cannot read in time is a retryable error, never a list read without the source policy.",
+  },
+  {
     site: "apps/api/src/mcp/gateway/rate-limit.ts#REDIS_COMMAND_TIMEOUT_MS",
     path: "request",
     tools: ["external_mcp"],

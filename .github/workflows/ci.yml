@@ -4152,6 +4152,17 @@ jobs:
         # copies, so a change that rejects one of its writes cannot reach main.
         run: bun --env-file=.env.example run db:seed-local
 
+      - name: Replay the local dev seed
+        if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
+        timeout-minutes: 5
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella
+          NODE_ENV: development
+          STELLA_LOCAL_DEV: "1"
+        # Every later `bun run agent:up` seeds the database it already has.
+        run: bun --env-file=.env.example run db:seed-local
+
       - name: Configure ephemeral Postgres fixture maintenance
         working-directory: apps/api
         env:
@@ -5054,6 +5065,8 @@ jobs:
           --file apps/web/Dockerfile
           --build-arg PUBLIC_API_URL=https://api.smoke.invalid
           --build-arg PUBLIC_APP_URL=https://app.smoke.invalid
+          --build-arg S3_BUCKET=documents
+          --build-arg S3_ENDPOINT=https://objects.smoke.invalid
           --tag stella-web-runner:ci
           .
 

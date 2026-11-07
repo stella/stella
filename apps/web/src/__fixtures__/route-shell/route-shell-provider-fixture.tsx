@@ -103,6 +103,15 @@ const setupFixtureEnvironment = (
     });
   }
 };
+/**
+ * The event streams a shell opens: the open matter's stream, and the signed-in
+ * user's stream that the app shell opens on every page.
+ */
+const RECORDED_SHELL_EVENT_STREAMS: readonly string[] = [
+  "/v1/workspaces/00000000-0000-4000-8000-000000000001/events",
+  "/v1/notifications/events",
+];
+
 // Resolve EventTarget after Happy DOM installs its matching Event constructor.
 const createFixtureEventSource = () =>
   class FixtureEventSource extends EventTarget implements EventSource {
@@ -124,9 +133,7 @@ const createFixtureEventSource = () =>
       this.url = String(url);
       this.withCredentials = init.withCredentials ?? false;
       const path = new URL(this.url, window.location.origin).pathname;
-      if (
-        path !== "/v1/workspaces/00000000-0000-4000-8000-000000000001/events"
-      ) {
+      if (!RECORDED_SHELL_EVENT_STREAMS.includes(path)) {
         panic(`Unrecorded shell event stream: ${path}`);
       }
       queueMicrotask(() => {
@@ -417,6 +424,15 @@ const installFixtureNetwork = () => {
           unavailable: [],
           unavailableHere: [],
         } satisfies WebApiRoutes["chat"]["skill-availability"]["get"]["response"][200]);
+      }
+      if (pathname === "/v1/chat/runs/active") {
+        return Response.json({
+          items: [],
+          limit: 100,
+          nextCursor: null,
+        } satisfies NonNullable<
+          Awaited<ReturnType<typeof api.chat.runs.active.get>>["data"]
+        >);
       }
       if (pathname === "/v1/chat/threads") {
         return Response.json({

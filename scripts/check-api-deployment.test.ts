@@ -578,6 +578,21 @@ describe("API deployment health receipt", () => {
     expect(workflow).not.toContain("\n  verify-staging:\n");
   });
 
+  test("supplies required storage configuration to the web smoke image", async () => {
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+    ).text();
+    const smokeJob = workflow
+      .split("\n  web-image-smoke:")
+      .at(1)
+      ?.split("\n  # Expo/Metro")
+      .at(0);
+    expect(smokeJob).toContain("--build-arg S3_BUCKET=documents");
+    expect(smokeJob).toContain(
+      "--build-arg S3_ENDPOINT=https://objects.smoke.invalid",
+    );
+  });
+
   test("builds web images publicly from an allowlisted browser contract", async () => {
     const [action, contract, production, staging] = await Promise.all([
       Bun.file(

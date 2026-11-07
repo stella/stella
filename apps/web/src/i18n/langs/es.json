@@ -40,7 +40,6 @@
     "organizationId": "ID de la organización",
     "organizationLeft": "Has salido de la organización.",
     "planAndUsage": "Plan y uso",
-    "title": "Administración de la organización",
     "toolsDescription": "Activa o desactiva las herramientas integradas para todas las personas de esta organización."
   },
   "agentClaim": {
@@ -163,7 +162,9 @@
       "declinedDescription": "Ha rechazado esta invitación. Puede cerrar esta página.",
       "description": "{inviterEmail} le ha invitado a unirse a {organizationName} como {role}.",
       "goToWorkspaces": "Ir a asuntos",
-      "title": "Invitación a la organización"
+      "title": "Invitación a la organización",
+      "verifyEmailHint": "Para verificar {email}, cierre sesión e inicie sesión con un código de un solo uso que enviaremos a esa dirección.",
+      "wrongAccountHint": "Ha iniciado sesión como {email}. Cierre sesión e inicie sesión con la dirección a la que se envió la invitación."
     },
     "lastUsed": "Último utilizado",
     "oneTimeCodeExpired": "Tu código de un solo uso ha caducado. Solicita un código nuevo.",
@@ -1461,6 +1462,8 @@
     },
     "answerQuote": {
       "showInDecision": "Ver en la resolución",
+      "unverified": "Cita no verificada",
+      "unverifiedHint": "Las resoluciones citadas no contienen este texto palabra por palabra",
       "verified": "Cita verificada",
       "verifiedHint": "Palabra por palabra en {source}"
     },
@@ -1686,10 +1689,18 @@
       "errorNeedsLogin": "El agente de programación de tu ordenador necesita que vuelvas a iniciar sesión. Inicia sesión desde stella desktop y vuelve a intentarlo.",
       "errorUnavailable": "Tu ordenador dejó de procesar esta respuesta. Comprueba que stella desktop esté abierto y conectado, y vuelve a intentarlo.",
       "onThisComputer": "{harness} en este ordenador",
+      "permissionAskDescription": "Edita por su cuenta los archivos de la carpeta del chat; pregunta antes de cualquier otra cosa.",
+      "permissionAutoDescription": "Hace por su cuenta lo que considera seguro; pregunta por el resto.",
+      "permissionFullAuto": "Totalmente automático",
+      "permissionFullAutoDescription": "Nunca pregunta por nada dentro de la carpeta del chat; siempre pregunta antes de cambiar tu ordenador.",
+      "permissionSandboxed": "Se ejecuta en un entorno aislado; pregunta antes de cambiar tu ordenador.",
+      "permissionUnavailable": "No disponible en este ordenador",
+      "permissions": "Permisos",
       "refusalConflictingRunMode": "Esta solicitud pide ejecutarse a la vez con el agente en la nube y en tu ordenador. Elige uno en Ejecutar en.",
       "refusalHarnessUnavailable": "El agente de programación de tu ordenador no puede atender esta solicitud ahora. Revísalo en stella desktop.",
       "refusalModelUnavailable": "El agente de programación de tu ordenador ya no ofrece este modelo. Elige otro en Ejecutar en.",
       "refusalNoComputer": "Ninguno de tus ordenadores está conectado. Abre stella desktop y vuelve a enviar.",
+      "refusalPermissionUnavailable": "El agente de programación de tu ordenador no puede ejecutarse con estos permisos. Elige otra opción en Permisos.",
       "refusalTooLarge": "Esta conversación es demasiado larga para pasarla a tu ordenador. Empieza un chat nuevo para ejecutarla allí.",
       "refusalUnavailable": "Ejecutar chats en tu ordenador no está disponible para tu cuenta.",
       "runOn": "Ejecutar en",
@@ -1701,6 +1712,16 @@
       "stateUnavailable": "No disponible por ahora",
       "stateUnsupported": "Esta versión no es compatible",
       "waitingForComputer": "Esperando a que tu ordenador se vuelva a conectar…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Elija todas las que correspondan",
+      "dismiss": "Descartar y detener",
+      "secretAnswer": "Respuesta oculta",
+      "secretPlaceholder": "Su respuesta permanece oculta"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# chat espera su respuesta} other {# chats esperan su respuesta} many {# chats esperan su respuesta}}",
+      "working": "{count, plural, one {# chat en curso} other {# chats en curso} many {# chats en curso}}"
     },
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
     "mcpReconnect": {
@@ -1843,10 +1864,18 @@
       "toolbarLabel": "Texto seleccionado"
     },
     "sendError": "Hubo un problema al enviar tu mensaje. Contacta con soporte si el error persiste.",
+    "sendErrorActiveFileNoText": "El archivo abierto no tiene texto que stella pueda leer. Ciérralo o abre otro archivo.",
+    "sendErrorActiveFileTooLarge": "El archivo abierto es demasiado grande para el chat. Ciérralo o abre un archivo más pequeño.",
+    "sendErrorAgentRunsDisabled": "Las ejecuciones del agente no están disponibles aquí. Contacta con el administrador del espacio de trabajo.",
     "sendErrorAnonymizationBlocked": "stella no pudo anonimizar un archivo adjunto, así que no se envió nada. Quita el archivo o envía este mensaje sin anonimización.",
+    "sendErrorAttachmentNoText": "Un archivo adjunto no tiene texto que stella pueda leer. Quítalo o adjunta otro archivo.",
+    "sendErrorAttachmentUnsupported": "Este tipo de archivo no se puede adjuntar a un chat. Adjunta otro archivo.",
     "sendErrorConnectionFailed": "No se pudo conectar con el chat. Compruebe su conexión e inténtelo de nuevo.",
     "sendErrorContinuationRejected": "No se pudo continuar el chat. Envía un nuevo mensaje para empezar de nuevo.",
+    "sendErrorDocumentUnsupported": "Este modelo no puede leer uno de los documentos adjuntos. Quita el adjunto o cambia a un modelo que lo admita.",
     "sendErrorEmptyCompletion": "La IA devolvió una respuesta vacía. Inténtalo de nuevo o reformula tu mensaje.",
+    "sendErrorImageInvalid": "No se pudo preparar esta imagen para el modelo. Sube una imagen más pequeña o cambia de modelo.",
+    "sendErrorImageUnsupported": "Este modelo no puede leer imágenes adjuntas. Quita la imagen o cambia a un modelo que admita imágenes.",
     "sendErrorLoopDetected": "La respuesta de IA se repitió demasiadas veces. Inténtalo de nuevo con una solicitud más concreta.",
     "sendErrorMessageEmpty": "Este mensaje no tiene texto para enviar. Escribe tu pregunta o adjunta un archivo y luego envíalo.",
     "sendErrorModelUnavailable": "El modelo de IA configurado ya no está disponible. Pídele al administrador del espacio de trabajo que actualice el modelo en la configuración de la organización.",
@@ -1858,6 +1887,7 @@
     "sendErrorQuotaExhausted": "Se agotó la cuota del proveedor de IA. Inténtalo de nuevo en un minuto o contacta con el administrador del espacio de trabajo.",
     "sendErrorStreamIncomplete": "La respuesta de la IA se cortó antes de terminar. Inténtalo de nuevo.",
     "sendErrorTimedOut": "El chat no respondió a tiempo. Inténtelo de nuevo.",
+    "sendErrorToolsUnsupported": "Este modelo no puede usar herramientas, por lo que no puede responder preguntas sobre tu asunto. Cambia a un modelo que admita herramientas.",
     "sendPrompt": "Enviar mensaje",
     "sendQueuedMessageNow": "Enviar ahora",
     "sendWithoutAnonymization": "Enviar sin anonimización",
@@ -1904,7 +1934,7 @@
       "unavailable": "No se pudo seleccionar un gráfico. Se muestra la tabla.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Trabajando con contexto",
+    "thinking": "Razonando",
     "threadFiles": {
       "title": "Archivos de este chat"
     },
@@ -2032,6 +2062,11 @@
       "replyReadyBody": "stella terminó de responder en tu chat.",
       "replyReadyTitle": "Respuesta lista"
     },
+    "turnStatus": {
+      "waitingForApproval": "Esperando aprobación",
+      "waitingForInput": "Esperando información",
+      "writing": "Redactando"
+    },
     "unsupportedFileType": "Tipo de archivo no compatible",
     "uploadFailed": "Error al procesar el archivo",
     "usageFallbackNotice": "Se agotó la asignación diaria de IA: las respuestas continúan con el modelo estándar.",
@@ -2040,7 +2075,6 @@
       "answer": "Resumen de la búsqueda web",
       "answerDisclaimer": "Síntesis de los resultados web públicos que aparecen abajo. Contrástela con las fuentes enlazadas.",
       "fetchedFrom": "de {source}",
-      "openSource": "Abrir {source} en una pestaña nueva",
       "sources": "Fuentes",
       "toggleDescription": "Permitir que el modelo busque en la web pública y lea páginas para esta conversación.",
       "toggleLabel": "Búsqueda web",
@@ -2394,6 +2428,7 @@
     "notes": "Notas",
     "open": "Abrir",
     "openInNewTab": "Abrir en una pestaña nueva",
+    "openInSidePanel": "Abrir en el panel lateral",
     "openInStella": "Abrir en stella",
     "openOriginalSource": "Abrir fuente original",
     "options": "Opciones",
@@ -3233,7 +3268,6 @@
     "noFileInVersion": "No hay ningún archivo en esta versión",
     "noFullScreenPreview": "Este tipo de archivo no tiene vista previa a pantalla completa.",
     "noLabel": "Sin etiqueta",
-    "openInSidePanel": "Abrir en el panel lateral",
     "redlinePreview": "Cambios controlados",
     "removeLabel": "Eliminar etiqueta",
     "saveComparison": "Guardar comparación",
@@ -3954,6 +3988,7 @@
     "reopenTab": "Reabrir {name}",
     "resizePane": "Cambiar el tamaño del panel",
     "review": {
+      "acceptChange": "Aceptar el cambio",
       "actionNeeded": "Requiere acción",
       "addComment": "Añadir como comentario",
       "addNote": "Añadir comentario para la contraparte",
@@ -3991,7 +4026,8 @@
       "decisionFailed": "No se pudo registrar tu decisión",
       "decisions": {
         "accepted": "Aceptado",
-        "dismissed": "Descartado"
+        "dismissed": "Descartado",
+        "reviewed": "Revisado"
       },
       "description": "Elige un playbook elaborado, documentos de referencia o ambos.",
       "documentChanged": "Este documento cambió después de esta revisión.",
@@ -4017,6 +4053,7 @@
       "history": {
         "backToLatest": "Volver a la última versión",
         "decided": "{decided, number} de {total, number} decidido",
+        "fromTable": "Desde la tabla",
         "references": "{count, plural, one {# referencia} other {# referencias} many {# referencias}}"
       },
       "impact": {
@@ -4040,6 +4077,7 @@
         "label": "Hallazgos junto a las cláusulas correspondientes",
         "unanchored": "No vinculado a ninguna cláusula"
       },
+      "markAsReviewed": "Marcar como revisado",
       "newTopic": "Nuevo tema de revisión",
       "noChangeNeeded": "No se necesita ningún cambio",
       "noEditor": "Abre el documento para aceptar los cambios",
@@ -4124,6 +4162,11 @@
         "noSide": "ninguna parte",
         "proposedFromReferences": "posiciones propuestas a partir de las referencias",
         "unnamedReferences": "{count, plural, one {# documento de referencia} other {# documentos de referencia} many {# documentos de referencia}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Una revisión completa de esta versión</link>, con enlaces y cambios propuestos, está disponible en el historial de revisiones.",
+        "origin": "<strong>Iniciada desde la tabla.</strong> Estos resultados se evaluaron con los valores extraídos para la tabla, por lo que no enlazan con el documento ni incluyen cambios propuestos.",
+        "runAnotherReview": "Para obtener enlaces y cambios propuestos, usa el botón <action>{label}</action>."
       },
       "targetAsReference": "El documento revisado no puede ser su propia referencia.",
       "targetColumn": "Este documento",
@@ -5244,6 +5287,8 @@
       "betaDescription": "Prueba funciones que aún están en desarrollo",
       "betaInbox": "Bandeja de entrada y notificaciones",
       "betaInboxDescription": "Mostrar la bandeja de entrada y la campana de notificaciones",
+      "betaLocalAgents": "Agentes en tu ordenador",
+      "betaLocalAgentsDescription": "Ejecutar chats con Codex o Claude Code en tu ordenador mediante stella desktop",
       "betaTimeBillingDescription": "Mostrar el registro de tiempo, las facturas y los gastos",
       "chatNotifications": "Notificaciones del chat",
       "chatNotificationsBlocked": "Las notificaciones de stella están bloqueadas en este navegador. Permítelas en la configuración del sitio del navegador.",
@@ -5761,7 +5806,6 @@
     "leadingDecisionsExplanation": "La primera mención en cada resolución, ordenada por autoridad de cita: citas recibidas ponderadas y ajustadas según la jerarquía del tribunal, el sentido de la cita y su antigüedad.",
     "noVersionInForce": "Ninguna versión de esta norma estaba vigente en la fecha elegida.",
     "openEnded": "actualidad",
-    "openProvision": "Abrir la disposición",
     "outline": "Índice",
     "outlineJumpLabel": "Ir a una disposición",
     "outlineJumpPlaceholder": "§ 10 o un título",
@@ -6474,6 +6518,10 @@
       "noProperties": "No hay propiedades para calcular",
       "unavailable": "—"
     },
+    "cellOverride": {
+      "machineValue": "Valor original de la IA",
+      "reasonPlaceholder": "Motivo del cambio (opcional)"
+    },
     "copyToMatter": {
       "copied": "Copiado al asunto",
       "copyOption": "Copiar (mantener original)",
@@ -6540,6 +6588,9 @@
       "calculating": "Calculando...",
       "errored": "Error",
       "formatNotSupported": "Formato no compatible",
+      "recordChoose": "{count, plural, one {Confirmar # coincidencia} many {Elegir entre # coincidencias} other {Elegir entre # coincidencias}}",
+      "recordCount": "{count, plural, one {# registro} many {# registros} other {# registros}}",
+      "recordNotFound": "No encontrado",
       "selectAValue": "Seleccione un valor",
       "selectValues": "Seleccione valores",
       "wholeNumberOnly": "Introduzca un número entero"
@@ -7232,6 +7283,7 @@
       "previewSubject": "Pruébalo en una muestra",
       "previewUnsupported": "Vista previa no compatible con este tipo de documento.",
       "readingFrom": "La IA lee de",
+      "record": "Registro",
       "referencesItself": "La propiedad se referencia a sí misma a través de otras propiedades",
       "resultType": "Tipo de resultado",
       "returnsLabel": "Formato",

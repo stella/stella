@@ -205,6 +205,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   "document-identity-badge": noNative("a domain badge for a document"),
   "document-mark": noNative("file format artwork drawn as SVG"),
   "document-identity-badge.logic": notComponent("badge formatting helpers"),
+  "entity-actions": owned(
+    "no-raw-context-menu/no-raw-context-menu",
+    "hand-written contextmenu handlers are reported there",
+  ),
   field: owned(
     nativeRuleId("label"),
     "Field pairs a Label with a control; the native label is the label rule's",
@@ -248,6 +252,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   }),
   inspector: noNative("the inspector panel layout"),
   kanban: noNative("a board layout"),
+  kbd: noNative(
+    "key caps; a rule for raw <kbd> follows once the existing key hints " +
+      "render through Kbd, so it lands without a backlog",
+  ),
   label: native("Label from @stll/ui/label", { elements: ["label"] }),
   landing: noNative("landing page sections"),
   "layout-tokens": notComponent("inspector layout tokens"),
@@ -270,6 +278,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   ),
   "middle-truncate": noNative(
     "a truncated name; plain text cut at its end is the other rule's",
+  ),
+  "native-context-menu": notComponent(
+    "decides when a right-click keeps the native menu",
   ),
   "number-input": native("NumberInput from @stll/ui/number-input", {
     roles: ["spinbutton"],

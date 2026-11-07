@@ -1,13 +1,12 @@
 import { stellaToast } from "@stll/ui/toast";
 
 import { getTranslator } from "@/i18n/translator";
-import { APIError, isAuthRefusal } from "@/lib/errors/api";
+import { APIError, isSessionRefusal } from "@/lib/errors/api";
 import { AuthClientError } from "@/lib/errors/auth";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { isAuthFlowPathname, normalizeRedirectTo } from "@/lib/redirect";
 
 const SESSION_EXPIRED_TOAST_ID = "session-expired";
-const UNAUTHORIZED_STATUS = 401;
 
 // Whether this page has held a member. A visitor who never signed in has no
 // session to lose, and the flag outlives the session read that comes back null.
@@ -26,9 +25,7 @@ export const closeSessionExpiredNotice = (): void => {
 };
 
 const isSessionRejection = (error: unknown): boolean =>
-  (APIError.is(error) || AuthClientError.is(error)) &&
-  error.status === UNAUTHORIZED_STATUS &&
-  isAuthRefusal(error);
+  (APIError.is(error) || AuthClientError.is(error)) && isSessionRefusal(error);
 
 const openSignIn = () => {
   const path = normalizeRedirectTo(

@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -26,6 +26,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
 import { isFoldableChunk } from "@/api/lib/desktop-runner/chunk";
 import type { RunnerFeatureAccess } from "@/api/lib/desktop-runner/feature-access";
+import {
+  openRunAnswer,
+  storedRunAnswerSchema,
+} from "@/api/lib/desktop-runner/sealed-answers";
 import {
   claimRunnerSession,
   type DesktopRunnerDb,
@@ -73,6 +77,12 @@ export const SYSTEM_TIMERS: RunnerTimers = {
 };
 
 /** What every socket of one gateway shares. */
+export type SignAttachmentLink = (file: {
+  s3Key: string;
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
+}) => Promise<string>;
+
 type RunnerSessionContext = {
   readonly db: DesktopRunnerDb;
   readonly instanceId: string;
@@ -82,6 +92,8 @@ type RunnerSessionContext = {
   readonly now: () => Date;
   readonly random: () => number;
   readonly mintRunToken: MintRunToken;
+  /** A short-lived link for one file a `run.start` copies. */
+  readonly signAttachmentLink: SignAttachmentLink;
   /** Whether the credential that opened a socket still authorizes it. */
   readonly isKeyLive: DesktopKeyLiveness;
   /** Whether the socket's account still has the runner feature. */
@@ -117,6 +129,11 @@ const FRAME_SINK = failureSink({
 });
 const DELIVERY_SINK = failureSink({
   event: "desktop_runner.delivery_failed",
+  expected: [],
+});
+/** A queued command no longer reads; its run is cancelled in its place. */
+const UNREADABLE_SINK = failureSink({
+  event: "desktop_runner.command_unreadable",
   expected: [],
 });
 const HEARTBEAT_SINK = failureSink({
@@ -194,6 +211,10 @@ type SessionState = {
 
 const runStartPayloadSchema = v.looseObject({
   mcp: v.looseObject({}),
+  attachments: v.optional(
+    v.array(v.object({ path: v.string(), s3Key: v.string() })),
+    [],
+  ),
 });
 
 const close = (state: SessionState, reason: DesktopRunnerClose) => {
@@ -295,22 +316,97 @@ const sendToken = async (
   });
 };
 
-/** A stored command as the message to send, with a fresh token for `run.start`. */
+class DesktopRunnerCommandUnreadable extends TaggedError(
+  "DesktopRunnerCommandUnreadable",
+)<{ message: string; kind: PendingCommand["kind"] }> {}
+
+/**
+ * What a stored command is sent as. `unreadable` is a command that will
+ * never read again: a stored payload that no longer validates, or answers
+ * that no longer open. A failure that may pass (minting a token, a missing
+ * content key) throws instead, so the socket closes and the next one tries
+ * the command again.
+ */
+type Composed =
+  | { type: "message"; message: DesktopRunnerServerMessage }
+  | { type: "unreadable"; reason: string };
+
+/**
+ * A stored command as the message to send: a `run.start` with a fresh
+ * token, a `run.answer` with its answers opened.
+ */
 const compose = async (
   state: SessionState,
   command: PendingCommand,
-): Promise<DesktopRunnerServerMessage> => {
+): Promise<Composed> => {
   let candidate = command.payload;
   if (command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runStart) {
-    const stored = v.parse(runStartPayloadSchema, command.payload);
+    const stored = v.safeParse(runStartPayloadSchema, command.payload);
+    if (!stored.success) {
+      return { type: "unreadable", reason: "its MCP server does not read" };
+    }
     const token = await mint(state, command.runId, command.workspaceIds);
-    candidate = { ...stored, mcp: { ...stored.mcp, ...token } };
+    const attachments = await Promise.all(
+      stored.output.attachments.map(async ({ path, s3Key }) => ({
+        path,
+        url: await state.context.signAttachmentLink({
+          s3Key,
+          userId: state.binding.userId,
+          organizationId: state.binding.organizationId,
+        }),
+      })),
+    );
+    candidate = {
+      ...stored.output,
+      attachments,
+      mcp: { ...stored.output.mcp, ...token },
+    };
+  }
+  if (command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer) {
+    const stored = v.safeParse(storedRunAnswerSchema, command.payload);
+    // The socket is bound to the organization of every run it holds.
+    const opened = stored.success
+      ? await openRunAnswer(state.binding.organizationId, stored.output)
+      : ({ type: "unreadable" } as const);
+    if (opened.type === "unreadable") {
+      return { type: "unreadable", reason: "its answers do not open" };
+    }
+    candidate = opened.message;
   }
   const message = v.safeParse(desktopRunnerServerMessageSchema, candidate);
   // Commands are validated when queued; one that no longer is was corrupted.
   return message.success
-    ? message.output
-    : panic(`A queued ${command.kind} no longer validates`);
+    ? { type: "message", message: message.output }
+    : { type: "unreadable", reason: "it no longer validates" };
+};
+
+/**
+ * The message a stored command leaves as. A command that no longer reads
+ * cannot be sent, and skipping it would leave its run waiting on it (a
+ * question whose answer never arrives) while the commands after it go out:
+ * its run is cancelled instead, so the run ends and its chat turn with it.
+ * The cancel is idempotent on the desktop, so a later socket that reads the
+ * same command again sends the same cancel.
+ */
+const outgoing = async (
+  state: SessionState,
+  command: PendingCommand,
+): Promise<DesktopRunnerServerMessage> => {
+  const composed = await compose(state, command);
+  if (composed.type === "message") {
+    return composed.message;
+  }
+  observeFailure(
+    new DesktopRunnerCommandUnreadable({
+      message: `A queued ${command.kind} cannot be sent: ${composed.reason}`,
+      kind: command.kind,
+    }),
+    { sink: UNREADABLE_SINK },
+  );
+  return {
+    type: DESKTOP_RUNNER_SERVER_MESSAGE.runCancel,
+    runId: command.runId,
+  };
 };
 
 /** Send every command queued after the last one sent, page by page. */
@@ -339,7 +435,9 @@ const deliverPending = async (state: SessionState) => {
       const resend =
         command.kind !== DESKTOP_RUNNER_SERVER_MESSAGE.runStart ||
         !held.has(command.runId);
-      const sent = resend ? send(state, await compose(state, command)) : "sent";
+      const sent = resend
+        ? send(state, await outgoing(state, command))
+        : "sent";
       if (sent === "closed") {
         return;
       }
