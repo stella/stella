@@ -189,3 +189,22 @@ test("a decision numbered as structure names only its own paragraphs", () => {
     expect(text.slice(start)).toStartWith(title);
   }
 });
+
+test("anonymised initials are not numbered sections", () => {
+  const text = [
+    "I. Stan faktyczny",
+    "M. T. poznała pozwanego w 2010 r.",
+    "M. D., poszukując w związku z działalnością gospodarczą",
+    "L. wniósł o oddalenie powództwa.",
+    "II. zasądza od pozwanego na rzecz powoda kwotę",
+    "I. A. Stan prawny",
+    "V. Posouzení věci",
+  ].join("\n\n");
+  const { entries } = decisionOutline({ text, blocks: null });
+  expect(entries.map(({ title }) => title)).toEqual([
+    "I. Stan faktyczny",
+    "II. zasądza od pozwanego na rzecz powoda kwotę",
+    "I. A. Stan prawny",
+    "V. Posouzení věci",
+  ]);
+});
