@@ -44,7 +44,7 @@ jobs:
       merge: ${{ steps.merge.outputs.merge }}
     steps:
       - name: Checkout current merge
-        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
+        uses: stella/.github/actions/partial-clone-checkout@9095c76cb8d5cb06bdd103aece6d9515393fa810
         with:
           fetch-depth: 0
           persist-credentials: false
