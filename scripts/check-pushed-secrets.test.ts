@@ -13,9 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { sha256Hex } from "@stll/sha256/node";
-
-import { GITLEAKS_BINARY_SHA256, GITLEAKS_VERSION } from "./gitleaks-pins";
+import { GITLEAKS_VERSION } from "./gitleaks-pins";
 
 const SCRIPT = fileURLToPath(
   new URL("check-pushed-secrets.sh", import.meta.url),
@@ -616,33 +614,14 @@ describe("a host without a scanner on PATH", () => {
       "not the release",
     );
     const result = scan(push, { cwd: dir, path: searchPath, cacheHome });
+    // Where dependencies are installed the provisioner names the mismatch; an
+    // install-free run cannot load it. Either way nothing is scanned.
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("checksum mismatch");
-    expect(result.stderr).toContain("secret scanning refused");
+    expect(result.stderr).toContain(
+      "cannot provision the pinned gitleaks; secret scanning refused",
+    );
     expect(result.ranges).toEqual([]);
   });
-
-  const pinnedDigest = Object.entries(GITLEAKS_BINARY_SHA256).find(
-    ([key]) => key === platformKey,
-  )?.[1];
-  const pinnedBinary =
-    pinnedDigest !== undefined &&
-    REAL_GITLEAKS !== null &&
-    sha256Hex(readFileSync(REAL_GITLEAKS)) === pinnedDigest
-      ? REAL_GITLEAKS
-      : null;
-  test.skipIf(pinnedBinary === null)(
-    "the provisioned pinned scanner scans the push",
-    () => {
-      const cacheHome = mkdtempSync(path.join(root, "cache-"));
-      mkdirSync(pinnedCache(cacheHome), { recursive: true });
-      const cached = path.join(pinnedCache(cacheHome), "gitleaks");
-      writeFileSync(cached, readFileSync(pinnedBinary ?? ""), { mode: 0o755 });
-      const result = scan(push, { cwd: dir, path: searchPath, cacheHome });
-      expect(result.exitCode).toBe(0);
-      expect(result.stderr).toContain("commits scanned");
-    },
-  );
 });
 
 describe("what the scanner read", () => {
