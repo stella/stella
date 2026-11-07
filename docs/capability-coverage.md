@@ -780,7 +780,7 @@ mechanics, and similar), not gaps in coverage.
 | native_device | 4 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
-| public_indexing | 9 |
+| public_indexing | 10 |
 | realtime_stream | 9 |
 | search_ui | 20 |
 | session_token_exchange | 21 |

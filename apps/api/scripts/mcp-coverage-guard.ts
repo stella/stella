@@ -126,6 +126,8 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "inline endpoint: apps/api/src/handlers/legal-resolve/routes.ts GET /law/:country/citations/resolve, shared resolveLawCitation service",
   read_case_law_decision:
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts GET /case/decisions/:decisionId",
+  verify_quote:
+    "no enumerable endpoint: MCP handler shares verifyDecisionQuotation with the public POST /case/decisions/quotes/verify route (apps/api/src/handlers/case-law/decisions/quotes/check.ts), which is not a capability",
   read_case_law_citations:
     "no dedicated endpoint: MCP handler reads the citation graph with its citing passages directly (apps/api/src/handlers/case-law/decisions/citation-passages.ts)",
   open_case_law_decision:

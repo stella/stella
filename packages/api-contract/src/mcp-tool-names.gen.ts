@@ -13,6 +13,7 @@ export const STELLA_MCP_TOOL_NAMES = [
   "read_case_law_citations",
   "read_contact",
   "set_practice_jurisdictions",
+  "verify_quote",
   "open_case_law_decision",
   "read_case_law_decision_blocks",
   "preview_cited_provision",

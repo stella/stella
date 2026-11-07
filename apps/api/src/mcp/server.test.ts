@@ -1452,6 +1452,7 @@ describe("handleMcpHttpRequest", () => {
         "case_law_coverage",
         "read_case_law_decision",
         "read_case_law_citations",
+        "verify_quote",
         "open_case_law_decision",
         "read_case_law_decision_blocks",
         "preview_cited_provision",
