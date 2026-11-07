@@ -61,6 +61,8 @@ export const ThreadResponseSchema = v.object({
 export const SkillsListResponseSchema = v.object({
   data: v.array(
     v.object({
+      /** The working directory this entry lists skills for. */
+      cwd: v.string(),
       skills: v.array(
         v.object({
           /** The `SKILL.md`, as `skills.config` names it. */

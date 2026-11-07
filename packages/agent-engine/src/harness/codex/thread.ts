@@ -87,6 +87,20 @@ const establishSkills = async (
       ),
     );
   }
+  // A listing without the run's own folder named nothing it would load there,
+  // so switching off what it named would leave that folder's skills on.
+  const workspace = await realPathOf(input.workspaceDir);
+  const listsWorkspace = await Promise.all(
+    parsed.output.data.map(
+      async ({ cwd }) =>
+        cwd === input.workspaceDir || (await realPathOf(cwd)) === workspace,
+    ),
+  );
+  if (!listsWorkspace.includes(true)) {
+    return Result.err(
+      skillsRefused("The harness listed no skills for the run's folder."),
+    );
+  }
   const allowed = new Set(
     await Promise.all(
       folders.map(async ({ path: folder }) => realSkillFile(folder)),

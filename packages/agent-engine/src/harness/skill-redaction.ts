@@ -172,6 +172,17 @@ const createRedactor = (scope: SkillPathScope) => {
           request: {
             ...event.request,
             toolCall: toolCall(event.request.toolCall),
+            // An option's label is also the answer the harness takes back, so
+            // it stays as asked; the text around it is shown, not answered.
+            questions: event.request.questions.map((question) => ({
+              ...question,
+              header: text(question.header),
+              prompt: text(question.prompt),
+              options: question.options.map((option) => ({
+                ...option,
+                description: text(option.description),
+              })),
+            })),
           },
         };
       case "retrying":

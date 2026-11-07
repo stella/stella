@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -862,7 +862,8 @@ const SkillsParamsSchema = v.looseObject({
 
 /** Every `SKILL.md` under a root, however deep and through any link. */
 const skillFilesUnder = (root: string, depth = 0): string[] =>
-  depth > 8 || !existsSync(root)
+  // A link to a file is followed like Codex follows it, but holds no folder.
+  depth > 8 || !existsSync(root) || !statSync(root).isDirectory()
     ? []
     : readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
         const entryPath = path.join(root, entry.name);

@@ -22,19 +22,59 @@ import type { HarnessSkillFolder } from "./adapter";
 const SKILL_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9_-])?$/u;
 const WINDOWS_RESERVED_NAME = /^(?:con|prn|aux|nul|com\d|lpt\d)(?:\..*)?$/iu;
 const SKILL_FILE = "SKILL.md";
+/**
+ * The `SKILL.md` read below is a member's own file on their computer, never a
+ * Markdown file of this repository, so it is no CI input.
+ */
+export const CI_MARKDOWN_READER_INPUTS = [] as const;
 const LOOK_BUDGET_MS = 2000;
 
 const withinBudget = async <T>(look: Promise<T>, otherwise: T): Promise<T> =>
   Promise.race([look, Bun.sleep(LOOK_BUDGET_MS).then(() => otherwise)]);
 
-const holdsSkill = async (folder: string) =>
+/**
+ * The name in a `SKILL.md` header, read the way the desktop reads it: a `---`
+ * first line, a `name:` line, and a closing `---`.
+ */
+const headerName = (contents: string): string | null => {
+  const lines = contents.replace(/^\uFEFF/u, "").split(/\r?\n/u);
+  if (lines[0]?.trimEnd() !== "---") {
+    return null;
+  }
+  const end = lines.findIndex(
+    (line, index) => index > 0 && line.trimEnd() === "---",
+  );
+  if (end === -1) {
+    return null;
+  }
+  const line = lines
+    .slice(1, end)
+    .find((candidate) => candidate.startsWith("name:"));
+  if (line === undefined) {
+    return null;
+  }
+  const value = line.slice("name:".length).trim();
+  const quoted = /^(["'])(.*)\1$/u.exec(value);
+  return (quoted?.[2] ?? value).trim();
+};
+
+/**
+ * Whether the folder still holds the skill the desktop listed: its `SKILL.md`
+ * is a regular file whose header still names it. The name links and redacts
+ * the folder, so one that changed since must not load under the old one.
+ */
+const holdsSkill = async (folder: string, name: string) =>
   withinBudget(
     Result.tryPromise(async () => {
+      const skillFile = path.join(folder, SKILL_FILE);
       const [entry, file] = await Promise.all([
         lstat(folder),
-        lstat(path.join(folder, SKILL_FILE)),
+        lstat(skillFile),
       ]);
-      return entry.isDirectory() && file.isFile();
+      if (!entry.isDirectory() || !file.isFile()) {
+        return false;
+      }
+      return headerName(await Bun.file(skillFile).text()) === name;
     }).then((held) => Result.isOk(held) && held.value),
     false,
   );
@@ -50,7 +90,7 @@ export const loadableSkillFolders = async (
       if (!path.isAbsolute(folder)) {
         return panic("Skill folders: a skill folder must be an absolute path");
       }
-      return isPlainSkillName(name) && (await holdsSkill(folder));
+      return isPlainSkillName(name) && (await holdsSkill(folder, name));
     }),
   );
   const names = new Set<string>();

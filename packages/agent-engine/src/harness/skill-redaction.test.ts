@@ -140,6 +140,41 @@ describe("what a turn reports about its skill folders", () => {
     expect(result.content).toBe(STATUS_ONLY);
   });
 
+  test("a question names a skill by its name and keeps each option's answer", async () => {
+    const [event] = await through([
+      {
+        type: "question.requested",
+        request: {
+          requestId: "request-1",
+          toolCall: { id: "call-1", name: "question", input: {} },
+          answerWith: "response",
+          questions: [
+            {
+              id: "q1",
+              header: `Run ${FOLDER}/scripts/run.ts?`,
+              prompt: `It reads ${FOLDER}/SKILL.md.`,
+              options: [
+                { label: `${FOLDER}/a.md`, description: `From ${FOLDER}` },
+              ],
+              allowsFreeText: false,
+              multiSelect: false,
+              secret: false,
+            },
+          ],
+        },
+      },
+    ]);
+    if (event?.type !== "question.requested") {
+      throw new Error("the question did not pass");
+    }
+    const [question] = event.request.questions;
+    expect(question?.header).toBe("Run <skill:fixture-skill>/scripts/run.ts?");
+    expect(question?.prompt).toBe("It reads <skill:fixture-skill>/SKILL.md.");
+    expect(question?.options).toEqual([
+      { label: `${FOLDER}/a.md`, description: "From <skill:fixture-skill>" },
+    ]);
+  });
+
   test("a Claude Bash that never names a skill stays as it was", async () => {
     const event = await claudeCall("Bash", { command: "ls" }, "notes.md\n");
     expect(event.toolCall.input).toEqual({ command: "ls" });

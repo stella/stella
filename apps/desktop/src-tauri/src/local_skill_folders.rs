@@ -13,12 +13,16 @@
 use std::{
   fs,
   path::{Path, PathBuf},
+  sync::{Mutex, PoisonError},
 };
 
 use serde::{Deserialize, Serialize};
 
 use crate::device_preference::DevicePreference;
 use crate::harness_sidecar::SkillFolderRef;
+
+/// The list is read and replaced whole, so changes to it are made one at a time.
+static LIST_CHANGE: Mutex<()> = Mutex::new(());
 
 const PREFERENCE_FILE: &str = "local-skill-folders.json";
 const SKILL_FILE: &str = "SKILL.md";
@@ -108,8 +112,22 @@ fn skill_name(contents: &str) -> Result<String, SkillFolderProblem> {
   if lines.next().map(str::trim_end) != Some("---") {
     return Err(SkillFolderProblem::NoName);
   }
-  let name = lines
-    .take_while(|line| line.trim_end() != "---")
+  // The header ends at its closing `---`; one that never closes is no header,
+  // which the harnesses refuse to load.
+  let mut header = Vec::new();
+  let mut closed = false;
+  for line in lines {
+    if line.trim_end() == "---" {
+      closed = true;
+      break;
+    }
+    header.push(line);
+  }
+  if !closed {
+    return Err(SkillFolderProblem::NoName);
+  }
+  let name = header
+    .into_iter()
     .find_map(name_value)
     .ok_or(SkillFolderProblem::NoName)?;
   let plain = name.chars().enumerate().all(|(index, character)| {
@@ -350,13 +368,23 @@ impl SkillFolders {
         SkillFolderProblem::DuplicateName,
       ));
     }
+    // Checked again under the lock: the looks above take time, and two adds
+    // must not each replace the list with their own copy.
+    let _held = LIST_CHANGE.lock().unwrap_or_else(PoisonError::into_inner);
     let mut folders = self.stored();
+    if folders.contains(&path) {
+      return Err(SkillFolderListError::AlreadyListed);
+    }
+    if folders.len() >= MAX_FOLDERS {
+      return Err(SkillFolderListError::TooMany);
+    }
     folders.push(path);
     self.store(folders)
   }
 
   /// Unlists a folder; the folder itself is not touched.
   pub fn remove(&self, path: &str) -> Result<(), SkillFolderListError> {
+    let _held = LIST_CHANGE.lock().unwrap_or_else(PoisonError::into_inner);
     let mut folders = self.stored();
     folders.retain(|listed| listed != path);
     self.store(folders)
@@ -566,6 +594,10 @@ mod tests {
       "Quoted_1.2"
     );
     assert_eq!(skill_name("---\nname: 'single'\n---\n").unwrap(), "single");
+    assert_eq!(
+      skill_name("---\nname: unclosed\n"),
+      Err(SkillFolderProblem::NoName)
+    );
   }
 
   #[test]

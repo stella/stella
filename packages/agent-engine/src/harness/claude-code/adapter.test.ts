@@ -1293,6 +1293,24 @@ describe("Claude Code skill folders", () => {
     await finished();
   });
 
+  test("a skill renamed since the desktop listed it, or whose header never closes, is left out", async () => {
+    const good = skillFolder("good-skill");
+    const renamed = skillFolder("listed-skill");
+    writeFileSync(
+      path.join(renamed.path, "SKILL.md"),
+      "---\nname: another-skill\n---\nBody.\n",
+    );
+    const unclosed = skillFolder("unclosed-skill");
+    writeFileSync(
+      path.join(unclosed.path, "SKILL.md"),
+      "---\nname: unclosed-skill\nBody.\n",
+    );
+    const { args, finished } = await startedWith([renamed, unclosed, good]);
+    const plugin = valueOf(args, "--plugin-dir") ?? "";
+    expect(readdirSync(path.join(plugin, "skills"))).toEqual([good.name]);
+    await finished();
+  });
+
   test("when no folder is usable the turn runs without a plugin", async () => {
     const vanished = skillFolder("vanished-skill");
     rmSync(vanished.path, { recursive: true });
