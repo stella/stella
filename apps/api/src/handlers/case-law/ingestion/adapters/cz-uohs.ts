@@ -7,6 +7,11 @@ import * as v from "valibot";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import { CZ_PROFILE } from "@stll/legal-atlas/cz-provision-citation-profile";
+import {
+  printedDateOf,
+  printedDatePattern,
+} from "@stll/legal-atlas/printed-date";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -171,22 +176,44 @@ const readListingText = async (
   );
 };
 
+/**
+ * The proceeding's file number as the office prints it, "ÚOHS-R0003/2018/HS".
+ * Older export rows state only the file's serial ("R0003") and carry the
+ * whole number at the head of the reference number
+ * ("R0003/2018/HS-31751/310/MHf"). A serial alone repeats every year, so it
+ * never stands for the file: two proceedings would share one identity.
+ */
+export const czUohsFileNumber = (
+  record: Pick<CzUohsRecord, "spisová_značka" | "číslo_jednací">,
+): string => {
+  const stated = record.spisová_značka.replace(/^ÚOHS-/u, "");
+  const reference = record.číslo_jednací.replace(/^ÚOHS-/u, "");
+  if (/\/\d{4}(?:\/|$)/u.test(stated) || !reference.startsWith(`${stated}/`)) {
+    return `ÚOHS-${stated}`;
+  }
+  const serialEnd = reference.indexOf("-");
+  return `ÚOHS-${serialEnd === -1 ? reference : reference.slice(0, serialEnd)}`;
+};
+
+/**
+ * The decision's citable identifiers: the file number, then the reference
+ * number of this one decision. Both are lookup keys, never display text; the
+ * displayed docket is `czUohsFileNumber`.
+ */
 export const czUohsDecisionIdentifiers = (
   record: Pick<CzUohsRecord, "spisová_značka" | "číslo_jednací">,
 ) => {
-  const identifier = (value: string) => {
-    const prefixed = `ÚOHS-${value.replace(/^ÚOHS-/u, "")}`;
-    return {
+  const identifier = (printed: string) =>
+    ({
       type: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
       value: normalizeDecisionIdentifierValue(
         DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
-        prefixed,
+        printed,
       ),
-    } as const;
-  };
+    }) as const;
   return [
-    identifier(record.spisová_značka),
-    identifier(record.číslo_jednací),
+    identifier(czUohsFileNumber(record)),
+    identifier(`ÚOHS-${record.číslo_jednací.replace(/^ÚOHS-/u, "")}`),
   ] as const;
 };
 
@@ -358,40 +385,69 @@ export const parseCzUohsDocumentPdf = async (
     notes: read.notes,
     court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
     decisionDate: czUohsLetterheadDate(read.text),
-    decisionType: undefined,
+    decisionType: czUohsPrintedDecisionType(read.text),
     documentUrl: undefined,
   });
 };
 
 /**
  * The letterhead of every ÚOHS decision states its issue date beside the
- * place: "Datum, místo  12. 10. 2026, Brno". Body dates ("dne 5. 8. 2026")
- * never carry the place, so only the labelled letterhead value is read, and
- * only from the head of the text.
+ * place, in one of the layouts the office has used: labelled ("Datum, místo
+ * 12. 10. 2026, Brno"), or on the reference-number line ("Č. j.:
+ * ÚOHS-R0003/2018/HS-31751/310/MHf   Brno 1. listopadu 2018", "… Brno:
+ * 17. 10. 2016"). Body dates ("dne 5. 8. 2026") carry neither the label nor
+ * the reference, so only these two shapes are read, and only from the head.
  */
 const LETTERHEAD_SPAN = 1500;
-// The value must follow its own label: a date elsewhere in the head is not it.
-const LETTERHEAD_DATE =
-  /Datum,\s*místo\s+(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4}),\s*Brno/u;
+const PRINTED_DATE = printedDatePattern(CZ_PROFILE.versionGrammar.monthNames);
+// Each value must follow its own label: a date elsewhere in the head is not it.
+const LETTERHEAD_DATES = [
+  new RegExp(`Datum,\\s*místo\\s+${PRINTED_DATE},\\s*Brno`, "u"),
+  new RegExp(
+    `Č\\.\\s?j\\.:?\\s*ÚOHS-[^\\s]+\\s*Brno:?\\s*${PRINTED_DATE}`,
+    "u",
+  ),
+] as const;
+
+/**
+ * The decision's own title line in the letterhead ("ROZHODNUTÍ", "USNESENÍ",
+ * "PŘÍKAZ"), as its type in Czech; undefined when the head prints none.
+ */
+const PRINTED_DECISION_TYPE = /^\s*(ROZHODNUTÍ|USNESENÍ|PŘÍKAZ)\s*$/mu;
+
+export const czUohsPrintedDecisionType = (text: string): string | undefined =>
+  PRINTED_DECISION_TYPE.exec(
+    text.slice(0, LETTERHEAD_SPAN),
+  )?.[1]?.toLocaleLowerCase("cs");
+
+/**
+ * What the decision's own text states about it. The date comes from the
+ * letterhead, so a text without one is a source that publishes none; the
+ * type is the printed title, since the export names it only by a code-list
+ * address (which stays in metadata). An unread document says neither.
+ */
+const czUohsPrintedFacts = (
+  fulltext: string | undefined,
+): { decisionDate: string | undefined; decisionType: string | undefined } =>
+  fulltext === undefined
+    ? { decisionDate: undefined, decisionType: undefined }
+    : {
+        decisionDate: czUohsLetterheadDate(fulltext),
+        decisionType: czUohsPrintedDecisionType(fulltext),
+      };
 
 /** Where a ÚOHS decision date was read from; the export states none. */
 export const CZ_UOHS_DECISION_DATE_SOURCE = "document";
 
 export const czUohsLetterheadDate = (text: string): string | undefined => {
-  const match = LETTERHEAD_DATE.exec(text.slice(0, LETTERHEAD_SPAN));
-  if (match === null) {
-    return undefined;
+  const head = text.slice(0, LETTERHEAD_SPAN);
+  for (const pattern of LETTERHEAD_DATES) {
+    const match = pattern.exec(head);
+    if (match !== null) {
+      return printedDateOf(match.groups, CZ_PROFILE.versionGrammar.monthNames);
+    }
   }
-  const [, day, month, year] = match;
-  const date = Result.try({
-    try: () =>
-      Temporal.PlainDate.from(
-        { year: Number(year), month: Number(month), day: Number(day) },
-        { overflow: "reject" },
-      ).toString(),
-    catch: String,
-  });
-  return Result.isOk(date) ? date.value : undefined;
+  return undefined;
 };
 
 /**
@@ -562,12 +618,10 @@ const assembleCzUohsDecision = async ({
   // first listed file only when none of them yielded text.
   const decisionDocumentUrl = canonical?.url ?? primaryDocumentUrl;
   const identifiers = czUohsDecisionIdentifiers(record);
-  // The date comes from the decision's own text; a text without a letterhead
-  // date is a source that publishes none. An unread document says neither.
-  const decisionDate =
-    fulltext === undefined ? undefined : czUohsLetterheadDate(fulltext);
+  const caseNumber = czUohsFileNumber(record);
+  const { decisionDate, decisionType } = czUohsPrintedFacts(fulltext);
   return plainTextIngestionResult({
-    caseNumber: identifiers[0].value,
+    caseNumber,
     caseNumberType: "case-number",
     identifiers,
     sourceDocumentId: record.iri,
@@ -575,9 +629,7 @@ const assembleCzUohsDecision = async ({
     country: "CZE",
     language: "cs",
     ...(decisionDate === undefined ? {} : { decisionDate }),
-    ...(record.typ_rozhodnutí.at(0) === undefined
-      ? {}
-      : { decisionType: record.typ_rozhodnutí[0] }),
+    ...(decisionType === undefined ? {} : { decisionType }),
     ...(fulltext === undefined ? {} : { fulltext }),
     ...(fulltext === undefined && documentReadOutcome !== undefined
       ? { isListingOnly: true }
@@ -627,10 +679,10 @@ const assembleCzUohsDecision = async ({
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS],
     documentAst: decisionDocumentAst(canonical, {
-      caseNumber: identifiers[0].value,
+      caseNumber,
       court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
       decisionDate,
-      decisionType: record.typ_rozhodnutí.at(0),
+      decisionType,
       sourceUrl: record.iri,
     }),
     sourceRaw,
