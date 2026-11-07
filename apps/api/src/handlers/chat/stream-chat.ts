@@ -35,8 +35,11 @@ import {
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
 import {
+  CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  type ChatLocalRunContext,
+  chatLocalRunContextSchema,
   chatLocalRunFilePartsOf,
   chatLocalRunFilesNotSharedSchema,
   chatLocalRunLimitSchema,
@@ -2631,6 +2634,8 @@ type StreamSettlementOptions = Pick<
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
   getUsage: () => TokenUsage | undefined;
+  /** How full the context of a turn run on the member's computer was. */
+  getLocalRunContext: () => ChatLocalRunContext | undefined;
   announceBeforeFailure: () => StreamChunk[];
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   getProducedAnswer: () => boolean;
@@ -2651,6 +2656,7 @@ const createStreamSettlement = ({
   rawArgumentsByIncompleteToolCallId,
   toolCallsWithCompleteInput,
   getUsage,
+  getLocalRunContext,
   getProducedAnswer,
   announceBeforeFailure,
   terminal,
@@ -2739,6 +2745,7 @@ const createStreamSettlement = ({
             producedAnswer: getProducedAnswer(),
             responseMessage,
             usage: getUsage(),
+            localRunContext: getLocalRunContext(),
           })
         : attachTerminalTurnOutcome({
             message: checkpoint,
@@ -2780,6 +2787,7 @@ type ProcessPersistenceChunkOptions = {
   processor: ChatStreamProcessor;
   runState: { cancelled: boolean };
   recordUsage: (usage: TokenUsage | undefined) => void;
+  recordLocalRunContext: (context: ChatLocalRunContext) => void;
   partProvenance: SnapshotPartReconciler;
 };
 
@@ -3089,6 +3097,7 @@ const processPersistenceChunk = ({
   processor,
   runState,
   recordUsage,
+  recordLocalRunContext,
   partProvenance,
 }: ProcessPersistenceChunkOptions): PersistenceChunkResult => {
   if (
@@ -3151,6 +3160,10 @@ const processPersistenceChunk = ({
     }
     if (chunk.usage) {
       recordUsage(tokenUsageFromTerminalChunk(chunk));
+    }
+    const localRunContext = localRunContextFromChunk(chunk);
+    if (localRunContext !== undefined) {
+      recordLocalRunContext(localRunContext);
     }
     // TanStack's agent loop can emit continuation events after a model
     // run finishes, notably `approval-requested` for a gated server tool.
@@ -3443,6 +3456,11 @@ export const processServerChatStream = async function* ({
   const recordUsage = (recorded: TokenUsage | undefined) => {
     usage = recorded;
   };
+  // The last run of the turn reports the context the next one starts from.
+  let localRunContext: ChatLocalRunContext | undefined;
+  const recordLocalRunContext = (recorded: ChatLocalRunContext) => {
+    localRunContext = recorded;
+  };
   // One accepted turn has exactly one terminal callback. Set before awaiting
   // persistence so a callback failure cannot re-enter and double-write a
   // different outcome from catch/finally.
@@ -3468,6 +3486,7 @@ export const processServerChatStream = async function* ({
     rawArgumentsByIncompleteToolCallId,
     toolCallsWithCompleteInput,
     getUsage: () => usage,
+    getLocalRunContext: () => localRunContext,
     getProducedAnswer: () => producedAnswer,
     announceBeforeFailure: clientAssistantOwner.announceBeforeFailure,
     terminal,
@@ -3512,6 +3531,7 @@ export const processServerChatStream = async function* ({
         processor,
         runState,
         recordUsage,
+        recordLocalRunContext,
         partProvenance,
       });
       if (processed.type === "deferred") {
@@ -3674,6 +3694,7 @@ type FinishResponseMessageProps = {
   producedAnswer: boolean;
   responseMessage: ChatMessage | null;
   usage: TokenUsage | undefined;
+  localRunContext: ChatLocalRunContext | undefined;
 };
 
 const createTerminalResponseMessage = ({
@@ -3682,6 +3703,7 @@ const createTerminalResponseMessage = ({
   producedAnswer,
   responseMessage,
   usage,
+  localRunContext,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
   if (outcome.type === "completed" && !producedAnswer) {
     throw new ChatEmptyCompletionError({
@@ -3715,9 +3737,29 @@ const createTerminalResponseMessage = ({
     usage,
   });
   return attachTerminalTurnOutcome({
-    message: persistableMessage,
+    message:
+      localRunContext === undefined
+        ? persistableMessage
+        : {
+            ...persistableMessage,
+            metadata: { ...persistableMessage.metadata, localRunContext },
+          },
     turnOutcome: outcome,
   });
+};
+
+/**
+ * The context report of a turn run on the member's computer, as the local
+ * run's own reader checked it (`local-run-chunks.ts`), checked again here.
+ */
+const localRunContextFromChunk = (
+  chunk: Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>,
+) => {
+  const parsed = v.safeParse(
+    chatLocalRunContextSchema,
+    chunk.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY],
+  );
+  return parsed.success ? parsed.output : undefined;
 };
 
 const finalizeResponseProcessor = (processor: ChatStreamProcessor): void => {

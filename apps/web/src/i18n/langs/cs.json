@@ -1585,6 +1585,8 @@
       "full": "{percent} % zaplněno",
       "instructions": "Systémové pokyny",
       "percent": "{percent} %",
+      "reported": "Podle údajů programovacího agenta ve vašem počítači po jeho poslední odpovědi. Agent si kontext spravuje sám.",
+      "reportedTokens": "{used} / {total} tokenů",
       "summary": "Shrnutí starších zpráv",
       "summaryWithCount": "Shrnutí {count} starších zpráv",
       "title": "Kontext konverzace",

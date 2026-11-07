@@ -1585,6 +1585,8 @@
       "full": "{percent}% zapełnienia",
       "instructions": "Instrukcje systemowe",
       "percent": "{percent}%",
+      "reported": "Według agenta programistycznego na Twoim komputerze po jego ostatniej odpowiedzi. Agent sam zarządza swoim kontekstem.",
+      "reportedTokens": "{used} / {total} tokenów",
       "summary": "Podsumowanie starszych wiadomości",
       "summaryWithCount": "Podsumowanie {count} starszych wiadomości",
       "title": "Kontekst rozmowy",

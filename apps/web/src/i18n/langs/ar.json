@@ -1585,6 +1585,8 @@
       "full": "ممتلئة بنسبة {percent}%",
       "instructions": "تعليمات النظام",
       "percent": "{percent}%",
+      "reported": "كما أبلغ عنه وكيل البرمجة على حاسوبك بعد آخر إجابة له. يدير الوكيل سياقه بنفسه.",
+      "reportedTokens": "{used} / {total} رمز",
       "summary": "ملخّص الرسائل الأقدم",
       "summaryWithCount": "ملخّص {count} من الرسائل الأقدم",
       "title": "سياق المحادثة",

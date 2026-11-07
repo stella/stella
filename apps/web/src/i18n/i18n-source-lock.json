@@ -1253,6 +1253,8 @@
   "chat.contextMeter.full": "{percent}% full",
   "chat.contextMeter.instructions": "System instructions",
   "chat.contextMeter.percent": "{percent}%",
+  "chat.contextMeter.reported": "As the coding agent on your computer reported it after its latest answer. The agent manages its own context.",
+  "chat.contextMeter.reportedTokens": "{used} / {total} tokens",
   "chat.contextMeter.summary": "Summary of older messages",
   "chat.contextMeter.summaryWithCount": "Summary of {count} older messages",
   "chat.contextMeter.title": "Conversation context",

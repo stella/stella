@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
 import { Button } from "@stll/ui/button";
 import {
   Popover,
@@ -27,6 +28,9 @@ export type ChatContextUsage = {
     attachmentTokens: number;
     conversationTokens: number;
   };
+  /** For a thread whose turns run on the member's computer: what its
+   *  harness reported, shown instead of the estimate. */
+  reported?: ChatLocalRunContext | undefined;
 };
 
 type ChatContextMeterProps =
@@ -106,13 +110,18 @@ export const ChatContextMeter = (props: ChatContextMeterProps) => {
     );
   }
 
+  const compact = (value: number) =>
+    format.number(value, { notation: "compact", maximumFractionDigits: 1 });
+
+  if (usage.reported !== undefined) {
+    return <ReportedContextMeter compact={compact} reported={usage.reported} />;
+  }
+
   const percent = Math.min(
     100,
     Math.round((usage.estimatedTokens / usage.triggerTokens) * 100),
   );
   const tone = contextTone(percent);
-  const compact = (value: number) =>
-    format.number(value, { notation: "compact", maximumFractionDigits: 1 });
 
   const parts = buildContextParts({ t, format, usage });
 
@@ -156,6 +165,67 @@ export const ChatContextMeter = (props: ChatContextMeterProps) => {
             <p>{t("autoCompact")}</p>
             <p>{t("cache")}</p>
           </div>
+        </div>
+      </PopoverPopup>
+    </Popover>
+  );
+};
+
+/**
+ * The meter for a thread whose turns run on the member's computer: how full
+ * the harness said its context was, against its model's window. The harness
+ * builds and compacts that context itself, so there is no breakdown.
+ */
+const ReportedContextMeter = ({
+  reported,
+  compact,
+}: {
+  reported: ChatLocalRunContext;
+  compact: (value: number) => string;
+}) => {
+  const t = useTranslations("chat.contextMeter");
+  const format = useFormatter();
+  const percent = Math.min(
+    100,
+    Math.round((reported.usedTokens / reported.windowTokens) * 100),
+  );
+  const tone = contextTone(percent);
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            aria-label={t("triggerLabel", {
+              percent: format.number(percent),
+            })}
+            className={cn(TONE_TEXT_CLASS[tone])}
+            data-source="reported"
+            size="icon-xs"
+            variant="ghost"
+          />
+        }
+      >
+        <ContextRing percent={percent} />
+      </PopoverTrigger>
+      <PopoverPopup
+        align="end"
+        className="w-[min(24rem,calc(100vw-2rem))]"
+        side="top"
+      >
+        <div className="flex flex-col gap-3">
+          <PopoverTitle className="text-sm">{t("title")}</PopoverTitle>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className={cn("text-sm font-medium", TONE_TEXT_CLASS[tone])}>
+              {t("full", { percent: format.number(percent) })}
+            </span>
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {t("reportedTokens", {
+                used: compact(reported.usedTokens),
+                total: compact(reported.windowTokens),
+              })}
+            </span>
+          </div>
+          <p className="text-muted-foreground text-xs">{t("reported")}</p>
         </div>
       </PopoverPopup>
     </Popover>

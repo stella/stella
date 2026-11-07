@@ -191,11 +191,23 @@ export type ClaudeToolUse = Extract<ClaudeContentBlock, { type: "tool_use" }>;
 /** A subagent's messages carry the tool call that started it. */
 const ParentToolUseId = v.nullish(v.string());
 
+/** What one model request read and wrote, as Anthropic reports it. */
+const MessageUsageSchema = v.object({
+  input_tokens: v.number(),
+  output_tokens: v.number(),
+  cache_creation_input_tokens: v.nullish(v.number()),
+  cache_read_input_tokens: v.nullish(v.number()),
+});
+
 export const AssistantMessageSchema = v.object({
   type: v.literal("assistant"),
   message: v.object({
     id: v.string(),
     content: v.array(v.looseObject({ type: v.string() })),
+    /** The model that wrote it, as `result.modelUsage` keys it. */
+    model: v.optional(v.string()),
+    /** The request that wrote it; every block of one message repeats it. */
+    usage: v.optional(MessageUsageSchema),
   }),
   parent_tool_use_id: ParentToolUseId,
   /** Set on the synthetic message an API failure produces. */
@@ -233,13 +245,10 @@ export const ResultMessageSchema = v.object({
   result: v.optional(v.string()),
   errors: v.optional(v.array(v.string())),
   api_error_status: v.nullish(v.number()),
-  usage: v.optional(
-    v.object({
-      input_tokens: v.number(),
-      output_tokens: v.number(),
-      cache_creation_input_tokens: v.nullish(v.number()),
-      cache_read_input_tokens: v.nullish(v.number()),
-    }),
+  usage: v.optional(MessageUsageSchema),
+  /** Per model the turn used: its context window among the rest. */
+  modelUsage: v.optional(
+    v.record(v.string(), v.object({ contextWindow: v.optional(v.number()) })),
   ),
 });
 export type ClaudeResultMessage = v.InferOutput<typeof ResultMessageSchema>;

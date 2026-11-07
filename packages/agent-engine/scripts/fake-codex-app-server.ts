@@ -205,6 +205,30 @@ const commandApproval = (reason: string | null): FakeStep[] => [
   completed(),
 ];
 
+/** The context window the fake reports, as Codex does with its token usage. */
+export const FAKE_CONTEXT_WINDOW = 258_400;
+
+/** One request's counts as Codex reports them, totals included. */
+const usageBreakdown = (counts: {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+}) => ({
+  ...counts,
+  totalTokens: counts.inputTokens + counts.outputTokens,
+  cacheWriteInputTokens: 0,
+});
+
+const tokenUsage = (usage: {
+  last: object;
+  total: object;
+  modelContextWindow: number | null;
+}): FakeStep => ({
+  notify: "thread/tokenUsage/updated",
+  params: { threadId: FAKE_THREAD_ID, turnId: FAKE_TURN_ID, tokenUsage: usage },
+});
+
 const FAKE_SCENARIOS = {
   /**
    * The shared stella tool calls through the stella MCP binding, step by
@@ -323,6 +347,22 @@ const FAKE_SCENARIOS = {
         exitCode: 0,
       }),
     ),
+    // The turn's first model request; the answer below is its second.
+    tokenUsage({
+      last: usageBreakdown({
+        inputTokens: 50,
+        cachedInputTokens: 0,
+        outputTokens: 10,
+        reasoningOutputTokens: 0,
+      }),
+      total: usageBreakdown({
+        inputTokens: 50,
+        cachedInputTokens: 0,
+        outputTokens: 10,
+        reasoningOutputTokens: 0,
+      }),
+      modelContextWindow: FAKE_CONTEXT_WINDOW,
+    }),
     {
       notify: "item/agentMessage/delta",
       params: {
@@ -333,23 +373,21 @@ const FAKE_SCENARIOS = {
       },
     },
     item("completed", agentMessage("m-1", "Found two leases.")),
-    {
-      notify: "thread/tokenUsage/updated",
-      params: {
-        threadId: FAKE_THREAD_ID,
-        turnId: FAKE_TURN_ID,
-        tokenUsage: {
-          last: {
-            totalTokens: 150,
-            inputTokens: 120,
-            cachedInputTokens: 20,
-            cacheWriteInputTokens: 0,
-            outputTokens: 30,
-            reasoningOutputTokens: 5,
-          },
-        },
-      },
-    },
+    tokenUsage({
+      last: usageBreakdown({
+        inputTokens: 120,
+        cachedInputTokens: 20,
+        outputTokens: 30,
+        reasoningOutputTokens: 5,
+      }),
+      total: usageBreakdown({
+        inputTokens: 170,
+        cachedInputTokens: 20,
+        outputTokens: 40,
+        reasoningOutputTokens: 5,
+      }),
+      modelContextWindow: FAKE_CONTEXT_WINDOW,
+    }),
     completed(),
   ],
   approval: commandApproval("Deletes a file"),
