@@ -150,6 +150,28 @@ export const extractedFromContent = (
   }
 };
 
+const CITED_PASSAGE_SEPARATOR = "\n\n";
+
+/**
+ * A tier-match answer is a summary in the model's words, and the verified
+ * passages it cites are the document's own. The finding records those passages
+ * as the text the value was read from, so its evidence stays the same across
+ * runs that word the summary differently.
+ */
+export const extractedFromCitedClause = (
+  content: FieldContent | undefined,
+  passages: readonly string[],
+): ExtractedAskValue | null => {
+  const extracted = extractedFromContent(content);
+  if (extracted === null || passages.length === 0) {
+    return extracted;
+  }
+  return {
+    value: extracted.value,
+    text: passages.join(CITED_PASSAGE_SEPARATOR),
+  };
+};
+
 // Flatten the ASK field to the prose the positionMatch model compares against.
 export const askText = (content: FieldContent | undefined): string | null => {
   if (!content) {
@@ -901,13 +923,14 @@ export const computeVerdictBatch = async ({
   )) {
     await Promise.all(
       chunk.map(async ({ property, askValue, askFieldId }) => {
+        const passages =
+          askFieldId === undefined
+            ? []
+            : arrayOrEmpty(passagesByFieldId.get(askFieldId));
         const graded = await gradeTierMatchForVerdict({
           askValue,
           tiers: resolveVerdictTiers(property.tool),
-          passages:
-            askFieldId === undefined
-              ? []
-              : arrayOrEmpty(passagesByFieldId.get(askFieldId)),
+          passages,
           abortSignal,
           organizationId,
           admission,
@@ -937,8 +960,9 @@ export const computeVerdictBatch = async ({
           verdict: tier,
           rationale,
           ...(matchedRef === undefined ? {} : { matchedRef }),
-          extracted: extractedFromContent(
+          extracted: extractedFromCitedClause(
             fieldContentByPropertyId.get(property.tool.askPropertyId),
+            passages,
           ),
         });
         const content: JustificationContent = {

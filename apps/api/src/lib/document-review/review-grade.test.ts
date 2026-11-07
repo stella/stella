@@ -262,6 +262,17 @@ describe("document review grading", () => {
     ]);
   });
 
+  test("records the cited wording as the text behind a tier-match summary", async () => {
+    const findings = await buildFindings(
+      buildArgs([position(1)], new AbortController().signal),
+    );
+
+    expect(findings.at(0)?.extracted).toEqual({
+      value: "Ten days",
+      text: "Ten days' written notice.",
+    });
+  });
+
   test("stops after cancellation and preserves completed-batch grading", async () => {
     const controller = new AbortController();
     abortAfterFirstCall = controller;

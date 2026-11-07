@@ -392,6 +392,28 @@ describe("computeVerdictBatch — passages for the grader", () => {
     ]);
   });
 
+  test("the finding records the cited wording as the text behind the summary", async () => {
+    const { output } = await run({
+      properties: [verdictProperty({ kind: "positionMatch" })],
+      justification: justificationOf([
+        {
+          citationStatus: "verified",
+          blockId: "b1",
+          text: "Each invoice is payable within 30 days.",
+        },
+        {
+          citationStatus: "verified",
+          blockId: "b2",
+          text: "Late payments accrue interest.",
+        },
+      ]),
+    });
+    expect(output.gradedVerdicts.at(0)?.extracted).toEqual({
+      value: "30 days.",
+      text: "Each invoice is payable within 30 days.\n\nLate payments accrue interest.",
+    });
+  });
+
   test("an answer with only unverified citations still grades, from its text", async () => {
     const { calls, output } = await run({
       properties: [verdictProperty({ kind: "positionMatch" })],
@@ -403,6 +425,10 @@ describe("computeVerdictBatch — passages for the grader", () => {
       [["30 days.", []]],
     );
     expect(output.gradedVerdicts.at(0)?.verdict).toBe("compliant");
+    expect(output.gradedVerdicts.at(0)?.extracted).toEqual({
+      value: "30 days.",
+      text: "30 days.",
+    });
   });
 
   test("an answer with no justification still grades, from its text", async () => {

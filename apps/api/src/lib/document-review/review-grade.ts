@@ -44,9 +44,11 @@ import type {
   PositionStandardSource,
   ResolvedTiers,
 } from "@/api/lib/workflow/playbook-positions";
+import { answerShapeForPosition } from "@/api/lib/workflow/position-runtime";
 import {
   askPresence,
   askText,
+  extractedFromCitedClause,
   extractedFromContent,
   gradePresence,
   gradePropertyConstraint,
@@ -713,7 +715,13 @@ const projectFinding = ({
     // difference it finds is a language one; the structured kinds come from
     // a reference comparison, which reads both sides' text.
     delta: LANGUAGE_DELTA,
-    extracted: extractedFromContent(askContent),
+    extracted:
+      answerShapeForPosition(position) === "clause-summary"
+        ? extractedFromCitedClause(
+            askContent,
+            citations.map(({ text }) => text),
+          )
+        : extractedFromContent(askContent),
     rationale,
     ...(matchedRef === undefined ? {} : { matchedRef }),
     citations,
