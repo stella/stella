@@ -373,7 +373,7 @@ jobs:
           bash "$GH_RETRY_SCRIPT" api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
 
       - name: Checkout pull request head
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}

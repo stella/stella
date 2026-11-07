@@ -814,7 +814,7 @@ export const networkViolations = (
           add({
             id: violationId(file, job, name, "retry"),
             rule: "retry",
-            message: `${file}: ${job}: ${name}: partial-clone actions/checkout must use ./.github/actions/partial-clone-checkout`,
+            message: `${file}: ${job}: ${name}: partial-clone actions/checkout must use stella/.github/actions/partial-clone-checkout`,
           });
         }
         const fetches: NetworkFetch[] = [];

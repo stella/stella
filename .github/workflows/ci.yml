@@ -413,7 +413,7 @@ jobs:
       # merge group validates the queued tree, so it needs no patch identity.
       - name: Checkout patch-id inputs
         if: (github.event_name == 'pull_request' && github.event.action != 'enqueued') || github.event_name == 'merge_group'
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           fetch-depth: 0
@@ -921,7 +921,7 @@ jobs:
         # are enough to list changed paths, and git fetches any other blob a
         # step reads (a `git show <base>:<file>`, say) on first access. Jobs
         # that never look past HEAD keep the default shallow checkout.
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -1773,7 +1773,7 @@ jobs:
     steps:
       &quick-checks-steps # parser-version-guard reads Git history, so the checkout is full.
       - name: Checkout
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2182,7 +2182,7 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2480,7 +2480,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -2670,7 +2670,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         id: checkout
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -3423,7 +3423,7 @@ jobs:
     steps:
       - &full_checkout_input_sha
         name: Checkout
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -3689,7 +3689,7 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -3869,7 +3869,7 @@ jobs:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           fetch-depth: 0
           persist-credentials: false

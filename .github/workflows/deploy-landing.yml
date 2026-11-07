@@ -34,7 +34,7 @@ jobs:
       affected: ${{ steps.scope.outputs.affected }}
     steps:
       - name: Checkout
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           # The pushed range can span several commits; blobless keeps the
           # history cheap and fetches only the files the check reads.
@@ -83,7 +83,7 @@ jobs:
       artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
       - name: Checkout
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           # The landing build dates sitemap entries from git history and
           # emits none on a shallow checkout. Blobless keeps the full
@@ -133,7 +133,7 @@ jobs:
     environment: release-app
     steps:
       - name: Checkout
-        uses: ./.github/actions/partial-clone-checkout
+        uses: stella/.github/actions/partial-clone-checkout@3e9057a176377ddfa34d7897025934d1feb7ce9f
         with:
           fetch-depth: 0
           persist-credentials: false

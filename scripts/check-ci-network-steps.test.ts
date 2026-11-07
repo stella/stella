@@ -51,7 +51,7 @@ describe("run step fetches", () => {
     });
 
     expect(report.errors).toEqual([
-      `${WORKFLOW}: build: Checkout: partial-clone actions/checkout must use ./.github/actions/partial-clone-checkout`,
+      `${WORKFLOW}: build: Checkout: partial-clone actions/checkout must use stella/.github/actions/partial-clone-checkout`,
     ]);
   });
 
