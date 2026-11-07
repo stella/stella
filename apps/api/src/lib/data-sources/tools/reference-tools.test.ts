@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import type { EntityCheckResult } from "@stll/business-registries/entity-checks";
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { Temporal } from "@stll/time";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -18,13 +19,17 @@ import { createCzIsirProceedingsTool } from "@/api/lib/data-sources/tools/cz-isi
 
 const NOW = Temporal.Instant.from("2026-10-26T10:00:00Z");
 
-const run = async (tool: DataSourceTool, filled: FilledToolInput) =>
+const run = async (
+  tool: DataSourceTool,
+  filled: FilledToolInput,
+  observer: RegistryRequestObservation = "unobserved",
+) =>
   await runDataSourceTool({
     tool,
     filled,
     context: {
       permit: grantThirdPartyOutboundPermit(),
-      observer: "unobserved",
+      observer,
       signal: new AbortController().signal,
     },
     now: NOW,
@@ -262,6 +267,23 @@ describe("cz.cnb.rate", () => {
         },
       },
     });
+  });
+
+  test("every ČNB request is reported to the caller's observer", async () => {
+    const seen: string[] = [];
+    let requests = 0;
+    await run(
+      toolServing(await fixture(), seen),
+      { values: { currency: "EUR", date: "2026-10-25" }, uncertainKeys: [] },
+      {
+        onRequest: () => {
+          requests += 1;
+        },
+        onError: () => {},
+      },
+    );
+    expect(seen.length).toBeGreaterThan(0);
+    expect(requests).toBe(seen.length);
   });
 
   test("a weekend date takes the last published rate", async () => {

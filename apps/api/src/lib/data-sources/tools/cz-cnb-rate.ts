@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import type { RecordValue } from "@stll/api-contract/record-schema";
+import { observeRegistryRequest } from "@stll/business-registries/shared/request-observer";
 import { Temporal } from "@stll/time";
 
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -118,7 +119,7 @@ export const createCzCnbRateTool = ({
   match: "exact",
   // A published rate never changes.
   cacheTtl: { hours: 24 * 30 },
-  call: async (input, { permit }) => {
+  call: async (input, { observer, permit }) => {
     const currency = textInput(input, "currency");
     const referenceDate = textInput(input, "date");
     const requested: string[] = [];
@@ -129,11 +130,26 @@ export const createCzCnbRateTool = ({
       referenceDate,
       transport: async (url) => {
         requested.push(url);
+        // Count the request as the registry clients do, success or failure.
+        observeRegistryRequest(observer);
         return await transport(url);
       },
     });
-    const url =
-      requested.at(-1) ?? panic("The ČNB rate was read without a request");
+    const url = requested.at(-1);
+    if (url === undefined) {
+      // The rate owner refused before asking ČNB (a date it cannot serve yet):
+      // there is no source URL to cite, so the cell is a retryable failure.
+      return fetched.isOk()
+        ? panic("The ČNB rate was read without a request")
+        : Result.err(
+            new DataSourceUnavailableError({
+              message: fetched.error.message,
+              toolId: CZ_CNB_RATE_TOOL_ID,
+              reason: "source-error",
+              cause: fetched.error,
+            }),
+          );
+    }
     if (fetched.isOk()) {
       return Result.ok({
         type: "records",
