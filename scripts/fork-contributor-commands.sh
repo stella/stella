@@ -33,7 +33,11 @@ done < <(
 git -C "$checkout" -c protocol.file.allow=always submodule update --init --quiet
 
 cd "$checkout"
-# A contributor install runs the lifecycle scripts; it never sees a token.
-NPM_TOKEN="" bun install --frozen-lockfile
+# A fork clone has none of the CI job's state: the generated-source manifest
+# belongs to the job's own checkout, and an install never sees a token.
+unset CI_GENERATED_SOURCES_MANIFEST
+export NPM_TOKEN=""
+# A contributor install runs the lifecycle scripts.
+bash scripts/retry.sh bun install --frozen-lockfile
 bun run autofix
 bun run verify --list
