@@ -914,6 +914,8 @@ type EvaluateResultOptions = {
     | "red"
     | "missing"
     | "other-head"
+    | "fork-green"
+    | "other-fork"
     | "running-green"
     | "queued-green"
     | "planned-green"
@@ -937,6 +939,27 @@ const firstCodeRunStage: Partial<Record<MetadataCodeRun, CodeRunStage>> = {
   "planned-green": "planned",
 };
 
+// The fork the pull request's head comes from, as the outcome step reads it.
+const PULL_REQUEST_HEAD = { repoId: 456, ref: "fork-branch" } as const;
+
+// GitHub links no pull request to a run from a fork: such a run carries only
+// the repository and branch it ran.
+const metadataCodeRunLink = (state: MetadataCodeRun | undefined) => {
+  switch (state) {
+    case "fork-green":
+    case "other-fork":
+      return {
+        pull_requests: [],
+        head_repository: {
+          id: state === "fork-green" ? PULL_REQUEST_HEAD.repoId : 999,
+        },
+        head_branch: PULL_REQUEST_HEAD.ref,
+      };
+    default:
+      return { pull_requests: [{ number: Number(PULL_REQUEST.number) }] };
+  }
+};
+
 const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
   const head = state === "other-head" ? "b".repeat(40) : "a".repeat(40);
   const runStatus =
@@ -953,7 +976,7 @@ const metadataCodeRunFixtures = (state: MetadataCodeRun | undefined) => {
             run_number: 99,
             head_sha: head,
             status: runStatus,
-            pull_requests: [{ number: Number(PULL_REQUEST.number) }],
+            ...metadataCodeRunLink(state),
           },
         ];
   const conclusion = state === "red" ? "failure" : "success";
@@ -1309,6 +1332,8 @@ const resultGateCase = ({
       PR_NUMBER: event === EVENT.pullRequest ? PULL_REQUEST.number : "",
       REPO: PULL_REQUEST.repo,
       HEAD_SHA: "a".repeat(40),
+      HEAD_REPO_ID: String(PULL_REQUEST_HEAD.repoId),
+      HEAD_REF: PULL_REQUEST_HEAD.ref,
       METADATA_ONLY: codeRun.enabled,
       RUN_REQUIRED: codeRun.runRequired,
       PLAN_RESULT: needs["ci-plan"]?.result ?? "",
@@ -3501,6 +3526,12 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
     { state: "red", exitCode: 1, message: "(evaluated-failure)" },
     { state: "missing", exitCode: 1, message: "no code run exists" },
     { state: "other-head", exitCode: 1, message: "no code run exists" },
+    {
+      state: "fork-green",
+      exitCode: 0,
+      message: "evaluated every required job of head",
+    },
+    { state: "other-fork", exitCode: 1, message: "no code run exists" },
     {
       state: "completed-without-result",
       exitCode: 1,
