@@ -351,7 +351,10 @@ impl Drop for OwnedDirectory {
     if std::fs::symlink_metadata(&socket)
       .is_ok_and(|bound| bound.dev() == device && bound.ino() == inode)
     {
-      crate::logging::best_effort(std::fs::remove_file(socket), "broker socket was not removed");
+      crate::logging::best_effort(
+        std::fs::remove_file(socket),
+        "broker socket was not removed",
+      );
     }
   }
 }

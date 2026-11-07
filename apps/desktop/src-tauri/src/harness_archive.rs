@@ -176,7 +176,10 @@ pub(crate) mod tests {
 
   impl Drop for TempDir {
     fn drop(&mut self) {
-      crate::logging::best_effort(fs::remove_dir_all(&self.0), "test directory was not removed");
+      crate::logging::best_effort(
+        fs::remove_dir_all(&self.0),
+        "test directory was not removed",
+      );
     }
   }
 
