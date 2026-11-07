@@ -1,6 +1,13 @@
 import { defineRequestState } from "@better-auth/core/context";
+import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
+import { createAuthMiddleware, getOAuthState } from "better-auth/api";
 import { Result } from "better-result";
 
+import {
+  completesSocialCallback,
+  socialCallbackErrorUrl,
+} from "@/api/lib/auth/social-sign-in-outcome";
+import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -56,39 +63,28 @@ export type TokenExchangeRuntime = {
   markProviderUnavailable: () => Promise<void>;
 };
 
-type ExchangingProvider = {
-  id: string;
-  validateAuthorizationCode: (...args: never[]) => Promise<unknown>;
-};
-
 /**
- * The provider with its exchange retried once when the provider is
- * unavailable. Every other member is the provider's own.
+ * The exchange retried once when the provider is unavailable, with the
+ * exchange's own signature.
  */
-export const withTokenExchangeRetry = <Provider extends ExchangingProvider>(
-  provider: Provider,
+export const withTokenExchangeRetry = <Args extends unknown[], Tokens>(
+  providerId: string,
+  exchange: (...args: Args) => Promise<Tokens>,
   runtime: TokenExchangeRuntime,
-): Provider => {
-  const exchange = provider.validateAuthorizationCode.bind(provider);
-  const attempt = async (
-    args: Parameters<Provider["validateAuthorizationCode"]>,
-    number: number,
-  ): Promise<Awaited<ReturnType<Provider["validateAuthorizationCode"]>>> => {
+): ((...args: Args) => Promise<Tokens>) => {
+  const attempt = async (args: Args, number: number): Promise<Tokens> => {
     const startedAt = runtime.now();
     const outcome = await Result.tryPromise({
       try: async () => await exchange(...args),
       catch: (cause: unknown) => cause,
     });
     if (Result.isOk(outcome)) {
-      // The bound exchange keeps the provider's own signature.
-      return outcome.value as Awaited<
-        ReturnType<Provider["validateAuthorizationCode"]>
-      >;
+      return outcome.value;
     }
     const error = outcome.error;
     const fault = tokenExchangeFault(error);
     runtime.observe({
-      provider: provider.id,
+      provider: providerId,
       attempt: number,
       fault,
       status: statusOf(error),
@@ -106,12 +102,7 @@ export const withTokenExchangeRetry = <Provider extends ExchangingProvider>(
     await runtime.sleep(RETRY_DELAY_MS);
     return await attempt(args, number + 1);
   };
-  return {
-    ...provider,
-    validateAuthorizationCode: async (
-      ...args: Parameters<Provider["validateAuthorizationCode"]>
-    ) => await attempt(args, 1),
-  };
+  return async (...args: Args) => await attempt(args, 1);
 };
 
 /**
@@ -159,3 +150,60 @@ export const providerUnavailableRedirect = (
   target.searchParams.set("error", "temporarily_unavailable");
   return { type: "rewrite", location: target.href };
 };
+
+const PRODUCTION_RUNTIME: TokenExchangeRuntime = {
+  sleep: Bun.sleep,
+  now: () => performance.now(),
+  observe: (observation) => {
+    logger.warn("auth.provider_token_exchange", observation);
+  },
+  markProviderUnavailable: async () => {
+    await providerUnavailableCallback.set(true);
+  },
+};
+
+/**
+ * Retries every social provider's code exchange once when the provider is
+ * unavailable, and answers a callback whose provider stayed unavailable with
+ * `temporarily_unavailable` instead of `invalid_code`, so the sign-in page
+ * can say so.
+ */
+export const socialTokenExchangePlugin = {
+  id: "stella-social-token-exchange",
+  init: (ctx) => ({
+    context: {
+      socialProviders: ctx.socialProviders.map((provider) => ({
+        ...provider,
+        validateAuthorizationCode: withTokenExchangeRetry(
+          provider.id,
+          provider.validateAuthorizationCode.bind(provider),
+          PRODUCTION_RUNTIME,
+        ),
+      })),
+    },
+  }),
+  hooks: {
+    after: [
+      {
+        matcher: (ctx: HookEndpointContext) => completesSocialCallback(ctx),
+        handler: createAuthMiddleware(async (ctx) => {
+          if (!(await providerUnavailableCallback.get())) {
+            return;
+          }
+          const redirect = providerUnavailableRedirect(
+            ctx.context.returned,
+            socialCallbackErrorUrl(
+              await getOAuthState(),
+              ctx.context.options.onAPIError?.errorURL ??
+                `${ctx.context.baseURL}/error`,
+              ctx.context.baseURL,
+            ),
+          );
+          if (redirect.type === "rewrite") {
+            throw ctx.redirect(redirect.location);
+          }
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;

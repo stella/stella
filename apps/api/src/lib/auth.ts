@@ -259,11 +259,7 @@ import {
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
-import {
-  providerUnavailableCallback,
-  providerUnavailableRedirect,
-  withTokenExchangeRetry,
-} from "@/api/lib/auth/social-token-exchange";
+import { socialTokenExchangePlugin } from "@/api/lib/auth/social-token-exchange";
 import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
 import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
 import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-runtime";
@@ -1359,56 +1355,6 @@ const oauthUiFragmentBridgePlugin = {
             frontendUrl: env.FRONTEND_URL,
           });
           await Promise.resolve();
-        }),
-      },
-    ],
-  },
-} satisfies BetterAuthPlugin;
-
-/**
- * Retries a social provider's code exchange once when the provider is
- * unavailable (`withTokenExchangeRetry`), and answers a callback whose provider
- * stayed unavailable with `temporarily_unavailable` instead of `invalid_code`,
- * so the sign-in page can say so.
- */
-const socialTokenExchangePlugin = {
-  id: "stella-social-token-exchange",
-  init: (ctx) => ({
-    context: {
-      socialProviders: ctx.socialProviders.map((provider) =>
-        withTokenExchangeRetry(provider, {
-          sleep: Bun.sleep,
-          now: () => performance.now(),
-          observe: (observation) => {
-            logger.warn("auth.provider_token_exchange", observation);
-          },
-          markProviderUnavailable: async () => {
-            await providerUnavailableCallback.set(true);
-          },
-        }),
-      ),
-    },
-  }),
-  hooks: {
-    after: [
-      {
-        matcher: (ctx: HookEndpointContext) => completesSocialCallback(ctx),
-        handler: createAuthMiddleware(async (ctx) => {
-          if (!(await providerUnavailableCallback.get())) {
-            return;
-          }
-          const redirect = providerUnavailableRedirect(
-            ctx.context.returned,
-            socialCallbackErrorUrl(
-              await getOAuthState(),
-              ctx.context.options.onAPIError?.errorURL ??
-                `${ctx.context.baseURL}/error`,
-              ctx.context.baseURL,
-            ),
-          );
-          if (redirect.type === "rewrite") {
-            throw ctx.redirect(redirect.location);
-          }
         }),
       },
     ],

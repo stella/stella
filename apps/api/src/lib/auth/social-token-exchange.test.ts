@@ -85,8 +85,12 @@ describe("exchange retry", () => {
   test("a provider fault followed by an answer completes the exchange", async () => {
     const google = provider([providerError(500, "internal_failure"), tokens]);
     const run = runtime();
-    const wrapped = withTokenExchangeRetry(google.instance, run.value);
-    expect(await wrapped.validateAuthorizationCode({ code: "c" })).toBe(tokens);
+    const wrapped = withTokenExchangeRetry(
+      google.instance.id,
+      google.instance.validateAuthorizationCode,
+      run.value,
+    );
+    expect(await wrapped({ code: "c" })).toBe(tokens);
     expect(google.calls).toBe(2);
     expect(run.slept).toEqual([750]);
     expect(run.unavailable).toBe(0);
@@ -105,12 +109,14 @@ describe("exchange retry", () => {
     const failure = providerError(500, "internal_failure");
     const google = provider([failure, failure]);
     const run = runtime();
-    const wrapped = withTokenExchangeRetry(google.instance, run.value);
-    expect(
-      await wrapped
-        .validateAuthorizationCode({ code: "c" })
-        .catch((error: unknown) => error),
-    ).toBe(failure);
+    const wrapped = withTokenExchangeRetry(
+      google.instance.id,
+      google.instance.validateAuthorizationCode,
+      run.value,
+    );
+    expect(await wrapped({ code: "c" }).catch((error: unknown) => error)).toBe(
+      failure,
+    );
     expect(google.calls).toBe(2);
     expect(run.unavailable).toBe(1);
   });
@@ -119,22 +125,17 @@ describe("exchange retry", () => {
     const refusal = providerError(400, "invalid_grant");
     const google = provider([refusal, tokens]);
     const run = runtime();
-    const wrapped = withTokenExchangeRetry(google.instance, run.value);
-    expect(
-      await wrapped
-        .validateAuthorizationCode({ code: "c" })
-        .catch((error: unknown) => error),
-    ).toBe(refusal);
+    const wrapped = withTokenExchangeRetry(
+      google.instance.id,
+      google.instance.validateAuthorizationCode,
+      run.value,
+    );
+    expect(await wrapped({ code: "c" }).catch((error: unknown) => error)).toBe(
+      refusal,
+    );
     expect(google.calls).toBe(1);
     expect(run.slept).toEqual([]);
     expect(run.unavailable).toBe(0);
-  });
-
-  test("the wrapped provider keeps every other member", () => {
-    const google = provider([]);
-    const wrapped = withTokenExchangeRetry(google.instance, runtime().value);
-    expect(wrapped.id).toBe("google");
-    expect(wrapped.name).toBe("Google");
   });
 });
 
