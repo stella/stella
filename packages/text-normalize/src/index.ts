@@ -53,9 +53,13 @@ export type {
   SearchMatchRange,
 } from "./search-match.js";
 export {
+  collapseLetterSpacing,
   collapseSpacedLetters,
-  spacedLetterRunRegex,
-} from "./spaced-letters.js";
+  documentWordCounts,
+  isLetterSpacedEmphasis,
+  letterSpacingJoins,
+} from "./letter-spacing.js";
+export type { LetterSpacingOptions } from "./letter-spacing.js";
 export { slugify } from "./slug.js";
 export type { SlugCharset, SlugifyOptions, SlugSeparator } from "./slug.js";
 export {

@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  collapseSpacedLetters,
-  spacedLetterRunRegex,
-} from "./spaced-letters.js";
+import { collapseSpacedLetters, letterSpacingJoins } from "./letter-spacing.js";
 
 // Real letter-spaced court headings collapse; short single-letter word
 // lists (Czech/Slovak prepositions) must stay untouched.
@@ -50,18 +47,20 @@ describe("collapseSpacedLetters", () => {
   });
 });
 
-describe("spacedLetterRunRegex", () => {
-  test("returns a fresh global regex each call", () => {
-    const a = spacedLetterRunRegex();
-    const b = spacedLetterRunRegex();
-    expect(a).not.toBe(b);
-    expect(a.global).toBe(true);
+describe("letterSpacingJoins", () => {
+  test("names the gaps the fold removes, and only those", () => {
+    const text = "súd r o z h o d o l : a b c dnes";
+    const joins = letterSpacingJoins(text);
+    // The spaced word's gaps, its spaced colon's included; the gaps of
+    // "a b c" and every word gap stay.
+    expect(joins).toEqual([5, 7, 9, 11, 13, 15, 17, 19]);
+    const drawn = [...text]
+      .filter((_, index) => !joins.includes(index))
+      .join("");
+    expect(drawn).toBe(collapseSpacedLetters(text));
   });
 
-  test("matches the same runs collapseSpacedLetters removes", () => {
-    const text = "súd r o z h o d o l : a b c dnes";
-    const matches = [...text.matchAll(spacedLetterRunRegex())].map((m) => m[0]);
-    // Only the four-plus run matches; the "a b c" list does not.
-    expect(matches).toEqual(["r o z h o d o l :"]);
+  test("names nothing in text without spaced letters", () => {
+    expect(letterSpacingJoins("hello   world")).toEqual([]);
   });
 });

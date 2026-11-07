@@ -25,6 +25,8 @@ import { caseLawSectionHeading } from "./case-law-heading";
  * with its spacing removed, so the vocabulary carries none either.
  */
 const DECISION_TITLES = new Set([
+  // The Constitutional Court's ruling on the merits.
+  "nález",
   "uznesenie",
   "rozsudok",
   "rozsudokbezodôvodnenia",

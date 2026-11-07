@@ -63,7 +63,7 @@ import {
   skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
-import { normalizeUnicode } from "@stll/text-normalize";
+import { documentWordCounts, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   ANONYMIZED_CLASS,
@@ -73,7 +73,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { createBlockAnchorAllocator } from "@/api/lib/legal-search/parsers/block-anchors";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 
 /**
  * What a dropped anonymized run reads as.
@@ -618,6 +618,7 @@ const setInlines = (line: MarkupLine, inlines: readonly Inline[]): void => {
 type WordGap = "no-break" | "plain";
 
 /** A gap between two letters, and which space sets it. */
+// oxlint-disable-next-line no-local-letter-spacing/no-local-letter-spacing -- counts which space a file sets between letters, to tell its word gap; joins nothing
 const LETTER_GAP = /\p{L}\p{M}*(?<gap>[  ])(?=\p{L})/gu;
 
 /**
@@ -655,6 +656,7 @@ const LOST_LINE_BREAK = /(?<=[.!?][“”"»)]{0,3}) (?=\d{1,3}\.[  ]{1,4}\p{Lu
  * A seam inside a word: a letter (with at most a few combining marks), then
  * the lowercase rest of the word. Bounded repeats keep every match linear.
  */
+// oxlint-disable-next-line no-local-letter-spacing/no-local-letter-spacing -- a text-layer seam of a no-break-gap file is a plain space, a gap the owner cannot tell from a word gap
 const SPACED_WORD_SEAM = /(?<=\p{L}\p{M}{0,4}) (?=\p{Ll})/gu;
 
 /** A word's letters, read the same however the file composed or cased them. */
@@ -753,14 +755,10 @@ const readTextLayerSeams = (lines: readonly MarkupLine[]): MarkupLine[] => {
 /** U+00AD, the soft hyphen, spelled out: a formatter writes the escape as the character. */
 const SOFT_HYPHEN = String.fromCodePoint(0xad);
 
-/** Intact document words and section markers recognized by the shared vocabulary. */
+/** The document's words and section markers recognized by the shared vocabulary. */
 const typographyWords = (lines: readonly MarkupLine[]) => {
-  const words = new Set<string>();
   const spacedWords = new Set<string>();
   for (const { text } of lines) {
-    for (const [word] of text.matchAll(/\p{L}[\p{L}\p{M}]*/gu)) {
-      words.add(normalizeUnicode(word, "NFC").toLowerCase());
-    }
     const colon = text.indexOf(":");
     if (colon === -1) {
       continue;
@@ -787,7 +785,10 @@ const typographyWords = (lines: readonly MarkupLine[]) => {
       }
     }
   }
-  return { attestedWords: words, spacedWords };
+  return {
+    documentWords: documentWordCounts(lines.map(({ text }) => text)),
+    spacedWords,
+  };
 };
 
 /**
@@ -808,10 +809,9 @@ const readTypography = (
   inlines: readonly Inline[],
   evidence: ReturnType<typeof typographyWords>,
 ): Inline[] =>
-  rewriteInlineWhitespace(
+  readInlineLetterSpacing(
     mapInlineText(inlines, (text) => text.replaceAll(SOFT_HYPHEN, "-")),
-    // Over the whole line: a wrapper's edge is not a gap between words.
-    (text) => collapseLetterSpacing(text, { setApart: true, ...evidence }),
+    { setApart: true, ...evidence },
   );
 
 type Section = SkDocumentSection;
