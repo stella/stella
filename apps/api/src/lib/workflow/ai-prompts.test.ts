@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { answerSchemaForContent } from "@/api/lib/workflow/ai-answer-schema";
 import {
   buildBatchSchema,
   buildDocxBlocksMessage,
@@ -93,6 +94,20 @@ describe("buildBatchSchema — absent answers", () => {
     expect(output[intProperty.id]?.answer).toEqual({
       amount: 1500,
       currency: "USD",
+    });
+  });
+});
+
+describe("buildBatchSchema — text answer length", () => {
+  test("the length limit gives way when the prompt asks for quoted wording", () => {
+    expect(answerSchemaForContent(textProperty.content)).toMatchObject({
+      pipe: expect.arrayContaining([
+        expect.objectContaining({
+          description: expect.stringMatching(
+            /less than 100 characters, unless the prompt asks for the source's wording to be quoted/u,
+          ),
+        }),
+      ]),
     });
   });
 });
