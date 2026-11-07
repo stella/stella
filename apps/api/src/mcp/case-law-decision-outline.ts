@@ -12,6 +12,17 @@ const OUTLINE_LIMIT = 100;
 // opening words, and a hundred long openings would outweigh the page itself.
 const TITLE_LIMIT = 80;
 const NUMBERED_SECTION = /^(?:[IVXLCDM]+[.)]|\d+[.)]|\[\d+\])(?:\s|$)/u;
+// Anonymised names print as capital initials, and `M.`, `L.`, `D.`, `C.`
+// (or `V.`, `I.`) read as Roman numerals. A run of two initials that goes on
+// in lower case or after a comma ("M. T. poznała", "M. D., poszukując") is a
+// party, as is a lone `L.`, `C.`, `D.` or `M.` that does: those numerals
+// never open a section. "I. zasądza" (a lone I, V or X) and "I. A. Stan"
+// (a numeral, then a lettered subsection) stay sections.
+const ANONYMISED_INITIALS =
+  /^(?:\p{Lu}\.\s*){2,}(?:[,;:]|\p{Ll})|^[LCDM]\.\s*(?:[,;:]|\p{Ll})/u;
+
+const opensNumberedSection = (line: string): boolean =>
+  NUMBERED_SECTION.test(line) && !ANONYMISED_INITIALS.test(line);
 
 /** A block found in the served plain text, with where it sits there. */
 export type LocatedDecisionBlock = {
@@ -170,7 +181,7 @@ const printedNumberedCandidates = (
   let blockIndex = 0;
   for (const line of text.matchAll(/[^\r\n]+/gu)) {
     const title = line[0].trim();
-    if (!NUMBERED_SECTION.test(title)) {
+    if (!opensNumberedSection(title)) {
       continue;
     }
     const start = line.index + line[0].indexOf(title);
