@@ -17,10 +17,7 @@ import {
   generatedSummariesAISchema,
   suggestionsAIOutputSchema,
 } from "@/api/handlers/entities/placements/suggest";
-import {
-  deriveClauseAskSchema,
-  deriveConstraintAskSchema,
-} from "@/api/handlers/playbooks/derive-ask";
+import { deriveAskSchema } from "@/api/handlers/playbooks/derive-ask";
 import {
   refineSearchOutputSchema,
   searchSummaryOutputSchema,
@@ -228,17 +225,10 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
     },
     {
       file: "handlers/playbooks/derive-ask.ts",
-      outputSchema: "deriveClauseAskSchema",
-      schema: deriveClauseAskSchema,
+      outputSchema: "deriveAskSchema",
+      schema: deriveAskSchema,
       answer:
-        '{"question":"What does the contract say about termination for convenience, including who may terminate and the notice period? Quote the wording in full."}',
-    },
-    {
-      file: "handlers/playbooks/derive-ask.ts",
-      outputSchema: "deriveConstraintAskSchema",
-      schema: deriveConstraintAskSchema,
-      answer:
-        '{"question":"How many days of notice does termination for convenience require?","contentType":"int"}',
+        '{"question":"What is the notice period for termination for convenience?","contentType":"text"}',
     },
     {
       file: "handlers/search/ai.ts",

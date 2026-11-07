@@ -17,7 +17,7 @@ import {
 } from "@/api/handlers/playbooks/derive-ask";
 import type {
   DeriveAskGenerate,
-  DeriveClauseAskResult,
+  DeriveAskResult,
 } from "@/api/handlers/playbooks/derive-ask";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -93,10 +93,9 @@ const constraintCheck = {
 const unexpectedCall = async (): Promise<never> =>
   await Promise.reject(new Error("generator must not be called"));
 
-const answeringClause = (question: string): DeriveAskGenerate => ({
-  clause: async () => ({ question }),
-  constraint: unexpectedCall,
-});
+const answeringClause =
+  (question: string): DeriveAskGenerate =>
+  async () => ({ question, contentType: "text" });
 
 const storedAsk = (result: PlaybookPositions) => {
   const [item] = result.items;
@@ -151,12 +150,13 @@ describe("deriveAutoAsks — the check decides the shape", () => {
 
     const result = await deriveAutoAsks(container(position), {
       ...deps,
-      generate: {
-        clause: async ({ system }) => {
-          systems.push(system);
-          return { question: "What does the contract say about the law?" };
-        },
-        constraint: unexpectedCall,
+      // The check decides the type, so a model that picks `int` cannot narrow it.
+      generate: async ({ system }) => {
+        systems.push(system);
+        return {
+          question: "What does the contract say about the law?",
+          contentType: "int",
+        };
       },
     });
 
@@ -179,12 +179,9 @@ describe("deriveAutoAsks — the check decides the shape", () => {
 
       const result = await deriveAutoAsks(container(position), {
         ...deps,
-        generate: {
-          clause: unexpectedCall,
-          constraint: async ({ system }) => {
-            systems.push(system);
-            return { question: "How many days?", contentType };
-          },
+        generate: async ({ system }) => {
+          systems.push(system);
+          return { question: "How many days?", contentType };
         },
       });
 
@@ -204,8 +201,9 @@ describe("deriveAutoAsks — the check decides the shape", () => {
     expect(DERIVE_CLAUSE_ASK_SYSTEM_PROMPT).toContain(
       "every term the rules cover",
     );
-    expect(DERIVE_CLAUSE_ASK_SYSTEM_PROMPT).not.toContain("contentType");
-    expect(DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT).toContain("contentType");
+    expect(DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT).not.toContain(
+      "every term the rules cover",
+    );
   });
 
   test("a stored ask is replaced only when a grading input changes", async () => {
@@ -223,7 +221,7 @@ describe("deriveAutoAsks — the check decides the shape", () => {
 
     const unchanged = await deriveAutoAsks(container(narrow), {
       ...deps,
-      generate: { clause: unexpectedCall, constraint: unexpectedCall },
+      generate: unexpectedCall,
     });
     expect(storedAsk(unchanged)).toEqual(narrow.ask);
 
@@ -259,7 +257,8 @@ describe("deriveAutoAsks — save resilience", () => {
     } satisfies OrgAIConfig;
     const generatedAsk = {
       question: "What law governs the agreement?",
-    } satisfies DeriveClauseAskResult;
+      contentType: "text",
+    } satisfies DeriveAskResult;
     const providerResponse = {
       id: "derive-ask-response",
       created_at: 0,
@@ -370,7 +369,7 @@ describe("deriveAutoAsks — save resilience", () => {
       });
 
       expect(requests).toEqual([
-        { model: pdfModelId, outputProperties: ["question"] },
+        { model: pdfModelId, outputProperties: ["question", "contentType"] },
       ]);
       expect(analytics.exceptions()).toEqual([]);
       expect(result.items.at(0)).toEqual({
@@ -419,12 +418,9 @@ describe("deriveAutoAsks — save resilience", () => {
     "an unusable AI config (%s) makes no model call and still saves, dropping a stale `derived`",
     async (orgAIConfigStatus) => {
       let calls = 0;
-      const generate: DeriveAskGenerate = {
-        clause: async () => {
-          calls += 1;
-          return { question: "Derived on the wrong key" };
-        },
-        constraint: unexpectedCall,
+      const generate: DeriveAskGenerate = async () => {
+        calls += 1;
+        return { question: "Derived on the wrong key", contentType: "text" };
       };
       const stale = graded();
       stale.ask = {
@@ -451,11 +447,8 @@ describe("deriveAutoAsks — save resilience", () => {
   );
 
   test("a thrown derivation still saves, with `derived` absent", async () => {
-    const generate: DeriveAskGenerate = {
-      clause: async () => {
-        throw new Error("model unavailable");
-      },
-      constraint: unexpectedCall,
+    const generate: DeriveAskGenerate = async () => {
+      throw new Error("model unavailable");
     };
 
     const result = await deriveAutoAsks(container(graded()), {
@@ -486,12 +479,9 @@ describe("deriveAutoAsks — save resilience", () => {
     });
 
     let called = false;
-    const generate: DeriveAskGenerate = {
-      clause: async () => {
-        called = true;
-        return { question: "New?" };
-      },
-      constraint: unexpectedCall,
+    const generate: DeriveAskGenerate = async () => {
+      called = true;
+      return { question: "New?", contentType: "text" };
     };
 
     const result = await deriveAutoAsks(container(withDerived), {
@@ -508,12 +498,9 @@ describe("deriveAutoAsks — save resilience", () => {
 
   test("manual asks and extract positions pass through untouched", async () => {
     let called = false;
-    const generate: DeriveAskGenerate = {
-      clause: async () => {
-        called = true;
-        return { question: "x" };
-      },
-      constraint: unexpectedCall,
+    const generate: DeriveAskGenerate = async () => {
+      called = true;
+      return { question: "x", contentType: "text" };
     };
 
     const manual = graded({

@@ -766,17 +766,12 @@ export const mockStructuredData = (
     return { tier: "deviation", rationale: "Mock verdict." };
   }
 
-  // playbook.derive-ask, constraint shape — question + content type.
+  // playbook.derive-ask — question + content type.
   if ("question" in properties && "contentType" in properties) {
     return {
       question: "What does the contract say about this issue?",
       contentType: "text",
     };
-  }
-
-  // playbook.derive-ask, clause shape — the question alone.
-  if ("question" in properties && Object.keys(properties).length === 1) {
-    return { question: "What does the contract say about this issue?" };
   }
 
   // templates.prefill — tmpl-supply fixture (see comment above). Its values
