@@ -107,4 +107,45 @@ describe.serial("no-nullable-join-nested-selection", () => {
       ]),
     ).toEqual([]);
   });
+
+  test("reads the first column of the nullable table, as Drizzle does", async () => {
+    expect(
+      await lint([
+        // The key first: a NULL first column means no row matched.
+        "db.select({ b: { id: b.id, x: b.x } }).from(a).leftJoin(b, eq(b.id, a.bId));",
+        // The key later: a NULL `x` on a matched row already nulls `b`.
+        "db.select({ b: { x: b.x, id: b.id } }).from(a).leftJoin(b, eq(b.id, a.bId));",
+        // Columns of two tables: Drizzle never nullifies the object.
+        "db.select({ b: { aId: a.id, x: b.x } }).from(a).leftJoin(b, eq(b.id, a.bId));",
+        "db.select({ b: { x: b.x, aId: a.id } }).from(a).leftJoin(b, eq(b.id, a.bId));",
+        "",
+      ]),
+    ).toEqual([2]);
+  });
+
+  test("resolves drizzle-orm helpers through their import", async () => {
+    expect(
+      await lint([
+        'import { and as all, eq as equals } from "drizzle-orm";',
+        'import * as d from "drizzle-orm";',
+        'import { eq as same } from "./not-drizzle.ts";',
+        "db.select({ b: { id: b.id } }).from(a).leftJoin(b, equals(b.id, a.bId));",
+        "db.select({ b: { id: b.id } }).from(a).leftJoin(b, all(d.eq(b.id, a.bId), d.isNotNull(b.x)));",
+        "db.select({ b: { id: b.id } }).from(a).leftJoin(b, same(b.id, a.bId));",
+        "",
+      ]),
+    ).toEqual([6]);
+  });
+
+  test("reads a nested object held in a const", async () => {
+    expect(
+      await lint([
+        "const source = { x: b.x };",
+        "const keyed = { id: b.id, x: b.x };",
+        "db.select({ source }).from(a).leftJoin(b, eq(b.id, a.bId));",
+        "db.select({ source: keyed }).from(a).leftJoin(b, eq(b.id, a.bId));",
+        "",
+      ]),
+    ).toEqual([3]);
+  });
 });

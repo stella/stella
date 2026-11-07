@@ -3,18 +3,21 @@
 // the object carries that join's key.
 //
 // Drizzle maps every top-level nested object of a joined selection through a
-// null check: when each column in the object reads back null and the columns
-// belong to a nullable side of the join, the whole object becomes `null`. That
-// is right only when one of those columns can never be null on a matched row.
-// When every selected column is nullable, a matched row whose values happen to
-// be NULL reads back exactly like no matched row: `source: { descriptor }`
-// over a left-joined source whose descriptor is NULL becomes `source: null`,
-// and the caller treats a real source as a missing one.
+// null check: when all of the object's columns belong to one nullable side of
+// the join and the FIRST of them reads back NULL, the whole object becomes
+// `null` (a later non-NULL column of the same table does not undo that). That
+// is right only when the first column can never be NULL on a matched row.
+// Otherwise a matched row whose first value happens to be NULL reads back
+// exactly like no matched row: `source: { descriptor }` over a left-joined
+// source whose descriptor is NULL becomes `source: null`, and the caller treats
+// a real source as a missing one. An object that also reads another table's
+// column is never nullified.
 //
 // A column the left join's own condition matches with `eq` or tests with
-// `isNotNull` (directly or under `and`) is never NULL on a matched row, so a nested object that selects it
-// reads back null exactly when no row matched. Anything else is selected flat
-// with the join key, and the object is built after the read keyed on it:
+// `isNotNull` (directly or under `and`, as imported from drizzle-orm) is never
+// NULL on a matched row, so a nested object that selects it FIRST reads back
+// null exactly when no row matched. Anything else is selected flat with the
+// join key, and the object is built after the read keyed on it:
 //
 //   .select({ sourceId: sources.id, sourceDescriptor: sources.descriptor })
 //   ...
@@ -29,8 +32,9 @@
 //     .from(decisions)
 //     .leftJoin(sources, eq(sources.id, decisions.sourceId))
 //
-// Accepted: a nested object holding its left-joined table's join key
-// (`source: { id: sources.id, descriptor: sources.descriptor }` above),
+// Accepted: a nested object whose first column is its left-joined table's
+// join key (`source: { id: sources.id, descriptor: sources.descriptor }`
+// above), a nested object reading columns of more than one table,
 // nested objects over the base table or inner-joined tables (they are never
 // nullified), flat columns from a nullable table, and nested objects more than
 // one level deep (Drizzle nullifies only the top level). Right and full joins
@@ -39,22 +43,33 @@
 //
 // Tables are matched by the expression naming them (`sources`, `schema.x`, an
 // `alias(...)` bound to a const), so the join argument and the column's table
-// must be spelled alike. Builders split across statements (`$dynamic()`,
+// must be spelled alike. Nested objects are read inline or through a
+// never-reassigned const. Builders split across statements (`$dynamic()`,
 // a stored query extended later), join conditions held in variables, and
 // nested objects assembled by spreading other objects or by helper calls such
 // as `getTableColumns(...)` are outside this syntactic check.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { Ranged } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
   type AstNode,
+  type FilenameContext,
+  filenameForContext,
   getPropertyName,
   isAstNode,
   isIdentifierReference,
+  resolveImport,
   resolveVariable,
+  type ScopeContext,
   stableInitializer,
   unwrapExpression,
 } from "./utils.ts";
+
+const GUARD = "no-nullable-join-nested-selection";
+
+type RuleContext = ScopeContext & FilenameContext;
 
 const SELECTION_ARGUMENT_INDEX: Readonly<Record<string, number>> = {
   select: 0,
@@ -149,19 +164,35 @@ type JoinedTable = {
   joinKeys: ReadonlySet<string>;
 };
 
-const calleeName = (node: unknown): string | null => {
+const DRIZZLE_MODULE = /^drizzle-orm(?:\/|$)/u;
+
+// The drizzle-orm helper a call invokes, through its import binding
+// (`import { eq as equals }`, `import * as d` with `d.eq`). A bare name bound
+// to no import keeps its spelling, so local stand-ins in tests still count.
+const calleeName = (context: RuleContext, node: unknown): string | null => {
   const expression = unwrapExpression(node);
   if (expression?.type !== "CallExpression") {
     return null;
   }
   const callee = unwrapExpression(expression.callee);
-  return callee?.type === "Identifier" ? getPropertyName(callee) : null;
+  if (callee === null) {
+    return null;
+  }
+  const resolved = resolveImport(context, callee);
+  if (resolved !== null) {
+    return DRIZZLE_MODULE.test(resolved.moduleId) ? resolved.imported : null;
+  }
+  return callee.type === "Identifier" ? getPropertyName(callee) : null;
 };
 
 // Columns of `table` that `condition` proves non-NULL on a matched row: an
 // `eq` operand or an `isNotNull` argument, through `and(...)` only. Under `or`
 // or any other operator the column may still be NULL on a match.
-const equalityKeys = (condition: unknown, table: string): Set<string> => {
+const equalityKeys = (
+  context: RuleContext,
+  condition: unknown,
+  table: string,
+): Set<string> => {
   const keys = new Set<string>();
   const visit = (node: unknown): void => {
     const expression = unwrapExpression(node);
@@ -171,7 +202,7 @@ const equalityKeys = (condition: unknown, table: string): Set<string> => {
     const args = Array.isArray(expression.arguments)
       ? expression.arguments
       : [];
-    const name = calleeName(expression);
+    const name = calleeName(context, expression);
     if (name === "and") {
       for (const argument of args) {
         visit(argument);
@@ -202,7 +233,10 @@ const equalityKeys = (condition: unknown, table: string): Set<string> => {
 const NO_KEYS: ReadonlySet<string> = new Set();
 
 // The tables the chain reads, in order, with whether each may be unmatched.
-const joinedTables = (calls: readonly ChainCall[]): JoinedTable[] => {
+const joinedTables = (
+  context: RuleContext,
+  calls: readonly ChainCall[],
+): JoinedTable[] => {
   const tables: JoinedTable[] = [];
   for (const { method, arguments: args } of calls) {
     const key = tableKey(args.at(0));
@@ -241,7 +275,10 @@ const joinedTables = (calls: readonly ChainCall[]): JoinedTable[] => {
         key,
         nullable: kind === "nullable",
         via: method,
-        joinKeys: kind === "nullable" ? equalityKeys(args.at(1), key) : NO_KEYS,
+        joinKeys:
+          kind === "nullable"
+            ? equalityKeys(context, args.at(1), key)
+            : NO_KEYS,
       });
     }
   }
@@ -277,102 +314,126 @@ const propertiesOf = (object: AstNode): AstNode[] =>
       )
     : [];
 
-// The nullable table a nested object reads from without holding its join key.
+// The nullable table a nested object is nullified by without its join key:
+// Drizzle nullifies an object whose columns all come from one nullable table
+// when the first of them is NULL, so that first column must be a join key.
 const nullableColumnTable = (
   nested: AstNode,
   nullable: ReadonlyMap<string, JoinedTable>,
 ): JoinedTable | null => {
-  const read = new Map<string, Set<string>>();
+  const columns: { table: string; column: string }[] = [];
   for (const property of propertiesOf(nested)) {
     const value = unwrapExpression(property.value);
     if (value?.type !== "MemberExpression" || value.computed === true) {
       continue;
     }
-    const key = tableKey(value.object);
+    const table = tableKey(value.object);
     const column = getPropertyName(value.property);
-    if (key === null || column === null || !nullable.has(key)) {
-      continue;
+    if (table === null || column === null) {
+      return null;
     }
-    const columns = read.get(key) ?? new Set<string>();
-    columns.add(column);
-    read.set(key, columns);
+    columns.push({ table, column });
   }
-  for (const [key, columns] of read) {
-    const table = nullable.get(key);
-    if (
-      table !== undefined &&
-      ![...columns].some((column) => table.joinKeys.has(column))
-    ) {
-      return table;
-    }
+  const first = columns.at(0);
+  if (
+    first === undefined ||
+    columns.some(({ table }) => table !== first.table)
+  ) {
+    return null;
   }
-  return null;
+  const table = nullable.get(first.table);
+  return table === undefined || table.joinKeys.has(first.column) ? null : table;
 };
 
-export default eslintCompatPlugin({
-  meta: { name: "no-nullable-join-nested-selection" },
-  rules: {
-    "no-nullable-join-nested-selection": {
-      meta: {
-        type: "problem",
-        messages: {
-          nestedOverNullableJoin:
-            "`{{field}}` nests columns of `{{table}}`, which this query reaches through `{{join}}`, without its join key. Drizzle reads a nested object over a nullable join back as `null` whenever every column in it is NULL, so a matched `{{table}}` row whose selected columns are all NULL looks like no row at all. Select the columns flat together with the join key (e.g. `{{field}}Id: {{table}}.id`) and build `{{field}}` after the read, `row.{{field}}Id === null ? null : { ... }`; under a left join, selecting a column the join's own `eq` matches inside the object also works.",
+export const createNullableJoinNestedSelectionPlugin = (
+  enforcesLine = guardEnforcesLine,
+) =>
+  eslintCompatPlugin({
+    meta: { name: "no-nullable-join-nested-selection" },
+    rules: {
+      "no-nullable-join-nested-selection": {
+        meta: {
+          type: "problem",
+          messages: {
+            nestedOverNullableJoin:
+              "`{{field}}` nests columns of `{{table}}`, which this query reaches through `{{join}}`, without its join key first. Drizzle reads a nested object over a nullable join back as `null` whenever its first column is NULL, so a matched `{{table}}` row whose first selected column is NULL looks like no row at all. Select the columns flat together with the join key (e.g. `{{field}}Id: {{table}}.id`) and build `{{field}}` after the read, `row.{{field}}Id === null ? null : { ... }`; under a left join, selecting a column the join's own `eq` matches as the object's first column also works.",
+          },
+        },
+        createOnce(context) {
+          const enforces = (node: Ranged): boolean => {
+            const start = context.sourceCode.getLocFromIndex(
+              node.range[0],
+            ).line;
+            const end = context.sourceCode.getLocFromIndex(
+              node.range[1] - 1,
+            ).line;
+            for (let line = start; line <= end; line++) {
+              if (
+                enforcesLine({
+                  guard: GUARD,
+                  file: filenameForContext(context),
+                  line,
+                })
+              ) {
+                return true;
+              }
+            }
+            return false;
+          };
+          return {
+            CallExpression(node) {
+              const callee = unwrapExpression(node.callee);
+              if (
+                callee?.type !== "MemberExpression" ||
+                callee.computed === true
+              ) {
+                return;
+              }
+              const method = getPropertyName(callee.property);
+              const index =
+                method === null ? undefined : SELECTION_ARGUMENT_INDEX[method];
+              if (index === undefined) {
+                return;
+              }
+              const nullable = new Map(
+                joinedTables(context, chainedCalls(node))
+                  .filter((table) => table.nullable)
+                  .map((table) => [table.key, table] as const),
+              );
+              if (nullable.size === 0) {
+                return;
+              }
+              const selection = selectionObject(
+                context,
+                node.arguments.at(index),
+              );
+              if (selection === null) {
+                return;
+              }
+              for (const property of propertiesOf(selection)) {
+                const value = selectionObject(context, property.value);
+                if (value === null) {
+                  continue;
+                }
+                const table = nullableColumnTable(value, nullable);
+                if (table === null || !enforces(property)) {
+                  continue;
+                }
+                context.report({
+                  node: property,
+                  messageId: "nestedOverNullableJoin",
+                  data: {
+                    field: getPropertyName(property.key) ?? "nested",
+                    table: table.key,
+                    join: table.via,
+                  },
+                });
+              }
+            },
+          };
         },
       },
-      createOnce(context) {
-        return {
-          CallExpression(node) {
-            const callee = unwrapExpression(node.callee);
-            if (
-              callee?.type !== "MemberExpression" ||
-              callee.computed === true
-            ) {
-              return;
-            }
-            const method = getPropertyName(callee.property);
-            const index =
-              method === null ? undefined : SELECTION_ARGUMENT_INDEX[method];
-            if (index === undefined) {
-              return;
-            }
-            const nullable = new Map(
-              joinedTables(chainedCalls(node))
-                .filter((table) => table.nullable)
-                .map((table) => [table.key, table] as const),
-            );
-            if (nullable.size === 0) {
-              return;
-            }
-            const selection = selectionObject(
-              context,
-              node.arguments.at(index),
-            );
-            if (selection === null) {
-              return;
-            }
-            for (const property of propertiesOf(selection)) {
-              const value = unwrapExpression(property.value);
-              if (value?.type !== "ObjectExpression") {
-                continue;
-              }
-              const table = nullableColumnTable(value, nullable);
-              if (table === null) {
-                continue;
-              }
-              context.report({
-                node: property,
-                messageId: "nestedOverNullableJoin",
-                data: {
-                  field: getPropertyName(property.key) ?? "nested",
-                  table: table.key,
-                  join: table.via,
-                },
-              });
-            }
-          },
-        };
-      },
     },
-  },
-});
+  });
+
+export default createNullableJoinNestedSelectionPlugin();

@@ -79,6 +79,22 @@ db.select({
   .from(decisions)
   .leftJoin(sources, eq(sources.descriptor, decisions.sourceId));
 
+// Drizzle reads the first column: a key selected after it proves nothing.
+db.select({
+  // oxlint-disable-next-line no-nullable-join-nested-selection/no-nullable-join-nested-selection -- fixture: join key not first
+  source: { descriptor: sources.descriptor, id: sources.id },
+})
+  .from(decisions)
+  .leftJoin(sources, eq(sources.id, decisions.sourceId));
+
+// An object reading two tables' columns is never nullified.
+db.select({
+  // expect-clean: no-nullable-join-nested-selection/no-nullable-join-nested-selection
+  source: { decisionId: decisions.id, descriptor: sources.descriptor },
+})
+  .from(decisions)
+  .leftJoin(sources, eq(sources.id, decisions.sourceId));
+
 // The fix: flat columns, including the join key.
 db.select({
   id: decisions.id,
