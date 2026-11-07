@@ -183,6 +183,7 @@ describe("the app's builds", () => {
       {
         bundleIdentifier: "app.stll.mobile.preview.widgets",
         groupIdentifier: "group.app.stll.mobile.preview",
+        enablePushNotifications: true,
       },
     ]);
   });

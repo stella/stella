@@ -152,6 +152,7 @@ const reviewTarget = (): ReviewTarget => ({
 const seedRunningRun = async (
   target: ReviewTarget,
   total: number,
+  runBasis: DocumentReviewRunBasis = basis,
 ): Promise<SafeId<"documentReviewRun">> => {
   const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
   seededRunIds.push(runId);
@@ -163,7 +164,7 @@ const seedRunningRun = async (
     fileFieldId: target.fileFieldId,
     entityVersionId: target.entityVersionId,
     contentSha256: CONTENT_SHA256,
-    basis,
+    basis: runBasis,
     status: "running",
     startedAt: new Date(),
     total,
@@ -473,6 +474,96 @@ const seedCappedTarget = async (): Promise<CappedReviewTarget> => {
     pendingIds,
   };
 };
+
+describe("a re-run after the reviewer dismissed a staged fix", () => {
+  const basisWithRule = (ruleText: string): DocumentReviewRunBasis => ({
+    ...basis,
+    playbook: {
+      ...basis.playbook,
+      definitionSnapshot: {
+        name: "Time bars",
+        positions: {
+          version: 3,
+          items: [
+            {
+              mode: "graded",
+              sourceId: FIXED_POSITION_ID,
+              issue: FIXED_ISSUE,
+              severity: "blocker",
+              standard: {
+                source: "tiers",
+                tiers: {
+                  acceptable: {
+                    rules: [
+                      {
+                        id: "44444444-4444-4444-8444-444444444444",
+                        text: ruleText,
+                      },
+                    ],
+                  },
+                  fallback: { entries: [] },
+                  notAcceptable: { rules: [] },
+                },
+              },
+              ask: { mode: "auto" },
+              enabled: true,
+            },
+          ],
+        },
+      },
+    },
+  });
+
+  const rerun = async (priorRule: string, currentRule: string) => {
+    const target = reviewTarget();
+    const firstRun = await seedRunningRun(target, 1, basisWithRule(priorRule));
+    const firstFinding = await seedFinding(firstRun, target, payloadWithFix);
+    await finalize(firstRun, target, 1);
+    await testDb
+      .update(documentReviewFindings)
+      .set({
+        decision: "dismissed",
+        decidedBy: ids.userA1,
+        decidedAt: new Date("2026-01-15T10:00:00.000Z"),
+      })
+      .where(eq(documentReviewFindings.id, firstFinding));
+
+    const secondRun = await seedRunningRun(
+      target,
+      1,
+      basisWithRule(currentRule),
+    );
+    const secondFinding = await seedFinding(secondRun, target, payloadWithFix);
+    const finalized = await finalize(secondRun, target, 1);
+    return {
+      finalized,
+      state: await findingState(secondFinding),
+      suggestions: await suggestionsFor(secondFinding),
+    };
+  };
+
+  test("keeps the decision and stages nothing while the rules are unchanged", async () => {
+    const { finalized, state, suggestions } = await rerun(
+      "No longer than 6 months",
+      "No longer than 6 months",
+    );
+
+    expect(finalized).toMatchObject({ carried: 1, staged: 0 });
+    expect(state?.decision).toBe("dismissed");
+    expect(suggestions).toHaveLength(0);
+  });
+
+  test("reopens the finding and stages its fix again when the rules changed", async () => {
+    const { finalized, state, suggestions } = await rerun(
+      "No longer than 6 months",
+      "No longer than 3 months",
+    );
+
+    expect(finalized).toMatchObject({ carried: 0, staged: 1 });
+    expect(state?.decision).toBe("open");
+    expect(suggestions).toHaveLength(1);
+  });
+});
 
 describe("review fixes and the document's pending suggestion cap", () => {
   test("a document at its cap leaves new fixes unstaged and reports them without failing the run", async () => {

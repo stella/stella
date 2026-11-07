@@ -1,6 +1,6 @@
 {
   "name": "@stll/chat",
-  "version": "0.3.5",
+  "version": "0.4.0",
   "description": "Typed React chat composer, message stream, model selector, and transport runtime primitives.",
   "keywords": [
     "ai",
@@ -80,8 +80,8 @@
   },
   "peerDependencies": {
     "@base-ui/react": "^1.7.0",
-    "@tiptap/core": "^3.31.4",
-    "@tiptap/pm": "^3.31.4",
+    "@tiptap/core": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
     "@types/react": ">=19",
     "react": ">=19"
   },

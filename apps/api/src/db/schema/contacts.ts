@@ -5,6 +5,10 @@ import {
   INVOICE_LANGUAGES,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
+import {
+  WORKSPACE_STATUS,
+  WORKSPACE_STATUSES,
+} from "@stll/api-contract/workspace-status";
 
 import { workspaceInsertCheck } from "@/api/db/rls";
 import {
@@ -17,6 +21,11 @@ import { NARRATIVE_LANGUAGE_MAX_LENGTH } from "@/api/lib/billing/narrative-langu
 import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_CONTACT_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
+import {
+  EU_VAT_ID_SQL_COMPACT,
+  EU_VAT_ID_SQL_PATTERN,
+} from "../eu-vat-id-format";
+import { fieldsSetTogetherCheck } from "../field-groups";
 import {
   importProvenanceColumns,
   importProvenanceConstraints,
@@ -51,6 +60,8 @@ import type {
   SchedulerPayload,
   SchedulerSchedule,
 } from "./common";
+
+const contactsOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.contacts'::regclass)`;
 
 export const TIME_BILLING_FORMATS = ["categories", "ledes"] as const;
 
@@ -149,6 +160,14 @@ export const contacts = p.pgTable(
         sql`, `,
       )})`,
     ),
+    // An EU VAT number lives in vat_id: tax_id holds one only beside a vat_id
+    // (migration 20261103061500_contact_vat_id_check, validated online).
+    p.check(
+      "contacts_vat_id_check",
+      sql`${table.vatId} IS NOT NULL OR ${table.taxId} IS NULL OR ${sql.raw(
+        EU_VAT_ID_SQL_COMPACT('"tax_id"'),
+      )} !~ ${sql.raw(`'${EU_VAT_ID_SQL_PATTERN}'`)}`,
+    ),
     p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
     ...importProvenanceConstraints("contacts", table),
     p.index("contacts_organization_id_idx").on(table.organizationId),
@@ -204,6 +223,12 @@ export const contacts = p.pgTable(
       )})`,
     ),
     ...orgPolicies(),
+    p.pgPolicy("contacts_owner_organization_access", {
+      for: "all",
+      to: "public",
+      using: sql`${contactsOwner} AND ${organizationCheck}`,
+      withCheck: sql`${contactsOwner} AND ${organizationCheck}`,
+    }),
   ],
 );
 
@@ -385,14 +410,23 @@ export const workspaces = p.pgTable(
     }),
     color: p.varchar({ length: 32 }),
     status: p
-      .text({ enum: ["active", "deleting", "archived"] })
+      .text({ enum: WORKSPACE_STATUSES })
       .notNull()
-      .default("active"),
+      .default(WORKSPACE_STATUS.active),
     lastActivityAt: timestamptz("last_activity_at").notNull().defaultNow(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("workspaces_organization_id_idx").on(table.organizationId),
+    // Readable-workspace queries test `<> 'deleting'`, so a value outside the
+    // domain must be unwritable rather than silently readable.
+    p.check(
+      "workspaces_status_values_check",
+      sql`${table.status} IN (${sql.join(
+        WORKSPACE_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )})`,
+    ),
     ...importProvenanceConstraints("workspaces", table),
     p
       .unique("workspaces_org_reference_uidx")
@@ -854,6 +888,11 @@ export const schedulerJobs = p.pgTable(
       .on(table.enabled, table.nextRunAt),
     p.index("scheduler_jobs_task_idx").on(table.task),
     p.index("scheduler_jobs_locked_until_idx").on(table.lockedUntil),
+    // A lease is its token, claim time and expiry; a row never holds part of one.
+    fieldsSetTogetherCheck({
+      name: "scheduler_jobs_lease_fields_check",
+      columns: [table.lockedBy, table.lockedAt, table.lockedUntil],
+    }),
     p
       .index("scheduler_jobs_paused_until_idx")
       .on(table.pausedUntil)

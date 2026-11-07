@@ -11,10 +11,17 @@ import {
 } from "@tanstack/ai-codex";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
+import {
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  chatLocalRunLimitSchema,
+} from "@stll/api-contract/chat-run-target";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  approvalMessage,
+  type HarnessApprovalRequest,
   type HarnessEvent,
   type HarnessFailure,
   harnessSessionId,
@@ -325,6 +332,7 @@ describe("local harness chunks", () => {
               prompt: "Which governing law?",
               options: [{ label: "Czech", description: "" }],
               allowsFreeText: true,
+              multiSelect: false,
               secret: false,
             },
           ],
@@ -384,6 +392,16 @@ describe("local harness chunks", () => {
         content: JSON.stringify({ status: "interrupted" }),
       }),
     );
+    // Stored as the cloud engine stores a cancelled call: an error, never
+    // a completed result.
+    expect(fold(chunks).flatMap(({ parts }) => parts)).toContainEqual(
+      expect.objectContaining({
+        type: "tool-result",
+        toolCallId: commandCall.id,
+        state: "error",
+        outcome: "cancelled",
+      }),
+    );
   });
 
   test("each failure kind ends the run with its own error code", async () => {
@@ -409,6 +427,10 @@ describe("local harness chunks", () => {
         type: "protocol_violation",
         message: "Malformed message.",
       },
+      sandbox_unavailable: {
+        type: "sandbox_unavailable",
+        message: "The sandbox could not start.",
+      },
     } as const satisfies {
       [Type in HarnessFailure["type"]]: Extract<HarnessFailure, { type: Type }>;
     };
@@ -426,6 +448,42 @@ describe("local harness chunks", () => {
     expect(codes.size).toBe(Object.keys(failures).length);
   });
 
+  test("a usage limit says when it resets, and only a limit with a known reset", async () => {
+    const limited = async (resetsAt: string | null) =>
+      (
+        await localChunks([
+          {
+            type: "turn.failed",
+            failure: {
+              type: "usage_limit",
+              message: "Limit reached.",
+              resetsAt,
+            },
+          },
+        ])
+      ).at(-1);
+    const known = await limited("2026-10-28T14:00:00.000Z");
+    expect(known).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: "harness.usage_limit",
+      metadata: {
+        [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: {
+          resetsAt: "2026-10-28T14:00:00.000Z",
+        },
+      },
+    });
+    expect(
+      v.is(
+        chatLocalRunLimitSchema,
+        known?.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+      ),
+    ).toBe(true);
+    const unknown = await limited(null);
+    expect(
+      unknown?.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+    ).toBeUndefined();
+  });
+
   test("a stream that ends without a terminal event fails as a protocol violation", async () => {
     const chunks = await localChunks([
       { type: "tool.started", toolCall: commandCall },
@@ -434,6 +492,56 @@ describe("local harness chunks", () => {
       type: EventType.RUN_ERROR,
       code: "harness.protocol_violation",
     });
+  });
+});
+
+describe("approval messages", () => {
+  const request = (
+    overrides: Partial<HarnessApprovalRequest>,
+  ): HarnessApprovalRequest => ({
+    requestId: "request-1",
+    kind: "command",
+    toolCall: { id: "call-1", name: "command_execution", input: {} },
+    reason: "Lists the folder",
+    options: [],
+    ...overrides,
+  });
+
+  test("a command approval names the command, not the harness's summary", () => {
+    expect(
+      approvalMessage(
+        request({
+          toolCall: {
+            id: "call-1",
+            name: "command_execution",
+            input: { command: "rm -rf build" },
+          },
+        }),
+      ),
+    ).toBe("rm -rf build");
+  });
+
+  test("other approvals and a command without its text keep the reason", () => {
+    expect(approvalMessage(request({ kind: "file_change" }))).toBe(
+      "Lists the folder",
+    );
+    expect(
+      approvalMessage(
+        request({
+          toolCall: {
+            id: "call-1",
+            name: "command_execution",
+            input: { command: "  " },
+          },
+        }),
+      ),
+    ).toBe("Lists the folder");
+  });
+
+  test("an approval without a reason names its tool", () => {
+    expect(approvalMessage(request({ kind: "tool", reason: " " }))).toBe(
+      "Approval required to run command_execution",
+    );
   });
 });
 

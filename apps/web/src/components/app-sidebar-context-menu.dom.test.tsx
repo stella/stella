@@ -9,8 +9,9 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 
@@ -127,6 +128,7 @@ test("sidebar context menus delete only the row that was right-clicked", async (
               onDeleted={() => undefined}
               onExpandedChange={() => undefined}
               onTogglePin={() => undefined}
+              runStatus={undefined}
               userId="user_sidebar"
               workspace={{
                 client: null,

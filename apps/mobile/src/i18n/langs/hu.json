@@ -189,8 +189,11 @@
       "notSaved": "Még nincs mentve",
       "done": "Kész",
       "openFailed": "Ez a dokumentum most nem szerkeszthető",
+      "resumed": "Ennek a dokumentumnak van befejezetlen szerkesztése, ezért onnan folytatódik. Amit az imént beírt, nem maradt meg.",
+      "newerVersion": "Időközben a dokumentum egy újabb verzióját mentették, ezért a szerkesztés abból folytatódik. Amit az imént beírt, nem maradt meg.",
       "takenOver": "Valaki más szerkeszti most ezt a dokumentumot. A legutóbbi mentés óta végzett módosításai nem maradtak meg.",
       "finishFailed": "A módosításai mentve vannak, de még nem lett belőlük új verzió. Koppintson újra a Kész gombra, vagy lépjen ki: a következő szerkesztés innen folytatódik.",
+      "notStored": "A legutóbbi módosításokat nem sikerült menteni. Maradjon, és próbálja újra, vagy lépjen ki nélkülük.",
       "stay": "Maradok",
       "leave": "Kilépés"
     }
@@ -222,7 +225,10 @@
     "signOut": "Kijelentkezés",
     "deleteAccount": "Fiók törlése",
     "deleteAccountHint": "Megnyitja a fiókját a weben, ahol mindazzal együtt törölheti, ami az öné.",
-    "signOutFailed": "A kijelentkezést nem sikerült befejezni. Próbálja újra."
+    "signOutFailed": "A kijelentkezést nem sikerült befejezni. Próbálja újra.",
+    "lockScreenTitle": "Zárolási képernyő",
+    "timerDetails": "Időzítő részletei",
+    "timerDetailsHint": "Ha egy időzítő egy másik eszközön változik, az Apple értesítési szolgáltatása viszi a leírását és az ügyét a zárolási képernyőre. Kikapcsolva csak az idő látszik, amíg meg nem nyitja az appot."
   },
   "header": {
     "search": "Keresés"
@@ -262,12 +268,6 @@
     "newTimer": "Új időzítő",
     "description": "Min dolgozik?",
     "matterTitle": "Ügy",
-    "noMatter": "Nincs ügy",
-    "noDescription": "Nincs leírás",
-    "running": "Fut",
-    "paused": "Szüneteltetve",
-    "pause": "Szüneteltetés",
-    "resume": "Folytatás",
     "save": "Mentés",
     "discard": "Elvetés",
     "emptyTitle": "Nincsenek időzítők",
@@ -276,8 +276,7 @@
     "retry": "Újra",
     "unavailable": "Az időrögzítés nincs bekapcsolva a szervezetében.",
     "startFailed": "Az időzítőt nem sikerült elindítani. Próbálja újra.",
-    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra.",
-    "more": "{count, plural, other {még # időmérő}}"
+    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra."
   },
   "scan": {
     "title": "Dokumentum szkennelése",

@@ -1,4 +1,3 @@
-import type { ModelMessage } from "@tanstack/ai";
 import { type Result, TaggedError } from "better-result";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
@@ -7,21 +6,24 @@ import type {
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
+  DesktopRunnerApprovalMode,
 } from "@stll/api-contract/desktop-runner";
 
 import type { StellaSandboxMcpBinding } from "../sandbox";
 import type { HarnessEvent, HarnessSessionId } from "./events";
+import type { HarnessTranscriptMessage } from "./transcript-handoff";
 
 /**
  * Guardrails for a turn on the user's own computer, in the runner protocol's
  * terms. The network is open: a local run's access to stella is bounded by
  * its short-lived, run-scoped MCP token, not by egress rules. Writes stay
  * inside the run's workspace directory, and the harness asks before acting
- * outside that.
+ * outside that. `approvals` sets how much it asks inside those bounds.
  */
 export type HarnessRunPolicy = {
   network: (typeof DESKTOP_RUNNER_NETWORK_POLICIES)[number];
   fs: (typeof DESKTOP_RUNNER_FS_POLICIES)[number];
+  approvals: DesktopRunnerApprovalMode;
 };
 
 export type HarnessCapability =
@@ -43,6 +45,11 @@ export type HarnessTurnInput = {
   threadId: string;
   /** Absolute directory the harness runs in and may write to. */
   workspaceDir: string;
+  /**
+   * Absolute stella-owned directory for package-manager caches, shared by
+   * the computer's runs; writable inside every harness sandbox.
+   */
+  cacheDir: string;
   /** A model id the harness itself reported through `probe`. */
   model: string;
   /** Developer instructions for the harness. */
@@ -55,7 +62,7 @@ export type HarnessTurnInput = {
    * this turn. It is the portable context: a conversation may change engine
    * or harness between turns, so every turn can start from it alone.
    */
-  transcript: readonly ModelMessage[];
+  transcript: readonly HarnessTranscriptMessage[];
   continuation: HarnessContinuationRequest;
 };
 
@@ -104,7 +111,9 @@ export class HarnessStartError extends TaggedError("HarnessStartError")<{
     | "invalid_transcript"
     | "harness_unavailable"
     | "protocol_violation"
-    | "start_rejected";
+    | "start_rejected"
+    /** The run's approval mode needs a sandbox the harness cannot start. */
+    | "sandbox_unavailable";
   message: string;
 }> {}
 
@@ -122,12 +131,22 @@ export type HarnessModel = {
   inputModalities: readonly string[];
 };
 
+/** A plan limit the harness reports as exhausted, and when it resets. */
+export type HarnessUsageLimit = { resetsAt: string };
+
 export type HarnessProbe = {
   version: string;
   auth: HarnessAuth;
   models: readonly HarnessModel[];
   /** What this harness and adapter can do, as the runner reports it. */
   capabilities: readonly HarnessCapability[];
+  /** The approval modes this computer can run the harness in. */
+  approvalModes: readonly DesktopRunnerApprovalMode[];
+  /**
+   * Set when the harness reports its plan limit exhausted with a known
+   * reset; `null` when it reports none or cannot say when it resets.
+   */
+  usageLimit: HarnessUsageLimit | null;
 };
 
 export class HarnessProbeError extends TaggedError("HarnessProbeError")<{

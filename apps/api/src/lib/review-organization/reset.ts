@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { declareFingerprintFields } from "@stll/errors";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -30,6 +31,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import {
@@ -454,7 +456,7 @@ const deleteMatters = async (scope: ResetScope) => {
     LIMITS.workspacesCount,
   );
   return await deleteEach(scope, "matters", rows, async (matter) => {
-    if (matter.status === "archived") {
+    if (matter.status === WORKSPACE_STATUS.archived) {
       const unarchived = await Result.gen(() =>
         unarchiveWorkspaceHandler({
           safeDb: scope.safeDb,
@@ -494,13 +496,19 @@ const deleteMatters = async (scope: ResetScope) => {
 
 const deleteContacts = async (scope: ResetScope) => {
   const { organizationId } = scope.target;
-  const rows = await readBounded(
-    scope.db
-      .select({ id: contacts.id })
-      .from(contacts)
-      .where(eq(contacts.organizationId, organizationId))
-      .orderBy(asc(contacts.id)),
-    LIMITS.contactsCount,
+  // The owner connection reads contacts inside their organization only.
+  const rows = await withOwnerOrganizationScope(
+    scope.db,
+    organizationId,
+    async (tx) =>
+      await readBounded(
+        tx
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(eq(contacts.organizationId, organizationId))
+          .orderBy(asc(contacts.id)),
+        LIMITS.contactsCount,
+      ),
   );
   return await deleteEach(
     scope,

@@ -767,17 +767,17 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 | account_lifecycle | 6 |
-| assistant_chat | 15 |
+| assistant_chat | 16 |
 | auth_plumbing | 38 |
 | billing_ui | 1 |
-| chat_thread_ui | 18 |
+| chat_thread_ui | 19 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 26 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
-| native_device | 2 |
+| native_device | 5 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
 | public_indexing | 9 |
@@ -785,5 +785,5 @@ mechanics, and similar), not gaps in coverage.
 | search_ui | 20 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 21 |
+| upload_mechanics | 22 |
 | url_preview | 2 |

@@ -8,6 +8,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   type BrowserExtensionCapability,
+  CHAT_INPUT_REFUSAL_CODE,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -17,9 +18,14 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
-import { isServerChatToolCall } from "@stll/api-contract/chat";
+import {
+  isHarnessChatToolCall,
+  isServerChatToolCall,
+} from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
@@ -35,6 +41,7 @@ import {
   type ActiveChatSkillContext,
   resolveActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
+import { createTurnAnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import {
   chatMessageFromPersisted,
   getAwaitedApprovalToolNames,
@@ -90,6 +97,7 @@ import {
   parseMessage,
   requireUserMessageContent,
   resolveBrowserExtensionCapability,
+  toolCallOwnershipOf,
   validateMessage,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
@@ -141,6 +149,11 @@ import {
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
 import { sourceScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-source-scopes";
+import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
+import {
+  resolveChatLocalRun,
+  type ResolveChatLocalRunOptions,
+} from "@/api/handlers/chat/local-run-plan";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import { loadClientMessages } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
@@ -164,7 +177,11 @@ import {
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
 import { enforceLoadedSkillHistoryBindings } from "@/api/handlers/chat/skill-history-binding";
-import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
+import {
+  hydrateMessages,
+  localRunAttachmentsOf,
+  streamChat,
+} from "@/api/handlers/chat/stream-chat";
 import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
 import {
@@ -257,6 +274,7 @@ import {
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -285,11 +303,17 @@ import {
   resolveChatRefInputState,
 } from "@/api/lib/chat/ref-token";
 import {
+  chatRunTargetOf,
+  sameChatRunTarget,
+  storedChatRunTarget,
+} from "@/api/lib/chat/run-target";
+import {
   type ChatThreadNamesRead,
   readChatThreadNames,
 } from "@/api/lib/chat/thread-names";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
+import type { LocalRunAttachment } from "@/api/lib/desktop-runner/control";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
@@ -402,7 +426,7 @@ const usableWorkspaceIds = (
 ): AccessibleWorkspace["id"][] => {
   const ids: AccessibleWorkspace["id"][] = [];
   for (const workspace of workspaces) {
-    if (workspace.status !== "deleting") {
+    if (workspaceIsVisible(workspace.status)) {
       ids.push(workspace.id);
     }
   }
@@ -1297,6 +1321,60 @@ const createTurnVisualOrigin = ({
         : [],
   });
 
+/**
+ * Store the target a local turn runs on as the thread's own, so what reads the
+ * thread later (follow-up suggestions, a reload) treats its transcript as
+ * local even when the Run on menu's own save did not land.
+ */
+const keepThreadRunTarget = async ({
+  organizationId,
+  recordAuditEvent,
+  routedLocally,
+  runTarget,
+  safeDb,
+  thread,
+  userId,
+  workspaceId,
+}: {
+  organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
+  /** Whether the turn was routed to a computer; a cloud turn keeps it as is. */
+  routedLocally: boolean;
+  runTarget: ChatRunTarget | undefined;
+  safeDb: SafeDb;
+  thread: ChatThreadState;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+}) => {
+  if (!routedLocally || runTarget === undefined) {
+    return Result.ok();
+  }
+  const runsOn = storedChatRunTarget(runTarget);
+  const stored = thread.data.chatLocalRunTarget;
+  if (sameChatRunTarget(chatRunTargetOf(stored), runTarget)) {
+    return Result.ok();
+  }
+  return await safeDb(async (tx) => {
+    await tx
+      .update(chatThreads)
+      .set({ chatLocalRunTarget: runsOn })
+      .where(
+        and(
+          eq(chatThreads.id, thread.data.id),
+          eq(chatThreads.organizationId, organizationId),
+          eq(chatThreads.userId, userId),
+        ),
+      );
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+      resourceId: thread.data.id,
+      workspaceId,
+      changes: { chatLocalRunTarget: { old: stored, new: runsOn } },
+    });
+  });
+};
+
 type AcceptIncomingTurnOptions = {
   accessibleSet: ReadonlySet<string>;
   accessibleWorkspaceIds: SafeId<"workspace">[];
@@ -1729,7 +1807,7 @@ type PrepareValidatedIncomingMessageOptions = {
     memberRole: ChatToolsInput["memberRole"];
     pinServerValidatedWorkspaceId: ChatToolsInput["pinServerValidatedWorkspaceId"];
     requestedContextMatterIds: SafeId<"workspace">[];
-    workspaceStatusById: NonNullable<ChatToolsInput["workspaceStatusById"]>;
+    workspaceStatusById: ChatToolsInput["workspaceStatusById"];
   };
   lifecycle: ChatSendLifecycle;
   persistence: {
@@ -1843,7 +1921,7 @@ const prepareValidatedIncomingMessage = async ({
     // tool schema without starting connector discovery. Normal streaming
     // still reuses a validation-triggered load through the memoized loader.
     const externalToolsForValidation =
-      body.runMode === CHAT_RUN_MODE.agent
+      turnRunModeOf(body) === CHAT_RUN_MODE.agent
         ? undefined
         : await resolveExternalToolsForValidation(
             body.message,
@@ -1926,6 +2004,7 @@ const prepareValidatedIncomingMessage = async ({
       resume,
       safeDb,
       threadId: body.threadId,
+      toolCallOwnership: toolCallOwnershipOf(body.runTarget),
       tools: validationTools,
       userId,
     });
@@ -2067,7 +2146,7 @@ const prepareValidatedIncomingMessage = async ({
       selectedChatModel !== undefined &&
       selectedChatModel !== turnLane.forcedModelSelection;
     const agentModeNeedsPool =
-      body.runMode === "agent" && turnLane.lane !== "pool";
+      turnRunModeOf(body) === CHAT_RUN_MODE.agent && turnLane.lane !== "pool";
     if (explicitSelectionNeedsPool || agentModeNeedsPool) {
       const poolCheck = yield* Result.await(
         Result.tryPromise({
@@ -2240,6 +2319,11 @@ export type SendMessageDependencies = {
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
   /**
+   * The gateway a turn bound for the member's computer runs through. Defaults
+   * to this process's own.
+   */
+  localRunRuntime?: ResolveChatLocalRunOptions["runtime"];
+  /**
    * Rebuilds live authority when a delayed registry tool runs. Defaults to
    * fresh credential-boundary membership, matter, and database scopes.
    */
@@ -2296,6 +2380,17 @@ const settleInternalPreflight = async <T, E>(
 const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
   dependencies.resolveCurrentExecutionContext ??
   resolveCredentialMemberExecutionContext;
+
+/** A turn on the computer gets its files, unless a raw copy would defeat anonymization. */
+const turnCopiesFiles = (
+  localRun: LocalChatRun | undefined,
+  sendMode: ChatSendMode,
+) => localRun !== undefined && sendMode !== CHAT_SEND_MODE.anonymized;
+
+const localRunWithAttachments = (
+  localRun: LocalChatRun | undefined,
+  attachments: readonly LocalRunAttachment[],
+): LocalChatRun | undefined => localRun?.withAttachments(attachments);
 
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
@@ -2416,6 +2511,7 @@ export const createSendMessage = (
         ]),
       );
       const scope = yield* resolveChatScope({
+        admitted: "active",
         getWorkspaceAccess,
         workspaceId: body.workspaceId,
       });
@@ -2705,6 +2801,41 @@ export const createSendMessage = (
           uploadedMessage,
           webSearchProviders,
         } = preparedIncomingMessage;
+
+        // A turn bound for a computer is routed before it is admitted or
+        // stored: a computer that cannot take it refuses the send.
+        const localRun = yield* Result.await(
+          resolveChatLocalRun({
+            runTarget: body.runTarget,
+            agentSandboxRequested: body.runMode === CHAT_RUN_MODE.agent,
+            resumesPausedRun: resume !== undefined,
+            featureAccessSnapshot,
+            userId: user.id,
+            organizationId: session.activeOrganizationId,
+            chatThreadId: body.threadId,
+            workspaceIds: resolveToolWorkspaceIds({
+              pinnedIds: effectiveContextMatterIds,
+              accessibleWorkspaceIds,
+            }),
+            ...(dependencies.localRunRuntime === undefined
+              ? {}
+              : { runtime: dependencies.localRunRuntime }),
+          }),
+        );
+        yield* Result.await(
+          keepThreadRunTarget({
+            organizationId: session.activeOrganizationId,
+            recordAuditEvent,
+            // A resumed run keeps the policy it started with, so its target
+            // was stored then; storing this request's would misstate it.
+            routedLocally: localRun !== undefined && resume === undefined,
+            runTarget: body.runTarget,
+            safeDb,
+            thread,
+            userId: user.id,
+            workspaceId,
+          }),
+        );
 
         const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({
@@ -3053,6 +3184,8 @@ export const createSendMessage = (
         };
         const chatContextResult = await prepareChatContext({
           caseLawDb: dependencies.caseLawDb,
+          copiesFilesToComputer: turnCopiesFiles(localRun, body.sendMode),
+          recordAuditEvent,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
           activeDraft: body.activeDraft,
@@ -3121,7 +3254,7 @@ export const createSendMessage = (
         // decides which approval-gated calls run without a prompt, and agent
         // runs keep every approval gate.
         const toolSourcesResult = shouldLoadExternalMcpToolsForStreaming(
-          body.runMode,
+          turnRunModeOf(body),
         )
           ? await loadStreamingToolSources({
               chatThreadId: body.threadId,
@@ -3358,6 +3491,8 @@ export const createSendMessage = (
                     allowPartialInput: CUT_SHORT_OUTCOME[outcome.type],
                     allowDeferredServerInput: outcome.type === "awaiting-user",
                     message: responseMessage,
+                    // A turn on a computer carries only what its harness ran.
+                    ownership: localRun === undefined ? "cloud" : "harness",
                     tools: streamingTools,
                   });
                   if (Result.isError(validatedToolParts)) {
@@ -3380,7 +3515,7 @@ export const createSendMessage = (
                     isServerTool,
                     messages: [canonicalResponseMessage],
                     opaqueReadWorkspaceIds:
-                      body.runMode === CHAT_RUN_MODE.agent
+                      turnRunModeOf(body) === CHAT_RUN_MODE.agent
                         ? toolWorkspaceIds
                         : [],
                     refRegistry,
@@ -3467,12 +3602,19 @@ export const createSendMessage = (
                   reasoningEffort: chatReasoningEffort,
                   promptCacheKey: chatContext.promptCacheKey,
                   promptCachingEnabled,
-                  runMode: body.runMode,
+                  runMode: turnRunModeOf(body),
                   sandboxRun,
+                  localRun: localRunWithAttachments(
+                    localRun,
+                    chatContext.localRunAttachments,
+                  ),
                   usageLane: turnLane.lane,
                   decisionPassageStamper: createTurnDecisionPassageStamper({
                     caseLawDb: dependencies.caseLawDb,
                     known: chatContext.decisionPassageNumbers,
+                  }),
+                  answerQuoteChecker: createTurnAnswerQuoteChecker({
+                    caseLawDb: dependencies.caseLawDb,
                   }),
                   resolveAssistantTextRefs:
                     refRegistry.resolveAssistantTextRefs,
@@ -3673,8 +3815,21 @@ export const shouldLoadExternalMcpToolsForStreaming = (
   runMode: ChatSendRequest["runMode"],
 ): boolean => runMode !== CHAT_RUN_MODE.agent;
 
+/**
+ * How the turn executes. A turn bound for the member's computer is harness
+ * work like an agent-sandbox turn: it reaches the workspace only through its
+ * MCP token, never falls back to a cloud model and is refused in anonymized
+ * mode, so it takes the agent mode for every decision but where it runs.
+ */
+const turnRunModeOf = (
+  body: Pick<ChatSendRequest, "runMode" | "runTarget">,
+): ChatSendRequest["runMode"] =>
+  body.runTarget?.kind === "local" ? CHAT_RUN_MODE.agent : body.runMode;
+
 type PrepareChatContextProps = {
   caseLawDb?: SendMessageDependencies["caseLawDb"];
+  copiesFilesToComputer: boolean;
+  recordAuditEvent: AuditRecorder;
   featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft: IncomingActiveDraft | undefined;
@@ -3706,6 +3861,8 @@ type PrepareChatContextProps = {
 type PrepareChatContextResult = Result<
   {
     hydratedMessages: ChatMessage[];
+    /** The files a turn on the member's computer copies into its folder. */
+    localRunAttachments: readonly LocalRunAttachment[];
     promptCacheKey: string;
     /**
      * Server-built scaffold. Safe to send to the LLM verbatim.
@@ -3732,8 +3889,51 @@ type PrepareChatContextResult = Result<
   HandlerError<403 | 404 | 422 | 500> | SafeDbError
 >;
 
+/**
+ * The files this turn copies to the member's computer, each recorded as their
+ * download. The run's links are signed later, when its command is sent.
+ */
+const auditedLocalRunAttachments = async ({
+  messages,
+  recordAuditEvent,
+  safeDb,
+  userId,
+  workspaceId,
+}: {
+  messages: ChatMessage[];
+  recordAuditEvent: AuditRecorder;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+}) =>
+  await Result.gen(async function* () {
+    const attachments = yield* Result.await(
+      localRunAttachmentsOf({ messages, safeDb, userId }),
+    );
+    if (attachments.length > 0) {
+      yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await recordAuditEvent(
+              tx,
+              attachments.map(({ fileId, fileName }) => ({
+                action: CONTENT_DELIVERY_AUDIT_ACTION.attachment,
+                resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
+                resourceId: fileId,
+                workspaceId,
+                metadata: { fileName, destination: "local_run" },
+              })),
+            ),
+        ),
+      );
+    }
+    return Result.ok(attachments);
+  });
+
 const prepareChatContext = async ({
   caseLawDb,
+  copiesFilesToComputer,
+  recordAuditEvent,
   featureAccessSnapshot,
   activeDecision,
   activeDraft,
@@ -3802,6 +4002,7 @@ const prepareChatContext = async ({
         workspaceId,
       }),
       hydrateMessages({
+        copiesFilesToComputer,
         messages: messageWindow,
         safeDb,
         sendMode,
@@ -3818,6 +4019,17 @@ const prepareChatContext = async ({
             })
           : error,
       );
+    const localRunAttachments = copiesFilesToComputer
+      ? yield* Result.await(
+          auditedLocalRunAttachments({
+            messages: messageWindow,
+            recordAuditEvent,
+            safeDb,
+            userId,
+            workspaceId,
+          }),
+        )
+      : [];
 
     const messagesWithActiveFileFallback = yield* Result.await(
       attachActiveFileFallbackWhenExtractionIsEmpty({
@@ -3852,6 +4064,7 @@ const prepareChatContext = async ({
       activeSkillContext: systemPrompt.activeSkillContext,
       decisionPassageNumbers: systemPrompt.decisionPassageNumbers,
       hydratedMessages: messagesWithMentionKinds,
+      localRunAttachments,
     });
   });
 
@@ -4069,6 +4282,7 @@ type ActiveFileFallbackForModel =
 
 const activeFileSizeLimitError = () =>
   new HandlerError({
+    code: CHAT_INPUT_REFUSAL_CODE.activeFileTooLarge,
     status: 422,
     message: `Active file exceeds the ${String(CHAT_CONTEXT_FILE_MAX_MEGABYTES)} MB chat context limit`,
   });
@@ -4126,6 +4340,7 @@ const readActiveFileFallbackForModel = async ({
       if (extracted.value === null) {
         return Result.err(
           new HandlerError({
+            code: CHAT_INPUT_REFUSAL_CODE.activeFileNoText,
             status: 422,
             message: "Active file does not contain extractable text",
           }),
@@ -4230,8 +4445,11 @@ const resolveAssistantPartRefs = ({
   unresolvedInputRefs,
   refRegistry,
 }: ResolveAssistantPartRefsProps): ChatMessage["parts"][number] => {
+  // A harness call is stored as its harness reported it: its name only
+  // collides with a registry tool's by chance, so no registry ref rule
+  // applies to it.
   const withDeclaredToolRefs: unknown =
-    part.type === "tool-call"
+    part.type === "tool-call" && !isHarnessChatToolCall(part)
       ? {
           ...part,
           ...("input" in part
@@ -4366,7 +4584,8 @@ const hydrateAssistantMessageRefs = ({
     inputState: ChatRefInputState,
     unresolvedInputRefs: readonly ChatUnresolvedInputRefContext[],
   ): unknown => {
-    if (part.type !== "tool-call") {
+    // Stored as its harness reported it; see `resolveAssistantPartRefs`.
+    if (part.type !== "tool-call" || isHarnessChatToolCall(part)) {
       return part;
     }
     const rawInput: unknown = "input" in part ? part.input : undefined;

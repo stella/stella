@@ -8,6 +8,7 @@ import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract/mcp";
 import type { ORGANIZATION_CREATE_SCOPE } from "@stll/api-contract/organization-create";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import type { FailureGrade } from "@stll/errors";
 import type { PermissionInput } from "@stll/permissions";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -38,7 +39,7 @@ import {
   authenticateSession,
   authorizeWorkspace,
 } from "@/api/lib/auth";
-import type { WorkspaceStatusAccess } from "@/api/lib/auth";
+import type { WorkspaceStatusAccess } from "@/api/lib/auth/accessible-workspace";
 import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
 import type { AccountAccess } from "@/api/lib/auth/account-access";
 import { hasAccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
@@ -99,6 +100,7 @@ import {
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
+  answeredFailureSeverity,
   legacyChannelOf,
   observeShadow,
   SHADOW_SINKS,
@@ -2732,18 +2734,19 @@ const logAndCaptureSafeError = ({
   }
   const reqCtx = getRequestContext();
   const evidence = readEvidence(error);
-  const severity =
-    statusCode >= 500 &&
-    !(
-      HandlerError.is(error) &&
-      error.code === ACTION_ADMISSION_CODES.featureDisabled
-    )
-      ? "ERROR"
-      : "WARN";
+  const featureDisabled =
+    HandlerError.is(error) &&
+    error.code === ACTION_ADMISSION_CODES.featureDisabled;
+  const severityFor = (grade: FailureGrade | undefined) =>
+    featureDisabled ? "WARN" : answeredFailureSeverity(statusCode, grade);
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.handler,
-    channel: legacyChannelOf({ severity, capture: telemetry === "capture" }),
+    channel: ({ grade }) =>
+      legacyChannelOf({
+        severity: severityFor(grade),
+        capture: telemetry === "capture",
+      }),
     request,
     route,
     requestState: { answeredStatus: statusCode },
@@ -2795,12 +2798,11 @@ const logAndCaptureSafeError = ({
     attributes["enduser.organization_id"] = reqCtx.organizationId;
   }
 
-  // The owner's grade rides along in shadow; it decides nothing here yet.
   Object.assign(attributes, shadowFields(grading));
 
   // Operator feature refusals retain 503 on the wire while remaining an
-  // expected warning. Other server failures keep their error severity.
-  if (severity === "ERROR") {
+  // expected warning. Other server failures take their grade's severity.
+  if (severityFor(grading?.grade) === "ERROR") {
     logger.error("request.failed", attributes);
   } else {
     logger.warn("request.failed", attributes);

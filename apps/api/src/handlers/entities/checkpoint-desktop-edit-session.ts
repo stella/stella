@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -176,7 +177,7 @@ export const checkpointDesktopEditSessionHandler = async ({
       .where(eq(workspaces.id, authorizedSession.value.workspaceId))
       .limit(1)
       .for("update");
-    if (workspaceRows.at(0)?.status !== "active") {
+    if (!workspaceAcceptsWrites(workspaceRows.at(0)?.status)) {
       return status(409, { message: "Workspace is not active" });
     }
 

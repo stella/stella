@@ -1,6 +1,7 @@
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 
 import type { ChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import type {
@@ -125,6 +126,8 @@ export type ChatThreadOptionsContext = {
     (() => DocxEditRepresentation | undefined) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
+  /** Where the next turn runs; absent on surfaces that only run in the cloud. */
+  getRunTarget?: (() => ChatRunTarget) | undefined;
   /**
    * Present on a surface that mounts a `suggest_changes` review-queue
    * bridge (the file overlay). Its presence, not its value, keys the
@@ -187,6 +190,14 @@ type AnswerRevisionQueryKey = {
 
 export const chatKeys = {
   all: ["chat"],
+  /** The reader's own chats that are working or waiting on them, all matters. */
+  activeRuns: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "runs",
+    "active",
+  ],
   fileThread: (activeOrganizationId: string, key: FileChatThreadKey) => [
     ...chatKeys.all,
     activeOrganizationId,
@@ -240,6 +251,11 @@ export const chatKeys = {
     activeOrganizationId,
     "modelOptions",
     MODEL_OPTIONS_RESPONSE_VERSION,
+  ],
+  localRunners: (activeOrganizationId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    "localRunners",
   ],
   threadTitle: (activeOrganizationId: string, key: ChatThreadTitleKey) => [
     ...chatKeys.all,

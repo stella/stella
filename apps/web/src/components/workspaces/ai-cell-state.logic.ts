@@ -50,6 +50,7 @@ export const propertyAiCellState = (
     case "money":
     case "person":
     case "clip":
+    case "record":
       return { type: "done" };
     default:
       content satisfies never;

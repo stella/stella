@@ -189,8 +189,11 @@
       "notSaved": "Aún sin guardar",
       "done": "Listo",
       "openFailed": "Ahora no se puede editar este documento",
+      "resumed": "Tienes una edición sin terminar de este documento, así que continúa desde ahí. Lo que acabas de escribir no se ha guardado.",
+      "newerVersion": "Mientras tanto se ha guardado una versión más reciente de este documento, así que la edición continúa desde ella. Lo que acabas de escribir no se ha guardado.",
       "takenOver": "Otra persona está editando ahora este documento. Sus cambios desde el último guardado no se conservaron.",
       "finishFailed": "Sus cambios están guardados, pero aún no se han convertido en una nueva versión. Vuelva a tocar Listo o salga: la próxima edición continuará desde ellos.",
+      "notStored": "No se pudieron guardar tus últimos cambios. Quédate para intentarlo de nuevo o sal sin ellos.",
       "stay": "Quedarse",
       "leave": "Salir"
     }
@@ -222,7 +225,10 @@
     "signOut": "Cerrar sesión",
     "deleteAccount": "Eliminar cuenta",
     "deleteAccountHint": "Abre tu cuenta en la web, donde puedes eliminarla junto con todo lo que es tuyo.",
-    "signOutFailed": "No se pudo completar el cierre de sesión. Inténtalo de nuevo."
+    "signOutFailed": "No se pudo completar el cierre de sesión. Inténtalo de nuevo.",
+    "lockScreenTitle": "Pantalla bloqueada",
+    "timerDetails": "Detalles del temporizador",
+    "timerDetailsHint": "Cuando un temporizador cambia en otro dispositivo, el servicio de notificaciones de Apple lleva su descripción y su asunto a la pantalla bloqueada. Desactivado, solo muestra el tiempo hasta que abras la app."
   },
   "header": {
     "search": "Buscar"
@@ -262,12 +268,6 @@
     "newTimer": "Nuevo temporizador",
     "description": "¿En qué está trabajando?",
     "matterTitle": "Asunto",
-    "noMatter": "Sin asunto",
-    "noDescription": "Sin descripción",
-    "running": "En marcha",
-    "paused": "En pausa",
-    "pause": "Pausar",
-    "resume": "Reanudar",
     "save": "Guardar",
     "discard": "Descartar",
     "emptyTitle": "No hay temporizadores",
@@ -276,8 +276,7 @@
     "retry": "Reintentar",
     "unavailable": "El registro de tiempo no está activado en su organización.",
     "startFailed": "No se pudo iniciar el temporizador. Inténtelo de nuevo.",
-    "changeFailed": "No se pudo cambiar el temporizador. Inténtelo de nuevo.",
-    "more": "{count, plural, one {# temporizador más} other {# temporizadores más}}"
+    "changeFailed": "No se pudo cambiar el temporizador. Inténtelo de nuevo."
   },
   "scan": {
     "title": "Escanear un documento",

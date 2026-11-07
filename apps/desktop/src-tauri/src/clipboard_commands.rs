@@ -582,6 +582,23 @@ pub fn clipboard_copy_items(
     .map_err(|message| ClipboardCopyError::Hide { message })
 }
 
+/// Copies or cuts a selection made inside a Clips window (the panel or the
+/// editor). The webview routes every native copy here, so the write carries
+/// the internal marker and never comes back as a new clip.
+#[tauri::command]
+pub fn clipboard_copy_selection(
+  _caller: ClipboardCaller,
+  plain_text: String,
+  html: Option<String>,
+  state: State<'_, ClipboardAppState>,
+) -> Result<(), String> {
+  // Serialize with the watcher, which reads formats under the same lock.
+  let manager = state.lock().map_err(lock_error)?;
+  let written = crate::clipboard::write_clips_selection(plain_text, html);
+  drop(manager);
+  written
+}
+
 #[tauri::command]
 pub fn clipboard_hide(
   _caller: ClipboardCaller,

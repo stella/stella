@@ -73,10 +73,10 @@ import {
   optionalOrganizationSettingsOptions,
   organizationSettingsOptions,
 } from "@/queries/organization-settings";
-import { auditLogOptions } from "@/routes/_protected.admin/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
+import { auditLogOptions } from "@/routes/_protected.settings/organization/-queries/audit-logs";
 import { timeReportOptions } from "@/routes/_protected.time_.report/-components/report-query";
 
 // API reads that answer for the signed-in user are cached under a key that
@@ -260,7 +260,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "audit-logs/list.ts": {
     kind: "keyed",
     calls: ['api["audit-logs"].get'],
-    files: ["routes/_protected.admin/-queries/audit-logs.ts"],
+    files: ["routes/_protected.settings/organization/-queries/audit-logs.ts"],
     keys: () => [
       auditLogOptions({
         viewer: { userId: USER, organizationId: ORG },
@@ -375,6 +375,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     opaqueKeys: {
       "chatKeys.decisionThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
     },
+  },
+  "chat/runs/list.ts": {
+    kind: "keyed",
+    calls: ["api.chat.runs.active.get"],
+    files: ["features/chat/active-runs.ts"],
+    keys: () => [chatKeys.activeRuns(ORG, USER)],
   },
   "chat/threads/list.ts": {
     kind: "keyed",
