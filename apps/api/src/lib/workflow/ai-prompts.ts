@@ -37,7 +37,10 @@ export const WORKFLOW_SYSTEM_PROMPT =
   "language, additions, redlines, or comments. Otherwise answer without " +
   "showing the tag syntax.";
 
-const ACTIVE_DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS = 1500;
+// A guard against a malformed document, not a budget: one paragraph can hold a
+// whole clause, and grading sees only what extraction could read. Matches the
+// per-file limit on extracted text.
+const DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS = 40_000;
 
 export const buildExtractedFileMessage = ({
   content,
@@ -198,10 +201,10 @@ type DocxBlocksMessageProps = {
 };
 
 const truncateBlockText = (text: string): string => {
-  if (text.length <= ACTIVE_DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS) {
+  if (text.length <= DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS) {
     return text;
   }
-  return `${text.slice(0, ACTIVE_DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS - 1)}…`;
+  return `${text.slice(0, DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS - 1)}…`;
 };
 
 export const buildDocxBlocksMessage = ({
