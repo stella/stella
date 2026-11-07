@@ -90,7 +90,12 @@ const stored = (chunks: readonly StreamChunk[]) => {
     .map(({ role, parts }: UIMessage) => ({ role, parts }));
 };
 
-const isContent = (chunk: StreamChunk) =>
+type ContentChunk = Extract<
+  StreamChunk,
+  { type: EventType.TEXT_MESSAGE_CONTENT | EventType.REASONING_MESSAGE_CONTENT }
+>;
+
+const isContent = (chunk: StreamChunk): chunk is ContentChunk =>
   chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
   chunk.type === EventType.REASONING_MESSAGE_CONTENT;
 
@@ -302,12 +307,9 @@ describe("coalescing invariants", () => {
           );
           for (const chunk of sent.filter(isContent)) {
             if (!single.has(JSON.stringify(chunk))) {
-              expect(
-                chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
-                  chunk.type === EventType.REASONING_MESSAGE_CONTENT
-                  ? utf8Length(chunk.delta)
-                  : 0,
-              ).toBeLessThanOrEqual(maxDeltaBytes);
+              expect(utf8Length(chunk.delta)).toBeLessThanOrEqual(
+                maxDeltaBytes,
+              );
             }
           }
         },
