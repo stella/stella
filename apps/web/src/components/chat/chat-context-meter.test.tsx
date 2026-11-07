@@ -43,7 +43,7 @@ describe("the composer's context meter", () => {
   test("shows stella's estimate for a thread on stella's own models", () => {
     const html = render(ESTIMATE);
     expect(html).toContain(`aria-label="${label(25)}"`);
-    expect(html).not.toContain('data-source="reported"');
+    expect(html).toContain('data-source="estimate"');
   });
 
   test("shows what the harness reported for a thread on the member's computer, against its window", () => {

@@ -125,7 +125,7 @@ const assistant = (
 });
 
 /** The model the fake answers with, and the context window it reports. */
-export const FAKE_CLAUDE_MODEL = "claude-sonnet-4-5-20250929";
+const FAKE_CLAUDE_MODEL = "claude-sonnet-4-5-20250929";
 export const FAKE_CLAUDE_CONTEXT_WINDOW = 200_000;
 
 /** What one request of the fake read and wrote. */

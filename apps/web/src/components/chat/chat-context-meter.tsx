@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useTranslations } from "use-intl";
 
 import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
@@ -121,10 +123,46 @@ export const ChatContextMeter = (props: ChatContextMeterProps) => {
     100,
     Math.round((usage.estimatedTokens / usage.triggerTokens) * 100),
   );
-  const tone = contextTone(percent);
-
   const parts = buildContextParts({ t, format, usage });
 
+  return (
+    <ContextPopover
+      percent={percent}
+      source="estimate"
+      tokens={t("tokens", {
+        used: compact(usage.estimatedTokens),
+        total: compact(usage.triggerTokens),
+      })}
+    >
+      <ContextBar parts={parts} usage={usage} />
+      <ContextLegend compact={compact} parts={parts} />
+      <div className="text-muted-foreground flex flex-col gap-1 text-xs">
+        <p>{t("autoCompact")}</p>
+        <p>{t("cache")}</p>
+      </div>
+    </ContextPopover>
+  );
+};
+
+/**
+ * The meter's trigger and sheet: the ring in its tone, then how full the
+ * context is and its tokens, then what each meter adds below.
+ */
+const ContextPopover = ({
+  source,
+  percent,
+  tokens,
+  children,
+}: {
+  /** Whose numbers these are: stella's estimate or the harness's report. */
+  source: "estimate" | "reported";
+  percent: number;
+  tokens: string;
+  children: ReactNode;
+}) => {
+  const t = useTranslations("chat.contextMeter");
+  const format = useFormatter();
+  const tone = contextTone(percent);
   return (
     <Popover>
       <PopoverTrigger
@@ -134,6 +172,7 @@ export const ChatContextMeter = (props: ChatContextMeterProps) => {
               percent: format.number(percent),
             })}
             className={cn(TONE_TEXT_CLASS[tone])}
+            data-source={source}
             size="icon-xs"
             variant="ghost"
           />
@@ -153,18 +192,10 @@ export const ChatContextMeter = (props: ChatContextMeterProps) => {
               {t("full", { percent: format.number(percent) })}
             </span>
             <span className="text-muted-foreground text-xs tabular-nums">
-              {t("tokens", {
-                used: compact(usage.estimatedTokens),
-                total: compact(usage.triggerTokens),
-              })}
+              {tokens}
             </span>
           </div>
-          <ContextBar parts={parts} usage={usage} />
-          <ContextLegend compact={compact} parts={parts} />
-          <div className="text-muted-foreground flex flex-col gap-1 text-xs">
-            <p>{t("autoCompact")}</p>
-            <p>{t("cache")}</p>
-          </div>
+          {children}
         </div>
       </PopoverPopup>
     </Popover>
@@ -184,51 +215,20 @@ const ReportedContextMeter = ({
   compact: (value: number) => string;
 }) => {
   const t = useTranslations("chat.contextMeter");
-  const format = useFormatter();
-  const percent = Math.min(
-    100,
-    Math.round((reported.usedTokens / reported.windowTokens) * 100),
-  );
-  const tone = contextTone(percent);
   return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <Button
-            aria-label={t("triggerLabel", {
-              percent: format.number(percent),
-            })}
-            className={cn(TONE_TEXT_CLASS[tone])}
-            data-source="reported"
-            size="icon-xs"
-            variant="ghost"
-          />
-        }
-      >
-        <ContextRing percent={percent} />
-      </PopoverTrigger>
-      <PopoverPopup
-        align="end"
-        className="w-[min(24rem,calc(100vw-2rem))]"
-        side="top"
-      >
-        <div className="flex flex-col gap-3">
-          <PopoverTitle className="text-sm">{t("title")}</PopoverTitle>
-          <div className="flex items-baseline justify-between gap-2">
-            <span className={cn("text-sm font-medium", TONE_TEXT_CLASS[tone])}>
-              {t("full", { percent: format.number(percent) })}
-            </span>
-            <span className="text-muted-foreground text-xs tabular-nums">
-              {t("reportedTokens", {
-                used: compact(reported.usedTokens),
-                total: compact(reported.windowTokens),
-              })}
-            </span>
-          </div>
-          <p className="text-muted-foreground text-xs">{t("reported")}</p>
-        </div>
-      </PopoverPopup>
-    </Popover>
+    <ContextPopover
+      source="reported"
+      percent={Math.min(
+        100,
+        Math.round((reported.usedTokens / reported.windowTokens) * 100),
+      )}
+      tokens={t("reportedTokens", {
+        used: compact(reported.usedTokens),
+        total: compact(reported.windowTokens),
+      })}
+    >
+      <p className="text-muted-foreground text-xs">{t("reported")}</p>
+    </ContextPopover>
   );
 };
 
