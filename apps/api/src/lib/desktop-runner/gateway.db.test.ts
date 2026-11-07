@@ -3,6 +3,7 @@ import {
   type ModelMessage,
   RUN_CANCEL_REASON,
   type RunAgentResumeItem,
+  type StreamChunk,
   type UIMessage,
 } from "@tanstack/ai";
 import { ChatClient } from "@tanstack/ai-client";
@@ -12,6 +13,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  createChunkCoalescer,
   HARNESS_QUESTION_TOOL,
   type HarnessEvent,
   harnessEventsToChunks,
@@ -2234,11 +2236,11 @@ describe("chat turns on a computer", () => {
   });
 
   /** The chunks the desktop's own mapper makes of a harness turn. */
-  const harnessChunks = async (runId: string, events: HarnessEvent[]) => {
+  const harnessStreamChunks = async (runId: string, events: HarnessEvent[]) => {
     const source = (async function* () {
       yield* events;
     })();
-    const chunks: unknown[] = [];
+    const chunks: StreamChunk[] = [];
     let generated = 0;
     for await (const chunk of harnessEventsToChunks(source, {
       harness: "codex",
@@ -2255,6 +2257,10 @@ describe("chat turns on a computer", () => {
     }
     return chunks;
   };
+  const harnessChunks = async (
+    runId: string,
+    events: HarnessEvent[],
+  ): Promise<unknown[]> => await harnessStreamChunks(runId, events);
 
   /** The fake desktop's side of one run: every message takes the next position. */
   const desktopRun = (desktop: FakeDesktop, runId: string, from = 0) => {
@@ -3731,6 +3737,110 @@ describe("chat turns on a computer", () => {
         part.type === "tool-call" ? [part.state] : [],
       ),
     ).toEqual(["complete", "complete"]);
+  });
+
+  test("an answer the desktop streamed as merged deltas is stored, reloaded and shown as the harness wrote it", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const responseMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    const served = serveTurn(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: Bun.randomUUIDv7(),
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "Summarise the lease" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+      responseMessageId,
+    );
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    // Multi-byte text, so a merge that splits or drops bytes shows.
+    const deltas = Array.from(
+      { length: 120 },
+      (_, index) => `nájemce ${String(index)} `,
+    );
+    const answer = deltas.join("");
+    const sent = await harnessStreamChunks(start.runId, [
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("codex-session-c1"),
+        continuation: { type: "fresh" },
+      },
+      ...deltas.map((delta): HarnessEvent => ({
+        type: "text.delta",
+        messageId: "msg_c1",
+        delta,
+      })),
+      { type: "text.completed", messageId: "msg_c1", text: answer },
+      { type: "turn.completed", usage: null },
+    ]);
+    // The sidecar's coalescing, on a clock this test moves: a delta every
+    // 20 ms, as a harness streams them.
+    const merged: unknown[] = [];
+    const timers: (() => void)[] = [];
+    const coalescer = createChunkCoalescer({
+      emit: (chunk) => {
+        merged.push({ ...chunk });
+      },
+      schedule: (flush, delayMs) => {
+        const due = { left: delayMs, flush, live: true };
+        timers.push(() => {
+          due.left -= 20;
+          if (due.live && due.left <= 0) {
+            due.live = false;
+            due.flush();
+          }
+        });
+        return () => {
+          due.live = false;
+        };
+      },
+    });
+    for (const chunk of sent) {
+      coalescer.push(chunk);
+      for (const tick of [...timers]) {
+        tick();
+      }
+    }
+    coalescer.flush();
+    const contentChunks = (chunks: readonly unknown[]) =>
+      chunks.filter(
+        (chunk) =>
+          isRecord(chunk) && chunk["type"] === EventType.TEXT_MESSAGE_CONTENT,
+      ).length;
+    // The fixture reaches the merge: the desktop sends far fewer messages.
+    expect(contentChunks(sent)).toBe(deltas.length);
+    expect(contentChunks(merged)).toBeGreaterThan(1);
+    expect(contentChunks(merged)).toBeLessThan(deltas.length / 4);
+
+    const run = desktopRun(desktop, start.runId);
+    await run.events(merged);
+    await run.finish("completed", "codex-session-c1");
+    expect(await storedSeqs(start.runId)).toHaveLength(merged.length + 1);
+    const turn = await served;
+    expect(turn.finish.outcome).toMatchObject({ type: "completed" });
+
+    const stored = persistTurn(turn.finish, "harness").unwrap();
+    expect(shownParts(stored.reloaded.parts)).toEqual([
+      { type: "text", content: answer },
+    ]);
+    // The page that streamed the merged chunks shows what a reload shows.
+    const client = new ChatClient({
+      threadId: chatThreadId,
+      connection: {
+        async *connect() {
+          yield* turn.emitted;
+        },
+      },
+    });
+    await client.sendMessage("Summarise the lease");
+    expect(shownParts(client.getMessages().at(-1)?.parts ?? [])).toEqual(
+      shownParts(stored.reloaded.parts),
+    );
   });
 
   test("an answer from another turn of the same thread does not reach the run", async () => {
