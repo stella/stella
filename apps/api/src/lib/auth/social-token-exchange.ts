@@ -109,9 +109,7 @@ export const withTokenExchangeRetry = <Args extends unknown[], Tokens>(
  * Whether this callback's provider stayed unavailable, held in Better Auth's
  * per-request state so the exchange and the callback's after hook share it.
  */
-export const providerUnavailableCallback = defineRequestState<boolean>(
-  () => false,
-);
+const providerUnavailableCallback = defineRequestState<boolean>(() => false);
 
 /**
  * The redirect a callback should answer with instead, when its exchange failed
