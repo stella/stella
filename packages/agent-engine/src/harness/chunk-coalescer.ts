@@ -25,7 +25,7 @@ export const CHUNK_COALESCE_WINDOW_MS = 150;
  * fraction of the runner's 4 MiB frame, so a burst never nears it. A single
  * delta above it passes as it came.
  */
-export const CHUNK_COALESCE_MAX_DELTA_BYTES = 64 * 1024;
+const CHUNK_COALESCE_MAX_DELTA_BYTES = 64 * 1024;
 
 type ContentChunk = Extract<
   StreamChunk,
