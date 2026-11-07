@@ -10,8 +10,8 @@
  * batch decides is also committed here, against the run created for that
  * document when the playbook was started.
  *
- * A document holds at most one active run, so this path only ever writes into a
- * run it owns (`executor = "table"`). A review someone started from the
+ * A document holds at most one active table run, so this path only ever writes
+ * into a run it owns (`executor = "table"`). A review someone started from the
  * inspector is never touched.
  */
 
@@ -92,8 +92,8 @@ export const recordTableRunVerdicts = async ({
   }
 
   return await scopedDb(async (tx): Promise<RecordTableRunVerdictsResult> => {
-    // At most one active run per document, and only a table-executed one is
-    // ours to write into.
+    // At most one active table run per document, and only a table-executed one
+    // is ours to write into.
     const run = await lockActiveTableRun(tx, { workspaceId, entityId });
     if (run === undefined) {
       return { type: "no-run" };
