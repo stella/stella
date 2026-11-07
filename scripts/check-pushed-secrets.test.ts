@@ -189,21 +189,26 @@ const scan = (
   rmSync(log, { force: true });
   rmSync(argsLog, { force: true });
   rmSync(patchLog, { force: true });
-  const result = Bun.spawnSync(["bash", SCRIPT], {
-    cwd,
-    env: {
-      ...process.env,
-      FAKE_GITLEAKS_EXIT: String(scannerExit),
-      GITLEAKS_TEST_BINARY: scannerBinary ?? "",
-      ...(scannerScanned === undefined
-        ? {}
-        : { FAKE_GITLEAKS_SCANNED: scannerScanned }),
-      PATH: searchPath ?? `${pathPrefix}:${bin}:${process.env["PATH"] ?? ""}`,
-      ...(cacheHome === undefined ? {} : { XDG_CACHE_HOME: cacheHome }),
+  const scanPath =
+    searchPath ?? `${pathPrefix}:${bin}:${process.env["PATH"] ?? ""}`;
+  const result = Bun.spawnSync(
+    [Bun.which("bash", { PATH: scanPath }) ?? "bash", SCRIPT],
+    {
+      cwd,
+      env: {
+        ...process.env,
+        FAKE_GITLEAKS_EXIT: String(scannerExit),
+        GITLEAKS_TEST_BINARY: scannerBinary ?? "",
+        ...(scannerScanned === undefined
+          ? {}
+          : { FAKE_GITLEAKS_SCANNED: scannerScanned }),
+        PATH: searchPath ?? `${pathPrefix}:${bin}:${process.env["PATH"] ?? ""}`,
+        ...(cacheHome === undefined ? {} : { XDG_CACHE_HOME: cacheHome }),
+      },
+      stdin: new TextEncoder().encode(stdin),
+      stderr: "pipe",
     },
-    stdin: new TextEncoder().encode(stdin),
-    stderr: "pipe",
-  });
+  );
   return {
     exitCode: result.exitCode,
     patch: existsSync(patchLog) ? readFileSync(patchLog, "utf-8") : "",
@@ -588,20 +593,44 @@ describe("a host without a scanner on PATH", () => {
   publish(dir, { ref: "main", oid: before });
   const changed = commitFile(dir, { file: "kept.txt", text: "two\n" });
   const push = `refs/heads/x ${changed} refs/heads/x ${before}\n`;
-  // Only Git, Bun and the base system tools: no gitleaks anywhere on PATH.
+  // Only the tools the hook runs, each linked by name: no system directory is
+  // on PATH, so a scanner installed anywhere on the host stays out of reach.
   const toolsBin = path.join(root, "no-scanner-bin");
   mkdirSync(toolsBin);
-  symlinkSync(REAL_GIT, path.join(toolsBin, "git"));
+  const tools = [
+    "bash",
+    "git",
+    "dirname",
+    "mktemp",
+    "awk",
+    "sed",
+    "cat",
+    "rm",
+    "tail",
+  ];
+  for (const tool of tools) {
+    const resolved = Bun.which(tool);
+    if (resolved === null) {
+      throw new Error(`test host has no ${tool}`);
+    }
+    symlinkSync(
+      tool === "git" ? REAL_GIT : resolved,
+      path.join(toolsBin, tool),
+    );
+  }
   symlinkSync(process.execPath, path.join(toolsBin, "bun"));
-  const searchPath = `${toolsBin}:/usr/bin:/bin`;
+  const searchPath = toolsBin;
   const platformKey = `${process.platform}-${process.arch}`;
   const pinnedCache = (cacheHome: string) =>
     path.join(cacheHome, "stella", "gitleaks", GITLEAKS_VERSION, platformKey);
 
   test("the test PATH really has no scanner", () => {
-    const probe = Bun.spawnSync(["bash", "-c", "command -v gitleaks"], {
-      env: { PATH: searchPath },
-    });
+    const probe = Bun.spawnSync(
+      [path.join(toolsBin, "bash"), "-c", "command -v gitleaks"],
+      {
+        env: { PATH: searchPath },
+      },
+    );
     expect(probe.exitCode).not.toBe(0);
   });
 
