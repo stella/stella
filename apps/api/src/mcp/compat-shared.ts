@@ -43,6 +43,14 @@ import {
  * read, never in how they answer.
  */
 
+/**
+ * Host metadata for the pair. Claude Code defers every MCP tool behind its
+ * tool search unless a tool asks to load; the pair is where a turn starts and
+ * weighs a small part of the surface, so it loads up front and every other
+ * tool stays deferred.
+ */
+export const COMPAT_PAIR_HOST_META = { "anthropic/alwaysLoad": true } as const;
+
 export type CompatSearchPosition = {
   /**
    * Three states, as in the corpus sub-cursors: a string continues the
