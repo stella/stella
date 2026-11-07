@@ -1,5 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -146,7 +147,7 @@ export const authorizeDocumentWriteAccess = <
   if (workspace === null || workspace.id !== operation.workspaceId) {
     return refuse("workspace-not-found");
   }
-  if (workspace.status !== "active") {
+  if (!workspaceAcceptsWrites(workspace.status)) {
     return refuse("workspace-not-active");
   }
   return Result.ok(new DocumentWriteAccessProof(operation));

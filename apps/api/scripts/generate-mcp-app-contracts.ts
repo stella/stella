@@ -9,6 +9,7 @@ import { jsonSchemaToType } from "../src/lib/json-schema/json-schema-to-type";
 import { toJsonSchema } from "../src/lib/json-schema/valibot-to-json-schema";
 import {
   APP_CITATION_PAGE_SCHEMA,
+  APP_COURT_CATALOG_SCHEMA,
   APP_DECISION_BLOCKS_SCHEMA,
   APP_OPEN_DECISION_SCHEMA,
   APP_PROVISION_HISTORY_SCHEMA,
@@ -64,6 +65,7 @@ const header =
 
 const frontendContracts = {
   APP_CITATION_PAGE_SCHEMA,
+  APP_COURT_CATALOG_SCHEMA,
   APP_PROVISION_HISTORY_SCHEMA,
   APP_DECISION_BLOCKS_SCHEMA,
   APP_OPEN_DECISION_SCHEMA,
@@ -73,6 +75,7 @@ const frontendContracts = {
 };
 const frontendContractTypeNames = {
   APP_CITATION_PAGE_SCHEMA: "CitationPage",
+  APP_COURT_CATALOG_SCHEMA: "CourtCatalog",
   APP_PROVISION_HISTORY_SCHEMA: "ProvisionHistory",
   APP_SEARCH_SCHEMA: "SearchResults",
   APP_RESOLVE_SCHEMA: "ResolveResults",

@@ -1,3 +1,5 @@
+import { STELLA_API_VERSION_PREFIX } from "./api-version";
+
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
 
@@ -362,6 +364,7 @@ export {
   IDEMPOTENCY_KEY_REUSED_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_INPUT_REFUSAL_CODE,
   CHAT_MESSAGE_EDIT_ERROR_CODE,
   CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
@@ -375,6 +378,7 @@ export {
   parseApiValidationIssues,
 } from "./error";
 export type {
+  ChatInputRefusalCode,
   ApiErrorInput,
   ApiErrorObjectValue,
   ApiErrorValue,
@@ -486,6 +490,7 @@ export type {
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
 export {
+  chatRunsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
   newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
@@ -602,8 +607,7 @@ export type {
   ChatMentionResourceLinkTarget,
 } from "./resource-link";
 
-/** Path prefix shared by the REST router and direct-fetch clients. */
-export const STELLA_API_VERSION_PREFIX = "/v1" as const;
+export { STELLA_API_VERSION_PREFIX } from "./api-version";
 export const MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES = 1024 * 1024;
 export const EMAIL_TEXT_ATTACHMENT_CHARSET = {
   big5: "big5",

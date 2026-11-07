@@ -5,7 +5,6 @@ import { Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { REALTIME_EVENT_TYPE } from "@stll/api-contract";
 import {
   NOTIFICATION_ENTITY_TYPE,
   NOTIFICATION_KIND,
@@ -39,7 +38,6 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  firstNotificationsPageRefresh,
   notificationsOptions,
   refetchFirstNotificationsPage,
 } from "@/lib/notification-queries";
@@ -48,7 +46,6 @@ import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/acces
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { toSafeId } from "@/lib/safe-id";
 import { useUnreadFaviconDot } from "@/lib/unread-favicon-dot";
-import { useUserEventsSSE } from "@/lib/user-events-sse";
 
 /**
  * Unread awareness for the signed-in person: mentions, task assignments,
@@ -81,19 +78,6 @@ export const NotificationBell = () => {
   const items = data ? data.pages.flatMap((page) => page.items) : [];
 
   useUnreadFaviconDot(unreadCount > 0);
-
-  useUserEventsSSE(organizationId, ({ type: eventType }) => {
-    // The user channel carries a single event kind today; this bind makes a
-    // second kind a compile error here instead of a silently ignored event.
-    eventType satisfies typeof REALTIME_EVENT_TYPE.NEW_NOTIFICATION;
-    return [
-      firstNotificationsPageRefresh({
-        organizationId,
-        queryClient,
-        userId,
-      }),
-    ];
-  });
 
   useExternalSyncEffect(() => {
     if (listError === null) {

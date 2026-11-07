@@ -280,6 +280,7 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],
         pinnedIds: [],
       }),
+      workspaceStatusById: new Map([[WS, "active" as const]]),
       userId: toSafeId<"user">("user_1"),
       userEmail: "standard@example.test",
       testDependencies: {
@@ -2425,7 +2426,7 @@ describe("registry projection contract", () => {
           if (!isRecord(item)) {
             panic("Invalid citation result");
           }
-          expect(item["url"]).toBe(item["sourceUrl"]);
+          expect(item["sourceUrl"]).toBeUndefined();
           expect(item["url"]).toMatch(/^https:/u);
           expect(item["source_url"]).toBeUndefined();
         }
@@ -2526,16 +2527,12 @@ describe("registry projection contract", () => {
             "appUrl" in value,
             `${toolName}: primary/source links must not expose appUrl`,
           ).toBe(false);
-          if (
-            "url" in value &&
-            typeof value.url === "string" &&
-            "sourceUrl" in value &&
-            typeof value.sourceUrl === "string" &&
-            value.url !== new URL(value.sourceUrl).href
-          ) {
-            expect("source_url" in value && value.source_url).toBe(
-              new URL(value.sourceUrl).href,
+          // The publisher link is a distinct, parsed link or absent.
+          if ("source_url" in value) {
+            expect(value.source_url).toBe(
+              new URL(String(value.source_url)).href,
             );
+            expect("url" in value && value.url).not.toBe(value.source_url);
           }
           for (const child of Object.values(value)) {
             assertCitationLinks(child);

@@ -108,7 +108,7 @@ describe("startLoopbackListener", () => {
     try {
       const result = await listener.waitForCallback(20);
       if (!(result instanceof Error)) {
-        throw new Error("expected a LoopbackTimeoutError");
+        throw new TypeError("expected a LoopbackTimeoutError");
       }
       expect(result.name).toBe("LoopbackTimeoutError");
     } finally {

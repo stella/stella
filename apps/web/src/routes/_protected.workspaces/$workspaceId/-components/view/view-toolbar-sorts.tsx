@@ -28,12 +28,19 @@ export const SortChips = ({ sorts, properties, onUpdate }: SortChipsProps) => {
       }}
       maxSorts={VIEW_SORTS_MAX}
       onUpdate={onUpdate}
-      properties={properties.map((property) => ({
-        id: property.id,
-        name: displayName(property),
-        type: property.content.type,
-        sortKind: PROPERTY_SORT_KINDS[property.content.type],
-      }))}
+      properties={properties.flatMap((property) => {
+        const sortKind = PROPERTY_SORT_KINDS[property.content.type];
+        return sortKind === null
+          ? []
+          : [
+              {
+                id: property.id,
+                name: displayName(property),
+                type: property.content.type,
+                sortKind,
+              },
+            ];
+      })}
       sorts={sorts}
     />
   );

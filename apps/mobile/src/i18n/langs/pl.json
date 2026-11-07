@@ -189,8 +189,11 @@
       "notSaved": "Jeszcze nie zapisano",
       "done": "Gotowe",
       "openFailed": "Tego dokumentu nie można teraz edytować",
+      "resumed": "Masz niedokończoną edycję tego dokumentu, więc jest ona kontynuowana. To, co przed chwilą wpisano, nie zostało zachowane.",
+      "newerVersion": "W międzyczasie zapisano nowszą wersję tego dokumentu, więc edycja jest kontynuowana od niej. To, co przed chwilą wpisano, nie zostało zachowane.",
       "takenOver": "Ktoś inny edytuje teraz ten dokument. Zmiany od ostatniego zapisu nie zostały zachowane.",
       "finishFailed": "Zmiany są zapisane, ale nie powstała z nich jeszcze nowa wersja. Stuknij ponownie Gotowe albo wyjdź: następna edycja będzie je kontynuować.",
+      "notStored": "Nie udało się zapisać ostatnich zmian. Zostań, aby spróbować ponownie, albo wyjdź bez nich.",
       "stay": "Zostań",
       "leave": "Wyjdź"
     }
@@ -222,7 +225,10 @@
     "signOut": "Wyloguj się",
     "deleteAccount": "Usuń konto",
     "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy.",
-    "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie."
+    "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie.",
+    "lockScreenTitle": "Ekran blokady",
+    "timerDetails": "Szczegóły licznika",
+    "timerDetailsHint": "Gdy licznik zmieni się na innym urządzeniu, usługa powiadomień Apple przekazuje jego opis i sprawę na ekran blokady. Po wyłączeniu widać tylko czas, dopóki nie otworzysz aplikacji."
   },
   "header": {
     "search": "Szukaj"
@@ -262,10 +268,6 @@
     "newTimer": "Nowy licznik",
     "description": "Nad czym pracujesz?",
     "matterTitle": "Sprawa",
-    "noMatter": "Bez sprawy",
-    "noDescription": "Bez opisu",
-    "running": "Działa",
-    "paused": "Wstrzymany",
     "pause": "Wstrzymaj",
     "resume": "Wznów",
     "save": "Zapisz",
@@ -276,8 +278,7 @@
     "retry": "Spróbuj ponownie",
     "unavailable": "Rejestrowanie czasu nie jest włączone w Twojej organizacji.",
     "startFailed": "Nie udało się uruchomić licznika. Spróbuj ponownie.",
-    "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie.",
-    "more": "{count, plural, one {i # inny stoper} few {i # inne stopery} other {i # innych stoperów}}"
+    "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie."
   },
   "scan": {
     "title": "Zeskanuj dokument",

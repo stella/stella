@@ -5,6 +5,7 @@ import type { SQL } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -164,7 +165,7 @@ const lockActiveWorkspaceForDerivative = async (
     .where(eq(workspaces.id, workspaceId))
     .limit(1)
     .for("update");
-  return workspaceRows.at(0)?.status === "active";
+  return workspaceAcceptsWrites(workspaceRows.at(0)?.status);
 };
 
 const cleanupUnpublishedDerivative = async ({

@@ -80,6 +80,7 @@ import { usePinnedStore } from "@/lib/pinned-store";
 import { queryView } from "@/lib/query-view.logic";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { useUserEventRefreshes } from "@/lib/user-events-sse";
 import {
   workspaceOptions,
   workspacesNavigationOptions,
@@ -201,6 +202,10 @@ export const ProtectedAppFrame = ({
   const analyticsUser = user;
   const inspectorBroadcastUserId = user.id;
   const inspectorBroadcastOrganizationId = user.activeOrganizationId;
+  useUserEventRefreshes({
+    organizationId: user.activeOrganizationId,
+    userId: user.id,
+  });
   const activeWorkspaceId = useRouteWorkspaceId();
   const workspaceNavigationView = queryView(
     useChromeQuery(

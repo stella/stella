@@ -9,14 +9,16 @@ import {
 import { panic } from "better-result";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
 
-import type {
-  HarnessApprovalRequest,
-  HarnessEvent,
-  HarnessFailure,
-  HarnessQuestionRequest,
-  HarnessToolCall,
-  HarnessUsage,
+import {
+  approvalMessage,
+  type HarnessApprovalRequest,
+  type HarnessEvent,
+  type HarnessFailure,
+  type HarnessQuestionRequest,
+  type HarnessToolCall,
+  type HarnessUsage,
 } from "./events";
 
 /**
@@ -37,7 +39,7 @@ import type {
 export const HARNESS_CONTINUATION_EVENT = "harness.continuation";
 
 /** Tool name for a harness question, matching Codex's native item name. */
-export const HARNESS_QUESTION_TOOL = "request_user_input";
+export const HARNESS_QUESTION_TOOL = CHAT_LOCAL_RUN_QUESTION_TOOL;
 
 export type HarnessChunkContext = {
   harness: AgentHarness;
@@ -54,6 +56,7 @@ const FAILURE_CODE = {
   provider_error: "harness.provider_error",
   harness_exited: "harness.exited",
   protocol_violation: "harness.protocol_violation",
+  sandbox_unavailable: "harness.sandbox_unavailable",
 } as const satisfies Record<HarnessFailure["type"], string>;
 
 const toTokenUsage = (usage: HarnessUsage): TokenUsage => {
@@ -72,6 +75,22 @@ const toTokenUsage = (usage: HarnessUsage): TokenUsage => {
   }
   return result;
 };
+
+/**
+ * How a tool call ended. `cancelled`: its turn ended before it finished; like
+ * the cloud engine's cancelled results, it is an error with that outcome, so
+ * it never reads as complete.
+ */
+type ToolResultStatus = "succeeded" | "failed" | "cancelled";
+
+const TOOL_RESULT_FIELDS = {
+  succeeded: {},
+  failed: { state: "output-error" },
+  cancelled: {
+    state: "output-error",
+    metadata: { tanstack: { toolResultOutcome: "cancelled" } },
+  },
+} as const satisfies Record<ToolResultStatus, object>;
 
 type TextState = { text: string; emitted: number; ended: boolean };
 
@@ -290,7 +309,7 @@ class ChunkMapper {
   private resolveToolCall(
     toolCallId: string,
     content: string,
-    failed: boolean,
+    status: ToolResultStatus,
   ) {
     this.unresolved.delete(toolCallId);
     this.push({
@@ -298,7 +317,7 @@ class ChunkMapper {
       toolCallId,
       messageId: this.context.generateId(),
       content,
-      ...(failed ? { state: "output-error" as const } : {}),
+      ...TOOL_RESULT_FIELDS[status],
     });
   }
 
@@ -312,11 +331,7 @@ class ChunkMapper {
     }
     this.ensureSegment();
     this.openToolCall(toolCall);
-    this.resolveToolCall(
-      toolCall.id,
-      result.content,
-      result.status === "failed",
-    );
+    this.resolveToolCall(toolCall.id, result.content, result.status);
   }
 
   private text(messageId: string, fullText: string) {
@@ -377,12 +392,11 @@ class ChunkMapper {
             {
               id: request.requestId,
               reason: "tool_call",
-              message:
-                request.reason ??
-                `Approval required to run ${request.toolCall.name}`,
+              message: approvalMessage(request),
               toolCallId: request.toolCall.id,
               metadata: {
                 kind: "approval",
+                reason: request.reason,
                 toolName: request.toolCall.name,
                 input: request.toolCall.input,
                 approvalKind: request.kind,
@@ -407,7 +421,7 @@ class ChunkMapper {
           status: "awaiting_reply",
           questions: request.questions,
         }),
-        false,
+        "succeeded",
       );
       return;
     }
@@ -443,7 +457,7 @@ class ChunkMapper {
       this.resolveToolCall(
         toolCallId,
         JSON.stringify({ status: "interrupted" }),
-        false,
+        "cancelled",
       );
     }
     this.closeSegment(chunk);

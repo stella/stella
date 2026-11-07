@@ -66,24 +66,93 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
   }),
   staticRoute("/settings/account/profile"),
-  staticRoute("/admin", {
-    expectation: { kind: "redirectsTo", to: "/admin/general" },
+  staticRoute("/settings/organization", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/general",
+    },
   }),
-  staticRoute("/admin/general"),
-  staticRoute("/admin/tools"),
-  staticRoute("/admin/ai"),
-  staticRoute("/admin/anonymization"),
-  staticRoute("/admin/audit-logs"),
+  staticRoute("/settings/organization/general"),
+  staticRoute("/settings/organization/tools"),
+  staticRoute("/settings/organization/ai"),
+  staticRoute("/settings/organization/anonymization"),
+  staticRoute("/settings/organization/audit-logs"),
+  staticRoute("/settings/organization/catalogue", {
+    expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
+  }),
+  staticRoute("/settings/organization/document-types"),
+  staticRoute("/settings/organization/matter-numbering"),
+  staticRoute("/settings/organization/billing", {
+    expectation: { kind: "settles" },
+  }),
+  staticRoute("/settings/organization/members"),
+  staticRoute("/settings/organization/usage"),
+  staticRoute("/admin", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/general",
+    },
+  }),
+  staticRoute("/admin/general", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/general",
+    },
+  }),
+  staticRoute("/admin/tools", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/tools",
+    },
+  }),
+  staticRoute("/admin/ai", {
+    expectation: { kind: "redirectsTo", to: "/settings/organization/ai" },
+  }),
+  staticRoute("/admin/anonymization", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/anonymization",
+    },
+  }),
+  staticRoute("/admin/audit-logs", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/audit-logs",
+    },
+  }),
   staticRoute("/admin/catalogue", {
     expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
   }),
-  staticRoute("/admin/document-types"),
-  staticRoute("/admin/matter-numbering"),
-  staticRoute("/admin/billing", {
-    expectation: { kind: "settles" },
+  staticRoute("/admin/document-types", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/document-types",
+    },
   }),
-  staticRoute("/admin/members"),
-  staticRoute("/admin/usage"),
+  staticRoute("/admin/matter-numbering", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/matter-numbering",
+    },
+  }),
+  staticRoute("/admin/billing", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/billing",
+    },
+  }),
+  staticRoute("/admin/members", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/members",
+    },
+  }),
+  staticRoute("/admin/usage", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/usage",
+    },
+  }),
   staticRoute("/inbox"),
   staticRoute("/workspaces"),
   {
@@ -152,12 +221,30 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
       `/workspaces/${world.workspace.id}/correspondence/${world.correspondenceId}`,
   },
   staticRoute("/time"),
-  staticRoute("/admin/time-policy"),
-  staticRoute("/admin/vat-rates", {
+  staticRoute("/settings/organization/time-policy"),
+  staticRoute("/settings/organization/vat-rates", {
     expectation: { kind: "settles" },
   }),
-  staticRoute("/admin/number-series", {
+  staticRoute("/settings/organization/number-series", {
     expectation: { kind: "settles" },
+  }),
+  staticRoute("/admin/time-policy", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/time-policy",
+    },
+  }),
+  staticRoute("/admin/vat-rates", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/vat-rates",
+    },
+  }),
+  staticRoute("/admin/number-series", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/number-series",
+    },
   }),
   {
     template: "/workspaces/$workspaceId/invoices/new",

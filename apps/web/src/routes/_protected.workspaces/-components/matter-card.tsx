@@ -6,6 +6,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 import { FileIcon } from "@stll/ui/icons";
 import { IdentityText } from "@stll/ui/identity-text";
@@ -123,7 +124,7 @@ export const MatterCard = ({
         name: workspace.name,
         color: workspace.color,
         client: workspace.client,
-        isArchived: workspace.status === "archived",
+        isArchived: workspace.status === WORKSPACE_STATUS.archived,
       }}
     >
       {({ rename, menuOpen }) => (
@@ -366,11 +367,11 @@ const PreviewPopupContent = ({
       <div className="min-w-0 flex-1">
         {(preview.documentCount > 0 || preview.taskCount > 0) && (
           <div className="mb-2 flex gap-1">
-            <div className="bg-muted flex-1 rounded px-2 py-1 text-center text-xs tabular-nums">
+            <div className="bg-muted flex-1 rounded-sm px-2 py-1 text-center text-xs tabular-nums">
               {t("workspaces.documentsCount", { count: preview.documentCount })}
             </div>
             {preview.taskCount > 0 && (
-              <div className="bg-muted flex-1 rounded px-2 py-1 text-center text-xs tabular-nums">
+              <div className="bg-muted flex-1 rounded-sm px-2 py-1 text-center text-xs tabular-nums">
                 {t("workspaces.tasksCount", { count: preview.taskCount })}
               </div>
             )}

@@ -25,6 +25,7 @@ import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { ProvisionReferenceChip } from "@/features/case-law/components/case-viewer/provision-reference-chip";
@@ -245,19 +246,21 @@ export const ProvisionsCited = ({
 
   return (
     <section className="reader-chrome border-border/60 mb-6 rounded-lg border print:hidden">
-      <button
+      <Button
         aria-expanded={open}
-        className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-start text-xs font-medium"
+        className="group/plain flex w-full"
         onClick={() => setLocalOpen(!open)}
-        type="button"
+        variant="plain"
       >
-        <DirectionalIcon
-          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-          flip={!open}
-          icon={ChevronRightIcon}
-        />
-        {t("caseLaw.viewer.provisionsCited")}
-      </button>
+        <span className="text-foreground-strong-muted group-hover/plain:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium">
+          <DirectionalIcon
+            className={cn("size-3.5 transition-transform", open && "rotate-90")}
+            flip={!open}
+            icon={ChevronRightIcon}
+          />
+          {t("caseLaw.viewer.provisionsCited")}
+        </span>
+      </Button>
       {content}
     </section>
   );
@@ -368,40 +371,47 @@ const WorkReferences = ({
             {t("statutes.publisherWindowInconsistent")}
           </p>
         )}
-        <div className="flex flex-wrap gap-1.5">
-          {group.provisions.map((provision) => {
-            const href =
-              group.jurisdiction === "EU"
-                ? euProvisionSourceUrl(group.workIdentifier, provision)
-                : null;
-            return (
-              <ProvisionReferenceChip
-                target={
-                  href !== null
-                    ? { type: "external", href }
-                    : {
-                        type: "hosted",
-                        document:
-                          group.jurisdiction === "EU"
-                            ? null
-                            : documentFor(provision),
-                      }
-                }
-                key={provision.key}
-                label={formatProvisionLabel(
-                  group.jurisdiction,
-                  provision,
-                  renderPart,
-                )}
-                anchorNesting={statuteAnchorNestingFor(group.jurisdiction)}
-                provision={provision}
-                versionMarker={
-                  exceptions.has(provision.key) ? "exception" : "group"
-                }
-              />
-            );
-          })}
-        </div>
+        {/* The chips are reader peeks; their side-panel action opens the
+            provision through the reader's adapters, which the inspector
+            views around this list do not otherwise provide. */}
+        <WebReaderProvider>
+          <div className="flex flex-wrap gap-1.5">
+            {group.provisions.map((provision) => {
+              const href =
+                group.jurisdiction === "EU"
+                  ? euProvisionSourceUrl(group.workIdentifier, provision)
+                  : null;
+              return (
+                <ProvisionReferenceChip
+                  target={
+                    href !== null
+                      ? { type: "external", href }
+                      : {
+                          type: "hosted",
+                          document:
+                            group.jurisdiction === "EU"
+                              ? null
+                              : documentFor(provision),
+                        }
+                  }
+                  key={provision.key}
+                  label={formatProvisionLabel(
+                    group.jurisdiction,
+                    provision,
+                    renderPart,
+                  )}
+                  anchorNesting={statuteAnchorNestingFor(group.jurisdiction)}
+                  jurisdiction={group.jurisdiction}
+                  provision={provision}
+                  statuteTitle={title}
+                  versionMarker={
+                    exceptions.has(provision.key) ? "exception" : "group"
+                  }
+                />
+              );
+            })}
+          </div>
+        </WebReaderProvider>
       </AccordionPanel>
     </AccordionItem>
   );

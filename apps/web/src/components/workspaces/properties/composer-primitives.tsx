@@ -4,6 +4,7 @@ import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
   AtSignIcon,
+  BanknoteIcon,
   FileTextIcon,
   PlusIcon,
   XIcon,
@@ -32,6 +33,13 @@ const CREATABLE_CONTENT_TYPES = [
 export type CreatableContentType = (typeof CREATABLE_CONTENT_TYPES)[number];
 
 /**
+ * What the single-column composer offers: the shared kinds plus money. Money
+ * stays out of `CREATABLE_CONTENT_TYPES` because the bulk composer shares that
+ * list with case-law question columns, which do not answer in money.
+ */
+export type PropertyComposerContentType = CreatableContentType | "money";
+
+/**
  * One chip: the value it stands for, and how it reads. Parameterised because
  * the same row names matter-property content types and, on the case-law
  * results table, the kind of answer a question column takes — one chip row so
@@ -53,8 +61,25 @@ export const useChipDefinitions = (): readonly ChipDefinition[] => {
   });
 };
 
+export const usePropertyComposerChipDefinitions = (
+  offerMoney: boolean,
+): readonly ChipDefinition<PropertyComposerContentType>[] => {
+  const t = useTranslations();
+  const shared = useChipDefinitions();
+  return offerMoney
+    ? [
+        ...shared,
+        {
+          type: "money",
+          icon: BanknoteIcon,
+          label: t("workspaces.properties.money"),
+        },
+      ]
+    : shared;
+};
+
 export const COMPOSER_CARD_CLASS =
-  "bg-card ring-foreground/6 flex flex-col gap-3 rounded-[10px] border border-[var(--input)] p-3 ring-4 shadow-sm";
+  "bg-card ring-foreground/6 flex flex-col gap-3 rounded-lg border border-[var(--input)] p-3 ring-4 shadow-sm";
 
 export type ManualChipOption = {
   active: boolean;
@@ -74,7 +99,7 @@ type TypeChipsRowProps<TType extends string> = {
 };
 
 const CHIP_BASE_CLASS =
-  "inline-flex shrink-0 items-center gap-1.5 rounded-[6px] border px-2 py-1 text-xs font-medium";
+  "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium";
 const CHIP_ACTIVE_CLASS =
   "bg-foreground text-background border-foreground shadow-xs/5";
 const CHIP_IDLE_CLASS =

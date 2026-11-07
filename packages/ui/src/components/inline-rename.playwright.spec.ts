@@ -264,7 +264,7 @@ for (const { fallback, rtl } of [
       (element) => {
         const row = element.closest("[data-title-container]");
         if (!(row instanceof HTMLElement)) {
-          throw new Error("the fill field is missing its row");
+          throw new TypeError("the fill field is missing its row");
         }
         const rowBox = row.getBoundingClientRect();
         const fieldBox = element.getBoundingClientRect();

@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 /**
  * Seed realistic test data for local development.
  *
@@ -40,7 +40,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { ConditionNode } from "@stll/conditions";
 import { isCountryCode } from "@stll/country-codes";
 import type { CountryCode } from "@stll/country-codes";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { printError } from "@stll/errors";
 import { timeEntryAmount } from "@stll/money";
 import {
@@ -62,6 +62,7 @@ import {
   expenses,
   extractedContent,
   fields,
+  invoiceLines,
   invoices,
   justifications,
   numberSeries,
@@ -103,6 +104,7 @@ import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
 import { createTextPdf } from "@/api/lib/files/text-pdf";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { cents } from "@/api/lib/money";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import {
   brandPersistedOrganizationId,
@@ -271,11 +273,9 @@ export const createMockDocx = async (
   title: string,
   bodyText?: string,
 ): Promise<Buffer> => {
-  const JSZip = (await import("jszip")).default;
-  const zip = new JSZip();
+  const zip = new ZipArchive();
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -286,8 +286,7 @@ export const createMockDocx = async (
       }</Types>`,
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -306,8 +305,7 @@ export const createMockDocx = async (
       `${xmlEscape(line)}</w:t></w:r></w:p>`;
   }
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
@@ -315,17 +313,16 @@ export const createMockDocx = async (
       "</w:document>",
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/_rels/document.xml.rels",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${
         SEED_STYLES_RELATIONSHIP
       }</Relationships>`,
   );
-  writeZipEntry(zip, "word/styles.xml", SEED_STYLES_XML);
+  zip.set("word/styles.xml", SEED_STYLES_XML);
 
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
+  const buf = Buffer.from(await zip.generate({ compression: "store" }));
   return buf;
 };
 
@@ -375,12 +372,10 @@ const supplierAgreementBaseVersionId = (
 const createSupplierAgreementDocx = async (
   disposition: SeedTrackedChangeDisposition,
 ): Promise<Buffer> => {
-  const JSZip = (await import("jszip")).default;
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   const { author, date, initials } = SUPPLIER_AGREEMENT.reviewer;
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -392,8 +387,7 @@ const createSupplierAgreementDocx = async (
       `</Types>`,
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -466,8 +460,7 @@ const createSupplierAgreementDocx = async (
 
   const paragraphs = SUPPLIER_AGREEMENT.paragraphs.map(paragraphXml).join("");
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
@@ -484,16 +477,14 @@ const createSupplierAgreementDocx = async (
         "</w:comment>",
     )
     .join("");
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/comments.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
       `${commentsXml}</w:comments>`,
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/_rels/document.xml.rels",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
@@ -501,9 +492,9 @@ const createSupplierAgreementDocx = async (
         SEED_STYLES_RELATIONSHIP
       }</Relationships>`,
   );
-  writeZipEntry(zip, "word/styles.xml", SEED_STYLES_XML);
+  zip.set("word/styles.xml", SEED_STYLES_XML);
 
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
+  const buf = Buffer.from(await zip.generate({ compression: "store" }));
   return buf;
 };
 
@@ -1063,6 +1054,38 @@ const buildProperties = (
     },
   ];
 };
+
+export const buildAllPropertySeeds = (): PropertySeed[] => [
+  ...seedWorkspaces.flatMap((workspace, index) =>
+    buildProperties(workspace.id, at(WS_LABELS, index)),
+  ),
+  ...MORE_WORKSPACES.flatMap(({ reference }) => {
+    const label = `extra-ws-${reference}`;
+    return buildProperties(seedId(label), label);
+  }),
+];
+
+export const buildPropertySeedDependencies = (seeds: readonly PropertySeed[]) =>
+  seeds
+    .filter(({ tool }) => tool.type === "ai-model")
+    .flatMap((prop) => {
+      const inputs = requireComputedColumnInputs({
+        candidates: seeds.filter(
+          ({ workspaceId }) => workspaceId === prop.workspaceId,
+        ),
+        inputs: [],
+      });
+      if (Result.isError(inputs)) {
+        return panic(`Seeded column ${prop.name} has no input`, inputs.error);
+      }
+      return inputs.value.map(({ dependsOnPropertyId, condition }) => ({
+        id: seedId(`${prop.id}-input-${dependsOnPropertyId}`),
+        workspaceId: prop.workspaceId,
+        propertyId: prop.id,
+        dependsOnPropertyId,
+        condition,
+      }));
+    });
 
 // ─── Entities (per-workspace) ───────────────────────────
 
@@ -2735,6 +2758,28 @@ export async function seed(organizationId?: string, userId?: string) {
     }
   };
 
+  // Billing records keep their matter on purpose (ON DELETE NO ACTION), so a
+  // replay removes them before the matters. An invoice's lines can belong to
+  // another matter, so they go first; deleting an invoice takes the rest.
+  const deleteRetainedBilling = async (
+    workspaceIds: readonly WorkspaceId[],
+  ) => {
+    await withAggregateTransaction(db, async (tx) => {
+      await tx
+        .delete(invoiceLines)
+        .where(inArray(invoiceLines.workspaceId, [...workspaceIds]));
+      await tx
+        .delete(invoices)
+        .where(inArray(invoices.workspaceId, [...workspaceIds]));
+      await tx
+        .delete(timeEntries)
+        .where(inArray(timeEntries.workspaceId, [...workspaceIds]));
+      await tx
+        .delete(expenses)
+        .where(inArray(expenses.workspaceId, [...workspaceIds]));
+    });
+  };
+
   const clearSeedData = async () => {
     const allSeedContactIds = [
       ...orgContacts,
@@ -2776,6 +2821,7 @@ export async function seed(organizationId?: string, userId?: string) {
               sql`${propertyDependencies.workspaceId} IN ${allSeedWorkspaceIds}`,
             ),
       );
+      await deleteRetainedBilling(allSeedWorkspaceIds);
       await db.transaction(async (tx) => {
         await tx
           .delete(workspaces)
@@ -2831,6 +2877,7 @@ export async function seed(organizationId?: string, userId?: string) {
               sql`${propertyDependencies.workspaceId} IN ${clientWorkspaceIds}`,
             ),
       );
+      await deleteRetainedBilling(clientWorkspaceIds);
     }
     await organizationTransaction(
       async (tx) =>
@@ -3086,17 +3133,7 @@ export async function seed(organizationId?: string, userId?: string) {
   );
 
   // 3. Properties
-  const allProperties: PropertySeed[] = [];
-  for (let i = 0; i < seedWorkspaces.length; i++) {
-    allProperties.push(
-      ...buildProperties(at(seedWorkspaces, i).id, at(WS_LABELS, i)),
-    );
-  }
-  for (const mw of MORE_WORKSPACES) {
-    const wsId = seedId(`extra-ws-${mw.reference}`);
-    const label = `extra-ws-${mw.reference}`;
-    allProperties.push(...buildProperties(wsId, label));
-  }
+  const allProperties = buildAllPropertySeeds();
   for (const prop of allProperties) {
     await db.transaction(
       async (tx) =>
@@ -3118,6 +3155,14 @@ export async function seed(organizationId?: string, userId?: string) {
           .onConflictDoNothing(),
     );
   }
+  await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await tx
+        .insert(propertyDependencies)
+        .values(buildPropertySeedDependencies(allProperties))
+        .onConflictDoNothing(),
+  );
   console.log(
     `  Properties: ${allProperties.length} (${allProperties.length / seedWorkspaces.length}/workspace)`,
   );

@@ -63,6 +63,7 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         accessibleWorkspaceIds: [toSafeId<"workspace">(WS_UUID)],
         pinnedIds: [],
       }),
+      workspaceStatusById: new Map([[WS_UUID, "active" as const]]),
       userId: toSafeId<"user">("user_1"),
       userEmail: "standard@example.test",
     }),

@@ -3,7 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/document" });
 

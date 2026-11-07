@@ -10,6 +10,7 @@ import {
 } from "./resource-ref";
 
 export const REALTIME_EVENT_TYPE = {
+  CHAT_RUNS_CHANGED: "chat-runs.changed",
   DESKTOP_EDIT_SESSION_CLOSED: "__desktop_edit_session_closed__",
   FLOW_RUN_UPDATE: "flow-run-update",
   NEW_NOTIFICATION: "new-notification",
@@ -132,7 +133,21 @@ const newNotificationEventSchema = v.object({
   data: v.null(),
 });
 
-const userRealtimeEventSchema = v.variant("type", [newNotificationEventSchema]);
+/**
+ * User-channel event announcing that one of the recipient's chat runs started,
+ * started or stopped waiting on them, or ended. Content-free for the same
+ * reason as the notification event: the client re-reads its active runs
+ * through the ordinary authorized endpoint.
+ */
+const chatRunsChangedEventSchema = v.object({
+  type: v.literal(REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED),
+  data: v.null(),
+});
+
+const userRealtimeEventSchema = v.variant("type", [
+  newNotificationEventSchema,
+  chatRunsChangedEventSchema,
+]);
 
 export type ResourceChange = v.InferOutput<typeof resourceChangeSchema>;
 
@@ -151,6 +166,12 @@ export type UserRealtimeEvent = v.InferOutput<typeof userRealtimeEventSchema>;
 export const newNotificationRealtimeEvent = () =>
   ({
     type: REALTIME_EVENT_TYPE.NEW_NOTIFICATION,
+    data: null,
+  }) as const satisfies UserRealtimeEvent;
+
+export const chatRunsChangedRealtimeEvent = () =>
+  ({
+    type: REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED,
     data: null,
   }) as const satisfies UserRealtimeEvent;
 
