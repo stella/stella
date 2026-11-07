@@ -12,6 +12,7 @@ import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { Fetcher } from "@stll/fetch";
+import { createTestClock } from "@stll/test-kit";
 
 import {
   caseLawDecisions,
@@ -796,6 +797,8 @@ const answeringDecisionModel = (): {
   };
 };
 
+const researchClock = createTestClock();
+
 describe("a source without reuse terms", () => {
   // Most sources state no reuse restrictions, which the corpus stores as a
   // NULL descriptor. The research read once nested that column under the
@@ -841,7 +844,7 @@ describe("a source without reuse terms", () => {
           columnIds: [columnId],
           decisionIds: [decisionId],
           force: false,
-          now: new Date(),
+          now: new Date(researchClock.now()),
         }),
     );
     expect(claim.cells).toEqual([{ columnId, decisionId }]);
