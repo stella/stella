@@ -1,9 +1,7 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { OWNERSHIP } from "../../scripts/ownership.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(30_000);
 
 describe.serial("cell claim write ownership", () => {
   const entry = OWNERSHIP.find(({ id }) => id === "cell-claim-write");
