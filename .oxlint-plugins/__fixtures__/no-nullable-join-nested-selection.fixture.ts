@@ -5,6 +5,8 @@
 // the detector regresses, the directive becomes unused and the fixture lint
 // fails. Each `expect-clean` marks a shape the rule must NOT report.
 
+import { eq } from "drizzle-orm";
+
 type Column = { readonly name: string };
 type Builder = {
   from: (table: unknown) => Builder;
@@ -23,7 +25,6 @@ declare const db: {
 declare const decisions: { id: Column; sourceId: Column; courtId: Column };
 declare const sources: { id: Column; descriptor: Column };
 declare const courts: { id: Column; name: Column };
-declare const eq: (left: unknown, right: unknown) => unknown;
 
 // A left-joined table nested: every NULL descriptor reads back as no source.
 db.select({

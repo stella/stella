@@ -44,7 +44,8 @@
 // Tables are matched by the expression naming them (`sources`, `schema.x`, an
 // `alias(...)` bound to a const), so the join argument and the column's table
 // must be spelled alike. Nested objects are read inline or through a
-// never-reassigned const. Builders split across statements (`$dynamic()`,
+// never-reassigned const binding (its properties reassigned later are not
+// followed), and one holding a spread is skipped. Builders split across statements (`$dynamic()`,
 // a stored query extended later), join conditions held in variables, and
 // nested objects assembled by spreading other objects or by helper calls such
 // as `getTableColumns(...)` are outside this syntactic check.
@@ -112,7 +113,11 @@ const tableKey = (node: unknown): string | null => {
   return null;
 };
 
-type ChainCall = { method: string; arguments: readonly unknown[] };
+type ChainCall = {
+  method: string;
+  arguments: readonly unknown[];
+  node: AstNode;
+};
 
 // The calls chained onto `call`: `.from(x).leftJoin(y, on).where(...)`.
 const chainedCalls = (call: unknown): ChainCall[] => {
@@ -151,6 +156,7 @@ const chainedCalls = (call: unknown): ChainCall[] => {
     calls.push({
       method,
       arguments: Array.isArray(next.arguments) ? next.arguments : [],
+      node: next,
     });
     current = next;
   }
@@ -167,8 +173,9 @@ type JoinedTable = {
 const DRIZZLE_MODULE = /^drizzle-orm(?:\/|$)/u;
 
 // The drizzle-orm helper a call invokes, through its import binding
-// (`import { eq as equals }`, `import * as d` with `d.eq`). A bare name bound
-// to no import keeps its spelling, so local stand-ins in tests still count.
+// (`import { eq as equals }`, `import * as d` with `d.eq`). A helper not
+// imported from drizzle-orm proves nothing: a local `eq` may compare with
+// `IS NOT DISTINCT FROM`, which matches two NULLs.
 const calleeName = (context: RuleContext, node: unknown): string | null => {
   const expression = unwrapExpression(node);
   if (expression?.type !== "CallExpression") {
@@ -179,10 +186,9 @@ const calleeName = (context: RuleContext, node: unknown): string | null => {
     return null;
   }
   const resolved = resolveImport(context, callee);
-  if (resolved !== null) {
-    return DRIZZLE_MODULE.test(resolved.moduleId) ? resolved.imported : null;
-  }
-  return callee.type === "Identifier" ? getPropertyName(callee) : null;
+  return resolved !== null && DRIZZLE_MODULE.test(resolved.moduleId)
+    ? resolved.imported
+    : null;
 };
 
 // Columns of `table` that `condition` proves non-NULL on a matched row: an
@@ -321,6 +327,15 @@ const nullableColumnTable = (
   nested: AstNode,
   nullable: ReadonlyMap<string, JoinedTable>,
 ): JoinedTable | null => {
+  // A spread may supply the first column, which this check cannot see.
+  if (
+    Array.isArray(nested.properties) &&
+    nested.properties.some(
+      (property) => isAstNode(property) && property.type !== "Property",
+    )
+  ) {
+    return null;
+  }
   const columns: { table: string; column: string }[] = [];
   for (const property of propertiesOf(nested)) {
     const value = unwrapExpression(property.value);
@@ -395,8 +410,12 @@ export const createNullableJoinNestedSelectionPlugin = (
               if (index === undefined) {
                 return;
               }
+              const calls = chainedCalls(node);
+              // The whole statement: a change to its joins or its select call
+              // re-checks a const selection whose own lines did not change.
+              const statement = calls.at(-1)?.node ?? node;
               const nullable = new Map(
-                joinedTables(context, chainedCalls(node))
+                joinedTables(context, calls)
                   .filter((table) => table.nullable)
                   .map((table) => [table.key, table] as const),
               );
@@ -416,7 +435,10 @@ export const createNullableJoinNestedSelectionPlugin = (
                   continue;
                 }
                 const table = nullableColumnTable(value, nullable);
-                if (table === null || !enforces(property)) {
+                if (
+                  table === null ||
+                  (!enforces(property) && !enforces(statement))
+                ) {
                   continue;
                 }
                 context.report({

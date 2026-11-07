@@ -6546,9 +6546,10 @@ const config = defineConfig({
     },
     {
       // Drizzle reads a nested selection object over a left, right or full
-      // join back as null when every column in it is NULL, so a matched row
-      // with NULL values looks like no row. Joined columns are selected flat
-      // with the join key, and the object is built after the read.
+      // join back as null when its first column is NULL, whatever follows,
+      // so a matched row with a NULL first value looks like no row. The join
+      // key goes first, or the columns are selected flat with the join key
+      // and the object is built after the read.
       files: ["apps/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts"],
       rules: {
         "no-nullable-join-nested-selection/no-nullable-join-nested-selection":

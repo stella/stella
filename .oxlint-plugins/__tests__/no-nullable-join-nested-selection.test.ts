@@ -2,8 +2,17 @@ import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
+// Join-key proofs count only for helpers imported from drizzle-orm, so every
+// snippet starts with that import; reported lines are counted without it.
+const DRIZZLE_IMPORT = 'import { and, eq, isNotNull, or } from "drizzle-orm";';
+
 const lint = async (lines: readonly string[]) =>
-  await lintSingleRule("no-nullable-join-nested-selection", lines.join("\n"));
+  (
+    await lintSingleRule(
+      "no-nullable-join-nested-selection",
+      [DRIZZLE_IMPORT, ...lines].join("\n"),
+    )
+  ).map((line) => line - 1);
 
 describe.serial("no-nullable-join-nested-selection", () => {
   test("reports a nested object over a left-joined table, as the research read had it", async () => {
@@ -147,5 +156,25 @@ describe.serial("no-nullable-join-nested-selection", () => {
         "",
       ]),
     ).toEqual([3]);
+  });
+
+  test("a helper not imported from drizzle-orm proves no join key", async () => {
+    expect(
+      await lint([
+        "const same = (left: unknown, right: unknown) => isNotDistinctFrom(left, right);",
+        "db.select({ b: { id: b.id } }).from(a).leftJoin(b, same(b.id, a.bId));",
+        "",
+      ]),
+    ).toEqual([2]);
+  });
+
+  test("skips a nested object holding a spread", async () => {
+    expect(
+      await lint([
+        "const keyed = { id: b.id };",
+        "db.select({ b: { ...keyed, x: b.x } }).from(a).leftJoin(b, eq(b.id, a.bId));",
+        "",
+      ]),
+    ).toEqual([]);
   });
 });
