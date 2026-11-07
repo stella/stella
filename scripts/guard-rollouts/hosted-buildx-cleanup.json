@@ -1,0 +1,12 @@
+{
+  "id": "hosted-buildx-cleanup",
+  "type": "changed-lines",
+  "expiresAt": "2026-11-06T00:00:00.000Z",
+  "check": [
+    "bun",
+    "test",
+    "./scripts/hosted-buildx-cleanup.test.ts",
+    "-t",
+    "every hosted Buildx"
+  ]
+}
