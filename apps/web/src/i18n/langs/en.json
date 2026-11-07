@@ -3988,6 +3988,8 @@
     "reopenTab": "Reopen {name}",
     "resizePane": "Resize pane",
     "review": {
+      "acceptChange": "Accept change",
+      "acceptFinding": "Accept finding",
       "actionNeeded": "Action needed",
       "addComment": "Add as comment",
       "addNote": "Add comment for counterparty",
@@ -4028,6 +4030,7 @@
         "dismissed": "Dismissed"
       },
       "description": "Choose an authored playbook, reference documents, or both.",
+      "dismissFinding": "Dismiss finding",
       "documentChanged": "This document changed after this review.",
       "export": {
         "counterparty": "Download for counterparty",
@@ -4051,6 +4054,7 @@
       "history": {
         "backToLatest": "Back to latest",
         "decided": "{decided, number} of {total, number} decided",
+        "fromTable": "From the table",
         "references": "{count, plural, one {# reference} other {# references}}"
       },
       "impact": {
@@ -4075,7 +4079,6 @@
         "unanchored": "Not tied to a clause"
       },
       "newTopic": "New review topic",
-      "noChangeNeeded": "No change needed",
       "noEditor": "Open the document to accept changes",
       "noMaterialDifferences": "No material differences found",
       "noPassage": "No passage",
@@ -4158,6 +4161,11 @@
         "noSide": "no side",
         "proposedFromReferences": "positions proposed from the references",
         "unnamedReferences": "{count, plural, one {# reference document} other {# reference documents}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>A full review of this version</link>, with links and proposed changes, is available in the review history.",
+        "origin": "<strong>From a table run.</strong> These findings were graded on the values extracted for the table, so they don't link to the document and include no proposed changes.",
+        "runAnotherReview": "To get links and proposed changes, use <action>{label}</action>."
       },
       "targetAsReference": "The reviewed document cannot be its own reference.",
       "targetColumn": "This document",

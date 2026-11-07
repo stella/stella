@@ -3988,6 +3988,8 @@
     "reopenTab": "Otwórz ponownie {name}",
     "resizePane": "Zmień rozmiar panelu",
     "review": {
+      "acceptChange": "Akceptuj zmianę",
+      "acceptFinding": "Akceptuj ustalenie",
       "actionNeeded": "Wymaga działania",
       "addComment": "Dodaj jako komentarz",
       "addNote": "Dodaj komentarz dla kontrahenta",
@@ -4028,6 +4030,7 @@
         "dismissed": "Odrzucono"
       },
       "description": "Wybierz przygotowany playbook, dokumenty referencyjne lub oba.",
+      "dismissFinding": "Odrzuć ustalenie",
       "documentChanged": "Ten dokument zmienił się po tej weryfikacji.",
       "export": {
         "counterparty": "Pobierz dla kontrahenta",
@@ -4051,6 +4054,7 @@
       "history": {
         "backToLatest": "Wróć do najnowszej",
         "decided": "rozstrzygnięto {decided, number} z {total, number}",
+        "fromTable": "Z tabeli",
         "references": "{count, plural, one {# referencja} few {# referencje} many {# referencji} other {# referencji}}"
       },
       "impact": {
@@ -4075,7 +4079,6 @@
         "unanchored": "Niepowiązane z klauzulą"
       },
       "newTopic": "Nowy temat przeglądu",
-      "noChangeNeeded": "Brak potrzeby zmiany",
       "noEditor": "Otwórz dokument, aby zaakceptować zmiany",
       "noMaterialDifferences": "Nie znaleziono istotnych różnic",
       "noPassage": "Brak fragmentu",
@@ -4158,6 +4161,11 @@
         "noSide": "bez strony",
         "proposedFromReferences": "stanowiska zaproponowane z referencji",
         "unnamedReferences": "{count, plural, one {# dokument referencyjny} few {# dokumenty referencyjne} many {# dokumentów referencyjnych} other {# dokumentu referencyjnego}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Pełna weryfikacja tej wersji</link> z odnośnikami i proponowanymi zmianami jest dostępna w historii weryfikacji.",
+        "origin": "<strong>Uruchomiono z tabeli.</strong> Te ustalenia oceniono na podstawie wartości wyodrębnionych do tabeli, dlatego nie odsyłają do dokumentu i nie zawierają proponowanych zmian.",
+        "runAnotherReview": "Aby uzyskać odnośniki i proponowane zmiany, użyj przycisku <action>{label}</action>."
       },
       "targetAsReference": "Sprawdzany dokument nie może być własną referencją.",
       "targetColumn": "Ten dokument",

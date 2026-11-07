@@ -334,6 +334,8 @@ const MAX_ACTIVE_RUNS = 64;
 const MAX_MODELS = 100;
 const MAX_RUN_MESSAGES = 1000;
 const MAX_RECONNECT_DELAY_MS = 600_000;
+/** Files one `run.start` may copy; a chat's earlier files are already there. */
+export const MAX_RUN_ATTACHMENTS = 32;
 const MAX_MESSAGE_TYPE_LENGTH = 64;
 
 const listsOnce = (keys: readonly string[]) =>
@@ -531,6 +533,62 @@ const modelMessageSchema = v.looseObject({
   role: v.picklist(DESKTOP_RUNNER_MESSAGE_ROLES),
 });
 
+export const DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH = 8192;
+
+const ATTACHMENT_PATH = /^attachments\/[\da-f-]{36}\/[^/\\\0]{1,255}$/u;
+
+/**
+ * Where a chat's attached file lands in the run's folder, relative to it. The
+ * file's id keeps two files of one name apart and a name out of the path's
+ * structure; the name stays readable for the agent and the member.
+ */
+export const desktopRunnerAttachmentPathSchema = v.pipe(
+  v.string(),
+  v.regex(ATTACHMENT_PATH),
+  v.check(
+    (path) => !path.split("/").some((part) => part === ".." || part === "."),
+    "An attachment stays inside its folder",
+  ),
+);
+
+/** Short of every filesystem's limit, with room for a long extension. */
+const ATTACHMENT_NAME_MAX_CHARS = 120;
+const ATTACHMENT_EXTENSION = /\.[^.]{1,16}$/u;
+
+const boundedAttachmentName = (name: string) => {
+  const characters = Array.from(name);
+  if (characters.length <= ATTACHMENT_NAME_MAX_CHARS) {
+    return name;
+  }
+  const suffix = ATTACHMENT_EXTENSION.exec(name)?.[0] ?? "";
+  return `${characters
+    .slice(0, ATTACHMENT_NAME_MAX_CHARS - Array.from(suffix).length)
+    .join("")}${suffix}`;
+};
+
+export const desktopRunnerAttachmentPath = (
+  fileId: string,
+  sanitizedFileName: string,
+): string =>
+  `attachments/${fileId}/${boundedAttachmentName(sanitizedFileName)}`;
+
+/**
+ * A file to copy before the run starts. The link is signed when the command is
+ * sent and expires soon after, so a stored `run.start` never holds one.
+ */
+export const desktopRunnerAttachmentSchema = v.object({
+  path: desktopRunnerAttachmentPathSchema,
+  url: v.pipe(
+    v.string(),
+    v.maxLength(DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH),
+    v.url(),
+    v.startsWith("https://"),
+  ),
+});
+export type DesktopRunnerAttachment = v.InferOutput<
+  typeof desktopRunnerAttachmentSchema
+>;
+
 export const desktopRunnerDesktopMessageSchema = v.variant("type", [
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.hello),
@@ -642,6 +700,10 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
       v.array(modelMessageSchema),
       v.minLength(1),
       v.maxLength(MAX_RUN_MESSAGES),
+    ),
+    attachments: v.pipe(
+      v.array(desktopRunnerAttachmentSchema),
+      v.maxLength(MAX_RUN_ATTACHMENTS),
     ),
     policy: v.object({
       network: v.picklist(DESKTOP_RUNNER_NETWORK_POLICIES),

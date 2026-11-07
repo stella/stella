@@ -24,6 +24,7 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -1410,7 +1411,7 @@ export const MatterItem = ({
       name: ws.name,
       color: ws.color,
       client: ws.client ?? null,
-      isArchived: ws.status === "archived",
+      isArchived: ws.status === WORKSPACE_STATUS.archived,
     },
     { onRename: startRename, onDeleted: () => onDeleted(ws.id) },
   );

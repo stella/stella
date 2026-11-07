@@ -10979,6 +10979,7 @@
       },
       "anthracite-org/magnum-v4-72b": {
         "cost": {
+          "cache_read": 2.5,
           "input": 2.5,
           "output": 5
         },
@@ -11843,7 +11844,7 @@
         "reasoning": false,
         "release_date": "2025-03-13",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
       },
       "cohere/command-a-plus": {
         "cost": {
@@ -11922,7 +11923,7 @@
         "reasoning": false,
         "release_date": "2024-12-13",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
       },
       "cohere/north-mini-code:free": {
         "cost": {
@@ -11949,11 +11950,11 @@
       },
       "deepseek/deepseek-chat": {
         "cost": {
-          "input": 0.2574,
-          "output": 1.0287
+          "input": 0.32,
+          "output": 0.89
         },
         "limit": {
-          "output": 16000
+          "output": 16384
         },
         "modalities": {
           "input": [
@@ -12190,9 +12191,9 @@
       },
       "deepseek/deepseek-v4-pro": {
         "cost": {
-          "cache_read": 0.079605,
-          "input": 0.95526,
-          "output": 1.91052
+          "cache_read": 0.079025,
+          "input": 0.9483,
+          "output": 1.8966
         },
         "limit": {
           "output": 384000
@@ -12219,9 +12220,9 @@
       },
       "deepseek/deepseek-v4-pro-0813": {
         "cost": {
-          "cache_read": 0.098,
-          "input": 0.103,
-          "output": 4.11
+          "cache_read": 0.111,
+          "input": 0.1165,
+          "output": 4.66
         },
         "limit": {
           "output": 943718
@@ -12250,8 +12251,8 @@
       "deepseek/deepseek-v4.1-flash": {
         "cost": {
           "cache_read": 0.018,
-          "input": 0.045,
-          "output": 0.5
+          "input": 0.051,
+          "output": 0.567
         },
         "limit": {
           "output": 943718
@@ -13308,9 +13309,9 @@
       },
       "google/gemma-4-26b-a4b-it": {
         "cost": {
-          "cache_read": 0.0425,
-          "input": 0.0765,
-          "output": 0.255
+          "cache_read": 0.0375,
+          "input": 0.0675,
+          "output": 0.225
         },
         "limit": {
           "output": 235929
@@ -13658,9 +13659,9 @@
       },
       "inclusionai/ling-3.1-flash": {
         "cost": {
-          "cache_read": 0.015,
-          "input": 0.075,
-          "output": 0.225
+          "cache_read": 0.009,
+          "input": 0.045,
+          "output": 0.135
         },
         "limit": {
           "output": 262144
@@ -13777,8 +13778,48 @@
         "temperature": true,
         "tool_call": true
       },
+      "liquid/lfm-3-1.7b": {
+        "cost": {
+          "cache_read": 0.02,
+          "input": 0.08,
+          "output": 0.2
+        },
+        "limit": {
+          "output": 8192
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [],
+        "release_date": "2026-11-06",
+        "temperature": true,
+        "tool_call": true
+      },
+      "liquid/lfm-3-1.7b:free": {
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "limit": {
+          "output": 8192
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [],
+        "release_date": "2026-11-06",
+        "temperature": true,
+        "tool_call": true
+      },
       "mancer/weaver": {
         "cost": {
+          "cache_read": 0.4,
           "input": 0.4,
           "output": 0.75
         },
@@ -14288,12 +14329,12 @@
       },
       "minimax/minimax-m2.5": {
         "cost": {
-          "cache_read": 0.03,
-          "input": 0.27,
-          "output": 0.95
+          "cache_read": 0.06,
+          "input": 0.3,
+          "output": 1.2
         },
         "limit": {
-          "output": 32768
+          "output": 58982
         },
         "modalities": {
           "input": [
@@ -15225,12 +15266,11 @@
       },
       "nvidia/nemotron-3-super-120b-a12b": {
         "cost": {
-          "cache_read": 0.15,
-          "input": 0.3,
-          "output": 2.4
+          "input": 0.075,
+          "output": 0.4
         },
         "limit": {
-          "output": 262144
+          "output": 16384
         },
         "modalities": {
           "input": [
@@ -15325,30 +15365,6 @@
         },
         "limit": {
           "output": 117964
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ]
-        },
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "release_date": "2026-06-02",
-        "temperature": true,
-        "tool_call": false
-      },
-      "nvidia/nemotron-3.5-content-safety:free": {
-        "cost": {
-          "input": 0,
-          "output": 0
-        },
-        "limit": {
-          "output": 8192
         },
         "modalities": {
           "input": [
@@ -17317,9 +17333,9 @@
       },
       "openai/gpt-oss-120b": {
         "cost": {
-          "cache_read": 0.018,
-          "input": 0.02,
-          "output": 0.074
+          "cache_read": 0.01,
+          "input": 0.011,
+          "output": 0.042
         },
         "limit": {
           "output": 65536
@@ -19745,6 +19761,7 @@
       },
       "undi95/remm-slerp-l2-13b": {
         "cost": {
+          "cache_read": 0.35,
           "input": 0.35,
           "output": 0.65
         },
@@ -20622,11 +20639,11 @@
       "z-ai/glm-5.3-flash": {
         "cost": {
           "cache_read": 0.03,
-          "input": 0.15,
-          "output": 0.5
+          "input": 0.0386,
+          "output": 0.0793
         },
         "limit": {
-          "output": 943717
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -20949,8 +20966,8 @@
       },
       "~deepseek/deepseek-pro-latest": {
         "cost": {
-          "cache_read": 0.0927,
-          "input": 0.0927,
+          "cache_read": 0.0999,
+          "input": 0.0999,
           "output": 8
         },
         "limit": {
@@ -21097,9 +21114,9 @@
       },
       "~moonshotai/kimi-latest": {
         "cost": {
-          "cache_read": 0.18,
-          "input": 0.1824,
-          "output": 9.3388
+          "cache_read": 0.16,
+          "input": 0.1634,
+          "output": 10.1489
         },
         "limit": {
           "output": 943718
@@ -21444,8 +21461,8 @@
       "~z-ai/glm-flash-latest": {
         "cost": {
           "cache_read": 0.03,
-          "input": 0.0335,
-          "output": 0.083
+          "input": 0.0386,
+          "output": 0.0793
         },
         "limit": {
           "output": 131072

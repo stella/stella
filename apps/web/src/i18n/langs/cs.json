@@ -3988,6 +3988,8 @@
     "reopenTab": "Znovu otevřít {name}",
     "resizePane": "Změnit šířku panelu",
     "review": {
+      "acceptChange": "Přijmout změnu",
+      "acceptFinding": "Přijmout zjištění",
       "actionNeeded": "K řešení",
       "addComment": "Přidat jako komentář",
       "addNote": "Přidat komentář pro protistranu",
@@ -4028,6 +4030,7 @@
         "dismissed": "Zamítnuto"
       },
       "description": "Vyberte schválený playbook, referenční dokumenty nebo obojí.",
+      "dismissFinding": "Zamítnout zjištění",
       "documentChanged": "Dokument se od této kontroly změnil.",
       "export": {
         "counterparty": "Stáhnout pro protistranu",
@@ -4051,6 +4054,7 @@
       "history": {
         "backToLatest": "Zpět na poslední",
         "decided": "rozhodnuto {decided, number} z {total, number}",
+        "fromTable": "Z tabulky",
         "references": "{count, plural, one {# reference} few {# reference} other {# referencí} many {# reference}}"
       },
       "impact": {
@@ -4075,7 +4079,6 @@
         "unanchored": "Bez vazby na ustanovení"
       },
       "newTopic": "Nové téma kontroly",
-      "noChangeNeeded": "Není třeba měnit",
       "noEditor": "Změny přijmete po otevření dokumentu",
       "noMaterialDifferences": "Nenalezeny žádné podstatné rozdíly",
       "noPassage": "Žádná pasáž",
@@ -4158,6 +4161,11 @@
         "noSide": "bez strany",
         "proposedFromReferences": "pozice navržené z referencí",
         "unnamedReferences": "{count, plural, one {# referenční dokument} few {# referenční dokumenty} other {# referenčních dokumentů} many {# referenčního dokumentu}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Úplná kontrola této verze</link> s odkazy a navrhovanými změnami je k dispozici v historii kontrol.",
+        "origin": "<strong>Spuštěno z tabulky.</strong> Tato zjištění byla vyhodnocena podle hodnot vytěžených pro tabulku, proto neodkazují na dokument a neobsahují navrhované změny.",
+        "runAnotherReview": "Odkazy a navrhované změny získáte přes tlačítko <action>{label}</action>."
       },
       "targetAsReference": "Kontrolovaný dokument nemůže být vlastní referencí.",
       "targetColumn": "Tento dokument",

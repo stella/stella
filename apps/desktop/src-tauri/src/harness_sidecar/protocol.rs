@@ -14,7 +14,8 @@ use serde_json::Value;
 
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessCapability, JsonObject, McpBinding,
-  RunAnswer, RunApproval, RunOutcome, RunPolicy, RunRef, RunTokenRefresh,
+  RunAnswer, RunApproval, RunAttachment, RunOutcome, RunPolicy, RunRef,
+  RunTokenRefresh,
 };
 
 pub(crate) const SIDECAR_PROTOCOL: u32 = 3;
@@ -194,6 +195,8 @@ pub(crate) struct SidecarRunStart {
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
   pub(crate) harness_session_id: Option<String>,
+  /// Files to copy into `workspace_dir` before the harness starts.
+  pub(crate) attachments: Vec<RunAttachment>,
   pub(crate) policy: RunPolicy,
   pub(crate) mcp: McpBinding,
 }

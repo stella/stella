@@ -37,6 +37,7 @@ import {
 } from "../harness/events";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
+import { copyAttachments } from "./attachments";
 import { type McpProxy, startMcpProxy } from "./mcp-proxy";
 import type {
   SidecarHarnessLaunchSettings,
@@ -130,6 +131,8 @@ type HeldRun = {
   turn: HarnessTurn | null;
   /** Set before the turn starts too: a turn that opens later stops at once. */
   stop: RunStop;
+  /** Ends the attachment copy that comes before the turn. */
+  readonly stopCopying: AbortController;
   /**
    * Runner request id (a UUID) to the harness's own request id, for both
    * approvals and blocking questions.
@@ -274,6 +277,13 @@ const probeOutcome = ({
 };
 
 /** The event stream for a run that ends before its harness starts. */
+const stoppedBeforeStart = (): AsyncIterable<HarnessEvent> => {
+  const queue = createEventQueue<HarnessEvent>();
+  queue.push({ type: "turn.interrupted" });
+  queue.close();
+  return queue.items;
+};
+
 const failedBeforeStart = (
   failure: HarnessFailure,
 ): AsyncIterable<HarnessEvent> => {
@@ -547,6 +557,7 @@ export class SidecarHost {
       turn: null,
       // A run that starts while the host stops is cancelled like the held ones.
       stop: this.stopping ? RUN_STOP.cancel : RUN_STOP.none,
+      stopCopying: new AbortController(),
       requests: new Map(),
     };
     this.runs.set(message.runId, run);
@@ -563,6 +574,7 @@ export class SidecarHost {
       run.stop === RUN_STOP.cancel || reason === RUN_STOP.cancel
         ? RUN_STOP.cancel
         : RUN_STOP.interrupt;
+    run.stopCopying.abort();
     if (run.turn !== null) {
       this.detached(run.turn.interrupt(), "sidecar.interrupt");
     }
@@ -598,6 +610,7 @@ export class SidecarHost {
   private async open(
     message: SidecarRunStart,
     config: Config,
+    run: HeldRun,
   ): Promise<Result<HarnessTurn, HarnessFailure>> {
     // The wire checks each message's role only, as the runner socket does;
     // the turn reads more, so the rest is checked before anything starts.
@@ -635,6 +648,29 @@ export class SidecarHost {
         signal: null,
       });
     }
+    const copied = await copyAttachments(
+      message.attachments,
+      message.workspaceDir,
+      { signal: run.stopCopying.signal },
+    );
+    if (run.stop !== RUN_STOP.none) {
+      // Stopped during the copy: no harness starts for a run nobody wants now.
+      return Result.err({
+        type: "harness_exited",
+        message: "The run was stopped before it started.",
+        exitCode: null,
+        signal: null,
+      });
+    }
+    if (Result.isError(copied)) {
+      this.options.log(`a run's attachment failed: ${copied.error.message}`);
+      return Result.err({
+        type: "harness_exited",
+        message: "An attached file could not be copied to this computer.",
+        exitCode: null,
+        signal: null,
+      });
+    }
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
@@ -663,7 +699,7 @@ export class SidecarHost {
     config: Config,
     run: HeldRun,
   ) {
-    const opened = await this.open(message, config);
+    const opened = await this.open(message, config, run);
     const outcome: { value: RunOutcome; sessionId: string | null } = {
       value: "failed",
       sessionId: null,
@@ -773,6 +809,8 @@ export class SidecarHost {
         this.detached(opened.value.interrupt(), "sidecar.interrupt");
       }
       events = opened.value.events;
+    } else if (run.stop !== RUN_STOP.none) {
+      events = stoppedBeforeStart();
     } else {
       events = failedBeforeStart(opened.error);
     }
