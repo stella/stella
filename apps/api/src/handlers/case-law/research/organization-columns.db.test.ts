@@ -11,9 +11,13 @@ import {
 import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { Fetcher } from "@stll/fetch";
+
 import {
+  caseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
+  caseLawSources,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
@@ -45,6 +49,8 @@ import {
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestWithdrawalCopyReader } from "@/api/tests/helpers/withdrawn-copy-reader";
@@ -723,5 +729,157 @@ describe("a run answers only the cells that need it", () => {
     expect(await storeAnswer(`{"version":1,"type":"text","value":"ano"}`)).toBe(
       "stored",
     );
+  });
+});
+
+/**
+ * A decision model over a fake wire that picks, for every question, the first
+ * option that is not a sentinel, so a run that reaches the model settles its
+ * cells `answered` without a network call.
+ */
+const answeringDecisionModel = (): {
+  decisionModel: DecisionModel;
+  requests: unknown[];
+} => {
+  const requests: unknown[] = [];
+  const fetcher: Fetcher = async (_input, init) => {
+    const body: unknown =
+      typeof init?.body === "string" ? JSON.parse(init.body) : null;
+    requests.push(body);
+    const questions =
+      typeof body === "object" &&
+      body !== null &&
+      "questions" in body &&
+      typeof body.questions === "object" &&
+      body.questions !== null
+        ? Object.entries(body.questions)
+        : [];
+    const answers = Object.fromEntries(
+      questions.map(([key, question]: [string, unknown]) => {
+        const criteria =
+          typeof question === "object" &&
+          question !== null &&
+          "criteria" in question &&
+          typeof question.criteria === "object" &&
+          question.criteria !== null
+            ? Object.keys(question.criteria)
+            : [];
+        const choice =
+          criteria.find((option) => !option.startsWith("__")) ?? "";
+        return [
+          key,
+          {
+            type: "choice",
+            choice,
+            probabilities: Object.fromEntries(
+              criteria.map((option) => [option, option === choice ? 1 : 0]),
+            ),
+            confidence: 1,
+          },
+        ];
+      }),
+    );
+    return await Promise.resolve(
+      Response.json({
+        model: "test-decision-model",
+        answers,
+        usage: { input_tokens: 10, output_tokens: 1 },
+      }),
+    );
+  };
+  return {
+    decisionModel: {
+      ...createSystemOneClient({ apiKey: "key-test", fetcher }),
+      keySource: "byok",
+    },
+    requests,
+  };
+};
+
+describe("a source without reuse terms", () => {
+  // Most sources state no reuse restrictions, which the corpus stores as a
+  // NULL descriptor. The research read once nested that column under the
+  // left-joined source, and Drizzle read an all-NULL nested object back as no
+  // source at all, so every such decision failed `decision_unavailable`.
+  test("is researched like any other published decision", async () => {
+    const sourceId = createSafeId<"caseLawSource">();
+    const decisionId = createSafeId<"caseLawDecision">();
+    await testDb.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey: "research-unrestricted",
+      name: "Unrestricted test source",
+    });
+    // The fixture has to reach the fault: the source row exists and its
+    // descriptor, the only column the read takes from it, is NULL.
+    expect(
+      await testDb
+        .select({ descriptor: caseLawSources.descriptor })
+        .from(caseLawSources)
+        .where(eq(caseLawSources.id, sourceId)),
+    ).toEqual([{ descriptor: null }]);
+    await testDb.insert(caseLawDecisions).values({
+      id: decisionId,
+      sourceId,
+      caseNumber: "7 Research 1/2026",
+      citationKey: "7research/1/2026",
+      court: "Test court",
+      country: "CZE",
+      language: "en",
+      decisionDate: "2026-01-15",
+      slug: `research-unrestricted-${decisionId}`,
+      languageGroupKey: `research-unrestricted-${decisionId}`,
+      fulltext:
+        "The court held that the purchase agreement was valid and binding.",
+    });
+
+    const columnId = await addColumn(ids.orgA, ids.userA1, "Valid?");
+    const claim = await testDb.transaction(
+      async (tx) =>
+        await queueResearchAnswerCells({
+          tx: asTestRaw(tx),
+          organizationId: ids.orgA,
+          columnIds: [columnId],
+          decisionIds: [decisionId],
+          force: false,
+          now: new Date(),
+        }),
+    );
+    expect(claim.cells).toEqual([{ columnId, decisionId }]);
+
+    const { decisionModel, requests } = answeringDecisionModel();
+    await runResearchAnswers(
+      asTestRaw({
+        admission: testModelAdmission(ids.orgA),
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        columns: [{ columnId, question: "Valid?", content: YES_NO_CONTENT }],
+        claim,
+        orgAIConfig: null,
+        managedAIResidency: "eu",
+        promptCachingEnabled: false,
+      }),
+      asTestRaw({
+        safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+        caseLawDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+          await testDb.transaction(async (tx) => await fn(tx)),
+        decisionModel,
+      }),
+    );
+
+    const [cell] = await testDb
+      .select({
+        state: caseLawResearchAnswers.state,
+        failureReason: caseLawResearchAnswers.failureReason,
+        answer: caseLawResearchAnswers.answer,
+      })
+      .from(caseLawResearchAnswers)
+      .where(eq(caseLawResearchAnswers.decisionId, decisionId));
+    expect(cell).toEqual({
+      state: "answered",
+      failureReason: null,
+      answer: { version: 1, type: "single-select", value: "yes" },
+    });
+    // The decision text reached the model: the cell was not settled before it.
+    expect(JSON.stringify(requests)).toContain("purchase agreement was valid");
   });
 });
