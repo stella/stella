@@ -25,9 +25,10 @@ const CASE_LAW_CELEX =
 
 /**
  * The Court of Justice prefixed its dockets with `C-` from 1989, when the Court
- * of First Instance opened; before that a docket is a bare `120/78`.
+ * of First Instance opened; before that a docket is a bare `120/78`. Compared
+ * as text: every CELEX year has four digits.
  */
-const FIRST_PREFIXED_DOCKET_YEAR = 1989;
+const FIRST_PREFIXED_DOCKET_YEAR = "1989";
 
 /**
  * A publisher's cited entry as extraction would find it in the text, or null
@@ -50,11 +51,12 @@ const comparableCitation = (cited: string): string | null => {
     year === undefined ||
     court === undefined ||
     ordinal === undefined ||
-    Number.parseInt(year, 10) < FIRST_PREFIXED_DOCKET_YEAR
+    year < FIRST_PREFIXED_DOCKET_YEAR
   ) {
     return null;
   }
-  return `${court}-${String(Number.parseInt(ordinal, 10))}/${year.slice(2)}`;
+  // `0181` is written `181`.
+  return `${court}-${ordinal.replace(/^0+(?=\d)/u, "")}/${year.slice(2)}`;
 };
 
 export const publisherCitationGap = ({
