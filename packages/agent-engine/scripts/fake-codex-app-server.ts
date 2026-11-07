@@ -1,3 +1,5 @@
+import { existsSync, readdirSync } from "node:fs";
+import path from "node:path";
 import * as v from "valibot";
 
 import { PACKAGE_CACHE_FOLDERS } from "../src/harness/package-cache";
@@ -204,6 +206,8 @@ const commandApproval = (reason: string | null): FakeStep[] => [
   item("completed", agentMessage("m-2", "Left it in place.")),
   completed(),
 ];
+
+const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
 
 const FAKE_SCENARIOS = {
   /**
@@ -473,6 +477,37 @@ const FAKE_SCENARIOS = {
     { expect: "turn/interrupt", result: {} },
     completed("interrupted"),
   ],
+  /** A read and a command on the skill folder `FAKE_SKILL_PATH` names. */
+  reads_skill: [
+    ...freshTurn(),
+    item("started", {
+      ...command("call-read", "inProgress"),
+      command: `cat ${FAKE_SKILL_PATH}/SKILL.md`,
+    }),
+    item("completed", {
+      ...command("call-read", "completed", {
+        aggregatedOutput: "Licensed commentary.\n",
+        exitCode: 0,
+      }),
+      command: `cat ${FAKE_SKILL_PATH}/SKILL.md`,
+    }),
+    item("started", command("call-cmd", "inProgress")),
+    item(
+      "completed",
+      command("call-cmd", "completed", {
+        aggregatedOutput: "notes.md\n",
+        exitCode: 0,
+      }),
+    ),
+    completed(),
+  ],
+  skills_refused: [
+    ...handshake(),
+    {
+      expect: "skills/list",
+      error: { code: -32_600, message: "skills are unavailable" },
+    },
+  ],
   resume_missing: [
     ...handshake(),
     {
@@ -723,6 +758,66 @@ const IncomingSchema = v.looseObject({
   method: v.optional(v.string()),
 });
 
+const SkillsParamsSchema = v.looseObject({
+  extraRoots: v.optional(v.array(v.string())),
+  cwds: v.optional(v.array(v.string())),
+});
+
+/** Every `SKILL.md` under a root, however deep and through any link. */
+const skillFilesUnder = (root: string, depth = 0): string[] =>
+  depth > 8 || !existsSync(root)
+    ? []
+    : readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+        const entryPath = path.join(root, entry.name);
+        if (entry.name === "SKILL.md") {
+          return [entryPath];
+        }
+        return entry.isDirectory() || entry.isSymbolicLink()
+          ? skillFilesUnder(entryPath, depth + 1)
+          : [];
+      });
+
+const FAKE_SYSTEM_SKILL = "/fake-home/skills/.system/imagegen/SKILL.md";
+
+/**
+ * Skill discovery as Codex does it, on the real filesystem: its own skills, the
+ * roots this process was given, the member's own `~/.agents/skills`, and
+ * whatever the working directory holds in its `.agents/skills`.
+ */
+const skillDiscovery = () => {
+  const roots: string[] = [];
+  const home = process.env["HOME"];
+  return {
+    answer: (method: string | undefined, params: unknown): object | null => {
+      const parsed = v.parse(SkillsParamsSchema, params ?? {});
+      if (method === "skills/extraRoots/set") {
+        roots.splice(0, roots.length, ...(parsed.extraRoots ?? []));
+        return {};
+      }
+      if (method !== "skills/list") {
+        return null;
+      }
+      const user = [
+        ...roots,
+        ...(home === undefined ? [] : [path.join(home, ".agents", "skills")]),
+      ].flatMap((root) => skillFilesUnder(root));
+      return {
+        data: (parsed.cwds ?? []).map((cwd) => ({
+          cwd,
+          errors: [],
+          skills: [
+            { path: FAKE_SYSTEM_SKILL, scope: "system" },
+            ...user.map((file) => ({ path: file, scope: "user" })),
+            ...skillFilesUnder(path.join(cwd, ".agents", "skills")).map(
+              (file) => ({ path: file, scope: "repo" }),
+            ),
+          ],
+        })),
+      };
+    },
+  };
+};
+
 const run = async (
   steps: readonly FakeStep[],
   log: (entry: object) => void,
@@ -739,10 +834,26 @@ const run = async (
     log,
   });
 
+  const skills = skillDiscovery();
+  /** The next request a step scripts; skill discovery answers the rest. */
+  const nextRequest = async (expected: string) => {
+    for (;;) {
+      // await-in-loop: one request at a time, in the order they arrived.
+      const message = await take("requests");
+      const answer =
+        message === null || message.method === expected
+          ? null
+          : skills.answer(message.method, message["params"]);
+      if (answer === null) {
+        return message;
+      }
+      write({ id: message?.id, result: answer });
+    }
+  };
   let serverRequestId = 1000;
   for (const step of steps) {
     if ("expect" in step) {
-      const message = await take("requests");
+      const message = await nextRequest(step.expect);
       if (message === null) {
         return;
       }

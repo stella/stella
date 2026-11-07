@@ -437,6 +437,7 @@ export const FAILURE_TAGS = [
   "SkDocumentRawMissingError",
   "SkDocumentRawStorageError",
   "SkillFileError",
+  "SkillPluginFailed",
   "SkillRequiredToolsError",
   "SnapshotReconciliationError",
   "SnippetCompareFileError",
