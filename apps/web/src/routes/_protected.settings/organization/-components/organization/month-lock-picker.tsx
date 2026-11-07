@@ -2,8 +2,9 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import { Temporal } from "@stll/time";
-import { Input } from "@stll/ui/input";
+import { NumberInput } from "@stll/ui/number-input";
 import {
   Select,
   SelectItem,
@@ -38,6 +39,7 @@ export const MonthLockPicker = ({
     value === "" ? String(previousMonth.year) : value.slice(0, 4),
   );
   const month = value === "" ? null : value.slice(-2);
+  const yearValue = parseDecimalToken(year).unwrapOr(null);
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <Select
@@ -70,8 +72,8 @@ export const MonthLockPicker = ({
             return (
               <SelectItem
                 disabled={
-                  Number(year) > previousMonth.year ||
-                  (Number(year) === previousMonth.year &&
+                  (yearValue ?? 0) > previousMonth.year ||
+                  ((yearValue ?? 0) === previousMonth.year &&
                     monthNumber > previousMonth.month)
                 }
                 key={monthValue}
@@ -86,25 +88,27 @@ export const MonthLockPicker = ({
           })}
         </SelectPopup>
       </Select>
-      <Input
+      <NumberInput
         className="min-h-11 w-28"
-        aria-label={t("workspaces.views.calendar.year")}
-        aria-describedby={describedBy}
         disabled={disabled}
-        required={month !== null}
-        min={1}
+        // A year reads without a thousands separator.
+        format={{ useGrouping: false }}
+        inputProps={{
+          "aria-describedby": describedBy,
+          "aria-label": t("workspaces.views.calendar.year"),
+        }}
         max={previousMonth.year}
-        step={1}
-        inputMode="numeric"
-        type="number"
-        value={year}
-        onChange={(event) => {
-          const nextYear = event.target.value;
+        min={1}
+        onValueChange={(next) => {
+          const nextYear = next === null ? "" : String(next);
           setYear(nextYear);
           if (month !== null) {
             onChange(`${nextYear.padStart(4, "0")}-${month}`);
           }
         }}
+        required={month !== null}
+        step={1}
+        value={yearValue}
       />
     </div>
   );

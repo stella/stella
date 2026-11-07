@@ -327,6 +327,7 @@ describe("local harness chunks", () => {
               prompt: "Which governing law?",
               options: [{ label: "Czech", description: "" }],
               allowsFreeText: true,
+              multiSelect: false,
               secret: false,
             },
           ],
@@ -420,6 +421,10 @@ describe("local harness chunks", () => {
       protocol_violation: {
         type: "protocol_violation",
         message: "Malformed message.",
+      },
+      sandbox_unavailable: {
+        type: "sandbox_unavailable",
+        message: "The sandbox could not start.",
       },
     } as const satisfies {
       [Type in HarnessFailure["type"]]: Extract<HarnessFailure, { type: Type }>;

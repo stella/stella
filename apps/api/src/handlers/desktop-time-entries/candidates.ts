@@ -5,6 +5,7 @@ import {
   DESKTOP_ACTIVITY_REVIEW_LIMIT,
   desktopMatterCandidatesResponseSchema,
 } from "@stll/api-contract/desktop-time-entries";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import {
   contacts,
@@ -74,7 +75,7 @@ export const createDesktopMatterCandidatesEndpoint = (
               .where(
                 and(
                   eq(workspaces.organizationId, account.organizationId),
-                  eq(workspaces.status, "active"),
+                  eq(workspaces.status, WORKSPACE_STATUS.active),
                 ),
               )
               .orderBy(

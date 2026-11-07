@@ -336,7 +336,7 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
         findFirst: async () => {
           threadReads += 1;
           return {
-            chatRunTarget: null,
+            chatLocalRunTarget: null,
             workspaceId: null,
             usedAnonymization: false,
             turns: [{ status: "completed" }],
@@ -422,75 +422,115 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
 });
 
 test("a thread that runs on the member's computer gets no follow-ups from a cloud model", async () => {
-  const organizationId = toSafeId<"organization">("org_prompts_local");
-  const userId = toSafeId<"user">("user_prompts_local");
-  const threadId = toSafeId<"chatThread">("thread_prompts_local");
-  let messageReads = 0;
-  const persist = mock(() => panic("Local-thread suggestions persisted"));
-  const db = createScopedDbMock({
-    query: {
-      chatThreads: {
-        findFirst: async () => ({
-          chatRunTarget: "codex::gpt-5-codex",
-          workspaceId: null,
-          usedAnonymization: false,
-          turns: [{ status: "completed" }],
-        }),
-      },
-      chatMessages: {
-        findMany: async () => {
-          messageReads += 1;
-          return [
-            {
-              id: "message_prompts_local",
-              role: "user",
-              createdAt: new Date("2026-09-01T00:00:00Z"),
-              content: toPersistedChatMessageContentV3({
-                data: [{ type: "text", content: "Summarise the brief" }],
-              }),
-            },
-          ];
+  // A target the contract reads, and one it no longer does (a harness since
+  // removed): both name a computer, so neither thread reaches a cloud model.
+  for (const stored of [
+    {
+      kind: "local",
+      harness: "codex",
+      model: "gpt-5-codex",
+      approvals: "ask",
+    },
+    { kind: "local", harness: "opencode", model: "gpt-5-codex" },
+  ]) {
+    const organizationId = toSafeId<"organization">("org_prompts_local");
+    const userId = toSafeId<"user">("user_prompts_local");
+    const threadId = toSafeId<"chatThread">("thread_prompts_local");
+    let messageReads = 0;
+    const persist = mock(() => panic("Local-thread suggestions persisted"));
+    const db = createScopedDbMock({
+      query: {
+        chatThreads: {
+          findFirst: async () => ({
+            chatLocalRunTarget: stored,
+            workspaceId: null,
+            usedAnonymization: false,
+            turns: [{ status: "completed" }],
+          }),
+        },
+        chatMessages: {
+          findMany: async () => {
+            messageReads += 1;
+            return [
+              {
+                id: "message_prompts_local",
+                role: "user",
+                createdAt: new Date("2026-09-01T00:00:00Z"),
+                content: toPersistedChatMessageContentV3({
+                  data: [{ type: "text", content: "Summarise the brief" }],
+                }),
+              },
+            ];
+          },
         },
       },
-    },
-    select: () => createSelectQueryMock([]),
-    insert: persist,
-    update: persist,
-    delete: persist,
-    execute: persist,
-  });
-  const generator = spyOn(
-    textGeneration,
-    "generateTanStackTextForTask",
-  ).mockResolvedValue("Draft a response.");
-  testState.setConfig("AI_PROVIDER", "openrouter");
-  testState.setConfig("OPENROUTER_API_KEY", "fixture-instance-key");
-  testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
-  try {
-    const result = await getSuggestedPrompts.handler(
-      asTestRaw({
-        getWorkspaceAccess: async () => null,
-        memberRole: sessionMemberRole("owner"),
-        orgAIConfig: null,
-        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
-        managedAIResidency: "eu" as const,
-        params: { threadId },
-        promptCachingEnabled: false,
-        query: {},
-        request: new Request("https://example.test/prompts"),
-        route:
-          "/v1/chat/threads/:threadId/suggested-prompts" satisfies ApiRoutePath,
-        safeDb: db.safeDb,
-        session: { activeOrganizationId: organizationId },
-        user: { id: userId },
-      }),
-    );
-    expect(result).toEqual({ prompts: [] });
-    // The transcript is never read, so nothing of it can reach a model.
-    expect(messageReads).toBe(0);
-    expect(generator).not.toHaveBeenCalled();
-    expect(persist).not.toHaveBeenCalled();
-  } finally {
-    generator.mockRestore();
+      select: () => createSelectQueryMock([]),
+      insert: persist,
+      update: persist,
+      delete: persist,
+      execute: persist,
+    });
+    const generator = spyOn(
+      textGeneration,
+      "generateTanStackTextForTask",
+    ).mockResolvedValue("Draft a response.");
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    testState.setConfig("OPENROUTER_API_KEY", "fixture-instance-key");
+    testState.setConfig("REQUIRE_PERSONAL_AI_KEY", false);
+    try {
+      const result = await getSuggestedPrompts.handler(
+        asTestRaw({
+          getWorkspaceAccess: async () => null,
+          memberRole: sessionMemberRole("owner"),
+          orgAIConfig: null,
+          orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+          managedAIResidency: "eu" as const,
+          params: { threadId },
+          promptCachingEnabled: false,
+          query: {},
+          request: new Request("https://example.test/prompts"),
+          route:
+            "/v1/chat/threads/:threadId/suggested-prompts" satisfies ApiRoutePath,
+          safeDb: db.safeDb,
+          session: { activeOrganizationId: organizationId },
+          user: { id: userId },
+        }),
+      );
+      expect(result).toEqual({ prompts: [] });
+      // The transcript is never read, so nothing of it can reach a model.
+      expect(messageReads).toBe(0);
+      expect(generator).not.toHaveBeenCalled();
+      expect(persist).not.toHaveBeenCalled();
+    } finally {
+      generator.mockRestore();
+    }
   }
+});
+
+test("an archived matter refuses suggested prompts even when no model is available", async () => {
+  const organizationId = toSafeId<"organization">("org_prompts_archived");
+  const threadRead = mock(() => panic("Refused request read the thread"));
+  const db = createScopedDbMock({
+    query: { chatThreads: { findFirst: threadRead } },
+  });
+  const result = await getSuggestedPrompts.handler(
+    asTestRaw({
+      getWorkspaceAccess: async (id: string) => ({ id, status: "archived" }),
+      memberRole: sessionMemberRole("owner"),
+      orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+      managedAIResidency: "eu" as const,
+      params: { threadId: toSafeId<"chatThread">("thread_prompts_archived") },
+      promptCachingEnabled: false,
+      query: { workspaceId: toSafeId<"workspace">("workspace_archived") },
+      request: new Request("https://example.test/prompts"),
+      route:
+        "/v1/chat/threads/:threadId/suggested-prompts" satisfies ApiRoutePath,
+      safeDb: db.safeDb,
+      session: { activeOrganizationId: organizationId },
+      user: { id: toSafeId<"user">("user_prompts_archived") },
+    }),
+  );
+  expect(result).toMatchObject({ code: 404 });
+  expect(threadRead).not.toHaveBeenCalled();
 });

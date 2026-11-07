@@ -792,7 +792,7 @@
       "behaviour": "The reaper ends a turn whose owner stopped renewing its lease, without waiting for a next message.",
       "status": "active",
       "file": "src/lib/scheduler/tasks/chat-turn-reaper.ts",
-      "search": "async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),",
+      "search": "async (tx) =>\n                await reapOwnerlessChatTurnOnTx({ pings, threadId, tx }),",
       "replace": "async () => await Promise.resolve(),",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",

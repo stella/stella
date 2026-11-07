@@ -99,6 +99,13 @@ type ClassifyTurnFailureOptions = {
   rateLimits: CodexRateLimits | null;
 };
 
+/**
+ * Codex reports an exhausted ChatGPT Subscription Sharing allowance as a stream
+ * disconnect that only its text tells apart (approach from t3code, MIT,
+ * pingdotgg/t3code#25341).
+ */
+const SHARING_LIMIT_TEXT = "has reached their Subscription Sharing usage limit";
+
 export const classifyTurnFailure = ({
   error,
   rateLimits,
@@ -115,6 +122,10 @@ export const classifyTurnFailure = ({
       message,
       resetsAt: usageLimitResetsAt(rateLimits),
     };
+  }
+  if (message.includes(SHARING_LIMIT_TEXT)) {
+    // This allowance has its own reset, which the plan's rate limits do not say.
+    return { type: "usage_limit", message, resetsAt: null };
   }
   return { type: "provider_error", message, code };
 };

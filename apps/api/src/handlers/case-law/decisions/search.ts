@@ -2399,9 +2399,9 @@ export const findDecisionIdsByIdentity = async ({
     case "none":
       return [];
     case "unique":
+    case "incomplete_identifier":
       return [resolution.decision.id];
     case "ambiguous":
-    case "incomplete_identifier":
       return resolution.candidates.map((hit) => hit.id);
     default: {
       resolution satisfies never;
@@ -2923,7 +2923,7 @@ const TERM_COVERAGE_FAILURE_SINK = failureSink({
  * any other failure is the coverage read's. Each 5xx answer observes its
  * cause on the request itself.
  */
-const termCoverageFailure = (error: HandlerError<502 | 503>) => {
+const termCoverageFailure = (error: HandlerError<400 | 502 | 503>) => {
   // An expired budget is read first: it is never the index being down.
   const timedOut = publicReadTimeoutError(error) !== null;
   if (!timedOut && isSearchIndexUnavailable(error)) {

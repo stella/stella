@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
@@ -89,7 +91,7 @@ export const deleteEntitiesHandler = async function* ({
         .where(eq(workspaces.id, workspaceId))
         .limit(1)
         .for("update");
-      if (workspaceRows.at(0)?.status !== "active") {
+      if (!workspaceAcceptsWrites(workspaceRows.at(0)?.status)) {
         return {
           status: "rejected" as const,
           error: new HandlerError({

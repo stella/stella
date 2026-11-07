@@ -35,6 +35,10 @@
       "types": "./src/corpus.ts",
       "import": "./src/corpus.ts"
     },
+    "./act-titles": {
+      "types": "./src/act-titles.ts",
+      "import": "./src/act-titles.ts"
+    },
     "./cz-provision-citation-profile": {
       "types": "./src/cz-provision-citation-profile.ts",
       "import": "./src/cz-provision-citation-profile.ts"

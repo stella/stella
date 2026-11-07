@@ -1105,6 +1105,7 @@ export const OUTPUT_RULES = {
             "packages/ai-catalog/*",
             "packages/api-contract/*",
             "packages/boe/*",
+            "packages/brand/*",
             "packages/cli/*",
             "packages/business-registries/*",
             "packages/chat-limits/*",

@@ -6,7 +6,10 @@
 use std::{
   collections::HashMap,
   path::PathBuf,
-  sync::{Arc, Mutex},
+  sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+  },
   time::Duration,
 };
 
@@ -33,15 +36,16 @@ use super::client::{
   RunnerTiming,
 };
 use super::harness::{
-  EmitError, HarnessHost, HarnessReports, NoHarnessReports, RunOutput, RunSink,
-  UnavailableHarnessHost,
+  EmitError, Forwarded, HarnessHost, HarnessReports, NoHarnessReports, NotForwarded,
+  RunOutput, RunSink, UnavailableHarnessHost,
 };
 use super::journal::{Journal, JournalBacking, SharedJournal};
 use super::state::RunnerState;
 use crate::device_proof::DeviceKey;
 use crate::runner_protocol::{
   ApprovalKind, DESKTOP_ID_HEADER, Harness, HarnessReport, MAX_FRAME_BYTES, PATH,
-  PROTOCOL, RejectReason, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
+  PROTOCOL, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunStart,
+  RunTokenRefresh,
 };
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -198,13 +202,14 @@ fn run_start(run_id: &str, expires_at: &str) -> Value {
   json!({
     "type": "run.start",
     "runId": run_id,
+    "folderId": run_id,
     "harness": "codex",
     "harnessVersion": "0.50.0",
     "model": "gpt-5-codex",
     "harnessSessionId": null,
     "instructions": "Summarize the matter.",
     "messages": [{"role": "user", "content": "Summarize the matter."}],
-    "policy": {"network": "open", "fs": "workspace"},
+    "policy": {"network": "open", "fs": "workspace", "approvals": "ask"},
     "mcp": {
       "serverName": "stella",
       "url": "https://api.example.test/mcp",
@@ -226,10 +231,12 @@ fn text_chunk(delta: &str) -> RunOutput {
 }
 
 /// Records every call and keeps each run's sink for the test to emit through.
+/// While `refusing`, it takes no run command, as a busy or absent holder.
 #[derive(Default)]
 struct RecordingHost {
   calls: Mutex<Vec<String>>,
   sinks: Mutex<HashMap<String, RunSink>>,
+  refusing: AtomicBool,
 }
 
 impl RecordingHost {
@@ -244,6 +251,15 @@ impl RecordingHost {
   fn record(&self, call: String) {
     self.calls.lock().unwrap().push(call);
   }
+
+  fn take(&self, command: String) -> Forwarded {
+    if self.refusing.load(Ordering::SeqCst) {
+      self.record(format!("refused {command}"));
+      return Err(NotForwarded);
+    }
+    self.record(command);
+    Ok(())
+  }
 }
 
 impl HarnessHost for RecordingHost {
@@ -257,24 +273,34 @@ impl HarnessHost for RecordingHost {
     Ok(())
   }
 
-  fn input(&self, input: RunInput) {
-    self.record(format!("input {}", input.input_id));
+  fn input(&self, input: RunInput) -> Forwarded {
+    self.take(format!("input {}", input.input_id))
   }
 
-  fn approval(&self, approval: RunApproval) {
-    self.record(format!("approval {}", approval.request_id));
+  fn approval(&self, approval: RunApproval) -> Forwarded {
+    self.take(format!("approval {}", approval.request_id))
   }
 
-  fn interrupt(&self, run_id: &str) {
-    self.record(format!("interrupt {run_id}"));
+  fn answer(&self, answer: RunAnswer) -> Forwarded {
+    // The answers themselves may be secret; the host is shown only to take them.
+    let questions: Vec<&str> = answer.answers.question_ids().collect();
+    self.take(format!(
+      "answer {} {}",
+      answer.request_id,
+      questions.join(",")
+    ))
   }
 
-  fn cancel(&self, run_id: &str) {
-    self.record(format!("cancel {run_id}"));
+  fn interrupt(&self, run_id: &str) -> Forwarded {
+    self.take(format!("interrupt {run_id}"))
   }
 
-  fn token(&self, refresh: RunTokenRefresh) {
-    self.record(format!("token {}", refresh.expires_at));
+  fn cancel(&self, run_id: &str) -> Forwarded {
+    self.take(format!("cancel {run_id}"))
+  }
+
+  fn token(&self, refresh: RunTokenRefresh) -> Forwarded {
+    self.take(format!("token {}", refresh.expires_at))
   }
 }
 
@@ -688,6 +714,12 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
     "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
     "decision": "approve",
   });
+  let answer = json!({
+    "type": "run.answer",
+    "runId": RUN,
+    "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000d2",
+    "answers": {"tone": ["Formal"], "passphrase": ["open sesame"]},
+  });
   let token = |expires_at: &str| json!({"type": "run.token", "runId": RUN, "token": "run-token-2", "expiresAt": expires_at});
   for _ in 0..2 {
     connection
@@ -696,6 +728,7 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
     connection.receive_type("run.accepted").await;
     connection.send(input.clone()).await;
     connection.send(approval.clone()).await;
+    connection.send(answer.clone()).await;
     connection
       .send(json!({"type": "run.interrupt", "runId": RUN}))
       .await;
@@ -722,6 +755,7 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
       format!("start {RUN}"),
       "input 0192f3a0-6b1c-7d2e-8f30-0000000000c1".to_owned(),
       "approval 0192f3a0-6b1c-7d2e-8f30-0000000000d1".to_owned(),
+      "answer 0192f3a0-6b1c-7d2e-8f30-0000000000d2 passphrase,tone".to_owned(),
       format!("interrupt {RUN}"),
       "token 2026-10-28T13:15:00.000Z".to_owned(),
     ]
@@ -747,6 +781,7 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
   // The API replays its queue on a new socket.
   connection.send(input).await;
   connection.send(approval).await;
+  connection.send(answer).await;
   connection
     .send(json!({"type": "run.interrupt", "runId": RUN}))
     .await;
@@ -761,6 +796,80 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
     .await;
   connection.receive_type("run.accepted").await;
   assert_eq!(restarted_host.calls(), [format!("cancel {RUN}")]);
+  runner.stop().await;
+}
+
+#[tokio::test]
+async fn a_command_the_host_did_not_take_reaches_it_when_the_api_resends_it() {
+  let gateway = Gateway::bind().await;
+  let host = Arc::new(RecordingHost::default());
+  let setup = Setup::new(Arc::clone(&host) as Arc<dyn HarnessHost>);
+  let runner = setup.start(&gateway);
+  let mut connection = gateway.accept().await;
+  connection.hello().await;
+  connection.welcome(&[]).await;
+  connection
+    .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
+    .await;
+  connection.receive_type("run.accepted").await;
+  let commands = [
+    json!({
+      "type": "run.input",
+      "runId": RUN,
+      "inputId": "0192f3a0-6b1c-7d2e-8f30-0000000000c1",
+      "message": {"role": "user", "content": "Also check the dates."},
+    }),
+    json!({
+      "type": "run.approval",
+      "runId": RUN,
+      "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
+      "decision": "approve",
+    }),
+    json!({
+      "type": "run.answer",
+      "runId": RUN,
+      "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000d2",
+      "answers": {"tone": ["Formal"]},
+    }),
+    json!({"type": "run.interrupt", "runId": RUN}),
+    json!({"type": "run.cancel", "runId": RUN}),
+  ];
+  let names = [
+    "input 0192f3a0-6b1c-7d2e-8f30-0000000000c1".to_owned(),
+    "approval 0192f3a0-6b1c-7d2e-8f30-0000000000d1".to_owned(),
+    "answer 0192f3a0-6b1c-7d2e-8f30-0000000000d2 tone".to_owned(),
+    format!("interrupt {RUN}"),
+    format!("cancel {RUN}"),
+  ];
+  // The holder is busy: no command is taken, so none is recorded as handled.
+  host.refusing.store(true, Ordering::SeqCst);
+  for command in &commands {
+    connection.send(command.clone()).await;
+  }
+  // Answered in order, so everything before it was handled.
+  connection
+    .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
+    .await;
+  connection.receive_type("run.accepted").await;
+  // The holder is back; the API resends its queue on the next socket.
+  host.refusing.store(false, Ordering::SeqCst);
+  connection.close(1011, "internal_error").await;
+  let mut connection = gateway.accept().await;
+  connection.hello().await;
+  connection.welcome(&[(RUN, 0)]).await;
+  for _ in 0..2 {
+    for command in &commands {
+      connection.send(command.clone()).await;
+    }
+  }
+  connection
+    .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
+    .await;
+  connection.receive_type("run.accepted").await;
+  let mut expected = vec![format!("start {RUN}")];
+  expected.extend(names.iter().map(|name| format!("refused {name}")));
+  expected.extend(names.iter().cloned());
+  assert_eq!(host.calls(), expected);
   runner.stop().await;
 }
 

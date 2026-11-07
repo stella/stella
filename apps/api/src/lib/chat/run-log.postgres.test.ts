@@ -15,6 +15,7 @@ import {
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
   createChatRunLog,
   createChatRunLogReplay,
@@ -250,14 +251,18 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
       const pending = reader.next();
       expect(
-        await scopedDb(
-          async (tx) =>
-            await settleChatTurnOnTx({
-              assistantMessageId: null,
-              execution,
-              outcome: USER_STOP_OUTCOME,
-              tx,
-            }),
+        await withChatRunPings(
+          async (pings) =>
+            await scopedDb(
+              async (tx) =>
+                await settleChatTurnOnTx({
+                  pings,
+                  assistantMessageId: null,
+                  execution,
+                  outcome: USER_STOP_OUTCOME,
+                  tx,
+                }),
+            ),
         ),
       ).toBe("settled");
       const timing = await readChatTurnTiming({

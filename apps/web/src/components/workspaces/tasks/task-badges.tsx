@@ -78,7 +78,7 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
       )}
     >
       {showItemType && (
-        <span className="bg-muted rounded px-1.5 py-0.5">
+        <span className="bg-muted rounded-sm px-1.5 py-0.5">
           {t(ITEM_TYPE_TRANSLATION_KEYS[listItemType])}
         </span>
       )}

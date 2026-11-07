@@ -189,6 +189,7 @@ fn run_start(model: &str) -> SidecarRunStart {
     config_dir: "/data/harness-home/codex".to_owned(),
     launch: HarnessLaunchSettings::default(),
     workspace_dir: "/data/runs/1".to_owned(),
+    cache_dir: "/data/agent-package-cache".to_owned(),
     model: model.to_owned(),
     instructions: String::new(),
     messages: vec![
@@ -197,10 +198,12 @@ fn run_start(model: &str) -> SidecarRunStart {
         .unwrap()
         .clone(),
     ],
+    attachments: Vec::new(),
     harness_session_id: None,
     policy: RunPolicy {
       network: NetworkPolicy::Open,
       fs: FsPolicy::Workspace,
+      approvals: ApprovalMode::FullAuto,
     },
     mcp: McpBinding {
       server_name: "stella".to_owned(),
@@ -375,7 +378,13 @@ fn commands_for_a_run_reach_the_holder() {
       .answer(RunAnswer {
         run_id: run_id.clone(),
         request_id: REQUEST_ID.to_owned(),
-        answers: [("law".to_owned(), vec!["Czech".to_owned()])].into(),
+        answers: crate::runner_protocol::QuestionAnswers::try_from(
+          std::collections::BTreeMap::from([(
+            "law".to_owned(),
+            vec!["Czech".to_owned()],
+          )]),
+        )
+        .unwrap(),
       })
       .unwrap();
     sidecar.interrupt(&run_id).unwrap();
@@ -418,12 +427,19 @@ fn a_command_over_the_line_limit_is_refused_and_the_session_stays_up() {
     let run_id = start.run_id.clone();
     let mut outputs = sidecar.start_run(start).unwrap();
     assert_eq!(next(&mut outputs).await, started(&run_id));
-    let answers = (0..32)
-      .map(|question| {
-        let answer = "x".repeat(16_384);
-        (format!("q{question}"), vec![answer; 64])
-      })
-      .collect();
+    // The most a valid answer may hold is still far over one line.
+    let answers = crate::runner_protocol::QuestionAnswers::try_from(
+      (0..crate::runner_protocol::MAX_ANSWERED_QUESTIONS)
+        .map(|question| {
+          let answer = "x".repeat(crate::runner_protocol::MAX_ANSWER_LENGTH);
+          (
+            format!("q{question}"),
+            vec![answer; crate::runner_protocol::MAX_ANSWERS_PER_QUESTION],
+          )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>(),
+    )
+    .unwrap();
     assert_eq!(
       sidecar.answer(RunAnswer {
         run_id: run_id.clone(),
@@ -966,6 +982,7 @@ fn probe_outcomes_become_runner_reports() {
   let ready = ProbeOutcome::Ready {
     version: "0.165.0".to_owned(),
     capabilities: vec![HarnessCapability::Approvals, HarnessCapability::Approvals],
+    approval_modes: vec![ApprovalMode::FullAuto, ApprovalMode::FullAuto],
     models: vec![
       ProbedModel {
         id: "gpt-test".to_owned(),
@@ -985,6 +1002,7 @@ fn probe_outcomes_become_runner_reports() {
       id: Harness::Codex,
       version: "0.165.0".to_owned(),
       capabilities: vec![HarnessCapability::Approvals],
+      approval_modes: vec![ApprovalMode::Ask, ApprovalMode::FullAuto],
       models: vec![HarnessModel {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
@@ -994,6 +1012,7 @@ fn probe_outcomes_become_runner_reports() {
   let no_models = ProbeOutcome::Ready {
     version: "0.165.0".to_owned(),
     capabilities: Vec::new(),
+    approval_modes: Vec::new(),
     models: Vec::new(),
   };
   assert_eq!(
@@ -1376,7 +1395,9 @@ mod stand_in {
     });
     match model {
       "garbage" => write(held, "not json").await,
-      "wait" | "interruptible" | "flood-later" => emit(held, run_id, event).await,
+      "wait" | "interruptible" | "flood-later" | "ask" => {
+        emit(held, run_id, event).await
+      }
       "flood" => {
         for _ in 0..300 {
           emit(held, run_id, event.clone()).await;
@@ -1498,6 +1519,27 @@ mod stand_in {
           for _ in 0..300 {
             emit(held, &run_id, event.clone()).await;
           }
+        }
+      }
+      "run.answer" => {
+        // A run that asked a question goes on with the request it answers.
+        if held
+          .runs
+          .get(&run_id)
+          .is_some_and(|run| !run.finished && run.model == "ask")
+        {
+          let answered = json!({
+            "type": "run.event",
+            "runId": run_id,
+            "chunk": { "type": "TEXT_MESSAGE_CONTENT", "delta": message["requestId"] },
+          });
+          emit(held, &run_id, answered).await;
+          emit(
+            held,
+            &run_id,
+            finished(&run_id, "completed", Some("thread-a")),
+          )
+          .await;
         }
       }
       "run.interrupt" => {

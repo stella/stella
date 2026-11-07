@@ -1,6 +1,6 @@
 import { beforeAll, expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { readFileSync, watch } from "node:fs";
+import { readFileSync } from "node:fs";
 import {
   cp,
   mkdir,
@@ -21,6 +21,10 @@ import * as v from "valibot";
 import oxlintConfig from "../oxlint.config.ts";
 import tailwindConfig from "../oxlint.tailwind.config.ts";
 import {
+  CI_GENERATED_DIRECTORIES,
+  TAILWIND_CLASS_CACHE,
+} from "../packages/scripts/src/generated-files";
+import {
   checkCache,
   mergeCache,
   snapshotProblems,
@@ -29,6 +33,7 @@ import {
   writeCache,
 } from "./generate-tailwind-classes";
 import { GENERATORS } from "./generated-files";
+import { TAILWIND_LINT_CACHE_DIR } from "./tailwind-lint-cache";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const pluginPath = path.join(repositoryRoot, "node_modules/oxlint-tailwindcss");
@@ -504,12 +509,10 @@ test("regeneration never exposes a missing or partial snapshot", async () => {
     changedSnapshot,
     `${await readFile(changedSnapshot, "utf-8")}\n`,
   );
-  let cacheDirectoryRemoved = false;
-  const watcher = watch(fixture, (event, name) => {
-    if (event === "rename" && name === path.basename(cache)) {
-      cacheDirectoryRemoved = true;
-    }
-  });
+  // Not an artifact, so publishing leaves it alone. It survives only if the
+  // directory does: a replaced or recreated cache directory loses it.
+  const directoryMarker = path.join(cache, "directory-marker");
+  await writeFile(directoryMarker, "kept");
   const writer = writeCache(cache);
   let reads = 0;
   const readSnapshots = async () => {
@@ -529,10 +532,7 @@ test("regeneration never exposes a missing or partial snapshot", async () => {
     }
   }
   await writer;
-  // real-time: allow the filesystem watcher to deliver a queued rename event.
-  await Bun.sleep(50);
-  watcher.close();
-  expect(cacheDirectoryRemoved).toBe(false);
+  expect(await readFile(directoryMarker, "utf-8")).toBe("kept");
   expect(reads).toBeGreaterThan(0);
   await rm(fixture, { recursive: true, force: true });
 }, 120_000);
@@ -706,6 +706,33 @@ test("the cache is a derived output with every Tailwind entry point as input", (
   });
   expect(tracked.exitCode).toBe(0);
   expect(tracked.stdout.toString()).toBe("");
+});
+
+test("CI lint jobs reuse the producer's cache instead of filling it beside lint", () => {
+  // The generated-sources producer fills the cache alone on its runner and
+  // ships it; every lint job restores it and runs no cache-filling pass.
+  expect(CI_GENERATED_DIRECTORIES).toContain(TAILWIND_CLASS_CACHE);
+  expect(
+    GENERATORS.find(({ id }) => id === "tailwind-class-cache")?.write,
+  ).toEqual(TAILWIND_CLASS_CACHE.command);
+  expect(TAILWIND_LINT_CACHE_DIR).toBe(
+    path.join(repositoryRoot, TAILWIND_CLASS_CACHE.directory),
+  );
+  expect(generatedCache).toBe(TAILWIND_LINT_CACHE_DIR);
+  // `--write` consults the prepared sources before any lint pass: a manifest
+  // configured for another checkout stops it before it starts oxlint.
+  const elsewhere = path.join(tmpdir(), "other-checkout", "manifest.json");
+  const generated = Bun.spawnSync(
+    ["bun", "scripts/generate-tailwind-classes.ts", "--write"],
+    {
+      cwd: repositoryRoot,
+      env: { ...process.env, CI_GENERATED_SOURCES_MANIFEST: elsewhere },
+    },
+  );
+  expect(generated.exitCode).not.toBe(0);
+  expect(generated.stderr.toString()).toContain(
+    "Generated source manifest must belong to this checkout",
+  );
 });
 
 test("derived cache keeps the generator's compact form", async () => {

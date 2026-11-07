@@ -85,6 +85,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { emitCaseLawResearchCellsMetric } from "@/api/lib/observability/request-metrics";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
@@ -1141,6 +1142,7 @@ const writeOutcomes = async (
   );
   const now = new Date();
   const written = await safeDb(async (tx) => {
+    const landed: AnswerOutcome[] = [];
     for (const { columnId, outcome } of outcomes) {
       const asked = askedByColumn.get(columnId);
       if (asked === undefined) {
@@ -1151,7 +1153,7 @@ const writeOutcomes = async (
       // transaction; each cell is its own row so a batch would be a VALUES join
       // of the same size.
       // db-await-in-loop: per-cell compare-and-set, each guarded by its own column snapshot and claim
-      await tx
+      const updated = await tx
         .update(caseLawResearchAnswers)
         .set({ ...values, claimId: null, updatedAt: now })
         .where(
@@ -1177,10 +1179,46 @@ const writeOutcomes = async (
                 ),
             ),
           ),
-        );
+        )
+        .returning({ columnId: caseLawResearchAnswers.columnId });
+      if (updated.length > 0) {
+        landed.push(outcome);
+      }
     }
+    return landed;
   });
   if (Result.isError(written)) {
     throw written.error;
+  }
+  reportSettledCells(written.value);
+};
+
+/** One metric line per outcome the write landed; nothing for a lost claim. */
+const reportSettledCells = (landed: readonly AnswerOutcome[]): void => {
+  const cellsByOutcome = new Map<
+    string,
+    {
+      state: AnswerOutcome["state"];
+      failureReason: CaseLawResearchAnswerFailureReason | null;
+      cells: number;
+    }
+  >();
+  for (const outcome of landed) {
+    const failureReason =
+      outcome.state === "failed" ? outcome.failureReason : null;
+    const key = `${outcome.state}:${failureReason ?? ""}`;
+    const tally = cellsByOutcome.get(key);
+    if (tally === undefined) {
+      cellsByOutcome.set(key, {
+        state: outcome.state,
+        failureReason,
+        cells: 1,
+      });
+      continue;
+    }
+    tally.cells += 1;
+  }
+  for (const tally of cellsByOutcome.values()) {
+    emitCaseLawResearchCellsMetric(tally);
   }
 };

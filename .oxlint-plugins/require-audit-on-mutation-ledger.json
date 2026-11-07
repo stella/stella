@@ -1070,20 +1070,6 @@
     "reason": "Usage metering or counter row that is itself the accounting record."
   },
   {
-    "id": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts::recordProviderEventReplayAuditInTx",
-    "writes": {
-      "update:hostedUsageWebhookEvents": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
-    "id": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts::updateWebhookEventResultInTx",
-    "writes": {
-      "update:hostedUsageWebhookEvents": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
     "id": "apps/api/src/lib/infosoud/agenda-import.ts::importInfoSoudAgendaItems",
     "writes": {
       "insert:entities": 1,

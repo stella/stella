@@ -97,6 +97,8 @@ pub(crate) struct RunRecord {
   pub(crate) inputs: BTreeSet<String>,
   /// `run.approval` request ids already handed to the host.
   pub(crate) approvals: BTreeSet<String>,
+  /// `run.answer` request ids already handed to the host; never the answers.
+  pub(crate) answers: BTreeSet<String>,
   pub(crate) interrupted: bool,
   pub(crate) cancelled: bool,
   /// The last position the API acknowledged.
@@ -117,6 +119,7 @@ impl RunRecord {
       decided_at_ms: now_ms,
       inputs: BTreeSet::new(),
       approvals: BTreeSet::new(),
+      answers: BTreeSet::new(),
       interrupted: false,
       cancelled: false,
       ack_seq: 0,
@@ -207,6 +210,7 @@ impl RunRecord {
       decided_at_ms: self.decided_at_ms,
       inputs: self.inputs.clone(),
       approvals: self.approvals.clone(),
+      answers: self.answers.clone(),
       interrupted: self.interrupted,
       cancelled: self.cancelled,
       ack_seq: self.ack_seq,
@@ -219,6 +223,7 @@ impl RunRecord {
     self.decision = head.decision;
     self.inputs = head.inputs;
     self.approvals = head.approvals;
+    self.answers = head.answers;
     self.interrupted = head.interrupted;
     self.cancelled = head.cancelled;
     self.ack_seq = head.ack_seq;
@@ -234,6 +239,9 @@ struct Head {
   decided_at_ms: i64,
   inputs: BTreeSet<String>,
   approvals: BTreeSet<String>,
+  /// Heads written before answers existed have none.
+  #[serde(default)]
+  answers: BTreeSet<String>,
   interrupted: bool,
   cancelled: bool,
   /// The acknowledged position when the head was written; the log may
@@ -249,6 +257,7 @@ impl Head {
     self.decision == other.decision
       && self.inputs == other.inputs
       && self.approvals == other.approvals
+      && self.answers == other.answers
       && self.interrupted == other.interrupted
       && self.cancelled == other.cancelled
   }
@@ -462,7 +471,6 @@ impl Journal {
     let before = held.record.head(held.log.generation);
     let (write, result) = change(&mut held.record);
     match write {
-      Change::Unchanged => held.record.restore(before),
       Change::Store => {
         if let Err(error) = store(&self.backing, held, &before) {
           held.record.restore(before);
@@ -907,7 +915,6 @@ fn remove_quietly(path: &Path) {
 
 /// What [`SharedJournal::update`] does with the changed record.
 pub(crate) enum Change {
-  Unchanged,
   Store,
   Forget,
 }

@@ -37,17 +37,17 @@ import {
   COMPOSER_CARD_CLASS,
   ReadingFromRow,
   TypeChipsRow,
-  useChipDefinitions,
+  usePropertyComposerChipDefinitions,
 } from "@/components/workspaces/properties/composer-primitives";
 import type {
-  CreatableContentType,
   FileChip,
+  PropertyComposerContentType,
 } from "@/components/workspaces/properties/composer-primitives";
 import { InlineOptionEditor } from "@/components/workspaces/properties/inline-option-editor";
 import { PropertyPromptInput } from "@/components/workspaces/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/components/workspaces/properties/property-input/input";
 import {
-  isCreatableContentType,
+  isPropertyComposerContentType,
   propertyToolAction,
 } from "@/components/workspaces/property-utils";
 import { ADD_COLUMN_RAIL_PLUS_CLASS_NAME } from "@/components/workspaces/table/add-column-rail";
@@ -61,10 +61,12 @@ import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import {
   CapabilityAction,
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -123,11 +125,23 @@ type CreatePropertyResult = {
   entityId?: string;
 };
 
-const buildContent = (
-  contentType: CreatableContentType,
-  options: SelectPropertyOption[],
-  fallback: string | null,
-): Exclude<WorkspaceProperty["content"], { type: "record" }> => {
+type BuildContentArgs = {
+  contentType: PropertyComposerContentType;
+  options: SelectPropertyOption[];
+  fallback: string | null;
+  /** The edited column's currency, kept when it stays a money column. */
+  currency: string | null;
+};
+
+const buildContent = ({
+  contentType,
+  options,
+  fallback,
+  currency,
+}: BuildContentArgs): Exclude<
+  WorkspaceProperty["content"],
+  { type: "record" }
+> => {
   if (contentType === "single-select" || contentType === "multi-select") {
     return {
       version: 1,
@@ -136,7 +150,31 @@ const buildContent = (
       fallback,
     };
   }
+  if (contentType === "money") {
+    return { version: 1, type: "money", currency };
+  }
   return { version: 1, type: contentType };
+};
+
+type ComposerContent = {
+  initialContentType: PropertyComposerContentType;
+  /** The edited column's currency, kept when it stays a money column. */
+  editingCurrency: string | null;
+};
+
+const composerContentOf = (
+  editingProperty: WorkspaceProperty | null,
+): ComposerContent => {
+  if (editingProperty === null) {
+    return { initialContentType: "text", editingCurrency: null };
+  }
+  const { content } = editingProperty;
+  return {
+    initialContentType: isPropertyComposerContentType(content.type)
+      ? content.type
+      : "text",
+    editingCurrency: content.type === "money" ? content.currency : null,
+  };
 };
 
 const promptFromHtml = (html: string): string =>
@@ -423,10 +461,15 @@ const PropertyComposerBody = ({
   const isManualEdit = editingTool?.type === "manual-input";
   const showAiSections = !isManualEdit;
   const { capabilities } = useActionCapabilities("ai");
-  const initialContentType: CreatableContentType =
-    editingProperty && isCreatableContentType(editingProperty.content.type)
-      ? editingProperty.content.type
-      : "text";
+  const { initialContentType, editingCurrency } =
+    composerContentOf(editingProperty);
+  // An existing money column keeps its chip for everyone; offering money for
+  // an AI column is the table-analysis beta, so only the AI composer asks.
+  const tableAnalysisEnabled = useCallerFeatureEnabled(
+    CALLER_FEATURE.tableAnalysis,
+    { enabled: showAiSections },
+  );
+  const offerMoney = tableAnalysisEnabled || initialContentType === "money";
   const initialPromptHtml =
     editingTool?.type === "ai-model" ? editingTool.prompt : "";
   const initialOptions: SelectPropertyOption[] =
@@ -521,7 +564,7 @@ const PropertyComposerBody = ({
   })();
 
   const [contentType, setContentType] =
-    useState<CreatableContentType>(initialContentType);
+    useState<PropertyComposerContentType>(initialContentType);
   const [name, setName] = useState(editingProperty?.name ?? "");
   const [prompt, setPrompt] = useState(initialPromptHtml);
   const [textareaMentions, setTextareaMentions] = useState<string[]>(
@@ -621,7 +664,12 @@ const PropertyComposerBody = ({
     }
 
     if (isEditMode && editingProperty) {
-      const nextContent = buildContent(contentType, options, effectiveFallback);
+      const nextContent = buildContent({
+        contentType,
+        options,
+        fallback: effectiveFallback,
+        currency: editingCurrency,
+      });
       const nextTool: Exclude<
         WorkspaceProperty["tool"],
         { type: "playbook-verdict" }
@@ -682,7 +730,12 @@ const PropertyComposerBody = ({
               createdAt: Temporal.Now.instant().toString(),
               status: "stale",
               kinds: null,
-              content: buildContent(contentType, options, effectiveFallback),
+              content: buildContent({
+                contentType,
+                options,
+                fallback: effectiveFallback,
+                currency: null,
+              }),
               tool: {
                 version: 1,
                 type: "ai-model",
@@ -833,6 +886,7 @@ const PropertyComposerBody = ({
               const file = fileProperties.find((p) => p.id === id);
               return { id, name: file === undefined ? id : displayName(file) };
             })}
+            offerMoney={offerMoney}
             onAutoPrompt={handleAutoPrompt}
             onContentTypeChange={setContentType}
             onMentionsChange={setTextareaMentions}
@@ -859,6 +913,7 @@ const PropertyComposerBody = ({
         ) : (
           <ManualTypeRow
             contentType={contentType}
+            offerMoney={offerMoney}
             onContentTypeChange={setContentType}
             typeChanged={typeChanged}
           />
@@ -997,8 +1052,9 @@ type ComposerCardProps = {
   onMentionsChange: (mentions: string[]) => void;
   editorReady: (editor: Editor) => void;
   onSubmit: () => void;
-  contentType: CreatableContentType;
-  onContentTypeChange: (next: CreatableContentType) => void;
+  contentType: PropertyComposerContentType;
+  onContentTypeChange: (next: PropertyComposerContentType) => void;
+  offerMoney: boolean;
   fileChips: FileChip[];
   onRemoveFile: (id: string) => void;
   availableFiles?: FileChip[];
@@ -1019,6 +1075,7 @@ const ComposerCard = ({
   onSubmit,
   contentType,
   onContentTypeChange,
+  offerMoney,
   fileChips,
   onRemoveFile,
   availableFiles,
@@ -1029,7 +1086,7 @@ const ComposerCard = ({
   typeChanged,
 }: ComposerCardProps) => {
   const t = useTranslations();
-  const chipDefs = useChipDefinitions();
+  const chipDefs = usePropertyComposerChipDefinitions(offerMoney);
 
   return (
     <div className={COMPOSER_CARD_CLASS}>
@@ -1128,17 +1185,19 @@ const DocumentTypeScopeRow = ({
 };
 
 type ManualTypeRowProps = {
-  contentType: CreatableContentType;
-  onContentTypeChange: (next: CreatableContentType) => void;
+  contentType: PropertyComposerContentType;
+  offerMoney: boolean;
+  onContentTypeChange: (next: PropertyComposerContentType) => void;
   typeChanged: boolean;
 };
 
 const ManualTypeRow = ({
   contentType,
+  offerMoney,
   onContentTypeChange,
   typeChanged,
 }: ManualTypeRowProps) => {
-  const chipDefs = useChipDefinitions();
+  const chipDefs = usePropertyComposerChipDefinitions(offerMoney);
   return (
     <div className={cn(COMPOSER_CARD_CLASS, "gap-2")}>
       <TypeChipsRow

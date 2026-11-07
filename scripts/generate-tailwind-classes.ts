@@ -14,9 +14,15 @@ import { cacheArtifactPaths } from "oxlint-tailwindcss";
 import * as v from "valibot";
 
 import oxlintConfig from "../oxlint.config.ts";
+import { TAILWIND_CLASS_CACHE } from "../packages/scripts/src/generated-files";
+import { hasPreparedGeneratedDirectory } from "../packages/scripts/src/prepared-generated-sources";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
-const generatedCache = path.join(repositoryRoot, ".tailwind-cache");
+const generatedCache = path.join(
+  repositoryRoot,
+  TAILWIND_CLASS_CACHE.directory,
+);
+const artifact = TAILWIND_CLASS_CACHE.file;
 const staleLockAgeMs = 5 * 60_000;
 const tailwindSettings = v.object({
   tailwindcss: v.object({
@@ -37,7 +43,6 @@ export const tailwindEntryPoints = v
     stylesheet: use,
   }));
 const lintTargets = tailwindEntryPoints.map(({ root }) => root);
-const artifact = /^[0-9a-f]{32}(?:\.json|\.decl-[0-9a-f]{2}\.json)$/u;
 
 const lintReport = v.object({
   diagnostics: v.array(v.object({ message: v.string() })),
@@ -491,7 +496,17 @@ const check = async () => {
 if (import.meta.main) {
   const mode = process.argv[2];
   if (mode === "--write") {
-    await writeCache();
+    // A CI consumer restored the cache the generated-sources producer filled
+    // for this exact tree. Filling it again would repeat the heaviest pass of
+    // the lint jobs beside their type-aware lint, which stalled on CI runners.
+    if (
+      !hasPreparedGeneratedDirectory(
+        repositoryRoot,
+        TAILWIND_CLASS_CACHE.directory,
+      )
+    ) {
+      await writeCache();
+    }
   } else if (mode === "--check") {
     await check();
   } else {

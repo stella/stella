@@ -45,6 +45,7 @@ export type {
 export { HARNESS_FAILURE_OUTCOME, harnessSessionId } from "./harness/events";
 export {
   HARNESS_CONTINUATION_EVENT,
+  HARNESS_QUESTION_TOOL,
   harnessEventsToChunks,
 } from "./harness/stream-chunks";
 export type {

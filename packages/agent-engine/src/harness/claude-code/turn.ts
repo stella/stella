@@ -2,6 +2,11 @@ import { panic, Result } from "better-result";
 import type { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
+import {
+  chatLocalRunAnswersRefusal,
+  chatLocalRunQuestionsSchema,
+} from "@stll/api-contract/chat-run-target";
+
 import type {
   HarnessInteractionResponse,
   HarnessRespondError,
@@ -198,18 +203,16 @@ const interactionResult = (
       if (response.type !== "answers") {
         return Result.err("This request takes answers.");
       }
+      const refusal = chatLocalRunAnswersRefusal(
+        pending.questions,
+        response.answers,
+      );
+      if (refusal !== null) {
+        return Result.err(refusal);
+      }
       const answers: [string, string][] = [];
       for (const question of pending.questions) {
         const given = response.answers[question.id] ?? [];
-        if (given.length === 0) {
-          return Result.err(`Question ${question.id} has no answer.`);
-        }
-        const labels = new Set(question.options.map(({ label }) => label));
-        if (!question.allowsFreeText && given.some((a) => !labels.has(a))) {
-          return Result.err(
-            `Question ${question.id} takes one of its options.`,
-          );
-        }
         // Native answers are keyed by the question text; several selected
         // options are one comma-separated answer.
         answers.push([pending.texts.get(question.id) ?? "", given.join(", ")]);
@@ -233,7 +236,19 @@ type ClaudeCodeTurnSessionOptions = {
   detached: Detached;
   /** The server name the turn registered the stella MCP binding under. */
   stellaServer: string;
+  /**
+   * Whether a sandboxed command's request to reach a host is answered
+   * without asking. A local run's network is open; the CLI's sandbox routes
+   * commands through a proxy that asks about every new host.
+   */
+  allowSandboxNetwork: boolean;
 };
+
+/**
+ * The tool name the CLI asks with when a sandboxed command reaches a host its
+ * sandbox has not allowed yet. Not a model tool: no tool call carries it.
+ */
+const SANDBOX_NETWORK_TOOL = "SandboxNetworkAccess";
 
 export class ClaudeCodeTurnSession {
   private began = false;
@@ -254,11 +269,13 @@ export class ClaudeCodeTurnSession {
 
   private readonly lifecycle: HarnessTurnLifecycle<ClaudeCliClient>;
   private readonly stellaServer: string;
+  private readonly allowSandboxNetwork: boolean;
 
   constructor({
     gracePeriodMs,
     detached,
     stellaServer,
+    allowSandboxNetwork,
   }: ClaudeCodeTurnSessionOptions) {
     this.lifecycle = new HarnessTurnLifecycle({
       gracePeriodMs,
@@ -266,6 +283,7 @@ export class ClaudeCodeTurnSession {
       name: "claude-turn",
     });
     this.stellaServer = stellaServer;
+    this.allowSandboxNetwork = allowSandboxNetwork;
   }
 
   /** Handlers for the process; messages before `begin` are held. */
@@ -694,6 +712,13 @@ export class ClaudeCodeTurnSession {
     if (parsed === null) {
       return;
     }
+    if (parsed.tool_name === SANDBOX_NETWORK_TOOL && this.allowSandboxNetwork) {
+      this.client?.respond(controlId, {
+        behavior: "allow",
+        updatedInput: parsed.input,
+      });
+      return;
+    }
     const requestId = requestIdFor(controlId);
     const use = { name: parsed.tool_name, input: parsed.input };
     const held = this.toolUses.get(parsed.tool_use_id);
@@ -736,9 +761,8 @@ export class ClaudeCodeTurnSession {
     if (parsed === null) {
       return;
     }
-    const requestId = requestIdFor(controlId);
     const texts = new Map<string, string>();
-    const questions = parsed.questions.map((question, index) => {
+    const asked = parsed.questions.map((question, index) => {
       const id = String(index);
       texts.set(id, question.question);
       return {
@@ -748,9 +772,21 @@ export class ClaudeCodeTurnSession {
         options: question.options,
         // The harness always lets the user write their own answer.
         allowsFreeText: true,
+        multiSelect: question.multiSelect ?? false,
         secret: false,
       };
     });
+    // A question the chat could not carry or answer back ends the turn
+    // instead of pausing it on a question nobody can answer.
+    const questions = this.parse(
+      chatLocalRunQuestionsSchema,
+      asked,
+      "question",
+    );
+    if (questions === null) {
+      return;
+    }
+    const requestId = requestIdFor(controlId);
     this.pending.set(requestId, {
       type: "question",
       controlId,

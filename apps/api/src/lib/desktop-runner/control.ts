@@ -3,12 +3,15 @@ import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
+  DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH,
+  DESKTOP_RUNNER_DESKTOP_MESSAGE,
   DESKTOP_RUNNER_HARNESS_STATE,
   DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   DESKTOP_RUNNER_MAX_TOKEN_LENGTH,
   DESKTOP_RUNNER_SERVER_MESSAGE,
   DESKTOP_RUNNER_TIMING,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
   type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
@@ -19,6 +22,11 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
 import {
+  type RunAnswerMessage,
+  sealRunAnswer,
+} from "@/api/lib/desktop-runner/sealed-answers";
+import {
+  type AnsweredRequest,
   type ChatRunBinding,
   type ChatRunForRequest,
   type DesktopRunnerDb,
@@ -77,15 +85,27 @@ export type PickedDesktop =
       report: DesktopRunnerHarnessReport | null;
     };
 
+/** A file a run copies: where it lands and which stored file it is. */
+export type LocalRunAttachment = {
+  path: string;
+  fileId: string;
+  fileName: string;
+  s3Key: string;
+};
+
 export type StartLocalRunInput = {
   owner: RunOwner;
   desktopId: string;
   harness: AgentHarness;
   harnessVersion: string;
   model: string;
+  /** How much the run asks before it acts; the computer must report it. */
+  approvals: DesktopRunnerApprovalMode;
   harnessSessionId: string | null;
   instructions: string;
   messages: RunStart["messages"];
+  /** Files to copy into the run's folder; each link is signed on every send. */
+  attachments: readonly LocalRunAttachment[];
   /** Where the run reaches the workspace; its token is minted on every send. */
   mcp: Omit<RunStart["mcp"], "token" | "expiresAt">;
   /** Workspaces already authorized for this member and run. */
@@ -103,6 +123,7 @@ export type StartLocalRunOutcome =
       report: DesktopRunnerHarnessReport | null;
     }
   | { type: "model_unavailable" }
+  | { type: "approvals_unavailable" }
   /** The message would not fit one frame, even with the longest token. */
   | { type: "too_large" };
 
@@ -123,6 +144,9 @@ export type DesktopRunnerEventPage = {
  * with it fits a frame with any token.
  */
 const TOKEN_SHAPE = "t".repeat(DESKTOP_RUNNER_MAX_TOKEN_LENGTH);
+const ATTACHMENT_LINK_SHAPE = `https://${"l".repeat(
+  DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH - "https://".length,
+)}`;
 
 /** Whether `message`, as sent, fits one frame. */
 const fitsOneFrame = (message: unknown) =>
@@ -212,17 +236,24 @@ const startRun = async (
   const message = {
     type: DESKTOP_RUNNER_SERVER_MESSAGE.runStart,
     runId,
+    // A chat's turns share a folder; a run outside a chat keeps its own.
+    folderId: input.chat?.threadId ?? runId,
     harness: input.harness,
     harnessVersion: input.harnessVersion,
     model: input.model,
     harnessSessionId: input.harnessSessionId,
     instructions: input.instructions,
     messages: input.messages,
-    policy: { network: "open", fs: "workspace" },
+    attachments: input.attachments.map(({ path, s3Key }) => ({ path, s3Key })),
+    policy: { network: "open", fs: "workspace", approvals: input.approvals },
     mcp: input.mcp,
   } as const;
   const checked = v.safeParse(desktopRunnerServerMessageSchema, {
     ...message,
+    attachments: input.attachments.map(({ path }) => ({
+      path,
+      url: ATTACHMENT_LINK_SHAPE,
+    })),
     mcp: {
       ...message.mcp,
       token: TOKEN_SHAPE,
@@ -244,6 +275,7 @@ const startRun = async (
         harness: input.harness,
         harnessVersion: input.harnessVersion,
         model: input.model,
+        approvals: input.approvals,
         workspaceIds: input.workspaceIds,
         chat: input.chat ?? null,
         payload: message,
@@ -271,24 +303,61 @@ type QueuedMessage = Extract<
     type:
       | typeof DESKTOP_RUNNER_SERVER_MESSAGE.runInput
       | typeof DESKTOP_RUNNER_SERVER_MESSAGE.runApproval
+      | typeof DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer
       | typeof DESKTOP_RUNNER_SERVER_MESSAGE.runInterrupt
       | typeof DESKTOP_RUNNER_SERVER_MESSAGE.runCancel;
   }
 >;
 
-/** The id a command is idempotent on, and the approval request it answers. */
-const commandKeyOf = (message: QueuedMessage) => {
+/** The id a command is idempotent on, and the request it answers. */
+const commandKeyOf = (
+  message: QueuedMessage,
+): { commandKey: string; answers: AnsweredRequest | null } => {
   switch (message.type) {
     case DESKTOP_RUNNER_SERVER_MESSAGE.runInput:
-      return { commandKey: message.inputId, answersRequestId: null };
+      return { commandKey: message.inputId, answers: null };
     case DESKTOP_RUNNER_SERVER_MESSAGE.runApproval:
       return {
         commandKey: message.requestId,
-        answersRequestId: message.requestId,
+        answers: {
+          requestId: message.requestId,
+          askedBy: DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest,
+        },
+      };
+    case DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer:
+      return {
+        commandKey: message.requestId,
+        answers: {
+          requestId: message.requestId,
+          askedBy: DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent,
+        },
       };
     case DESKTOP_RUNNER_SERVER_MESSAGE.runInterrupt:
     case DESKTOP_RUNNER_SERVER_MESSAGE.runCancel:
-      return { commandKey: message.runId, answersRequestId: null };
+      return { commandKey: message.runId, answers: null };
+    default: {
+      message satisfies never;
+      return panic("Unknown desktop runner command");
+    }
+  }
+};
+
+/**
+ * The command as the queue keeps it: as sent, except that answers to a
+ * question are sealed (`sealed-answers.ts`).
+ */
+const storedPayloadOf = async (
+  owner: RunOwner,
+  message: QueuedMessage,
+): Promise<object> => {
+  switch (message.type) {
+    case DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer:
+      return await sealRunAnswer(owner.organizationId, message);
+    case DESKTOP_RUNNER_SERVER_MESSAGE.runInput:
+    case DESKTOP_RUNNER_SERVER_MESSAGE.runApproval:
+    case DESKTOP_RUNNER_SERVER_MESSAGE.runInterrupt:
+    case DESKTOP_RUNNER_SERVER_MESSAGE.runCancel:
+      return message;
     default: {
       message satisfies never;
       return panic("Unknown desktop runner command");
@@ -308,13 +377,24 @@ const queue = async (
   if (!fitsOneFrame(checked.output)) {
     return Result.ok({ type: "too_large" });
   }
+  const payload = await Result.tryPromise({
+    try: async () => await storedPayloadOf(owner, message),
+    catch: (cause) =>
+      new DatabaseError({
+        message: "Desktop runner command could not be sealed",
+        cause,
+      }),
+  });
+  if (payload.isErr()) {
+    return payload;
+  }
   const inserted = await Result.tryPromise({
     try: async () =>
       await insertRunCommand(deps.db, {
         owner,
         runId: message.runId,
         kind: message.type,
-        payload: checked.output,
+        payload: payload.value,
         limits: deps.limits,
         ...commandKeyOf(message),
       }),
@@ -414,6 +494,25 @@ export const createDesktopRunnerControl = ({
         requestId,
         decision,
       }),
+    /**
+     * Answer a blocking question the run asked, keyed by question id;
+     * idempotent on `requestId`. The answers are stored sealed.
+     */
+    answerQuestion: async ({
+      owner,
+      runId,
+      requestId,
+      answers,
+    }: RunOptions & {
+      requestId: string;
+      answers: RunAnswerMessage["answers"];
+    }) =>
+      await queue(deps, owner, {
+        type: DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer,
+        runId,
+        requestId,
+        answers,
+      }),
     /** Stop the current turn; the run stays open. */
     interruptRun: async ({ owner, runId }: RunOptions) =>
       await queue(deps, owner, {
@@ -473,7 +572,7 @@ export const createDesktopRunnerControl = ({
         try: async () => await readChatRunSession(db, options),
         catch: toDatabaseError,
       }),
-    /** The thread's run that asked for approval `requestId`. */
+    /** The thread's run that asked request `requestId`. */
     readChatRunForRequest: async (
       options: Parameters<typeof readChatRunForRequest>[1],
     ): Promise<Result<ChatRunForRequest | null, DatabaseError>> =>

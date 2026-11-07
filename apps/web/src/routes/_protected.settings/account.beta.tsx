@@ -11,7 +11,7 @@ import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
 import { pageTitle } from "@/lib/page-title";
-import { useTimeBillingEnrolment } from "@/queries/feature-enrolments";
+import { useFeatureEnrolment } from "@/queries/feature-enrolments";
 import { routePresentation } from "@/routes/-route-presentation";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
@@ -32,20 +32,56 @@ export const Route = createFileRoute("/_protected/settings/account/beta")({
   component: BetaFeaturesPage,
 });
 
-function BetaFeaturesPage() {
+type SelfServeFeaturePanelProps = {
+  enrolment: Pick<
+    ReturnType<typeof useFeatureEnrolment>,
+    "feature" | "mutation"
+  >;
+  title: string;
+  description: string;
+};
+
+/** A self-serve feature's toggle; nothing when this deployment does not offer it. */
+function SelfServeFeaturePanel({
+  enrolment: { feature, mutation },
+  title,
+  description,
+}: SelfServeFeaturePanelProps) {
+  if (!feature) {
+    return null;
+  }
+  return (
+    <FramePanel>
+      <div className="flex flex-col gap-3 p-1">
+        <h2 className="text-sm font-medium">{title}</h2>
+        <p className="text-muted-foreground text-xs">{description}</p>
+        <Field className="flex-row items-center gap-2">
+          <Checkbox
+            aria-label={title}
+            checked={feature.enrolled}
+            disabled={mutation.isPending}
+            onCheckedChange={(next) => {
+              if (next === feature.enrolled) {
+                return;
+              }
+              mutation.mutate(next);
+            }}
+          />
+          <FieldLabel>{title}</FieldLabel>
+        </Field>
+      </div>
+    </FramePanel>
+  );
+}
+
+/** Every toggle reads one list, so its loading and its failure show once. */
+function SelfServeFeaturePanels() {
   const t = useTranslations();
-  const workflowsPreview = useDevStore((s) => s.workflowsPreview);
-  const setWorkflowsPreview = useDevStore((s) => s.setWorkflowsPreview);
-  const {
-    feature: timeBillingFeature,
-    mutation: timeBillingEnrolment,
-    view: timeBillingView,
-  } = useTimeBillingEnrolment();
-  const inboxPreview = useDevStore((s) => s.inboxPreview);
-  const setInboxPreview = useDevStore((s) => s.setInboxPreview);
-  let timeBillingPanel = null;
-  if (timeBillingView.type === "pending") {
-    timeBillingPanel = (
+  const timeBilling = useFeatureEnrolment("time-billing");
+  const localAgents = useFeatureEnrolment("local-agents");
+  const { view } = timeBilling;
+  if (view.type === "pending") {
+    return (
       <>
         <span className="sr-only" role="status">
           {t("common.loading")}
@@ -59,8 +95,9 @@ function BetaFeaturesPage() {
         </FramePanel>
       </>
     );
-  } else if (timeBillingView.type === "error") {
-    timeBillingPanel = (
+  }
+  if (view.type === "error") {
+    return (
       <FramePanel>
         <p role="alert" className="text-muted-foreground text-sm">
           {t("errors.actionFailed")}
@@ -69,39 +106,36 @@ function BetaFeaturesPage() {
           className="mt-3"
           variant="ghost"
           onClick={() => {
-            detached(timeBillingView.retry(), "feature-enrolments.refetch");
+            detached(view.retry(), "feature-enrolments.refetch");
           }}
         >
           {t("common.retry")}
         </Button>
       </FramePanel>
     );
-  } else if (timeBillingFeature) {
-    timeBillingPanel = (
-      <FramePanel>
-        <div className="flex flex-col gap-3 p-1">
-          <h2 className="text-sm font-medium">{t("common.timeBilling")}</h2>
-          <p className="text-muted-foreground text-xs">
-            {t("settings.account.betaTimeBillingDescription")}
-          </p>
-          <Field className="flex-row items-center gap-2">
-            <Checkbox
-              aria-label={t("common.timeBilling")}
-              checked={timeBillingFeature.enrolled}
-              disabled={timeBillingEnrolment.isPending}
-              onCheckedChange={(next) => {
-                if (next === timeBillingFeature.enrolled) {
-                  return;
-                }
-                timeBillingEnrolment.mutate(next);
-              }}
-            />
-            <FieldLabel>{t("common.timeBilling")}</FieldLabel>
-          </Field>
-        </div>
-      </FramePanel>
-    );
   }
+  return (
+    <>
+      <SelfServeFeaturePanel
+        description={t("settings.account.betaTimeBillingDescription")}
+        enrolment={timeBilling}
+        title={t("common.timeBilling")}
+      />
+      <SelfServeFeaturePanel
+        description={t("settings.account.betaLocalAgentsDescription")}
+        enrolment={localAgents}
+        title={t("settings.account.betaLocalAgents")}
+      />
+    </>
+  );
+}
+
+function BetaFeaturesPage() {
+  const t = useTranslations();
+  const workflowsPreview = useDevStore((s) => s.workflowsPreview);
+  const setWorkflowsPreview = useDevStore((s) => s.setWorkflowsPreview);
+  const inboxPreview = useDevStore((s) => s.inboxPreview);
+  const setInboxPreview = useDevStore((s) => s.setInboxPreview);
 
   return (
     <>
@@ -131,7 +165,7 @@ function BetaFeaturesPage() {
             </Field>
           </div>
         </FramePanel>
-        {timeBillingPanel}
+        <SelfServeFeaturePanels />
         <FramePanel>
           <div className="flex flex-col gap-3 p-1">
             <h2 className="text-sm font-medium">

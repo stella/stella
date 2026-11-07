@@ -12,6 +12,7 @@ import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { sha256Base64Url } from "../sha256.js";
+import { CALLBACK_PAGE_THEME_CSS } from "./callback-page-theme.js";
 import {
   CLIENT_NAME,
   LOOPBACK_REDIRECT_PATH,
@@ -118,9 +119,9 @@ const renderCallbackPage = (page: CallbackPageOptions) => {
         title: "Signed in to stella",
       }
     : failureText(page.reason);
-  const statusColor = ok ? "#18181b" : "#b91c1c";
+  const statusColor = ok ? "--status-success" : "--status-failure";
 
-  const styles = `
+  const styles = `${CALLBACK_PAGE_THEME_CSS}
       :root {
         color-scheme: light dark;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -130,8 +131,8 @@ const renderCallbackPage = (page: CallbackPageOptions) => {
       }
       body {
         align-items: center;
-        background: #fafafa;
-        color: #18181b;
+        background: var(--page-background);
+        color: var(--page-foreground);
         display: flex;
         justify-content: center;
         margin: 0;
@@ -140,12 +141,12 @@ const renderCallbackPage = (page: CallbackPageOptions) => {
         -webkit-font-smoothing: antialiased;
       }
       main {
-        background: #ffffff;
-        border: 1px solid rgb(24 24 27 / 8%);
+        background: var(--card-background);
+        border: 1px solid var(--card-border);
         border-radius: 8px;
         box-shadow:
-          0 1px 2px rgb(24 24 27 / 4%),
-          0 24px 80px rgb(24 24 27 / 8%);
+          0 1px 2px var(--card-shadow-near),
+          0 24px 80px var(--card-shadow-far);
         display: grid;
         gap: 28px;
         max-width: 480px;
@@ -154,13 +155,13 @@ const renderCallbackPage = (page: CallbackPageOptions) => {
       }
       .brand {
         align-items: center;
-        color: #18181b;
+        color: var(--page-foreground);
         display: flex;
         gap: 12px;
         min-width: 0;
       }
       .mark {
-        color: #18181b;
+        color: var(--page-foreground);
         height: 28px;
         width: 28px;
       }
@@ -171,7 +172,7 @@ const renderCallbackPage = (page: CallbackPageOptions) => {
         line-height: 1;
       }
       h1 {
-        color: ${statusColor};
+        color: var(${statusColor});
         font-size: 24px;
         font-weight: 600;
         letter-spacing: 0;
@@ -180,7 +181,7 @@ const renderCallbackPage = (page: CallbackPageOptions) => {
         text-wrap: balance;
       }
       p {
-        color: #52525b;
+        color: var(--body-foreground);
         font-size: 15px;
         line-height: 1.6;
         margin: 10px 0 0;
@@ -190,24 +191,8 @@ const renderCallbackPage = (page: CallbackPageOptions) => {
         overflow-wrap: anywhere;
       }
       @media (prefers-color-scheme: dark) {
-        body {
-          background: #09090b;
-          color: #fafafa;
-        }
         main {
-          background: #18181b;
-          border-color: rgb(250 250 250 / 8%);
-          box-shadow: 0 24px 80px rgb(0 0 0 / 24%);
-        }
-        .brand,
-        .mark {
-          color: #fafafa;
-        }
-        h1 {
-          color: ${ok ? "#fafafa" : "#fca5a5"};
-        }
-        p {
-          color: #a1a1aa;
+          box-shadow: 0 24px 80px var(--card-shadow-far);
         }
         path {
           fill: currentColor;

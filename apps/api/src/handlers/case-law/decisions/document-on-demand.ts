@@ -38,7 +38,11 @@
 
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 
-import { declareFailureClass, type FailureReason } from "@stll/errors";
+import {
+  classifyFailure,
+  declareFailureClass,
+  type FailureReason,
+} from "@stll/errors";
 
 import type {
   ImmediatePublisherSlotResult,
@@ -227,6 +231,27 @@ export const recordDocumentPacingOutcome = (
 const isReadBudgetExpiry = (error: unknown): boolean => {
   const raised = error instanceof UnhandledException ? error.cause : error;
   return TimeoutError.is(raised) && raised.label === READ_BUDGET_LABEL;
+};
+
+/**
+ * Grades the expiry of a fetch's wall-clock budget. A publisher too slow for
+ * the budget is the source's state rather than a fault here: the reader was
+ * already answered and the queue keeps the work. The fetch rejects with the
+ * budget's own abort reason, so that reason carries the grade, and a failure
+ * the budget did not cause keeps its own.
+ */
+export const gradedDocumentFetchBudget = (budget: AbortSignal): AbortSignal => {
+  budget.addEventListener(
+    "abort",
+    () => {
+      const reason: unknown = budget.reason;
+      if (typeof reason === "object" && reason !== null) {
+        classifyFailure(reason, "upstream_unavailable");
+      }
+    },
+    { once: true },
+  );
+  return budget;
 };
 
 type FetchDeferredDocumentOptions = {

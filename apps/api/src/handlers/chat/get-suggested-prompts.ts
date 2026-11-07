@@ -21,7 +21,6 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { decodeChatRunTarget } from "@/api/lib/chat/run-target";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -235,6 +234,14 @@ const getSuggestedPrompts = createSafeRootHandler(
       session,
       user,
     } = ctx;
+    // First, so a matter the member can't write to answers the same whether or
+    // not a model is available.
+    const scope = yield* resolveChatScope({
+      admitted: "active",
+      getWorkspaceAccess,
+      workspaceId,
+    });
+
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
@@ -252,11 +259,6 @@ const getSuggestedPrompts = createSafeRootHandler(
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
 
-    const scope = yield* resolveChatScope({
-      getWorkspaceAccess,
-      workspaceId,
-    });
-
     const thread = yield* Result.await(
       safeDb((tx) =>
         tx.query.chatThreads.findFirst({
@@ -265,7 +267,7 @@ const getSuggestedPrompts = createSafeRootHandler(
             userId: { eq: user.id },
           },
           columns: {
-            chatRunTarget: true,
+            chatLocalRunTarget: true,
             workspaceId: true,
             usedAnonymization: true,
           },
@@ -298,8 +300,10 @@ const getSuggestedPrompts = createSafeRootHandler(
 
     // A thread whose turns run on the member's computer never reaches
     // stella's cloud models for them, so its follow-ups are not written by one
-    // either: the member chose where the conversation goes.
-    if (decodeChatRunTarget(thread.chatRunTarget).kind === "local") {
+    // either: the member chose where the conversation goes. Any stored target
+    // counts, also one the contract no longer reads, since only a computer
+    // target is ever stored.
+    if (thread.chatLocalRunTarget !== null) {
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
 

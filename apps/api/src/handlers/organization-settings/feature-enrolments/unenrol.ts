@@ -7,8 +7,8 @@ import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
 import {
   FEATURE_REGISTRY,
   SELF_SERVE_FEATURE_IDS,
@@ -30,11 +30,7 @@ const config = {
 export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, params, recordAuditEvent }) {
-    if (
-      !isDeploymentFeatureEnabled(
-        FEATURE_REGISTRY[params.featureId].deploymentFeature,
-      )
-    ) {
+    if (!isFeatureDeployed(FEATURE_REGISTRY, params.featureId)) {
       return Result.err(
         new HandlerError({ status: 404, message: "Not found" }),
       );

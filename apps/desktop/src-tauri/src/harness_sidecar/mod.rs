@@ -60,7 +60,7 @@ pub(crate) use endpoint::EndpointError;
 use endpoint::Endpoints;
 pub(crate) use protocol::{
   HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
-  RunAnswer, SidecarRunStart,
+  SidecarRunStart,
 };
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProbeFailure,
@@ -68,9 +68,10 @@ use protocol::{
 };
 
 use crate::runner_protocol::{
-  Ack, ApprovalKind, Harness, HarnessModel, HarnessReport, HarnessUnavailableReason,
-  JsonObject, LimitedHarness, ReadyHarness, RejectReason, RunApproval, RunOutcome,
-  RunRef, RunTokenRefresh, SignedOutHarness, UnavailableHarness, UnsupportedHarness,
+  Ack, ApprovalKind, ApprovalMode, Harness, HarnessModel, HarnessReport,
+  HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, RejectReason,
+  RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
+  UnavailableHarness, UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
@@ -451,13 +452,6 @@ impl HarnessSidecar {
   }
 
   /// Answers to a blocking question the run asked.
-  #[cfg_attr(
-    not(all(test, unix)),
-    allow(
-      dead_code,
-      reason = "the runner socket has no answer message yet; the host relays one once it does"
-    )
-  )]
   pub(crate) fn answer(&self, answer: RunAnswer) -> Result<(), SidecarUnavailable> {
     self.forward(answer.run_id.clone(), &HostMessage::RunAnswer(answer))
   }
@@ -550,6 +544,7 @@ pub(crate) fn harness_report(
     ProbeOutcome::Ready {
       version,
       capabilities,
+      approval_modes,
       models,
     } => {
       let mut seen = std::collections::HashSet::new();
@@ -573,10 +568,17 @@ pub(crate) fn harness_report(
         .copied()
         .filter(|capability| listed.insert(capability.wire_name()))
         .collect();
+      // Each mode once, in the contract's order; `Ask` is always offered.
+      let approval_modes = ApprovalMode::ALL
+        .iter()
+        .copied()
+        .filter(|mode| *mode == ApprovalMode::Ask || approval_modes.contains(mode))
+        .collect();
       HarnessReport::Ready(ReadyHarness {
         id: harness,
         version: version.clone(),
         capabilities,
+        approval_modes,
         models,
       })
     }

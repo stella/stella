@@ -21,10 +21,19 @@ export const BASELINE_PATHS = {
   actionlint: ".github/actionlint-baseline.json",
   /** scripts/check-test-state-baseline.ts */
   testState: "scripts/test-state-baseline.json",
+  /** scripts/seed-test-determinism-baselines.ts */
+  testAmbientTime: "scripts/test-ambient-time-baseline.json",
+  /** scripts/seed-test-determinism-baselines.ts */
+  testRealTimers: "scripts/test-real-timers-baseline.json",
+  /** scripts/seed-test-determinism-baselines.ts */
+  testWallclockAssertion: "scripts/test-wallclock-assertion-baseline.json",
   /** scripts/check-rust-test-determinism.ts */
   rustTestDeterminism: "scripts/rust-test-determinism-baseline.json",
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
+  /** .oxlint-plugins/no-variable-arity-values.ts */
+  noVariableArityValues:
+    ".oxlint-plugins/no-variable-arity-values-baseline.json",
   /** scripts/check-write-contracts.ts */
   writeContracts: "scripts/write-contract-routes-baseline.json",
   /** scripts/check-aggregate-mutations.ts */

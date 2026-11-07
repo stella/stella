@@ -6,11 +6,13 @@
  * that cannot be hydrated is still a decision a reader can see.
  */
 
+import { panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
+  gradedDocumentFetchBudget,
   isDeferredDocumentFetchable,
   readThroughDeferredDocument,
   recordDocumentPacingOutcome,
@@ -477,6 +479,32 @@ describe("deferral reporting", () => {
       expect(captured).toEqual([]);
     });
   }
+
+  test("a fetch that outlasts its budget is not captured as an exception", async () => {
+    expect(
+      await readThroughDeferredDocument({
+        adapterKey: "sk-courts",
+        decision: pending(),
+        deps: {
+          recordPacingOutcome: () => {},
+          withFetchBudget: availableBudget,
+          recordRequest: async () => {},
+          fetchDocument: async () => {
+            const budget = gradedDocumentFetchBudget(AbortSignal.timeout(1));
+            await new Promise<void>((resolve) => {
+              budget.addEventListener("abort", () => {
+                resolve();
+              });
+            });
+            budget.throwIfAborted();
+            return panic("The budget has expired");
+          },
+        },
+        recordDemand: false,
+      }),
+    ).toBeNull();
+    expect(captured).toEqual([]);
+  });
 
   test("a failing fetch is still captured as an exception", async () => {
     expect(
