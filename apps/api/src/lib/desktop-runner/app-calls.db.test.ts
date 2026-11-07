@@ -179,7 +179,7 @@ describe("the app call ledger of a local run", () => {
     }
     expect(await record(ownerA, runId, { index: "over" })).toBe(false);
     const rows = await db
-      .select({ seq: desktopRunnerAppCalls.seq })
+      .select({ id: desktopRunnerAppCalls.id })
       .from(desktopRunnerAppCalls)
       .where(eq(desktopRunnerAppCalls.runId, runId));
     expect(rows.length).toBe(MAX_APP_CALLS_PER_RUN);
@@ -192,7 +192,7 @@ describe("the app call ledger of a local run", () => {
       .delete(desktopRunnerRuns)
       .where(eq(desktopRunnerRuns.runId, runId));
     const rows = await db
-      .select({ seq: desktopRunnerAppCalls.seq })
+      .select({ id: desktopRunnerAppCalls.id })
       .from(desktopRunnerAppCalls)
       .where(eq(desktopRunnerAppCalls.runId, runId));
     expect(rows).toEqual([]);

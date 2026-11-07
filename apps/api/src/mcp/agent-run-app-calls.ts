@@ -3,7 +3,7 @@ import { Result } from "better-result";
 
 import { STELLA_MCP_APP_LIMITS } from "@stll/api-contract/stella-mcp-app";
 
-import { chatMcpAppForTool } from "@/api/handlers/chat/mcp-apps/catalog";
+import { chatMcpAppForTool } from "@/api/lib/chat/mcp-app-catalog";
 import { appCallArgumentsHash } from "@/api/lib/desktop-runner/app-calls";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";

@@ -355,14 +355,15 @@ export const desktopRunnerEvents = p.pgTable.withRLS(
 export const desktopRunnerAppCalls = p.pgTable.withRLS(
   "desktop_runner_app_calls",
   {
+    /** Orders a run's answers as the server gave them. */
+    id: p.bigint({ mode: "number" }).generatedAlwaysAsIdentity(),
     runId: p
       .uuid("run_id")
       .notNull()
       .references(() => desktopRunnerRuns.runId, { onDelete: "cascade" }),
-    seq: p.integer().notNull(),
     toolName: p.varchar("tool_name", { length: 128 }).notNull(),
     /** SHA-256 of the call's arguments as the server received them. */
-    argumentsHash: p.char("arguments_hash", { length: 64 }).notNull(),
+    argumentsHash: p.varchar("arguments_hash", { length: 64 }).notNull(),
     resourceUri: p.varchar("resource_uri", { length: 256 }).notNull(),
     /** The tool's `structuredContent`, as the server answered the run. */
     result: jsonb("result").notNull(),
@@ -373,16 +374,13 @@ export const desktopRunnerAppCalls = p.pgTable.withRLS(
   (table) => [
     p.primaryKey({
       name: "desktop_runner_app_calls_pkey",
-      columns: [table.runId, table.seq],
+      columns: [table.id],
     }),
+    p.index("desktop_runner_app_calls_run_idx").on(table.runId, table.id),
     p
       .uniqueIndex("desktop_runner_app_calls_paired_idx")
       .on(table.runId, table.pairedToolCallId)
       .where(sql`${table.pairedToolCallId} IS NOT NULL`),
-    p.check(
-      "desktop_runner_app_calls_seq_check",
-      sql`${table.seq} BETWEEN 1 AND 16`,
-    ),
     p.check(
       "desktop_runner_app_calls_hash_check",
       sql`${table.argumentsHash} ~ '^[0-9a-f]{64}$'`,

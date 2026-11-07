@@ -55,7 +55,7 @@ export const TABLE_RETENTION = {
   },
   desktop_runner_app_calls: {
     boundedBy:
-      "At most MAX_APP_CALLS_PER_RUN rows per run, each holding one app's call within the chat app part limit, cascade-deleted when pruneEndedRuns deletes the ended run.",
+      "MAX_APP_CALLS_PER_RUN rows per run, a few more only when calls were answered at the same moment, each within the chat app part limit, cascade-deleted when pruneEndedRuns deletes the ended run.",
   },
   desktop_runner_events: {
     boundedBy:

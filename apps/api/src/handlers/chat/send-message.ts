@@ -149,7 +149,10 @@ import {
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
 import { sourceScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-source-scopes";
-import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
+import type {
+  LocalChatRun,
+  LocalRunAppIssuer,
+} from "@/api/handlers/chat/local-run-chunks";
 import {
   resolveChatLocalRun,
   type ResolveChatLocalRunOptions,
@@ -258,7 +261,6 @@ import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
-import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
 import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
@@ -2391,7 +2393,7 @@ const turnCopiesFiles = (
 const localRunForTurn = (
   localRun: LocalChatRun | undefined,
   attachments: readonly LocalRunAttachment[],
-  origin: VisualResourceOrigin,
+  origin: LocalRunAppIssuer,
 ): LocalChatRun | undefined =>
   localRun?.withAttachments(attachments).withResourceOrigin(origin);
 

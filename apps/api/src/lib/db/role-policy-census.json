@@ -4701,6 +4701,26 @@
   },
   {
     "schema": "public",
+    "table": "desktop_runner_app_calls",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "desktop_runner_app_calls",
+    "policy": "desktop_runner_app_calls_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runner_app_calls'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runner_app_calls'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "desktop_runner_commands",
     "policy": "auth_no_stella_access",
     "command": "ALL",

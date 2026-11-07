@@ -40,13 +40,16 @@ import {
   type DesktopRunnerHarnessReport,
   desktopRunnerOutputEventSchema,
 } from "@stll/api-contract/desktop-runner";
+import type {
+  StellaMcpAppCall,
+  StellaMcpAppPart,
+} from "@stll/api-contract/stella-mcp-app";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import { chatMcpAppForTool } from "@/api/handlers/chat/mcp-apps/catalog";
-import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chatMcpAppForTool } from "@/api/lib/chat/mcp-app-catalog";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { appCallArgumentsHash } from "@/api/lib/desktop-runner/app-calls";
 import {
@@ -100,6 +103,18 @@ type LocalRunControl = Pick<
   | "startRun"
 >;
 
+/**
+ * What a turn's resource origin offers a local run: minting the part of a
+ * stella app, which the same origin then accepts when the turn is stored.
+ */
+export type LocalRunAppIssuer = {
+  issueMcpApp: (options: {
+    call: StellaMcpAppCall;
+    toolCallId: string;
+    toolName: string;
+  }) => Result<StellaMcpAppPart, string>;
+};
+
 /** The computer and harness a new turn was routed to before it started. */
 type LocalRunDestination = {
   desktopId: string;
@@ -124,7 +139,7 @@ export type LocalRunContext = {
    * app presents shows the app, minted from what the server answered the
    * run; without it the call shows only its result.
    */
-  resourceOrigin?: Pick<VisualResourceOrigin, "issueMcpApp"> | undefined;
+  resourceOrigin?: LocalRunAppIssuer | undefined;
 };
 
 type LocalRunStreamInput = {
@@ -159,9 +174,7 @@ export type LocalChatRun = {
     attachments: readonly LocalRunAttachment[],
   ) => LocalChatRun;
   /** The same run, showing apps the turn's origin mints and accepts. */
-  readonly withResourceOrigin: (
-    origin: Pick<VisualResourceOrigin, "issueMcpApp">,
-  ) => LocalChatRun;
+  readonly withResourceOrigin: (origin: LocalRunAppIssuer) => LocalChatRun;
   readonly stream: (
     input: LocalRunStreamInput,
   ) => AsyncIterable<PublicStreamChunk>;

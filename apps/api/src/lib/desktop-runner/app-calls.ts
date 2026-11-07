@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull, max } from "drizzle-orm";
+import { and, asc, count, eq, isNull, or } from "drizzle-orm";
 
 import { sha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
@@ -59,9 +59,6 @@ type RecordAppCallOptions = {
   result: Record<string, unknown>;
 };
 
-/** Concurrent calls of one run race for the next position; each retries. */
-const MAX_RECORD_ATTEMPTS = 4;
-
 const calls = desktopRunnerAppCalls;
 const runs = desktopRunnerRuns;
 
@@ -75,8 +72,10 @@ const ownsRun = (owner: RunOwner, runId: string) =>
 /**
  * Record one answer the server gave the run. The row is written only for a
  * run of the token's own member and organization, and only while the run
- * has room; anything else records nothing. A call that lost the race for a
- * position to another call of the run tries the next one.
+ * holds fewer than `MAX_APP_CALLS_PER_RUN` answers. Calls of one run that
+ * the server answers at the same moment can each pass that check, so a run
+ * can end a few rows over the bound, never more than it had calls in
+ * flight; the identity key orders them as the server wrote them.
  */
 export const recordAppCall = async (
   db: Pick<DesktopRunnerDb, "select" | "insert">,
@@ -89,42 +88,22 @@ export const recordAppCall = async (
     result,
   }: RecordAppCallOptions,
 ): Promise<boolean> => {
-  const owned = await db
-    .select({ runId: runs.runId })
-    .from(runs)
-    .where(ownsRun(owner, runId))
-    .limit(1);
-  if (owned.length === 0) {
+  const held = (
+    await db
+      .select({ rows: count(calls.id) })
+      .from(runs)
+      .leftJoin(calls, eq(calls.runId, runs.runId))
+      .where(ownsRun(owner, runId))
+      .groupBy(runs.runId)
+  ).at(0);
+  if (held === undefined || held.rows >= MAX_APP_CALLS_PER_RUN) {
     return false;
   }
-  for (let attempt = 0; attempt < MAX_RECORD_ATTEMPTS; attempt += 1) {
-    const held = (
-      await db
-        .select({ rows: count(), last: max(calls.seq) })
-        .from(calls)
-        .where(eq(calls.runId, runId))
-    ).at(0);
-    if ((held?.rows ?? 0) >= MAX_APP_CALLS_PER_RUN) {
-      return false;
-    }
-    // audit: skip - run bookkeeping; the MCP server audits the member's call
-    const inserted = await db
-      .insert(calls)
-      .values({
-        runId,
-        seq: (held?.last ?? 0) + 1,
-        toolName,
-        argumentsHash,
-        resourceUri,
-        result,
-      })
-      .onConflictDoNothing()
-      .returning({ seq: calls.seq });
-    if (inserted.length > 0) {
-      return true;
-    }
-  }
-  return false;
+  // audit: skip - run bookkeeping; the MCP server audits the member's call
+  await db
+    .insert(calls)
+    .values({ runId, toolName, argumentsHash, resourceUri, result });
+  return true;
 };
 
 type PairAppCallOptions = {
@@ -155,61 +134,52 @@ const pairedRow = (
  * The server's answer for a call the desktop reported: the row already
  * paired with this call, or else the run's first unpaired row of the same
  * tool and arguments, now paired with it. A run of another member, or a
- * report the server never answered, pairs with nothing. Two readers racing
- * for one row cannot both take it: the update holds only while it is free.
+ * report the server never answered, pairs with nothing. The update holds
+ * only while the row is free, so a reader that loses a race for it pairs
+ * nothing rather than sharing it.
  */
 export const pairAppCall = async (
   db: Pick<DesktopRunnerDb, "select" | "update">,
   { owner, runId, toolName, argumentsHash, toolCallId }: PairAppCallOptions,
 ): Promise<PairedAppCall | null> => {
-  const owned = await db
-    .select({ runId: runs.runId })
-    .from(runs)
-    .where(ownsRun(owner, runId))
-    .limit(1);
-  if (owned.length === 0) {
-    return null;
-  }
-  const sameCall = and(
-    eq(calls.runId, runId),
-    eq(calls.toolName, toolName),
-    eq(calls.argumentsHash, argumentsHash),
-  );
-  for (let attempt = 0; attempt < MAX_RECORD_ATTEMPTS; attempt += 1) {
-    const held = await db
-      .select({ resourceUri: calls.resourceUri, result: calls.result })
-      .from(calls)
-      .where(and(sameCall, eq(calls.pairedToolCallId, toolCallId)))
-      .limit(1);
-    if (held.length > 0) {
-      return pairedRow(held.at(0));
-    }
-    const free = (
-      await db
-        .select({ seq: calls.seq })
-        .from(calls)
-        .where(and(sameCall, isNull(calls.pairedToolCallId)))
-        .orderBy(asc(calls.seq))
-        .limit(1)
-    ).at(0);
-    if (free === undefined) {
-      return null;
-    }
-    // audit: skip - run bookkeeping; the MCP server audited the member's call
-    const taken = await db
-      .update(calls)
-      .set({ pairedToolCallId: toolCallId })
-      .where(
-        and(
-          eq(calls.runId, runId),
-          eq(calls.seq, free.seq),
+  const candidates = await db
+    .select({
+      id: calls.id,
+      resourceUri: calls.resourceUri,
+      result: calls.result,
+      pairedToolCallId: calls.pairedToolCallId,
+    })
+    .from(calls)
+    .innerJoin(runs, eq(runs.runId, calls.runId))
+    .where(
+      and(
+        ownsRun(owner, runId),
+        eq(calls.runId, runId),
+        eq(calls.toolName, toolName),
+        eq(calls.argumentsHash, argumentsHash),
+        or(
+          eq(calls.pairedToolCallId, toolCallId),
           isNull(calls.pairedToolCallId),
         ),
-      )
-      .returning({ resourceUri: calls.resourceUri, result: calls.result });
-    if (taken.length > 0) {
-      return pairedRow(taken.at(0));
-    }
+      ),
+    )
+    .orderBy(asc(calls.id))
+    .limit(MAX_APP_CALLS_PER_RUN);
+  const held = candidates.find(
+    ({ pairedToolCallId }) => pairedToolCallId === toolCallId,
+  );
+  if (held !== undefined) {
+    return pairedRow(held);
   }
-  return null;
+  const free = candidates.at(0);
+  if (free === undefined) {
+    return null;
+  }
+  // audit: skip - run bookkeeping; the MCP server audited the member's call
+  const taken = await db
+    .update(calls)
+    .set({ pairedToolCallId: toolCallId })
+    .where(and(eq(calls.id, free.id), isNull(calls.pairedToolCallId)))
+    .returning({ resourceUri: calls.resourceUri, result: calls.result });
+  return pairedRow(taken.at(0));
 };
