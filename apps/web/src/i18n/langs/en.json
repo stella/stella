@@ -3989,6 +3989,7 @@
     "resizePane": "Resize pane",
     "review": {
       "acceptChange": "Accept change",
+      "acceptFinding": "Accept finding",
       "actionNeeded": "Action needed",
       "addComment": "Add as comment",
       "addNote": "Add comment for counterparty",
@@ -4026,10 +4027,10 @@
       "decisionFailed": "Couldn't record your decision",
       "decisions": {
         "accepted": "Accepted",
-        "dismissed": "Dismissed",
-        "reviewed": "Reviewed"
+        "dismissed": "Dismissed"
       },
       "description": "Choose an authored playbook, reference documents, or both.",
+      "dismissFinding": "Dismiss finding",
       "documentChanged": "This document changed after this review.",
       "export": {
         "counterparty": "Download for counterparty",
@@ -4077,9 +4078,7 @@
         "label": "Findings beside the clauses they are about",
         "unanchored": "Not tied to a clause"
       },
-      "markAsReviewed": "Mark as reviewed",
       "newTopic": "New review topic",
-      "noChangeNeeded": "No change needed",
       "noEditor": "Open the document to accept changes",
       "noMaterialDifferences": "No material differences found",
       "noPassage": "No passage",

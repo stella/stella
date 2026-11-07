@@ -3989,6 +3989,7 @@
     "resizePane": "Mainīt paneļa izmēru",
     "review": {
       "acceptChange": "Pieņemt izmaiņas",
+      "acceptFinding": "Pieņemt secinājumu",
       "actionNeeded": "Nepieciešama rīcība",
       "addComment": "Pievienot kā komentāru",
       "addNote": "Pievienot komentāru pretpusei",
@@ -4026,10 +4027,10 @@
       "decisionFailed": "Lēmumu neizdevās saglabāt",
       "decisions": {
         "accepted": "Pieņemts",
-        "dismissed": "Noraidīts",
-        "reviewed": "Pārbaudīts"
+        "dismissed": "Noraidīts"
       },
       "description": "Izvēlieties sagatavotu pārbaudes ceļvedi, atsauces dokumentus vai abus.",
+      "dismissFinding": "Noraidīt secinājumu",
       "documentChanged": "Šis dokuments pēc šīs pārbaudes ir mainījies.",
       "export": {
         "counterparty": "Lejupielādēt pretpusei",
@@ -4077,9 +4078,7 @@
         "label": "Secinājumi blakus klauzulām, par kurām tie ir",
         "unanchored": "Nav saistīts ar klauzulu"
       },
-      "markAsReviewed": "Atzīmēt kā pārbaudītu",
       "newTopic": "Jauna pārbaudes tēma",
-      "noChangeNeeded": "Izmaiņas nav nepieciešamas",
       "noEditor": "Atveriet dokumentu, lai apstiprinātu izmaiņas",
       "noMaterialDifferences": "Būtiskas atšķirības nav atrastas",
       "noPassage": "Fragmenta nav",
