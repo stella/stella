@@ -46,10 +46,7 @@ export const UsageLimitModal = ({
 }: UsageLimitModalProps) => {
   const t = useTranslations();
   const managementMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api.usage.hosted.management.post();
-      return unwrapApiResponse(response);
-    },
+    mutationFn: createHostedUsageManagementSession,
     onSuccess: ({ url }) => {
       window.location.href = url;
     },
@@ -89,7 +86,7 @@ export const UsageLimitModal = ({
 
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" />}>
-            {t("settings.organization.usageLimitNotNow")}
+            {t("common.notNow")}
           </DialogClose>
           {hasHostedEntitlement ? (
             <Button
@@ -120,3 +117,8 @@ const DESCRIPTION_KEYS = {
   usage_limit_exceeded:
     "settings.organization.usageLimitDescriptionUsageLimitExceeded",
 } as const satisfies Record<UsageLimitExceededReason, TranslationKey>;
+
+export const createHostedUsageManagementSession = async () => {
+  const response = await api.usage.hosted.management.post();
+  return unwrapApiResponse(response);
+};

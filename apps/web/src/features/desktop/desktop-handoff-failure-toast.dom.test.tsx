@@ -11,9 +11,8 @@ import {
 } from "bun:test";
 
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { Temporal } from "@stll/time";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
 let fetchBoundary: Mock<typeof globalThis.fetch>;
@@ -171,6 +170,7 @@ test.each(Object.values(DESKTOP_HANDOFF_FAILURE))(
       await ui.result.current.sign({
         target: {
           entityId: "90123344-5566-7788-9900-aabbccddeeff",
+          fieldId: "90123344-5566-7788-9900-aabbccddeeff",
           propertyId: "90123344-5566-7788-9900-aabbccddeeff",
           workspaceId: "90123344-5566-7788-9900-aabbccddeeff",
         },

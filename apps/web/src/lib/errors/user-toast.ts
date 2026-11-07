@@ -1,13 +1,10 @@
 import { createElement } from "react";
 
-import { Result } from "better-result";
-
-import { copyToClipboard } from "@stll/clipboard";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-import { createDetached } from "@stll/errors";
+import { createDetached, type DetachedOperand } from "@stll/errors";
 import { stellaToast } from "@stll/ui/toast";
 
-import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
+import { ProviderSetupGuidanceNotice } from "@/components/provider-diagnostic-content";
 import { getTranslator } from "@/i18n/translator";
 import { notifyStepUp } from "@/lib/account/mcp-step-up";
 import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
@@ -16,9 +13,15 @@ import { resetReportedErrorsForTests } from "@/lib/analytics/reported-error";
 import { BoundedSet } from "@/lib/bounded-set";
 import type { DetachedOperationId } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { APIError } from "@/lib/errors/api";
+import {
+  APIError,
+  apiFieldIssueMessage,
+  isCancellation,
+} from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
+import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
+import { notifySessionExpired } from "@/lib/errors/session-expired";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 type UserErrorToastOptions = Omit<
@@ -30,6 +33,19 @@ type UserErrorToastOptions = Omit<
   routeTemplate?: string | undefined;
   toastId?: string | undefined;
 };
+
+type ProblemToastOptions = Omit<
+  UserErrorToastOptions,
+  "feature" | "occurrence" | "routeTemplate"
+>;
+
+/**
+ * A user-facing error names its cause. A cause that is always `undefined` or
+ * `null` is a cause-free message, which goes through
+ * {@link notifyUserProblem}; a cause that may be missing is reported only when
+ * it is there (see {@link notifyUserError}).
+ */
+type NamedCause<Cause> = [Cause] extends [undefined | null] ? never : unknown;
 
 type UserVisibleErrorReportOptions = {
   notice?: string | undefined;
@@ -61,13 +77,17 @@ export const setUserErrorRouteTemplate = (routeTemplate: string): void => {
   currentRouteTemplate = routeTemplate;
 };
 
+/** Report a user-visible failure by its cause; without one there is nothing to report. */
 export const reportUserVisibleError = (
   error: unknown,
   feature: string | undefined,
   routeTemplate: string | undefined,
   { notice, occurrence }: UserVisibleErrorReportOptions = {},
 ): void => {
-  const reportable = error ?? new Error("UserVisibleError");
+  if (error === undefined || error === null) {
+    return;
+  }
+  const reportable = error;
   const template =
     (routeTemplate ?? currentRouteTemplate).split(/[?#]/u).at(0) ?? "unknown";
   const isApiError = APIError.is(error);
@@ -119,8 +139,25 @@ export const reportUserVisibleError = (
   });
 };
 
-export const notifyUserError = (
-  error: unknown,
+/**
+ * Tell the user about a problem that has no error behind it: input a form
+ * refuses, a limit, a precondition. Nothing is reported, because there is no
+ * cause to report; a failure with one goes through {@link notifyUserError}.
+ */
+export const notifyUserProblem = (
+  title: string,
+  { toastId, ...options }: ProblemToastOptions = {},
+): void => {
+  const toast = { ...options, title, type: "error" } as const;
+  if (toastId !== undefined) {
+    stellaToast.update(toastId, toast);
+    return;
+  }
+  stellaToast.add(toast);
+};
+
+export const notifyUserError = <Cause>(
+  error: Cause & NamedCause<Cause>,
   fallback: string,
   {
     feature,
@@ -130,7 +167,21 @@ export const notifyUserError = (
     ...options
   }: UserErrorToastOptions = {},
 ): boolean => {
+  // An optional cause that is missing leaves a message with nothing behind it.
+  if (error === undefined || error === null) {
+    notifyUserProblem(fallback, { ...options, toastId });
+    return true;
+  }
+  if (isCancellation(error)) {
+    return false;
+  }
   if (notifyStepUp(error)) {
+    return false;
+  }
+  if (notifySessionExpired(error)) {
+    if (toastId !== undefined) {
+      stellaToast.close(toastId);
+    }
     return false;
   }
   // The stable refusal id coalesces the API client's observer and local error
@@ -167,28 +218,18 @@ export const notifyUserError = (
     }
     return false;
   }
-  const diagnostic = providerDiagnosticFromThrown(error);
+  // A provider refusal adds its setup fix; its own wording stays out of sight.
+  const setupCode = providerDiagnosticFromThrown(error)?.code ?? null;
   const toast = {
     ...options,
-    title:
-      diagnostic === undefined
-        ? title
-        : createElement(ProviderDiagnosticToast, {
-            diagnostic,
-            onCopy: async () => {
-              const copied = await copyToClipboard(
-                `${diagnostic.provider}: ${diagnostic.message}`,
-              );
-              if (Result.isError(copied)) {
-                notifyUserError(
-                  copied.error,
-                  getTranslator()("errors.actionFailed"),
-                );
-                return false;
-              }
-              return true;
-            },
+    ...(providerSetupGuidance(setupCode ?? undefined) === null
+      ? {}
+      : {
+          description: createElement(ProviderSetupGuidanceNotice, {
+            code: setupCode,
           }),
+        }),
+    title,
     type: "error",
   } as const;
   if (toastId !== undefined) {
@@ -197,6 +238,25 @@ export const notifyUserError = (
   }
   stellaToast.add(toast);
   return true;
+};
+
+/**
+ * One failure, one message: the issue a rejected request names on `field`, for
+ * the form to show beside it, or a toast when the failure names no such issue
+ * or the form closed while the request was running.
+ */
+export const fieldIssueOrToast = (
+  error: unknown,
+  field: string,
+  fallback: string,
+  isFormOpen: () => boolean = () => true,
+): string | undefined => {
+  const issue = apiFieldIssueMessage(error, field);
+  if (issue === undefined || !isFormOpen()) {
+    notifyUserError(error, fallback);
+    return undefined;
+  }
+  return issue;
 };
 
 const SERVER_ERROR_THRESHOLD = 500;
@@ -224,11 +284,11 @@ type DetachedUserActionOptions = {
  * `detached`, a rejection is shown as well as reported: a press must never
  * end in nothing.
  */
-export const detachedUserAction = (
-  operation: unknown,
+export const detachedUserAction = <Operand>(
+  operation: DetachedOperand<Operand>,
   { context, failureMessage }: DetachedUserActionOptions,
 ): void => {
   createDetached((error) => {
     notifyUserError(error, failureMessage);
-  })(operation, context);
+  })<Operand>(operation, context);
 };

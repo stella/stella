@@ -8,8 +8,8 @@ import type { MemberOption } from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import { organizationOptions } from "@/lib/organization/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -36,7 +36,7 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const organizationQuery = useQuery(organizationOptions(activeOrganizationId));
-  const organizationView = useQueryView(organizationQuery);
+  const organizationView = queryView(organizationQuery);
   const organization =
     organizationView.type === "items" ? organizationView.items : undefined;
 

@@ -10,8 +10,9 @@ import { entities, signals } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { EntityQueryScope } from "@/api/lib/entities/query-scope";
 import { signalListConditions } from "@/api/lib/signals/read";
+import { workTask } from "@/api/lib/tasks/work-task";
 
-const isTask = eq(entities.kind, "task");
+const isTask = workTask(entities);
 const isClosedTask =
   and(isTask, inArray(entities.status, [...TASK_CLOSED_STATUSES])) ??
   panic("Closed-task predicate compiled to nothing");

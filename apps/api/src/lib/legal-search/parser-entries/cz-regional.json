@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "CZ_REGIONAL",
+  "key": "cz-regional",
+  "parserVersion": 19,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Recompute the instructions from stored raw so the court's own Poučení label, alone or opening the first instruction, is printed once under the synthesized heading; AST blocks have no separate feature storage."
+  }
+}

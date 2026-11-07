@@ -1,14 +1,29 @@
 import { panic } from "better-result";
-import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import {
+  mkdir,
+  mkdtemp,
+  open,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+} from "node:fs/promises";
 import path from "node:path";
 import { cacheArtifactPaths } from "oxlint-tailwindcss";
 import * as v from "valibot";
 
 import oxlintConfig from "../oxlint.config.ts";
+import { TAILWIND_CLASS_CACHE } from "../packages/scripts/src/generated-files";
+import { hasPreparedGeneratedDirectory } from "../packages/scripts/src/prepared-generated-sources";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
-const committedCache = path.join(repositoryRoot, ".tailwind-cache");
+const generatedCache = path.join(
+  repositoryRoot,
+  TAILWIND_CLASS_CACHE.directory,
+);
+const artifact = TAILWIND_CLASS_CACHE.file;
+const staleLockAgeMs = 5 * 60_000;
 const tailwindSettings = v.object({
   tailwindcss: v.object({
     entryPoint: v.array(
@@ -28,7 +43,6 @@ export const tailwindEntryPoints = v
     stylesheet: use,
   }));
 const lintTargets = tailwindEntryPoints.map(({ root }) => root);
-const artifact = /^[0-9a-f]{32}(?:\.json|\.decl-[0-9a-f]{2}\.json)$/u;
 
 const lintReport = v.object({
   diagnostics: v.array(v.object({ message: v.string() })),
@@ -53,25 +67,151 @@ export const tailwindFailureMessages = (
     ),
   ].toSorted();
 
-/** Lints every Tailwind entry point and returns why its rules did not run. */
-const tailwindFailures = async (env: Record<string, string | undefined>) => {
-  const child = Bun.spawn(
+/**
+ * How long one oxlint pass over the Tailwind sources may run. A cold pass
+ * takes about a minute on a CI runner; one still running after this has
+ * stalled, and is stopped so the step fails instead of hanging.
+ */
+export const lintPassTimeoutMs = 5 * 60_000;
+
+/** The prefix of the Tailwind plugin's debug lines (`DEBUG=oxlint-tailwindcss`). */
+export const pluginProgressPrefix = "[oxlint-tailwindcss]";
+/** How many of the plugin's latest debug lines a stalled pass reports. */
+export const progressTailLines = 40;
+
+/**
+ * Forwards a pass's stderr, keeping the plugin's debug lines out of the log
+ * and only the latest `progressTailLines` of them in memory: they are the
+ * pass's progress, worth printing only when it stalls.
+ */
+const collectProgress = async (
+  stderr: ReadableStream<Uint8Array>,
+  tail: string[],
+) => {
+  const decoder = new TextDecoder();
+  let pending = "";
+  const take = (line: string) => {
+    if (!line.startsWith(pluginProgressPrefix)) {
+      process.stderr.write(`${line}\n`);
+      return;
+    }
+    tail.push(line);
+    if (tail.length > progressTailLines) {
+      tail.shift();
+    }
+  };
+  for await (const chunk of stderr) {
+    pending += decoder.decode(chunk, { stream: true });
+    const lines = pending.split("\n");
+    pending = lines.pop() ?? "";
+    for (const line of lines) {
+      take(line);
+    }
+  }
+  if (pending !== "") {
+    take(pending);
+  }
+};
+
+/** The cache directory's entries with sizes and ages, to show what a stalled pass had written. */
+const describeCacheDirectory = async (directory: string | undefined) => {
+  if (directory === undefined) {
+    return "no cache directory set";
+  }
+  const entries = await readdir(directory).catch(() => null);
+  if (entries === null) {
+    return `${directory} is missing`;
+  }
+  if (entries.length === 0) {
+    return `${directory} is empty`;
+  }
+  const now = Date.now();
+  const described = await Promise.all(
+    entries.toSorted().map(async (name) => {
+      const info = await stat(path.join(directory, name)).catch(() => null);
+      return info === null
+        ? `${name} (gone)`
+        : `${name} ${info.size} bytes, ${Math.round((now - info.mtimeMs) / 1000)} s old`;
+    }),
+  );
+  return described.join("\n");
+};
+
+/**
+ * Runs one lint pass and returns its exit code and report. The report is read
+ * while the pass runs, so a large one cannot fill the pipe and block it. A
+ * pass still running after `timeoutMs` is killed and fails generation with a
+ * message naming the pass, its last plugin progress lines and the cache
+ * directory's state, so the stall can be diagnosed from the log.
+ */
+export const runLintPass = async (
+  command: readonly string[],
+  {
+    env,
+    pass,
+    timeoutMs = lintPassTimeoutMs,
+  }: {
+    env: Record<string, string | undefined>;
+    pass: string;
+    timeoutMs?: number;
+  },
+): Promise<{ exitCode: number; stdout: string }> => {
+  const child = Bun.spawn([...command], {
+    cwd: repositoryRoot,
+    env,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const stdout = new Response(child.stdout).text();
+  const progress: string[] = [];
+  const stderr = collectProgress(child.stderr, progress);
+  const deadline = { passed: false };
+  const timer = setTimeout(() => {
+    deadline.passed = true;
+    child.kill("SIGKILL");
+  }, timeoutMs);
+  const exitCode = await child.exited;
+  clearTimeout(timer);
+  await stderr;
+  if (deadline.passed) {
+    panic(
+      [
+        `Tailwind cache generation (scripts/generate-tailwind-classes.ts --write): the ${pass} oxlint pass was still running after ${timeoutMs / 1000} s and was stopped. A normal pass takes about a minute; rerun the step, and if it stalls again, run the command locally: ${command.join(" ")}`,
+        `Last plugin progress (${progress.length} lines):`,
+        progress.length === 0 ? "(none)" : progress.join("\n"),
+        "Cache directory:",
+        await describeCacheDirectory(env["OXLINT_TAILWINDCSS_CACHE_DIR"]),
+      ].join("\n"),
+    );
+  }
+  return { exitCode, stdout: await stdout };
+};
+
+/**
+ * Lints every Tailwind entry point and returns why its rules did not run. The
+ * pass runs only the Tailwind rules (oxlint.tailwind.config.ts), which ask the
+ * design system for the same classes as the repository lint. Oxlint's own
+ * entry runs in this Bun process's runtime directly, so a timeout kills the
+ * whole pass; `bun --bun oxlint` would start it under a wrapper process.
+ */
+const tailwindFailures = async (
+  env: Record<string, string | undefined>,
+  pass: string,
+) => {
+  const { exitCode, stdout } = await runLintPass(
     [
-      "bun",
-      "--bun",
-      "oxlint",
+      process.execPath,
+      path.join(repositoryRoot, "node_modules/oxlint/bin/oxlint"),
       "-c",
-      "oxlint.config.ts",
+      "oxlint.tailwind.config.ts",
       "--format",
       "json",
       ...lintTargets,
     ],
-    { cwd: repositoryRoot, env, stdout: "pipe", stderr: "inherit" },
+    // The plugin's debug lines are the pass's progress; runLintPass keeps
+    // them out of the log unless the pass stalls.
+    { env: { ...env, DEBUG: "oxlint-tailwindcss" }, pass },
   );
-  const [stdout, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    child.exited,
-  ]);
   // oxlint exits 1 when it reports findings; anything else is a crash.
   if (exitCode !== 0 && exitCode !== 1) {
     panic(`oxlint exited with ${exitCode} while linting the Tailwind sources.`);
@@ -93,7 +233,7 @@ const generate = async (cacheDirectory: string) => {
     OXLINT_TAILWINDCSS_CACHE_DIR: cacheDirectory,
     OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "0",
   };
-  const generationFailures = await tailwindFailures(env);
+  const generationFailures = await tailwindFailures(env, "cache-filling");
   if (generationFailures.length > 0) {
     panic(
       `Tailwind rules failed while generating the cache:\n${generationFailures.join("\n")}`,
@@ -111,10 +251,10 @@ const generate = async (cacheDirectory: string) => {
     }
     await Bun.write(file, `${JSON.stringify(value)}\n`);
   }
-  const missing = await tailwindFailures({
-    ...env,
-    OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "1",
-  });
+  const missing = await tailwindFailures(
+    { ...env, OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "1" },
+    "read-only verification",
+  );
   if (missing.length > 0) {
     panic(
       `Read-only lint misses answers in the generated Tailwind cache:\n${missing.join("\n")}`,
@@ -159,10 +299,12 @@ const answersOf = (text: string | undefined) => {
 };
 
 /**
- * Why the committed cache cannot serve lint, decided without compiling. The
+ * Why the generated cache cannot serve lint, decided without compiling. The
  * plugin names each snapshot by the hash of what compiles it (the stylesheet
- * and its imports, their package versions, the Tailwind engine and the
- * plugin's precompute script), so a committed file of that name is current.
+ * and its imports, including workspace stylesheets imported by package name
+ * such as `@stll/ui/theme.css`, the installed packages' versions, the Tailwind
+ * engine and the plugin's precompute script), so a committed file of that name
+ * is current.
  * A class without an answer fails every read-only lint that meets it.
  */
 export const snapshotProblems = (committed: ReadonlySet<string>) =>
@@ -180,23 +322,28 @@ export const snapshotProblems = (committed: ReadonlySet<string>) =>
   ].toSorted();
 
 /** The cache check: digests only, so it never starts lint or a worker. */
-export const checkCache = async () =>
-  snapshotProblems(new Set(await readdir(committedCache)));
+export const checkCache = async () => {
+  try {
+    return snapshotProblems(new Set(await readdir(generatedCache)));
+  } catch {
+    return snapshotProblems(new Set());
+  }
+};
 
 /**
- * The committed cache after a generation. Fresh answers win; an answer the
+ * A cache merged after generation. Fresh answers win; an answer the
  * sources no longer use stays, because a concurrent change may use that class
  * again; only artifacts of a snapshot that is no longer generated go.
  */
 export const mergeCache = (
-  committed: CacheFiles,
+  existing: CacheFiles,
   generated: CacheFiles,
 ): Map<string, string> => {
   const currentSnapshots = new Set(
     [...generated.keys()].map((name) => name.slice(0, 32)),
   );
   const merged = new Map<string, string>();
-  for (const [name, text] of committed) {
+  for (const [name, text] of existing) {
     if (isDeclarationShard(name) && currentSnapshots.has(name.slice(0, 32))) {
       merged.set(name, text);
     }
@@ -226,30 +373,113 @@ export const mergeCache = (
   return merged;
 };
 
-const write = async () => {
+const lockValue = (value: unknown) => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("createdAt" in value) ||
+    typeof value.createdAt !== "number" ||
+    !("pid" in value) ||
+    typeof value.pid !== "number" ||
+    !("token" in value) ||
+    typeof value.token !== "string"
+  ) {
+    return undefined;
+  }
+  return { createdAt: value.createdAt, pid: value.pid, token: value.token };
+};
+
+const acquireLock = async (cacheLock: string, token: string) => {
+  while (true) {
+    try {
+      const lock = await open(cacheLock, "wx");
+      await lock.writeFile(
+        JSON.stringify({ createdAt: Date.now(), pid: process.pid, token }),
+      );
+      await lock.close();
+      break;
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !("code" in error) ||
+        error.code !== "EEXIST"
+      ) {
+        throw error;
+      }
+      let staleToken: string | undefined;
+      try {
+        const value = lockValue(JSON.parse(await readFile(cacheLock, "utf-8")));
+        if (value && Date.now() - value.createdAt > staleLockAgeMs) {
+          staleToken = value.token;
+        } else if (value) {
+          try {
+            process.kill(value.pid, 0);
+          } catch {
+            staleToken = value.token;
+          }
+        }
+      } catch {
+        // A writer may be between creating and filling its lock file.
+      }
+      if (staleToken !== undefined) {
+        const current = lockValue(
+          JSON.parse(await readFile(cacheLock, "utf-8")),
+        );
+        if (current?.token === staleToken) {
+          await rm(cacheLock, { force: true });
+        }
+      } else {
+        await Bun.sleep(50);
+      }
+    }
+  }
+};
+
+export const writeCache = async (cacheDirectory = generatedCache) => {
+  const cacheLock = `${cacheDirectory}.lock`;
+  const token = `${process.pid}:${crypto.randomUUID()}`;
+  await acquireLock(cacheLock, token);
+
   const temporaryRoot = await mkdtemp(
-    path.join(tmpdir(), "stella-tailwind-cache-"),
+    path.join(path.dirname(cacheDirectory), ".tailwind-cache-build-"),
   );
   try {
     await generate(temporaryRoot);
-    const merged = mergeCache(
-      await readCache(committedCache),
-      await readCache(temporaryRoot),
-    );
-    await mkdir(committedCache, { recursive: true });
-    for (const name of await readdir(committedCache)) {
-      if (!merged.has(name)) {
-        await rm(path.join(committedCache, name), {
-          recursive: true,
-          force: true,
-        });
-      }
+    const generated = await readCache(temporaryRoot);
+    const merged = mergeCache(await readCache(cacheDirectory), generated);
+    const current = await readCache(cacheDirectory);
+    if (
+      current.size === merged.size &&
+      [...merged].every(([name, text]) => current.get(name) === text)
+    ) {
+      return;
     }
+    await mkdir(cacheDirectory, { recursive: true });
     for (const [name, text] of merged) {
-      await Bun.write(path.join(committedCache, name), text);
+      const temporaryFile = path.join(temporaryRoot, `.publish-${name}`);
+      await Bun.write(temporaryFile, text);
+      await rename(temporaryFile, path.join(cacheDirectory, name));
+    }
+    for (const name of await readdir(cacheDirectory)) {
+      if (artifact.test(name) && !merged.has(name)) {
+        await rm(path.join(cacheDirectory, name), { force: true });
+      }
     }
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
+    try {
+      const current: unknown = JSON.parse(await readFile(cacheLock, "utf-8"));
+      if (
+        typeof current === "object" &&
+        current !== null &&
+        "token" in current &&
+        current.token === token
+      ) {
+        await rm(cacheLock, { force: true });
+      }
+    } catch {
+      // The lock was already removed or replaced after becoming stale.
+    }
   }
 };
 
@@ -257,7 +487,7 @@ const check = async () => {
   const problems = await checkCache();
   if (problems.length > 0) {
     process.stderr.write(
-      `Tailwind cache is stale:\n${problems.join("\n")}\nRun bun scripts/generate-tailwind-classes.ts --write and commit .tailwind-cache.\n`,
+      `Tailwind cache is missing or stale:\n${problems.join("\n")}\nRun bun scripts/generate-tailwind-classes.ts --write.\n`,
     );
     process.exitCode = 1;
   }
@@ -266,7 +496,17 @@ const check = async () => {
 if (import.meta.main) {
   const mode = process.argv[2];
   if (mode === "--write") {
-    await write();
+    // A CI consumer restored the cache the generated-sources producer filled
+    // for this exact tree. Filling it again would repeat the heaviest pass of
+    // the lint jobs beside their type-aware lint, which stalled on CI runners.
+    if (
+      !hasPreparedGeneratedDirectory(
+        repositoryRoot,
+        TAILWIND_CLASS_CACHE.directory,
+      )
+    ) {
+      await writeCache();
+    }
   } else if (mode === "--check") {
     await check();
   } else {

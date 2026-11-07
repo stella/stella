@@ -4,7 +4,10 @@ import { describe, expect, test } from "bun:test";
 
 import { InspectorEntityTab } from "../inspector/entity-tab";
 import { DocumentIdentityBadge } from "./document-identity-badge";
-import { statuteIdentityLabels } from "./document-identity-badge.logic";
+import {
+  caseNumberIdentityLabels,
+  statuteIdentityLabels,
+} from "./document-identity-badge.logic";
 import type { DocumentIdentity } from "./document-identity-badge.logic";
 
 const markup = (identity: DocumentIdentity) =>
@@ -55,12 +58,34 @@ describe("document identity badge", () => {
     { kind: "decision", courtAbbreviation: null },
     { kind: "decision", courtAbbreviation: "  " },
     { kind: "statute", number: null, year: null },
+    { kind: "caseNumber", caseNumber: null },
+    { kind: "caseNumber", caseNumber: "  " },
   ] as const)(
     "uses a generic document mark only without known identity: %j",
     (identity) => {
       const result = markup(identity);
       expect(result).toContain("<svg");
       expect(result).toContain('data-kind="unknown"');
+      expect(result).not.toContain('data-slot="court-badge"');
+    },
+  );
+
+  test.each([
+    ["C-359/25", "C-359/25", "C-359/25"],
+    ["T-33/03", "T-33/03", "T-33/03"],
+    ["25 Cdo 1234/2019", "25 Cdo 1234/19", "25 Cdo 1234/2019"],
+    ["Pl. ÚS  19/2008", "Pl. ÚS 19/08", "Pl. ÚS 19/2008"],
+    ["2 BvR 1/04", "2 BvR 1/04", "2 BvR 1/04"],
+  ] as const)(
+    "a case number %j keeps a short and a full form",
+    (caseNumber, short, long) => {
+      expect(
+        caseNumberIdentityLabels({ kind: "caseNumber", caseNumber }),
+      ).toEqual({ short, long });
+      const result = markup({ kind: "caseNumber", caseNumber });
+      expect(result).toContain('data-kind="caseNumber"');
+      expect(result).toContain(`>${short}</bdi>`);
+      expect(result).toContain(`>${long}</bdi>`);
       expect(result).not.toContain('data-slot="court-badge"');
     },
   );

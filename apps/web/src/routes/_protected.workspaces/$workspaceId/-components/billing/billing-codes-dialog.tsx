@@ -247,12 +247,12 @@ export const BillingCodesDialog = ({
                     </span>
                     <span className="truncate text-sm">{code.label}</span>
                     {!code.active && (
-                      <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5">
+                      <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded-sm px-1.5 py-0.5">
                         {t("billing.codes.inactive")}
                       </span>
                     )}
                   </div>
-                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100">
                     <Button
                       className="size-7"
                       onClick={() => handleToggleActive(code.id, code.active)}

@@ -7,12 +7,14 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DialogFormState } from "@stll/ui/dialog";
+import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { SearchField } from "@stll/ui/search-field";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { filterVisibleDocuments } from "@/components/workspaces/matter-document-picker.logic";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 type MatterDocumentPickerProps = {
@@ -37,7 +39,7 @@ export const MatterDocumentPicker = ({
   const [search, setSearch] = useState("");
   const [initialPickedEntityIds] = useState(() => [...pickedEntityIds]);
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
-  const filesView = useQueryView(filesQuery);
+  const filesView = queryView(filesQuery);
   useQueryViewError(filesView, "MatterDocumentPicker:query");
   const files = filesView.type === "items" ? filesView.items : undefined;
 
@@ -100,10 +102,7 @@ export const MatterDocumentPicker = ({
             {documents.map((doc) => {
               const checked = pickedEntityIds.includes(doc.entityId);
               return (
-                <label
-                  className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"
-                  key={doc.entityId}
-                >
+                <Label key={doc.entityId} variant="choice">
                   <Checkbox
                     aria-label={doc.name ?? doc.fileName}
                     checked={checked}
@@ -118,7 +117,7 @@ export const MatterDocumentPicker = ({
                   <BidiText as="span" className="min-w-0 truncate">
                     {doc.name ?? doc.fileName}
                   </BidiText>
-                </label>
+                </Label>
               );
             })}
             {documents.length === 0 && (

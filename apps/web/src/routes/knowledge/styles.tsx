@@ -32,6 +32,7 @@ import {
   UploadIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";
 
 import { StyleSetEditorDialog } from "@/features/style-sets/style-set-editor-dialog";
@@ -49,10 +50,13 @@ import { isDocxFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
+import { pageTitle } from "@/lib/page-title";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { routePresentation } from "@/routes/-route-presentation";
 import { KnowledgeMemberOnly } from "@/routes/knowledge/-knowledge-member-only";
 
 const UNEXPECTED_ERROR_TRANSLATION_KEY = "common.unexpectedError";
@@ -93,7 +97,7 @@ const StyleSetsPage = () => {
 
   const replace = async (target: StyleSetItem, file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
     setBusy(true);
@@ -374,6 +378,14 @@ export const Route = createFileRoute("/knowledge/styles")({
       "knowledge-styles.prefetch",
     );
   },
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "styleSets.title",
+      to: "/knowledge/styles",
+    }),
+  },
+  head: () => ({ meta: [{ title: pageTitle("styleSets.title") }] }),
   component: GuardedStyleSetsPage,
 });
 
@@ -417,8 +429,10 @@ const StyleSetFormDialog = ({
   onSaved,
   styleSet,
 }: StyleSetDialogProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const sourceLabelId = useId();
+  const nameInputId = useId();
   const [name, setName] = useState(styleSet?.name ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -439,9 +453,13 @@ const StyleSetFormDialog = ({
         setSaving(false);
         return;
       }
-      response = await api["style-sets"].put({
-        name: normalizedName,
-        styleSource: file,
+      response = await idempotentSubmit.run({
+        operation: JSON.stringify(['api["style-sets"]']),
+        body: {
+          name: normalizedName,
+          styleSource: file,
+        },
+        send: async (body) => api["style-sets"].put(body),
       });
     }
     setSaving(false);
@@ -489,15 +507,16 @@ const StyleSetFormDialog = ({
           )}
         </DialogHeader>
         <DialogPanel className="space-y-4">
-          <label className="space-y-1.5">
-            <span className="text-sm font-medium">{t("common.name")}</span>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={nameInputId}>{t("common.name")}</Label>
             <Input
               autoFocus
+              id={nameInputId}
               maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
               onChange={(event) => setName(event.target.value)}
               value={name}
             />
-          </label>
+          </div>
           {!styleSet && (
             <div className="space-y-1.5">
               <span className="text-sm font-medium" id={sourceLabelId}>

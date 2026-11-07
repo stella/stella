@@ -8,11 +8,15 @@ import {
   BUSINESS_REGISTRY_SLUGS,
   CHAT_EDIT_APPLY_MODE,
 } from "@stll/api-contract";
-import type { ChatEditApplyMode } from "@stll/api-contract";
+import type {
+  BusinessRegistrySlug,
+  ChatEditApplyMode,
+} from "@stll/api-contract";
 import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
 } from "@stll/api-contract/chat-docx-suggestions";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
@@ -26,6 +30,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import type { RegistryHandler } from "@/api/lib/business-registries/dispatch";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -98,7 +103,9 @@ const activeSkillContext: ActiveChatSkillContext = {
   version: null,
 };
 
-const canaryRegistryDispatch = { ...BUSINESS_REGISTRY_DISPATCH };
+const canaryRegistryDispatch: Record<BusinessRegistrySlug, RegistryHandler> = {
+  ...BUSINESS_REGISTRY_DISPATCH,
+};
 for (const slug of BUSINESS_REGISTRY_SLUGS) {
   canaryRegistryDispatch[slug] = {
     ...BUSINESS_REGISTRY_DISPATCH[slug],
@@ -174,7 +181,10 @@ const buildChatToolsForScenario = ({
     },
     // A live extension registers the client-executed browser tool, so its
     // schema also runs through the provider matrix.
-    browserClient: { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION },
+    browserExtension: {
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "connected",
+    },
     docxSuggestionSurface: surface,
     editApplyMode,
     hasActiveDocxEditClient: true,
@@ -223,7 +233,7 @@ const buildChatToolsForScenario = ({
       webSearchProvider: inertWebSearchProvider,
     },
     workspaceId,
-    workspaceStatusById: new Map([[workspaceId, "active"]]),
+    workspaceStatusById: new Map([[workspaceId, WORKSPACE_STATUS.active]]),
   });
 };
 

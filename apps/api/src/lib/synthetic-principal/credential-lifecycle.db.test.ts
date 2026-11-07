@@ -29,7 +29,6 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import { createReviewAccountPlugin } from "@/api/lib/auth/review-account-plugin";
-import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   createSessionLifetime,
   SESSION_LIFETIME_FIELDS,
@@ -294,7 +293,6 @@ const setup = async () => {
         authorizeSession: async (current) =>
           await authorizeSyntheticSession(asTestRaw(testDb), current),
       }),
-      createSessionBearer(),
       organization(),
       apiKey(),
       oauthProvider({
@@ -410,6 +408,7 @@ const setup = async () => {
 for (const transition of ["revoked", "expired", "disabled"] as const) {
   test(`session credentials are unavailable when the source is ${transition}`, async () => {
     const { store, probes, source, testDb } = await setup();
+    await probes.bearer();
     if (transition === "revoked") {
       const revoked = await store.revokeSyntheticSessions();
       expect(revoked.deletedRoomTokens).toBe(1);

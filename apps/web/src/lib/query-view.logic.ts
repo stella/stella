@@ -1,3 +1,4 @@
+import { CancelledError } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { panic } from "better-result";
 
@@ -50,8 +51,10 @@ export const queryViewError = <TData, TError>(
   }
 };
 
+// The full result preserves inference for nested useQuery calls; the projection
+// also accepts minimal inputs without weakening status/data/error correlation.
 export const queryView = <TData, TError>(
-  query: QueryViewQuery<TData, TError>,
+  query: UseQueryResult<TData, TError> | QueryViewQuery<TData, TError>,
   {
     isEmpty = (items) => Array.isArray(items) && items.length === 0,
   }: QueryViewOptions<TData> = {},
@@ -60,6 +63,13 @@ export const queryView = <TData, TError>(
     case "pending":
       return { type: "pending" };
     case "error":
+      // Cancellation ends a flight, not the read: keep its data or wait for
+      // the next owner instead of promoting navigation to a failure.
+      if (query.error instanceof CancelledError) {
+        return query.data === undefined
+          ? { type: "pending" }
+          : { type: "items", items: query.data, retry: query.refetch };
+      }
       if (query.data === undefined) {
         return { type: "error", error: query.error, retry: query.refetch };
       }

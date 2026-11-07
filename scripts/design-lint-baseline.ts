@@ -1,9 +1,10 @@
 // Design-system lint backlog guard.
 //
 // `oxlint.config.ts` enables the tracked rules (the `@shadcn/lint` pair, the
-// local `no-raw-overflow-scroll` and `no-imported-class-constant`, the API
-// size-bound rules `require-bounded-request-schema` and
-// `no-unbounded-response-body`, `no-computed-key-record-assignment`, and the
+// local `no-raw-overflow-scroll`, `no-raw-context-menu` and
+// `no-imported-class-constant`, the API size-bound rules
+// `require-bounded-request-schema` and `no-unbounded-response-body`,
+// `no-computed-key-record-assignment`, and the
 // function size limits `complexity`,
 // `max-lines-per-function` and `max-params`) for every file in their scope
 // except the ones this baseline lists per rule (scripts/design-lint-policy.ts
@@ -105,12 +106,29 @@ export const emptyBacklog = (): DesignLintBacklog => ({
   "shadcn/no-arbitrary-values": {},
   "shadcn/no-restyle": {},
   "no-raw-overflow-scroll/no-raw-overflow-scroll": {},
+  "no-raw-context-menu/no-raw-context-menu": {},
   "no-imported-class-constant/no-imported-class-constant": {},
   "require-bounded-request-schema/require-bounded-request-schema": {},
   "no-unbounded-response-body/no-unbounded-response-body": {},
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {},
   "no-direct-status-set/no-direct-status-set": {},
   "require-polite-publisher-fetch/require-polite-publisher-fetch": {},
+  "no-native-ui/no-native-accordion": {},
+  "no-native-ui/no-native-button": {},
+  "no-native-ui/no-native-checkbox": {},
+  "no-native-ui/no-native-details-grid": {},
+  "no-native-ui/no-native-dialog": {},
+  "no-native-ui/no-native-form": {},
+  "no-native-ui/no-native-input": {},
+  "no-native-ui/no-native-label": {},
+  "no-native-ui/no-native-menu": {},
+  "no-native-ui/no-native-number-input": {},
+  "no-native-ui/no-native-secret-input": {},
+  "no-native-ui/no-native-select": {},
+  "no-native-ui/no-native-separator": {},
+  "no-native-ui/no-native-table": {},
+  "no-native-ui/no-native-textarea": {},
+  "no-native-ui/no-native-tooltip": {},
   "eslint/complexity": {},
   "eslint/max-lines-per-function": {},
   "eslint/max-params": {},

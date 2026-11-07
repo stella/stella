@@ -1,7 +1,7 @@
 //! The activity window's explicit confirmation boundary. Block references stay local.
 use crate::logging::best_effort;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 
 use crate::{
   account::{self, AccountRequest, AccountState, LinkedAccount},
@@ -10,7 +10,7 @@ use crate::{
     BatchReservationError,
   },
   feature_gate::{DesktopFeature, FeatureGates},
-  local_window::ActivityCaller,
+  local_window::{ActivityAccountFeature, ActivityCaller, LocalCaller},
   time_entry_submit::{
     self, ConfirmedBatch, ConfirmedTimeEntry, CreatedEntry, Matter, MatterCandidate,
   },
@@ -89,13 +89,14 @@ fn validate_confirmation(
   Ok(())
 }
 
-fn require_account(
-  caller: &ActivityCaller,
+pub(crate) fn require_account<F: ActivityAccountFeature>(
+  caller: &LocalCaller<F>,
   gates: &FeatureGates,
   account: &LinkedAccount,
 ) -> Result<(), String> {
+  // The server enables the activity timeline only with time billing.
   let binding = gates.account_binding(DesktopFeature::ActivityTimeline);
-  if !gates.is_enabled(DesktopFeature::TimeBilling)
+  if !gates.is_enabled(DesktopFeature::ActivityTimeline)
     || binding.as_ref() != caller.account_binding()
     || binding
       .as_ref()
@@ -106,23 +107,8 @@ fn require_account(
   Ok(())
 }
 
-fn require_local_discard(
-  caller: &ActivityCaller,
-  gates: &FeatureGates,
-) -> Result<(), String> {
-  let binding = gates
-    .account_binding(DesktopFeature::ActivityTimeline)
-    .ok_or(REFUSAL)?;
-  if gates.is_enabled(DesktopFeature::TimeBilling)
-    || Some(&binding) != caller.account_binding()
-  {
-    return Err(REFUSAL.into());
-  }
-  Ok(())
-}
-
-async fn linked_account(
-  caller: &ActivityCaller,
+pub(crate) async fn linked_account<F: ActivityAccountFeature>(
+  caller: &LocalCaller<F>,
   gates: &FeatureGates,
   state: &AccountState,
 ) -> Result<AccountRequest, String> {
@@ -214,10 +200,7 @@ pub async fn time_entry_submit_batch_confirmed(
           .cancel_pending_batch(day, &batch.idempotency_key)
           .map_err(uncertain)?;
         drop(manager);
-        best_effort(
-          app.emit(activity::CHANGED_EVENT, ()),
-          "activity change was not announced",
-        );
+        activity::emit_changed(&app);
         return Err(SubmitError::Rejected);
       }
       Err(_) => return Err(SubmitError::Uncertain),
@@ -243,40 +226,11 @@ pub async fn time_entry_submit_batch_confirmed(
   };
   // The account request lease covers the submission and its marker.
   drop(account);
-  best_effort(
-    app.emit(activity::CHANGED_EVENT, ()),
-    "activity change was not announced",
-  );
+  activity::emit_changed(&app);
   Ok(SubmitResult {
     entries: created.entries,
     marker_saved,
   })
-}
-
-#[tauri::command]
-pub async fn time_entry_discard_pending_batch_confirmed(
-  caller: ActivityCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  gates: State<'_, FeatureGates>,
-  date: String,
-  idempotency_key: String,
-) -> Result<(), String> {
-  let _confirmation = BATCH_CONFIRMATION.lock().await;
-  caller.require_current(&app)?;
-  require_local_discard(&caller, &gates)?;
-  let date = activity::parse_date(&date)?;
-  let mut manager = state
-    .lock()
-    .map_err(crate::logging::with_cause_logged(REFUSAL))?;
-  manager.require_caller(&caller)?;
-  manager.cancel_pending_batch(date, &idempotency_key)?;
-  drop(manager);
-  best_effort(
-    app.emit(activity::CHANGED_EVENT, ()),
-    "activity change was not announced",
-  );
-  Ok(())
 }
 
 #[cfg(test)]
@@ -322,6 +276,7 @@ mod tests {
           duration_minutes: 6,
           narrative: "Reviewed agreement".into(),
           billable: false,
+          classification: None,
         })
         .collect(),
     };
@@ -337,7 +292,7 @@ mod tests {
   }
 
   #[test]
-  fn confirmation_requires_both_features_and_the_original_account_generation() {
+  fn confirmation_requires_the_activity_timeline_and_the_original_account_generation() {
     let account: LinkedAccount = serde_json::from_value(serde_json::json!({
       "apiBaseUrl": "https://api.example.test", "webOrigin": "https://example.test",
       "account": {"email": "fixture@example.test", "name": null, "verifiedAt": "2026-01-01T00:00:00Z"},
@@ -350,15 +305,14 @@ mod tests {
     let caller = ActivityCaller::for_account_test(generation, &namespace);
     for features in [
       HashSet::new(),
+      HashSet::from([DesktopFeature::LocalAgents]),
       HashSet::from([DesktopFeature::ActivityTimeline]),
-      HashSet::from([DesktopFeature::TimeBilling]),
       HashSet::from([
         DesktopFeature::ActivityTimeline,
-        DesktopFeature::TimeBilling,
+        DesktopFeature::LocalAgents,
       ]),
     ] {
-      let both = features.len() == 2;
-      let discard = features == HashSet::from([DesktopFeature::ActivityTimeline]);
+      let enabled = features.contains(&DesktopFeature::ActivityTimeline);
       gates
         .install(
           generation,
@@ -367,28 +321,22 @@ mod tests {
           features,
         )
         .unwrap();
-      assert_eq!(require_account(&caller, &gates, &account).is_ok(), both);
-      assert_eq!(require_local_discard(&caller, &gates).is_ok(), discard);
+      assert_eq!(require_account(&caller, &gates, &account).is_ok(), enabled);
     }
     let mut other = account.clone();
     other.identity.user_id = "other_user".into();
     assert!(require_account(&caller, &gates, &other).is_err());
     gates.invalidate();
     assert!(require_account(&caller, &gates, &account).is_err());
-    assert!(require_local_discard(&caller, &gates).is_err());
     gates.finish_account_change();
     gates
       .install(
         gates.generation().unwrap(),
         Some(namespace),
         Some(chrono::Utc::now() + chrono::Duration::hours(1)),
-        HashSet::from([
-          DesktopFeature::ActivityTimeline,
-          DesktopFeature::TimeBilling,
-        ]),
+        HashSet::from([DesktopFeature::ActivityTimeline]),
       )
       .unwrap();
     assert!(require_account(&caller, &gates, &account).is_err());
-    assert!(require_local_discard(&caller, &gates).is_err());
   }
 }

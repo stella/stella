@@ -1,12 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import {
   MCP_TOOL_READ_BUDGETS,
   READ_BUDGETS,
   UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING,
 } from "@/api/lib/db/read-budgets";
-import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import {
+  SCHEDULER_BACKFILL_IDS,
+  SCHEDULER_REPAIR_BACKFILL_IDS,
+} from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
 import {
@@ -15,7 +20,6 @@ import {
 } from "@/api/tests/query-perf/registry";
 
 import {
-  ledgerMergeBase,
   parseReasonedLedger,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
@@ -23,6 +27,11 @@ import unmeasuredLedger from "./read-budgets-unmeasured.json";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const LEDGER = "apps/api/src/lib/db/read-budgets-unmeasured.json";
+/** Every scheduler job that batches through the backfill runtime. */
+const GOVERNED_BACKFILL_IDS = [
+  ...Object.values(SCHEDULER_BACKFILL_IDS),
+  ...Object.values(SCHEDULER_REPAIR_BACKFILL_IDS),
+];
 const unmeasured = new Set(
   parseReasonedLedger(JSON.stringify(unmeasuredLedger), LEDGER),
 );
@@ -35,7 +44,7 @@ const unmeasured = new Set(
  */
 describe("read budget declarations", () => {
   test("every scheduled job declares its reads", () => {
-    const governed = new Set<string>(Object.values(SCHEDULER_BACKFILL_IDS));
+    const governed = new Set<string>(GOVERNED_BACKFILL_IDS);
     const violations = DECLARED_SCHEDULER_JOBS.flatMap((job) => {
       const listed = unmeasured.has(`job:${job.id}`);
       if (job.reads === "unmeasured") {
@@ -48,12 +57,15 @@ describe("read budget declarations", () => {
       if (listed) {
         return [`${job.id}: declares its reads, so remove its ledger entry`];
       }
-      if (job.reads === "load-governed") {
-        return governed.has(job.id)
-          ? []
-          : [
-              `${job.id}: only jobs that batch through the backfill runtime are load-governed`,
-            ];
+      const loadGoverned =
+        job.reads === "load-governed" || "governance" in job.reads;
+      if (loadGoverned && !governed.has(job.id)) {
+        return [
+          `${job.id}: only jobs that batch through the backfill runtime are load-governed`,
+        ];
+      }
+      if (job.reads === "load-governed" || "governance" in job.reads) {
+        return [];
       }
       // Widened: the check holds for every budget a job may declare later.
       const pages: number = READ_BUDGETS[job.reads.budget].pages;
@@ -110,11 +122,15 @@ describe("read budget declarations", () => {
   });
 
   test("every governed backfill is declared as governed", () => {
-    for (const id of Object.values(SCHEDULER_BACKFILL_IDS)) {
+    for (const id of GOVERNED_BACKFILL_IDS) {
       expect(
         DECLARED_SCHEDULER_JOBS.find((job) => job.id === id)?.reads,
         id,
-      ).toBe("load-governed");
+      ).toSatisfy(
+        (reads) =>
+          reads === "load-governed" ||
+          (typeof reads === "object" && "governance" in reads),
+      );
     }
   });
 
@@ -148,15 +164,17 @@ describe("read budget declarations", () => {
         parseLedger: parseReasonedLedger,
         label: "read-budgets-unmeasured",
         remediation: "declare a read budget and measure it instead",
-        args: ["--base", ledgerMergeBase({ repoRoot, baseRef: "origin/main" })],
+        args: ["--base", treeBaseRevision({ repoRoot })],
       }),
     ).toBe(0);
   });
 
-  test("an over-budget entry is a measured statement with a reason", () => {
+  // Statements and scheduled jobs are both measured through the same page
+  // gate, which keeps a marked entry over its budget until the marker goes.
+  test("an over-budget entry is a measured surface with a reason", () => {
     for (const [id, budget] of Object.entries(READ_BUDGETS)) {
       if ("overBudget" in budget) {
-        expect(budget.surface, id).toBe("statement");
+        expect(["statement", "scheduled-job"], id).toContain(budget.surface);
         expect(budget.overBudget.reason.trim().length, id).toBeGreaterThan(0);
       }
       expect(Number.isInteger(budget.pages) && budget.pages > 0, id).toBe(true);

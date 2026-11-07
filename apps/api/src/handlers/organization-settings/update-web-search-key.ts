@@ -88,6 +88,7 @@ const updateWebSearchKey = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not reach the provider to validate the key",
         }),
       );

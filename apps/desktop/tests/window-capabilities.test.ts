@@ -8,7 +8,7 @@ const DESKTOP_ROOT = path.join(import.meta.dir, "..");
 const ENTRY_MODULE = "src/mainview/main.tsx";
 const INVOKE_COMMAND_PATTERN = /\binvoke(?:<[^>]+>)?\(\s*"([a-z_]+)"/gu;
 const LOCAL_COMMAND_PREFIXES = LOCAL_ONLY_FEATURES.flatMap((feature) =>
-  feature.commandOwners.map((owner) => owner.prefix),
+  feature.commandOwners.flatMap((owner) => owner.prefixes),
 ).join("|");
 /** Commands a local-only window routes through its own command helper. */
 const ROUTED_COMMAND_PATTERN = new RegExp(
@@ -35,16 +35,13 @@ const SHELL_INVOKE_SOURCES = [
 
 /**
  * The branch `main.tsx` renders for a window, keyed by that window's
- * capability. Local-only windows come from their feature entry.
+ * capability. Local-only modules come from their feature entry, added to
+ * any shell modules the same window renders.
  */
-const WINDOW_MODULES: Record<string, readonly string[]> = {
-  ...Object.fromEntries(
-    LOCAL_ONLY_FEATURES.flatMap((feature) =>
-      Object.entries(feature.windowModules),
-    ),
-  ),
+const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   "src-tauri/capabilities/default.json": [
     "src/mainview/App.tsx",
+    "src/mainview/AgentSubscriptionsSection.tsx",
     "src/mainview/PermissionsSection.tsx",
     "src/mainview/ShortcutSetting.tsx",
     "src/shared/ShortcutRecorder.tsx",
@@ -65,6 +62,18 @@ const WINDOW_MODULES: Record<string, readonly string[]> = {
   ],
 };
 
+const WINDOW_MODULES: Record<string, readonly string[]> = {
+  ...SHELL_WINDOW_MODULES,
+};
+for (const [capability, modules] of LOCAL_ONLY_FEATURES.flatMap((feature) =>
+  Object.entries(feature.windowModules),
+)) {
+  WINDOW_MODULES[capability] = [
+    ...(WINDOW_MODULES[capability] ?? []),
+    ...modules,
+  ];
+}
+
 /**
  * The static prompt windows Rust opens: plain HTML with no shell behind it,
  * so their capability is exactly the commands the page invokes and nothing
@@ -78,6 +87,50 @@ const DIALOG_WINDOWS = {
   "src-tauri/capabilities/takeover-dialog.json":
     "src/mainview/takeover-dialog.html",
 } as const satisfies Record<string, string>;
+
+/** Lets a page's drag strip move its window. */
+const DRAG_PERMISSION = "core:window:allow-start-dragging";
+const OVERLAY_TITLE_BAR = "TitleBarStyle::Overlay";
+
+/**
+ * The windows Rust opens with the macOS title bar under the page, keyed by
+ * the module that builds each one. The page covers the native title bar, so
+ * it draws the drag strip and its capability lets the strip move the window.
+ */
+const OVERLAY_TITLE_BAR_WINDOWS = {
+  "src-tauri/src/activity_window.rs": {
+    capability: "src-tauri/capabilities/activity.json",
+    page: "src/activity/ActivityApp.tsx",
+  },
+  "src-tauri/src/clipboard_window.rs": {
+    capability: "src-tauri/capabilities/clipboard-editor.json",
+    page: "src/clipboard/ClipboardEditor.tsx",
+  },
+  "src-tauri/src/deep_link.rs": {
+    capability: "src-tauri/capabilities/selfhost-connect-dialog.json",
+    page: "src/mainview/selfhost-connect-dialog.html",
+  },
+  "src-tauri/src/lib.rs": {
+    capability: "src-tauri/capabilities/default.json",
+    page: "src/mainview/App.tsx",
+  },
+  "src-tauri/src/onboarding.rs": {
+    capability: "src-tauri/capabilities/onboarding.json",
+    page: "src/onboarding/OnboardingApp.tsx",
+  },
+  "src-tauri/src/pdf_signing.rs": {
+    capability: "src-tauri/capabilities/pdf-sign-dialog.json",
+    page: "src/mainview/pdf-sign-dialog.html",
+  },
+} as const satisfies Record<string, { capability: string; page: string }>;
+
+const overlayCapabilities: ReadonlySet<string> = new Set(
+  Object.values(OVERLAY_TITLE_BAR_WINDOWS).map((window) => window.capability),
+);
+
+/** A page draws the shared strip, or, as a static page, the attribute. */
+const DRAG_STRIP_PATTERN =
+  /<WindowDragRegion \/>|\sdata-tauri-drag-region(?=[\s=>])/u;
 
 const readSource = async (sourcePath: string) =>
   readFile(path.join(DESKTOP_ROOT, sourcePath), "utf-8");
@@ -270,10 +323,55 @@ describe("window Tauri capabilities", () => {
       // app's own window earns no permission it does not use.
       const byName = (left: string, right: string) => left.localeCompare(right);
       expect([...permissions].toSorted(byName)).toEqual(
-        [...new Set(commands)]
-          .map((command) => `allow-${command.replaceAll("_", "-")}`)
-          .toSorted(byName),
+        [
+          ...[...new Set(commands)].map(
+            (command) => `allow-${command.replaceAll("_", "-")}`,
+          ),
+          ...(overlayCapabilities.has(capabilityPath) ? [DRAG_PERMISSION] : []),
+        ].toSorted(byName),
       );
     },
   );
+
+  test("every window under its title bar is registered with its drag strip", async () => {
+    const glob = new Bun.Glob("src-tauri/src/**/*.rs");
+    const overlayModules: string[] = [];
+    for await (const modulePath of glob.scan({ cwd: DESKTOP_ROOT })) {
+      const source = await readSource(modulePath);
+      const count = source.split(OVERLAY_TITLE_BAR).length - 1;
+      if (count > 0) {
+        // One registration per window: a second one in a module would need
+        // its own entry.
+        expect({ count, modulePath }).toEqual({ count: 1, modulePath });
+        overlayModules.push(modulePath);
+      }
+    }
+    const byName = (left: string, right: string) => left.localeCompare(right);
+    expect(overlayModules.toSorted(byName)).toEqual(
+      Object.keys(OVERLAY_TITLE_BAR_WINDOWS).toSorted(byName),
+    );
+  });
+
+  test.each(Object.entries(OVERLAY_TITLE_BAR_WINDOWS))(
+    "%s window can be dragged by its page",
+    async (_modulePath, { capability, page }) => {
+      const source = await readSource(page);
+      expect(DRAG_STRIP_PATTERN.test(source)).toBe(true);
+      const permissions = await grantedCommands(capability);
+      expect(permissions.has(DRAG_PERMISSION)).toBe(true);
+    },
+  );
+
+  test("a page without its drag strip or permission is caught", () => {
+    expect(DRAG_STRIP_PATTERN.test('<main className="pt-10">')).toBe(false);
+    expect(DRAG_STRIP_PATTERN.test("<div data-tauri-drag-region-x>")).toBe(
+      false,
+    );
+    expect(
+      capabilityPermissions(
+        { permissions: ["allow-activity-get-day"] },
+        "fixture.json",
+      ).has(DRAG_PERMISSION),
+    ).toBe(false);
+  });
 });

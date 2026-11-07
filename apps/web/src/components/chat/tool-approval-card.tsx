@@ -11,9 +11,24 @@ import {
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
-import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
+import {
+  requiresPerCallChatApproval,
+  USE_CONNECTOR_SECRET_TOOL_NAME,
+} from "@stll/api-contract/chat-secret";
 import { Button } from "@stll/ui/button";
-import { CheckIcon, GlobeIcon, PencilIcon, XIcon } from "@stll/ui/icons";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
+import {
+  BrowserControlIcon,
+  CheckIcon,
+  GlobeIcon,
+  PencilIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
@@ -27,7 +42,6 @@ import {
   isExternalInputChatToolName,
   isExternalMcpToolName,
   isNonPersistentGrantChatToolName,
-  isPublicOfficialChatToolName,
   isRegistryWriteSummaryToolName,
   isSuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
@@ -49,6 +63,7 @@ import {
   findCachedReaderAnnotationRows,
   findReaderAnnotationMark,
   formatReadableInputValue,
+  getCompleteConnectorInputRows,
   getReadableInputRows,
   getReaderAnnotationEditTargetId,
   humanizeIdentifier,
@@ -79,7 +94,8 @@ import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
@@ -347,7 +363,7 @@ const useMcpApprovalIconHref = ({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: connectorSlug !== null,
   });
-  const connectorsView = useQueryView(mcpConnectorsQuery);
+  const connectorsView = queryView(mcpConnectorsQuery);
   const availableConnectors =
     connectorsView.type === "items" ? connectorsView.items.connectors : [];
   return connectorSlug === null
@@ -435,7 +451,6 @@ export const ToolApprovalCard = ({
     isBlocked,
     isFailed,
     isProcessing,
-    isPublicOfficialApproval,
     isDenied,
     label,
     showsExternalInput,
@@ -464,23 +479,19 @@ export const ToolApprovalCard = ({
   const isBrowserCommandAutoApproved =
     useBrowserCommandAutoApproved(browserCommand);
   // A stored grant answers a card only once the API confirms it still holds;
-  // public-registry lookups and opted-in browser page reads need no grant.
+  // opted-in browser page reads need no grant.
   const isGrantAutoApproval =
-    !isPublicOfficialApproval &&
     approvalId !== unconfirmedGrantApprovalId &&
     hasAutomaticApproval({
       alwaysApprovedTools,
       canAlwaysAllow,
       conversationApprovedTools,
-      isPublicOfficialApproval,
       name,
     });
   const shouldAutoApprove =
     !isBlocked &&
     !requiresPerCallChatApproval(name) &&
-    (isGrantAutoApproval ||
-      isPublicOfficialApproval ||
-      isBrowserCommandAutoApproved);
+    (isGrantAutoApproval || isBrowserCommandAutoApproved);
   const automaticResponse =
     approvalId === null
       ? null
@@ -515,8 +526,7 @@ export const ToolApprovalCard = ({
   // a batch.
   const asksForDecision =
     isAwaitingUser && isApprovalRequested && !responded && !isProcessing;
-  const isAwaitingDecision =
-    asksForDecision && !isBlocked && !isPublicOfficialApproval;
+  const isAwaitingDecision = asksForDecision && !isBlocked;
   const beginManualResponse = (id: string): boolean => {
     if (submittedApprovalIdRef.current === id) {
       return false;
@@ -611,85 +621,82 @@ export const ToolApprovalCard = ({
           />
         )}
 
-      {approvalId &&
-        asksForDecision &&
-        !isBlocked &&
-        !isPublicOfficialApproval && (
-          <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
-            <Button
-              autoFocus
-              onClick={() => {
-                if (!beginManualResponse(approvalId)) {
-                  return;
-                }
-                onApprove(approvalId, name);
-              }}
-              size="xs"
-            >
-              {t("chat.approval.allowOnce")}
-            </Button>
-            {browserCommand !== null &&
-              isReadOnlyBrowserCommand(browserCommand) &&
-              browserApprovalMode === BROWSER_APPROVAL_MODE.askEveryTime && (
-                <Button
-                  onClick={() => {
-                    if (!beginManualResponse(approvalId)) {
-                      return;
-                    }
-                    setBrowserApprovalMode(
-                      BROWSER_APPROVAL_MODE.autoApproveReads,
-                    );
-                    onApprove(approvalId, name);
-                  }}
-                  size="xs"
-                  variant="outline"
-                >
-                  {t("chat.approval.browser.autoApproveReads")}
-                </Button>
-              )}
-            {canAllowInConversation && (
+      {approvalId && asksForDecision && !isBlocked && (
+        <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
+          <Button
+            autoFocus
+            onClick={() => {
+              if (!beginManualResponse(approvalId)) {
+                return;
+              }
+              onApprove(approvalId, name);
+            }}
+            size="xs"
+          >
+            {t("chat.approval.allowOnce")}
+          </Button>
+          {browserCommand !== null &&
+            isReadOnlyBrowserCommand(browserCommand) &&
+            browserApprovalMode === BROWSER_APPROVAL_MODE.askEveryTime && (
               <Button
                 onClick={() => {
                   if (!beginManualResponse(approvalId)) {
                     return;
                   }
-                  onAllowInConversation(approvalId, name);
+                  setBrowserApprovalMode(
+                    BROWSER_APPROVAL_MODE.autoApproveReads,
+                  );
+                  onApprove(approvalId, name);
                 }}
                 size="xs"
                 variant="outline"
               >
-                {t("chat.approval.allowInConversation")}
+                {t("chat.approval.browser.autoApproveReads")}
               </Button>
             )}
-            {canAlwaysAllow && (
-              <Button
-                onClick={() => {
-                  if (!beginManualResponse(approvalId)) {
-                    return;
-                  }
-                  onAlwaysAllow(approvalId, name);
-                }}
-                size="xs"
-                variant="outline"
-              >
-                {t("chat.approval.alwaysAllow")}
-              </Button>
-            )}
+          {canAllowInConversation && (
             <Button
-              className="ms-auto"
               onClick={() => {
                 if (!beginManualResponse(approvalId)) {
                   return;
                 }
-                onDeny(approvalId);
+                onAllowInConversation(approvalId, name);
               }}
               size="xs"
-              variant="ghost"
+              variant="outline"
             >
-              {t("chat.approval.deny")}
+              {t("chat.approval.allowInConversation")}
             </Button>
-          </div>
-        )}
+          )}
+          {canAlwaysAllow && (
+            <Button
+              onClick={() => {
+                if (!beginManualResponse(approvalId)) {
+                  return;
+                }
+                onAlwaysAllow(approvalId, name);
+              }}
+              size="xs"
+              variant="outline"
+            >
+              {t("chat.approval.alwaysAllow")}
+            </Button>
+          )}
+          <Button
+            className="ms-auto"
+            onClick={() => {
+              if (!beginManualResponse(approvalId)) {
+                return;
+              }
+              onDeny(approvalId);
+            }}
+            size="xs"
+            variant="ghost"
+          >
+            {t("chat.approval.deny")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
@@ -750,6 +757,7 @@ const ToolApprovalSummary = ({
           input={externalInput}
           isAwaitingDecision={isAwaitingDecision}
           providerName={providerName}
+          toolName={name}
         />
       )}
       {isRegistryWriteSummaryToolName(name) && input !== undefined && (
@@ -778,7 +786,7 @@ const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
     }),
     enabled: user !== null,
   });
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "useMattersById:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const byId = new Map<string, SummaryMatter>();
@@ -898,7 +906,6 @@ const getToolApprovalState = ({
       isTurnActive &&
       !isDenied &&
       (isApprovalResponded || (responded && isApprovalRequested)),
-    isPublicOfficialApproval: isPublicOfficialChatToolName(name),
     isStructuredEditFailure,
     label: externalMcpProviderName ?? defaultLabel,
     showsExternalInput,
@@ -920,24 +927,19 @@ const RegistryWriteSummaryRow = ({
   matter: SummaryMatter | undefined;
   value: string;
 }) => (
-  <div className="grid gap-1 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]">
-    <dt className="text-muted-foreground text-xs">
-      {matter ? stripIdSuffix(label) : label}
-    </dt>
-    <dd className="text-xs wrap-break-word">
-      {matter ? (
-        <span className="inline-flex min-w-0 items-center gap-1.5">
-          <MatterIcon
-            className="size-3.5 shrink-0"
-            matter={{ color: matter.color, id: matter.id }}
-          />
-          <span className="truncate">{matter.name}</span>
-        </span>
-      ) : (
-        value
-      )}
-    </dd>
-  </div>
+  <DetailsItem label={matter ? stripIdSuffix(label) : label}>
+    {matter ? (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        <MatterIcon
+          className="size-3.5 shrink-0"
+          matter={{ color: matter.color, id: matter.id }}
+        />
+        <span className="truncate">{matter.name}</span>
+      </span>
+    ) : (
+      value
+    )}
+  </DetailsItem>
 );
 
 /** "Matter id" -> "Matter": the id is no longer what the row shows. A single
@@ -984,7 +986,7 @@ const RegistryWriteSummary = ({
 
   return (
     <div className="border-border/50 border-t px-3 py-2">
-      <dl className="space-y-1.5">
+      <DetailsGrid variant="list">
         {rows.map((row) => (
           <RegistryWriteSummaryRow
             key={row.key}
@@ -993,7 +995,7 @@ const RegistryWriteSummary = ({
             value={row.value}
           />
         ))}
-      </dl>
+      </DetailsGrid>
     </div>
   );
 };
@@ -1028,17 +1030,23 @@ const ExternalMcpInputSummary = ({
   input,
   isAwaitingDecision,
   providerName,
+  toolName,
 }: {
   input: unknown;
   isAwaitingDecision: boolean;
   providerName: string;
+  toolName: ApprovalToolName;
 }) => {
   const t = useTranslations();
-  const rows = getReadableInputRows({
+  const rowOptions = {
     emptyLabel: t("common.empty"),
     input,
     requestLabel: t("chat.toolCall.input"),
-  });
+  };
+  const rows =
+    toolName === USE_CONNECTOR_SECRET_TOOL_NAME
+      ? getCompleteConnectorInputRows(rowOptions)
+      : getReadableInputRows(rowOptions);
 
   return (
     <div className="border-border/50 space-y-2 border-t px-3 py-2">
@@ -1052,24 +1060,26 @@ const ExternalMcpInputSummary = ({
           </p>
         </div>
       )}
-      <details className="group">
-        <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-xs">
-          {t("common.showDetails")}
-        </summary>
-        <div className="bg-background/60 mt-2 rounded-md border p-2">
-          <dl className="space-y-1.5">
-            {rows.map((row) => (
-              <div
-                className="grid gap-1 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]"
-                key={row.key}
-              >
-                <dt className="text-muted-foreground text-xs">{row.label}</dt>
-                <dd className="text-xs wrap-break-word">{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </details>
+      <div className="text-xs">
+        <Collapsible>
+          <CollapsibleTrigger render={<Button variant="plain" />}>
+            <span className="text-muted-foreground hover:text-foreground">
+              {t("common.showDetails")}
+            </span>
+          </CollapsibleTrigger>
+          <CollapsiblePanel>
+            <div className="bg-background/60 mt-2 rounded-md border p-2">
+              <DetailsGrid variant="list">
+                {rows.map((row) => (
+                  <DetailsItem key={row.key} label={row.label}>
+                    {row.value}
+                  </DetailsItem>
+                ))}
+              </DetailsGrid>
+            </div>
+          </CollapsiblePanel>
+        </Collapsible>
+      </div>
     </div>
   );
 };
@@ -1083,7 +1093,9 @@ const browserActionTranslationKey = (command: BrowserControlCommand) => {
     case BROWSER_CONTROL_ACTION.goBack:
       return "common.goBack";
     case BROWSER_CONTROL_ACTION.open:
-      return "chat.approval.browser.actions.open";
+      return command.newTab === true
+        ? "chat.approval.browser.actions.openNewTab"
+        : "chat.approval.browser.actions.open";
     case BROWSER_CONTROL_ACTION.pressKey:
       return "chat.approval.browser.actions.pressKey";
     case BROWSER_CONTROL_ACTION.select:
@@ -1092,6 +1104,8 @@ const browserActionTranslationKey = (command: BrowserControlCommand) => {
       return (command.textOffset ?? 0) > 0
         ? "chat.approval.browser.actions.snapshotContinue"
         : "chat.approval.browser.actions.snapshot";
+    case BROWSER_CONTROL_ACTION.switchTab:
+      return "chat.approval.browser.actions.switchTab";
     default:
       command satisfies never;
       return panic("Unhandled browser-control action");
@@ -1172,16 +1186,15 @@ const BrowserControlInputSummary = ({
           </p>
         </div>
       )}
-      <dl className="bg-background/60 space-y-1.5 rounded-md border p-2">
-        {rows.map((row) => (
-          <div className="grid gap-1 sm:grid-cols-[9rem_1fr]" key={row.label}>
-            <dt className="text-muted-foreground text-xs">{row.label}</dt>
-            <dd className="text-xs wrap-break-word" dir="auto">
-              {row.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <div className="bg-background/60 rounded-md border p-2">
+        <DetailsGrid variant="list">
+          {rows.map((row) => (
+            <DetailsItem key={row.label} label={row.label}>
+              <span dir="auto">{row.value}</span>
+            </DetailsItem>
+          ))}
+        </DetailsGrid>
+      </div>
     </div>
   );
 };
@@ -1228,6 +1241,12 @@ const ToolApprovalLeadingIcon = ({
 
   if (toolName === "web_search" || toolName === "fetch_url") {
     return <GlobeIcon className="text-muted-foreground size-4 shrink-0" />;
+  }
+
+  if (toolName === BROWSER_CONTROL_TOOL_NAME) {
+    return (
+      <BrowserControlIcon className="text-muted-foreground size-4 shrink-0" />
+    );
   }
 
   return <PencilIcon className="text-muted-foreground size-4 shrink-0" />;

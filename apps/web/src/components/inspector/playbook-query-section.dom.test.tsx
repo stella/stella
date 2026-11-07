@@ -1,10 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { documentReviewPartiesKeys } from "@/components/ai-suggestions/document-review-queries";
 import messages from "@/i18n/langs/en.json";
 import { entityVersionsKeys } from "@/lib/workspaces/queries/entity-versions";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act } = await import("react");
@@ -13,7 +14,7 @@ const { cleanup, fireEvent, render, waitFor } =
 const { QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
-const { useQueryView } = await import("@/lib/use-query-view");
+const { queryView } = await import("@/lib/query-view.logic");
 const { PlaybookQuerySection } = await import("./playbook-query-section");
 
 const disposers = new Set<() => Promise<void>>();
@@ -57,7 +58,7 @@ for (const queryKey of [
             return request.promise;
           },
         });
-        const view = useQueryView(query);
+        const view = queryView(query);
         return (
           <PlaybookQuerySection
             view={view}

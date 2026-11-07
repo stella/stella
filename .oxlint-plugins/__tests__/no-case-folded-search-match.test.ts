@@ -102,7 +102,7 @@ test("rejects a self-filtering combobox or command left on the collator filter",
   ).toEqual([1, 2, 3, 4]);
 });
 
-test("covers the web app, the decision reader and the design system outside tests, with named exceptions", () => {
+test("covers the web app, the decision reader and the design system outside tests, with one named exception", () => {
   const matching = oxlintConfig.overrides.filter(
     (override) => override.rules?.[RULE_ID] !== undefined,
   );
@@ -123,7 +123,6 @@ test("covers the web app, the decision reader and the design system outside test
       : undefined,
   ).toEqual([
     "**/*.test.{ts,tsx}",
-    "apps/web/src/components/workspaces/table/find-highlight.logic.ts",
     "apps/web/src/routes/_protected.contacts/-import-candidate.ts",
     "packages/ui/src/components/fixtures/**",
   ]);

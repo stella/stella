@@ -29,6 +29,7 @@ import {
   readLegislationAmendments,
   readLegislationAmendmentSnapshot,
 } from "@/api/lib/legal-search/legislation-amendments";
+import { legislationDocumentStatusToday } from "@/api/lib/legal-search/legislation-current-version";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
   derivedAiLegislationSource,
@@ -87,7 +88,7 @@ export const readPublicLegislationHandler = async (
           country: legislationDocuments.country,
           language: legislationDocuments.language,
           documentType: legislationDocuments.documentType,
-          status: legislationDocuments.status,
+          status: legislationDocumentStatusToday,
           effectiveDate: legislationDocuments.effectiveDate,
           versionValidFrom: legislationDocuments.versionValidFrom,
           versionValidTo: legislationDocuments.versionValidTo,

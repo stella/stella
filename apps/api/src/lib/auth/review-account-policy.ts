@@ -143,6 +143,7 @@ const SESSION_AUTH_PATH_OPERATIONS: Readonly<
   Record<string, ReviewAccountOperation>
 > = {
   "/organization/create": REVIEW_ACCOUNT_OPERATION.createOrganization,
+  "/v1/organizations": REVIEW_ACCOUNT_OPERATION.createOrganization,
   "/organization/invite-member": REVIEW_ACCOUNT_OPERATION.sendInvitation,
   "/organization/accept-invitation": REVIEW_ACCOUNT_OPERATION.acceptInvitation,
   "/change-email": REVIEW_ACCOUNT_OPERATION.changeEmail,
@@ -291,6 +292,9 @@ export const resolveReviewAccountBodyEmailOperation = ({
 
 /** Scopes a token for the review organization never carries. */
 export const REVIEW_ACCOUNT_EXCLUDED_SCOPES = [
+  "stella:account_export_read",
+  "stella:account_export_write",
+  "stella:organization_create",
   "stella:admin_read",
   "stella:admin_write",
   "stella:billing_write",

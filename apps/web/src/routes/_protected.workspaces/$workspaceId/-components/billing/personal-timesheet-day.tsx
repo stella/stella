@@ -4,7 +4,7 @@ import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
@@ -27,6 +27,11 @@ import {
   ManualTimeEntryForm,
   type ManualTimeEntryValues,
 } from "@/components/billing/manual-time-entry-form";
+import {
+  timeEntryActionLabel,
+  timeEntryNarrativeExcerpt,
+} from "@/components/billing/time-entry-copy.logic";
+import { isTimeEntryRateRequired } from "@/components/billing/time-entry-rate-error.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
@@ -46,10 +51,6 @@ import {
   timeEntrySuggestionsOptions,
   timeEntrySummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
-import {
-  timeEntryActionLabel,
-  timeEntryNarrativeExcerpt,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
 import { TimeSuggestionsLane } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-suggestions-lane";
 
 type PersonalTimesheetDayProps = {
@@ -151,6 +152,8 @@ export const PersonalTimesheetDay = ({
           durationMinutes: values.durationMinutes,
           narrative: values.narrative,
           narrativeLanguage: values.narrativeLanguage,
+          // The value the form showed, even when it was the default, so a
+          // rate change while the form is open cannot flip it.
           billable: values.billable,
         },
       });
@@ -194,13 +197,16 @@ export const PersonalTimesheetDay = ({
       }
       setDialog({ type: "closed" });
     } catch (error) {
+      if (isTimeEntryRateRequired(error)) {
+        return Result.err(error);
+      }
       reportFailure(error, "PersonalTimesheetDay:submit");
     }
+    return undefined;
   };
 
-  const submitOnce = async (values: Parameters<typeof submit>[0]) => {
+  const submitOnce = async (values: Parameters<typeof submit>[0]) =>
     await submitGuard.run(async () => await submit(values));
-  };
 
   const pending =
     createEntry.isPending ||
@@ -228,7 +234,7 @@ export const PersonalTimesheetDay = ({
           durationMinutes: dialog.suggestion.durationMinutes,
           narrative: dialog.narrative,
           narrativeLanguage: null,
-          billable: false,
+          billable: dialog.suggestion.billableByDefault,
         }
       : {
           dateWorked: editingEntry?.dateWorked ?? date,
@@ -261,14 +267,14 @@ export const PersonalTimesheetDay = ({
           activeMinutes={suggestions.activeMinutes}
           busyFingerprints={busySuggestions}
           items={suggestions.items}
-          loggedMinutes={summary.totalMinutes}
+          loggedMinutes={suggestions.loggedMinutes}
           onAccept={(suggestion, narrative) => {
             detached(
               acceptSuggestion(suggestion, {
                 durationMinutes: suggestion.durationMinutes,
                 narrative,
                 narrativeLanguage: null,
-                billable: false,
+                billable: suggestion.billableByDefault,
               }).catch((error: unknown) =>
                 reportFailure(error, "PersonalTimesheetDay:accept-suggestion"),
               ),
@@ -300,10 +306,13 @@ export const PersonalTimesheetDay = ({
                 <BidiText as="p" className="truncate text-sm font-medium">
                   {entry.narrative}
                 </BidiText>
-                {(!entry.billable || entry.source === "suggested") && (
+                {(!entry.billable ||
+                  entry.source === "suggested" ||
+                  entry.source === "activity") && (
                   <span className="text-muted-foreground text-xs">
                     {[
-                      entry.source === "suggested"
+                      entry.source === "suggested" ||
+                      entry.source === "activity"
                         ? tCommon("suggested")
                         : null,
                       entry.billable ? null : tBilling("nonBillable"),
@@ -399,6 +408,8 @@ export const PersonalTimesheetDay = ({
               onSubmit={submitOnce}
               pending={pending}
               workspaceId={workspaceId}
+              userId={editingEntry?.userId ?? userId}
+              activityCode={editingEntry?.activityCode ?? null}
             />
           </DialogPanel>
         </DialogPopup>

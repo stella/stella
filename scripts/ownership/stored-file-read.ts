@@ -20,6 +20,11 @@ export default {
     ],
     allowed: [
       {
+        path: "apps/api/src/lib/legal-search/sk-document-raw.ts",
+        reason:
+          "Loads the claimed source envelope under a byte cap and deadline before retaining its deferred document.",
+      },
+      {
         path: "apps/api/src/handlers/case-law/ingestion/pipeline/stored-raw.ts",
         reason: "Loads persisted source bytes for ingestion.",
       },

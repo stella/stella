@@ -13,7 +13,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 
@@ -83,7 +83,7 @@ export const ChatMentionProviders = ({
       userId,
     }),
   );
-  const workspacesView = useQueryView(workspacesQuery);
+  const workspacesView = queryView(workspacesQuery);
   const workspaces =
     workspacesView.type === "items"
       ? workspacesView.items.workspaces

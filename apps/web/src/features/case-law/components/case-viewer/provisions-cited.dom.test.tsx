@@ -2,10 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { toSafeId } from "@/lib/safe-id";
 import type { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { provision } from "./provisions-cited.fixture";
 
@@ -22,6 +22,8 @@ const {
 } = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { ProvisionsCited } = await import("./provisions-cited");
 const { decisionProvisionsInfiniteOptions, statutesResolveOptions } =
@@ -124,16 +126,18 @@ const mount = (items: ReturnType<typeof provision>[], resolveTitle = false) => {
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale="en" timeZone="UTC">
-          <RouterContextProvider router={appRouter}>
-            <TooltipProvider>
-              <ProvisionsCited
-                decisionDate="2024-01-01"
-                decisionId={decisionId}
-                expanded
-                isHydrated
-              />
-            </TooltipProvider>
-          </RouterContextProvider>
+          <WebReaderPresentationProvider>
+            <RouterContextProvider router={appRouter}>
+              <TooltipProvider>
+                <ProvisionsCited
+                  decisionDate="2024-01-01"
+                  decisionId={decisionId}
+                  expanded
+                  isHydrated
+                />
+              </TooltipProvider>
+            </RouterContextProvider>
+          </WebReaderPresentationProvider>
         </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
@@ -319,6 +323,8 @@ test("a resolved provision fetches wording on focus and retries into a valid sta
         throw new Error("temporary preview failure");
       }
       const preview = {
+        country: "CZE",
+        url: "https://example.test/law/cze/statutes/40-1964-sb#s1",
         documentId: toSafeId<"legislationDocument">(
           "00000000-0000-4000-8000-000000000003",
         ),
@@ -356,7 +362,7 @@ test("a resolved provision fetches wording on focus and retries into a valid sta
   expect(await screen.findByText("Wording of section one")).toBeTruthy();
   expect(requests).toBe(2);
   const statuteLink = screen.getByRole("link", {
-    name: messages.statutes.openProvision,
+    name: messages.common.openInStella,
   });
   expect(statuteLink.getAttribute("href")).toContain(
     "/law/cze/statutes/40-1964-sb",
@@ -392,7 +398,7 @@ test("EU provisions open EUR-Lex without resolving hosted text", async () => {
   ]);
   screen.getByRole("button", { name: /6.*1.*a/u }).focus();
   const link = await screen.findByRole("link", {
-    name: messages.chat.webSearch.openSource.replace("{source}", "EUR-Lex"),
+    name: messages.inspector.external.openOriginal,
   });
   expect(link.getAttribute("href")).toBe(
     "https://eur-lex.europa.eu/legal-content/AUTO/?uri=CELEX:32016R0679#art_6",

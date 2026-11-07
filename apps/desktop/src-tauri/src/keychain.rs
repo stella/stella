@@ -230,15 +230,10 @@ pub async fn get_token_with_timeout(
 
 /// Delete a session token from the OS keychain.
 /// Silently succeeds if the entry does not exist.
-pub fn delete_token(session_id: &str) {
-  if let Ok(e) = entry(session_id) {
-    match e.delete_credential() {
-      Ok(()) => {}
-      Err(Error::NoEntry) => {}
-      Err(e) => {
-        tracing::warn!(session_id, error = %e, "keychain delete failed");
-      }
-    }
+pub fn delete_token(session_id: &str) -> Result<(), String> {
+  match entry(session_id)?.delete_credential() {
+    Ok(()) | Err(Error::NoEntry) => Ok(()),
+    Err(error) => Err(format!("keychain delete failed: {error}")),
   }
 }
 
@@ -248,6 +243,8 @@ pub fn delete_token(session_id: &str) {
 pub enum LocalDataKey<'a> {
   ClipboardHistory,
   ActivityTimeline(&'a str),
+  /// The desktop runner journal of one account.
+  DesktopRunner(&'a str),
 }
 
 impl<'a> LocalDataKey<'a> {
@@ -256,6 +253,9 @@ impl<'a> LocalDataKey<'a> {
       Self::ClipboardHistory => "clipboard:history:v1".into(),
       Self::ActivityTimeline(namespace) => {
         format!("activity:timeline:v2:{namespace}").into()
+      }
+      Self::DesktopRunner(namespace) => {
+        format!("desktop-runner:journal:v1:{namespace}").into()
       }
     }
   }
@@ -297,6 +297,50 @@ pub fn create_local_data_key(key: LocalDataKey<'_>) -> Result<[u8; 32], String> 
   named_entry(&key.account())?
     .set_secret(&secret)
     .map_err(|e| format!("keychain store error: {e}"))?;
+  Ok(secret.into())
+}
+
+/// The ChatGPT sign-in's host identifier: generated once per installation and
+/// kept across sign-outs, so later sign-ins report the same host.
+const CHATGPT_HOST_ID_KEY: &str = "agent:chatgpt:host-id:v1";
+/// The key of the encrypted ChatGPT connection file. Tokens are larger than a
+/// Windows credential can hold, so the credential store keeps only this key.
+const CHATGPT_CONNECTION_KEY: &str = "agent:chatgpt:connection-key:v1";
+
+pub(crate) fn chatgpt_host_id() -> Result<Option<String>, String> {
+  match named_entry(CHATGPT_HOST_ID_KEY)?.get_password() {
+    Ok(value) => Ok(Some(value)),
+    Err(Error::NoEntry) => Ok(None),
+    Err(_) => Err("ChatGPT host Keychain read failed".into()),
+  }
+}
+
+pub(crate) fn store_chatgpt_host_id(value: &str) -> Result<(), String> {
+  named_entry(CHATGPT_HOST_ID_KEY)?
+    .set_password(value)
+    .map_err(with_cause_logged("Could not save ChatGPT host in Keychain"))
+}
+
+pub(crate) fn chatgpt_connection_key() -> Result<Option<[u8; 32]>, String> {
+  match named_entry(CHATGPT_CONNECTION_KEY)?.get_secret() {
+    Ok(secret) => secret
+      .try_into()
+      .map(Some)
+      .map_err(|_wrong_length: Vec<u8>| "ChatGPT connection key is invalid".into()),
+    Err(Error::NoEntry) => Ok(None),
+    Err(_) => Err("ChatGPT connection Keychain read failed".into()),
+  }
+}
+
+pub(crate) fn create_chatgpt_connection_key() -> Result<[u8; 32], String> {
+  use aes_gcm::{Aes256Gcm, Key, aead::Generate};
+
+  let secret = Key::<Aes256Gcm>::generate();
+  named_entry(CHATGPT_CONNECTION_KEY)?
+    .set_secret(&secret)
+    .map_err(with_cause_logged(
+      "Could not save ChatGPT connection key in Keychain",
+    ))?;
   Ok(secret.into())
 }
 
@@ -434,6 +478,10 @@ mod tests {
     assert_eq!(
       LocalDataKey::ActivityTimeline("fixture").account(),
       "activity:timeline:v2:fixture"
+    );
+    assert_eq!(
+      LocalDataKey::DesktopRunner("fixture").account(),
+      "desktop-runner:journal:v1:fixture"
     );
   }
 

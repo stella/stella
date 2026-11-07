@@ -8,76 +8,18 @@ import {
   summarizeSearchBodySchema,
   summarizeSearchResults,
 } from "@/api/handlers/search/ai";
-import {
-  searchFacetsBodySchema,
-  searchFacetsHandler,
-} from "@/api/handlers/search/facets";
+import searchFacets from "@/api/handlers/search/facets/list";
 import searchPreviewEndpoint from "@/api/handlers/search/preview";
-import { searchBodySchema, searchHandler } from "@/api/handlers/search/search";
+import searchResults from "@/api/handlers/search/results/list";
 import { routes } from "@/api/http/route";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   configuredModelAdmission,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-
-const searchEndpoint = createSafeRootHandler(
-  {
-    contract: "patch",
-    permissions: { workspace: ["read"] },
-    accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "tool", name: "search" },
-    body: searchBodySchema,
-  } satisfies HandlerConfig,
-  async function* ({ body, getActiveWorkspaceIds, scopedDb, session, user }) {
-    const activeWorkspaceIds = yield* Result.await(
-      Result.tryPromise(async () => await getActiveWorkspaceIds()),
-    );
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await searchHandler({
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-            accessibleWorkspaceIds: activeWorkspaceIds,
-            body,
-            scopedDb,
-          }),
-      ),
-    );
-
-    return Result.ok(response);
-  },
-);
-
-const searchFacetsEndpoint = createSafeRootHandler(
-  {
-    contract: "patch",
-    permissions: { workspace: ["read"] },
-    accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "internal", reason: "search_ui" },
-    body: searchFacetsBodySchema,
-  } satisfies HandlerConfig,
-  async function* ({ body, getActiveWorkspaceIds, scopedDb, session }) {
-    const activeWorkspaceIds = yield* Result.await(
-      Result.tryPromise(async () => await getActiveWorkspaceIds()),
-    );
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await searchFacetsHandler({
-            organizationId: session.activeOrganizationId,
-            accessibleWorkspaceIds: activeWorkspaceIds,
-            body,
-            scopedDb,
-          }),
-      ),
-    );
-
-    return Result.ok(response);
-  },
-);
 
 const refineSearchEndpoint = createSafeRootHandler(
   {
@@ -101,6 +43,10 @@ const refineSearchEndpoint = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -146,6 +92,10 @@ const summarizeSearchEndpoint = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const activeWorkspaceIds = yield* Result.await(
       Result.tryPromise(async () => await getActiveWorkspaceIds()),
     );
@@ -157,6 +107,7 @@ const summarizeSearchEndpoint = createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             userId: user.id,
             accessibleWorkspaceIds: activeWorkspaceIds,
+            grantedScopes: session.grantedScopes,
             body,
             orgAIConfig,
             managedAIResidency,
@@ -199,6 +150,7 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
           await createSearchSummaryChatThread({
             organizationId: session.activeOrganizationId,
             accessibleWorkspaceIds: activeWorkspaceIds,
+            grantedScopes: session.grantedScopes,
             body,
             featureAccessSnapshot,
             safeDb,
@@ -215,8 +167,8 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
 
 export const searchRoute = routes(
   {
-    "/": { POST: searchEndpoint },
-    "/facets": { POST: searchFacetsEndpoint },
+    "/": { POST: searchResults },
+    "/facets": { POST: searchFacets },
     "/preview": { POST: searchPreviewEndpoint },
     "/refine": { POST: refineSearchEndpoint },
     "/summary": { POST: summarizeSearchEndpoint },

@@ -99,6 +99,13 @@ const RAW_ROUTES: ReadonlyMap<ApiRouteKey, RawRouteReview> = new Map([
     },
   ],
   [
+    "GET /favicon.ico",
+    {
+      access: RAW_ROUTE_ACCESS.sessionless,
+      reason: "Public static host icon.",
+    },
+  ],
+  [
     "GET /dev-public/last-otp",
     {
       access: RAW_ROUTE_ACCESS.localDevelopment,
@@ -173,6 +180,14 @@ const RAW_ROUTES: ReadonlyMap<ApiRouteKey, RawRouteReview> = new Map([
     {
       access: RAW_ROUTE_ACCESS.sessionless,
       reason: "Authorized by the desktop edit-session token.",
+    },
+  ],
+  [
+    "GET /v1/desktop/runner",
+    {
+      access: RAW_ROUTE_ACCESS.sessionless,
+      reason:
+        "Runner socket upgrade, authorized by the desktop account token and a single-use device proof.",
     },
   ],
   [

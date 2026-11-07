@@ -8,6 +8,8 @@ import { panic } from "better-result";
 import { createCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 
+import { answerQuoteChecksByKey } from "@/components/chat/answer-quote.logic";
+import type { AnswerQuoteCheck } from "@/components/chat/answer-quote.logic";
 import {
   openCaseLawDecision,
   openReadCaseLawDecision,
@@ -40,7 +42,6 @@ import {
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
-import { useQueryView } from "@/lib/use-query-view";
 
 type CitationCacheRequest =
   | { type: "id"; key: string; options: ReturnType<typeof decisionOptions> }
@@ -53,6 +54,7 @@ type CitationCacheRequest =
 type AnswerDecisionContextValue = {
   reads: ReadonlyMap<string, DecisionCitationRead>;
   routes: ReadonlyMap<string, DecisionCitationRead>;
+  quoteChecks: ReadonlyMap<string, AnswerQuoteCheck> | null;
 };
 type CommonCitationProps = {
   passage?: ReactNode;
@@ -120,7 +122,7 @@ const CitationView = ({
         <CitationChip
           kind="decision"
           decision={decision}
-          onOpen={onOpen}
+          onOpenInSidePanel={onOpen}
           presentation="inline"
           paragraphNumber={paragraph?.courtParagraphNumber ?? null}
         />
@@ -139,7 +141,7 @@ const CitationView = ({
           <CitationChip
             kind="decision"
             decision={decision}
-            onOpen={onOpen}
+            onOpenInSidePanel={onOpen}
             presentation="inline"
             paragraphNumber={paragraph?.courtParagraphNumber ?? null}
           />
@@ -150,7 +152,7 @@ const CitationView = ({
           decision={decision}
           passage={passage}
           paragraphNumber={paragraph?.courtParagraphNumber ?? null}
-          onOpen={onOpen}
+          onOpenInSidePanel={onOpen}
         />
       )}
       <CitationReadFeedback read={read} />
@@ -164,7 +166,7 @@ const ActiveChatDecisionCitation = ({
 }: ChatDecisionCitationProps) => {
   const answer = useContext(AnswerDecisionContext);
   const scopedRead = answer?.reads.get(decisionId);
-  const view = useQueryView(
+  const view = queryView(
     useQuery({
       ...decisionOptions(decisionId),
       enabled: scopedRead?.type !== "source",
@@ -202,7 +204,7 @@ const ActiveChatRouteDecisionCitation = ({
 }) => {
   const answer = useContext(AnswerDecisionContext);
   const scopedRead = answer?.routes.get(createCaseLawDecisionPath(params));
-  const view = useQueryView(
+  const view = queryView(
     useQuery({ ...options, enabled: scopedRead?.type !== "source" }),
   );
   const { open } = useOpenDecisionTab();
@@ -353,7 +355,13 @@ export const ChatAnswerDecisionProvider = ({
     }
   }
   return (
-    <AnswerDecisionContext value={{ reads, routes }}>
+    <AnswerDecisionContext
+      value={{
+        reads,
+        routes,
+        quoteChecks: answerQuoteChecksByKey(message.metadata?.answerQuotes),
+      }}
+    >
       {children}
     </AnswerDecisionContext>
   );
@@ -381,6 +389,15 @@ export const useAnswerCitedDecisions = (): PublicCaseLawDecision[] => {
   }
   return [...decisions.values()];
 };
+
+/**
+ * The server's checks of this answer's quotations, by quotation key; null
+ * outside an answer and for an answer stored without them.
+ */
+export const useAnswerQuoteChecks = (): ReadonlyMap<
+  string,
+  AnswerQuoteCheck
+> | null => useContext(AnswerDecisionContext)?.quoteChecks ?? null;
 
 /** A quotation remains prose; its decision annotation owns metadata and actions. */
 // Explicit ReactNode: returning the bare passage infers a type containing

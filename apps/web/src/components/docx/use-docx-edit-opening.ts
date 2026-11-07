@@ -8,7 +8,7 @@ import type { DocxCompatibility } from "@stll/folio-react";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 
 import {
   editSessionErrorDescriptionKey,
@@ -340,7 +340,7 @@ const useDocxOpenErrorToast = ({
     }
 
     errorToastShownRef.current = true;
-    notifyUserError(undefined, t("folio.editOpenFailedTitle"), {
+    notifyUserProblem(t("folio.editOpenFailedTitle"), {
       description: t(editSessionErrorDescriptionKey(state.reason)),
     });
     onClose();

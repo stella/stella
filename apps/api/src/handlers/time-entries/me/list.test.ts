@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import { timeDailyTargets, timeEntries, workspaces } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -106,6 +107,7 @@ beforeAll(async () => {
     rateAtEntry: cents(0),
     currency: "USD",
     narrative: "Test work",
+    activityCode: "A101",
   });
 
   await testDb.insert(timeEntries).values([
@@ -130,6 +132,7 @@ beforeAll(async () => {
       }),
       workspaceId: null,
       activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      activityCode: null,
       currency: UNPRICED_TIME_ENTRY_CURRENCY,
       durationMinutes: 25,
       billedMinutes: 0,
@@ -379,6 +382,9 @@ describe("personal time entries", () => {
     }
 
     expect(result.items).toHaveLength(visibleIds.length);
+    expect(
+      result.items.every(({ activityCode }) => activityCode === "A101"),
+    ).toBe(true);
     expect(result.items.map(({ id }) => id)).toEqual(
       expect.arrayContaining([...visibleIds]),
     );
@@ -429,6 +435,48 @@ describe("personal time entries", () => {
       code: 400,
       response: { code: "invalid_cursor" },
     });
+  });
+
+  test("reports remaining minutes for a single date only, never against a range", async () => {
+    await withTargets(120, async () => {
+      expect(await listFor({ date: SUMMARY_DAY })).toMatchObject({
+        dailyTargetMinutes: 120,
+        leftTodayMinutes: 55,
+      });
+      expect(
+        await listFor({ date: SUMMARY_DAY, endDate: SUMMARY_DAY }),
+      ).toMatchObject({ leftTodayMinutes: 55 });
+      const week = Temporal.PlainDate.from(SUMMARY_DAY)
+        .add({ days: 6 })
+        .toString();
+      expect(await listFor({ date: SUMMARY_DAY, endDate: week })).toMatchObject(
+        { dailyTargetMinutes: 120, leftTodayMinutes: null },
+      );
+    });
+  });
+
+  test("lists a range of work dates with per-day totals and caps it at a week", async () => {
+    const page = await listFor({ date: BEFORE_DAY, endDate: AFTER_DAY });
+    if (!isPage(page)) {
+      throw new Error(`unexpected list response: ${JSON.stringify(page)}`);
+    }
+    expect(page.items.map(({ id }) => id).toSorted()).toEqual(
+      [...visibleIds, hiddenIds[4], afterDayId].toSorted(),
+    );
+    expect(page.days).toEqual([
+      { dateWorked: BEFORE_DAY, loggedMinutes: 30, billableMinutes: 30 },
+      { dateWorked: DAY, loggedMinutes: 60, billableMinutes: 60 },
+      { dateWorked: AFTER_DAY, loggedMinutes: 30, billableMinutes: 30 },
+    ]);
+
+    const weekEnd = "2024-07-06";
+    expect(await listFor({ date: DAY, endDate: weekEnd })).toSatisfy(isPage);
+    for (const endDate of ["2024-07-07", BEFORE_DAY]) {
+      expect(await listFor({ date: DAY, endDate })).toMatchObject({
+        code: 400,
+        response: { code: "invalid_date_worked" },
+      });
+    }
   });
 });
 

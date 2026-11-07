@@ -5,7 +5,6 @@ import { Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { REALTIME_EVENT_TYPE } from "@stll/api-contract";
 import {
   NOTIFICATION_ENTITY_TYPE,
   NOTIFICATION_KIND,
@@ -26,7 +25,10 @@ import {
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { MatterRefLink } from "@/components/matter-ref-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -44,11 +46,11 @@ import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/acces
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { toSafeId } from "@/lib/safe-id";
 import { useUnreadFaviconDot } from "@/lib/unread-favicon-dot";
-import { useUserEventsSSE } from "@/lib/user-events-sse";
 
 /**
- * Unread awareness for the signed-in person: mentions, finished exports,
- * flow-run outcomes and announcements, read or unread and nothing else.
+ * Unread awareness for the signed-in person: mentions, task assignments,
+ * finished exports, flow-run outcomes and announcements, read or unread and
+ * nothing else.
  * Deliberately not a work surface — anything with a deadline or an owner
  * belongs to My Work, not here.
  */
@@ -76,16 +78,6 @@ export const NotificationBell = () => {
   const items = data ? data.pages.flatMap((page) => page.items) : [];
 
   useUnreadFaviconDot(unreadCount > 0);
-
-  useUserEventsSSE(organizationId, ({ type: eventType }) => {
-    // The user channel carries a single event kind today; this bind makes a
-    // second kind a compile error here instead of a silently ignored event.
-    eventType satisfies typeof REALTIME_EVENT_TYPE.NEW_NOTIFICATION;
-    detached(
-      refetchFirstNotificationsPage({ organizationId, queryClient, userId }),
-      "notification-bell.refetch-first-page",
-    );
-  });
 
   useExternalSyncEffect(() => {
     if (listError === null) {
@@ -277,6 +269,7 @@ type NotificationRowProps = {
 };
 
 const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
+  const relativeTime = useRelativeTime();
   const unread = notification.readAt === null;
   const rowClassName = cn(
     "hover:bg-muted flex w-full items-start gap-2 px-3 py-2 text-start text-sm",
@@ -291,8 +284,16 @@ const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
           unread ? "bg-primary" : "bg-transparent",
         )}
       />
-      <span className="min-w-0 flex-1">
-        <NotificationMessage notification={notification} />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span>
+          <NotificationMessage notification={notification} />
+        </span>
+        <time
+          className="text-muted-foreground text-xs font-normal"
+          dateTime={notification.createdAt}
+        >
+          {relativeTime(notification.createdAt)}
+        </time>
       </span>
     </>
   );
@@ -301,9 +302,9 @@ const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
   return (
     <li>
       {target === null ? (
-        <button className={rowClassName} onClick={onRead} type="button">
-          {body}
-        </button>
+        <Button className="block w-full" onClick={onRead} variant="plain">
+          <span className={rowClassName}>{body}</span>
+        </Button>
       ) : (
         <NotificationLink
           className={rowClassName}
@@ -362,6 +363,7 @@ const NotificationLink = ({
   target: { entityId, entityType, workspaceId },
 }: NotificationLinkProps) => {
   const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
+  const openTask = useInspectorTabsStore((state) => state.openTask);
   switch (entityType) {
     // Today's only producer is a mention on a list item, and the item's own
     // id addresses no route: Lists is the surface the comment lives on.
@@ -393,6 +395,27 @@ const NotificationLink = ({
               params={{ exportId: entityId, workspaceId }}
               to="/workspaces/$workspaceId/reports/$exportId"
             />
+          }
+        >
+          {children}
+        </PopoverClose>
+      );
+    // A task has no route of its own: the link opens its matter, and the task
+    // opens in the inspector over it, the way the matter's own agenda opens one.
+    case NOTIFICATION_ENTITY_TYPE.TASK:
+      return (
+        <PopoverClose
+          render={
+            <MatterRefLink
+              className={className}
+              onClick={() => {
+                onRead();
+                openTask({ taskId: entityId, workspaceId });
+              }}
+              workspaceId={workspaceId}
+            >
+              {children}
+            </MatterRefLink>
           }
         >
           {children}
@@ -431,6 +454,7 @@ const NotificationLink = ({
  */
 const NOTIFICATION_MESSAGE_KEY = {
   [NOTIFICATION_KIND.MENTION]: "notifications.kind.mention",
+  [NOTIFICATION_KIND.TASK_ASSIGNED]: "notifications.kind.taskAssigned",
   [NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED]:
     "notifications.kind.reportExportSucceeded",
   [NOTIFICATION_KIND.REPORT_EXPORT_FAILED]:
@@ -484,6 +508,11 @@ const NotificationMessage = ({
   switch (kind) {
     case NOTIFICATION_KIND.MENTION:
       return t.rich("notifications.kind.mention", {
+        actorName: parameter(metadata, "actorName"),
+        bdi,
+      });
+    case NOTIFICATION_KIND.TASK_ASSIGNED:
+      return t.rich("notifications.kind.taskAssigned", {
         actorName: parameter(metadata, "actorName"),
         bdi,
       });

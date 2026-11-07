@@ -2,6 +2,11 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import {
+  REPLAY_WRITE_MODULE,
+  replayPlanners,
+  replayPlanValues,
+} from "./replay-plan-values";
 import { type Node, parseSource, walk } from "./syntax-tree";
 
 const apiRoot = path.resolve(import.meta.dir, "../../../apps/api");
@@ -131,12 +136,6 @@ const declarations: Record<string, Declaration> = {
       reason:
         "metadata or document payload update; no citation identity assignment",
     },
-  "src/lib/legal-search/sk-document-backfill.ts:writeFetchBookkeeping:orm-set-caseLawDecisions:1":
-    {
-      disposition: "copy",
-      reason:
-        "metadata or document payload update; no citation identity assignment",
-    },
   "src/lib/legal-search/sk-document-backfill.ts:markDocumentUnavailableOwned:orm-set-caseLawDecisions:1":
     {
       disposition: "copy",
@@ -205,6 +204,7 @@ const writtenFields = (node: Node): string[] | null => {
 const discoverWriters = (file: string, text: string): Writer[] => {
   const source = parseSource(file, text);
   const aliases = new Map([...tables].map((name) => [name, name]));
+  const planners = replayPlanners(source.program);
   for (const statement of source.program.body) {
     if (statement.type !== "ImportDeclaration") {
       continue;
@@ -294,9 +294,12 @@ const discoverWriters = (file: string, text: string): Writer[] => {
             .at(0);
         }
         if (payload) {
-          const written = writtenFields(payload);
+          const values =
+            replayPlanValues(payload, [...ancestors, node], planners) ??
+            payload;
+          const written = writtenFields(values);
           if (name === "values" || written === null || written.length > 0) {
-            add(`orm-${name}-${table}`, text.slice(payload.start, payload.end));
+            add(`orm-${name}-${table}`, text.slice(values.start, values.end));
           }
         }
       }
@@ -355,7 +358,7 @@ const boundedPayloadProblems = (members: readonly Writer[]): string[] =>
       expected = /\$\{checked\.value\}/u;
     } else {
       expected =
-        /WITH projected\(id, type, normalized_value\) AS \(VALUES \$\{projected\}\)[\s\S]*normalized_identifier_value = projected\.normalized_value/u;
+        /WITH projected AS \(\s*SELECT \* FROM jsonb_to_recordset\(\$\{projected\}::text::jsonb\)[\s\S]*normalized_identifier_value = projected\.normalized_value/u;
     }
     const subject = writer.id.includes(":sql:")
       ? writer.expression
@@ -396,6 +399,27 @@ test("new ORM and SQL writers require their own checked producer", () => {
     expect(found.length).toBeGreaterThan(0);
     expect(unauthorized(found)).toHaveLength(found.length);
   }
+});
+
+test("a replay plan's SET is judged by the values the plan was given", () => {
+  const plan = (values: string) =>
+    discoverWriters(
+      "src/scripts/replay-writer.ts",
+      `import { replayWrite } from "${REPLAY_WRITE_MODULE}";\nconst write = replayWrite(caseLawDecisions, ${values});\ndb.update(caseLawDecisions).set(write.set).where(write.setWhere);`,
+    );
+  const writing = plan("{ citationKey: supplied }");
+  expect(writing.map(({ payload }) => payload)).toEqual([
+    "{ citationKey: supplied }",
+  ]);
+  expect(unauthorized(writing)).toHaveLength(1);
+  expect(plan("{ projectionEpoch: epoch }")).toEqual([]);
+  // A `set` that is not a replay plan's stays opaque and must be declared.
+  expect(
+    discoverWriters(
+      "src/scripts/opaque-writer.ts",
+      "const write = build();\ndb.update(caseLawDecisions).set(write.set);",
+    ).map(({ payload }) => payload),
+  ).toEqual(["write.set"]);
 });
 
 test("column readers and unrelated updates are not citation writers", () => {
@@ -514,7 +538,7 @@ const producerProblems = (input: ReadonlyMap<string, string>): string[] => {
     [
       /const checked = assertCitationStorageField\(\s*"normalizedIdentifier",\s*normalizedValue\s*,?\s*\)/u,
       /if \(checked\.isErr\(\)\) \{\s*abortTransaction\(checked\.error\)/u,
-      /\$\{checked\.value\}/u,
+      /normalized_value:\s*checked\.value/u,
     ],
   );
   return problems;

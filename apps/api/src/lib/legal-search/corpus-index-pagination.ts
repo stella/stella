@@ -24,9 +24,9 @@ import type {
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+  corpusIndexBudgetExpiry,
   CorpusIndexError,
   getCorpusIndexClient,
-  isCorpusIndexUnavailable,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
   type CorpusAppliedProjection,
@@ -46,8 +46,9 @@ import {
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
-import { searchIndexUnavailableError } from "@/api/lib/legal-search/search-index-unavailable";
+import { corpusIndexReadRefusal } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { requestBoundedTimeout } from "@/api/lib/load/request-latency-budget";
 
 /**
  * The client answers a failed search with a typed `CorpusIndexError` so its
@@ -62,22 +63,45 @@ import { LIMITS } from "@/api/lib/limits";
  * engine refused, which no retry fixes and 502 reports. Mapping matches
  * `catalogueUpstreamStatus`, the same translation for the skill catalogue.
  * An engine that could not be reached at all, or that does not hold the
- * index, answers with the typed `search_index_unavailable` refusal, which
- * every search route and tool maps to the same actionable answer.
+ * index, answers with the typed `search_index_unavailable` refusal, and a
+ * request whose latency budget ran out with the public read timeout
+ * (`corpusIndexReadRefusal`), which every search route and tool maps to the
+ * same actionable answer.
  */
 const corpusIndexSearchFailure = (error: CorpusIndexError): HandlerError =>
-  isCorpusIndexUnavailable(error)
-    ? searchIndexUnavailableError(error)
-    : new HandlerError({
+  corpusIndexReadRefusal(
+    error,
+    (answered) =>
+      new HandlerError({
+        code: "internal_error",
         status:
-          error.status === undefined ||
-          error.status === 429 ||
-          error.status >= 500
+          answered.status === undefined ||
+          answered.status === 429 ||
+          answered.status >= 500
             ? 503
             : 502,
         message: "Search is temporarily unavailable",
-        cause: error,
-      });
+        cause: answered,
+      }),
+  );
+
+/**
+ * Highlighting ran out of the window its searches share: the request's latency
+ * budget when that window ends with the request, else its own.
+ */
+const highlightWindowSpent = (
+  endsAtRequestDeadline: boolean,
+): CorpusIndexError => {
+  const spent = new CorpusIndexError({
+    message: "Corpus page highlighting exhausted its shared search budget.",
+    reach: "unreachable",
+  });
+  return (
+    (endsAtRequestDeadline
+      ? corpusIndexBudgetExpiry({ label: "page highlighting", cause: spent })
+      : undefined) ?? spent
+  );
+};
 
 /**
  * A page boundary as the scan means it. `corpus-search-cursor` owns how it
@@ -158,14 +182,30 @@ type CorpusIndexRankingScope = {
   excludedGroups: ReadonlySet<string>;
   /** Resolve physical hits after the existing SQL read, before blending or folding. */
   selectAppliedCandidates: SelectAppliedCorpusCandidates;
+  /**
+   * For each candidate, the revision and the stored fields of the passage the
+   * scan reached it by first. A ranker that reads its signals off the hits
+   * instead of the database reads them here.
+   */
+  scannedProjections: () => ReadonlyMap<string, ScannedProjection>;
+};
+
+/** A candidate's earliest-scanned passage: its copy and what the hit carried. */
+export type ScannedProjection = {
+  revision: string | null;
+  fields: CorpusIndexHit;
 };
 
 const rankingScopeOf = (
   cursor: SearchCursor | null,
-  selectAppliedCandidates: SelectAppliedCorpusCandidates,
+  passages: Pick<
+    ReturnType<typeof appliedPassages>,
+    "selectCandidates" | "projections"
+  >,
 ): CorpusIndexRankingScope => ({
   excludedGroups: new Set(cursor?.excludedGroups),
-  selectAppliedCandidates,
+  selectAppliedCandidates: passages.selectCandidates,
+  scannedProjections: passages.projections,
 });
 
 /**
@@ -201,6 +241,7 @@ type CorpusIndexSearchPageInput<TContext> = {
   /** Caller-owned counters join this page's counts to the request's existing observation. */
   hitDispositions?: CorpusHitDispositionCounter | undefined;
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -238,6 +279,12 @@ type CorpusIndexSearchPageInput<TContext> = {
   /** The manifest's indexed revision field, including on legacy mappings. */
   projectionRevisionField: CorpusProjectionRevisionField;
   extractId: (hit: CorpusIndexHit) => string | null;
+  /**
+   * Stored fields the scored transport reads beside the scan's own, for a
+   * ranker that reads them off `scannedProjections`. The native transport
+   * returns whole stored documents and needs none.
+   */
+  scanFields?: readonly string[] | undefined;
   /**
    * The excerpt one hit shows. Handed the hit beside its snippet because the
    * engine's snippet is a fixed width with no size on the wire: a caller that
@@ -461,6 +508,7 @@ const passageClause = (hit: CorpusIndexHit): string | null => {
 type ReadPageSnippetsOptions = {
   hitDispositions: CorpusHitDispositionCounter;
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   /** Scan-selected passages and document fallbacks, both revision-filtered. */
   clauses: readonly { id: string; passage: string | null; document: string }[];
   cluster: QuickwitCluster;
@@ -485,6 +533,7 @@ type PageSnippets = {
 const readPageSnippets = async ({
   hitDispositions,
   observer,
+  signal,
   clauses,
   cluster,
   extractId,
@@ -501,20 +550,18 @@ const readPageSnippets = async ({
   }
 
   const startedAt = performance.now();
-  const deadline = startedAt + CORPUS_INDEX_SEARCH_TIMEOUT_MS;
+  const highlightWindow = requestBoundedTimeout(CORPUS_INDEX_SEARCH_TIMEOUT_MS);
+  const deadline = startedAt + highlightWindow.timeoutMs;
   const search = async (clause: string, maxHits: number) => {
     const remainingMs = deadline - performance.now();
     const result =
       remainingMs <= 0
         ? Result.err(
-            new CorpusIndexError({
-              message:
-                "Corpus page highlighting exhausted its shared search budget.",
-              reach: "unreachable",
-            }),
+            highlightWindowSpent(highlightWindow.endsAtRequestDeadline),
           )
         : await getCorpusIndexClient(cluster).search({
             observer,
+            signal,
             indexId,
             query: `(${query}) AND (${clause})`,
             maxHits,
@@ -571,16 +618,35 @@ const readPageSnippets = async ({
     }
   };
   recordResults(fastResults);
-  const missing = clauses.filter(({ id }) => !seen.has(id));
   // A superseded scan chunk can vanish under the applied-revision filter.
   // Optional snippet/anchor metadata does not make a returned passage missing.
+  const missingAfter = (from: typeof clauses) =>
+    from.filter(({ id }) => !seen.has(id));
+  const missing = missingAfter(clauses);
+  // Several missing documents are re-selected in one request: hits come best
+  // first, and each document's revision-narrowed clause scores its own
+  // passages alike, so a document's first hit there is the passage its own
+  // request would have chosen. A document whose passages the others crowd
+  // out of the batch falls back to a request of its own, so the batch can
+  // only remove requests: one engine round instead of one per document,
+  // which is what a page reached mid-refresh would otherwise cost.
+  if (missing.length > 1) {
+    rounds += 1;
+    recordResults([
+      await search(
+        missing.map(({ document }) => document).join(" OR "),
+        missing.length * PASSAGE_OVER_FETCH,
+      ),
+    ]);
+  }
+  const unresolved = missingAfter(missing);
   const fallbackResults = await mapWithConcurrency({
-    items: missing,
+    items: unresolved,
     limit: LIMITS.corpusIndexHighlightConcurrency,
     operation: async ({ document }) => search(document, 1),
   });
   recordResults(fallbackResults);
-  rounds += missing.length;
+  rounds += unresolved.length;
   hitDispositions.record({ malformed });
   return {
     indexMs: performance.now() - startedAt,
@@ -681,6 +747,7 @@ type ScanRound = {
 
 type ReadScanRoundOptions = {
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -688,6 +755,7 @@ type ReadScanRoundOptions = {
   transport: CorpusIndexScanTransport;
   startOffset: number;
   maxHits: number;
+  scanFields?: readonly string[] | undefined;
 };
 
 /**
@@ -697,6 +765,7 @@ type ReadScanRoundOptions = {
  */
 const readScanRound = async ({
   observer,
+  signal,
   cluster,
   indexId,
   query,
@@ -704,11 +773,13 @@ const readScanRound = async ({
   transport,
   startOffset,
   maxHits,
+  scanFields,
 }: ReadScanRoundOptions): Promise<ScanRound> => {
   switch (transport.type) {
     case "native": {
       const result = await getCorpusIndexClient(cluster).search({
         observer,
+        signal,
         indexId,
         query,
         maxHits,
@@ -730,11 +801,13 @@ const readScanRound = async ({
       }
       const result = await readScoredScanRound({
         observer,
+        signal,
         cluster,
         indexId,
         query,
         from: startOffset,
         size: maxHits,
+        scanFields,
       });
       return {
         numHits: result.numHits,
@@ -781,11 +854,13 @@ const scanScoreRecorder = (bestScoreById: ReadonlyMap<string, number>) => {
 
 type ReadScoredScanRoundOptions = {
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
   from: number;
   size: number;
+  scanFields?: readonly string[] | undefined;
 };
 
 /**
@@ -794,19 +869,22 @@ type ReadScoredScanRoundOptions = {
  */
 const readScoredScanRound = async ({
   observer,
+  signal,
   cluster,
   indexId,
   query,
   from,
   size,
+  scanFields = [],
 }: ReadScoredScanRoundOptions): Promise<CorpusIndexScoredSearchResponse> => {
   const result = await getCorpusIndexClient(cluster).scoredSearch({
     observer,
+    signal,
     indexId,
     query,
     from,
     size,
-    fields: CORPUS_INDEX_SCAN_PASSAGE_FIELDS,
+    fields: [...new Set([...CORPUS_INDEX_SCAN_PASSAGE_FIELDS, ...scanFields])],
     requiredFields: ["document_id"],
   });
   if (result.isErr()) {
@@ -958,6 +1036,7 @@ type ScannedPassage = {
   position: number;
   bm25: number | undefined;
   clause: string | null;
+  fields: CorpusIndexHit;
 };
 
 type SelectedPassages = {
@@ -1014,6 +1093,16 @@ const appliedPassages = () => {
     candidates,
     passageClauseById,
     bestScoreById,
+    projections: (): ReadonlyMap<string, ScannedProjection> =>
+      new Map(
+        [...passages].map(([id, revisions]) => {
+          const [revision, { best }] =
+            [...revisions].toSorted(
+              ([, left], [, right]) => left.best.position - right.best.position,
+            )[0] ?? panic("A scanned candidate holds no passage");
+          return [id, { revision, fields: best.fields }];
+        }),
+      ),
     record: (passage: ScannedPassage): boolean => {
       const { id, revision } = passage;
       if (
@@ -1074,6 +1163,7 @@ const appliedPassages = () => {
 const readWindowPage = async <TContext>({
   hitDispositions,
   observer,
+  signal,
   cluster,
   indexId,
   query,
@@ -1088,12 +1178,13 @@ const readWindowPage = async <TContext>({
   extractSnippet,
   rankCandidates,
   unseenScoreUpperBound,
+  scanFields,
 }: ObservedCorpusIndexSearchPageInput<TContext>): Promise<
   ScanPage<TContext>
 > => {
   const passages = appliedPassages();
   const { candidates, passageClauseById, bestScoreById } = passages;
-  const rankingScope = rankingScopeOf(parsedCursor, passages.selectCandidates);
+  const rankingScope = rankingScopeOf(parsedCursor, passages);
   const scores = scanScoreRecorder(bestScoreById);
   let ranking: CorpusIndexRanking<TContext> | null = null;
   let windowed: RankedHit[] = [];
@@ -1157,6 +1248,7 @@ const readWindowPage = async <TContext>({
     const roundStartedAt = performance.now();
     const round = await readScanRound({
       observer,
+      signal,
       cluster,
       indexId,
       query,
@@ -1164,6 +1256,7 @@ const readWindowPage = async <TContext>({
       transport: scanTransport,
       startOffset,
       maxHits,
+      scanFields,
     });
     indexMs += performance.now() - roundStartedAt;
 
@@ -1191,6 +1284,7 @@ const readWindowPage = async <TContext>({
               position: startOffset + index,
               bm25: round.scores?.[index],
               clause: passageClause(hit),
+              fields: hit,
             })
           ) {
             malformed += 1;
@@ -1249,6 +1343,7 @@ const readWindowPage = async <TContext>({
   const snippets = await readPageSnippets({
     hitDispositions,
     observer,
+    signal,
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById: ranking.revisionById,
@@ -1383,6 +1478,7 @@ const readOffsetChainPage = async <TContext>(
   const snippets = await readPageSnippets({
     hitDispositions: options.hitDispositions,
     observer: options.observer,
+    signal: options.signal,
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById,
@@ -1476,6 +1572,7 @@ const readBm25SearchPage = async <TContext>(
   const {
     hitDispositions,
     observer,
+    signal,
     cluster,
     indexId,
     query,
@@ -1489,6 +1586,7 @@ const readBm25SearchPage = async <TContext>(
     extractId,
     extractSnippet,
     rankCandidates,
+    scanFields,
   } = options;
   if (
     order.type !== "relevance" ||
@@ -1500,11 +1598,13 @@ const readBm25SearchPage = async <TContext>(
   const startedAt = performance.now();
   const round = await readScoredScanRound({
     observer,
+    signal,
     cluster,
     indexId,
     query,
     from: 0,
     size: CORPUS_BM25_PASSAGE_LIMIT + 1,
+    scanFields,
   });
   const indexMs = performance.now() - startedAt;
   const topScore = bm25TopScore(round.hits);
@@ -1558,6 +1658,7 @@ const readBm25SearchPage = async <TContext>(
             position,
             bm25: score,
             clause: passageClause(hit),
+            fields: hit,
           })
         ) {
           malformed += 1;
@@ -1572,7 +1673,7 @@ const readBm25SearchPage = async <TContext>(
   hitDispositions.record({ malformed });
   const ranking = await rankCandidates(
     candidates,
-    rankingScopeOf(parsedCursor, passages.selectCandidates),
+    rankingScopeOf(parsedCursor, passages),
   );
   const windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   const pageRanked = windowed.slice(skip, skip + limit);
@@ -1603,6 +1704,7 @@ const readBm25SearchPage = async <TContext>(
   const snippets = await readPageSnippets({
     hitDispositions,
     observer,
+    signal,
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById: ranking.revisionById,

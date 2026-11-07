@@ -2,12 +2,10 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import { parseRepeatedSqlFingerprintLedger } from "./check-repeated-sql-fingerprints-ledger.ts";
-import {
-  addedEntries,
-  ledgerMergeBase,
-  runLedgerMembershipGuard,
-} from "./ledger-membership.ts";
+import { addedEntries, runLedgerMembershipGuard } from "./ledger-membership.ts";
 
 const ledgerPath =
   "apps/api/src/lib/observability/repeated-sql-fingerprints.json";
@@ -31,7 +29,7 @@ test("repeated SQL callsite ledger starts empty and can only shrink", () => {
   expect(addedEntries(members(2), members(3))).toEqual([]);
   expect(addedEntries(members(3), members(2))).toEqual(["callsite::3"]);
 
-  const base = ledgerMergeBase({ repoRoot, baseRef: "origin/main" });
+  const base = treeBaseRevision({ repoRoot });
   expect(
     runLedgerMembershipGuard({
       ledgerRel: ledgerPath,

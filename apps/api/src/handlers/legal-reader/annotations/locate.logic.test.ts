@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   ANNOTATION_LOCATE_ISSUE,
@@ -29,7 +29,7 @@ describe("locatePassages", () => {
       [{ anchor: "p-1", quote: "Soud rozhodl" }],
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: "located",
       spans: [
         {
@@ -37,6 +37,28 @@ describe("locatePassages", () => {
           startOffset: 2,
           endOffset: 14,
           quote: "Soud rozhodl",
+        },
+      ],
+    });
+  });
+
+  test("stores the words either side, so a re-parse can find the mark again", () => {
+    const raw = "  Soud rozhodl, že žaloba se zamítá.";
+    const result = locatePassages(
+      [paragraph("p-1", raw)],
+      [{ anchor: "p-1", quote: "žaloba" }],
+    );
+
+    expect(result).toEqual({
+      status: "located",
+      spans: [
+        {
+          blockAnchorId: "p-1",
+          startOffset: 19,
+          endOffset: 25,
+          quote: "žaloba",
+          quotePrefix: "  Soud rozhodl, že ",
+          quoteSuffix: " se zamítá.",
         },
       ],
     });
@@ -64,6 +86,54 @@ describe("locatePassages", () => {
     ]);
   });
 
+  test("a quote copied with its served footnote mark marks that note's words", () => {
+    // The served text prints a note's mark before it; the reader's text
+    // holds the mark as the note's label, not as its words.
+    const note: Block = {
+      anchorId: "p-3",
+      id: "id-p-3",
+      inlines: [{ text: "Zob.: pkt 2 wyjaśnień.", type: "text" }],
+      note: { type: "footnote", label: "[2]" },
+      plainText: "Zob.: pkt 2 wyjaśnień.",
+      type: "paragraph",
+    };
+    const blocks = [
+      paragraph("p-1", "Spółka wyjaśniła[2], że Zob.: pkt 2 wyjaśnień."),
+      paragraph("p-2", "Zob.: pkt 2 wyjaśnień."),
+      note,
+    ];
+    const served = servedBlockText(note, blocks[1]);
+    expect(served).toBe("[2] Zob.: pkt 2 wyjaśnień.");
+    const span = {
+      blockAnchorId: "p-3",
+      startOffset: 0,
+      endOffset: "Zob.: pkt 2".length,
+      quote: "Zob.: pkt 2",
+      quotePrefix: "",
+      quoteSuffix: " wyjaśnień.",
+    };
+
+    expect(
+      locatePassages(blocks, [
+        { quote: "[2] Zob.: pkt 2" },
+        { anchor: "p-3", quote: "[2] Zob.: pkt 2" },
+      ]),
+    ).toEqual({ status: "located", spans: [span, span] });
+    // The mark names one note, and the words open it.
+    expect(
+      locatePassages(blocks, [
+        { quote: "[1] Zob.: pkt 2" },
+        { quote: "[2] pkt 2 wyjaśnień" },
+      ]),
+    ).toMatchObject({
+      status: "rejected",
+      issues: [
+        { code: ANNOTATION_LOCATE_ISSUE.quoteNotFound, passageIndex: 0 },
+        { code: ANNOTATION_LOCATE_ISSUE.quoteNotFound, passageIndex: 1 },
+      ],
+    });
+  });
+
   test("a quote copied with its served paragraph number marks that paragraph's words", () => {
     // The served text prints a court's number before its paragraph; the
     // reader's text does not hold it, so it names the paragraph instead.
@@ -87,6 +157,8 @@ describe("locatePassages", () => {
       startOffset: 0,
       endOffset: "The applicant lodged".length,
       quote: "The applicant lodged",
+      quotePrefix: "",
+      quoteSuffix: " an appeal.",
     };
 
     expect(
@@ -128,7 +200,7 @@ describe("locatePassages", () => {
       [{ anchor: "t-1", quote: "Žalobce" }],
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: "located",
       spans: [
         {
@@ -152,7 +224,7 @@ describe("locatePassages", () => {
       [{ anchor: "p-1", quote: "target" }],
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: "located",
       spans: [
         {
@@ -171,7 +243,7 @@ describe("locatePassages", () => {
       [{ anchor: "h-1", quote: "ROZSUDEK" }],
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: "located",
       spans: [
         {
@@ -193,7 +265,7 @@ describe("locatePassages", () => {
 
     expect(
       locatePassages(blocks, [{ quote: "Costs follow the event" }]),
-    ).toEqual({
+    ).toMatchObject({
       status: "located",
       spans: [
         {
@@ -219,7 +291,8 @@ describe("locatePassages", () => {
   test("any unique substring round-trips to its raw offsets, however its spaces are typed", () => {
     const word = fc.stringMatching(/^[a-zčřžáé§0-9]{1,8}$/u);
     const gap = fc.constantFrom(" ", " ", "\n", "  ");
-    fc.assert(
+    assertProperty(
+      "any unique substring round-trips to its raw offsets, however its spaces are typed",
       fc.property(
         fc.array(fc.tuple(word, gap), { minLength: 2, maxLength: 12 }),
         fc.nat(),
@@ -252,7 +325,7 @@ describe("locatePassages", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -278,7 +351,7 @@ describe("annotation literal matching policy", () => {
         },
         { anchor: "cl_4-ods_1-pism_b", quote: "Čl. 4 ods. 1 písm. b)" },
       ]),
-    ).toEqual({
+    ).toMatchObject({
       status: "located",
       spans: [
         {
@@ -301,7 +374,9 @@ describe("annotation literal matching policy", () => {
     const passage = { anchor: "par_7", quote: "právo na náhradu škody" };
     const newerText = "Nová veta. Podľa § 7 vzniká právo na náhradu škody.";
 
-    expect(locatePassages([paragraph("par_7", newerText)], [passage])).toEqual({
+    expect(
+      locatePassages([paragraph("par_7", newerText)], [passage]),
+    ).toMatchObject({
       status: "located",
       spans: [
         {
@@ -334,7 +409,7 @@ describe("annotation literal matching policy", () => {
           { anchor: "p", quote: "cdef" },
         ],
       ),
-    ).toEqual({
+    ).toMatchObject({
       status: "located",
       spans: [
         {
@@ -400,7 +475,7 @@ describe("annotation literal matching policy", () => {
     expect(locatePassages([], [{ quote: "Nováková" }])).toMatchObject({
       status: "rejected",
     });
-    expect(locatePassages(blocks, [])).toEqual({
+    expect(locatePassages(blocks, [])).toMatchObject({
       status: "located",
       spans: [],
     });
@@ -416,7 +491,7 @@ test("annotation quotes use scalar matching after isolated-surrogate replacement
   });
   expect(
     locatePassages([paragraph("p", "x\ud801y")], [{ quote: "\ud800" }]),
-  ).toEqual({
+  ).toMatchObject({
     status: "located",
     spans: [{ blockAnchorId: "p", startOffset: 1, endOffset: 2, quote: "�" }],
   });

@@ -3,11 +3,14 @@ import { describe, expect, test } from "bun:test";
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import type { ParseNssDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import { nssUnitDecisionHtml } from "./cz-nss.test-fixture";
 import { inlinesToPlainText } from "./shared-inlines";
+
+const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -147,11 +150,13 @@ describe("parseNssDecisionHtml", () => {
           block.type === "heading" && block.role === "decision-title",
       );
 
-      expect(titles.map((title) => title.plainText)).toEqual([
-        "ROZSUDEK",
-        "JMÉNEM REPUBLIKY",
-      ]);
-      expect(titles.map((title) => title.level)).toEqual([1, 1]);
+      expect(titles.map((title) => title.plainText)).toEqual(["ROZSUDEK"]);
+      expect(titles.map((title) => title.level)).toEqual([1]);
+      expect(
+        documentAst.blocks.find(
+          (block) => block.plainText === "JMÉNEM REPUBLIKY",
+        ),
+      ).toMatchObject({ type: "paragraph", role: "intro" });
     });
   });
 
@@ -265,6 +270,26 @@ describe("parseNssDecisionHtml", () => {
       expect(texts.some((t) => t.includes("pokračování"))).toBe(false);
       expect(texts.some((t) => t.includes("Konf 4/2011"))).toBe(false);
     });
+
+    test("keeps a citation that opens the page behind the header", () => {
+      const { documentAst, fulltext } = parseNssDecisionHtml(
+        baseInput(`<html><body>
+          <p style="text-align:center"><span style="font-weight:bold">ROZSUDEK</span></p>
+          <p style="text-align:center"><span style="font-weight:bold">Odůvodnění:</span></p>
+          <p>[1] Soud odkázal na rozsudek ze dne 3. 2. 2011, č. j.</p>
+          <p>[OBRÁZEK]pokračování 2 1 As 23/2012-45 2 Afs 1/2010-50, podle něhož soud rozhodl.</p>
+          <p>[OBRÁZEK]pokračování 3 22 Cdo 4223/2018 22 Cdo 4223/2018-137 [2] Soud uvážil dále.</p>
+        </body></html>`),
+      );
+      const texts = documentAst.blocks.map((b) => b.plainText);
+
+      // A different docket after the header's is the page's text; the same
+      // docket repeated with its sheet is the header's.
+      expect(fulltext).toContain("2 Afs 1/2010-50, podle něhož soud rozhodl.");
+      expect(texts.some((t) => t.includes("pokračování"))).toBe(false);
+      expect(texts.some((t) => t.includes("4223/2018"))).toBe(false);
+      expect(fulltext).toContain("Soud uvážil dále.");
+    });
   });
 
   describe("section separators", () => {
@@ -272,10 +297,8 @@ describe("parseNssDecisionHtml", () => {
       const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
-      const headings = findAllByType(documentAst.blocks, "heading");
-      const takto = headings.find((h) => h.plainText === "takto:");
-      expect(takto).toBeDefined();
-      expect(takto?.type).toBe("heading");
+      const takto = documentAst.blocks.find((b) => b.plainText === "takto:");
+      expect(takto).toMatchObject({ type: "paragraph", role: "intro" });
     });
 
     test("normalizes Odůvodnění to canonical form", () => {
@@ -410,7 +433,110 @@ describe("parseNssDecisionHtml", () => {
     });
   });
 
+  test.each([
+    ["separate", ""],
+    ["joined", "<p>pokračování 2 1 As 23/2012-45</p>"],
+    ["joined", "<p>[OBRÁZEK]</p>"],
+  ])(
+    "unfinished paragraphs stay %s according to page furniture %s",
+    (reading, furniture) => {
+      const before =
+        "Stěžovatel namítá, že výpočet náhrady musí zahrnovat veškeré vynaložené náklady";
+      const after = "náklady řízení přitom musí být doloženy.";
+      const { documentAst } = parseNssDecisionHtml(
+        baseInput(
+          `<body>${bold("Odůvodnění:")}<p>${before}</p>${furniture}<p>${after}</p></body>`,
+        ),
+      );
+      const paragraphs = documentAst.blocks.filter(
+        (block) => block.type === "paragraph",
+      );
+      expect(paragraphs.map((block) => block.plainText)).toEqual(
+        reading === "joined" ? [`${before} ${after}`] : [before, after],
+      );
+    },
+  );
+
+  test.each([
+    ["joined", ""],
+    ["joined", "text-indent:0pt;"],
+    ["separate", "text-indent:35.4pt;"],
+    ["separate", "text-indent:-10pt;"],
+  ])("indented paragraph and %s continuation with %s", (reading, indent) => {
+    const before =
+      "Stěžovatel namítá, že výpočet náhrady musí zahrnovat veškeré vynaložené náklady";
+    const after = "náklady řízení přitom musí být doloženy.";
+    const { documentAst } = parseNssDecisionHtml(
+      baseInput(
+        `<body>${bold("Odůvodnění:")}<p style="text-indent:35.4pt;text-align:justify">${before}</p><p style="${indent}text-align:justify">${after}</p></body>`,
+      ),
+    );
+    const paragraphs = documentAst.blocks.filter(
+      (block) => block.type === "paragraph",
+    );
+    expect(paragraphs.map((block) => block.plainText)).toEqual(
+      reading === "joined" ? [`${before} ${after}`] : [before, after],
+    );
+  });
+
+  // The continuation's layout is read as CSS reads its declarations: spacing
+  // and case do not matter, the later of two wins, and an indent in a unit
+  // the reader cannot measure leaves the paragraph apart.
+  test.each([
+    ["joined", "text-align: justify"],
+    ["joined", "TEXT-INDENT : 0PT ; Text-Align : Justify"],
+    ["joined", "text-align: center; text-align: justify"],
+    ["separate", "text-indent: 35.4pt; text-align: justify"],
+    ["separate", "text-align: justify; text-align: left"],
+    ["separate", "text-indent: 1em; text-align: justify"],
+  ])("%s continuation styled %p", (reading, style) => {
+    const before =
+      "Stěžovatel namítá, že výpočet náhrady musí zahrnovat veškeré vynaložené náklady";
+    const after = "náklady řízení přitom musí být doloženy.";
+    const { documentAst } = parseNssDecisionHtml(
+      baseInput(
+        `<body>${bold("Odůvodnění:")}<p style="text-indent:35.4pt;text-align:justify">${before}</p><p style="${style}">${after}</p></body>`,
+      ),
+    );
+    const paragraphs = documentAst.blocks.filter(
+      (block) => block.type === "paragraph",
+    );
+    expect(paragraphs.map((block) => block.plainText)).toEqual(
+      reading === "joined" ? [`${before} ${after}`] : [before, after],
+    );
+  });
+
   describe("unordered list content", () => {
+    test.each(["list", "table"])(
+      "%s boundaries keep adjacent unfinished reasoning paragraphs apart",
+      (kind) => {
+        const before =
+          "Stěžovatel namítá, že výpočet náhrady musí zahrnovat veškeré vynaložené náklady";
+        const item =
+          "náklady řízení účelně vynaložené na zastoupení a na opatření všech podkladů";
+        const after =
+          "následující vyjádření soudu pokračuje samostatným odstavcem.";
+        const structural =
+          kind === "list"
+            ? `<ul><li>${item}</li></ul>`
+            : `<table><tr><td>${item}</td><td>Hodnota</td></tr></table>`;
+        const expectedItem = kind === "list" ? item : `${item} | Hodnota`;
+        const { documentAst } = parseNssDecisionHtml(
+          baseInput(
+            `<body>${bold("Odůvodnění:")}<p>${before}</p>${structural}<p>${after}</p></body>`,
+          ),
+        );
+        const paragraphs = documentAst.blocks.filter(
+          (block) => block.type === "paragraph",
+        );
+        expect(paragraphs.map((block) => block.plainText)).toEqual([
+          before,
+          expectedItem,
+          after,
+        ]);
+      },
+    );
+
     /**
      * Aspose renders enumerations in the reasoning (case-file
      * inventories, evidence lists) as <ul type="disc">. The chunk
@@ -793,8 +919,8 @@ describe("parseNssDecisionHtml", () => {
       );
 
       expect(republicTitle).toMatchObject({
-        type: "heading",
-        role: "decision-title",
+        type: "paragraph",
+        role: "intro",
       });
       expect(holding?.plainText).toContain("se zrušuje");
       expect(holding?.inlines).toContainEqual({
@@ -1140,6 +1266,174 @@ test("preserves inline spacing around unknown wrappers and every heading", () =>
   }
 });
 
+describe("layout read from inline style", () => {
+  type SectionStyles = { centred: string; weight: string };
+
+  // A section set as a list item, and one the court renumbered by hand as a
+  // centred paragraph whose bold run prints its own numeral.
+  const withSections = ({ centred, weight }: SectionStyles): string =>
+    nssUnitDecisionHtml.replace(
+      "<p>[2] Krajský soud",
+      () =>
+        `<ol><li style="${centred};${weight}">Vymezení věci</li></ol><p style="${centred}"><span style="${weight}">2. Posouzení věci</span></p><p>[2] Krajský soud`,
+    );
+
+  const sectionTypes = (styles: SectionStyles) =>
+    parseNssDecisionHtml(baseInput(withSections(styles)))
+      .documentAst.blocks.filter((block) =>
+        /Vymezení věci|Posouzení věci/u.test(block.plainText),
+      )
+      .map((block) => [block.type, block.plainText]);
+
+  // Declarations are read as CSS reads them, whatever their spacing, case or
+  // order: a centred bold numbered line is a section heading however the
+  // court's editor wrote its style.
+  test.each([
+    { centred: "text-align:center", weight: "font-weight:bold" },
+    { centred: "text-align: center", weight: "font-weight: bold" },
+    { centred: "TEXT-ALIGN : Center ", weight: " Font-Weight : 700 " },
+    {
+      centred: "text-align: left; text-align: center",
+      weight: "font-weight: normal; font-weight: bold",
+    },
+    {
+      centred: "text-align: center !important; text-align: left",
+      weight: "font-weight: bold !important; font-weight: normal",
+    },
+  ])("reads section headings from style %p", (styles) => {
+    expect(sectionTypes(styles)).toEqual([
+      ["heading", "1. Vymezení věci"],
+      ["heading", "2. Posouzení věci"],
+    ]);
+  });
+
+  test("a later declaration that is not centred wins over an earlier one", () => {
+    expect(
+      sectionTypes({
+        centred: "text-align: center; text-align: left",
+        weight: "font-weight: bold",
+      }).map(([type]) => type),
+    ).toEqual(["paragraph", "paragraph"]);
+  });
+
+  // A paragraph can carry its weight itself rather than through a span; a
+  // span inside it that sets the text back to normal undoes it.
+  const ownWeightSection = (paragraph: string) =>
+    parseNssDecisionHtml(
+      baseInput(
+        nssUnitDecisionHtml.replace(
+          "<p>[2] Krajský soud",
+          () => `${paragraph}<p>[2] Krajský soud`,
+        ),
+      ),
+    )
+      .documentAst.blocks.filter((block) =>
+        block.plainText.includes("Posouzení věci"),
+      )
+      .map((block) => [block.type, block.plainText]);
+
+  test.each([
+    `<p style="text-align:center;font-weight:bold">2. Posouzení věci</p>`,
+    `<p style="text-align: center; font-weight: bold">2. Posouzení věci</p>`,
+  ])("a paragraph bold by its own style is a section heading: %s", (html) => {
+    expect(ownWeightSection(html)).toEqual([["heading", "2. Posouzení věci"]]);
+  });
+
+  test("a bold paragraph whose text a span sets back to normal is not a heading", () => {
+    expect(
+      ownWeightSection(
+        `<p style="text-align: center; font-weight: bold"><span style="font-weight: normal">2. Posouzení věci</span></p>`,
+      ).map(([type]) => type),
+    ).toEqual(["paragraph"]);
+  });
+
+  // Weight is inherited: text inside a normal span is normal, however bold
+  // the span around it.
+  test.each([
+    [
+      `<p style="text-align:center"><span style="font-weight:bold">2. <span style="font-weight:normal">Posouzení věci</span></span></p>`,
+      "paragraph",
+    ],
+    [
+      `<p style="text-align:center"><span style="font-weight:bold">2. Posouzení <span style="font-weight:normal">věci</span></span></p>`,
+      "heading",
+    ],
+    [
+      `<p style="text-align:center"><span style="font-weight:normal"><span style="font-weight:bold">2. Posouzení věci</span></span></p>`,
+      "heading",
+    ],
+  ])("reads each text's inherited weight: %s", (html, type) => {
+    expect(ownWeightSection(html).map(([blockType]) => blockType)).toEqual([
+      type,
+    ]);
+  });
+
+  // A block with no visible character is no block, so it is never a bold
+  // heading; a bold run of spaces beside normal text is not bold text.
+  test.each([
+    `<p style="text-align:center;font-weight:bold"> </p>`,
+    `<p style="text-align:center;font-weight:bold">&nbsp;&nbsp;</p>`,
+    `<p style="text-align:center"><span style="font-weight:bold">&nbsp;</span></p>`,
+  ])("a centred bold block of spaces adds no block: %s", (html) => {
+    const withBlank = parseNssDecisionHtml(
+      baseInput(
+        nssUnitDecisionHtml.replace(
+          "<p>[2] Krajský soud",
+          () => `${html}<p>[2] Krajský soud`,
+        ),
+      ),
+    ).documentAst.blocks;
+    const without = parseNssDecisionHtml(baseInput(nssUnitDecisionHtml))
+      .documentAst.blocks;
+    expect(withBlank.map((block) => [block.type, block.plainText])).toEqual(
+      without.map((block) => [block.type, block.plainText]),
+    );
+  });
+
+  test.each([
+    [
+      `<p style="text-align:center"><strong>2. Posouzení věci</strong></p>`,
+      "heading",
+    ],
+    [`<p style="text-align:center"><b>2. Posouzení věci</b></p>`, "heading"],
+    [
+      `<p style="text-align:center;font-weight:normal;font-weight:1200">2. Posouzení věci</p>`,
+      "paragraph",
+    ],
+    [
+      `<p style="text-align:center">2. Posouzení věci<span style="font-weight:bold">${"\u00ad".repeat(20)}</span></p>`,
+      "paragraph",
+    ],
+  ])("reads bold the way it prints: %s", (html, type) => {
+    expect(ownWeightSection(html).map(([blockType]) => blockType)).toEqual([
+      type,
+    ]);
+  });
+
+  test("a bold list item whose text a span sets back to normal is not a heading", () => {
+    const blocks = parseNssDecisionHtml(
+      baseInput(
+        nssUnitDecisionHtml.replace(
+          "<p>[2] Krajský soud",
+          () =>
+            `<ol><li style="text-align:center;font-weight:bold"><span style="font-weight:normal">Vymezení věci</span></li></ol><p>[2] Krajský soud`,
+        ),
+      ),
+    ).documentAst.blocks.filter((block) =>
+      block.plainText.includes("Vymezení věci"),
+    );
+    expect(blocks.map((block) => block.type)).toEqual(["paragraph"]);
+  });
+
+  test("bold spaces beside normal text do not make it bold", () => {
+    expect(
+      ownWeightSection(
+        `<p style="text-align:center"><span style="font-weight:bold">&nbsp;&nbsp;&nbsp;</span>2. Posouzení věci</p>`,
+      ).map(([type]) => type),
+    ).toEqual(["paragraph"]);
+  });
+});
+
 describe("table caption retention", () => {
   test("keeps caption text once before its row in source order", () => {
     const { documentAst } = parseNssDecisionHtml(
@@ -1191,3 +1485,61 @@ for (const tag of ["script", "style"]) {
     );
   });
 }
+
+test("a closing inside a closed quotation cannot arm a separate opinion", () => {
+  const { documentAst } = parseNssDecisionHtml(
+    baseInput(`<html><body>
+    <p>Odůvodnění:</p>
+    <p>[1] Soud cituje rozhodnutí: „Citace začíná.</p>
+    <p>V Brně dne 1. ledna 2025</p>
+    <p>Odlišné stanovisko soudce Jana Nováka</p>
+    <p>Citace končí.“</p>
+    <p>[2] Soud pokračuje v odůvodnění.</p>
+  </body></html>`),
+  );
+  expect(
+    documentAst.blocks.filter(
+      (block) =>
+        "role" in block &&
+        (block.role === "dissent" || block.role === "closing"),
+    ),
+  ).toEqual([]);
+  expect(
+    documentAst.blocks.some(
+      (block) =>
+        block.plainText === "Odlišné stanovisko soudce Jana Nováka" &&
+        block.type === "paragraph",
+    ),
+  ).toBe(true);
+});
+
+test("a header-shaped prefix remains prose without a layout boundary", () => {
+  const text = "Pokračování 2 1 As 23/2012-45 soud uvedl v citovaném podání.";
+  const { documentAst } = parseNssDecisionHtml(
+    baseInput(`<html><body><p>Odůvodnění:</p><p>${text}</p></body></html>`),
+  );
+  expect(documentAst.blocks.map((block) => block.plainText)).toContain(text);
+});
+
+test("a copied reasoning heading cannot reset the quotation surrounding a closing", () => {
+  const { documentAst } = parseNssDecisionHtml(
+    baseInput(`<html><body>
+    <p>Odůvodnění:</p><p>[1] Soud cituje: „Začátek citace.</p>
+    <p>Odůvodnění:</p><p>V Brně dne 1. ledna 2025</p>
+    <p>Odlišné stanovisko soudce Jana Nováka</p><p>Konec citace.“</p>
+    <p>[2] Soud pokračuje v odůvodnění.</p>
+  </body></html>`),
+  );
+  expect(
+    documentAst.blocks.filter(
+      (block) =>
+        "role" in block &&
+        (block.role === "dissent" || block.role === "closing"),
+    ),
+  ).toEqual([]);
+  expect(
+    documentAst.blocks.filter(
+      (block) => block.type === "heading" && block.plainText === "Odůvodnění:",
+    ),
+  ).toHaveLength(1);
+});

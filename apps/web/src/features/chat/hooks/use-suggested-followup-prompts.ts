@@ -10,7 +10,8 @@ import {
 import { chatThreadSuggestedPromptsOptions } from "@/features/chat/queries";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type UseSuggestedFollowupPromptsOptions = {
   activeOrganizationId: string;
@@ -83,7 +84,7 @@ export const useSuggestedFollowupPrompts = ({
       threadRef,
     }),
   );
-  const suggestedPromptsDataView = useQueryView(suggestedPromptsDataQuery);
+  const suggestedPromptsDataView = queryView(suggestedPromptsDataQuery);
   useQueryViewError(
     suggestedPromptsDataView,
     "useSuggestedFollowupPrompts:query",

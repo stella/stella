@@ -28,6 +28,7 @@ const createHostedManagement = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message:
             "Hosted usage management is not configured on this deployment",
         }),
@@ -72,6 +73,7 @@ const createHostedManagement = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not create hosted usage management session",
           cause: sessionResult.error,
         }),

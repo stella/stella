@@ -9,20 +9,26 @@ export const READER_ANNOTATION_CONSTRAINTS = [
   {
     tableName: TABLE_NAME,
     constraintName: "legal_reader_annotations_target_type_values",
+    introducedBy: "20261026120000_reader_annotation_matter_documents",
   },
   {
     tableName: TABLE_NAME,
     constraintName: "legal_reader_annotations_verification_claim_shape",
+    introducedBy: "20261021080000_reader_annotation_verification_claims",
   },
   {
     tableName: TABLE_NAME,
     constraintName: "legal_reader_annotations_workspace_organization_fk",
+    introducedBy: "20261021080000_reader_annotation_verification_claims",
   },
   {
     tableName: TABLE_NAME,
     constraintName: "legal_reader_annotations_matter_document_shape",
+    introducedBy: "20261026120000_reader_annotation_matter_documents",
   },
-] as const satisfies readonly OnlineConstraintValidation[];
+] as const satisfies readonly (OnlineConstraintValidation & {
+  introducedBy: string;
+})[];
 
 // Migrations 20261021080000 (claim comments) and 20261026120000 (matter
 // document marks, which also re-adds the target-type check) add these NOT
@@ -31,9 +37,10 @@ export const READER_ANNOTATION_CONSTRAINTS = [
 // keeps the scan out of the schema transaction.
 export const READER_ANNOTATION_CONSTRAINT_VALIDATIONS =
   READER_ANNOTATION_CONSTRAINTS.map(
-    ({ tableName, constraintName }) =>
+    ({ tableName, constraintName, introducedBy }) =>
       ({
         name: constraintName,
+        introducedBy,
         readCompletion: async (connection) =>
           await readConstraintCompletion({
             connection,

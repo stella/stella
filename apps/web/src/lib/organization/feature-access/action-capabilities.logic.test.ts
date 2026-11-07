@@ -15,13 +15,13 @@ import type {
 } from "./action-capabilities.logic";
 
 const cases = {
-  ai: { reason: "aiMissing", route: "/admin/ai" },
-  deepl: { reason: "deeplMissing", route: "/admin/ai" },
+  ai: { reason: "aiMissing", route: "/settings/organization/ai" },
+  deepl: { reason: "deeplMissing", route: "/settings/organization/ai" },
   translation: {
     reason: "translationMissing",
-    route: "/admin/ai",
+    route: "/settings/organization/ai",
   },
-  ocr: { reason: "ocrUnavailable", route: "/admin/ai" },
+  ocr: { reason: "ocrUnavailable", route: "/settings/organization/ai" },
   desktop: { reason: "desktopUnavailable", route: "/settings/account/desktop" },
   verification: {
     reason: "featureUnavailable",
@@ -79,7 +79,7 @@ for (const [capability, expected] of Object.entries(cases)) {
           ?.at(1),
       ).toEqual({ type: "available" });
     });
-    test("missing and unknown prerequisites deny with the precise settings destination", () => {
+    test("missing prerequisites deny precisely while pending observations stay reserved", () => {
       expect(
         Object.entries(
           resolveActionCapabilities(observations(false)).capabilities,
@@ -101,11 +101,7 @@ for (const [capability, expected] of Object.entries(cases)) {
         )
           .find(([key]) => key === capability)
           ?.at(1),
-      ).toEqual({
-        type: "unavailable",
-        reason: "availabilityUnknown",
-        settingsLink: expected.route,
-      });
+      ).toEqual({ type: "pending" });
     });
   });
 }
@@ -124,17 +120,35 @@ test("translation accepts either configured provider but never assumes an unknow
         ai,
         deepl,
       }).capabilities.translation;
-      expect(result.type).toBe(
-        ai === true || deepl === true ? "available" : "unavailable",
-      );
+      let expected: "available" | "pending" | "unavailable" = "unavailable";
+      if (ai === true || deepl === true) {
+        expected = "available";
+      } else if (ai === undefined || deepl === undefined) {
+        expected = "pending";
+      }
+      expect(result.type).toBe(expected);
       if (result.type === "unavailable") {
-        expect(result.reason).toBe(
-          ai === undefined || deepl === undefined
-            ? "availabilityUnknown"
-            : "translationMissing",
-        );
+        expect(result.reason).toBe("translationMissing");
       }
     }
+  }
+});
+
+test("translation remains available when either provider is ready", () => {
+  const error = { status: "error" } as const;
+  for (const [ai, deepl, expected] of [
+    [true, error, "available"],
+    [error, true, "available"],
+    [undefined, error, "pending"],
+    [false, true, "available"],
+  ] as const) {
+    expect(
+      resolveActionCapabilities({
+        ...observations(false),
+        ai,
+        deepl,
+      }).capabilities.translation.type,
+    ).toBe(expected);
   }
 });
 
@@ -150,7 +164,7 @@ test("OCR admits live and batched deployments and keeps the status for the actio
         ? {
             type: "unavailable",
             reason: "ocrUnavailable",
-            settingsLink: "/admin/ai",
+            settingsLink: "/settings/organization/ai",
           }
         : { type: "available" },
     );
@@ -190,7 +204,8 @@ test("capability visibility shares one role and availability policy", () => {
           throw new Error("Unexpected capability");
         }
         expect(isCapabilityActionVisible({ capability }, resolved)).toBe(
-          resolved.role === "admin" || availability.type === "available",
+          availability.type !== "pending" &&
+            (resolved.role === "admin" || availability.type === "available"),
         );
       }
     }

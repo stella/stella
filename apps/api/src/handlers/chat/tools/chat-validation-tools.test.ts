@@ -513,6 +513,7 @@ test("pending feature-bound write approvals use current caller access for valida
       approval: { ...canonicalCall.approval, approved: true },
     } satisfies ChatPart;
     const result = await validateMessage({
+      toolCallOwnership: "cloud",
       message: { id: messageId, role: "assistant", parts: [resumedCall] },
       persistedMessage: {
         role: "assistant",
@@ -526,6 +527,7 @@ test("pending feature-bound write approvals use current caller access for valida
         },
       ],
       safeDb: unusedSafeDb,
+      refRegistry: createChatRefRegistry(),
       threadId,
       tools: validationTools,
       userId: callerId,

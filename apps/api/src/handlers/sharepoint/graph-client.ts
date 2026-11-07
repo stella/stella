@@ -346,6 +346,7 @@ export const listDriveRootChildren = async ({
       if (!response.ok) {
         throw new HandlerError({
           status: 502,
+          code: "internal_error",
           message: `Microsoft Graph returned HTTP ${response.status}`,
         });
       }
@@ -361,6 +362,7 @@ export const listDriveRootChildren = async ({
     catch: (cause): HandlerError<502> =>
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message: HandlerError.is(cause)
           ? cause.message
           : "Failed to reach Microsoft Graph",

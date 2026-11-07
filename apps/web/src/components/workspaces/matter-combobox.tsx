@@ -41,7 +41,7 @@ import {
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import { usePinnedStore } from "@/lib/pinned-store";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 export type MatterOption = {
@@ -123,7 +123,7 @@ export const MatterCombobox = ({
   const groupedThreadsQuery = useInfiniteQuery(
     groupedChatThreadsOptions({ activeOrganizationId, userId }),
   );
-  const groupedThreadsView = useQueryView(groupedThreadsQuery);
+  const groupedThreadsView = queryView(groupedThreadsQuery);
   const chatHistory =
     groupedThreadsView.type === "items" ? groupedThreadsView.items : undefined;
   const browsing = isBrowsingMatters({

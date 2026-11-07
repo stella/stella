@@ -3,8 +3,28 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "../packages/portable-path/src/index";
 import { repositoryCustomLintRunnerViolations } from "./check-custom-lint-test-runners";
-import { customLintTestTimeoutViolations } from "./check-oxlint-test-timeouts.ts";
+import { customLintTestTimeoutViolations as checkProductionTimeouts } from "./check-oxlint-test-timeouts.ts";
+
+const checkTimeouts = (
+  options: Parameters<typeof checkProductionTimeouts>[0] = {},
+) =>
+  checkProductionTimeouts({
+    ...options,
+    rollouts: [
+      {
+        id: "central-test-timeout",
+        type: "changed-lines",
+        expiresAt: "2026-10-20T00:00:00.000Z",
+        check: ["bun", "scripts/check-oxlint-test-timeouts.ts"],
+      },
+    ],
+  });
+
+const customLintTestTimeoutViolations = (
+  options: Parameters<typeof checkTimeouts>[0] = {},
+) => checkTimeouts({ scope: "all", ...options });
 
 const IMPORTS =
   'import { test, it, describe, setDefaultTimeout } from "bun:test";\n';
@@ -369,6 +389,102 @@ test("shared test helpers cannot change the central budget", () => {
 });
 
 test("custom lint test timeout overrides require a measured allow-list reason", () => {
-  expect(customLintTestTimeoutViolations()).toEqual([]);
+  expect(checkTimeouts()).toEqual([]);
   expect(repositoryCustomLintRunnerViolations()).toEqual([]);
+});
+
+const rolloutFixture = (directory: string, lines: readonly number[]) =>
+  new Map([
+    [
+      repoRelativePath(
+        path.resolve(import.meta.dirname, ".."),
+        path.join(directory, "fixture.test.ts"),
+      ),
+      new Set(lines),
+    ],
+  ]);
+
+for (const { name, changedLines, diagnostics } of [
+  {
+    name: "unchanged during rollout",
+    changedLines: [],
+    diagnostics: [],
+  },
+  {
+    name: "changed inside the call during rollout",
+    changedLines: [6],
+    diagnostics: [
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ],
+  },
+]) {
+  test(`multiline custom lint timeout: ${name}`, () => {
+    withFixture((directory, file) => {
+      writeFileSync(
+        file,
+        `${IMPORTS}test(\n  "case",\n  () => {},\n  {\n    timeout: 60_000,\n  },\n);\n`,
+      );
+      expect(
+        checkTimeouts({
+          directory,
+          changedLines: rolloutFixture(directory, changedLines),
+        }),
+      ).toEqual(diagnostics);
+    });
+  });
+}
+
+test("the first week ignores an unchanged timeout and rejects a changed one", () => {
+  withFixture((directory, file) => {
+    writeFileSync(
+      file,
+      `${IMPORTS}test("legacy", () => {}, 60_000);\ntest("new", () => {}, 60_000);\n`,
+    );
+    expect(
+      checkTimeouts({
+        directory,
+        changedLines: rolloutFixture(directory, []),
+      }),
+    ).toEqual([]);
+    expect(
+      checkTimeouts({
+        directory,
+        changedLines: rolloutFixture(directory, [3]),
+      }),
+    ).toEqual([
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ]);
+  });
+});
+
+test("the changed timeout option is enforced inside a multiline call", () => {
+  withFixture((directory, file) => {
+    writeFileSync(
+      file,
+      `${IMPORTS}test(\n  "case",\n  () => {},\n  { timeout: 60_000 },\n);\n`,
+    );
+    expect(
+      checkTimeouts({
+        directory,
+        changedLines: rolloutFixture(directory, [5]),
+      }),
+    ).toEqual([
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ]);
+  });
+});
+
+test("full enforcement can be requested during rollout", () => {
+  withFixture((directory, file) => {
+    writeFileSync(file, `${IMPORTS}test("legacy", () => {}, 60_000);\n`);
+    expect(
+      checkTimeouts({
+        directory,
+        scope: "all",
+        changedLines: rolloutFixture(directory, []),
+      }),
+    ).toEqual([
+      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
+    ]);
+  });
 });

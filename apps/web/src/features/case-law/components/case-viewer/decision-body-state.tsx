@@ -1,10 +1,12 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
 import { missingBodyRetryable } from "@stll/decision-reader/decision-body-state.logic";
 import type { MissingBodyReason } from "@stll/decision-reader/decision-body-state.logic";
 import { Button } from "@stll/ui/button";
 
+import { DecisionTextAvailabilityMarker } from "@/features/case-law/components/decision-text-availability";
 import { publicDecisionReadFilter } from "@/features/case-law/queries/decisions";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
@@ -40,6 +42,11 @@ export const MissingDecisionBody = ({
 
   return (
     <div className="reader-chrome flex flex-col items-center gap-3 py-16">
+      {!missingBodyRetryable(reason) && (
+        <DecisionTextAvailabilityMarker
+          availability={DECISION_TEXT_AVAILABILITY.METADATA_ONLY}
+        />
+      )}
       <p className="text-muted-foreground text-sm text-balance">
         {t(MISSING_BODY_MESSAGE[reason])}
       </p>

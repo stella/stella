@@ -19,8 +19,9 @@ import {
 } from "@/components/chat-mention-helpers";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import type { WorkspaceEntity } from "@/lib/types";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { entitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceViews } from "@/lib/workspaces/queries/views.logic";
@@ -64,7 +65,7 @@ export const useWorkspaceChatMentionRegistration = (
       selectAvailableWorkspaceViews(data).at(0) ??
       null,
   });
-  const activeViewView = useQueryView(activeViewQuery);
+  const activeViewView = queryView(activeViewQuery);
   useQueryViewError(
     activeViewView,
     "useWorkspaceChatMentionRegistration:query",

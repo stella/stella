@@ -1,4 +1,5 @@
 import { blocksNestedUnder } from "@stll/legal-ast/provision-preview";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import type {
@@ -171,6 +172,52 @@ export type ProvisionCardPassage =
       unavailable: string[];
     };
 
+/** How a run of quoted wording relates to the paragraph's citations. */
+export const PROVISION_WORDING_EMPHASIS = {
+  /** Wording the paragraph cites, set off from the context around it. */
+  cited: "cited",
+  /** Wording drawn without emphasis: context, or a quote that is all cited. */
+  plain: "plain",
+} as const;
+
+type ProvisionWordingEmphasis =
+  (typeof PROVISION_WORDING_EMPHASIS)[keyof typeof PROVISION_WORDING_EMPHASIS];
+
+export type ProvisionWordingRun = {
+  blocks: ProvisionWordingBlock[];
+  emphasis: ProvisionWordingEmphasis;
+};
+
+/**
+ * The quoted wording as consecutive runs, each set as one unit: a cited
+ * paragraph and the letters under it are one quotation, never a stack of
+ * separately marked items. A mark only means something beside wording that
+ * is not cited, so a passage quoting nothing but cited wording is one plain
+ * run, and the card around it is the quotation's only frame.
+ */
+export const provisionWordingRuns = (
+  blocks: readonly ProvisionWordingBlock[],
+  cited: ReadonlySet<string>,
+): ProvisionWordingRun[] => {
+  const marks =
+    blocks.some((block) => cited.has(block.id)) &&
+    blocks.some((block) => !cited.has(block.id));
+  const runs: ProvisionWordingRun[] = [];
+  for (const block of blocks) {
+    const emphasis =
+      marks && cited.has(block.id)
+        ? PROVISION_WORDING_EMPHASIS.cited
+        : PROVISION_WORDING_EMPHASIS.plain;
+    const last = runs.at(-1);
+    if (last?.emphasis === emphasis) {
+      last.blocks.push(block);
+      continue;
+    }
+    runs.push({ blocks: [block], emphasis });
+  }
+  return runs;
+};
+
 /** What the host's full-provision read answered. */
 export type FullProvisionRead = {
   isPending: boolean;
@@ -196,6 +243,15 @@ export const fullProvisionOutcome = ({
 };
 
 /**
+ * A whole provision's read, with the scheme its publisher's anchors nest in:
+ * a cited part owns the blocks its anchor path holds.
+ */
+type FullProvisionWording = {
+  scheme: StatuteAnchorScheme;
+  wording: ProvisionPreviewData | null;
+};
+
+/**
  * The quoted passage of one card. A whole-provision citation quotes the
  * provision as it stands; otherwise the parts follow each other in citation
  * order, a block two of them share drawn once. Pending until every citation
@@ -207,21 +263,24 @@ export const fullProvisionOutcome = ({
  */
 export const provisionCardPassage = (
   wordings: readonly CitedWording[],
-  fullWording: ProvisionPreviewData | null = null,
+  fullWording: FullProvisionWording | null = null,
 ): ProvisionCardPassage => {
   if (wordings.some(({ wording }) => wording === undefined)) {
     return { type: "pending" };
   }
-  const full = hasProvisionWording(fullWording) ? fullWording : null;
+  const fullRead =
+    fullWording !== null && hasProvisionWording(fullWording.wording)
+      ? { scheme: fullWording.scheme, wording: fullWording.wording }
+      : null;
   const resolved =
-    full === null
+    fullRead === null
       ? wordings
       : wordings.map(({ target }) => {
           if (citesWholeProvision(target)) {
-            return { target, wording: full };
+            return { target, wording: fullRead.wording };
           }
           const anchor = citedAnchor(target);
-          const block = full.blocks.find(
+          const block = fullRead.wording.blocks.find(
             (candidate) => candidate.anchorId === anchor,
           );
           return {
@@ -230,8 +289,14 @@ export const provisionCardPassage = (
               block === undefined
                 ? null
                 : {
-                    ...full,
-                    blocks: blocksNestedUnder(full.blocks, block),
+                    ...fullRead.wording,
+                    blocks: blocksNestedUnder(
+                      {
+                        blocks: fullRead.wording.blocks,
+                        scheme: fullRead.scheme,
+                      },
+                      block,
+                    ),
                   },
           };
         });
@@ -248,7 +313,9 @@ export const provisionCardPassage = (
   const seen = new Set<string>();
   let language: string | null = null;
   const displayed =
-    full === null ? quoted.map(({ wording }) => wording) : [full];
+    fullRead === null
+      ? quoted.map(({ wording }) => wording)
+      : [fullRead.wording];
   for (const wording of displayed) {
     if (!hasProvisionWording(wording)) {
       continue;

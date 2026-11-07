@@ -1,5 +1,6 @@
-import { expect, spyOn, test } from "bun:test";
+import { beforeAll, expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   cp,
   mkdir,
@@ -13,22 +14,44 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { OxlintConfig } from "oxlint";
 import { cacheArtifactPaths } from "oxlint-tailwindcss";
 import * as v from "valibot";
 
 import oxlintConfig from "../oxlint.config.ts";
+import tailwindConfig from "../oxlint.tailwind.config.ts";
+import {
+  CI_GENERATED_DIRECTORIES,
+  TAILWIND_CLASS_CACHE,
+} from "../packages/scripts/src/generated-files";
 import {
   checkCache,
   mergeCache,
   snapshotProblems,
   tailwindEntryPoints,
   tailwindFailureMessages,
+  writeCache,
 } from "./generate-tailwind-classes";
-import { generatorsForFiles } from "./generated-files";
+import { GENERATORS } from "./generated-files";
+import { TAILWIND_LINT_CACHE_DIR } from "./tailwind-lint-cache";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const pluginPath = path.join(repositoryRoot, "node_modules/oxlint-tailwindcss");
 const generatedCache = path.join(repositoryRoot, ".tailwind-cache");
+
+// timeout: Cold generation compiles every repository Tailwind design system.
+beforeAll(async () => {
+  const generated = Bun.spawn(
+    ["bun", "scripts/generate-tailwind-classes.ts", "--write"],
+    { cwd: repositoryRoot, stdout: "pipe", stderr: "pipe" },
+  );
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(generated.stdout).text(),
+    new Response(generated.stderr).text(),
+    generated.exited,
+  ]);
+  expect(exitCode, stdout + stderr).toBe(0);
+}, 60_000);
 const report = v.object({
   diagnostics: v.array(
     v.object({
@@ -267,7 +290,7 @@ const lintFixture = async ({
   }
 };
 
-test("read-only lint uses the complete committed cache for all Tailwind rules", async () => {
+test("read-only lint uses the complete generated cache for all Tailwind rules", async () => {
   const result = await lintFixture({
     cache: generatedCache,
     source:
@@ -410,9 +433,9 @@ test("the cache check compares digests and never compiles", async () => {
   }
 });
 
-test("the cache check names each stylesheet whose snapshot is missing", async () => {
-  const committed = await readdir(generatedCache);
-  const shards = new Set(committed.filter((name) => name.includes(".decl-")));
+test("the cache check names each stylesheet whose derived snapshot is missing", async () => {
+  const generated = await readdir(generatedCache);
+  const shards = new Set(generated.filter((name) => name.includes(".decl-")));
   const stylesheets = [
     ...new Set(tailwindEntryPoints.map(({ stylesheet }) => stylesheet)),
   ];
@@ -469,6 +492,97 @@ test("the cache write keeps unused answers and drops obsolete snapshots", () => 
   });
 });
 
+// timeout: cold Tailwind compilation may take longer than Bun's default.
+test("regeneration never exposes a missing or partial snapshot", async () => {
+  const fixture = await mkdtemp(path.join(tmpdir(), "tailwind-publish-"));
+  const cache = path.join(fixture, "cache");
+  await cp(generatedCache, cache, { recursive: true });
+  const snapshots = (await readdir(cache)).filter((name) =>
+    name.endsWith(".json"),
+  );
+  const snapshot = snapshots.at(0);
+  if (snapshot === undefined) {
+    throw new TypeError("Generated Tailwind cache has no snapshots");
+  }
+  const changedSnapshot = path.join(cache, snapshot);
+  await writeFile(
+    changedSnapshot,
+    `${await readFile(changedSnapshot, "utf-8")}\n`,
+  );
+  // Not an artifact, so publishing leaves it alone. It survives only if the
+  // directory does: a replaced or recreated cache directory loses it.
+  const directoryMarker = path.join(cache, "directory-marker");
+  await writeFile(directoryMarker, "kept");
+  const writer = writeCache(cache);
+  let reads = 0;
+  const readSnapshots = async () => {
+    for (const name of snapshots) {
+      JSON.parse(await readFile(path.join(cache, name), "utf-8"));
+      reads += 1;
+    }
+    return "read" as const;
+  };
+  while (true) {
+    const result = await Promise.race([
+      writer.then(() => "done" as const),
+      readSnapshots(),
+    ]);
+    if (result === "done") {
+      break;
+    }
+  }
+  await writer;
+  expect(await readFile(directoryMarker, "utf-8")).toBe("kept");
+  expect(reads).toBeGreaterThan(0);
+  await rm(fixture, { recursive: true, force: true });
+}, 120_000);
+
+// timeout: two cold Tailwind compilations run serially behind the lock.
+test("concurrent generators wait for the writer lock and leave a complete cache", async () => {
+  const fixture = await mkdtemp(path.join(tmpdir(), "tailwind-publish-"));
+  const cache = path.join(fixture, "cache");
+  await cp(generatedCache, cache, { recursive: true });
+  const lock = `${cache}.lock`;
+  const buildsBefore = new Set(
+    await Array.fromAsync(
+      new Bun.Glob(".tailwind-cache-build-*").scan({
+        cwd: fixture,
+        onlyFiles: false,
+      }),
+    ),
+  );
+  await writeFile(
+    lock,
+    JSON.stringify({
+      createdAt: Date.now(),
+      pid: process.pid,
+      token: "test-owner",
+    }),
+  );
+  const writers = [writeCache(cache), writeCache(cache)];
+  try {
+    // real-time: the lock must remain exclusive while another writer owns it.
+    await Bun.sleep(2 * 1000);
+    expect(
+      await Array.fromAsync(
+        new Bun.Glob(".tailwind-cache-build-*").scan({
+          cwd: fixture,
+          onlyFiles: false,
+        }),
+      ),
+    ).toEqual([...buildsBefore]);
+  } finally {
+    await rm(lock, { force: true });
+  }
+  await Promise.all(writers);
+  for (const name of await readdir(cache)) {
+    if (name.endsWith(".json")) {
+      JSON.parse(await readFile(path.join(cache, name), "utf-8"));
+    }
+  }
+  await rm(fixture, { recursive: true, force: true });
+}, 120_000);
+
 test("a crash inside the Tailwind plugin fails generation", () => {
   const crash =
     "Error running JS plugin.\nTypeError: boom\n    at ask (/repo/node_modules/oxlint-tailwindcss/dist/index.cjs:1:1)";
@@ -486,7 +600,7 @@ test("a crash inside the Tailwind plugin fails generation", () => {
   ]);
 });
 
-test("oxlint.config.ts makes every lint read the committed cache", () => {
+test("oxlint.config.ts makes every lint read the generated cache", () => {
   const cacheEnv = (overrides: Record<string, string>) => {
     const child = Bun.spawnSync(
       [
@@ -566,28 +680,62 @@ test("the repository lint refuses a missing cache without any env", async () => 
   }
 });
 
-test("the cache generator owns every Tailwind entry point", () => {
-  const selects = (file: string) =>
-    generatorsForFiles([file]).some(({ id }) => id === "tailwind-class-cache");
+test("the cache is a derived output with every Tailwind entry point as input", () => {
+  const generator = GENERATORS.find(({ id }) => id === "tailwind-class-cache");
+  expect(generator?.outputKind).toBe("derived");
+  expect(generator?.selectsConsumers).toBe(false);
   expect(tailwindEntryPoints.map(({ root }) => root)).toContain("apps/landing");
-  for (const { root, stylesheet } of tailwindEntryPoints) {
-    for (const file of [
-      stylesheet,
-      `${root}/src/example.tsx`,
-      `${root}/package.json`,
-    ]) {
-      expect({ file, selected: selects(file) }).toEqual({
-        file,
-        selected: true,
-      });
-    }
+  for (const { root } of tailwindEntryPoints) {
+    expect(
+      generator?.inputs.some((input) => input.startsWith(`${root}/`)),
+    ).toBe(true);
   }
-  for (const file of ["oxlint.config.ts", "packages/ui/src/styles/theme.css"]) {
-    expect({ file, selected: selects(file) }).toEqual({ file, selected: true });
-  }
+  expect(generator?.inputs).toContain("oxlint.config.ts");
+  const turbo = readFileSync(path.join(repositoryRoot, "turbo.json"), "utf-8");
+  expect(turbo).toContain('"//#generate:tailwind-cache"');
+  expect(turbo).toContain('"outputs": ["$TURBO_ROOT$/.tailwind-cache/**"]');
+  const autofix = readFileSync(
+    path.join(repositoryRoot, ".github/workflows/autofix.yml"),
+    "utf-8",
+  );
+  expect(autofix).toContain(
+    'bun "$GITHUB_WORKSPACE/scripts/generate-tailwind-classes.ts" --write',
+  );
+  const tracked = Bun.spawnSync(["git", "ls-files", ".tailwind-cache"], {
+    cwd: repositoryRoot,
+  });
+  expect(tracked.exitCode).toBe(0);
+  expect(tracked.stdout.toString()).toBe("");
 });
 
-test("committed cache keeps the generator's compact form", async () => {
+test("CI lint jobs reuse the producer's cache instead of filling it beside lint", () => {
+  // The generated-sources producer fills the cache alone on its runner and
+  // ships it; every lint job restores it and runs no cache-filling pass.
+  expect(CI_GENERATED_DIRECTORIES).toContain(TAILWIND_CLASS_CACHE);
+  expect(
+    GENERATORS.find(({ id }) => id === "tailwind-class-cache")?.write,
+  ).toEqual(TAILWIND_CLASS_CACHE.command);
+  expect(TAILWIND_LINT_CACHE_DIR).toBe(
+    path.join(repositoryRoot, TAILWIND_CLASS_CACHE.directory),
+  );
+  expect(generatedCache).toBe(TAILWIND_LINT_CACHE_DIR);
+  // `--write` consults the prepared sources before any lint pass: a manifest
+  // configured for another checkout stops it before it starts oxlint.
+  const elsewhere = path.join(tmpdir(), "other-checkout", "manifest.json");
+  const generated = Bun.spawnSync(
+    ["bun", "scripts/generate-tailwind-classes.ts", "--write"],
+    {
+      cwd: repositoryRoot,
+      env: { ...process.env, CI_GENERATED_SOURCES_MANIFEST: elsewhere },
+    },
+  );
+  expect(generated.exitCode).not.toBe(0);
+  expect(generated.stderr.toString()).toContain(
+    "Generated source manifest must belong to this checkout",
+  );
+});
+
+test("derived cache keeps the generator's compact form", async () => {
   // The generator writes compact JSON; a formatter rewriting these files on
   // commit would make every --check report them stale.
   const names = await readdir(generatedCache);
@@ -636,4 +784,89 @@ test("read-only branches reject worker fallback", async () => {
   expect(patch).toContain(
     "if (CACHE_READ_ONLY) throw readOnlyCacheError(`missing declaration answer",
   );
+});
+
+test.each([
+  { name: "direct export", target: "./theme.css" },
+  { name: "style export", target: { style: "./theme.css" } },
+  {
+    name: "style and default exports",
+    target: { style: "./theme.css", default: "./unused.css" },
+  },
+])(
+  "a workspace stylesheet with $name is part of the snapshot key",
+  async ({ target }) => {
+    // A workspace package changes without a new version, so the key reads the
+    // stylesheet itself and what it imports; otherwise an edited shared theme
+    // keeps the old snapshot name and the cache check passes on stale data.
+    const workspace = await mkdtemp(
+      path.join(repositoryRoot, ".tailwind-workspace-key-"),
+    );
+    try {
+      const ui = path.join(workspace, "packages/ui");
+      await Bun.write(
+        path.join(ui, "package.json"),
+        JSON.stringify({
+          name: "@fixture/ui",
+          exports: { "./theme.css": target },
+        }),
+      );
+      await Bun.write(
+        path.join(ui, "theme.css"),
+        '@import "./extra.css";\n@theme { --color-shared: red; }\n',
+      );
+      await Bun.write(path.join(ui, "extra.css"), "@utility one { top: 0; }\n");
+      await mkdir(path.join(workspace, "node_modules/@fixture"), {
+        recursive: true,
+      });
+      await symlink(ui, path.join(workspace, "node_modules/@fixture/ui"));
+      const entry = path.join(workspace, "app/app.css");
+      await Bun.write(entry, '@import "@fixture/ui/theme.css";\n');
+      const key = () => path.basename(cacheArtifactPaths(entry).json);
+      const original = key();
+      await Bun.write(
+        path.join(ui, "theme.css"),
+        '@import "./extra.css";\n@theme { --color-shared: blue; }\n',
+      );
+      const themeEdited = key();
+      await Bun.write(
+        path.join(ui, "extra.css"),
+        "@utility one { top: 1px; }\n",
+      );
+      const importEdited = key();
+      expect(new Set([original, themeEdited, importEdited]).size).toBe(3);
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  },
+);
+
+test("the generation config sees every Tailwind rule the repository lint enables", () => {
+  // oxlint.tailwind.config.ts copies the Tailwind rules of oxlint.config.ts
+  // and its overrides; a preset naming one would escape it.
+  expect(JSON.stringify(oxlintConfig.extends)).not.toContain('"tailwindcss/');
+  const repository: OxlintConfig = oxlintConfig;
+  const generation: OxlintConfig = tailwindConfig;
+  const scopes = (config: OxlintConfig) =>
+    [
+      ...Object.entries(config.rules ?? {}).map(([rule, value]) => ({
+        scope: "*",
+        rule,
+        value,
+      })),
+      ...(config.overrides ?? []).flatMap(({ files, excludeFiles, rules }) =>
+        Object.entries(rules ?? {}).map(([rule, value]) => ({
+          scope: JSON.stringify([files, excludeFiles ?? []]),
+          rule,
+          value,
+        })),
+      ),
+    ].filter(({ rule }) => rule.startsWith("tailwindcss/"));
+  expect(scopes(generation).length).toBeGreaterThan(0);
+  expect(scopes(generation)).toEqual(scopes(repository));
+  expect(generation.jsPlugins).toEqual(["oxlint-tailwindcss"]);
+  expect(generation.ignorePatterns).toEqual(repository.ignorePatterns);
+  expect(generation.settings).toEqual({
+    tailwindcss: repository.settings?.["tailwindcss"],
+  });
 });

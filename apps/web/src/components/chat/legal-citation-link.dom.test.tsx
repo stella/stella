@@ -3,12 +3,13 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { AskUserInput } from "@/components/chat/chat-ui-tools";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { CaseLawDecisionLocator } from "./case-law-open";
 
@@ -38,6 +39,8 @@ const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
 const { decisionOptions } =
   await import("@/features/case-law/queries/decisions");
 const { toSafeId } = await import("@/lib/safe-id");
@@ -125,7 +128,9 @@ const renderChat = async (
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale="en" timeZone="UTC">
-          <router.RouterProvider router={appRouter} />
+          <WebReaderPresentationProvider>
+            <router.RouterProvider router={appRouter} />
+          </WebReaderPresentationProvider>
         </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
@@ -155,6 +160,7 @@ const decisionPath = createCaseLawDecisionPath(
 );
 const absentText = { type: "absent", reason: "not_published" } as const;
 const fullDecision = {
+  extractionWarnings: [],
   citationCount: 0,
   id: toSafeId<"caseLawDecision">(documentId),
   caseNumber: "26 Cdo 4249/2016",
@@ -168,6 +174,7 @@ const fullDecision = {
   decisionType: null,
   ecli: null,
   language: "cs",
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   languageAlternates: [],
   languageGroupKey: null,
   slug: null,
@@ -198,6 +205,7 @@ const fullDecision = {
     name: "Synthetic source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: "https://publisher.example.test/decision",
   textFields: {
     abstract: absentText,
@@ -217,6 +225,7 @@ const canonicalDecision = {
 const canonicalSearchHit = {
   ...canonicalDecision,
   decisionId: documentId,
+  decisionTypeKind: null,
   identifiers: [{ type: "case-number", value: canonicalDecision.caseNumber }],
   textWithheldReason: null,
   keywords: null,
@@ -224,6 +233,7 @@ const canonicalSearchHit = {
   headline: null,
   citationAuthority: 0,
   citationCount: 0,
+  textAvailability: "available",
   matchingPassages: 1,
   match: "all_terms",
 } satisfies PublicLawData<
@@ -401,10 +411,11 @@ for (const { kind, path } of citations) {
               held ? internal : publisher,
             );
             // One chip per citation: a held primary trails no publisher link
-            // and carries no glyph beside its own text.
+            // and carries no glyph beside its own text. The tray's disclosure
+            // chevron belongs to its trigger, not to the chip.
             expect(surface.querySelectorAll("a")).toHaveLength(1);
             if (held) {
-              expect(surface.querySelector("svg")).toBeNull();
+              expect(primary?.parentElement?.querySelector("svg")).toBeNull();
             }
           }
         });
@@ -549,18 +560,20 @@ test("Arabic clarification questions use automatic direction and localized numbe
   const view = await renderChat(
     <IntlProvider locale="ar" messages={arabicMessages} timeZone="UTC">
       <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
-        <AskUserCard
-          isAwaitingUser
-          onSubmit={() => undefined}
-          part={{
-            type: "tool-call",
-            name: "ask-user",
-            id: "arabic-ask",
-            state: "input-complete",
-            arguments: JSON.stringify(input),
-            input,
-          }}
-        />
+        <WebReaderPresentationProvider>
+          <AskUserCard
+            isAwaitingUser
+            onSubmit={() => undefined}
+            part={{
+              type: "tool-call",
+              name: "ask-user",
+              id: "arabic-ask",
+              state: "input-complete",
+              arguments: JSON.stringify(input),
+              input,
+            }}
+          />
+        </WebReaderPresentationProvider>
       </FormattingProvider>
     </IntlProvider>,
   );
@@ -641,7 +654,7 @@ for (const anchorId of [null, "p-12"]) {
         <BidiText as="span">{target.caseNumber}</BidiText>
       </StreamdownMentionLink>,
     );
-    const primary = await view.findByRole("button", {
+    const primary = await view.findByRole("link", {
       name: decisionReference,
     });
     const reader = new URL(
@@ -664,12 +677,14 @@ for (const anchorId of [null, "p-12"]) {
       name: messages.inspector.external.openOriginal,
     });
     expect(source.getAttribute("href")).toBe(publisher);
-    const open = screen.getByRole("link", {
-      name: messages.common.openInStella,
-    });
-    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
-    open.dispatchEvent(click);
-    expect(click.defaultPrevented).toBe(true);
+    expect(
+      screen
+        .getByRole("link", { name: messages.common.openInStella })
+        .getAttribute("href"),
+    ).toBe(primary.getAttribute("href"));
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.openInSidePanel }),
+    );
     await waitFor(() => {
       const decisions = useInspectorTabsStore.getState().tabs.flatMap((tab) =>
         tab.type === "view" && isCaseDecisionViewPayload(tab.payload)
@@ -705,7 +720,7 @@ for (const interactive of [false, true]) {
       expect(view.queryByRole("link")).toBeNull();
       return;
     }
-    const primary = view.getByRole("button", { name: decisionReference });
+    const primary = view.getByRole("link", { name: decisionReference });
     expect(primary.textContent).toBe(`NS${fullDecision.caseNumber}`);
     expect(view.container.textContent).toBe(
       `${quotedPassage} NS${fullDecision.caseNumber}`,
@@ -718,6 +733,21 @@ for (const interactive of [false, true]) {
     expect(source.getAttribute("target")).toBe("_blank");
   });
 }
+
+// Consulted sources sit behind the tray's disclosure; open it so the chips
+// are in the accessibility tree.
+const openConsultedSources = async (view: { container: HTMLElement }) => {
+  const trigger = await waitFor(() => {
+    const button = [...view.container.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent.startsWith("Also consulted"),
+    );
+    expect(button).toBeDefined();
+    return button;
+  });
+  if (trigger !== undefined) {
+    fireEvent.click(trigger);
+  }
+};
 
 test("a long external source title stays inside its truncated tray chip", async () => {
   const title = "Publisher".repeat(12);
@@ -737,6 +767,7 @@ test("a long external source title stays inside its truncated tray chip", async 
       ]}
     />,
   );
+  await openConsultedSources(view);
   await waitFor(() => {
     const chip = view.getByRole("link", { name: title });
     expect(chip.getAttribute("href")).toBe(href);
@@ -779,6 +810,7 @@ test("a relative held primary is one chip in the tray and the passive answer", a
       </StreamdownMentionLink>
     </>,
   );
+  await openConsultedSources(view);
   await waitFor(() => {
     const primaryLinks = view.getAllByRole("link", {
       name: label,
@@ -811,7 +843,7 @@ test("a publisher alias with a canonical decision keeps the passage before the s
     </StreamdownMentionLink>,
     fullDecision,
   );
-  const primary = view.getByRole("button", { name: decisionReference });
+  const primary = view.getByRole("link", { name: decisionReference });
   expect(primary.textContent).toBe(`NS${fullDecision.caseNumber}`);
   expect(view.container.textContent).toBe(
     `${quotedPassage} NS${fullDecision.caseNumber}`,
@@ -851,16 +883,15 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
       </LegalCitationLink>,
       fullDecision,
     );
-    const primary = await view.findByRole("button", {
+    const primary = await view.findByRole("link", {
       name: decisionReference,
     });
     fireEvent.focus(primary);
-    const open = await screen.findByRole("link", {
-      name: messages.common.openInStella,
-    });
-    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
-    open.dispatchEvent(click);
-    expect(click.defaultPrevented).toBe(true);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: messages.common.openInSidePanel,
+      }),
+    );
     await waitFor(() => {
       const decisions = useInspectorTabsStore.getState().tabs.flatMap((tab) =>
         tab.type === "view" && isCaseDecisionViewPayload(tab.payload)
@@ -979,7 +1010,9 @@ test("maximizing a different decision docks the displaced main reader before nav
   render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
-        <router.RouterProvider router={appRouter} />
+        <WebReaderPresentationProvider>
+          <router.RouterProvider router={appRouter} />
+        </WebReaderPresentationProvider>
       </FormattingProvider>
     </IntlProvider>,
   );

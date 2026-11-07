@@ -1,8 +1,14 @@
 import { Result } from "better-result";
 
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
-import { readInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { readInvoiceTotals } from "@/api/lib/billing/invoice-lines";
+import {
+  invoicePaymentAmounts,
+  invoicePaymentView,
+  paidAmountOf,
+} from "@/api/lib/billing/invoice-payments";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -16,7 +22,8 @@ const readInvoiceById = createSafeHandler(
     description:
       "Read one invoice with its full detail: its lines in order with " +
       "quantity, unit price, VAT, and amounts; totals with the VAT breakdown " +
-      "by rate; document type, original invoice id, seller profile, buyer, dates, currency, and status; and every " +
+      "by rate; document type, original invoice id, seller profile, buyer, dates, currency, and status; " +
+      "its payments with the paid and outstanding amounts; and every " +
       "attached time entry and expense with its work item. An invoice from " +
       "before invoice lines lists no lines for its attached entries until " +
       "its first line edit; its totals still count them. Use " +
@@ -34,7 +41,7 @@ const readInvoiceById = createSafeHandler(
         tx.query.invoices.findFirst({
           where: {
             id: { eq: params.invoiceId },
-            workspaceId: { eq: workspaceId },
+            RAW: (table) => invoiceInMatter(table, workspaceId),
           },
           with: INVOICE_DETAIL_RELATIONS,
         }),
@@ -51,19 +58,22 @@ const readInvoiceById = createSafeHandler(
     // for its attached entries until its first line edit materialises them
     // (`lockDraftInvoiceForLines`), and its totals count them in memory.
     const totals = readInvoiceTotals(invoice);
-    if (totals.isErr()) {
-      return Result.err(totals.error);
-    }
 
     return Result.ok({
       ...invoice,
-      netAmount: totals.value.netAmountMinor,
-      vatAmount: totals.value.vatAmountMinor,
+      netAmount: totals.netAmountMinor,
+      vatAmount: totals.vatAmountMinor,
       lines: invoice.lines.map((line) => ({
         ...line,
         releasedAt: line.releasedAt?.toISOString() ?? null,
       })),
-      totals: totals.value,
+      totals,
+      payments: invoice.payments.map(invoicePaymentView),
+      ...invoicePaymentAmounts({
+        totalAmount: invoice.totalAmount,
+        paidAmount: paidAmountOf(invoice.payments),
+      }),
+      sentAt: invoice.sentAt?.toISOString() ?? null,
       paidAt: invoice.paidAt?.toISOString() ?? null,
       finalizedAt: invoice.finalizedAt?.toISOString() ?? null,
       createdAt: invoice.createdAt.toISOString(),

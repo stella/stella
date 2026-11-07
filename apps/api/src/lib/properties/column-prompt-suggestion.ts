@@ -1,8 +1,7 @@
 import { panic, Result } from "better-result";
 
-import type { CaseLawResearchAnswerType } from "@stll/api-contract";
-
 import type { SafeDb } from "@/api/db/safe-db";
+import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
@@ -190,7 +189,7 @@ const contextLines = (context: SuggestPromptContext): string[] => {
 type ColumnPromptDraft = {
   /** The column's heading; a question column's heading is its question. */
   name: string;
-  contentType: CaseLawResearchAnswerType;
+  contentType: AiExtractablePropertyContent["type"];
   options: readonly string[] | undefined;
   currentPrompt: string | undefined;
   instruction: string;
@@ -424,7 +423,11 @@ export const suggestColumnPrompt = async ({
   const prompt = sanitizeSuggestion(generateResult.value);
   if (prompt.length === 0) {
     return Result.err(
-      new HandlerError({ status: 502, message: "Empty suggestion" }),
+      new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: "Empty suggestion",
+      }),
     );
   }
 

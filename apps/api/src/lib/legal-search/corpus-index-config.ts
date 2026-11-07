@@ -90,11 +90,17 @@ type CorpusIndexMergePolicy = {
   min_level_num_docs: number;
 };
 
+/**
+ * The engine reports a maturation period back in humantime's format, whatever
+ * spelling created the index: four hours as `4h`, seven days as `7days`
+ * (Quickwit 0.9's index metadata for an index created with `7d` reads
+ * `7days`). The configuration attestation compares against this rendering.
+ */
 const QUICKWIT_CANONICAL_MATURATION_PERIOD = {
   "4h": "4h",
   "4hours": "4h",
-  "7d": "7d",
-  "7days": "7d",
+  "7d": "7days",
+  "7days": "7days",
 } as const;
 
 type CorpusIndexMaturationPeriod =
@@ -563,7 +569,9 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
       stored: true,
       fast: false,
     },
-    // current | historical | repealed
+    // The stored status. `current` and `historical` are the ingest day's
+    // reading of the window, so search filters only the other values here
+    // (see `legislationStatusToday`).
     {
       name: "status",
       type: "text",

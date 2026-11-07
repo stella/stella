@@ -9,6 +9,7 @@ import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
+import { WindowDragRegion } from "../shared/WindowDragRegion";
 import { ActivityStep } from "./ActivityStep";
 import { ConnectStep } from "./ConnectStep";
 import { DoneStep } from "./DoneStep";
@@ -145,6 +146,7 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
         DESKTOP_PLATFORM === "mac" ? "pt-10" : "pt-6",
       )}
     >
+      <WindowDragRegion />
       {flowContent()}
     </main>
   );
@@ -159,7 +161,7 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
             <p className="text-sm" role="alert">
               {t("errorLoad")}
             </p>
-            <Button onClick={onRetry} size="sm" variant="outline">
+            <Button onClick={onRetry} variant="outline">
               {t("tryAgain")}
             </Button>
           </div>

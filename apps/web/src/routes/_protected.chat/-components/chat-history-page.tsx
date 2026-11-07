@@ -25,6 +25,7 @@ import {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { NewChatIcon, TrashIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import {
   List,
   ListGroup,
@@ -71,9 +72,10 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 import {
@@ -173,7 +175,7 @@ export const ChatHistoryPage = ({
     // Typing refines the list in place instead of blanking it per keystroke.
     placeholderData: keepPreviousData,
   });
-  const threadsView = useQueryView(threadsQuery);
+  const threadsView = queryView(threadsQuery);
   useQueryViewError(threadsView, "ChatHistoryPage:query");
   const matterUnavailable =
     threadsView.type === "error" &&
@@ -186,7 +188,7 @@ export const ChatHistoryPage = ({
       userId,
     }),
   );
-  const mattersView = useQueryView(mattersQuery);
+  const mattersView = queryView(mattersQuery);
   useQueryViewError(mattersView, "ChatHistoryPage:query-2");
   const matters = mattersView.type === "items" ? mattersView.items : undefined;
   // Base UI compares combobox props by identity; hand it one value object per
@@ -226,9 +228,9 @@ export const ChatHistoryPage = ({
             value={syncedSearchField.value}
           />
           <div className="flex min-w-0 flex-col gap-1 sm:w-64">
-            <label className="sr-only" htmlFor={matterFieldId}>
+            <Label className="sr-only" htmlFor={matterFieldId}>
               {t("common.matter")}
-            </label>
+            </Label>
             <MatterCombobox
               activeOrganizationId={activeOrganizationId}
               id={matterFieldId}
@@ -469,13 +471,20 @@ function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
               </BidiText>
               {contextLine}
             </Tooltip>
-            <time
-              className="text-muted-foreground shrink-0 text-xs tabular-nums md:group-focus-within:hidden md:group-hover:hidden"
-              dateTime={updatedAt.toISOString()}
-              title={format.dateTime(updatedAt, MEDIUM_DATE_SHORT_TIME_FORMAT)}
+            <Tooltip
+              content={format.dateTime(
+                updatedAt,
+                MEDIUM_DATE_SHORT_TIME_FORMAT,
+              )}
+              render={
+                <time
+                  className="text-muted-foreground shrink-0 text-xs tabular-nums md:group-focus-within:hidden md:group-hover:hidden"
+                  dateTime={updatedAt.toISOString()}
+                />
+              }
             >
               {relativeTime(updatedAt)}
-            </time>
+            </Tooltip>
             <ChatTitleSuggestButton
               className={revealClass}
               hasMessages

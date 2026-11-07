@@ -12,8 +12,9 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type ClauseSlot = { patchKey: string; name: string; body: ClauseBody };
 
@@ -44,7 +45,7 @@ export const FillClausesSection = ({
       return unwrapApiResponse(response);
     },
   });
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "FillClausesSection:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
@@ -139,7 +140,7 @@ const ClauseFillItem = ({
             {slot.name}
           </span>
           {edited && (
-            <span className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5 font-medium">
+            <span className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5 font-medium">
               {t("common.edited")}
             </span>
           )}

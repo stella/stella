@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "Installable development and preview builds of the mobile app need Expo's development client, which ships with Expo SDK 57."
+}

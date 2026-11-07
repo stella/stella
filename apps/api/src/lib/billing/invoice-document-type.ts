@@ -1,0 +1,182 @@
+import { panic, Result } from "better-result";
+import { and, eq, ne, sql } from "drizzle-orm";
+import * as v from "valibot";
+
+import type { InvoiceDocumentType } from "@stll/invoicing";
+
+import type { Transaction } from "@/api/db/root";
+import { INVOICE_STATUS, invoices } from "@/api/db/schema";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
+import type { SafeId } from "@/api/lib/branded-types";
+import { lockOriginalInvoice } from "@/api/lib/db/aggregate-lock";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+export const tInvoiceDocumentType = v.picklist([
+  "invoice",
+  "advance",
+  "credit_note",
+]);
+true satisfies [InvoiceDocumentType] extends [
+  v.InferOutput<typeof tInvoiceDocumentType>,
+]
+  ? [v.InferOutput<typeof tInvoiceDocumentType>] extends [InvoiceDocumentType]
+    ? true
+    : never
+  : never;
+
+/** A status revert keeps the issued document frozen; corrections use a credit note. */
+export const invoiceContentMutationRefusal = ({
+  finalizedAt,
+}: {
+  finalizedAt: Date | null;
+}) =>
+  finalizedAt === null
+    ? undefined
+    : new HandlerError({
+        status: 409,
+        message:
+          "Issued invoice content cannot be edited; create a credit note instead",
+      });
+
+type ValidateInvoiceDocumentOptions = {
+  workspaceId: SafeId<"workspace">;
+  documentType: InvoiceDocumentType;
+  originalInvoiceId: SafeId<"invoice"> | null;
+  currency: string;
+} & (
+  | { invoiceId: SafeId<"invoice">; totalAmount: number }
+  | { invoiceId?: never; totalAmount?: never }
+);
+
+/** The linked document is authorized and stable until this transaction commits. */
+export const validateInvoiceDocument = async (
+  tx: Transaction,
+  {
+    workspaceId,
+    documentType,
+    originalInvoiceId,
+    currency,
+    totalAmount,
+    invoiceId,
+  }: ValidateInvoiceDocumentOptions,
+): Promise<Result<void, HandlerError>> => {
+  if (documentType !== "credit_note") {
+    return originalInvoiceId === null
+      ? Result.ok(undefined)
+      : Result.err(
+          new HandlerError({
+            status: 422,
+            message: "Only a credit note can reference an original invoice",
+          }),
+        );
+  }
+  if (originalInvoiceId === null) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "A credit note requires an original invoice",
+      }),
+    );
+  }
+  const rows = await lockOriginalInvoice(tx, {
+    invoiceId: originalInvoiceId,
+    workspaceId,
+  });
+  const original = rows.at(0);
+  if (!original) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "Original invoice not found in this matter",
+      }),
+    );
+  }
+  if (original.documentType === "credit_note") {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "A credit note cannot reference another credit note",
+      }),
+    );
+  }
+  if (
+    original.status !== INVOICE_STATUS.FINALIZED &&
+    original.status !== INVOICE_STATUS.SENT &&
+    original.status !== INVOICE_STATUS.PAID
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Original invoice must be finalized, sent, or paid",
+      }),
+    );
+  }
+  if (original.currency !== currency) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "Credit note currency must match its original invoice",
+      }),
+    );
+  }
+  if (totalAmount === undefined) {
+    return Result.ok(undefined);
+  }
+  // The original row serializes reservations across every related credit note.
+  // This sum reads through row security, and it is complete: the original is
+  // visible only to a caller authorized for every matter it bills
+  // (stella_invoice_access), and a credit note bills only those matters
+  // (insertInvoiceLines), so every related credit note is visible here.
+  const credits = await tx
+    .select({
+      amount: sql<string>`coalesce(sum(abs(${invoices.totalAmount})), 0)`,
+    })
+    .from(invoices)
+    .where(
+      and(
+        invoiceInMatter(invoices, workspaceId),
+        eq(invoices.originalInvoiceId, originalInvoiceId),
+        ne(invoices.status, INVOICE_STATUS.VOID),
+        ne(invoices.id, invoiceId),
+      ),
+    );
+  const credited = credits.at(0);
+  if (!credited) {
+    return panic("Credit aggregate did not return a row");
+  }
+  if (
+    BigInt(credited.amount) + BigInt(Math.abs(totalAmount)) >
+    BigInt(original.totalAmount)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: "Credit notes together cannot exceed their original invoice",
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
+
+type ActiveInvoiceCreditOptions = {
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const hasActiveInvoiceCredit = async (
+  tx: Transaction,
+  { invoiceId, workspaceId }: ActiveInvoiceCreditOptions,
+) => {
+  const credits = await tx
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(
+      and(
+        invoiceInMatter(invoices, workspaceId),
+        eq(invoices.originalInvoiceId, invoiceId),
+        ne(invoices.status, INVOICE_STATUS.VOID),
+      ),
+    )
+    .limit(1);
+  return credits.length > 0;
+};

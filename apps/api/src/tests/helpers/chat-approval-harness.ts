@@ -9,6 +9,10 @@ import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
+import {
+  createMembershipSafeDb,
+  createMembershipScopedDb,
+} from "@/api/db/scoped";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type {
@@ -18,6 +22,7 @@ import type {
 } from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
+import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -40,7 +45,10 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { resolveMemberAuthorization } from "@/api/lib/auth";
+import {
+  featureAccessSnapshotFromAuthorization,
+  resolveMemberAuthorization,
+} from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -52,6 +60,7 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type {
   ChatHarnessPhase,
@@ -101,6 +110,7 @@ import type {
   WebChatContext,
 } from "@/api/tests/helpers/chat-web-client";
 import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-transcript";
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -259,6 +269,7 @@ export const createApprovalHarness = ({
   failingApprovalNames = [],
   grantableApprovalConnectorId,
   ids,
+  localRunOf,
   model,
   organizationAIConfig = orgAIConfig,
   promptCachingEnabled = false,
@@ -274,6 +285,12 @@ export const createApprovalHarness = ({
 }: {
   /** Observe or control the real send's pre-model compaction boundary. */
   compactMessages?: typeof compactMessagesForContext | undefined;
+  /**
+   * The run on the member's computer a thread's next turn answers through, as
+   * the send's routing would hand it over. `undefined` is a cloud turn.
+   */
+  localRunOf?:
+    ((threadId: SafeId<"chatThread">) => LocalChatRun | undefined) | undefined;
   /**
    * Replaces the anonymizer an anonymized turn's provider boundary calls, so a
    * test can make it fail. The real pipeline by default.
@@ -430,10 +447,52 @@ export const createApprovalHarness = ({
       return await startExecutionAdmission(options);
     },
     indexThread: async () => await Promise.resolve(undefined),
-    // An approved write reads the member's role again when it runs; read it
-    // from this test's database, not the shared pools.
-    resolveCurrentMembership: async (lookup) =>
-      await resolveMemberAuthorization(lookup, testDb),
+    // Delayed tools rebuild live authority from this test's database, not the
+    // shared pools.
+    resolveCurrentExecutionContext: async ({
+      organizationId,
+      userId: executionUserId,
+    }) => {
+      const authorization = await resolveMemberAuthorization(
+        { organizationId, userId: executionUserId },
+        testDb,
+      );
+      if (authorization === null) {
+        return Result.ok(null);
+      }
+      const databaseIdentity = {
+        organizationId,
+        serverValidatedWorkspaceIds: [],
+        userId: executionUserId,
+      };
+      const executionScopedDb = asTestRaw<ScopedDb>(
+        createMembershipScopedDb(testDb, databaseIdentity),
+      );
+      const workspaces = await executionScopedDb(
+        async (tx) => await readAuthorizedWorkspaces(tx, { organizationId }),
+      );
+      if (workspaces.isErr()) {
+        return workspaces;
+      }
+      const accessibleWorkspaces = workspaces.value.workspaces;
+      const accessibleIds = new Set(accessibleWorkspaces.map(({ id }) => id));
+      return Result.ok({
+        accessibleWorkspaces,
+        featureAccessSnapshot: featureAccessSnapshotFromAuthorization({
+          organizationId,
+          userId: executionUserId,
+          authorization,
+        }),
+        pinServerValidatedWorkspaceId: (workspaceId) =>
+          accessibleIds.has(workspaceId),
+        role: authorization.role,
+        safeDb: asTestRaw<SafeDb>(
+          createMembershipSafeDb(testDb, databaseIdentity),
+        ),
+        scopedDb: executionScopedDb,
+        userEmail: authorization.email,
+      });
+    },
     loadExternalMcpTools: async () => {
       const close = async () => await Promise.resolve(undefined);
       return await Promise.resolve({
@@ -485,6 +544,9 @@ export const createApprovalHarness = ({
       );
       return await streamChat({
         ...props,
+        ...(localRunOf === undefined
+          ? {}
+          : { localRun: localRunOf(props.threadId) }),
         onFinish: async (event) => {
           await beforeTurnSettles?.({
             outcome: event.outcome,
@@ -1493,9 +1555,11 @@ export const createApprovalHarness = ({
       });
     }
   };
-  globalThis.fetch = Object.assign(routedFetch, {
-    preconnect: originalFetch.preconnect,
-  });
+  const fetchInstallation = installTestFetch(
+    Object.assign(routedFetch, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 
   /** A browser tab that loads `threadId` now, as a page load does. */
   const openWebClient = async (
@@ -1730,7 +1794,7 @@ export const createApprovalHarness = ({
           await relinquishChatTurnRuns();
           await Promise.all(abandonedReads);
         } finally {
-          globalThis.fetch = originalFetch;
+          fetchInstallation.restore();
           provider.restore();
         }
         if (turnSettlementFailures.size > 0) {

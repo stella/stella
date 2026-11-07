@@ -159,6 +159,18 @@ describe("filterBySearchQuery", () => {
     ).toEqual(["Antonín Dvořák", "Élise Dupré"]);
   });
 
+  test.each(["", " ", "\t\n", "\u00a0\u2003", "\u0301", "\u064e"])(
+    "keeps items with empty or missing search fields for blank query %j",
+    (query) => {
+      const items = [1, 2, 3];
+      for (const fields of [[], [null], [undefined], [""], ["searchable"]]) {
+        expect(
+          filterBySearchQuery({ items, query, fields: () => fields }),
+        ).toEqual(items);
+      }
+    },
+  );
+
   test("keeps every item for a blank query", () => {
     expect(
       filterBySearchQuery({

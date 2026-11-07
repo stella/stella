@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -17,7 +18,8 @@ import { MatterCombobox } from "@/components/workspaces/matter-combobox";
 import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { contactOptions } from "@/lib/contacts/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
@@ -87,12 +89,9 @@ export const SkillAvailabilityField = ({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-end gap-2">
-        <label
-          className="text-muted-foreground text-xs"
-          htmlFor="skill-availability"
-        >
-          {tSkills("availabilityLabel")}
-        </label>
+        <Label htmlFor="skill-availability" variant="muted">
+          <span className="font-normal">{tSkills("availabilityLabel")}</span>
+        </Label>
         <Select
           disabled={options.length < 2}
           onValueChange={(value) => {
@@ -177,7 +176,7 @@ export const SkillAvailabilitySummary = ({
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   // Names are a nicety: a failed read falls back to the generic label and is
   // reported, never blocking the editor.
-  const navigationView = useQueryView(
+  const navigationView = queryView(
     useQuery({
       ...workspacesNavigationOptions({
         organizationId: activeOrganizationId,
@@ -187,7 +186,7 @@ export const SkillAvailabilitySummary = ({
     }),
   );
   useQueryViewError(navigationView, "SkillAvailabilitySummary:navigation");
-  const clientView = useQueryView(
+  const clientView = queryView(
     useQuery({
       ...contactOptions(activeOrganizationId, boundClientId ?? ""),
       enabled: boundClientId !== null,

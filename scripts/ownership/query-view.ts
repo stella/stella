@@ -8,6 +8,6 @@ export default {
     "apps/web/src/lib/use-query-view.ts",
   ],
   summary:
-    "useQueryView separates pending reads, initial errors with retry, successful empty results and cached items with refetch errors. The query-data-requires-state lint rule rejects data reads without state handling and hooks that discard query state; its exact-set baseline only shrinks.",
+    "queryView separates pending reads, initial errors with retry, successful empty results and cached items with refetch errors. The query-data-requires-state lint rule rejects data reads without state handling and hooks that discard query state; its exact-set baseline only shrinks.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

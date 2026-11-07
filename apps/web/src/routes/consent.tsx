@@ -7,7 +7,7 @@ import {
   redirect,
   useLocation,
 } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -28,7 +28,7 @@ import {
 } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,
@@ -39,9 +39,14 @@ import { organizationListOptions } from "@/lib/organization/queries";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { optionalOrganizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { pageTitle } from "@/lib/page-title";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
+import {
+  consentCompletion,
+  isConsentAllowDisabled,
+} from "@/routes/-consent-completion.logic";
 import { ConsentSuccess } from "@/routes/-consent-success";
 
 export const Route = createFileRoute("/consent")({
@@ -88,7 +93,7 @@ function ConsentPage() {
   });
   // The session query follows an organization switch on this page; the route
   // context only knows the organization the page loaded with.
-  const sessionView = useQueryView(useQuery(sessionOptions));
+  const sessionView = queryView(useQuery(sessionOptions));
   useQueryViewError(sessionView, "ConsentPage:query");
   const activeOrganizationId =
     (sessionView.type === "items"
@@ -103,13 +108,13 @@ function ConsentPage() {
   });
   const isPending = submission.status === "pending";
   const hasError = submission.status === "error";
-  const organizationsView = useQueryView(
+  const organizationsView = queryView(
     useQuery(organizationListOptions(userId)),
   );
   useQueryViewError(organizationsView, "ConsentPage:query-2");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
-  const roleView = useQueryView(
+  const roleView = queryView(
     useQuery({
       ...roleOptions,
       enabled: activeOrganizationId !== null,
@@ -143,7 +148,7 @@ function ConsentPage() {
     },
   });
 
-  const jurisdictionsView = useQueryView(
+  const jurisdictionsView = queryView(
     useQuery({
       ...optionalOrganizationSettingsOptions({
         organizationId: activeOrganizationId,
@@ -226,15 +231,27 @@ function ConsentPage() {
     const redirectUrl = getOauthRedirectUrl(result.data);
     if (!redirectUrl) {
       setSubmission({ status: "error" });
-      notifyUserError(undefined, t("consent.error"));
+      notifyUserProblem(t("consent.error"));
       return;
     }
 
-    if (!accept) {
-      window.location.assign(redirectUrl);
-      return;
+    const completion = consentCompletion({
+      accept,
+      redirectUrl,
+      client: identity,
+      organizationName,
+    });
+    switch (completion.status) {
+      case "redirect":
+        window.location.assign(completion.redirectUrl);
+        return;
+      case "connected":
+        setSubmission(completion);
+        return;
+      default:
+        completion satisfies never;
+        panic("Unhandled consent completion");
     }
-    setSubmission({ status: "connected", redirectUrl });
   };
 
   if (submission.status === "connected") {
@@ -260,7 +277,12 @@ function ConsentPage() {
       }
       decision={
         <ConsentDecisionBar
-          allowDisabled={clientQuery.isError || !clientQuery.data}
+          allowDisabled={isConsentAllowDisabled({
+            clientInfoFailed: clientQuery.isError,
+            clientInfoLoaded:
+              clientQuery.data !== undefined && clientQuery.data !== null,
+            session: sessionView,
+          })}
           hasError={hasError}
           isPending={isPending}
           onDecide={(accept) => {
@@ -310,7 +332,7 @@ function ConsentPage() {
           </p>
           <Link
             className="text-primary text-sm font-medium hover:underline"
-            to="/admin/members"
+            to="/settings/organization/members"
             target="_blank"
             rel="noopener noreferrer"
           >

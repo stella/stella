@@ -9,6 +9,7 @@ import * as v from "valibot";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import {
   Frame,
   FrameDescription,
@@ -74,7 +75,7 @@ export const SocialRecoveryPanel = ({
   };
   const sendCode = useMutation({
     mutationFn: async () => {
-      const parsed = v.parse(emailSchema(), email);
+      const parsed = v.parse(emailSchema(t("validation.invalidEmail")), email);
       const result = await authClient.emailOtp.sendVerificationOtp({
         email: parsed,
         type: "sign-in",
@@ -183,8 +184,8 @@ export const SocialRecoveryPanel = ({
       </FrameHeader>
       <FramePanel>
         {error === "account_not_linked" ? (
-          <form
-            className="flex flex-col gap-3"
+          <Form
+            density="snug"
             onSubmit={(event) => {
               event.preventDefault();
               sendCode.mutate();
@@ -207,12 +208,14 @@ export const SocialRecoveryPanel = ({
               className="w-full"
               loading={sendCode.isPending}
               disabled={
-                sendCode.isPending || !v.safeParse(emailSchema(), email).success
+                sendCode.isPending ||
+                !v.safeParse(emailSchema(t("validation.invalidEmail")), email)
+                  .success
               }
             >
               {t("auth.continueWithEmail")}
             </Button>
-          </form>
+          </Form>
         ) : (
           <Button
             className="w-full"

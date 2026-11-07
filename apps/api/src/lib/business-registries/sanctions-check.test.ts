@@ -1,7 +1,9 @@
 import { panic, Result } from "better-result";
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
+import { CONTACT_DATE_TIME_ZONE } from "@stll/api-contract/contact-date";
 import type { CountryCode } from "@stll/country-codes";
+import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -187,6 +189,7 @@ describe("sanctions check", () => {
       answer: async () =>
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Registry 'ares' lookup failed",
         }),
       reason: "registry-unavailable",
@@ -261,7 +264,11 @@ describe("sanctions check", () => {
         subject: { type: "company-id", value: "26863154", country: "CZ" },
         dependencies: dependencies({
           executeLookup: async () =>
-            new HandlerError({ status, message: "Register did not answer" }),
+            new HandlerError({
+              status,
+              code: "internal_error",
+              message: "Register did not answer",
+            }),
         }),
       });
       const check = result.unwrap();
@@ -478,7 +485,7 @@ describe("person birth date", () => {
       expect(result.isErr() && result.error).toMatchObject({
         status: 400,
         code: "validation_error",
-        message: "The birth date is not a valid calendar date",
+        message: "The birth date must be from 1900 through today",
       });
     },
   );
@@ -490,6 +497,23 @@ describe("person birth date", () => {
         dateOfBirth: { precision: "day", year: 1988, month: 2, day: 29 },
       }).unwrap(),
     ).toEqual({ precision: "day", year: 1988, month: 2, day: 29 });
+  });
+
+  test.each([
+    { precision: "year" as const, year: 1899 },
+    // Next year is always in the future, whenever this runs.
+    {
+      precision: "month" as const,
+      year: Temporal.Now.plainDateISO(CONTACT_DATE_TIME_ZONE).year + 1,
+      month: 1,
+    },
+  ])("refuses an out-of-range $precision date", (dateOfBirth) => {
+    const result = personDateOfBirth({ birthDate: undefined, dateOfBirth });
+    expect(result.isErr() && result.error).toMatchObject({
+      status: 400,
+      code: "validation_error",
+      message: "The birth date must be from 1900 through today",
+    });
   });
 
   test.each([

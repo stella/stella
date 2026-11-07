@@ -197,6 +197,7 @@ export const requestManualOcrHandler = async function* ({
       classifyFailure(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message:
             "Searchable-text recognition is not available on this deployment",
           hint:

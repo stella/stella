@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/case-law/removal-stores.ts",
+  "delta": 1,
+  "reason": "The fixed total store census executes erasures in stable order to preserve citation-trigger and row-lock ordering within the canonical redaction transaction."
+}

@@ -26,7 +26,6 @@ jobs:
       && github.event.workflow_run.conclusion == 'success'
       && (github.event.workflow_run.head_branch == 'chore/provenance-update'
       || github.event.workflow_run.head_branch == 'bot/model-catalog-refresh')
-      && vars.STELLA_MERGE_HOLD == ''
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

@@ -11,6 +11,7 @@ import {
   arrayFromQuery,
   booleanFromString,
 } from "@stll/api-contract/http-input";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { listSkillMetadata } from "@stll/skills";
 
 import { AGENT_SKILL_SCOPES, agentSkills } from "@/api/db/schema";
@@ -21,6 +22,8 @@ import {
   resolveCallerChatSkillAvailability,
 } from "@/api/handlers/chat/skill-availability/offered-tools";
 import { resolvesToBuiltInSkill } from "@/api/lib/agent-skills/skills";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -99,6 +102,7 @@ export const createListUnavailableChatSkills = ({
   createSafeRootHandler(
     config,
     async function* ({
+      orgAIConfigStatus,
       getAccessibleWorkspaces,
       getWorkspaceAccess,
       memberRole,
@@ -110,6 +114,10 @@ export const createListUnavailableChatSkills = ({
       session,
       user,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError());
+      }
+
       const switches = [
         query.anonymized,
         query.browserExtension,
@@ -135,6 +143,7 @@ export const createListUnavailableChatSkills = ({
       let chatContext: ChatSkillContext | undefined;
       if (asksAboutChat) {
         const scope = yield* resolveChatScope({
+          admitted: "active-or-archived",
           getWorkspaceAccess,
           workspaceId: query.workspaceId,
         });
@@ -150,7 +159,7 @@ export const createListUnavailableChatSkills = ({
                     async () => await getAccessibleWorkspaces(),
                   ),
                 )).flatMap((workspace) =>
-                  workspace.status === "deleting" ? [] : [workspace.id],
+                  workspaceIsVisible(workspace.status) ? [workspace.id] : [],
                 ),
               );
         // A send refuses pinned matters the caller cannot use; so does this.

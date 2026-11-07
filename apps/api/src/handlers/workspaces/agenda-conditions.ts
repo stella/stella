@@ -1,9 +1,9 @@
-import { and, eq, gte, isNull, notInArray, or, sql } from "drizzle-orm";
+import { and, isNull, notInArray, or } from "drizzle-orm";
 
 import { TASK_STATUS } from "@stll/api-contract";
-import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import type { entities } from "@/api/db/schema";
+import { workTask } from "@/api/lib/tasks/work-task";
 
 /**
  * The entities table as a query sees it: the table itself in a builder query,
@@ -18,30 +18,9 @@ type EntitiesTable = typeof entities;
  */
 export const openAgendaTask = (table: EntitiesTable) =>
   and(
-    eq(table.kind, "task"),
-    or(isNull(table.listItemType), eq(table.listItemType, LIST_ITEM_TYPE.TASK)),
+    workTask(table),
     or(
       isNull(table.status),
       notInArray(table.status, [TASK_STATUS.DONE, TASK_STATUS.CANCELLED]),
     ),
   );
-
-/** Due today or later in the database's calendar. */
-export const dueFromToday = (table: EntitiesTable) =>
-  gte(table.dueDate, sql`CURRENT_DATE`);
-
-/**
- * Due on or after the reader's local date. A reader's date differs from the
- * database's by at most a day either way, so a value outside that window is
- * clamped to it; without one, the database's today applies.
- */
-export const dueFromReaderDate = (
-  table: EntitiesTable,
-  readerDate: string | undefined,
-) =>
-  readerDate === undefined
-    ? dueFromToday(table)
-    : gte(
-        table.dueDate,
-        sql`GREATEST(LEAST(${readerDate}::date, CURRENT_DATE + 1), CURRENT_DATE - 1)`,
-      );

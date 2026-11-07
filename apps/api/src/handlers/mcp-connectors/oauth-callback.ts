@@ -53,6 +53,8 @@ import { requireRequestExceptionScope } from "@/api/lib/observability/request-co
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
+const oauthStateCutoff = () =>
+  new Date(Temporal.Now.instant().epochMilliseconds - STATE_TTL_MS);
 
 const requestQuery = v.object({
   code: v.optional(v.string()),
@@ -95,6 +97,27 @@ const redirect = (input: CallbackRedirectInput) =>
   new Response(null, {
     status: 302,
     headers: { Location: buildCallbackRedirectUrl(env.FRONTEND_URL, input) },
+  });
+
+type OAuthCallbackFailureRedirectOptions = {
+  error: unknown;
+  organizationId: SafeId<"organization">;
+  request: Request;
+};
+
+const redirectForOAuthCallbackFailure = ({
+  error,
+  organizationId,
+  request,
+}: OAuthCallbackFailureRedirectOptions) =>
+  redirect({
+    status: "error",
+    reason: oauthCallbackFailureReason(error, {
+      scope: requireRequestExceptionScope(request),
+      operation: "mcp_oauth_callback",
+      organizationId,
+      request,
+    }),
   });
 
 const logAuthorizationResponseBindingObservation = ({
@@ -190,6 +213,7 @@ const validatePendingOAuthMetadata = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message:
           "MCP authorization server metadata does not match the selected issuer",
       }),
@@ -392,7 +416,13 @@ const saveOAuthConnection = async ({
 
   // The safeDb transaction is the only boundary; a failure rolls back every write.
   return await safeDb(async (tx) => {
-    await tx.delete(mcpOAuthState).where(eq(mcpOAuthState.state, state));
+    const consumed = await tx
+      .delete(mcpOAuthState)
+      .where(eq(mcpOAuthState.state, state))
+      .returning({ state: mcpOAuthState.state });
+    if (consumed.length !== 1) {
+      return { type: "superseded" as const };
+    }
     await tx
       .delete(mcpOAuthState)
       .where(
@@ -466,7 +496,7 @@ const saveOAuthConnection = async ({
         },
       });
     }
-    return rows;
+    return { type: "saved" as const, rows };
   });
 };
 
@@ -492,23 +522,17 @@ export const createMcpOAuthCallbackHandler = (
         const code = input.code;
         const state = input.state;
 
-        const cutoff = new Date(
-          Temporal.Now.instant().epochMilliseconds - STATE_TTL_MS,
-        );
+        const cutoff = oauthStateCutoff();
 
         // A DB failure here is a Result.err, not a thrown exception: `yield*` on
         // an Err closes this generator via `.return()`, which skips `catch`
         // below (only `finally` would run). Await and branch explicitly instead
         // of `yield*` so every failure — DB or thrown — still redirects.
         const redirectForFailure = (error: unknown) =>
-          redirect({
-            status: "error",
-            reason: oauthCallbackFailureReason(error, {
-              scope: requireRequestExceptionScope(request),
-              operation: "mcp_oauth_callback",
-              organizationId: session.activeOrganizationId,
-              request,
-            }),
+          redirectForOAuthCallbackFailure({
+            error,
+            organizationId: session.activeOrganizationId,
+            request,
           });
 
         try {
@@ -665,8 +689,13 @@ export const createMcpOAuthCallbackHandler = (
             return Result.ok(redirectForFailure(savedResult.error));
           }
           const saved = savedResult.value;
+          if (saved.type === "superseded") {
+            return Result.ok(
+              redirect({ status: "error", reason: "expired-state" }),
+            );
+          }
 
-          const connection = saved.at(0);
+          const connection = saved.rows.at(0);
           if (connection) {
             await refreshCachedMcpToolsForConnection({
               connectionId: connection.id,

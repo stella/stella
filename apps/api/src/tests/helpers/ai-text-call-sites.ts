@@ -90,7 +90,6 @@ const seamDriver = (
 export const SEAM_DRIVERS = {
   "require-complete": seamDriver("require-complete"),
   "allow-output-ceiling": seamDriver("allow-output-ceiling"),
-  "allow-incomplete": seamDriver("allow-incomplete"),
 } as const satisfies Record<TanStackTextFinishPolicy, TextCallSiteDriver>;
 
 // --- Chat compaction --------------------------------------------------------
@@ -333,8 +332,6 @@ const modelCompactionDriver = textCallSiteDriver({
         : panic("The replayed steps must cross the compaction trigger"),
     ),
 });
-
-// --- The census -------------------------------------------------------------
 
 /**
  * Every call site the replay drives, by file (relative to `apps/api/src`),

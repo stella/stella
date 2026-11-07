@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+
 import type { Transaction } from "@/api/db/root";
 import {
   cellMetadata,
@@ -391,7 +393,7 @@ export const writeFileVersion = async ({
   const targetsFileProperty =
     locksFileProperty ||
     writePolicy.type === "append-derived-file-from-version";
-  if (locksFileProperty && lockedWorkspace?.status !== "active") {
+  if (locksFileProperty && !workspaceAcceptsWrites(lockedWorkspace?.status)) {
     return { status: "workspace-not-active" };
   }
   const entityLock = await withAggregateRowQuery({

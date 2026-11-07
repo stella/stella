@@ -1,13 +1,19 @@
 import { panic, Result, TaggedError } from "better-result";
 import type { InferOk } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, exists, isNull } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { correspondence, correspondenceAttachments } from "@/api/db/schema";
+import {
+  correspondence,
+  correspondenceAttachments,
+  correspondenceSources,
+  entities,
+} from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import type { InboundFiler } from "@/api/lib/email/inbound/acceptance";
@@ -35,6 +41,19 @@ class InboundAttachmentAlreadyLinked extends TaggedError(
   message: string;
 }> {}
 
+export class StaleCorrespondenceAttachmentError extends TaggedError(
+  "StaleCorrespondenceAttachmentError",
+)<{ message: string }> {}
+
+type AttachmentGeneration =
+  | { type: "delivery"; contentHash: string }
+  | {
+      type: "upload";
+      contentHash: string;
+      sourceEntityId: SafeId<"entity">;
+      sourceVersionId: SafeId<"entityVersion"> | null;
+    };
+
 type InboundMatterScope = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -50,6 +69,60 @@ type LinkInboundAttachmentOptions = {
   mediaType: string;
   byteSize: number;
   ordinal: number;
+  generation: AttachmentGeneration;
+};
+
+type CurrentAttachmentGenerationOptions = Pick<
+  LinkInboundAttachmentOptions,
+  "tx" | "correspondenceId" | "scope" | "generation"
+>;
+
+const isCurrentAttachmentGeneration = async ({
+  tx,
+  correspondenceId,
+  scope,
+  generation,
+}: CurrentAttachmentGenerationOptions) => {
+  const sourceCondition =
+    generation.type === "delivery"
+      ? eq(correspondence.source, "delivery")
+      : exists(
+          tx
+            .select({ id: entities.id })
+            .from(entities)
+            .innerJoin(
+              correspondenceSources,
+              and(
+                eq(correspondenceSources.entityId, entities.id),
+                eq(correspondenceSources.workspaceId, entities.workspaceId),
+              ),
+            )
+            .where(
+              and(
+                eq(entities.id, generation.sourceEntityId),
+                eq(entities.workspaceId, scope.workspaceId),
+                eq(correspondenceSources.organizationId, scope.organizationId),
+                eq(correspondenceSources.correspondenceId, correspondenceId),
+                generation.sourceVersionId === null
+                  ? isNull(entities.currentVersionId)
+                  : eq(entities.currentVersionId, generation.sourceVersionId),
+              ),
+            ),
+        );
+  const records = await tx
+    .select({ id: correspondence.id })
+    .from(correspondence)
+    .where(
+      and(
+        eq(correspondence.id, correspondenceId),
+        eq(correspondence.workspaceId, scope.workspaceId),
+        eq(correspondence.organizationId, scope.organizationId),
+        eq(correspondence.contentHash, generation.contentHash),
+        sourceCondition,
+      ),
+    )
+    .limit(1);
+  return records.length > 0;
 };
 
 const linkInboundAttachment = async ({
@@ -61,6 +134,7 @@ const linkInboundAttachment = async ({
   mediaType,
   byteSize,
   ordinal,
+  generation,
 }: LinkInboundAttachmentOptions) => {
   // The entity writer holds the matter lock. An ordinal can win once;
   // the caller rolls back a losing entity, audit and intent together.
@@ -80,6 +154,22 @@ const linkInboundAttachment = async ({
     return Result.err(
       new InboundPersistenceError({
         message: "Inbound correspondence is unavailable",
+      }),
+    );
+  }
+  // The existing record lock serializes a refresh with this claim; the
+  // document writer also holds the matter lock through its attachment write.
+  if (
+    !(await isCurrentAttachmentGeneration({
+      tx,
+      correspondenceId,
+      scope,
+      generation,
+    }))
+  ) {
+    return Result.err(
+      new StaleCorrespondenceAttachmentError({
+        message: "Correspondence attachment generation changed",
       }),
     );
   }
@@ -156,22 +246,56 @@ type InboundCompletion = {
   id: SafeId<"correspondence">;
   scope: InboundMatterScope;
   filer: InboundFiler;
+  contentHash: string;
 };
 
-// Stores each scanned attachment not yet linked to the filed correspondence.
-const finishInboundAttachments = async ({
-  completion: { id, scope, filer },
-  scannedFiles,
-  scopedDbForMatter,
-  createDocument,
-}: {
-  completion: InboundCompletion;
+type FinishCorrespondenceAttachmentsOptions = {
+  correspondenceId: SafeId<"correspondence">;
+  scope: InboundMatterScope;
   scannedFiles: readonly InferOk<Awaited<ReturnType<typeof scanUpload>>>[];
-  scopedDbForMatter: CreateInboundMailPersistenceOptions["scopedDbForMatter"];
+  scopedDb: ScopedDb;
+  recordAuditEvent: AuditRecorder;
   createDocument: typeof createEntityFromBuffer;
-}): Promise<Result<undefined, InboundPersistenceError>> => {
-  const scopedDb = scopedDbForMatter(scope);
-  const recordAuditEvent = auditForFiler({ filer, ...scope });
+  /** The folder the documents are stored in; the matter root when null. */
+  parentId: SafeId<"entity"> | null;
+  generation: AttachmentGeneration;
+};
+
+/**
+ * Stores each scanned attachment not yet linked to the filed correspondence,
+ * so a retry resumes at the missing ordinals.
+ */
+export const finishCorrespondenceAttachments = async ({
+  correspondenceId: id,
+  scope,
+  scannedFiles,
+  scopedDb,
+  recordAuditEvent,
+  createDocument,
+  parentId,
+  generation,
+}: FinishCorrespondenceAttachmentsOptions): Promise<
+  Result<
+    undefined,
+    InboundPersistenceError | StaleCorrespondenceAttachmentError
+  >
+> => {
+  const current = await scopedDb(
+    async (tx) =>
+      await isCurrentAttachmentGeneration({
+        tx,
+        correspondenceId: id,
+        scope,
+        generation,
+      }),
+  );
+  if (!current) {
+    return Result.err(
+      new StaleCorrespondenceAttachmentError({
+        message: "Correspondence attachment generation changed",
+      }),
+    );
+  }
   const linked = await scopedDb((tx) =>
     tx
       .select({ ordinal: correspondenceAttachments.ordinal })
@@ -218,7 +342,11 @@ const finishInboundAttachments = async ({
       continue;
     }
     const aborted: {
-      error: InboundPersistenceError | InboundAttachmentAlreadyLinked | null;
+      error:
+        | InboundPersistenceError
+        | InboundAttachmentAlreadyLinked
+        | StaleCorrespondenceAttachmentError
+        | null;
     } = { error: null };
     const written = await Result.tryPromise({
       try: async () =>
@@ -231,6 +359,7 @@ const finishInboundAttachments = async ({
           fileName: sanitizeFilename(file.fileName),
           mimeType: file.mimeType,
           encryption,
+          parentId,
           scanWarnings: file.scanWarnings ?? undefined,
           afterCreate: async (tx, document) => {
             const attachmentLink = await linkInboundAttachment({
@@ -242,6 +371,7 @@ const finishInboundAttachments = async ({
               mediaType: file.mimeType,
               byteSize: file.bytes.byteLength,
               ordinal,
+              generation,
             });
             if (attachmentLink.isErr()) {
               aborted.error = attachmentLink.error;
@@ -356,6 +486,7 @@ export const createInboundMailPersistence =
                         ? candidate.filer.userId
                         : null,
                   },
+                  contentHash: created.contentHash,
                 };
                 return Result.ok({
                   status: created.created
@@ -372,6 +503,7 @@ export const createInboundMailPersistence =
                 );
               case "invalid_content":
               case "invalid_authentication":
+              case "source_changed":
                 return Result.err(
                   new InboundPersistenceError({
                     message: "Inbound correspondence failed validation",
@@ -391,14 +523,28 @@ export const createInboundMailPersistence =
         if (!completion) {
           return outcome;
         }
-        const finished = await finishInboundAttachments({
-          completion,
+        const finished = await finishCorrespondenceAttachments({
+          correspondenceId: completion.id,
+          scope: completion.scope,
           scannedFiles,
-          scopedDbForMatter,
+          scopedDb: scopedDbForMatter(completion.scope),
+          recordAuditEvent: auditForFiler({
+            filer: completion.filer,
+            ...completion.scope,
+          }),
           createDocument,
+          parentId: null,
+          generation: { type: "delivery", contentHash: completion.contentHash },
         });
         if (finished.isErr()) {
-          return Result.err(finished.error);
+          return Result.err(
+            StaleCorrespondenceAttachmentError.is(finished.error)
+              ? new InboundPersistenceError({
+                  message: "Inbound attachment generation changed",
+                  cause: finished.error,
+                })
+              : finished.error,
+          );
         }
         return outcome;
       },

@@ -14,6 +14,24 @@ export type SelectionToolbarAnchor = {
 
 const clips = (overflow: string): boolean => overflow !== "visible";
 
+/**
+ * Whether a scroll can have moved the selected words under the bar. A host
+ * listens for scroll across the whole document to keep the bar on its words,
+ * and re-reading the selection closes an open menu. A scroll inside the
+ * bar's own surfaces (a copy menu's preview) moves none of the words, so it
+ * must not close the menu being read.
+ */
+export const scrollMovesSelection = (
+  event: Event,
+  surfaces: readonly (Node | null)[],
+): boolean => {
+  const { target } = event;
+  return !(
+    target instanceof Node &&
+    surfaces.some((surface) => surface?.contains(target) === true)
+  );
+};
+
 /** The reader's visible scroll area, in the selection document's coordinates. */
 export const selectionToolbarBounds = (root: HTMLElement): DOMRect | null => {
   const view = root.ownerDocument.defaultView;

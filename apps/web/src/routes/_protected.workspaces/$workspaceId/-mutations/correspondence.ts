@@ -68,7 +68,7 @@ export const useUpdateCorrespondence = () => {
           handlerId: "useUpdateCorrespondence:failure",
         },
       });
-      notifyUserError(error, t("common.error"));
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
@@ -102,7 +102,7 @@ export const useRotateCorrespondenceAddress = () => {
           handlerId: "useRotateCorrespondenceAddress:failure",
         },
       });
-      notifyUserError(error, t("common.error"));
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
@@ -136,7 +136,7 @@ export const useRevokeCorrespondenceAddress = () => {
           handlerId: "useRevokeCorrespondenceAddress:failure",
         },
       });
-      notifyUserError(error, t("common.error"));
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };

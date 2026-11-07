@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
-import { hasTabOrderChanged } from "../lib/tab-order";
+import { hasTabOrderChanged, revealActiveTab } from "../lib/tab-order";
 import { cn, composeRefs } from "../lib/utils";
 
 type TabsVariant = "default" | "underline";
@@ -51,6 +51,23 @@ const TabsList = ({
     }
   });
 
+  // Base UI reveals the active tab on mount and on focus only, so a strip
+  // narrowed later, by a pane docking beside it, would strand it off-screen
+  // behind a hidden scrollbar.
+  useIsoLayoutEffect(() => {
+    const list = listRef.current;
+    if (list === null || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+    const observer = new ResizeObserver(() => {
+      revealActiveTab(list);
+    });
+    observer.observe(list);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   return (
     <TabsPrimitive.List
       className={cn(
@@ -69,12 +86,13 @@ const TabsList = ({
         // this element's scroll origin. `safe center` falls back to start
         // alignment once the strip overflows, because plain centring puts the
         // leading tabs at a negative offset, outside the scrollable area.
-        // Scrolling one axis computes the other to `auto` anyway, hence both,
-        // but containment stays per axis so a wheel over a horizontal strip
-        // still scrolls the page. The bar itself stays hidden: it would take
-        // block size from the strip on appearing and paint over the indicator
-        // anchored to the strip's edge.
-        "scrollbar-none overflow-auto data-[orientation=horizontal]:overscroll-x-contain data-[orientation=vertical]:overscroll-y-contain [&::-webkit-scrollbar]:hidden",
+        // Only the strip's own axis scrolls: the cross axis is clipped, because
+        // a tab or action button a pixel taller than the strip otherwise lets
+        // touch drag it up and down. Containment stays per axis so a wheel
+        // over a horizontal strip still scrolls the page. The bar itself stays
+        // hidden: it would take block size from the strip on appearing and
+        // paint over the indicator anchored to the strip's edge.
+        "scrollbar-none overflow-auto data-[orientation=horizontal]:overflow-y-hidden data-[orientation=horizontal]:overscroll-x-contain data-[orientation=vertical]:overflow-x-hidden data-[orientation=vertical]:overscroll-y-contain [&::-webkit-scrollbar]:hidden",
         "data-[orientation=vertical]:flex-col",
         variant === "default"
           ? "bg-muted text-foreground-label rounded-lg p-0.5"

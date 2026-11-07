@@ -111,6 +111,12 @@ type WithAuthRetentionOptions = {
     adapter: DBTransactionAdapter,
   ) => DBTransactionAdapter["create"];
   touchClient?: (clientId: string) => Promise<void>;
+  /**
+   * Resources a client resolved from its metadata document receives beyond
+   * the provider's defaults: the REST API for stella's own apps
+   * (`oauth-own-client-links`), nothing for anyone else.
+   */
+  ownClientResources?: (clientId: string) => readonly string[];
   retention?: (model: string) => string;
 };
 
@@ -119,6 +125,7 @@ export const withAuthRetention = ({
   admitClient,
   protectCreate = (raw) => raw.create,
   touchClient,
+  ownClientResources = () => [],
   retention = (model) => requireAuthRetention({ model }),
 }: WithAuthRetentionOptions): DBAdapter => {
   const protect = (raw: DBTransactionAdapter): DBTransactionAdapter => {
@@ -168,10 +175,32 @@ export const withAuthRetention = ({
           });
         }
         await admitClient();
-        return await create({
-          ...args,
-          data: { ...args.data, registrationOrigin: "open-client" },
-        });
+        // In the provider's registration transaction, so the client never
+        // exists without the links it is owed. The created row passes
+        // through unchanged, keeping the adapter's result type.
+        const linkOwnResources = async <Client>(
+          client: Client,
+        ): Promise<Client> => {
+          const clientId = args.data["clientId"];
+          if (
+            typeof clientId === "string" &&
+            typeof args.data["clientDiscoveryId"] === "string"
+          ) {
+            for (const resourceId of ownClientResources(clientId)) {
+              await create({
+                model: "oauthClientResource",
+                data: { clientId, resourceId, createdAt: new Date() },
+              });
+            }
+          }
+          return client;
+        };
+        return await linkOwnResources(
+          await create({
+            ...args,
+            data: { ...args.data, registrationOrigin: "open-client" },
+          }),
+        );
       },
     };
   };

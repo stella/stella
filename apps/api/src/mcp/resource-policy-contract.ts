@@ -9,6 +9,11 @@ import {
   MCP_LAW_HTTP_PATH,
   MCP_OAUTH_PROTOCOL_SCOPES,
 } from "@stll/api-contract";
+import {
+  API_OAUTH_RESOURCE_NAME,
+  API_OAUTH_RESOURCE_SCOPES,
+  apiOAuthResourceUrl,
+} from "@stll/api-contract/api-oauth-resource";
 
 import type { ToolScope } from "@/api/mcp/tool-types";
 
@@ -158,23 +163,38 @@ export const getMcpResourceScopes = (mode: McpMode) =>
  * The OAuth resource set Better Auth is configured with, one entry per
  * audience.
  *
- * Adding an audience widens this set, and the startup census
- * (`ensureBetterAuthOAuthPolicy`) refuses to boot until the database matches
- * it. Startup does not repair an existing database on its own: seeding runs
- * only against an entirely empty auth database, and `resourceSeedMode: "none"`
- * in `lib/auth.ts` keeps resource creation out of the request path.
+ * Adding an audience or a scope widens this set, and the startup census
+ * (`ensureBetterAuthOAuthPolicy`) refuses to boot until the database covers
+ * it. Covering is enough: scopes and audiences a newer release stored are
+ * tolerated, and the auth adapter narrows every stored resource to this set
+ * before the provider reads it (`withConfiguredOAuthResources`), so this code
+ * never grants what it does not configure here. Startup does not repair an
+ * existing database on its own: seeding runs only against an entirely empty
+ * auth database, and `resourceSeedMode: "none"` in `lib/auth.ts` keeps
+ * resource creation out of the request path.
  *
  * Reconciling them is the deploy's job, and it needs no operator step: the
  * `better-auth-oauth-resources` online repair
  * (`db/better-auth-oauth-resource-repair.ts`, registered in
  * `db/online-migrations.ts`) runs on the migrate entrypoint before the API
- * rolls, inserts any resource this set names and the table lacks, and links
- * every existing client registration to it. It also upgrades the exact
- * predecessor policy that omitted protocol scopes from token issuance.
+ * rolls, inserts any resource this set names and the table lacks, adds any
+ * scope a stored resource lacks (never removing one), and links every
+ * existing client registration to each MCP audience
+ * (`buildEveryClientOAuthResources`). It also upgrades the exact predecessor
+ * policy that omitted protocol scopes from token issuance.
  * `better-auth-oauth-policy-census.db.test.ts` pins that, the idempotence, and
  * the refusal to overwrite a conflicting definition.
  */
-export const buildBetterAuthOAuthResources = (baseUrl: string) =>
+export const buildBetterAuthOAuthResources = (baseUrl: string) => [
+  ...buildEveryClientOAuthResources(baseUrl),
+  buildApiOAuthResource(baseUrl),
+];
+
+/**
+ * The MCP audiences: every client registration is linked to each, and a new
+ * registration receives them by default.
+ */
+export const buildEveryClientOAuthResources = (baseUrl: string) =>
   MCP_MODES.map((mode) => {
     const config = getMcpResourceModeConfig(mode);
     return {
@@ -191,13 +211,36 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
   });
 
 /**
+ * The REST API as a resource. It is linked only to stella's own native apps
+ * (`OWN_NATIVE_CLIENT_RESOURCE_LINKS` in `lib/auth/oauth-own-client-documents`),
+ * never by default and never by the backfill, so a client connected over MCP
+ * cannot obtain a token the API accepts.
+ */
+export const buildApiOAuthResource = (baseUrl: string) => ({
+  allowedScopes: [...API_OAUTH_RESOURCE_SCOPES, ...MCP_OAUTH_PROTOCOL_SCOPES],
+  identifier: apiOAuthResourceUrl(baseUrl),
+  name: API_OAUTH_RESOURCE_NAME,
+});
+
+/**
+ * Whether a configured resource is linked to every client, i.e. is an MCP
+ * audience. Told apart by the resource name, which only Stella's seeding
+ * writes and the boot census pins, never by its URL: a deployment served
+ * under a path would otherwise shift the API resource's path out from under
+ * a comparison and link it to every client.
+ */
+export const isEveryClientOAuthResource = (resource: {
+  readonly name: string;
+}): boolean => resource.name !== API_OAUTH_RESOURCE_NAME;
+
+/**
  * The allowed scopes a stored resource row carried before protocol scopes
  * joined the issuance policy: the configured set minus
  * `MCP_OAUTH_PROTOCOL_SCOPES`.
  *
- * Databases seeded before then still hold this set. The deploy repair
- * reconciles it to the configured set like any earlier configured scope set,
- * and the boot census accepts only the configured set.
+ * Databases seeded before then still hold this set. The deploy repair adds
+ * the protocol scopes like any other configured scope a stored row lacks, and
+ * the boot census refuses a row that lacks them.
  */
 export const predecessorOAuthResourceScopes = (
   allowedScopes: readonly string[],

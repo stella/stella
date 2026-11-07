@@ -17,7 +17,7 @@ type EmptyScreenMediaPlacement = "side" | "bottom";
 type EmptyScreenAction = GuideAnchorProps & {
   label: string;
   icon?: LucideIcon;
-  onClick?: () => void;
+  onClick?: ComponentProps<typeof Button>["onClick"];
   href?: string;
   disabled?: boolean;
 };
@@ -207,7 +207,7 @@ const DefaultEmptyPreview = () => (
       <div className="border-border/60 bg-background/80 flex flex-col gap-2 rounded-md border p-3">
         {Array.from({ length: 5 }, (_, index) => (
           <div
-            className="bg-muted h-6 rounded"
+            className="bg-muted h-6 rounded-sm"
             key={`empty-preview-row-${index}`}
           />
         ))}

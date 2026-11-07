@@ -18,6 +18,20 @@ export type SearchSort = (typeof SEARCH_SORTS)[number];
 
 export const DEFAULT_SEARCH_SORT = SEARCH_SORTS[0];
 
+/** Facets offered without the optional court/year matrix. */
+export const DEFAULT_CASE_LAW_SEARCH_FACETS = [
+  "court",
+  "decisionType",
+  "source",
+  "language",
+  "year",
+] as const;
+
+export const CASE_LAW_SEARCH_FACET_NAMES = [
+  ...DEFAULT_CASE_LAW_SEARCH_FACETS,
+  "courtYear",
+] as const;
+
 /**
  * The orders the case-law browse listing (no query) may be read in: by
  * decision date, either way. A listing has nothing to rank, so relevance is
@@ -198,6 +212,16 @@ export const SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET = {
   type: "truncated",
   reason: "exclusion_budget",
 } as const;
+/**
+ * A search that ran several phrasings at once returned the ones that finished
+ * and stopped the rest on its time budget. Only the agent tools merge
+ * phrasings, so only they report it; the HTTP search answers one phrasing and
+ * fails whole instead.
+ */
+export const SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET = {
+  type: "truncated",
+  reason: "time_budget",
+} as const;
 
 export type SearchPaginationOutcome =
   | typeof SEARCH_PAGINATION_COMPLETE
@@ -241,3 +265,16 @@ export const searchPageEnd = ({
     ? SEARCH_PAGE_END.COMPLETE
     : SEARCH_PAGE_END.STOPPED;
 };
+
+/**
+ * Whether global search ranked all the chat text matching a query. `partial`
+ * means long threads ranked on their leading messages, or matching threads
+ * past the ranking window were left out: the other result types are unaffected.
+ */
+export const GLOBAL_SEARCH_CHAT_COVERAGE = {
+  COMPLETE: "complete",
+  PARTIAL: "partial",
+} as const;
+
+export type GlobalSearchChatCoverage =
+  (typeof GLOBAL_SEARCH_CHAT_COVERAGE)[keyof typeof GLOBAL_SEARCH_CHAT_COVERAGE];

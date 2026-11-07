@@ -506,6 +506,10 @@ fn extract_plural_branch(icu: &str, form: &str) -> Option<String> {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
   use std::collections::BTreeSet;

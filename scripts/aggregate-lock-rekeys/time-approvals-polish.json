@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/lib/billing/time-entry-approval.ts",
+    "from": "00ad883a7d690bee58227f10fc2b0e668089a9071cc0cd4c307aa00710db044e",
+    "to": "1062846dc1709bc585d5006f940b566082038d494103626fc7a6bd1f5a8a12db",
+    "reason": "Approval and return share one locked read of the reviewed entries; the single-entry return's own acquisition is removed."
+  }
+]

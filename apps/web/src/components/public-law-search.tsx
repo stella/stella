@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 import type { ChatCorpus, ChatCorpusScope } from "@stll/api-contract";
 import { isPublicCountry } from "@stll/api-contract/public-country-capability";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { AiActionIcon, MessageSquareTextIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
@@ -78,8 +79,10 @@ export const PublicLawSearch = ({
   const trimmed = query.trim();
 
   return (
-    <form
-      className="mx-auto flex w-full max-w-2xl flex-wrap items-center justify-center gap-2"
+    <Form
+      className="mx-auto max-w-2xl flex-wrap justify-center"
+      density="compact"
+      layout="inline"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();
@@ -105,7 +108,7 @@ export const PublicLawSearch = ({
       {askScope !== null && trimmed.length > 0 && (
         <PublicLawAskInChat askScope={askScope} question={trimmed} />
       )}
-    </form>
+    </Form>
   );
 };
 

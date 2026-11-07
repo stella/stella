@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
-import type JSZip from "jszip";
 
+import type { ZipEntry } from "@stll/docx-core/zip";
 import {
   isAllowedResourcePath,
   isSkillResourceFolder,
@@ -13,12 +13,12 @@ import { Temporal } from "@stll/time";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { skillRequirableToolNames } from "@/api/lib/agent-skills/required-tools-validation";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { loadDocx } from "@/api/lib/docx-archive";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -468,7 +468,7 @@ const parseMarkdownSkillPackageBytes = (
 };
 
 type ZipPackageEntry = {
-  file: JSZip.JSZipObject;
+  file: ZipEntry;
   path: string;
 };
 
@@ -526,17 +526,17 @@ const parseZipSkillPackage = async (
   buffer: ArrayBuffer,
 ): Promise<Result<ImportedSkillPackage, HandlerError>> => {
   const zip = await loadDocx(buffer, SKILL_ARCHIVE_OPTIONS);
-  const entries = Object.values(zip.files);
+  const entries = zip.entries();
   if (entries.length > LIMITS.agentSkillArchiveFilesMax) {
     return rejectSkillPackage("Skill pack has too many files");
   }
 
   const packageEntries: ZipPackageEntry[] = [];
   for (const file of entries) {
-    if (file.dir || file.name.startsWith("__MACOSX/")) {
+    if (file.path.startsWith("__MACOSX/")) {
       continue;
     }
-    const normalizedPath = normalizePackageFilePath(file.name);
+    const normalizedPath = normalizePackageFilePath(file.path);
     if (!normalizedPath) {
       continue;
     }
@@ -565,17 +565,14 @@ const parseZipSkillPackage = async (
       continue;
     }
 
-    const declaredSize = zipUncompressedSize(file);
-    if (declaredSize !== null) {
-      const declaredLimit = checkZipUncompressedLimit(
-        totalUncompressedBytes + declaredSize,
-      );
-      if (declaredLimit.isErr()) {
-        return Result.err(declaredLimit.error);
-      }
+    const declaredLimit = checkZipUncompressedLimit(
+      totalUncompressedBytes + file.size,
+    );
+    if (declaredLimit.isErr()) {
+      return Result.err(declaredLimit.error);
     }
 
-    const bytes = await file.async("uint8array");
+    const bytes = await file.bytes();
     totalUncompressedBytes += bytes.byteLength;
     const inflatedLimit = checkZipUncompressedLimit(totalUncompressedBytes);
     if (inflatedLimit.isErr()) {
@@ -1337,6 +1334,7 @@ const fetchSafeBytes = async ({
     return Result.err(
       new HandlerError({
         status: access.source === "catalogue" ? 503 : 400,
+        code: "internal_error",
         message: response.error.message,
         cause: response.error,
       }),
@@ -1349,6 +1347,7 @@ const fetchSafeBytes = async ({
           access.source === "catalogue"
             ? catalogueUpstreamStatus(response.value.status)
             : 400,
+        code: "internal_error",
         message: `Skill source returned HTTP ${response.value.status}`,
       }),
     );
@@ -2240,25 +2239,6 @@ const decodeUtf8 = (
 const encodedSize = (value: string): number =>
   UTF8_ENCODER.encode(value).byteLength;
 
-const zipUncompressedSize = (file: JSZip.JSZipObject): number | null => {
-  // JSZip has no public declared-size API; this is only a preflight before the
-  // authoritative post-decompression byte count.
-  const candidate: unknown = file;
-  if (!isRecord(candidate)) {
-    return null;
-  }
-
-  const metadata = candidate["_data"];
-  if (!isRecord(metadata)) {
-    return null;
-  }
-
-  const size = metadata["uncompressedSize"];
-  return typeof size === "number" && Number.isFinite(size) && size >= 0
-    ? size
-    : null;
-};
-
 const toHandlerError = (cause: unknown): HandlerError =>
   HandlerError.is(cause)
     ? cause
@@ -2277,6 +2257,7 @@ const toCatalogueHandlerError = (cause: unknown): HandlerError => {
   }
   return new HandlerError({
     status: 502,
+    code: "internal_error",
     message: "Catalogue skill package is invalid",
     cause,
   });

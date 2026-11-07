@@ -54,8 +54,9 @@ import { optionalArray } from "@/lib/arrays";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
 import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
+import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
 
 type LeadingCitationsProps = {
@@ -75,7 +76,7 @@ export const LeadingCitations = ({
   decisionId,
 }: LeadingCitationsProps) => {
   const summaryQuery = useQuery(decisionCitationSummaryOptions(decisionId));
-  const summaryView = useQueryView(summaryQuery);
+  const summaryView = queryView(summaryQuery);
   useQueryViewError(summaryView, "LeadingCitations:query");
   const summary = summaryView.type === "items" ? summaryView.items : undefined;
   if (summary === undefined) {
@@ -157,7 +158,7 @@ const DirectionSection = ({
   const leadingQuery = useQuery(
     decisionLeadingCitationsOptions(decisionId, direction),
   );
-  const leadingView = useQueryView(leadingQuery);
+  const leadingView = queryView(leadingQuery);
   useQueryViewError(leadingView, "DirectionSection:query");
   const leading = leadingView.type === "items" ? leadingView.items : undefined;
   const [showingAll, setShowingAll] = useState(false);
@@ -286,11 +287,13 @@ const LeadingRow = ({
 
   return (
     <li className="flex flex-col" ref={rowRef}>
-      <button
+      <Button
         aria-expanded={open}
-        className="hover:bg-muted/60 -mx-1.5 flex items-start gap-1.5 rounded-md px-1.5 py-1 text-start"
+        className="-mx-2 w-auto items-start"
+        layout="wrap"
         onClick={() => setOpen(!open)}
-        type="button"
+        size="row"
+        variant="ghost"
       >
         <DocumentIdentityBadge
           identity={decisionDocumentIdentity(row.decision)}
@@ -317,7 +320,7 @@ const LeadingRow = ({
               : `${row.decision.court} · ${decided}`}
           </span>
         </span>
-      </button>
+      </Button>
       <div className="ps-4">
         <CitedDecisionLink
           decision={row.decision}

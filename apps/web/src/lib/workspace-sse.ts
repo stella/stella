@@ -1,4 +1,5 @@
 import { hashKey, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -11,7 +12,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   getWorkspaceRealtimeQueryActions,
   getWorkspaceReconnectQueryActions,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/workspace-sse-connection.logic";
 import type { WorkspaceStreamAccess } from "@/lib/workspace-sse-connection.logic";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
+import { getRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
 
 const WORKSPACE_SSE_EVENT_SOURCE_INIT = {
   withCredentials: true,
@@ -94,6 +96,26 @@ type UseWorkspaceSSEOptions = {
   onEvent?: (event: WorkspaceRealtimeEvent) => void;
 };
 
+export const applyWorkspaceRealtimeQueryActions = (
+  queryClient: QueryClient,
+  actions: WorkspaceRealtimeQueryAction[],
+) => {
+  const realtimeRefresh = getRealtimeRefreshScheduler(queryClient);
+  for (const action of actions) {
+    switch (action.type) {
+      case WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE:
+        realtimeRefresh.refresh(action.queryKey);
+        break;
+      case WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX:
+        queryClient.removeQueries({ queryKey: action.queryKey, exact: false });
+        break;
+      default:
+        action satisfies never;
+        panic(`Unhandled action: ${String(action)}`);
+    }
+  }
+};
+
 const getWorkspaceSSEUrl = (workspaceId: string) =>
   apiUrl(`/workspaces/${workspaceId}/events`);
 
@@ -139,14 +161,25 @@ export const useWorkspaceSSE = (
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const t = useTranslations();
+  const realtimeRefresh = getRealtimeRefreshScheduler(queryClient);
 
   const applyQueryActions = (actions: WorkspaceRealtimeQueryAction[]) => {
-    for (const action of actions) {
+    applyWorkspaceRealtimeQueryActions(queryClient, actions);
+  };
+  const applyBatchedQueryActions = useLatestCallback(applyQueryActions);
+  const handleParsedEvent = useLatestCallback(
+    (event: WorkspaceRealtimeEvent): WorkspaceRealtimeQueryAction[] => {
+      options.onEvent?.(event);
+      return getWorkspaceRealtimeQueryActions(event, workspaceId);
+    },
+  );
+  const refreshAfterReconnect = useLatestCallback(() => {
+    for (const action of getWorkspaceReconnectQueryActions(workspaceId)) {
       switch (action.type) {
         case WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE:
           detached(
-            queryClient.invalidateQueries({ queryKey: action.queryKey }),
-            "sse.invalidate",
+            realtimeRefresh.invalidateImmediately(action.queryKey),
+            "sse.reconnect-invalidate",
           );
           break;
         case WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX:
@@ -157,19 +190,9 @@ export const useWorkspaceSSE = (
           break;
         default:
           action satisfies never;
-          panic(`Unhandled action: ${String(action)}`);
+          panic(`Unhandled reconnect action: ${String(action)}`);
       }
     }
-  };
-  const applyBatchedQueryActions = useLatestCallback(applyQueryActions);
-  const handleParsedEvent = useLatestCallback(
-    (event: WorkspaceRealtimeEvent): WorkspaceRealtimeQueryAction[] => {
-      options.onEvent?.(event);
-      return getWorkspaceRealtimeQueryActions(event, workspaceId);
-    },
-  );
-  const refreshAfterReconnect = useLatestCallback(() => {
-    applyQueryActions(getWorkspaceReconnectQueryActions(workspaceId));
   });
   const captureConnectionOutage = useLatestCallback(() => {
     analytics.captureError(
@@ -183,14 +206,14 @@ export const useWorkspaceSSE = (
     );
   });
   const leaveEndedMatter = useLatestCallback(async () => {
-    notifyUserError(undefined, t("errors.matterNotFound"));
+    notifyUserProblem(t("errors.matterNotFound"));
     // Leave first: dropping the cache while the matter's views are still
     // mounted would only make them refetch into the same refusal.
     await navigate({ to: "/workspaces", replace: true });
     queryClient.removeQueries({
       predicate: (query) => isWorkspaceQueryKey(query.queryKey, workspaceId),
     });
-    await queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
+    await realtimeRefresh.invalidateImmediately(workspacesKeys.all);
   });
 
   useExternalSyncEffect(() => {

@@ -25,6 +25,7 @@ import {
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
+  MenuAnchor,
   MenuCheckboxItem,
   MenuGroup,
   MenuGroupLabel,
@@ -99,6 +100,7 @@ import {
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useBrowserExtensionStoreUrl } from "@/features/chat/browser-control/use-browser-extension-store-url";
 import { useSetChatWebSearch } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
@@ -116,6 +118,7 @@ import {
   mcpConnectionsOptions,
   mcpConnectorsOptions,
 } from "@/lib/knowledge/queries";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import {
   type ChatSkillRowState,
@@ -125,9 +128,9 @@ import {
   slashItemSkillId,
 } from "@/lib/prompts/chat-skill-availability.logic";
 import { useComposerSkillAvailability } from "@/lib/prompts/use-chat-unavailable-skills";
+import { queryView } from "@/lib/query-view.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -295,6 +298,7 @@ export const ComposerPlusMenu = ({
                 triggerClassName,
               )}
               size={COMPOSER_CONTROL_BUTTON_SIZE}
+              tooltip={t("chat.composerMenu.open")}
               type="button"
               variant="secondary"
             />
@@ -605,14 +609,17 @@ const WebSearchFixSkillItem = ({
 /**
  * One row of the Skills submenu. A skill this chat cannot run stays listed,
  * disabled, with what the chat lacks; where the composer can meet that need
- * in one click, the row does so and inserts the skill.
+ * in one click, the row does so and inserts the skill. A missing extension
+ * cannot be met in place: the row opens its store listing instead.
  */
 const ComposerSkillMenuItem = ({
+  browserExtensionStoreUrl,
   chat,
   item,
   onSelect,
   state,
 }: {
+  browserExtensionStoreUrl: string | null;
   chat: ComposerSkillChatContext | undefined;
   item: SlashItem;
   onSelect: (item: SlashItem) => void;
@@ -635,6 +642,21 @@ const ComposerSkillMenuItem = ({
     );
   }
   const message = t(state.messageKey);
+  if (
+    state.fixable &&
+    state.need === CHAT_SKILL_CONTEXT_NEED.browserExtension &&
+    browserExtensionStoreUrl !== null
+  ) {
+    return (
+      <MenuItem
+        onClick={() => {
+          openIsolatedWindow(browserExtensionStoreUrl);
+        }}
+      >
+        <ComposerSkillItemBody blocked item={item} secondary={message} />
+      </MenuItem>
+    );
+  }
   if (state.fixable && chat !== undefined) {
     if (state.need === CHAT_SKILL_CONTEXT_NEED.webSearch) {
       return (
@@ -693,7 +715,7 @@ export const ComposerSkillsMenu = ({
     organizationId: activeOrganizationId,
     userId,
   });
-  const skillsView = useQueryView(skillsQuery, {
+  const skillsView = queryView(skillsQuery, {
     isEmpty: (data) =>
       data.pages.every(
         (page) => page.builtIn.length === 0 && page.installed.length === 0,
@@ -711,7 +733,8 @@ export const ComposerSkillsMenu = ({
   // Only skills no chat can run leave the menu; one this chat alone cannot
   // run stays, disabled, with what the chat lacks.
   const unavailableSkillIds = availability?.hidden;
-  const oneClickNeeds = oneClickSkillNeeds(chat);
+  const browserExtensionStoreUrl = useBrowserExtensionStoreUrl();
+  const oneClickNeeds = oneClickSkillNeeds(chat, browserExtensionStoreUrl);
   const shortcutRows = useMemo(
     () => commandShortcutRowsFromSkillPages(data?.pages, unavailableSkillIds),
     [data?.pages, unavailableSkillIds],
@@ -781,6 +804,7 @@ export const ComposerSkillsMenu = ({
   } else {
     skillItemsContent = filteredItems.map((item) => (
       <ComposerSkillMenuItem
+        browserExtensionStoreUrl={browserExtensionStoreUrl}
         chat={chat}
         item={item}
         key={itemKey(item)}
@@ -889,7 +913,7 @@ export const ComposerSkillsMenu = ({
 };
 
 // The trigger-less Menu a shortcut opens at the caret, following the
-// sr-only-trigger shape of the shell's anchored menus (`useAnchoredMenu`).
+// nonfocusable-anchor shape of the shell's anchored menus (`useAnchoredMenu`).
 const ComposerShortcutPopup = ({
   anchor,
   children,
@@ -908,7 +932,7 @@ const ComposerShortcutPopup = ({
   side: ShortcutPopupSide;
 }) => (
   <Menu onOpenChange={onOpenChange} open={open}>
-    <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
+    <MenuAnchor />
     <MenuPopup
       align="start"
       anchor={anchor}
@@ -986,7 +1010,7 @@ const useContextMentionSearch = ({
     staleTime: 0,
     refetchOnWindowFocus: false,
   });
-  const view = useQueryView(mentionQuery, {
+  const view = queryView(mentionQuery, {
     isEmpty: (data) => data.items.length === 0 && data.failures.length === 0,
   });
   return {
@@ -1036,7 +1060,7 @@ export const ComposerContextMenu = ({
     }),
     enabled,
   });
-  const mattersView = useQueryView(mattersQuery, {
+  const mattersView = queryView(mattersQuery, {
     isEmpty: (data) => data.workspaces.length === 0,
   });
   const matters: ContextMatter[] =
@@ -1476,10 +1500,10 @@ export const ComposerMcpSubmenu = ({
     ...mcpConnectionsOptions(activeOrganizationId, userId),
     enabled,
   });
-  const connectorsView = useQueryView(connectorsQuery, {
+  const connectorsView = queryView(connectorsQuery, {
     isEmpty: (data) => data.connectors.length === 0,
   });
-  const connectionsView = useQueryView(connectionsQuery, {
+  const connectionsView = queryView(connectionsQuery, {
     isEmpty: (data) => data.connections.length === 0,
   });
   const connectorsData =

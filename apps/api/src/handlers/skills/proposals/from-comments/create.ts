@@ -13,6 +13,8 @@ import {
   lockSkillForAnchor,
 } from "@/api/lib/agent-skills/revisions";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -136,6 +138,10 @@ const createProposalFromComments = createSafeRootHandler(
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
@@ -267,6 +273,7 @@ const createProposalFromComments = createSafeRootHandler(
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not apply the comments. Please try again.",
           cause,
         });
@@ -281,6 +288,7 @@ const createProposalFromComments = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "The revised skill was empty. Please try again.",
         }),
       );
@@ -289,6 +297,7 @@ const createProposalFromComments = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "The revised skill exceeds the maximum size.",
         }),
       );
@@ -302,6 +311,7 @@ const createProposalFromComments = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message:
             "The revised skill dropped or altered its frontmatter. Please try again.",
         }),

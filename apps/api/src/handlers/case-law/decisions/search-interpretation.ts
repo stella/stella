@@ -43,7 +43,7 @@ type SearchOptionKey = Exclude<keyof SearchDecisionsBody, "country" | "query">;
  * Whether an option cuts the result set or only shapes it.
  *
  * `narrows` is what an empty page can be blamed on and what a reader can drop
- * to widen one; `shapes` orders, trims or paginates a set it does not cut.
+ * to widen one; `shapes` orders, trims, paginates or summarizes a set it does not cut.
  * `country` is neither and is absent above: it is required and selects the
  * index rather than filtering within it, so no reader can drop it.
  *
@@ -65,6 +65,7 @@ const SEARCH_OPTION_EFFECT = {
   dateTo: "narrows",
   decisionType: "narrows",
   excerpt: "shapes",
+  facets: "shapes",
   language: "narrows",
   limit: "shapes",
   offset: "shapes",

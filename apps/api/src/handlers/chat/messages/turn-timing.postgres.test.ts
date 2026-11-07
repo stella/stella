@@ -21,6 +21,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import getMessages from "./list";
@@ -94,9 +95,7 @@ const withFixture = async (run: (fixture: Fixture) => Promise<void>) => {
             fixture.otherWorkspaceId,
           ]),
         );
-      await db
-        .delete(organization)
-        .where(eq(organization.id, fixture.organizationId));
+      await deleteOrganizationsForTest(db, [fixture.organizationId]);
       await db.delete(user).where(eq(user.id, fixture.userId));
     }
   });

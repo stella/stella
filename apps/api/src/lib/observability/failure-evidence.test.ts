@@ -1,6 +1,6 @@
 import { Panic, UnhandledException } from "better-result";
 import { SQL } from "bun";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import {
   classifyFailure,
@@ -42,6 +42,7 @@ describe("failure evidence walks the chain once", () => {
     const evidence = readEvidence(
       new UnhandledException({
         cause: new HandlerError({
+          code: "internal_error",
           status: 502,
           message: "wrapped",
           cause: body,
@@ -330,6 +331,31 @@ describe("failure evidence reads frames", () => {
     });
   });
 
+  test("a panic names its caller, not the helper that built it", () => {
+    const error = new Error("boom");
+    error.stack = [
+      "Error: boom",
+      "    at i (/app/node_modules/better-result/dist/index.mjs:1:322)",
+      "    at i (/root/.bun/install/cache/better-result@3.0.1/index.mjs:1:322)",
+      "    at load (/app/apps/api/src/lib/caller.ts:12:7)",
+    ].join("\n");
+
+    expect(readEvidence(error).nodes[0]?.frame).toEqual({
+      kind: "recognized",
+      location: "/app/apps/api/src/lib/caller.ts:12:7",
+    });
+  });
+
+  test("a stack of only helper frames has no frame to report", () => {
+    const error = new Error("boom");
+    error.stack = [
+      "Error: boom",
+      "    at i (/app/node_modules/better-result/dist/index.mjs:1:322)",
+    ].join("\n");
+
+    expect(readEvidence(error).nodes[0]?.frame).toEqual({ kind: "absent" });
+  });
+
   test("a frame outside this build's paths is present but not shipped", () => {
     const error = errorWithStack(
       "x",
@@ -364,15 +390,33 @@ describe("failure evidence reads frames", () => {
       message,
       [`Error: ${message}`, at("/app/apps/api/src/big.ts:5:6")].join("\n"),
     );
-    const started = performance.now();
-
-    const frame = readEvidence(error).nodes[0]?.frame;
+    const originalSplit = String.prototype.split;
+    const splitBytes: number[] = [];
+    const splitting = spyOn(String.prototype, "split").mockImplementation(
+      function (this: string, separator, limit) {
+        splitBytes.push(new TextEncoder().encode(this).byteLength);
+        const split = originalSplit.bind(this);
+        if (typeof separator === "string" || separator instanceof RegExp) {
+          return split(separator, limit);
+        }
+        return split(separator, limit);
+      },
+    );
+    let evidence: ReturnType<typeof readEvidence>;
+    try {
+      evidence = readEvidence(error);
+    } finally {
+      splitting.mockRestore();
+    }
+    const frame = evidence.nodes[0]?.frame;
 
     expect(frame).toEqual({
       kind: "recognized",
       location: "/app/apps/api/src/big.ts:5:6",
     });
-    expect(performance.now() - started).toBeLessThan(250);
+    expect(splitBytes).toHaveLength(1);
+    expect(Math.max(...splitBytes)).toBeLessThanOrEqual(8 * 1024);
+    expect(new TextEncoder().encode(message).byteLength).toBe(1024 * 1024);
   });
 
   test("frames past the line bound are not searched", () => {
@@ -439,7 +483,9 @@ describe("provider status provenance", () => {
       source: "code",
     });
     expect(
-      readProviderStatus(new HandlerError({ status: 502, message: "x" })),
+      readProviderStatus(
+        new HandlerError({ code: "internal_error", status: 502, message: "x" }),
+      ),
     ).toBeUndefined();
   });
 

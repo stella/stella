@@ -24,6 +24,16 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -41,11 +51,13 @@ import {
   SearchIcon,
   UsersIcon,
 } from "@stll/ui/icons";
+import { IdentityText } from "@stll/ui/identity-text";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
-import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
+import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
+  MenuAnchor,
   MenuItem,
   MenuPopup,
   MenuSeparator,
@@ -55,6 +67,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { appSidebarSurfaceProps } from "@/components/app-sidebar-surface";
+import type { AppSidebarSurface } from "@/components/app-sidebar-surface";
 import {
   chatActivityByWorkspace,
   getMatterBillingLinks,
@@ -69,12 +83,15 @@ import {
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import { contextMenuBelongsTo } from "@/components/context-menu-target";
 import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
+import { MatterRunBadge, MatterRunMarks } from "@/components/matter-run-marks";
+import { PendingApprovalsNavBadge } from "@/components/pending-approvals-nav-badge";
 import {
   Sidebar,
   SidebarContent,
@@ -92,6 +109,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from "@/components/sidebar";
+import { SidebarEntityRow } from "@/components/sidebar-entity-row";
 import { SidebarUserMenu } from "@/components/sidebar-user-menu";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import Tooltip from "@/components/tooltip";
@@ -108,6 +126,9 @@ import {
   MatterMenuItems,
   useMatterActions,
 } from "@/components/workspaces/matter-context-menu";
+import { activeChatRunsOptions } from "@/features/chat/active-runs";
+import { matterRunStatusByWorkspace } from "@/features/chat/active-runs.logic";
+import type { MatterRunStatus } from "@/features/chat/active-runs.logic";
 import {
   groupedChatThreadsOptions,
   mergeGroupedChatThreadPages,
@@ -118,14 +139,14 @@ import {
 } from "@/features/guides/guide-drawer-store";
 import type { GuideWorkspaceListState } from "@/features/guides/guide-help-drawer";
 import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
-import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeBillingChromeEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeChromeVisible } from "@/hooks/use-time-chrome-visible";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -143,15 +164,18 @@ import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
+import type { fetchWorkspaceNavigationPage } from "@/lib/memory-api";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
-import { useQueryView } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
+import { useDeleteEntities } from "@/lib/workspaces/mutations/entities";
 import {
   workspaceActivityOptions,
   workspacesKeys,
@@ -160,12 +184,6 @@ import {
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
 import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
-
-// Scrollable group body. Hide the scrollbar in the collapsed icon rail (matches
-// SidebarContent); a thin track over the narrow icon strip reads as a bright
-// artifact rather than chrome.
-const SCROLLABLE_GROUP_CONTENT =
-  "overflow-x-hidden overflow-y-auto group-data-[collapsible=icon]:[scrollbar-width:none] group-data-[collapsible=icon]:[&::-webkit-scrollbar]:hidden";
 
 // Lazy so the guides feature stays out of the shell bundle until the user
 // opens Help. The spotlight engine remains a second, runner-owned lazy chunk.
@@ -179,6 +197,53 @@ const SearchDialog = lazy(async () => {
   return { default: module.SearchDialog };
 });
 
+// Hide scrollbars in the collapsed icon rail, where a track over the narrow
+// icon strip reads as an artifact rather than chrome.
+const SCROLLABLE_GROUP_CONTENT =
+  "overflow-x-hidden overflow-y-auto group-data-[collapsible=icon]:[scrollbar-width:none] group-data-[collapsible=icon]:[&::-webkit-scrollbar]:hidden";
+
+type SidebarMatterGroupsProps = {
+  pinnedItems: React.ReactNode[];
+  pinnedLabel: string;
+  recentItems: React.ReactNode[];
+  recentLabel: string;
+};
+
+export const SidebarMatterGroups = ({
+  pinnedItems,
+  pinnedLabel,
+  recentItems,
+  recentLabel,
+}: SidebarMatterGroupsProps) => (
+  <>
+    {pinnedItems.length > 0 && (
+      <SidebarGroup
+        aria-label={pinnedLabel}
+        className="max-h-1/2 min-h-0 flex-none"
+        role="group"
+      >
+        <SidebarGroupLabel>{pinnedLabel}</SidebarGroupLabel>
+        <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
+          <SidebarMenu>{pinnedItems}</SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    )}
+
+    {recentItems.length > 0 && (
+      <SidebarGroup
+        aria-label={recentLabel}
+        className="min-h-0 flex-1"
+        role="group"
+      >
+        <SidebarGroupLabel>{recentLabel}</SidebarGroupLabel>
+        <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
+          <SidebarMenu>{recentItems}</SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    )}
+  </>
+);
+
 const SEARCH_DIALOG_STATES = {
   idle: "idle",
   open: "open",
@@ -187,7 +252,7 @@ const SEARCH_DIALOG_STATES = {
 type SearchDialogState =
   (typeof SEARCH_DIALOG_STATES)[keyof typeof SEARCH_DIALOG_STATES];
 
-export const AppSidebar = (props: AppSidebarProps) => {
+export const AppSidebar = ({ surface }: AppSidebarProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
@@ -195,12 +260,27 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const canUseStyleSets = usePermissions({ styleSet: ["use"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
-  const { state, toggleSidebar, isMobile } = useSidebar();
+  const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
-  const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  const sidebarToggleLabel = isCollapsed
+    ? t("inspector.showPane")
+    : t("inspector.hidePane");
+  const router = useRouter();
+  // On compact layouts the sidebar is a sheet over the page, so a navigation
+  // started from it would land behind it. Close it once the new location
+  // resolves, whichever item (link, button or matter sub-row) started it.
+  useMountEffect(() =>
+    router.subscribe("onResolved", ({ hrefChanged }) => {
+      if (hrefChanged) {
+        setOpenMobile(false);
+      }
+    }),
+  );
+  const publicLawEnabled = isPublicLawEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
-  const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
+  const timeBillingPreviewEnabled = useTimeBillingChromeEnabled();
+  const timeChromeVisible = useTimeChromeVisible();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
   const canReadInvoices = usePermissions({ workspace: ["read"] });
   const matterBillingLinks = getMatterBillingLinks({
@@ -210,11 +290,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxPreviewEnabled,
-    includePublicLaw: publicLawPreviewEnabled,
+    includePublicLaw: publicLawEnabled,
     // The public /tools catalogue stays out of the authenticated app
     // nav; signed-in users manage tools via /knowledge/tools instead.
     includePublicTools: false,
-    includeTimesheets: timeBillingPreviewEnabled && canReadTimeEntries,
+    includeTimesheets: timeChromeVisible,
     publicKnowledge: isPublicKnowledgeEnabled(),
   });
   const user = useAuthenticatedUser();
@@ -260,7 +340,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     ...inboxCountOptions(user.activeOrganizationId, user.id),
     enabled: inboxPreviewEnabled,
   });
-  const inboxView = useQueryView(inboxQuery);
+  const inboxView = queryView(inboxQuery);
   // This badge decorates an always-available inbox link; hide it when the count cannot be read.
   const openInboxCount = inboxView.type === "items" ? inboxView.items.count : 0;
   const mounted = useHasMounted();
@@ -271,7 +351,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     }),
     enabled: mounted,
   });
-  const groupedThreadsView = useQueryView(groupedThreadsQuery);
+  const groupedThreadsView = queryView(groupedThreadsQuery);
   // Thread activity only orders the matter shortcuts; the matter list remains independently available.
   const groupedChatThreads = mergeGroupedChatThreadPages(
     groupedThreadsView.type === "items"
@@ -279,6 +359,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
       : undefined,
   );
   const chatActivityByWorkspaceId = chatActivityByWorkspace(groupedChatThreads);
+  const activeRunsView = queryView(
+    useChromeQuery(
+      activeChatRunsOptions({
+        activeOrganizationId: user.activeOrganizationId,
+        userId: user.id,
+      }),
+    ),
+  );
+  // Run marks decorate matters that are listed anyway; an unreadable list
+  // shows no marks rather than holding the matters back.
+  const runStatusByWorkspaceId = matterRunStatusByWorkspace(
+    activeRunsView.type === "items" ? activeRunsView.items : [],
+  );
   const workspaces = workspacesData?.workspaces;
   const guideWorkspaceList = ((): GuideWorkspaceListState => {
     if (workspacesPending) {
@@ -308,11 +401,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
     chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
     workspaceId: workspaceMatch?.params.workspaceId,
   });
-  const handleCreateWorkspace = () => {
+  const handleCreateWorkspace = (opener?: HTMLElement) => {
     if (!canCreateMatter) {
       return;
     }
-    openCreateMatter();
+    openCreateMatter(opener ? { opener } : undefined);
   };
 
   // The delete + toast + cache invalidation are owned by the shared
@@ -636,20 +729,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   }, [showNavBadges, runNavTarget]);
 
   return (
-    <Sidebar
-      {...props}
-      className={cn(
-        // Unified glass language with the chat composer tray: the same
-        // translucent veil + backdrop-blur-md instead of the solid
-        // sidebar fill so the app chrome reads as one system. The
-        // opaque-leaning fallback keeps contrast where backdrop-filter
-        // is unsupported.
-        "[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/80 [&_[data-slot=sidebar-inner]]:backdrop-blur-md supports-[backdrop-filter]:[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/60",
-        props.className,
-      )}
-      collapsible="icon"
-      style={props.style}
-    >
+    <Sidebar {...appSidebarSurfaceProps(surface)} collapsible="icon">
       {/* Stella logo header */}
       <SidebarHeader className="h-12 border-b p-0">
         <div
@@ -660,21 +740,20 @@ export const AppSidebar = (props: AppSidebarProps) => {
           )}
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
-          <Button
-            className={SIDE_RAIL_ICON_BUTTON_SIZE}
-            disabled={!mounted}
-            onClick={toggleSidebar}
-            size="icon"
-            tooltip={
-              isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")
+          {/* The inspector's toggle primitive, so both pane toggles share
+              one size and ink (a `Button` dims its icon to 80%). */}
+          <Tooltip
+            content={sidebarToggleLabel}
+            render={
+              <InspectorRailIconButton
+                aria-label={sidebarToggleLabel}
+                disabled={!mounted}
+                onClick={toggleSidebar}
+              />
             }
-            variant="muted"
           >
             <PanelLeftIcon className="size-4" />
-            <span className="sr-only">
-              {isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")}
-            </span>
-          </Button>
+          </Tooltip>
         </div>
       </SidebarHeader>
 
@@ -691,54 +770,60 @@ export const AppSidebar = (props: AppSidebarProps) => {
               return (
                 <Fragment key={item.id}>
                   <NavContextMenu config={navTarget.contextMenu}>
-                    <SidebarMenuItem>
-                      {item.kind === "action" ? (
-                        <SidebarMenuButton
-                          onClick={navTarget.action}
-                          tooltip={label}
+                    {item.kind === "action" ? (
+                      <SidebarMenuButton
+                        onClick={navTarget.action}
+                        tooltip={label}
+                      >
+                        <Icon />
+                        <span>{label}</span>
+                      </SidebarMenuButton>
+                    ) : (
+                      <SidebarMenuButton asChild tooltip={label}>
+                        <Link
+                          activeProps={{ "data-active": true }}
+                          to={item.to}
                         >
                           <Icon />
                           <span>{label}</span>
-                        </SidebarMenuButton>
-                      ) : (
-                        <SidebarMenuButton asChild tooltip={label}>
-                          <Link
-                            activeProps={{ "data-active": true }}
-                            to={item.to}
-                          >
-                            <Icon />
-                            <span>{label}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      )}
-                      {(() => {
-                        if (showNavBadges) {
-                          return <NavBadge digit={digit} />;
-                        }
-                        if (item.id === "search") {
-                          return (
-                            <SidebarMenuBadge>
-                              <kbd className="text-muted-foreground text-3xs">
-                                {formatHotkeyForPlatform(
-                                  searchHotkey,
-                                  hotkeyPlatform,
-                                )}
-                              </kbd>
-                            </SidebarMenuBadge>
-                          );
-                        }
-                        if (item.id === "inbox" && openInboxCount > 0) {
-                          return (
-                            <SidebarMenuBadge>
-                              <span className="text-muted-foreground text-3xs tabular-nums">
-                                {format.number(openInboxCount)}
-                              </span>
-                            </SidebarMenuBadge>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </SidebarMenuItem>
+                        </Link>
+                      </SidebarMenuButton>
+                    )}
+                    {(() => {
+                      if (showNavBadges) {
+                        return <NavBadge digit={digit} />;
+                      }
+                      if (item.id === "search") {
+                        return (
+                          <SidebarMenuBadge>
+                            <kbd className="text-muted-foreground text-3xs">
+                              {formatHotkeyForPlatform(
+                                searchHotkey,
+                                hotkeyPlatform,
+                              )}
+                            </kbd>
+                          </SidebarMenuBadge>
+                        );
+                      }
+                      if (item.id === "timesheets") {
+                        return (
+                          <PendingApprovalsNavBadge
+                            organizationId={user.activeOrganizationId}
+                            userId={user.id}
+                          />
+                        );
+                      }
+                      if (item.id === "inbox" && openInboxCount > 0) {
+                        return (
+                          <SidebarMenuBadge>
+                            <span className="text-muted-foreground text-3xs tabular-nums">
+                              {format.number(openInboxCount)}
+                            </span>
+                          </SidebarMenuBadge>
+                        );
+                      }
+                      return null;
+                    })()}
                   </NavContextMenu>
                 </Fragment>
               );
@@ -753,64 +838,49 @@ export const AppSidebar = (props: AppSidebarProps) => {
           canCreateWorkspace={canCreateMatter}
           onCreateWorkspace={handleCreateWorkspace}
         >
-          {/* Pinned */}
-          {pinned.length > 0 && (
-            <SidebarGroup className="min-h-0 flex-1">
-              <SidebarGroupLabel>{t("navigation.pinned")}</SidebarGroupLabel>
-              <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
-                <SidebarMenu>
-                  {pinned.map((ws, i) => (
-                    <MatterItem
-                      activeOrganizationId={user.activeOrganizationId}
-                      userId={user.id}
-                      isActive={activeWorkspaceId === ws.id}
-                      isExpanded={!isCollapsed && expandedMatterId === ws.id}
-                      isPinned
-                      key={ws.id}
-                      navBadge={
-                        showNavBadges && i < 3
-                          ? primaryNavItems.length + 1 + i
-                          : undefined
-                      }
-                      onDeleted={handleMatterDeleted}
-                      onEntityDrop={handleEntityDropOnMatter}
-                      onExpandedChange={() => toggleMatterExpansion(ws.id)}
-                      onReorder={reorderPinned}
-                      billingLinks={matterBillingLinks}
-                      onTogglePin={togglePin}
-                      workspace={ws}
-                    />
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {/* Recents — sorted by lastActivityAt. Header intentionally omitted;
-              the list reads as the continuation of the matter list above. */}
-          {recents.length > 0 && (
-            <SidebarGroup className="min-h-0 flex-1">
-              <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
-                <SidebarMenu>
-                  {recents.map((ws) => (
-                    <MatterItem
-                      activeOrganizationId={user.activeOrganizationId}
-                      userId={user.id}
-                      isActive={activeWorkspaceId === ws.id}
-                      isExpanded={!isCollapsed && expandedMatterId === ws.id}
-                      key={ws.id}
-                      onDeleted={handleMatterDeleted}
-                      onEntityDrop={handleEntityDropOnMatter}
-                      onExpandedChange={() => toggleMatterExpansion(ws.id)}
-                      billingLinks={matterBillingLinks}
-                      onTogglePin={togglePin}
-                      workspace={ws}
-                    />
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
+          <SidebarMatterGroups
+            pinnedLabel={t("navigation.pinned")}
+            pinnedItems={pinned.map((ws, i) => (
+              <MatterItem
+                activeOrganizationId={user.activeOrganizationId}
+                userId={user.id}
+                isActive={activeWorkspaceId === ws.id}
+                isExpanded={!isCollapsed && expandedMatterId === ws.id}
+                isPinned
+                key={ws.id}
+                navBadge={
+                  showNavBadges && i < 3
+                    ? primaryNavItems.length + 1 + i
+                    : undefined
+                }
+                onDeleted={handleMatterDeleted}
+                onEntityDrop={handleEntityDropOnMatter}
+                onExpandedChange={() => toggleMatterExpansion(ws.id)}
+                onReorder={reorderPinned}
+                billingLinks={matterBillingLinks}
+                onTogglePin={togglePin}
+                runStatus={runStatusByWorkspaceId.get(ws.id)}
+                workspace={ws}
+              />
+            ))}
+            recentLabel={t("navigation.recentMatters")}
+            recentItems={recents.map((ws) => (
+              <MatterItem
+                activeOrganizationId={user.activeOrganizationId}
+                userId={user.id}
+                isActive={activeWorkspaceId === ws.id}
+                isExpanded={!isCollapsed && expandedMatterId === ws.id}
+                key={ws.id}
+                onDeleted={handleMatterDeleted}
+                onEntityDrop={handleEntityDropOnMatter}
+                onExpandedChange={() => toggleMatterExpansion(ws.id)}
+                billingLinks={matterBillingLinks}
+                onTogglePin={togglePin}
+                runStatus={runStatusByWorkspaceId.get(ws.id)}
+                workspace={ws}
+              />
+            ))}
+          />
         </SidebarContextArea>
       </SidebarContent>
 
@@ -893,6 +963,9 @@ type MatterExpansion =
  * accept this type so `MatterIcon` always has a color.
  */
 type MatterIdentity = {
+  status: Awaited<
+    ReturnType<typeof fetchWorkspaceNavigationPage>
+  >["workspaces"][number]["status"];
   defaultViewId?: string | null;
   id: string;
   name: string;
@@ -903,7 +976,7 @@ type ContextAction = {
   id: string;
   label: string;
   icon: React.ReactNode;
-  onClick: () => void;
+  onClick: (opener?: HTMLElement) => void;
   variant?: "destructive";
 };
 
@@ -920,6 +993,7 @@ const NavContextMenu = ({
   children: React.ReactNode;
 }): React.ReactNode => {
   const [open, setOpen] = useState(false);
+  const [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null);
   const [anchor, setAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -928,13 +1002,17 @@ const NavContextMenu = ({
   const hasContent = config.primaryAction !== undefined || hasRecents;
 
   if (!hasContent) {
-    return children;
+    return <SidebarMenuItem>{children}</SidebarMenuItem>;
   }
 
   return (
-    <div
-      className="contents"
+    <SidebarMenuItem
       onContextMenu={containedEventHandler((e) => {
+        if (!contextMenuBelongsTo(e)) {
+          return;
+        }
+        const control = e.currentTarget.querySelector("button,a[href]");
+        setReturnFocus(control instanceof HTMLElement ? control : null);
         e.preventDefault();
         e.stopPropagation();
         const x = e.clientX;
@@ -955,13 +1033,14 @@ const NavContextMenu = ({
         }}
         open={open}
       >
-        <MenuTrigger
-          nativeButton={false}
-          render={<span className="sr-only" />}
-        />
-        <MenuPopup anchor={anchor ?? undefined}>
+        <MenuAnchor />
+        <MenuPopup anchor={anchor ?? undefined} finalFocus={() => returnFocus}>
           {config.primaryAction && (
-            <MenuItem onClick={config.primaryAction.onClick}>
+            <MenuItem
+              onClick={() =>
+                config.primaryAction?.onClick(returnFocus ?? undefined)
+              }
+            >
               {config.primaryAction.icon}
               {config.primaryAction.label}
             </MenuItem>
@@ -975,7 +1054,7 @@ const NavContextMenu = ({
                 item.variant === "destructive" && "text-destructive",
               )}
               key={item.id}
-              onClick={item.onClick}
+              onClick={() => item.onClick(returnFocus ?? undefined)}
             >
               {item.icon}
               {item.label}
@@ -983,7 +1062,7 @@ const NavContextMenu = ({
           ))}
         </MenuPopup>
       </Menu>
-    </div>
+    </SidebarMenuItem>
   );
 };
 
@@ -995,7 +1074,7 @@ const NavBadge = ({
   digit: number;
 }) => (
   <SidebarMenuBadge className={className}>
-    <kbd className="animate-in bg-muted text-muted-foreground fade-in text-3xs rounded border px-1.5 py-0.5 duration-150 motion-reduce:animate-none">
+    <kbd className="animate-in bg-muted text-muted-foreground fade-in text-3xs rounded-sm border px-1.5 py-0.5 duration-150 motion-reduce:animate-none">
       {digit}
     </kbd>
   </SidebarMenuBadge>
@@ -1007,7 +1086,7 @@ type PendingEntityDrop = {
   entities: CopyToMatterEntity[];
 };
 
-type AppSidebarProps = React.ComponentProps<typeof Sidebar>;
+type AppSidebarProps = { surface: AppSidebarSurface };
 type MatterItemProps = {
   activeOrganizationId: string;
   userId: string;
@@ -1033,6 +1112,8 @@ type MatterItemProps = {
     entities: CopyToMatterEntity[],
   ) => void;
   navBadge?: number | undefined;
+  /** What the reader's chats in this matter are doing; absent when none are open. */
+  runStatus: MatterRunStatus | undefined;
 };
 
 const MATTER_DRAG_TYPE = "stella/pinned-matter-id";
@@ -1091,7 +1172,7 @@ const toCopyToMatterEntities = (raw: unknown): CopyToMatterEntity[] => {
   return result;
 };
 
-const MatterItem = ({
+export const MatterItem = ({
   activeOrganizationId,
   workspace: ws,
   isActive,
@@ -1104,6 +1185,7 @@ const MatterItem = ({
   onEntityDrop,
   onExpandedChange,
   navBadge,
+  runStatus,
   userId,
 }: MatterItemProps) => {
   // Read pin state directly from the store so the menu label
@@ -1329,9 +1411,28 @@ const MatterItem = ({
       name: ws.name,
       color: ws.color,
       client: ws.client ?? null,
+      isArchived: ws.status === WORKSPACE_STATUS.archived,
     },
     { onRename: startRename, onDeleted: () => onDeleted(ws.id) },
   );
+
+  const [matterReturnFocus, setMatterReturnFocus] =
+    useState<HTMLElement | null>(null);
+  const handleMatterContextMenu = (e: React.MouseEvent) => {
+    if (!contextMenuBelongsTo(e, { id: ws.id, kind: "matter" })) {
+      return;
+    }
+    const control = e.currentTarget.querySelector("button,a[href]");
+    setMatterReturnFocus(control instanceof HTMLElement ? control : null);
+    e.preventDefault();
+    e.stopPropagation();
+    const x = e.clientX;
+    const y = e.clientY;
+    setCtxAnchor({
+      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+    });
+    setMenuOpen(true);
+  };
 
   if (rename.state.mode === "edit") {
     return (
@@ -1359,22 +1460,16 @@ const MatterItem = ({
   return (
     <>
       <SidebarMenuItem
+        data-context-menu-target={ws.id}
+        data-entity-id={ws.id}
+        data-entity-kind="matter"
         className={cn(
           isDropTarget &&
             "before:bg-primary before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full",
           isEntityDropTarget &&
             "bg-primary/8 ring-primary rounded-md ring-2 ring-inset",
         )}
-        onContextMenu={containedEventHandler((e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const x = e.clientX;
-          const y = e.clientY;
-          setCtxAnchor({
-            getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-          });
-          setMenuOpen(true);
-        })}
+        onContextMenu={containedEventHandler(handleMatterContextMenu)}
         ref={dropRef}
       >
         {hasExpandableContent ? (
@@ -1429,7 +1524,7 @@ const MatterItem = ({
             showMatterNumber ? ws.reference : null,
           ]
             .filter(Boolean)
-            .join(" — ")}
+            .join(" · ")}
         >
           <Link data-active={isActive || undefined} {...navigationTarget}>
             {pinFlashSequence !== null && (
@@ -1452,28 +1547,29 @@ const MatterItem = ({
                   className="size-4 shrink-0"
                   matter={{ id: ws.id, color: ws.color }}
                 />
+                <MatterRunBadge status={runStatus} />
               </MatterColorContextPicker>
             )}
             <span className="relative flex min-w-0 flex-col">
-              <BidiText
-                as="span"
-                className="overflow-hidden text-ellipsis whitespace-pre"
-              >
-                {ws.name}
-              </BidiText>
-              <Tooltip
-                content={formatFullTimestamp(ws.lastActivityAt)}
-                render={
-                  <span className="text-muted-foreground text-3xs truncate leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
-                }
-              >
-                <BidiText>
-                  {ws.client
-                    ? ws.client.displayName
-                    : t("workspaces.parties.personalLabel")}
-                </BidiText>
-                {relTime ? ` · ${relTime}` : ""}
-              </Tooltip>
+              <IdentityText className="whitespace-pre">{ws.name}</IdentityText>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Tooltip
+                  content={formatFullTimestamp(ws.lastActivityAt)}
+                  render={
+                    <span className="text-muted-foreground text-3xs truncate leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
+                  }
+                >
+                  <BidiText>
+                    {ws.client
+                      ? ws.client.displayName
+                      : t("workspaces.parties.personalLabel")}
+                  </BidiText>
+                  {relTime ? ` · ${relTime}` : ""}
+                </Tooltip>
+                <span className="ms-auto">
+                  <MatterRunMarks status={runStatus} />
+                </span>
+              </span>
             </span>
           </Link>
         </SidebarMenuButton>
@@ -1485,28 +1581,27 @@ const MatterItem = ({
         ) : (
           <div
             className={cn(
-              "absolute top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100",
+              "absolute top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100 pointer-coarse:opacity-100",
               hasExpandableContent ? "end-7" : "end-1",
             )}
             data-pinned={isPinned || undefined}
           >
-            <Tooltip
-              content={isPinned ? t("common.unpin") : t("common.pin")}
-              render={
-                <button
-                  aria-label={isPinned ? t("common.unpin") : t("common.pin")}
-                  className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden"
-                  onClick={() => onTogglePin(ws.id)}
-                  type="button"
-                />
-              }
+            {/* An icon button names itself in its tooltip. Sized to the
+                actions menu trigger beside it, so the two hover actions
+                stay one scale. */}
+            <Button
+              aria-label={isPinned ? t("common.unpin") : t("common.pin")}
+              className="size-5 sm:size-5"
+              onClick={() => onTogglePin(ws.id)}
+              size="icon-xs"
+              variant="ghost"
             >
               {isPinned ? (
                 <PinOffIcon className="size-3.5" />
               ) : (
                 <PinIcon className="size-3.5" />
               )}
-            </Tooltip>
+            </Button>
             <Menu
               onOpenChange={(open) => {
                 setMenuOpen(open);
@@ -1517,14 +1612,17 @@ const MatterItem = ({
               open={menuOpen}
             >
               <MenuTrigger
+                onClick={(event) => setMatterReturnFocus(event.currentTarget)}
                 aria-label={t("common.actions")}
                 className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100"
+                tooltip={t("common.actions")}
               >
                 <EllipsisVerticalIcon className="size-4" />
               </MenuTrigger>
               <MenuPopup
                 align="start"
                 anchor={ctxAnchor ?? undefined}
+                finalFocus={() => matterReturnFocus}
                 side="right"
                 sideOffset={4}
               >
@@ -1620,6 +1718,14 @@ export const MatterActivityList = ({
   const queryClient = useQueryClient();
   const router = useRouter();
   const mounted = useHasMounted();
+  const deleteEntities = useDeleteEntities();
+  const [contextTarget, setContextTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const [deleteReturnFocus, setDeleteReturnFocus] =
+    useState<HTMLElement | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const {
     data,
     fetchNextPage,
@@ -1698,14 +1804,16 @@ export const MatterActivityList = ({
       <SidebarMenuSub className="border-0" id={id}>
         <SidebarMenuSubItem>
           <MatterActivityRow>
-            <button
+            {/* The sub-row styles this button through Slot; a plain Button
+                adds no look of its own for the row's classes to fight. */}
+            <Button
               onClick={() => {
                 detached(refetch(), "app-sidebar.refetch");
               }}
-              type="button"
+              variant="plain"
             >
               {t("common.tryAgain")}
-            </button>
+            </Button>
           </MatterActivityRow>
         </SidebarMenuSubItem>
       </SidebarMenuSub>
@@ -1722,54 +1830,80 @@ export const MatterActivityList = ({
   }
 
   return (
-    <SidebarMenuSub className="border-0" id={id}>
-      {items.map((item) => {
-        const title =
-          item.type === "thread" && isPlaceholderThreadTitle(item.title)
-            ? t("chat.newChat")
-            : item.title;
-        const relativeTime = formatRelativeTime(item.activityAt);
-        const content = (
-          <>
-            {item.type === "thread" ? (
-              <MessageSquareIcon className="text-muted-foreground size-3.5 shrink-0" />
-            ) : (
-              <EntityKindIcon
-                className="text-muted-foreground size-3.5 shrink-0"
-                fileName={item.fileName}
-                kind={item.entityKind}
-                mimeType={item.mimeType}
-                status={item.status}
-                thumbnail={
-                  item.fieldId
-                    ? {
-                        fieldId: item.fieldId,
-                        hasThumbnail: item.hasThumbnail,
-                        workspaceId,
-                      }
-                    : null
-                }
-              />
-            )}
-            <BidiText as="span" className="min-w-0 flex-1 truncate text-start">
-              {title}
-            </BidiText>
-            {relativeTime ? (
-              <Tooltip
-                content={formatFullTimestamp(item.activityAt)}
-                render={
-                  <span className="text-muted-foreground shrink-0 tabular-nums" />
-                }
-              >
-                {relativeTime}
-              </Tooltip>
-            ) : null}
-          </>
-        );
+    <>
+      <SidebarMenuSub className="border-0" id={id}>
+        {items.map((item) => {
+          const title =
+            item.type === "thread" && isPlaceholderThreadTitle(item.title)
+              ? t("chat.newChat")
+              : item.title;
+          const relativeTime = formatRelativeTime(item.activityAt);
+          const content = (
+            <>
+              {item.type === "thread" ? (
+                <MessageSquareIcon className="text-muted-foreground size-3.5 shrink-0" />
+              ) : (
+                <EntityKindIcon
+                  className="text-muted-foreground size-3.5 shrink-0"
+                  fileName={item.fileName}
+                  kind={item.entityKind}
+                  mimeType={item.mimeType}
+                  status={item.status}
+                  thumbnail={
+                    item.fieldId
+                      ? {
+                          fieldId: item.fieldId,
+                          hasThumbnail: item.hasThumbnail,
+                          workspaceId,
+                        }
+                      : null
+                  }
+                />
+              )}
+              <IdentityText className="min-w-0 flex-1 text-start">
+                {title}
+              </IdentityText>
+              {relativeTime ? (
+                <Tooltip
+                  content={formatFullTimestamp(item.activityAt)}
+                  render={
+                    <span className="text-muted-foreground shrink-0 tabular-nums" />
+                  }
+                >
+                  {relativeTime}
+                </Tooltip>
+              ) : null}
+            </>
+          );
 
-        return (
-          <SidebarMenuSubItem key={`${item.type}-${item.id}`}>
-            {item.type === "thread" ? (
+          if (item.type === "entity") {
+            return (
+              <SidebarEntityRow
+                activeOrganizationId={activeOrganizationId}
+                entityId={item.id}
+                entityKind={item.entityKind}
+                onDelete={(opener) => {
+                  setContextTarget({ id: item.id, title: item.title });
+                  setDeleteReturnFocus(opener);
+                  setDeleteOpen(true);
+                }}
+                key={`${item.type}-${item.id}`}
+                name={title}
+                onOpen={() =>
+                  detached(openEntity(item), "app-sidebar.open-entity")
+                }
+                workspaceId={workspaceId}
+                userId={userId}
+              >
+                {content}
+              </SidebarEntityRow>
+            );
+          }
+          return (
+            <SidebarMenuSubItem
+              data-context-menu-target={item.id}
+              key={`${item.type}-${item.id}`}
+            >
               <MatterActivityRow>
                 <Link
                   activeProps={{ "data-active": true }}
@@ -1779,37 +1913,62 @@ export const MatterActivityList = ({
                   {content}
                 </Link>
               </MatterActivityRow>
-            ) : (
-              <MatterActivityRow>
-                <button
-                  onClick={() => {
-                    detached(openEntity(item), "app-sidebar.open-entity");
-                  }}
-                  type="button"
-                >
-                  {content}
-                </button>
-              </MatterActivityRow>
-            )}
+            </SidebarMenuSubItem>
+          );
+        })}
+        {hasNextPage ? (
+          <SidebarMenuSubItem>
+            <MatterActivityRow className="text-muted-foreground justify-start">
+              <Button
+                disabled={isFetchingNextPage}
+                onClick={() => {
+                  detached(fetchNextPage(), "app-sidebar.fetch-next-page");
+                }}
+                variant="plain"
+              >
+                {isFetchingNextPage
+                  ? t("common.loading")
+                  : t("common.showMore")}
+              </Button>
+            </MatterActivityRow>
           </SidebarMenuSubItem>
-        );
-      })}
-      {hasNextPage ? (
-        <SidebarMenuSubItem>
-          <MatterActivityRow className="text-muted-foreground justify-start">
-            <button
-              disabled={isFetchingNextPage}
-              onClick={() => {
-                detached(fetchNextPage(), "app-sidebar.fetch-next-page");
-              }}
-              type="button"
+        ) : null}
+      </SidebarMenuSub>
+      <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+        <AlertDialogPopup finalFocus={() => deleteReturnFocus}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("workspaces.deleteItem")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("common.deleteConfirmDescription", {
+                name: contextTarget?.title ?? "",
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={
+                <Button
+                  onClick={() => {
+                    if (contextTarget) {
+                      deleteEntities.mutate({
+                        workspaceId,
+                        entityIds: [contextTarget.id],
+                      });
+                    }
+                  }}
+                  variant="destructive"
+                />
+              }
             >
-              {isFetchingNextPage ? t("common.loading") : t("common.showMore")}
-            </button>
-          </MatterActivityRow>
-        </SidebarMenuSubItem>
-      ) : null}
-    </SidebarMenuSub>
+              {t("common.delete")}
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+    </>
   );
 };
 
@@ -1819,10 +1978,11 @@ const SidebarContextArea = ({
   children,
 }: {
   canCreateWorkspace: boolean;
-  onCreateWorkspace: () => void;
+  onCreateWorkspace: (opener?: HTMLElement) => void;
   children?: React.ReactNode;
 }) => {
   const t = useTranslations();
+  const [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null);
   const [ctxOpen, setCtxOpen] = useState(false);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
@@ -1832,6 +1992,11 @@ const SidebarContextArea = ({
     <div
       className="flex min-h-0 flex-1 flex-col"
       onContextMenu={containedEventHandler((e) => {
+        if (!contextMenuBelongsTo(e)) {
+          return;
+        }
+        const control = e.currentTarget.querySelector("button,a[href]");
+        setReturnFocus(control instanceof HTMLElement ? control : null);
         e.preventDefault();
         const x = e.clientX;
         const y = e.clientY;
@@ -1851,13 +2016,15 @@ const SidebarContextArea = ({
         }}
         open={ctxOpen}
       >
-        <MenuTrigger
-          nativeButton={false}
-          render={<span className="sr-only" />}
-        />
-        <MenuPopup anchor={ctxAnchor ?? undefined}>
+        <MenuAnchor />
+        <MenuPopup
+          anchor={ctxAnchor ?? undefined}
+          finalFocus={() => returnFocus}
+        >
           {canCreateWorkspace && (
-            <MenuItem onClick={onCreateWorkspace}>
+            <MenuItem
+              onClick={() => onCreateWorkspace(returnFocus ?? undefined)}
+            >
               <PlusIcon />
               {t("common.newMatter")}
             </MenuItem>

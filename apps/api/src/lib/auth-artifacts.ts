@@ -27,10 +27,13 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { ApiKeyConfigId } from "@/api/lib/api-key-plugin-configs";
+import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import { lockAccountRow, shareAccountRow } from "@/api/lib/db/account-row";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { releaseRevokedRunners } from "@/api/lib/desktop-runner/store";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import { machineApiKeyOrganizationScope } from "@/api/lib/machine-api-key-scope";
 import {
@@ -354,6 +357,9 @@ const MEMBER_CREDENTIAL_REVOCATION = {
           eq(apikey.enabled, true),
         ),
       );
+    // The member's desktop keys are revoked with the rest, and with them the
+    // runner sockets they opened.
+    await releaseRevokedRunners(tx, { userId, organizationId });
   },
 } as const satisfies Record<string, RevokeMemberCredentials>;
 
@@ -430,11 +436,9 @@ type RevokeOAuthClientAuthArtifactsOptions = {
  * rows: disconnecting an OAuth app ends that app's access, not the
  * user's own web sessions.
  *
- * Access tokens are verified statelessly (JWT via JWKS), so an already
- * issued token keeps working until its expiry (15 minutes, see
- * `ACCESS_TOKEN_EXPIRES_IN`); deleting the refresh token guarantees it
- * cannot be renewed. Checking the DB on every MCP request to close that
- * window was deliberately rejected as a hot-path cost.
+ * Access tokens are verified as JWTs; the disconnect caller also records the
+ * grant revocation that the existing MCP client-registration read checks.
+ * Deleting the refresh token guarantees the grant cannot be renewed.
  */
 export const revokeOAuthClientAuthArtifacts = async (
   tx: Transaction,
@@ -512,6 +516,7 @@ export const revokeAllUserApiKeys = async (
     .update(apikey)
     .set({ enabled: false, updatedAt: new Date() })
     .where(and(eq(apikey.referenceId, userId), eq(apikey.enabled, true)));
+  await releaseRevokedRunners(tx, { userId });
 };
 
 /**
@@ -584,6 +589,8 @@ type HoldLiveSessionCredentialFenceOptions = {
 type HoldGrantCredentialFenceOptions = HoldLiveSessionCredentialFenceOptions & {
   /** The provider grant a token continues; its earlier tokens prove it. */
   grantId: string | null;
+  /** The organization an organization-scoped token acts in. */
+  organizationId: SafeId<"organization"> | null;
 };
 
 const isSessionLive = async (
@@ -597,7 +604,8 @@ const isSessionLive = async (
       and(
         eq(sessionTable.id, sessionId),
         eq(sessionTable.userId, userId),
-        sql`${sessionTable.expiresAt} > now()`,
+        // The one liveness rule: expiry, the absolute cap and handoff limits.
+        liveSessionPredicate(new Date(), sessionTable),
       ),
     )
     .limit(1);
@@ -653,11 +661,18 @@ export class CredentialIssuanceFence {
    * The fence for a token a provider grant issues: the grant's session is
    * live, or an earlier token of the same grant survives. Account-wide
    * revocation deletes both under this fence, so a refresh that rotated before
-   * a reset cannot insert its successor after it.
+   * a reset cannot insert its successor after it. An organization-scoped
+   * token also needs the membership, held against removal, which deletes the
+   * membership before the organization's tokens.
    */
   static async holdForGrant(
     tx: Transaction,
-    { userId, sessionId, grantId }: HoldGrantCredentialFenceOptions,
+    {
+      userId,
+      sessionId,
+      grantId,
+      organizationId,
+    }: HoldGrantCredentialFenceOptions,
   ): Promise<CredentialIssuanceFence | null> {
     if (sessionId === null && grantId === null) {
       return null;
@@ -667,7 +682,22 @@ export class CredentialIssuanceFence {
       (sessionId !== null &&
         (await isSessionLive(tx, { userId, sessionId }))) ||
       (grantId !== null && (await hasGrantToken(tx, { userId, grantId })));
-    return authorized ? new CredentialIssuanceFence(tx, userId) : null;
+    if (!authorized) {
+      return null;
+    }
+    if (organizationId !== null) {
+      // The member row, keyed by person and organization.
+      const membership = await withAggregateLock({
+        aggregate: "desktopMembership",
+        id: { organizationId, userId },
+        mode: "key share",
+        tx,
+      });
+      if (membership.status === "missing") {
+        return null;
+      }
+    }
+    return new CredentialIssuanceFence(tx, userId);
   }
 }
 

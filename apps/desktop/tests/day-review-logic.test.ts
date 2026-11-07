@@ -3,7 +3,11 @@ import { describe, expect, test } from "bun:test";
 import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
 
 import { timedSegments, totalDurationMs } from "../src/activity/activity-logic";
-import { canAssign, matchDay } from "../src/activity/day-review-logic";
+import {
+  cleanSharedContext,
+  matchDay,
+  withoutAppSuffix,
+} from "../src/activity/day-review-logic";
 
 const candidates = [
   {
@@ -59,19 +63,6 @@ const review = (
   });
 
 describe("local matter day review", () => {
-  test("assignment requires an editable review with time billing enabled", () => {
-    expect(canAssign({ editable: true, timeBillingEnabled: true })).toBe(true);
-    expect(canAssign({ editable: false, timeBillingEnabled: true })).toBe(
-      false,
-    );
-    expect(canAssign({ editable: true, timeBillingEnabled: false })).toBe(
-      false,
-    );
-    expect(canAssign({ editable: false, timeBillingEnabled: false })).toBe(
-      false,
-    );
-  });
-
   test("recorded matter IDs outside the candidate shortlist never become heuristic matches", () => {
     for (const captureDetails of [false, true]) {
       const result = review(
@@ -225,6 +216,118 @@ describe("local matter day review", () => {
       "b",
       undefined,
       "b",
+    ]);
+  });
+});
+
+/** The distinct own parts of `titles`, in order. */
+const withoutSharedContext = (titles: readonly string[]) => {
+  const cleaned = cleanSharedContext(titles);
+  return [...new Set(titles.map((title) => cleaned.get(title) ?? title))];
+};
+
+describe("window title evidence", () => {
+  test("drops a label that several titles share", () => {
+    expect(
+      withoutSharedContext([
+        "home",
+        "host: notes",
+        "host: Local tooling",
+        "host: stella",
+        "Stella",
+      ]),
+    ).toEqual(["home", "notes", "Local tooling", "stella", "Stella"]);
+    expect(
+      withoutSharedContext(["build: release notes", "Smlouva o dílo.docx"]),
+    ).toEqual(["build: release notes", "Smlouva o dílo.docx"]);
+    expect(
+      withoutSharedContext(["a: stella", "a: stella 2", "stella"]),
+    ).toEqual(["stella", "stella 2"]);
+    expect(
+      withoutSharedContext([
+        "Pull requests · stella/stella",
+        "Merge queue · stella/stella",
+        "Notifications",
+        "Smlouva - návrh",
+      ]),
+    ).toEqual([
+      "Pull requests",
+      "Merge queue",
+      "Notifications",
+      "Smlouva - návrh",
+    ]);
+    expect(
+      withoutSharedContext([
+        "Pull requests · my-site.com",
+        "Merge queue · my-site.com",
+      ]),
+    ).toEqual(["Pull requests", "Merge queue"]);
+  });
+
+  test("drops the browser and profile a title ends with", () => {
+    expect(
+      withoutAppSuffix(
+        "Pull requests · stella/stella - Google Chrome – Jan (Osobní)",
+        "Google Chrome",
+      ),
+    ).toEqual("Pull requests · stella/stella");
+    expect(withoutAppSuffix("Inbox — Firefox", "Firefox")).toEqual("Inbox");
+    expect(
+      withoutAppSuffix("Google Chrome - Wikipedia", "Google Chrome"),
+    ).toEqual("Google Chrome - Wikipedia");
+    expect(
+      withoutAppSuffix("Notes - Google Chromebook", "Google Chrome"),
+    ).toEqual("Notes - Google Chromebook");
+    expect(
+      withoutAppSuffix(
+        "Notes - Google Chromebook - Google Chrome",
+        "Google Chrome",
+      ),
+    ).toEqual("Notes - Google Chromebook");
+  });
+
+  test("lists each app's own titles, the longest-used first", () => {
+    const window = (
+      start: number,
+      end: number,
+      [appIdentifier, appName]: readonly [string, string],
+      windowTitle: string,
+    ) => ({
+      appIdentifier,
+      appName,
+      start: at(start),
+      end: at(end),
+      windowTitle,
+      matterId: null,
+    });
+    const terminal = ["ghostty", "Ghostty"] as const;
+    const chrome = ["chrome", "Google Chrome"] as const;
+    const [group] = matchDay({
+      segments: timedSegments([
+        window(0, 10, terminal, "host: notes"),
+        window(10, 40, terminal, "host: stella"),
+        window(40, 50, chrome, "Merge queue - Google Chrome - Jan"),
+        window(50, 55, chrome, "Google Chrome"),
+      ]),
+      candidates,
+      captureDetails: true,
+      manualAssignments: [],
+      draftedEntries: [],
+    }).groups;
+    expect(group?.evidence).toEqual([
+      {
+        identifier: "ghostty",
+        name: "Ghostty",
+        details: [
+          { title: "stella", durationMs: 30_000 },
+          { title: "notes", durationMs: 10_000 },
+        ],
+      },
+      {
+        identifier: "chrome",
+        name: "Google Chrome",
+        details: [{ title: "Merge queue", durationMs: 10_000 }],
+      },
     ]);
   });
 });

@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/client-invoices/create.ts",
+  "delta": 3,
+  "reason": "The client invoice request admits at most 50 matters. Quota and arrangement checks run in sorted lock order; subsequent matters append their bounded entries to one locked draft inside the same transaction. Independent parallel writes would violate the ordered aggregate lock protocol."
+}

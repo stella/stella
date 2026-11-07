@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { expect, spyOn, test } from "bun:test";
 
+import * as safeOutboundFetch from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import * as safeOutboundFetch from "@/api/lib/safe-outbound-fetch";
 
 import { createPublisherFetch } from "./publisher-fetch";
 

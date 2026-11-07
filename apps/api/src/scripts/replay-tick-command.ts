@@ -16,18 +16,14 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { readReplayTickEnvironment } from "@/api/env-replay";
 import type {
-  SourceAdapter,
-  StoredRawReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
   BackgroundReplaySource,
   BackgroundReplayTickReport,
 } from "@/api/handlers/case-law/ingestion/background-replay";
 import {
   BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
-  REPLAY_HEALTH_CONFIG,
   type ReplayEnrolment,
+  replayHealthConfig,
   replayKillRequested,
 } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import {
@@ -41,14 +37,18 @@ import {
   enterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
 import type {
-  acquireCaseLawSourceIngestionLease,
   CaseLawSourceIngestionLease,
+  holdCaseLawSourceIngestionLease,
 } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type {
+  SourceAdapter,
+  StoredRawReader,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isLocalTestRun } from "@/api/runtime-mode";
 
 const now = () => Temporal.Now.instant().epochMilliseconds;
@@ -149,7 +149,7 @@ const loadReplayTickRuntime = async () => {
     { runBackgroundReplayTick },
     { createBackgroundReplayRunner },
     { createBackgroundReplayStore },
-    { acquireCaseLawSourceIngestionLease },
+    { holdCaseLawSourceIngestionLease },
   ] = await Promise.all([
     import("@/api/db/long-running-connection"),
     import("@/api/db/backfill-runtime"),
@@ -166,7 +166,7 @@ const loadReplayTickRuntime = async () => {
     runBackgroundReplayTick,
     createBackgroundReplayRunner,
     createBackgroundReplayStore,
-    acquireCaseLawSourceIngestionLease,
+    holdCaseLawSourceIngestionLease,
   };
 };
 
@@ -240,9 +240,11 @@ export const createReplayPreflightGate = ({
   saveState,
   clock,
 }: ReplayPreflightGateOptions) => {
+  const config = replayHealthConfig();
   let state: BatchState | undefined;
   return {
-    heldTooLong: () => state !== undefined && isHeldTooLong(state, clock()),
+    heldTooLong: () =>
+      state !== undefined && isHeldTooLong(state, clock(), config),
     readVerdict: async (): Promise<Verdict> => {
       state ??= await loadState();
       if (state.holdUntil !== null && clock() < state.holdUntil) {
@@ -254,7 +256,7 @@ export const createReplayPreflightGate = ({
         state,
         verdict,
         lastDurationMs: null,
-        config: REPLAY_HEALTH_CONFIG,
+        config,
         clock,
       });
       state = plan.state;
@@ -269,29 +271,29 @@ export const createReplayPreflightGate = ({
 };
 
 type ReplayLeaseOwnerOptions = {
-  acquire: typeof acquireCaseLawSourceIngestionLease;
+  holdLease: typeof holdCaseLawSourceIngestionLease;
   scopedDb: ScopedDb;
 };
 
 const createReplayLeaseOwner = ({
-  acquire,
+  holdLease,
   scopedDb,
 }: ReplayLeaseOwnerOptions) => {
   let lease: CaseLawSourceIngestionLease | null = null;
   return {
     getLease: () => lease,
     acquireLease: async (source: BackgroundReplaySource) => {
-      lease = await acquire({
+      const held = await holdLease({
         scopedDb,
         sourceId: source.id,
         releaseDb: releaseReplayDb,
       });
-      if (lease === null) {
+      if (held === null) {
         return null;
       }
-      const claimed = lease;
+      lease = held.lease;
       return async () => {
-        await claimed.release();
+        await held.release();
         lease = null;
       };
     },
@@ -400,15 +402,16 @@ const runReplayOnSlotSession = async ({
       },
     },
   });
+  const healthConfig = { ...replayHealthConfig(), ...fixture.healthConfig };
   const health = runtime.createScriptBackfillHealthReader({
     db: rootDb,
     tableName: "case_law_decisions",
     clock: now,
-    config: { ...REPLAY_HEALTH_CONFIG, ...fixture.healthConfig },
+    config: healthConfig,
   });
   let lastVerdict: Verdict = { kind: "unknown", signals: [] };
   const leaseOwner = createReplayLeaseOwner({
-    acquire: runtime.acquireCaseLawSourceIngestionLease,
+    holdLease: runtime.holdCaseLawSourceIngestionLease,
     scopedDb: ingestionDb,
   });
   const cleanupStore = await createReplayCleanupStore();
@@ -427,7 +430,7 @@ const runReplayOnSlotSession = async ({
       metric(source, "case_law.replay.tick", {
         "case_law.replay.tick.held": 1,
         "case_law.replay.tick.hold_too_long": Number(
-          isHeldTooLong(state, now()),
+          isHeldTooLong(state, now(), healthConfig),
         ),
       }),
   });
@@ -591,8 +594,10 @@ const runReplayTickWithOptions = async (
   return report;
 };
 
-export const runEnabledReplayTick = async (signal: AbortSignal) =>
-  await runReplayTickWithOptions(signal, {});
+export const runEnabledReplayTick = async (
+  signal: AbortSignal,
+  enrolment: Readonly<Record<AdapterKey, ReplayEnrolment>> = REPLAY_ENROLMENT,
+) => await runReplayTickWithOptions(signal, { enrolment });
 
 /** Refuse fixture access before loading any database or storage runtime. */
 export const getReplayTickFixtureRunner = () => {
@@ -691,11 +696,11 @@ const parseReplayTickCommand = (args: readonly string[]) => {
 type RunReplayTickScriptOptions = {
   args?: readonly string[];
   environment?: ReturnType<typeof readReplayTickEnvironment>;
-  policies?: readonly ReplayEnrolment[];
   enrolment?: Readonly<Record<AdapterKey, ReplayEnrolment>>;
   resetDryRun?: (options: ResetReplayDryRunOptions) => Promise<boolean>;
   runEnabled?: (
     signal: AbortSignal,
+    enrolment: Readonly<Record<AdapterKey, ReplayEnrolment>>,
   ) => Promise<BackgroundReplayTickReport | null>;
   log?: (record: unknown) => void;
   timeoutSignal?: (timeoutMs: number) => AbortSignal;
@@ -704,7 +709,6 @@ type RunReplayTickScriptOptions = {
 export const runReplayTickScript = async ({
   args = process.argv.slice(2),
   environment = readReplayTickEnvironment(),
-  policies = Object.values(REPLAY_ENROLMENT),
   enrolment = REPLAY_ENROLMENT,
   resetDryRun = resetReplayDryRun,
   runEnabled = runEnabledReplayTick,
@@ -723,7 +727,7 @@ export const runReplayTickScript = async ({
       !environment.CASE_LAW_REPLAY_ENABLED ||
       environment.CASE_LAW_REPLAY_KILL_SWITCH ||
       (command.type === "tick" &&
-        policies.every((policy) => policy.mode === "off")) ||
+        Object.values(enrolment).every((policy) => policy.mode === "off")) ||
       (command.type === "reset-dry-run" &&
         environment.CASE_LAW_REPLAY_DISABLED_SOURCES.split(",").some(
           (key) => key.trim() === command.adapterKey,
@@ -750,7 +754,7 @@ export const runReplayTickScript = async ({
       });
       return 0;
     }
-    const report = await runEnabled(signal);
+    const report = await runEnabled(signal, enrolment);
     signal.throwIfAborted();
     return report?.status === "failed" ? 1 : 0;
   });

@@ -119,6 +119,7 @@ export const GlobalTimerContent = ({
               className="min-h-11"
               variant="ghost"
               aria-label={t("billing.globalTimer.title")}
+              tooltip={t("billing.globalTimer.title")}
             />
           }
         >

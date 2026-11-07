@@ -10,10 +10,11 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 let fetch: Mock<typeof globalThis.fetch>;
@@ -23,7 +24,7 @@ const { cleanup, fireEvent, render, waitFor } =
 const { QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
-const { useQueryView } = await import("@/lib/use-query-view");
+const { queryView } = await import("@/lib/query-view.logic");
 const { ChatMattersContext } = await import("./chat-matters-context");
 const { NeedsMatterCard } = await import("./needs-matter-card");
 
@@ -81,7 +82,7 @@ const mountPicker = (
   const Picker = () => {
     const query = useQuery({ queryKey, queryFn });
     const value = {
-      createDocumentMattersView: useQueryView(query),
+      createDocumentMattersView: queryView(query),
     };
     return (
       <ChatMattersContext value={value}>

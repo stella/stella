@@ -23,7 +23,10 @@ import {
 } from "@/lib/pdf/pdf-page-scroll.logic";
 import type { PDFSearchBox } from "@/lib/pdf/pdf-search";
 import { toPDFSearchViewportBox } from "@/lib/pdf/pdf-search";
-import { getCenteredSearchMatchScrollTop } from "@/lib/search-match-navigation";
+import {
+  getCenteredSearchMatchScrollTop,
+  readScrollPaddingBlockEnd,
+} from "@/lib/search-match-navigation";
 
 type PDFPageSearchMatch = {
   boxes: readonly PDFSearchBox[];
@@ -296,6 +299,7 @@ const PDFSearchHighlightBox = ({
             currentScrollTop: scrollViewport.scrollTop,
             matchHeight: matchRect.height,
             matchTop: matchRect.top,
+            obscuredBlockEnd: readScrollPaddingBlockEnd(scrollViewport),
           }),
         });
         store.getState().setScrollTo(null);

@@ -41,7 +41,7 @@ export const prefetchPendingApprovals = async ({
   await Promise.all([
     prefetchRouteQuery(
       queryClient,
-      timeEntriesOptions(workspaceId, userId, { status: "draft" }),
+      timeEntriesOptions(workspaceId, userId, { status: "submitted" }),
       captureError,
     ),
     prefetchRouteQuery(

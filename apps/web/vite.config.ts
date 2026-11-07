@@ -5,6 +5,7 @@ import react from "@vitejs/plugin-react";
 import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import path from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
@@ -17,6 +18,7 @@ import {
 
 import stllAhoCorasickWasm from "@stll/aho-corasick-wasm/vite";
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
+import { STELLA_LOGO_FILE_NAME } from "@stll/api-contract/stella-logo";
 import stllRegexSetWasm from "@stll/regex-set-wasm/vite";
 import {
   REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE,
@@ -27,6 +29,7 @@ import { chatRuntimeBuildGuard } from "./chat-runtime-build-guard.ts";
 import { devRouteBuildGuard } from "./dev-route-build-guard.ts";
 import { routeTreeOptions } from "./route-tree.config.ts";
 import { routeTemplateManifestPlugin } from "./scripts/route-template-manifest.ts";
+import { workerEntryFileName } from "./scripts/runtime-asset-contracts.ts";
 
 export { REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE } from "@stll/scripts/src/react-compiler-options";
 
@@ -102,6 +105,36 @@ const versionManifestPlugin = (): Plugin => ({
         commit: APP_COMMIT_SHA,
         version: APP_VERSION,
       }),
+    });
+  },
+});
+
+// Publish the canonical stella logo from @stll/api-contract at
+// `/stella-logo-512.png`, the URL MCP metadata advertises. The package owns the
+// only copy; the API serves the same bytes as its favicon.
+const readStellaLogo = () =>
+  readFileSync(
+    createRequire(import.meta.url).resolve(
+      "@stll/api-contract/stella-logo-512.png",
+    ),
+  );
+
+const stellaLogoPlugin = (): Plugin => ({
+  name: "stella-logo",
+  configureServer(server) {
+    server.middlewares.use(
+      `/${STELLA_LOGO_FILE_NAME}`,
+      (_request, response) => {
+        response.setHeader("Content-Type", "image/png");
+        response.end(readStellaLogo());
+      },
+    );
+  },
+  generateBundle() {
+    this.emitFile({
+      type: "asset",
+      fileName: STELLA_LOGO_FILE_NAME,
+      source: readStellaLogo(),
     });
   },
 });
@@ -327,6 +360,7 @@ export default defineConfig(({ mode, command }) => {
       "@tanstack/devtools-vite",
     ),
     versionManifestPlugin(),
+    stellaLogoPlugin(),
     devRouteBuildGuard(),
     chatRuntimeBuildGuard(),
     // Emits @stll/anonymize-wasm's binding + glue as build assets and
@@ -434,6 +468,9 @@ export default defineConfig(({ mode, command }) => {
       // asset plugins so dependencies that rewrite and emit WASM sidecars keep
       // the same contract when they move off the main thread.
       plugins: workerRuntimeAssetPlugins,
+      rolldownOptions: {
+        output: { entryFileNames: workerEntryFileName },
+      },
     },
     build: {
       target: "es2025",
@@ -457,9 +494,12 @@ export default defineConfig(({ mode, command }) => {
               id.includes("node_modules/@modelcontextprotocol/sdk/")
             ) {
               // This graph is reached only from ChatRichMessagePart's dynamic
-              // import. Keep it out of the eagerly preloaded TanStack vendor
-              // chunk so users without MCP App output never download it.
-              return "mcp-app";
+              // import, so that boundary already splits it off. A named group
+              // here would also capture its shared dependencies (React, zod),
+              // and every route importing those would then evaluate the MCP
+              // client eagerly, including the zod copy it bundles, whose eval
+              // probe the content security policy reports.
+              return undefined;
             }
             if (
               id.includes("node_modules/@tanstack/ai/") ||

@@ -175,6 +175,12 @@
       }
     },
     {
+      "id": "deepseek/deepseek-v4-flash-0731:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "deepseek/deepseek-v4-flash-vision-exp",
       "reasoning": {
         "default_effort": "high"
@@ -361,6 +367,18 @@
       }
     },
     {
+      "id": "google/gemini-omni-1.1-flash",
+      "reasoning": {
+        "default_effort": "low"
+      }
+    },
+    {
+      "id": "google/gemini-omni-1.2-flash",
+      "reasoning": {
+        "default_effort": "low"
+      }
+    },
+    {
       "id": "ibm-granite/granite-4.2-8b",
       "reasoning": {
         "default_effort": "high"
@@ -386,6 +404,12 @@
     },
     {
       "id": "meta/muse-glimmer-30b",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "meta/muse-glimmer-30b:batch",
       "reasoning": {
         "default_effort": "medium"
       }
@@ -463,12 +487,6 @@
       }
     },
     {
-      "id": "mistralai/mistral-small-2603:batch",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
       "id": "moonshotai/kimi-k3",
       "reasoning": {
         "default_effort": "max"
@@ -500,12 +518,6 @@
     },
     {
       "id": "nvidia/nemotron-3-super-120b-a12b",
-      "reasoning": {
-        "default_effort": "medium"
-      }
-    },
-    {
-      "id": "nvidia/nemotron-3-super-120b-a12b:free",
       "reasoning": {
         "default_effort": "medium"
       }
@@ -883,6 +895,30 @@
       }
     },
     {
+      "id": "openai/gpt-6.1-terra",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-terra-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-terra-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-terra:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
       "id": "openai/gpt-oss-120b",
       "reasoning": {
         "default_effort": "medium"
@@ -907,13 +943,7 @@
       }
     },
     {
-      "id": "openai/o3-mini-high",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
-      "id": "openai/o4-mini-high",
+      "id": "particle-ai/particle-1",
       "reasoning": {
         "default_effort": "high"
       }
@@ -938,6 +968,12 @@
     },
     {
       "id": "qwen/qwen3.8-27b",
+      "reasoning": {
+        "default_effort": "xhigh"
+      }
+    },
+    {
+      "id": "qwen/qwen3.8-27b:batch",
       "reasoning": {
         "default_effort": "xhigh"
       }
@@ -985,6 +1021,12 @@
       }
     },
     {
+      "id": "stealth/crouton-alpha",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
       "id": "stepfun/step-3.7-flash",
       "reasoning": {
         "default_effort": "medium"
@@ -1009,6 +1051,12 @@
       }
     },
     {
+      "id": "tencent/hy4",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "tencent/hy4-preview",
       "reasoning": {
         "default_effort": "high"
@@ -1027,25 +1075,13 @@
       }
     },
     {
-      "id": "thinkingmachines/inkling-small:free",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
-      "id": "thinkingmachines/inkling:free",
+      "id": "thinkingmachines/inkling-small:batch",
       "reasoning": {
         "default_effort": "high"
       }
     },
     {
       "id": "upstage/solar-mini4",
-      "reasoning": {
-        "default_effort": "medium"
-      }
-    },
-    {
-      "id": "upstage/solar-pro-3",
       "reasoning": {
         "default_effort": "medium"
       }
@@ -1087,7 +1123,19 @@
       }
     },
     {
+      "id": "x-ai/grok-4.6:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "x-ai/grok-4.7",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "x-ai/grok-4.7:batch",
       "reasoning": {
         "default_effort": "high"
       }
@@ -1118,6 +1166,12 @@
     },
     {
       "id": "z-ai/glm-5.3-flashx",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.3-flashx-legal",
       "reasoning": {
         "default_effort": "max"
       }

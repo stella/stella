@@ -1,0 +1,174 @@
+{
+  "package": "@stll/conditions",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "BUILTIN_FIELDS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "BuiltinField",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "COMBINATORS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "COMPARE_OPS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "Combinator",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompareNode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompareOp",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "Condition",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ConditionNode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ConditionValue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FoldHandlers",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "GroupNode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "LiteralValue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NULLARY_PREDICATE_OPS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "Operand",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OperandResolver",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PREDICATE_OPS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "PredicateNode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PredicateOp",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RefOperand",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "conditionHasFormula",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "conditionIncludesKind",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "conditionNodeSchema",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "conditionSchema",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "emptyCondition",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "evaluateCondition",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "foldCondition",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "foldConditions",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isEffectiveLeaf",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "operandSchema",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "pruneIncomplete",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/effective-leaf.d.ts": "import type { CompareNode, PredicateNode } from \"./schema\";\nexport declare const isEffectiveLeaf: (node: CompareNode | PredicateNode) => boolean;\n",
+    "./src/evaluate.d.ts": "import type { ConditionNode, RefOperand } from \"./schema\";\nexport type ConditionValue = string | number | boolean | string[] | null | undefined;\nexport type OperandResolver = (operand: RefOperand) => ConditionValue;\nexport declare const evaluateCondition: (node: ConditionNode, resolve: OperandResolver) => boolean;\nexport declare const pruneIncomplete: (node: ConditionNode) => ConditionNode | null;\n",
+    "./src/fold.d.ts": "import type { CompareNode, ConditionNode, GroupNode, PredicateNode } from \"./schema\";\nexport type FoldHandlers<T> = {\n    leaf: (node: PredicateNode | CompareNode) => T | null;\n    group: (node: GroupNode, children: readonly T[]) => T | null;\n};\nexport declare const foldCondition: <T>(node: ConditionNode, handlers: FoldHandlers<T>) => T | null;\nexport declare const foldConditions: <T>(nodes: readonly ConditionNode[], handlers: FoldHandlers<T>) => readonly T[] | null;\n",
+    "./src/index.d.ts": "export * from \"./schema\";\nexport * from \"./evaluate\";\nexport * from \"./walk\";\nexport * from \"./fold\";\nexport * from \"./effective-leaf\";\n",
+    "./src/schema.d.ts": "import * as v from \"valibot\";\nexport declare const COMPARE_OPS: readonly [\n    \"eq\",\n    \"neq\",\n    \"gt\",\n    \"lt\",\n    \"gte\",\n    \"lte\"\n];\nexport type CompareOp = (typeof COMPARE_OPS)[number];\nexport declare const PREDICATE_OPS: readonly [\n    \"is_empty\",\n    \"is_not_empty\",\n    \"is_truthy\",\n    \"contains\",\n    \"not_contains\",\n    \"starts_with\",\n    \"ends_with\",\n    \"contains_all\",\n    \"in\"\n];\nexport type PredicateOp = (typeof PREDICATE_OPS)[number];\nexport declare const NULLARY_PREDICATE_OPS: readonly [\n    \"is_empty\",\n    \"is_not_empty\",\n    \"is_truthy\"\n];\nexport declare const BUILTIN_FIELDS: readonly [\n    \"status\",\n    \"priority\",\n    \"agendaKind\"\n];\nexport type BuiltinField = (typeof BUILTIN_FIELDS)[number];\nexport declare const COMBINATORS: readonly [\n    \"and\",\n    \"or\"\n];\nexport type Combinator = (typeof COMBINATORS)[number];\ndeclare const literalValueSchema: v.UnionSchema<[\n    v.StringSchema<undefined>,\n    v.NumberSchema<undefined>,\n    v.BooleanSchema<undefined>,\n    v.ArraySchema<v.StringSchema<undefined>, undefined>\n], undefined>;\nexport type LiteralValue = v.InferOutput<typeof literalValueSchema>;\nexport declare const operandSchema: v.VariantSchema<\"type\", [\n    v.StrictObjectSchema<{\n        readonly type: v.LiteralSchema<\"property\", undefined>;\n        readonly propertyId: v.SchemaWithPipe<readonly [\n            v.StringSchema<undefined>,\n            v.MinLengthAction<string, 1, undefined>\n        ]>;\n    }, undefined>,\n    v.StrictObjectSchema<{\n        readonly type: v.LiteralSchema<\"builtin\", undefined>;\n        readonly field: v.PicklistSchema<readonly [\n            \"status\",\n            \"priority\",\n            \"agendaKind\"\n        ], undefined>;\n    }, undefined>,\n    v.StrictObjectSchema<{\n        readonly type: v.LiteralSchema<\"kind\", undefined>;\n    }, undefined>,\n    v.StrictObjectSchema<{\n        readonly type: v.LiteralSchema<\"path\", undefined>;\n        readonly path: v.SchemaWithPipe<readonly [\n            v.StringSchema<undefined>,\n            v.MinLengthAction<string, 1, undefined>\n        ]>;\n    }, undefined>,\n    v.StrictObjectSchema<{\n        readonly type: v.LiteralSchema<\"formula\", undefined>;\n        readonly expr: v.SchemaWithPipe<readonly [\n            v.StringSchema<undefined>,\n            v.MinLengthAction<string, 1, undefined>\n        ]>;\n    }, undefined>,\n    v.StrictObjectSchema<{\n        readonly type: v.LiteralSchema<\"literal\", undefined>;\n        readonly value: v.UnionSchema<[\n            v.StringSchema<undefined>,\n            v.NumberSchema<undefined>,\n            v.BooleanSchema<undefined>,\n            v.ArraySchema<v.StringSchema<undefined>, undefined>\n        ], undefined>;\n    }, undefined>\n], undefined>;\nexport type Operand = v.InferOutput<typeof operandSchema>;\nexport type RefOperand = Exclude<Operand, {\n    type: \"literal\";\n}>;\nexport type CompareNode = {\n    type: \"compare\";\n    left: Operand;\n    op: CompareOp;\n    right: Operand;\n};\nexport type PredicateNode = {\n    type: \"predicate\";\n    operand: Operand;\n    op: PredicateOp;\n    value?: string | string[] | undefined;\n};\nexport type GroupNode = {\n    type: \"group\";\n    combinator: Combinator;\n    negated?: boolean | undefined;\n    children: ConditionNode[];\n};\nexport type ConditionNode = CompareNode | PredicateNode | GroupNode;\nexport declare const conditionNodeSchema: v.GenericSchema<ConditionNode>;\nexport declare const conditionSchema: v.StrictObjectSchema<{\n    readonly type: v.LiteralSchema<\"group\", undefined>;\n    readonly combinator: v.PicklistSchema<readonly [\n        \"and\",\n        \"or\"\n    ], undefined>;\n    readonly negated: v.OptionalSchema<v.BooleanSchema<undefined>, undefined>;\n    readonly children: v.ArraySchema<v.LazySchema<v.GenericSchema<ConditionNode>>, undefined>;\n}, undefined>;\nexport type Condition = GroupNode;\nexport declare const emptyCondition: () => Condition;\nexport {};\n",
+    "./src/walk.d.ts": "import type { ConditionNode } from \"./schema\";\nexport declare const conditionHasFormula: (node: ConditionNode) => boolean;\nexport declare const conditionIncludesKind: (nodes: readonly ConditionNode[], kind: string) => boolean;\n"
+  }
+}

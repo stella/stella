@@ -8,7 +8,7 @@ import { FileDropZone } from "@/components/file-drop-zone";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import type { CreateFileEntitiesInput } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -33,7 +33,7 @@ export const WorkspaceDropZone = ({
     shouldThrow: false,
   });
   const viewsQuery = useQuery(viewsOptions(workspaceId));
-  const viewsView = useQueryView(viewsQuery);
+  const viewsView = queryView(viewsQuery);
   const activeViewId = viewMatch?.params.viewId;
   const currentFolderId = viewMatch?.search.folder;
   const handleDrop = useLatestCallback((input: CreateFileEntitiesInput) => {

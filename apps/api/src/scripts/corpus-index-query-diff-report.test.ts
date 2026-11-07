@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import {
@@ -309,7 +309,8 @@ describe("diffRankedDocuments", () => {
   );
 
   test("swapping base and candidate mirrors the diff", () => {
-    fc.assert(
+    assertProperty(
+      "swapping base and candidate mirrors the diff",
       fc.property(
         rankedIds,
         rankedIds,
@@ -337,7 +338,7 @@ describe("diffRankedDocuments", () => {
           expect(backward.maxRankShift).toBe(forward.maxRankShift);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

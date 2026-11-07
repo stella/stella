@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 8,
+  "reason": "The mobile app's sign-in and matter list need Expo's crypto, keychain and browser-session modules, plus the repo's shared catalog libraries it now uses like the web app: better-result, valibot, use-intl, temporal-polyfill, and fast-check for property tests. Each was already approved in the catalog or ships with Expo SDK 57."
+}

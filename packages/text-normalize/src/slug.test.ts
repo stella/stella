@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
+
+import { foldToAscii } from "./ascii-fold";
+import { ASCII_FOLD_TABLE } from "./ascii-fold-table";
 import { slugify } from "./slug";
 
 const ascii = {
@@ -26,11 +31,24 @@ describe("slugify", () => {
     expect(slugify("---hello---", ascii)).toBe("hello");
   });
 
-  test("does not transliterate under the ascii charset", () => {
-    // Load-bearing: slugs are persisted, so folding "café" to "cafe" here
-    // would start minting different keys for labels already in the database.
-    expect(slugify("café", ascii)).toBe("caf");
-    expect(slugify("Řeč", ascii)).toBe("e");
+  test.each([
+    ["café", "cafe"],
+    ["Řeč", "rec"],
+    [
+      "Wojewódzki Sąd Administracyjny w Łodzi",
+      "wojewodzki-sad-administracyjny-w-lodzi",
+    ],
+    ["Trybunał Konstytucyjny", "trybunal-konstytucyjny"],
+    ["Đakovo", "dakovo"],
+    ["Højesteret", "hojesteret"],
+    ["Bundesgerichtshof Straße", "bundesgerichtshof-strasse"],
+    ["Æsir Œuvre", "aesir-oeuvre"],
+    ["Þingvellir Ða", "thingvellir-da"],
+    ["Diyarbakır", "diyarbakir"],
+    ["Ħamrun ŧ", "hamrun-t"],
+    ["ﬁnal Ａ", "final-a"],
+  ])("transliterates %s to %s under the ascii charset", (value, slug) => {
+    expect(slugify(value, { ...ascii, maxLength: 80 })).toBe(slug);
   });
 
   test("keeps letters and numbers of any script under the unicode charset", () => {
@@ -87,4 +105,43 @@ describe("slugify", () => {
     expect(slugify("—", ascii)).toBe("item");
     expect(slugify("", ascii)).toBe("item");
   });
+});
+
+/**
+ * Every letter the fold table names, letters that decompose, letters of other
+ * scripts, a lone combining mark, and separators.
+ */
+const SLUG_CHARACTERS = [
+  ...Object.keys(ASCII_FOLD_TABLE),
+  ..."aZ09áčěŘšůžőűİΣжم契 -/.\u0301".split(""),
+];
+
+const slugText = fc
+  .array(fc.constantFrom(...SLUG_CHARACTERS), { maxLength: 24 })
+  .map((parts) => parts.join(""));
+
+const ASCII_ALPHANUMERICS = /^[a-z0-9]+$/u;
+const LETTER = /^\p{L}$/u;
+
+test("ascii slugs keep every Latin letter's transliteration", () => {
+  assertProperty(
+    "ascii slugs keep every Latin letter's transliteration",
+    fc.property(slugText, (value) => {
+      const slug = slugify(value, {
+        charset: "ascii",
+        separator: "-",
+        maxLength: Number.MAX_SAFE_INTEGER,
+        fallback: "",
+      });
+      expect(slug).toMatch(/^(?:[a-z0-9]+(?:-[a-z0-9]+)*)?$/u);
+      for (const character of value) {
+        // The search fold is the oracle: what it spells in ASCII, the slug
+        // must keep rather than drop.
+        const spelled = foldToAscii(character).toLowerCase();
+        if (LETTER.test(character) && ASCII_ALPHANUMERICS.test(spelled)) {
+          expect(slug).toContain(spelled);
+        }
+      }
+    }),
+  );
 });

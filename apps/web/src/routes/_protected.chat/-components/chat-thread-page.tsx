@@ -12,6 +12,7 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { Minimize2Icon, NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -38,13 +39,17 @@ import {
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
+import { ChatLocalRunQuestionContext } from "@/components/chat/chat-local-run-question-context";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
+import { effectiveRunTarget } from "@/components/chat/chat-run-target-menu.logic";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
-import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
+import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
+import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
+import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { useAIKeyGate } from "@/components/require-ai-key";
@@ -94,13 +99,15 @@ import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
+import { queryView } from "@/lib/query-view.logic";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
@@ -130,7 +137,7 @@ export const ChatThreadPage = ({
   workspaceId,
 }: ChatThreadPageProps) => {
   const t = useTranslations();
-  const { ensureAIAvailable } = useAIKeyGate();
+  const { availability, ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
   const suggestedSkills = useSuggestedSkills();
@@ -144,7 +151,7 @@ export const ChatThreadPage = ({
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
-  const currentUserRoleView = useQueryView(currentUserRoleQuery);
+  const currentUserRoleView = queryView(currentUserRoleQuery);
   useQueryViewError(currentUserRoleView, "ChatThreadPage:query");
   const currentUserRole =
     currentUserRoleView.type === "items" &&
@@ -195,11 +202,16 @@ export const ChatThreadPage = ({
   const getActiveSkill = useLatestCallback(() => activeSkill);
   // The skill is known only after the read above, and the cache key never
   // depends on it, so this context addresses the same entry the page reads.
+  // Read at send time, so a turn carries the target the menu shows then.
+  const getRunTarget = useLatestCallback(() =>
+    effectiveRunTarget(data.runTarget),
+  );
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
     getContextMatterIds,
     getSendMode,
+    getRunTarget,
     ...(activeSkill ? { getActiveSkill } : {}),
   };
   const chat = useChatThreadRuntime({
@@ -232,7 +244,7 @@ export const ChatThreadPage = ({
     ...usageEntitlementOptions({ organizationId: activeOrganizationId }),
     enabled: env.VITE_FEATURE_USAGE && canManageOrganization,
   });
-  const usageEntitlementDataView = useQueryView(usageEntitlementDataQuery);
+  const usageEntitlementDataView = queryView(usageEntitlementDataQuery);
   useQueryViewError(usageEntitlementDataView, "ChatThreadPage:query-2");
   const usageEntitlementData =
     usageEntitlementDataView.type === "items"
@@ -263,6 +275,7 @@ export const ChatThreadPage = ({
     isGenerating,
     reconnecting,
     turnAbandoned,
+    waitingForComputer,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -271,10 +284,15 @@ export const ChatThreadPage = ({
     handleDeny,
     handleRequestSecret,
     continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
     resolveSecretTarget,
     secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
+    startUserMessageEdit,
+    holdQueueForMessageEdit,
+    editUserMessage,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
@@ -283,6 +301,8 @@ export const ChatThreadPage = ({
     createDocumentMattersView,
     streamdownComponents,
     approvalPendingMessageId,
+    localRunQuestion,
+    answerLocalRunQuestion,
   } = useChatSession({
     exceptionScope: { type: "handler", handlerId: "chat-session.thread-page" },
     chat,
@@ -298,8 +318,16 @@ export const ChatThreadPage = ({
     threadRef,
     workspaceId,
   });
+  const userMessageEdit = useUserMessageEditActions({
+    editUserMessage,
+    ensureAIAvailable,
+    holdQueueForMessageEdit,
+    messages,
+    startUserMessageEdit,
+    threadRef,
+  });
 
-  const sentMessageHistoryHtml = getUserMessageHtmlHistory(messages);
+  const sentMessageHistory = getUserMessageHistory(messages);
 
   // Suggested follow-up prompts for Tab-to-ask (editor) and chips display.
   const {
@@ -362,7 +390,7 @@ export const ChatThreadPage = ({
   };
   const controller = useChatEditor({
     followupAnalytics: { surface: "chat-thread" },
-    sentMessageHistoryHtml,
+    sentMessageHistory,
     suggestedFollowupPrompt,
     threadRef,
   });
@@ -375,10 +403,11 @@ export const ChatThreadPage = ({
   // submit on the outcome (see `onSubmit` below) so a send can never race
   // a just-changed model onto the old, stale one.
   const modelSelection = useChatModelSelection({
-    onPersisted: ({ model, reasoningEffort }) => {
+    onPersisted: ({ model, reasoningEffort, runTarget }) => {
       applyChatModelChange({
         model,
         reasoningEffort,
+        runTarget,
         queryClient,
         queryKey: threadQueryOptions.queryKey,
         threadId: toSafeId<"chatThread">(threadRef.threadId),
@@ -386,6 +415,17 @@ export const ChatThreadPage = ({
     },
     threadRef,
   });
+  // The thread keeps where its turns run beside its model, so a reload shows
+  // the same choice; the model stays as it is.
+  const runTargetChoice = {
+    selected: effectiveRunTarget(data.runTarget),
+    select: (runTarget: ChatRunTarget) =>
+      modelSelection.selectModel({
+        model: data.model,
+        reasoningEffort: data.reasoningEffort,
+        runTarget,
+      }),
+  };
 
   // "Move to side" — re-host this thread inside the inspector
   // tab. Workspace-scoped chats land on the matter so the pane
@@ -551,7 +591,7 @@ export const ChatThreadPage = ({
                 workspaceId: threadRef.workspaceId,
               }
             : { scope: "global", threadId: createChatThreadId() };
-        await startNewThreadCommandHandoff({
+        const handoff = await startNewThreadCommandHandoff({
           activeOrganizationId,
           context: {
             ...chatThreadContext,
@@ -563,6 +603,10 @@ export const ChatThreadPage = ({
           queryClient,
           threadRef: newThreadRef,
         });
+        if (handoff.isErr()) {
+          notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+          return CHAT_SEND_KEPT;
+        }
         leave();
         if (newThreadRef.scope === "workspace") {
           await navigate({
@@ -594,7 +638,12 @@ export const ChatThreadPage = ({
       if (Result.isError(await modelSelection.awaitPendingSelection())) {
         return CHAT_SEND_KEPT;
       }
-      await sendMessage(await buildChatRequestMessage(draft));
+      const message = await buildChatRequestMessage(draft);
+      if (message.isErr()) {
+        notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
+      await sendMessage(message.value);
       return CHAT_SEND_SENT;
     },
   );
@@ -620,6 +669,8 @@ export const ChatThreadPage = ({
             handleDeny,
             handleRequestSecret,
             continueRequestSecret,
+            handleConnectConnector,
+            continueConnectConnector,
             resolveSecretTarget,
             secretAvailabilityKey,
           }}
@@ -682,46 +733,54 @@ export const ChatThreadPage = ({
                           {t("common.reconnecting")}
                         </p>
                       )}
-                      <ChatThreadMessages
-                        activitySession={activitySession}
-                        onAnswerEdited={refreshAnswers}
-                        answerRewriteAvailability={
-                          data.usedAnonymization ? "anonymized" : "available"
-                        }
-                        approvalPendingMessageId={approvalPendingMessageId}
-                        branchSource={{
-                          contextMatterIds: selectedContextMatterIds,
-                          threadRef,
+                      <ChatLocalRunQuestionContext
+                        value={{
+                          pause: localRunQuestion,
+                          answer: answerLocalRunQuestion,
                         }}
-                        error={error}
-                        hasOlderMessages={olderCursor !== null}
-                        isGenerating={isGenerating}
-                        isLoadingOlder={isLoadingOlder}
-                        loadOlderError={loadOlderError}
-                        messages={messages}
-                        onLoadOlder={loadOlder}
-                        onAskUserEditAndRerun={handleAskUserEditAndRerun}
-                        onAskUserEditingChange={handleAskUserEditingChange}
-                        onAskUserSubmit={handleAskUserSubmit}
-                        onCreateDocumentResolve={handleCreateDocumentResolve}
-                        onOpenCreateDocumentDraft={
-                          handleOpenCreateDocumentDraft
-                        }
-                        onOpenCreatedDocument={handleOpenCreatedDocument}
-                        onOpenPlaybook={handleOpenPlaybook}
-                        onResend={resendLatestMessage}
-                        onSendWithoutAnonymization={sendWithoutAnonymization}
-                        queuedMessageActions={{
-                          remove: removeQueuedMessage,
-                          sendNow: sendQueuedMessageNow,
-                        }}
-                        queuedMessages={queuedMessages}
-                        showThinkingIndicator
-                        stickyUserMessages
-                        streamdownComponents={streamdownComponents}
-                        threadRef={threadRef}
-                        workspaceId={workspaceId}
-                      />
+                      >
+                        <ChatThreadMessages
+                          activitySession={activitySession}
+                          onAnswerEdited={refreshAnswers}
+                          answerRewriteAvailability={
+                            data.usedAnonymization ? "anonymized" : "available"
+                          }
+                          approvalPendingMessageId={approvalPendingMessageId}
+                          branchSource={{
+                            contextMatterIds: selectedContextMatterIds,
+                            threadRef,
+                          }}
+                          error={error}
+                          hasOlderMessages={olderCursor !== null}
+                          isGenerating={isGenerating}
+                          isLoadingOlder={isLoadingOlder}
+                          loadOlderError={loadOlderError}
+                          messages={messages}
+                          onLoadOlder={loadOlder}
+                          onAskUserEditAndRerun={handleAskUserEditAndRerun}
+                          onAskUserEditingChange={handleAskUserEditingChange}
+                          onAskUserSubmit={handleAskUserSubmit}
+                          onCreateDocumentResolve={handleCreateDocumentResolve}
+                          onOpenCreateDocumentDraft={
+                            handleOpenCreateDocumentDraft
+                          }
+                          onOpenCreatedDocument={handleOpenCreatedDocument}
+                          onOpenPlaybook={handleOpenPlaybook}
+                          onResend={resendLatestMessage}
+                          onSendWithoutAnonymization={sendWithoutAnonymization}
+                          queuedMessageActions={{
+                            remove: removeQueuedMessage,
+                            sendNow: sendQueuedMessageNow,
+                          }}
+                          queuedMessages={queuedMessages}
+                          stickyUserMessages
+                          streamdownComponents={streamdownComponents}
+                          waitingForComputer={waitingForComputer}
+                          threadRef={threadRef}
+                          userMessageEdit={userMessageEdit}
+                          workspaceId={workspaceId}
+                        />
+                      </ChatLocalRunQuestionContext>
                       <ChatThreadRecap
                         activeOrganizationId={activeOrganizationId}
                         isGenerating={isGenerating}
@@ -785,7 +844,15 @@ export const ChatThreadPage = ({
                         if (!(await ensureAIAvailable())) {
                           return CHAT_SEND_KEPT;
                         }
-                        await sendMessage(await buildChatRequestMessage(draft));
+                        const message = await buildChatRequestMessage(draft);
+                        if (message.isErr()) {
+                          notifyUserError(
+                            message.error,
+                            t("chat.sendErrorMessageEmpty"),
+                          );
+                          return CHAT_SEND_KEPT;
+                        }
+                        await sendMessage(message.value);
                         return CHAT_SEND_SENT;
                       }),
                       "chat-thread-page.submit",
@@ -797,6 +864,7 @@ export const ChatThreadPage = ({
                   threadId={threadRef.threadId}
                 />
                 {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
+                <McpReconnectNotice editor={controller.editor} />
                 {/* Glass tray behind the composer + status row: the shared
                   `ComposerVeil` (one owner of the blur/tint values across
                   every chat surface) fills this `relative isolate` wrapper
@@ -805,6 +873,7 @@ export const ChatThreadPage = ({
                 <div className="relative isolate p-2">
                   <ComposerVeil />
                   <ChatInputSurface
+                    sendDisabled={availability !== "available"}
                     anonymized={anonymized}
                     autoFocus
                     context={{ activeOrganizationId, threadRef }}
@@ -818,6 +887,7 @@ export const ChatThreadPage = ({
                       selectedModel: data.model,
                       selectedReasoningEffort: data.reasoningEffort,
                       selectModel: modelSelection.selectModel,
+                      runTarget: runTargetChoice,
                     }}
                     reservedCommands={{
                       hasPersistedThread: messages.length > 0,
@@ -843,6 +913,7 @@ export const ChatThreadPage = ({
                           selectedModel: data.model,
                           selectedReasoningEffort: data.reasoningEffort,
                           selectModel: modelSelection.selectModel,
+                          runTarget: runTargetChoice,
                         }}
                         leadingContext={
                           <>

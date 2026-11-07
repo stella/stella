@@ -39,6 +39,7 @@ export const MCP_APPS = [
     callableTools: [
       MCP_WEB_HANDOFF_TOOL_NAME,
       "search_case_law",
+      "list_case_law_courts",
       "resolve_case_law_decision",
       "open_case_law_decision",
       "read_case_law_decision_blocks",
@@ -77,6 +78,10 @@ export const MCP_APPS = [
   },
 ] as const;
 
+export type McpAppDirectory = (typeof MCP_APPS)[number]["directory"];
+
+export const DOCUMENT_UPLOAD_APP = MCP_APPS[0];
+export const FILE_COMPARISON_APP = MCP_APPS[1];
 export const CASE_LAW_RESULTS_APP = MCP_APPS[2];
 export const DECISION_READER_APP = MCP_APPS[3];
 export const CITATION_GRAPH_APP = MCP_APPS[4];

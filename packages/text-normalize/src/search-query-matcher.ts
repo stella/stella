@@ -78,5 +78,9 @@ export const filterBySearchQuery = <T>({
   query,
 }: FilterBySearchQueryOptions<T>): T[] => {
   const matches = createSearchQueryMatcher(query);
+  // A query that matches empty text also keeps items with no search fields.
+  if (matches("")) {
+    return [...items];
+  }
   return items.filter((item) => fields(item).some(matches));
 };
