@@ -8,18 +8,15 @@
  */
 
 import {
-  gradedDocumentFetchBudget,
   type OnDemandDocumentDeps,
   recordDocumentPacingOutcome,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import { DEFERRED_DOCUMENT_PROCESSORS } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 import { withImmediatePublisherSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
+import { startDocumentFetchBudget } from "@/api/lib/legal-search/document-fetch-budget";
 import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
-import {
-  DOCUMENT_FETCH_BUDGET_MS,
-  recordDocumentFetchRequest,
-} from "@/api/lib/legal-search/sk-document-backfill";
+import { recordDocumentFetchRequest } from "@/api/lib/legal-search/sk-document-backfill";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export const onDemandDocumentDeps: OnDemandDocumentDeps = {
@@ -49,9 +46,7 @@ export const onDemandDocumentDeps: OnDemandDocumentDeps = {
           decisionId: decision.id,
           scopedDb: getCaseLawIngestionDb(),
           signal: AbortSignal.any([
-            gradedDocumentFetchBudget(
-              AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
-            ),
+            startDocumentFetchBudget(),
             ...(io.signal === undefined ? [] : [io.signal]),
           ]),
         }),
