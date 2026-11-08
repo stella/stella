@@ -14,6 +14,7 @@ import {
   NUMBERED_POINT_RE,
   opensWithDate,
   printedLabelOpensParagraph,
+  splitsDate,
   takesANumber,
 } from "@stll/legal-ast/printed-paragraph-labels";
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -800,6 +801,19 @@ export type PositionedLine = {
 export const INDENT_THRESHOLD_PT = 18;
 
 /**
+ * Whether the line above runs into the number `line` opens with: it ends on
+ * a word the number belongs to (`art.`, `lit.`), or the number is a date
+ * (`11. února 2015`) or a date wrapped after its day (`dnia 22.` / `10. 2003`).
+ */
+const runsIntoNumber = (
+  previous: PositionedLine,
+  line: PositionedLine,
+): boolean =>
+  takesANumber(previous.text) ||
+  opensWithDate(line.text) ||
+  splitsDate(previous.text.trimEnd(), line.text.trimStart());
+
+/**
  * Whether `line` opens a numbered point of its own. A numbered point opens
  * its own paragraph however full the line above ran, unless that line ended
  * on a word the number belongs to (`art.`).
@@ -809,8 +823,7 @@ export const opensNumberedPoint = (
   line: PositionedLine,
 ): boolean =>
   NUMBERED_POINT_RE.test(line.text.trimStart()) &&
-  !takesANumber(previous.text) &&
-  !opensWithDate(line.text);
+  !runsIntoNumber(previous, line);
 
 /** How a publisher marks the points and paragraphs a line can open. */
 export type PointMarkers = {
@@ -928,8 +941,7 @@ export const opensBlockParagraph = ({
   // sentences, so only the full-line test reads those.
   if (
     (markers.numbered.test(line.text.trimStart()) &&
-      !takesANumber(previous.text) &&
-      !opensWithDate(line.text)) ||
+      !runsIntoNumber(previous, line)) ||
     (markers.paragraphNumber?.test(line.text.trimStart()) === true &&
       next !== undefined &&
       next.text.length > 0 &&
@@ -939,7 +951,11 @@ export const opensBlockParagraph = ({
   }
   const full = ranOutOfRoom({ previous, line, rightEdge, markers });
   if (!indented) {
-    return !full && markers.list.test(line.text.trimStart());
+    return (
+      !full &&
+      markers.list.test(line.text.trimStart()) &&
+      !runsIntoNumber(previous, line)
+    );
   }
   return !(
     full &&

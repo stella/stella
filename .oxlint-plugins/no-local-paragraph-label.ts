@@ -12,14 +12,16 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import { regexSourceVisitors } from "./regex-sources.ts";
+import { filenameForContext } from "./utils.ts";
 
 /** A line start, perhaps after spaces, a group and an opening bracket. */
 const OPENING = String.raw`^\^(?:\\s[*+?]?|\[[^\]]*\][*+?]?)?(?:\\\(\??|\\\[)?(?:\(\?:|\((?:\?<\w+>)?)?(?:\\\(\??|\\\[)?`;
-/** A run of digits: `\d{1,3}`, `\d+`, `[0-9]{1,2}`. */
-const NUMBER = String.raw`(?:\\d|\[0-9\])(?:\{1,\d\}|\+)\)?`;
+/** A run of digits: `\d{1,3}`, `\d{2}`, `\d+`, `[0-9]{1,2}`. */
+const NUMBER = String.raw`(?:\\d|\[0-9\])(?:\{\d(?:,\d)?\}|\+)\)?`;
 /** What closes a label: a dot, a parenthesis, a bracket, a sub-number's dot. */
-const CLOSER = String.raw`(?:\[\.\)\]|\[\)\.\]|\\\.|\\\)|\\\]|\(\?:\\\.)`;
+const CLOSER = String.raw`(?:\[[.):]{2,3}\]|\\\.|\\\)|\\\]|\(\?:\\\.)`;
 
 const LABEL_OPENING = new RegExp(`${OPENING}${NUMBER}${CLOSER}`, "u");
 
@@ -39,7 +41,14 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         return regexSourceVisitors((node, pattern) => {
-          if (readsParagraphLabel(pattern)) {
+          if (
+            readsParagraphLabel(pattern) &&
+            guardEnforcesLine({
+              guard: "no-local-paragraph-label",
+              file: filenameForContext(context),
+              line: context.sourceCode.getLocFromIndex(node.range[0]).line,
+            })
+          ) {
             context.report({ node, messageId: "owner" });
           }
         });

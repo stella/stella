@@ -23,6 +23,10 @@ describe("readPrintedLabel", () => {
     ["(2) Dovolací dôvod", PRINTED_LABEL_KIND.PARENTHESISED, "(2)"],
     ["a) sa rozhodlo", PRINTED_LABEL_KIND.LETTER, "a)"],
     ["IV. Posouzení", PRINTED_LABEL_KIND.ROMAN, "IV."],
+    ["IX. Záver", PRINTED_LABEL_KIND.ROMAN, "IX."],
+    ["X. Náklady konania", PRINTED_LABEL_KIND.ROMAN, "X."],
+    ["XI. Poučenie", PRINTED_LABEL_KIND.ROMAN, "XI."],
+    ["[2]Súd prvej inštancie", PRINTED_LABEL_KIND.BRACKET, "[2]"],
     ["- súd prvého stupňa", PRINTED_LABEL_KIND.BULLET, "-"],
   ])("%s opens with a %s label", (line, kind, marker) => {
     expect(readPrintedLabel(line)).toMatchObject({ kind, marker });
@@ -30,6 +34,7 @@ describe("readPrintedLabel", () => {
 
   test.each([
     "II. ÚS 177/04",
+    "IV. senátu Ústavného súdu",
     "28.5.2014 doručil",
     "1.2. 1999",
     "1 014,41 eur",

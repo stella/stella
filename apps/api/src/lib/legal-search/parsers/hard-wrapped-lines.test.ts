@@ -5,6 +5,8 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   LINE_JOINS,
+  opensBlockParagraph,
+  opensNumberedPoint,
   type PdfPrintedLine,
   readPdfLineJoins,
   reflowPrintedText,
@@ -448,5 +450,38 @@ describe("PDF line joins", () => {
       LINE_JOINS.SPACE,
       LINE_JOINS.SPACE,
     ]);
+  });
+});
+
+describe("positioned lines", () => {
+  const RIGHT_EDGE = 520;
+  const at = (text: string, x = 72, right = RIGHT_EDGE) => ({ text, x, right });
+
+  test("a date wrapped after its day continues, a numbered point opens", () => {
+    expect(
+      opensNumberedPoint(at("orzeczeniem z dnia 22."), at("10. 2003 r. Sąd")),
+    ).toBe(false);
+    expect(
+      opensNumberedPoint(at("Sąd orzekł, co następuje:"), at("2. oddala")),
+    ).toBe(true);
+  });
+
+  test("a lettered point after `lit.` continues the citation, a list point opens", () => {
+    const options = (above: string, line: string) => ({
+      previous: at(above, 72, 300),
+      line: at(line, 72, 300),
+      indented: false,
+      rightEdge: RIGHT_EDGE,
+    });
+    expect(
+      opensBlockParagraph(
+        options("na podstawie art. 89 ust. 1 lit.", "b) ustawy"),
+      ),
+    ).toBe(false);
+    expect(
+      opensBlockParagraph(
+        options("wykonawca nie spełnia warunków:", "b) wiedzy"),
+      ),
+    ).toBe(true);
   });
 });

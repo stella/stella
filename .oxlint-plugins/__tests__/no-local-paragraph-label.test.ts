@@ -12,8 +12,10 @@ test("rejects a regular expression that reads a printed label at a line start", 
     "/^\\(?\\d{1,3}\\)(?:\\s|$)/u.test(text);",
     "/^\\d{1,3}(?:\\.\\d{1,3})+\\.?\\s/u.test(text);",
     'new RegExp("^(?:\\\\(\\\\d{1,3}\\\\)|\\\\[\\\\d{1,3}\\\\])\\\\s", "u");',
+    "/^\\d{2}\\./u.test(text);",
+    "/^\\d{1,3}[.:]/u.test(text);",
   ].join("\n");
-  expect(await lintSingleRule(RULE, source)).toEqual([1, 2, 3, 4, 5, 6]);
+  expect(await lintSingleRule(RULE, source)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 });
 
 test("accepts the grammar's calls and numbers that open no label", async () => {

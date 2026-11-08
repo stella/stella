@@ -53,14 +53,15 @@ const GAP = "[ \\t\\u00a0]+";
 /**
  * Roman parts a decision runs to. Initials of anonymised names (`L.`, `C.`,
  * `M.`) read as Roman numbers too, so only the parts a ruling or reasoning
- * actually reaches count, and `II. ÚS` is a Constitutional Court docket.
+ * actually reaches count. `II. ÚS` is a Constitutional Court docket and
+ * `IV. senátu` a senate a sentence names, neither a part.
  */
-const ROMAN = "(?:XX|X{0,1}(?:IX|IV|V?I{1,3}|V))";
+const ROMAN = "(?:XX|X?(?:IX|IV|V?I{1,3}|V)|X)";
 
 const LABEL_PATTERNS = [
   [
     PRINTED_LABEL_KIND.BRACKET,
-    new RegExp(`^(\\[\\d{1,4}\\])(?:${GAP}|$)`, "u"),
+    new RegExp(`^(\\[\\d{1,4}\\])(?:${GAP}|$|(?=\\p{Lu}))`, "u"),
   ],
   [
     PRINTED_LABEL_KIND.SUBNUMBER,
@@ -77,7 +78,7 @@ const LABEL_PATTERNS = [
   [PRINTED_LABEL_KIND.LETTER, new RegExp(`^(\\(?\\p{L}\\))${GAP}(?=\\S)`, "u")],
   [
     PRINTED_LABEL_KIND.ROMAN,
-    new RegExp(`^(${ROMAN}[.)])(?:${GAP}(?!ÚS\\b)(?=\\S)|$)`, "u"),
+    new RegExp(`^(${ROMAN}[.)])(?:${GAP}(?!ÚS\\b|sen[aá]t)(?=\\S)|$)`, "u"),
   ],
   [PRINTED_LABEL_KIND.BULLET, new RegExp(`^([-–•])${GAP}(?=\\S)`, "u")],
 ] as const satisfies readonly (readonly [PrintedLabelKind, RegExp])[];
