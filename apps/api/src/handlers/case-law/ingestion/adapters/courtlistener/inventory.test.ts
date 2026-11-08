@@ -64,14 +64,14 @@ describe("the CourtListener field and surface declarations", () => {
 
     expect(clusters.length).toBeGreaterThan(0);
     for (const record of clusters) {
-      expect(Object.keys(record.cluster)).toEqual(CLUSTER_COLUMNS);
-      expect(Object.keys(record.docket)).toEqual(DOCKET_COLUMNS);
-      expect(Object.keys(record.court)).toEqual(COURT_COLUMNS);
+      expect(Object.keys(record.cluster)).toEqual([...CLUSTER_COLUMNS]);
+      expect(Object.keys(record.docket)).toEqual([...DOCKET_COLUMNS]);
+      expect(Object.keys(record.court)).toEqual([...COURT_COLUMNS]);
       for (const opinion of record.opinions) {
-        expect(Object.keys(opinion)).toEqual(OPINION_COLUMNS);
+        expect(Object.keys(opinion)).toEqual([...OPINION_COLUMNS]);
       }
       for (const citation of record.citations) {
-        expect(Object.keys(citation)).toEqual(CITATION_COLUMNS);
+        expect(Object.keys(citation)).toEqual([...CITATION_COLUMNS]);
       }
     }
   });

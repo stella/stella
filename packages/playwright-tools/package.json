@@ -7,6 +7,9 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./marketing-case-law": "./src/marketing-case-law.ts",
+    "./marketing-config": "./src/marketing-config.ts",
+    "./marketing-locales": "./src/marketing-locales.ts",
     "./marketing-case-law.json": "./src/marketing-case-law.json",
     "./app-marketing-config": "./src/app-marketing-config.ts",
     "./landing-marketing-config": "./src/landing-marketing-config.ts",
@@ -20,7 +23,7 @@
     "report": "PLAYWRIGHT_HTML_OUTPUT_DIR=../../apps/web/playwright-report playwright merge-reports --reporter html ../../apps/web/all-blob-reports"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.1",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:"
   }

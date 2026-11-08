@@ -34,6 +34,26 @@ describe("renameIdentifiers", () => {
     );
   });
 
+  test("leaves members named like the binding alone, declared or typed", () => {
+    const input = [
+      "type Glyph = Icons.WandSparklesIcon;",
+      "const accessors = { get WandSparklesIcon() { return 1; }, set WandSparklesIcon(value) {} };",
+      "class Panel { get WandSparklesIcon() { return WandSparklesIcon; } }",
+      "const { WandSparklesIcon: picked = WandSparklesIcon } = icons;",
+      "({ WandSparklesIcon } = icons);",
+    ].join("\n");
+
+    expect(rename(input)).toBe(
+      [
+        "type Glyph = Icons.WandSparklesIcon;",
+        "const accessors = { get WandSparklesIcon() { return 1; }, set WandSparklesIcon(value) {} };",
+        "class Panel { get WandSparklesIcon() { return AiActionIcon; } }",
+        "const { WandSparklesIcon: picked = AiActionIcon } = icons;",
+        "({ WandSparklesIcon: AiActionIcon } = icons);",
+      ].join("\n"),
+    );
+  });
+
   test("reaches a fixed point: a second pass changes nothing", () => {
     const input = [
       'const icons = { WandSparklesIcon, label: "WandSparklesIcon" };',

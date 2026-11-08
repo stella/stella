@@ -129,9 +129,14 @@
         },
         {
           "path": "scripts/check-migrations.sh",
+          "contains": ["check-migration-schema.ts", "check-migration-safety.ts"]
+        },
+        {
+          "path": "scripts/check-migration-schema.ts",
           "contains": [
             "Database schema changed without a migration file",
-            "check-migration-safety.ts"
+            "prepareBaseDependencies(root, baseRoot)",
+            "migration\\.sql$"
           ]
         }
       ]
@@ -183,7 +188,10 @@
         },
         {
           "path": "apps/api/src/lib/workspace-deletion.ts",
-          "contains": ["status: \"deleting\"", "completeWorkspaceDeletion"]
+          "contains": [
+            "status: WORKSPACE_STATUS.deleting",
+            "completeWorkspaceDeletion"
+          ]
         },
         {
           "path": "apps/api/src/lib/organization-storage-teardown.ts",

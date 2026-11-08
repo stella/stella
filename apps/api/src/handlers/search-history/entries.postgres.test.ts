@@ -12,6 +12,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestClock } from "@stll/test-kit";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -46,6 +47,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { createUngatedTableGateForTests } from "../../db/online-ddl";
 import { createSearchHistoryCountryRepair } from "../../db/search-history-country-repair";
@@ -64,6 +66,7 @@ import record from "./upsert";
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const NOW = new Date();
+const testClock = createTestClock();
 const INITIAL_MEMBERSHIP_CREATED_AT = new Date("2000-01-01T00:00:00.000Z");
 
 type HistoryFixture = {
@@ -157,9 +160,7 @@ const withHistory = async (
         memberId,
       });
     } finally {
-      await db
-        .delete(organization)
-        .where(inArray(organization.id, organizationIds));
+      await deleteOrganizationsForTest(db, organizationIds);
       await db.delete(user).where(inArray(user.id, userIds));
     }
   });
@@ -278,7 +279,7 @@ if (!databaseUrl || !enabled) {
         const oldRows = await prepareSearchHistoryRows(fixture, [
           {
             entry: { kind: "search", query, country: "CZE" },
-            usedAt: new Date(),
+            usedAt: new Date(testClock.now()),
           },
         ]);
         const oldRow = oldRows.at(0);
@@ -633,7 +634,7 @@ if (!databaseUrl || !enabled) {
           .set({
             country: null,
             countryUsedAt: null,
-            countryRepairFailedAt: new Date(),
+            countryRepairFailedAt: new Date(testClock.now()),
           })
           .where(eq(searchHistoryEntries.id, saved.id));
         const context = identity(fixture);
@@ -722,7 +723,7 @@ if (!databaseUrl || !enabled) {
           userId: fixture.userId,
           kind: "search",
           lookupKey: scopedKey,
-          deletedAt: new Date(),
+          deletedAt: new Date(testClock.now()),
         });
         const restore = async (country: CaseLawJurisdiction) =>
           await importEntries.handler(
@@ -756,7 +757,7 @@ if (!databaseUrl || !enabled) {
           userId: fixture.userId,
           kind: "search",
           lookupKey: original.lookupKey,
-          deletedAt: new Date(),
+          deletedAt: new Date(testClock.now()),
         });
         expect(await restore("AUT")).toEqual({
           entries: 0,

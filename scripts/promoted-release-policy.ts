@@ -57,6 +57,77 @@ const parsePublicationTime = (value: string): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const RELEASE_MANIFEST_NOTE_KEY = "_note";
+
+/**
+ * The release publication manifest split into its two kinds of entry: the
+ * human note, and the stable tags with their publication time (null: built
+ * but never promoted). Only tags ever reach version comparisons.
+ */
+export type ReleaseManifest = {
+  readonly note: string | undefined;
+  readonly releases: Readonly<Record<string, string | null>>;
+};
+
+type ParsedManifest =
+  | { status: "parsed"; manifest: ReleaseManifest }
+  | { status: "invalid"; message: string };
+
+// The one reader of the manifest file: every other key must be a stable tag
+// whose value is a string or null, else the whole file is invalid.
+export const parseReleaseManifest = (manifest: unknown): ParsedManifest => {
+  if (!isRecord(manifest)) {
+    return {
+      status: "invalid",
+      message: "The release publication manifest must be an object.",
+    };
+  }
+  let note: string | undefined;
+  const releases: (readonly [string, string | null])[] = [];
+  for (const [key, value] of Object.entries(manifest)) {
+    if (key === RELEASE_MANIFEST_NOTE_KEY) {
+      if (typeof value !== "string") {
+        return {
+          status: "invalid",
+          message: `The release publication manifest note must be a string.`,
+        };
+      }
+      note = value;
+      continue;
+    }
+    if (!STABLE_RELEASE_TAG.test(key)) {
+      return {
+        status: "invalid",
+        message: `The release publication manifest contains an invalid stable release ref: ${key}.`,
+      };
+    }
+    if (typeof value !== "string" && value !== null) {
+      return {
+        status: "invalid",
+        message: `The release publication manifest contains an invalid publication time for ${key}.`,
+      };
+    }
+    releases.push([key, value]);
+  }
+  return {
+    status: "parsed",
+    manifest: { note, releases: Object.fromEntries(releases) },
+  };
+};
+
+/** The manifest file's bytes: the note first, then the tags as given. */
+export const serializeReleaseManifest = ({
+  note,
+  releases,
+}: ReleaseManifest): string =>
+  `${JSON.stringify(
+    note === undefined
+      ? releases
+      : { [RELEASE_MANIFEST_NOTE_KEY]: note, ...releases },
+    null,
+    2,
+  )}\n`;
+
 type ParsedPromotions =
   | {
       status: "parsed";
@@ -64,14 +135,12 @@ type ParsedPromotions =
     }
   | { status: "invalid"; message: string };
 
-// One reader of the manifest: null is a known unpromoted release, an absent
-// ref was never promoted, and any malformed entry invalidates the whole file.
+// Null is a known unpromoted release, an absent ref was never promoted, and
+// any malformed entry invalidates the whole file.
 const parsePromotions = (manifest: unknown): ParsedPromotions => {
-  if (!isRecord(manifest)) {
-    return {
-      status: "invalid",
-      message: "The release publication manifest must be an object.",
-    };
+  const parsed = parseReleaseManifest(manifest);
+  if (parsed.status === "invalid") {
+    return parsed;
   }
 
   const promoted: {
@@ -79,24 +148,9 @@ const parsePromotions = (manifest: unknown): ParsedPromotions => {
     publishedAt: string;
     publishedAtMs: number;
   }[] = [];
-  for (const [ref, publishedAt] of Object.entries(manifest)) {
-    if (ref === "_note") {
-      continue;
-    }
-    if (!STABLE_RELEASE_TAG.test(ref)) {
-      return {
-        status: "invalid",
-        message: `The release publication manifest contains an invalid stable release ref: ${ref}.`,
-      };
-    }
+  for (const [ref, publishedAt] of Object.entries(parsed.manifest.releases)) {
     if (publishedAt === null) {
       continue;
-    }
-    if (typeof publishedAt !== "string") {
-      return {
-        status: "invalid",
-        message: `The release publication manifest contains an invalid publication time for ${ref}.`,
-      };
     }
     const publishedAtMs = parsePublicationTime(publishedAt);
     if (publishedAtMs === null) {

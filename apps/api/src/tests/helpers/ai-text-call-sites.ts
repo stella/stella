@@ -333,8 +333,6 @@ const modelCompactionDriver = textCallSiteDriver({
     ),
 });
 
-// --- The census -------------------------------------------------------------
-
 /**
  * Every call site the replay drives, by file (relative to `apps/api/src`),
  * with one driver per runtime reference the file makes to a text export of

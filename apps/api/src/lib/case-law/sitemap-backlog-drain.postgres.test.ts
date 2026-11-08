@@ -226,7 +226,11 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
                   new Proxy(tx, {
                     get: (target, property, receiver) =>
                       property === "execute"
-                        ? async (query: SQL) => {
+                        ? async (query: SQL | string) => {
+                            // The corpus schema lane try is plain text.
+                            if (typeof query === "string") {
+                              return await target.execute(query);
+                            }
                             const rendered = dialect.sqlToQuery(query);
                             if (
                               rendered.sql.includes(
@@ -638,8 +642,9 @@ describe.skipIf(!enabled)("sitemap backlog drain (postgres)", () => {
                       new Proxy(tx, {
                         get: (target, property, receiver) =>
                           property === "execute"
-                            ? async (query: SQL) => {
+                            ? async (query: SQL | string) => {
                                 if (
+                                  typeof query !== "string" &&
                                   dialect
                                     .sqlToQuery(query)
                                     .sql.includes(

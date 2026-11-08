@@ -489,9 +489,9 @@ export const createRemoveWorkspaceMember = (
         userId: brandPersistedUserId(userId),
         actorUserId: user.id,
         reassignTo:
-          body?.reassign_to === undefined
-            ? undefined
-            : brandPersistedUserId(body.reassign_to),
+          body?.reassign_to !== undefined
+            ? brandPersistedUserId(body.reassign_to)
+            : undefined,
         recordAuditEvent,
         dependencies,
       });

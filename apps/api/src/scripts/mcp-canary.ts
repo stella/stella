@@ -28,14 +28,24 @@ import {
 import { cliClientMetadataUrl } from "@stll/cli/client-metadata-document";
 import { printError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
+import {
+  BodyByteLimitError,
+  readBodyTextWithIdleDeadline,
+  readBodyWithIdleDeadline,
+} from "@stll/fetch/body-reader";
 import { sha256Base64Url, sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import { MCP_DISCOVERY_PATH } from "@/api/mcp/resource-policy-contract";
+import { judgeMcpToolLatency } from "@/api/mcp/tool-latency-budgets";
 import { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "@/api/mcp/transport-contract";
 
+import {
+  type CallCaseLawTool,
+  sampleCaseLawIdentities,
+} from "./mcp-canary-case-law-identity";
 import { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
 
 export { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
@@ -262,6 +272,8 @@ const PROBE_NAMES = {
   stream: `GET ${MCP_HTTP_PATH} (notification stream)`,
   toolsList: `POST ${MCP_HTTP_PATH} (modern tools/list)`,
   toolCall: `POST ${MCP_HTTP_PATH} (search_case_law)`,
+  legislationSearch: `POST ${MCP_HTTP_PATH} (search_legislation)`,
+  caseLawCoverage: `POST ${MCP_HTTP_PATH} (case_law_coverage)`,
   unauthenticated: `POST ${MCP_HTTP_PATH} (no credential)`,
 } as const;
 
@@ -369,8 +381,11 @@ export const evaluateToolsList = ({
 
 const readProbeResponse = async (
   response: Response,
+  idleMs = PROBE_TIMEOUT_MS,
 ): Promise<ProbeResponse> => {
-  const text = await response.text();
+  const text = await readBodyTextWithIdleDeadline(response, {
+    idleMs,
+  });
   let body: unknown;
   try {
     body = JSON.parse(text);
@@ -506,7 +521,7 @@ const postJsonRpc = async (
 ): Promise<ProbeResponse> =>
   await readProbeResponse(
     await fetcher(createJsonRpcRequest(call), {
-      timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+      timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
     }),
   );
 
@@ -518,7 +533,7 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
           await deploymentFetcher(new URL(MCP_DISCOVERY_PATH, baseUrl), {
             headers: { accept: "application/json" },
             method: "GET",
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
           }),
         ),
       ),
@@ -537,7 +552,7 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
               "content-type": "application/json",
             },
             method: "POST",
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
           }),
         ),
       ),
@@ -609,7 +624,7 @@ export const runAuthenticatedStreamProbe = async (
       authorization: `Bearer ${token}`,
     },
     method: "GET",
-    timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+    timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
   });
   const headerResult = evaluateStreamAvailability({
     contentType: response.headers.get("content-type"),
@@ -696,10 +711,13 @@ export const describeToolCallFailure = ({
     : line;
 };
 
-export const evaluateToolCall = ({
-  status,
-  body,
-}: Pick<ProbeResponse, "body" | "status">): ProbeResult => {
+export const evaluateToolCall = (
+  { status, body }: Pick<ProbeResponse, "body" | "status">,
+  {
+    name = PROBE_NAMES.toolCall,
+    answered = "read-only case-law search returned content",
+  }: { name?: string; answered?: string } = {},
+): ProbeResult => {
   const result = jsonRpcResult(body);
   if (
     status !== 200 ||
@@ -711,15 +729,111 @@ export const evaluateToolCall = ({
     )
   ) {
     return failed(
-      PROBE_NAMES.toolCall,
+      name,
       `expected a non-error JSON-RPC tool result with content (${describeToolCallFailure({ status, body })})`,
     );
   }
-  return passed(
-    PROBE_NAMES.toolCall,
-    "read-only case-law search returned content",
-  );
+  return passed(name, answered);
 };
+
+/**
+ * Why a tool call failed its latency budget, or undefined within it. The
+ * budget is the API's own table (`mcp/tool-latency-budgets.ts`), the one the
+ * slow-tool alarm counts by, so a slow tool fails the canary, and with it the
+ * release proof, before it ships.
+ */
+export const describeToolLatencyOverBudget = ({
+  toolName,
+  elapsedMs,
+}: {
+  toolName: string;
+  elapsedMs: number;
+}): string | undefined => {
+  const { budgetMs, overBudget } = judgeMcpToolLatency({
+    toolName,
+    elapsedMs,
+  });
+  return overBudget
+    ? `${toolName} answered in ${String(Math.round(elapsedMs))} ms, over its ${String(budgetMs)} ms latency budget`
+    : undefined;
+};
+
+/** A tool call's correctness result, failed as well when it ran over budget. */
+export const judgeToolCallProbe = (
+  result: ProbeResult,
+  { toolName, elapsedMs }: { toolName: string; elapsedMs: number },
+): ProbeResult => {
+  const overBudget = describeToolLatencyOverBudget({ toolName, elapsedMs });
+  if (overBudget === undefined) {
+    return result.status === PROBE_STATUS.passed
+      ? {
+          ...result,
+          detail: `${result.detail} in ${String(Math.round(elapsedMs))} ms`,
+        }
+      : result;
+  }
+  return result.status === PROBE_STATUS.failed
+    ? { ...result, detail: `${result.detail}; ${overBudget}` }
+    : failed(result.name, overBudget);
+};
+
+type ToolCallProbe = {
+  name: string;
+  toolName: string;
+  arguments: Record<string, unknown>;
+  /** The pass line: what a correct answer showed. */
+  answered: string;
+};
+
+/**
+ * The read-only tools a credentialed run calls, each judged for content and
+ * for latency. Public-corpus reads: they need no tenant data, so the same
+ * calls hold for the release proof and the deployed canary.
+ */
+export const TOOL_CALL_PROBES = [
+  {
+    name: PROBE_NAMES.toolCall,
+    toolName: "search_case_law",
+    arguments: { queries: ["contract"], country: "CZ", limit: 1 },
+    answered: "read-only case-law search returned content",
+  },
+  {
+    name: PROBE_NAMES.legislationSearch,
+    toolName: "search_legislation",
+    arguments: { query: "zákoník práce", country: "CZ", limit: 1 },
+    answered: "read-only legislation search returned content",
+  },
+  {
+    name: PROBE_NAMES.caseLawCoverage,
+    toolName: "case_law_coverage",
+    arguments: {},
+    answered: "case-law coverage returned content",
+  },
+] as const satisfies readonly ToolCallProbe[];
+
+const runToolCallProbe =
+  ({ name, toolName, arguments: args, answered }: ToolCallProbe) =>
+  async (
+    { baseUrl, token }: CanaryTarget,
+    fetcher: CanaryFetcher = deploymentFetcher,
+  ): Promise<ProbeResult> => {
+    const startedAt = performance.now();
+    const response = await postJsonRpc(
+      {
+        baseUrl,
+        token,
+        era: "modern",
+        id: 3,
+        method: "tools/call",
+        params: { name: toolName, arguments: args },
+      },
+      fetcher,
+    );
+    return judgeToolCallProbe(evaluateToolCall(response, { name, answered }), {
+      toolName,
+      elapsedMs: performance.now() - startedAt,
+    });
+  };
 
 type AuthenticatedProbe = {
   name: string;
@@ -731,26 +845,10 @@ type AuthenticatedProbe = {
  * skip report both read it, so neither can describe a probe the other lacks.
  */
 export const AUTHENTICATED_PROBES = [
-  {
-    name: PROBE_NAMES.toolCall,
-    run: async ({ baseUrl, token }, fetcher = deploymentFetcher) =>
-      evaluateToolCall(
-        await postJsonRpc(
-          {
-            baseUrl,
-            token,
-            era: "modern",
-            id: 3,
-            method: "tools/call",
-            params: {
-              name: "search_case_law",
-              arguments: { queries: ["contract"], country: "CZ", limit: 1 },
-            },
-          },
-          fetcher,
-        ),
-      ),
-  },
+  ...TOOL_CALL_PROBES.map((probe) => ({
+    name: probe.name,
+    run: runToolCallProbe(probe),
+  })),
   {
     name: PROBE_NAMES.stream,
     run: runAuthenticatedStreamProbe,
@@ -795,18 +893,68 @@ export const AUTHENTICATED_PROBES = [
   },
 ] as const satisfies readonly AuthenticatedProbe[];
 
-// Concurrent because both eras are stateless: neither the legacy initialize
-// nor the modern per-request envelope establishes state for another probe.
-export const runAuthenticatedProbes = async (
+const CASE_LAW_IDENTITY_PROBE_ID = 4;
+
+/** A case-law tool call's JSON payload, or the line saying why there is none. */
+const caseLawToolCaller =
+  (
+    { baseUrl, token }: CanaryTarget,
+    fetcher: CanaryFetcher = deploymentFetcher,
+  ): CallCaseLawTool =>
+  async (name, args) => {
+    const response = await postJsonRpc(
+      {
+        baseUrl,
+        token,
+        era: "modern",
+        id: CASE_LAW_IDENTITY_PROBE_ID,
+        method: "tools/call",
+        params: { name, arguments: args },
+      },
+      fetcher,
+    );
+    const result = jsonRpcResult(response.body);
+    const text =
+      response.status === 200 && result && result["isError"] !== true
+        ? firstContentText(result)
+        : undefined;
+    if (text === undefined) {
+      return { type: "error", detail: describeToolCallFailure(response) };
+    }
+    const payload = Result.try((): unknown => JSON.parse(text));
+    return payload.isOk()
+      ? { type: "ok", payload: payload.value }
+      : { type: "error", detail: "tool content is not JSON" };
+  };
+
+/** One result per probed country: a sampled decision resolves to itself. */
+const runCaseLawIdentityProbes = async (
   target: CanaryTarget,
   fetcher: CanaryFetcher = deploymentFetcher,
 ): Promise<ProbeResult[]> =>
-  await Promise.all(
-    AUTHENTICATED_PROBES.map(
-      async ({ name, run }) =>
-        await runNamedProbe(name, async () => await run(target, fetcher)),
-    ),
+  (await sampleCaseLawIdentities(caseLawToolCaller(target, fetcher))).map(
+    ({ country, outcome: { status, detail } }) => ({
+      name: `case-law identity (${country})`,
+      status: status === "not_applicable" ? PROBE_STATUS.notApplicable : status,
+      detail,
+    }),
   );
+
+// Concurrent because both eras are stateless: neither the legacy initialize
+// nor the modern per-request envelope establishes state for another probe.
+// Credentialed probes share the caller's action admission capacity.
+export const runAuthenticatedProbes = async (
+  target: CanaryTarget,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  const results: ProbeResult[] = [];
+  for (const { name, run } of AUTHENTICATED_PROBES) {
+    results.push(
+      await runNamedProbe(name, async () => await run(target, fetcher)),
+    );
+  }
+  return results;
+};
 
 export const summarize = (results: readonly ProbeResult[]) => ({
   failed: results.filter(
@@ -867,24 +1015,9 @@ const CANARY_SCOPE = MCP_DEFAULT_RESOURCE_SCOPES.filter(
   (scope) => scope === "stella:search" || scope === "stella:read",
 ).join(" ");
 
-const readBoundedJsonObjectBody = async (
-  body: ReadableStream<Uint8Array>,
-): Promise<Record<string, unknown> | undefined> => {
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  for await (const chunk of body) {
-    length += chunk.byteLength;
-    if (length > CLIENT_METADATA_BYTE_CAP) {
-      return undefined;
-    }
-    chunks.push(chunk);
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
+const parseJsonObjectBody = (
+  bytes: Uint8Array,
+): Record<string, unknown> | undefined => {
   const parsed = Result.try((): unknown =>
     JSON.parse(new TextDecoder().decode(bytes)),
   );
@@ -893,7 +1026,7 @@ const readBoundedJsonObjectBody = async (
     : undefined;
 };
 
-const readBoundedJsonObject = async (
+const readClientMetadataBody = async (
   response: Response,
 ): Promise<Record<string, unknown> | undefined> => {
   const declaredLength = Number(response.headers.get("content-length"));
@@ -904,9 +1037,19 @@ const readBoundedJsonObject = async (
     await response.body?.cancel();
     return undefined;
   }
-  return response.body
-    ? await readBoundedJsonObjectBody(response.body)
-    : undefined;
+  const bytes = await Result.tryPromise(async () =>
+    readBodyWithIdleDeadline(response, {
+      idleMs: PROBE_TIMEOUT_MS,
+      maxBytes: CLIENT_METADATA_BYTE_CAP,
+    }),
+  );
+  if (Result.isError(bytes)) {
+    if (BodyByteLimitError.is(bytes.error.cause)) {
+      return undefined;
+    }
+    throw bytes.error.cause;
+  }
+  return parseJsonObjectBody(bytes.value);
 };
 
 type AuthorizeResponseOptions = {
@@ -988,7 +1131,7 @@ export const runOAuthJourneys = async (
     await runNamedProbe("authorization server discovery", async () => {
       const resource = await readProbeResponse(
         await fetcher(new URL(MCP_DISCOVERY_PATH, baseUrl), {
-          timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+          timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
         }),
       );
       const discovery = evaluateDiscovery(resource);
@@ -1009,7 +1152,7 @@ export const runOAuthJourneys = async (
       );
       const metadata = await readProbeResponse(
         await fetcher(metadataUrl, {
-          timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+          timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
         }),
       );
       const evaluation = evaluateAuthorizationMetadata(metadata);
@@ -1036,7 +1179,7 @@ export const runOAuthJourneys = async (
           await fetcher(registrationEndpoint, {
             method: "POST",
             headers: { "content-type": "application/json" },
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
             body: JSON.stringify({
               client_name: CANARY_CLIENT_NAME,
               redirect_uris: LOOPBACK_REDIRECTS,
@@ -1079,7 +1222,7 @@ export const runOAuthJourneys = async (
             {
               headers: { accept: "application/json" },
               method: "GET",
-              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+              timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
             },
           );
           if (!response.ok) {
@@ -1089,13 +1232,12 @@ export const runOAuthJourneys = async (
               `client metadata unavailable upstream (HTTP ${String(response.status)})`,
             );
           }
-          if (!(await readBoundedJsonObject(response))) {
-            return upstream(
-              metadataName,
-              "client metadata unavailable upstream (invalid JSON document)",
-            );
-          }
-          return passed(metadataName, "client metadata available upstream");
+          return (await readClientMetadataBody(response))
+            ? passed(metadataName, "client metadata available upstream")
+            : upstream(
+                metadataName,
+                "client metadata unavailable upstream (invalid JSON document)",
+              );
         });
         if (Result.isOk(attempt)) {
           return attempt.value;
@@ -1148,7 +1290,7 @@ export const runOAuthJourneys = async (
           const response = await fetchWithRateLimitRetry(name, fetcher, url, {
             method: "GET",
             redirect: "manual",
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
           });
           const result = evaluateAuthorize({
             response,
@@ -1255,7 +1397,7 @@ export const runCredentialExpiryProbe = async (
     ...(await readProbeResponse(
       await fetcher(new URL("/v1/api-keys/current", baseUrl), {
         headers: { authorization: `Bearer ${token}` },
-        timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+        timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
       }),
     )),
     nowMs: Temporal.Now.instant().epochMilliseconds,
@@ -1299,7 +1441,7 @@ export const runDesktopProbe = async (
         const sessionResponse = await readProbeResponse(
           await fetcher(new URL("/api/auth/get-session", baseUrl), {
             headers: { cookie: sessionCookie },
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
           }),
         );
         const schema = v.object({
@@ -1337,7 +1479,7 @@ export const runDesktopProbe = async (
                 deviceJkt,
                 verifierHash: canaryVerifierHash(verifier),
               }),
-              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+              timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
             },
           );
           await grant.body?.cancel();
@@ -1369,7 +1511,7 @@ export const runDesktopProbe = async (
                   expectedUserId: identity.userId,
                   expectedOrganizationId: identity.organizationId,
                 }),
-                timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+                timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
               },
             ),
           );
@@ -1416,7 +1558,7 @@ export const runDesktopProbe = async (
                 "content-type": "application/json",
               },
               body: JSON.stringify({ type: "revoke" }),
-              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+              timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
             }),
           );
           if (
@@ -1479,7 +1621,7 @@ export const runStagingCredentialJourneys = async (
           await fetcher(new URL("/smoke/session", baseUrl), {
             method: "POST",
             headers: { "x-smoke-secret": smokeSecret },
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
           }),
         );
         if (
@@ -1505,7 +1647,7 @@ export const runStagingCredentialJourneys = async (
               cookie: sessionCookie,
               "content-type": "application/json",
             },
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
             body: JSON.stringify({
               name: STAGING_KEY_NAME,
               scopes: CANARY_SCOPE.split(" "),
@@ -1584,7 +1726,7 @@ export const runStagingCredentialJourneys = async (
                 cookie: browserCookie,
                 "content-type": "application/json",
               },
-              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+              timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
               body: JSON.stringify({ keyId: idToRevoke }),
             }),
           );
@@ -1780,7 +1922,12 @@ const createReviewJourneyContext = (
     token?: string;
     refreshToken?: string;
     createdTaskId?: string;
-  } = { step: "sign-in", lastResponse: undefined };
+    toolLatencyFailure: string | undefined;
+  } = {
+    step: "sign-in",
+    lastResponse: undefined,
+    toolLatencyFailure: undefined,
+  };
 
   const reject: (assertion: string) => never = (assertion) => {
     throw new ReviewJourneyError({
@@ -1788,6 +1935,13 @@ const createReviewJourneyContext = (
     });
   };
   const complete = () => {
+    // Let the step retain a successful mutation's identity before a timing
+    // failure interrupts it, so cleanup can still remove the created record.
+    const latencyFailure = state.toolLatencyFailure;
+    state.toolLatencyFailure = undefined;
+    if (latencyFailure !== undefined) {
+      reject(latencyFailure);
+    }
     results.push(passed(`${journey}: ${state.step}`, "assertions passed"));
   };
   const request = async (
@@ -1816,7 +1970,7 @@ const createReviewJourneyContext = (
       {
         ...init,
         headers,
-        timeout: { type: "idle", ms: requestBudgetMs ?? PROBE_TIMEOUT_MS },
+        timeout: { type: "headers", ms: requestBudgetMs ?? PROBE_TIMEOUT_MS },
       },
     );
     const responseCookies = cookies.get(origin) ?? new Map<string, string>();
@@ -1831,7 +1985,10 @@ const createReviewJourneyContext = (
       }
     }
     cookies.set(origin, responseCookies);
-    state.lastResponse = await readProbeResponse(response);
+    state.lastResponse = await readProbeResponse(
+      response,
+      requestBudgetMs ?? PROBE_TIMEOUT_MS,
+    );
     if (
       requestBudgetMs !== undefined &&
       performance.now() - started >= requestBudgetMs
@@ -1845,7 +2002,15 @@ const createReviewJourneyContext = (
   };
   const rpc = async (call: JsonRpcCall) => {
     state.lastResponse = undefined;
+    const startedAt = performance.now();
     state.lastResponse = await postJsonRpc(call, targetFetch);
+    state.toolLatencyFailure =
+      call.method === "tools/call"
+        ? describeToolLatencyOverBudget({
+            toolName: call.params.name,
+            elapsedMs: performance.now() - startedAt,
+          })
+        : undefined;
     const result = jsonRpcResult(state.lastResponse.body);
     if (
       state.lastResponse.status !== 200 ||
@@ -2155,7 +2320,7 @@ const captureReviewCallback = async ({
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the canary's own loopback receiver; origin, path and state checked against the issued redirect before this call; no credentials, redirects manual
   const delivered = await fetchWithTimeout(redirect, {
     redirect: "manual",
-    timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+    timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
   });
   await delivered.body?.cancel();
   state.lastResponse = { status: delivered.status, body: undefined };
@@ -2445,6 +2610,213 @@ export const runReviewAccountJourney = async (
   }
   await state.callback?.close();
   await cleanupReviewTask(context);
+  return results;
+};
+
+const RESEARCH_JOURNEY_NAME = "case-law research column";
+/**
+ * A published decision the hourly read journeys also open
+ * (`scripts/check-journeys.sh`). Its source states no reuse restrictions, the
+ * case a research read once mistook for a missing source.
+ */
+export const RESEARCH_CANARY_DECISION_ID =
+  "01a10c6e-cd77-77cc-97bd-19a8dc2e360c";
+const RESEARCH_ANSWER_DEADLINE_MS = 180_000;
+const RESEARCH_POLL_INTERVAL_MS = 5000;
+const researchColumnSchema = v.object({ id: v.pipe(v.string(), v.nonEmpty()) });
+const researchRunSchema = v.object({ queued: v.literal(1) });
+const researchLookupSchema = v.object({
+  items: v.array(
+    v.object({
+      columnId: v.string(),
+      decisionId: v.string(),
+      state: v.string(),
+      failureReason: v.nullable(v.string()),
+    }),
+  ),
+});
+
+type ResearchColumnJourneyOptions = ReviewAccountJourneyOptions & {
+  environment: "staging" | "production";
+  /** Injected by tests; the poll otherwise waits on the wall clock. */
+  wait?: ((ms: number) => Promise<void>) | undefined;
+  now?: (() => number) | undefined;
+};
+
+/**
+ * Ask one AI research question of a known public decision, through the same
+ * browser API the case-law table uses, and fail on anything but an answer.
+ * Answer runs read the decision, its source terms and its text before any
+ * model is asked, so a read that breaks for every decision fails every cell;
+ * nothing else exercises that path end to end against production data.
+ */
+export const runResearchColumnJourney = async (
+  {
+    baseUrl,
+    configuredBaseUrl,
+    frontendUrl = baseUrl,
+    password,
+    email = "review@stll.app",
+    mode,
+    environment,
+    wait = async (ms) => {
+      await Bun.sleep(ms);
+    },
+    now = () => performance.now(),
+  }: ResearchColumnJourneyOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  if (mode !== "full") {
+    return [];
+  }
+  if (environment !== "production") {
+    return [
+      notApplicable(
+        `${RESEARCH_JOURNEY_NAME}: answer`,
+        "the known decision and the model budget are production's",
+      ),
+    ];
+  }
+  if (!password || baseUrl !== configuredBaseUrl) {
+    return [
+      skipped(
+        `${RESEARCH_JOURNEY_NAME}: sign-in`,
+        !password
+          ? "no REVIEW_ACCOUNT_PASSWORD configured"
+          : "credential withheld: target is not the configured endpoint",
+      ),
+    ];
+  }
+  const context = createReviewJourneyContext(
+    {
+      baseUrl,
+      configuredBaseUrl,
+      frontendUrl,
+      journey: RESEARCH_JOURNEY_NAME,
+    },
+    fetcher,
+  );
+  const { results, state, request, complete } = context;
+  const reject: (assertion: string) => never = context.reject;
+  // The browser reaches the API under the app origin's `/api` prefix, where
+  // the session cookie the sign-in set is sent.
+  const researchUrl = (path: string) =>
+    new URL(`/api/v1/case/research${path}`, frontendUrl);
+  const json = { "content-type": "application/json" };
+  let columnId: string | undefined;
+  const outcome = await Result.tryPromise({
+    try: async () => {
+      await signInReviewAccount({ context, email, password });
+      await checkReviewSession(context, email);
+
+      state.step = "create column";
+      const column = await request(researchUrl("/columns"), {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({
+          question: "Did the court grant the application?",
+          answerType: "single-select",
+          options: [
+            { color: "green", value: "yes" },
+            { color: "red", value: "no" },
+          ],
+        }),
+      });
+      if (!v.is(researchColumnSchema, column)) {
+        reject("expected the created column's id");
+      }
+      const createdColumnId = column.id;
+      columnId = createdColumnId;
+      complete();
+
+      state.step = "run";
+      const run = await request(researchUrl("/answers/run"), {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({
+          columnIds: [createdColumnId],
+          decisionIds: [RESEARCH_CANARY_DECISION_ID],
+          force: true,
+        }),
+      });
+      if (!v.is(researchRunSchema, run)) {
+        reject("expected exactly one queued cell");
+      }
+      complete();
+
+      state.step = "answer";
+      const deadline = now() + RESEARCH_ANSWER_DEADLINE_MS;
+      for (;;) {
+        const lookup = await request(researchUrl("/answers/lookup"), {
+          method: "POST",
+          headers: json,
+          body: JSON.stringify({ decisionIds: [RESEARCH_CANARY_DECISION_ID] }),
+        });
+        if (!v.is(researchLookupSchema, lookup)) {
+          reject("expected the decision's research cells");
+        }
+        const cell = lookup.items.find(
+          (item) => item.columnId === createdColumnId,
+        );
+        if (cell === undefined) {
+          reject("expected a cell for the per-run column");
+        }
+        if (cell.state === "answered" || cell.state === "not_stated") {
+          break;
+        }
+        if (cell.state !== "pending") {
+          reject(
+            `expected an answer, got ${cell.state}${cell.failureReason === null ? "" : ` (${cell.failureReason})`}`,
+          );
+        }
+        if (now() >= deadline) {
+          reject(
+            `cell still pending after ${String(RESEARCH_ANSWER_DEADLINE_MS / 1000)} s`,
+          );
+        }
+        await wait(RESEARCH_POLL_INTERVAL_MS);
+      }
+      complete();
+    },
+    catch: (error) => error,
+  });
+  if (outcome.isErr()) {
+    const error = outcome.error;
+    const name = `${RESEARCH_JOURNEY_NAME}: ${state.step}`;
+    results.push(
+      error instanceof CanaryRateLimitError
+        ? { name, status: PROBE_STATUS.rateLimited, detail: error.message }
+        : failed(
+            name,
+            error instanceof ReviewJourneyError
+              ? error.message
+              : `HTTP unavailable; envelope code none; ${describeProbeFailure(error)}`,
+          ),
+    );
+  }
+  if (columnId !== undefined) {
+    const id = columnId;
+    // A column left behind only clutters the review organization until its
+    // nightly reset, so a failed delete warns rather than fails.
+    const cleanup = await runNamedProbe(
+      `${RESEARCH_JOURNEY_NAME}: delete column`,
+      async () => {
+        state.step = "delete column";
+        await request(researchUrl(`/columns/${encodeURIComponent(id)}`), {
+          method: "DELETE",
+        });
+        return passed(
+          `${RESEARCH_JOURNEY_NAME}: delete column`,
+          "per-run column deleted",
+        );
+      },
+    );
+    results.push(
+      cleanup.status === PROBE_STATUS.failed
+        ? { ...cleanup, status: PROBE_STATUS.warned }
+        : cleanup,
+    );
+  }
   return results;
 };
 
@@ -2865,6 +3237,22 @@ const run = async () => {
       mode,
     })),
   );
+  results.push(
+    ...(await runResearchColumnJourney({
+      baseUrl,
+      environment,
+      configuredBaseUrl:
+        process.env[
+          MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.configuredBaseUrl
+        ] ?? "https://api.stll.app",
+      frontendUrl: process.env["MCP_CANARY_FRONTEND_URL"],
+      email:
+        process.env[MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.email],
+      password:
+        process.env[MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.password],
+      mode,
+    })),
+  );
   if (environment === "staging") {
     results.push(
       ...(await runStagingCredentialJourneys({
@@ -2884,6 +3272,23 @@ const run = async () => {
     );
     if (token) {
       results.push(...(await runAuthenticatedProbes({ baseUrl, token })));
+      // Daily: it samples every court, a few hundred tool calls.
+      if (mode === "full") {
+        const identity = await Result.tryPromise({
+          try: async () => await runCaseLawIdentityProbes({ baseUrl, token }),
+          catch: (error) => error,
+        });
+        results.push(
+          ...(identity.isOk()
+            ? identity.value
+            : [
+                failed(
+                  "case-law identity",
+                  describeProbeFailure(identity.error),
+                ),
+              ]),
+        );
+      }
       results.push(
         await runNamedProbe(
           "canary bearer expiry",

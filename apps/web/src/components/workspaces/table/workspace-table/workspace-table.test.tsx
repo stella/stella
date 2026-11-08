@@ -39,6 +39,7 @@ const decisionRows = (count: number): DecisionRowData[] =>
       slug: null,
       decisionDate: null,
       decisionType: null,
+      decisionTypeKind: null,
       headnote: { type: "absent", reason: "not_published" } as const,
       citationCount: 0,
     },

@@ -18,6 +18,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -514,7 +515,7 @@ const ExportReportDialogBody = ({
           )}
         </div>
 
-        <label className="flex items-center gap-2 text-sm font-medium">
+        <Label>
           <Checkbox
             checked={aiNarrative}
             disabled={submitting}
@@ -524,7 +525,7 @@ const ExportReportDialogBody = ({
             }}
           />
           {t("workspaces.views.reportExport.aiSummaries")}
-        </label>
+        </Label>
 
         <ReportDeliveryAndFormatPicker
           disabled={submitting}

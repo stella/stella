@@ -7,6 +7,7 @@ import {
   decisionReferencesIn,
   WithdrawnCopyProjection,
 } from "./withdrawn-copy-projection";
+import { WITHDRAWN_COPY_REGISTRY } from "./withdrawn-copy-registry";
 
 const id = toSafeId<"caseLawDecision">("abcdef01-0000-4000-8000-000000000001");
 const marker = "Withdrawn by publisher";
@@ -45,10 +46,20 @@ describe("withdrawn decision copies", () => {
   });
 
   test("keeps user text and coordinates while replacing every selected quote", () => {
-    const annotation = { quote: "Selected judgment text", body: "My own note" };
+    const annotation = {
+      quote: "Selected judgment text",
+      quotePrefix: "The court held: ",
+      quoteSuffix: " in this case.",
+      body: "My own note",
+      blockAnchorId: "paragraph-7",
+      startOffset: 12,
+      endOffset: 34,
+    };
     expect(projection.annotation(annotation, id)).toEqual({
       ...annotation,
       quote: marker,
+      quotePrefix: marker,
+      quoteSuffix: marker,
     });
     expect(projection.annotation(annotation, null)).toBe(annotation);
     const answer = {
@@ -64,6 +75,41 @@ describe("withdrawn decision copies", () => {
       { paragraphId: "p2", startOffset: 2, endOffset: 8, quote: marker },
     ]);
     expect(answer.quote).toBe("First quote");
+  });
+
+  test("every registry quote column for annotation is masked and other fields stay unchanged", () => {
+    const quoteFields = Object.values(WITHDRAWN_COPY_REGISTRY).flatMap(
+      ({ fields }) =>
+        Object.entries(fields).flatMap(([field, policy]) =>
+          policy.kind === "quote" && policy.projection === "annotation"
+            ? [field]
+            : [],
+        ),
+    );
+    expect(quoteFields).toContain("quote");
+    const retained = {
+      body: "Reader note",
+      blockAnchorId: "paragraph-3",
+      startOffset: 2,
+      endOffset: 17,
+    };
+    const row = {
+      quote: "Copied words",
+      ...Object.fromEntries(
+        quoteFields.map(
+          (field) => [field, `Copied words for ${field}`] as const,
+        ),
+      ),
+      ...retained,
+    };
+    const masked = projection.annotation(row, id);
+    for (const field of quoteFields) {
+      expect(Reflect.get(masked, field)).toBe(marker);
+      expect(Reflect.get(row, field)).toBe(`Copied words for ${field}`);
+    }
+    expect(masked).toMatchObject(retained);
+    expect(Object.keys(masked).toSorted()).toEqual(Object.keys(row).toSorted());
+    expect(projection.annotation(row, null)).toBe(row);
   });
 
   test("replaces assistant snapshots and preserves user messages exactly", () => {

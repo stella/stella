@@ -725,9 +725,9 @@ export const identityFields = (
   const fields: Record<string, string> = {
     "error.class": root.className ?? UNKNOWN_ERROR_CLASS,
     "error.code":
-      root.extraction?.["workerErrorClass"] === undefined
-        ? (root.code ?? root.awsName ?? root.tag)
-        : `${root.code ?? root.tag}:${root.extraction["workerErrorClass"]}`,
+      root.extraction?.["workerErrorClass"] !== undefined
+        ? `${root.code ?? root.tag}:${root.extraction["workerErrorClass"]}`
+        : (root.code ?? root.awsName ?? root.tag),
   };
   const frame = frameValue(root.frame);
   if (frame !== undefined) {
@@ -843,9 +843,9 @@ export const providerStatusFieldsOf = ({
   nodes,
 }: FailureEvidence): Record<string, string> => {
   const found = firstProviderStatus(nodes);
-  return found?.node.providerStatus === undefined
-    ? {}
-    : { "error.provider.status": String(found.node.providerStatus.status) };
+  return found?.node.providerStatus !== undefined
+    ? { "error.provider.status": String(found.node.providerStatus.status) }
+    : {};
 };
 
 export type FingerprintDegradation =
