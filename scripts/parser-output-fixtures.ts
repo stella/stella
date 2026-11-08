@@ -993,7 +993,9 @@ const collectSlovakCourtDocuments = async ({
           await Bun.file(path.join(parserFixtures, filename)).arrayBuffer(),
         ),
       )
-    ).unwrap(`${filename} parses as a stored decision document`);
+    ).unwrap(
+      "A recorded Slovak court PDF parses as a stored decision document",
+    );
     if (parsed === undefined) {
       panic(`${filename} holds no decision document`);
     }
