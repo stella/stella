@@ -933,7 +933,10 @@ fn write_pointer(dir: &Path, pointer: &ActivePointer) -> std::io::Result<()> {
     crate::local_store::rename_private(&staged, &dir.join(ACTIVE_POINTER))
   });
   if written.is_err() {
-    let _ = std::fs::remove_file(staged);
+    crate::logging::best_effort(
+      std::fs::remove_file(staged),
+      "staged harness pointer was not removed",
+    );
   }
   written
 }
