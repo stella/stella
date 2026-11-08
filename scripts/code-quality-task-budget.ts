@@ -550,9 +550,12 @@ const MACHINE_TRAIL_COMMAND_CHARS = 120;
 export const largestOwnedProcesses = (snapshot: string, group: number) =>
   ownedProcessTreeRows(snapshot, group)
     .flatMap((row) => {
-      const match = /^\d+\s+\d+\s+\d+\s+\S+\s+(\d+)\s+(.*)$/u.exec(row);
-      return match
-        ? [{ rssKb: Number(match[1]), command: match[2] ?? "" }]
+      // pid ppid pgid state rss command...; the rows are already trimmed.
+      const fields = row.split(/\s+/u);
+      const rssKb = Number(fields[4]);
+      const [executable = "", ...args] = fields.slice(5);
+      return Number.isSafeInteger(rssKb)
+        ? [{ rssKb, command: [path.basename(executable), ...args].join(" ") }]
         : [];
     })
     .toSorted((left, right) => right.rssKb - left.rssKb)
