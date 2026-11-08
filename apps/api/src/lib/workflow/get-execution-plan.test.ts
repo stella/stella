@@ -696,4 +696,44 @@ describe("answer shape of an ask column", () => {
     expect(shapes.get(propertyId("presence"))).toBe("value");
     expect(shapes.get(propertyId("plain-column"))).toBe("value");
   });
+
+  // A constraint reads the answer itself, so a summary would make it fail
+  // silently; the order the columns are listed in must not decide that.
+  test("an ask a tier match shares with a value check stays a value, in any order", () => {
+    const tierMatch = {
+      ...verdictOf("shared", { kind: "positionMatch" }),
+      id: propertyId("verdict-shared-tier-match"),
+    };
+    const presence = {
+      ...verdictOf("shared", { kind: "presence", expectation: "required" }),
+      id: propertyId("verdict-shared-presence"),
+    };
+    const shapeOfSharedAsk = (verdicts: ExecutionPlanProperty[]) =>
+      getPropertyExecutionPlan({
+        properties: [
+          {
+            id: propertyId("file"),
+            status: "fresh",
+            content: textContent,
+            tool: { version: 1, type: "manual-input" },
+          },
+          askOf("shared"),
+          ...verdicts,
+        ],
+        dependencies: [
+          propertyDependency("shared", "file"),
+          ...verdicts.map(({ id }) => propertyDependency(id, "shared")),
+        ],
+      })
+        .flat()
+        .flatMap(({ properties: batch }) => batch)
+        .flatMap((property) =>
+          property.id === propertyId("shared") && "answerShape" in property
+            ? [property.answerShape]
+            : [],
+        );
+
+    expect(shapeOfSharedAsk([tierMatch, presence])).toEqual(["value"]);
+    expect(shapeOfSharedAsk([presence, tierMatch])).toEqual(["value"]);
+  });
 });

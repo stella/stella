@@ -219,11 +219,19 @@ export const buildDependencyGraph = ({
     dependents.get(edge.dependsOnPropertyId)?.push(edge.propertyId);
   }
 
+  // An ask read by several verdicts answers in the shape they all accept: one
+  // that reads the answer itself needs the value, not a summary of it.
   const answerShapeByAskId = new Map<string, AnswerShape>();
   for (const { tool } of properties) {
-    if (tool.type === "playbook-verdict") {
-      answerShapeByAskId.set(tool.askPropertyId, answerShapeForRule(tool.rule));
+    if (tool.type !== "playbook-verdict") {
+      continue;
     }
+    const shape = answerShapeForRule(tool.rule);
+    const shared = answerShapeByAskId.get(tool.askPropertyId);
+    answerShapeByAskId.set(
+      tool.askPropertyId,
+      shared === undefined || shared === shape ? shape : "value",
+    );
   }
 
   return {
