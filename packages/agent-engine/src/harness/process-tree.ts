@@ -51,6 +51,8 @@ const GROUP_WATCH_SCRIPT = [
 /** The first wait between checks of an ending tree; it doubles up to the cap. */
 const GONE_POLL_MS = 20;
 const GONE_POLL_MAX_MS = 250;
+/** How long one `ps` listing of the system's processes may take. */
+const PS_BUDGET_MS = 2000;
 
 type HarnessChild = Bun.Subprocess<"pipe", "pipe", "ignore">;
 
@@ -90,13 +92,17 @@ const resolveExecutable = (
   { cwd, env }: { cwd: string; env: Readonly<Record<string, string>> },
 ): Result<string, HarnessSpawnError> => {
   const path = env["PATH"];
+  // A name Bun cannot look up at all (one too long for a path, say) is as
+  // missing as one it looked up and did not find.
   const resolved =
     executable === undefined || executable === ""
       ? null
-      : Bun.which(
-          executable,
-          path === undefined ? { cwd } : { cwd, PATH: path },
-        );
+      : Result.try(() =>
+          Bun.which(
+            executable,
+            path === undefined ? { cwd } : { cwd, PATH: path },
+          ),
+        ).unwrapOr(null);
   return resolved === null
     ? Result.err(
         new HarnessSpawnError({
@@ -252,10 +258,20 @@ const darwinSessionMembers = async (
   if (Result.isError(listing)) {
     return { type: "unlisted" };
   }
-  const text = await new Response(listing.value.stdout).text();
-  if ((await listing.value.exited) !== 0) {
+  // A listing that stalls must not hold the ending past its deadline: past
+  // its budget it is killed and counts as unlisted.
+  const listed = await Promise.race([
+    (async () => {
+      const text = await new Response(listing.value.stdout).text();
+      return (await listing.value.exited) === 0 ? text : null;
+    })(),
+    Bun.sleep(PS_BUDGET_MS).then(() => null),
+  ]);
+  if (listed === null) {
+    listing.value.kill("SIGKILL");
     return { type: "unlisted" };
   }
+  const text = listed;
   const members: number[] = [];
   for (const line of text.split("\n")) {
     const [pidText, groupText, state] = line.trim().split(/\s+/u);
@@ -357,8 +373,15 @@ const spawnSession = ({
   const end = once(async () => {
     await signalTree("SIGTERM");
     if (!(await goneWithin(alive, terminateMs))) {
-      await signalTree("SIGKILL");
-      await goneWithin(alive, terminateMs);
+      // Repeated until none is left: a member outside the group may fork
+      // between a listing and its signal.
+      await goneWithin(async () => {
+        if (!(await alive())) {
+          return false;
+        }
+        await signalTree("SIGKILL");
+        return true;
+      }, terminateMs);
     }
     // The watcher went with the group: closing its pipe now cannot make it
     // signal a group id that was reused.
@@ -411,7 +434,14 @@ const spawnWindowsTree = ({
       }),
     );
     if (Result.isOk(tree)) {
-      await goneWithin(() => tree.value.exitCode === null, terminateMs);
+      const finished = await goneWithin(
+        () => tree.value.exitCode === null,
+        terminateMs,
+      );
+      if (!finished) {
+        // Nothing outlives the ending, its own helper included.
+        tree.value.kill("SIGKILL");
+      }
     }
     // The CLI itself, whatever taskkill managed.
     child.kill("SIGKILL");
