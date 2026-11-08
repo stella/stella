@@ -14,6 +14,7 @@ import {
   workspaceSearchDocuments,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import {
   createSearchProjectionRepairDeps,
   drainSearchProjectionRepairQueue,
@@ -24,6 +25,7 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -88,17 +90,21 @@ if (!databaseUrl || !runPostgresTests) {
             slug: organizationId,
           });
           if (kind === "contact") {
-            await currentRepair.db.insert(contacts).values({
-              displayName: staleText,
-              id: contactId,
+            await insertOwnerContacts(currentRepair.db, [
+              {
+                displayName: staleText,
+                id: contactId,
+                organizationId,
+                type: "person",
+              },
+            ]);
+            await withOwnerOrganizationScope(
+              currentRepair.db,
               organizationId,
-              type: "person",
-            });
-            await currentRepair.db.transaction(async (tx) => {
-              await enqueueContactSearchRepairs(asTestRaw<Transaction>(tx), [
-                contactId,
-              ]);
-            });
+              async (tx) => {
+                await enqueueContactSearchRepairs(tx, [contactId]);
+              },
+            );
           } else {
             await currentRepair.db.insert(workspaces).values({
               id: workspaceId,
@@ -127,25 +133,29 @@ if (!databaseUrl || !runPostgresTests) {
             timeoutMs: 3000,
           });
 
-          await currentRepair.db.transaction(async (tx) => {
-            if (kind === "contact") {
+          if (kind === "contact") {
+            await withOwnerOrganizationScope(
+              currentRepair.db,
+              organizationId,
+              async (tx) => {
+                await tx
+                  .update(contacts)
+                  .set({ displayName: currentText })
+                  .where(eq(contacts.id, contactId));
+                await enqueueContactSearchRepairs(tx, [contactId]);
+              },
+            );
+          } else {
+            await currentRepair.db.transaction(async (tx) => {
               await tx
-                .update(contacts)
-                .set({ displayName: currentText })
-                .where(eq(contacts.id, contactId));
-              await enqueueContactSearchRepairs(asTestRaw<Transaction>(tx), [
-                contactId,
+                .update(workspaces)
+                .set({ name: currentText })
+                .where(eq(workspaces.id, workspaceId));
+              await enqueueWorkspaceSearchRepairs(asTestRaw<Transaction>(tx), [
+                workspaceId,
               ]);
-              return;
-            }
-            await tx
-              .update(workspaces)
-              .set({ name: currentText })
-              .where(eq(workspaces.id, workspaceId));
-            await enqueueWorkspaceSearchRepairs(asTestRaw<Transaction>(tx), [
-              workspaceId,
-            ]);
-          });
+            });
+          }
           expect(
             await drainSearchProjectionRepairQueue({
               deps: createSearchProjectionRepairDeps(currentRepair.db),
