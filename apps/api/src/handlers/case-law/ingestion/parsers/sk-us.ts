@@ -52,6 +52,10 @@ import {
   stripInlineSuffix,
 } from "@stll/legal-ast/inline-line";
 import {
+  COURT_PARAGRAPH_OPENING_RE,
+  NUMBERED_LINE_RE,
+} from "@stll/legal-ast/printed-paragraph-labels";
+import {
   isSkDecisionTitle,
   isSkHoldingMarker,
   isSkInstructionMarker,
@@ -926,9 +930,6 @@ const joinRange = (
   return joined;
 };
 
-/** A line opening with a number that numbers it: `4.`, `28.1.`. */
-const NUMBERED_LINE = /^\d{1,3}(?:\.\d{1,3})*\.\s/u;
-
 /**
  * Whether a paragraph open at the foot of a page goes on at the top of the
  * next one: the page broke a sentence (the next page opens with a lowercase
@@ -939,9 +940,9 @@ const NUMBERED_LINE = /^\d{1,3}(?:\.\d{1,3})*\.\s/u;
  */
 const continuesOnNextPage = (open: string, next: string): boolean =>
   /^\p{Ll}/u.test(next) ||
-  (/^\d/u.test(next) && !NUMBERED_LINE.test(next)) ||
+  (/^\d/u.test(next) && !NUMBERED_LINE_RE.test(next)) ||
   (!/[.!?:;][“”"»)]*$/u.test(open) &&
-    !NUMBERED_LINE.test(next) &&
+    !NUMBERED_LINE_RE.test(next) &&
     openingNumberOf(next) === undefined &&
     !OUTLINE_HEADING_RE.test(next) &&
     !endsReasoningPart(next));
@@ -1468,12 +1469,9 @@ const courtRepeatsAfterList = (
   return false;
 };
 
-/** A line opening with a court paragraph number and a capitalised word. */
-const COURT_PARAGRAPH_OPENING = /^(?<number>\d{1,3})\.\s+\p{Lu}/u;
-
 /** The court paragraph number each line opens with, if any. */
 const openingNumberOf = (text: string): number | undefined => {
-  const raw = COURT_PARAGRAPH_OPENING.exec(text)?.groups?.["number"];
+  const raw = COURT_PARAGRAPH_OPENING_RE.exec(text)?.groups?.["number"];
   return raw === undefined ? undefined : Number(raw);
 };
 

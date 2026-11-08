@@ -131,6 +131,10 @@
       "types": "./src/line-wrap.ts",
       "import": "./src/line-wrap.ts"
     },
+    "./printed-paragraph-labels": {
+      "types": "./src/printed-paragraph-labels.ts",
+      "import": "./src/printed-paragraph-labels.ts"
+    },
     "./polish-document-roles": {
       "types": "./src/polish-document-roles.ts",
       "import": "./src/polish-document-roles.ts"
