@@ -2,8 +2,6 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { guardEnforcesLine } from "./guard-rollouts";
-
 const root = path.resolve(import.meta.dir, "..");
 const record = (value: unknown): Record<string, unknown> => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -56,54 +54,9 @@ test("every hosted Buildx use leaves cleanup to the discarded runner", () => {
   for (const file of new Bun.Glob(".github/**/*.{yml,yaml}").scanSync({
     cwd: root,
   })) {
-    const source = readFileSync(path.join(root, file), "utf-8");
-    const document = record(Bun.YAML.parse(source));
-    const lines = source.split("\n");
-    const scopes = lines.flatMap((line, index) => {
-      if (!/^\s*(?:- )?uses: docker\/setup-buildx-action@/u.test(line)) {
-        return [];
-      }
-      let start = index;
-      while (start > 0 && !/^\s*- /u.test(lines[start] ?? "")) {
-        start -= 1;
-      }
-      const indentation = /^\s*/u.exec(lines[start] ?? "")?.at(0)?.length ?? 0;
-      let end = start + 1;
-      while (end < lines.length) {
-        const next = lines[end] ?? "";
-        if (
-          next.trim() !== "" &&
-          !next.trimStart().startsWith("#") &&
-          (/^\s*/u.exec(next)?.at(0)?.length ?? 0) <= indentation
-        ) {
-          break;
-        }
-        end += 1;
-      }
-      for (let at = start; at < end; at += 1) {
-        if (
-          guardEnforcesLine({
-            guard: "hosted-buildx-cleanup",
-            file,
-            line: at + 1,
-          })
-        ) {
-          return [true];
-        }
-      }
-      return [false];
-    });
-    let scopeIndex = 0;
-    const enforceNext = () => {
-      const enforce = scopes.at(scopeIndex);
-      scopeIndex += 1;
-      if (enforce === undefined) {
-        throw new TypeError(
-          `${file}: Buildx source census differs from parsed steps`,
-        );
-      }
-      return enforce;
-    };
+    const document = record(
+      Bun.YAML.parse(readFileSync(path.join(root, file), "utf-8")),
+    );
     if (document["jobs"] !== undefined) {
       for (const [id, rawJob] of Object.entries(record(document["jobs"]))) {
         const job = record(rawJob);
@@ -113,12 +66,11 @@ test("every hosted Buildx use leaves cleanup to the discarded runner", () => {
           steps: job["steps"],
           location: `${file}: ${id}`,
           enforceNext: () => {
-            const enforce = enforceNext();
             const identity = `${file}: ${id}`;
             if (labels.includes("self-hosted")) {
               selfHostedJobs.add(identity);
             }
-            return !selfHostedExclusions.has(identity) && enforce;
+            return !selfHostedExclusions.has(identity);
           },
         });
       }
@@ -129,10 +81,8 @@ test("every hosted Buildx use leaves cleanup to the discarded runner", () => {
       count += assertEphemeralBuildxCleanup({
         steps: record(document["runs"])["steps"],
         location: file,
-        enforceNext,
       });
     }
-    expect(scopeIndex, file).toBe(scopes.length);
   }
   expect([...selfHostedJobs].toSorted()).toEqual(
     [...selfHostedExclusions].toSorted(),
