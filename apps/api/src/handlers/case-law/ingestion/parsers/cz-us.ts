@@ -101,7 +101,7 @@ import {
   readHardWrap,
 } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import {
-  collapseLetterSpacing,
+  readInlineLetterSpacing,
   withAttestedLetterSpacing,
 } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
@@ -525,7 +525,7 @@ const reflowUsLines = (
       reading === null ? inlines : mapInlineText(inlines, reading.clean),
     );
   const spelled = (inlines: readonly Inline[]): Inline[] =>
-    mapInlineText(inlines, collapseLetterSpacing);
+    readInlineLetterSpacing(inlines);
 
   const lines: ParsedLine[] = [];
   let paragraph: Inline[] | null = null;

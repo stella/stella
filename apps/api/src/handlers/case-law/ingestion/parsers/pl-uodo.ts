@@ -39,6 +39,7 @@ import type {
 
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   buildValidationHtml,
   validateAst,
@@ -222,7 +223,7 @@ const inlinesOf = (state: ParseState, node: AnyNode): Inline[] => {
   } else {
     walk(node, inlines);
   }
-  return trimInlines(inlines);
+  return trimInlines(readInlineLetterSpacing(inlines));
 };
 
 type ParagraphContext = {
