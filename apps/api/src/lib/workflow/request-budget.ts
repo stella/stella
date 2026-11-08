@@ -241,6 +241,18 @@ const fitWith = <TFile extends PreparedInputFile>(
       ),
     });
   }
+  // The byte check above is a cheap first pass. Bytes per character differ by
+  // script, so the share the reader is told about, in characters, decides.
+  const charactersTotal = files
+    .flatMap(sourceTexts)
+    .reduce((total, text) => total + Array.from(text).length, 0);
+  const charactersWithheld = withheld.reduce(
+    (total, source) => total + source.charactersWithheld,
+    0,
+  );
+  if (charactersWithheld > charactersTotal * MAX_WITHHELD_TEXT_SHARE) {
+    return Result.err(tooLarge(budgetBytes));
+  }
   const [first, ...rest] = withheld;
   if (first === undefined) {
     return panic("A request over budget must cut at least one text");

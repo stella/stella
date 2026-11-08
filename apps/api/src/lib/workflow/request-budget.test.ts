@@ -150,6 +150,29 @@ describe("fitting documents to a request budget", () => {
     );
   });
 
+  test("a cut never withholds more than half of the characters", () => {
+    assertProperty(
+      "a cut never withholds more than half of the characters",
+      fc.property(documents, budget, (texts, budgetBytes) => {
+        const fit = fitFilesToRequestBudget({
+          files: texts.map((blocks, index) => docx(index, blocks)),
+          budgetBytes,
+        });
+        if (Result.isError(fit) || fit.value.type === "whole") {
+          return;
+        }
+        const characters = texts
+          .flat()
+          .reduce((total, text) => total + Array.from(text).length, 0);
+        const withheld = fit.value.withheld.reduce(
+          (total, source) => total + source.charactersWithheld,
+          0,
+        );
+        expect(withheld).toBeLessThanOrEqual(characters / 2);
+      }),
+    );
+  });
+
   test("a short block is never cut while a longer one keeps more", () => {
     assertProperty(
       "a short block is never cut while a longer one keeps more",

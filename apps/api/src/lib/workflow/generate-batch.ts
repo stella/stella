@@ -24,6 +24,7 @@ import {
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import {
   fieldContentFromValidated,
+  isEmptyFieldContent,
   validateAIOutput,
 } from "@/api/lib/workflow/ai-validators";
 import {
@@ -398,7 +399,12 @@ export const generateBatch = async (
       });
 
       const content = fieldContentFromValidated(validated);
-      if (content === null) {
+      // In a cut document an empty select or date says no more than an empty
+      // text answer does: the value may sit in the text the model never read.
+      if (
+        content === null ||
+        (generation.fit.type === "cut" && isEmptyFieldContent(content))
+      ) {
         settlements.set(property.id, noAnswer);
         continue;
       }

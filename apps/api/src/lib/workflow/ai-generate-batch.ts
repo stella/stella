@@ -423,7 +423,9 @@ export const generateWorkflowData = async ({
     usageMetering,
     orgAIConfig,
     properties,
-    files,
+    // The fitted files: System One must not answer from text this request
+    // reports as withheld.
+    files: fit.value.files,
     textInputs,
     abortSignal,
     onPartialAnswer,
