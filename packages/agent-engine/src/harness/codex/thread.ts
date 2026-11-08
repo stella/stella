@@ -8,8 +8,13 @@ import {
   type HarnessTurnInput,
 } from "../adapter";
 import type { HarnessContinuation } from "../events";
+import {
+  loadableSkillFolders,
+  realPathOf,
+  realSkillFile,
+} from "../skill-folders";
 import type { AppServerClient } from "./app-server-client";
-import { ThreadResponseSchema } from "./protocol";
+import { SkillsListResponseSchema, ThreadResponseSchema } from "./protocol";
 
 /**
  * Opening the Codex thread a turn runs in: a new one, or the native session
@@ -36,10 +41,100 @@ const APPROVAL_POLICY = "on-request";
 /** A dotted config key carries the name, so it must stay a bare TOML key. */
 const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
 
+/** The skills Codex installs with itself; none comes from a member's files. */
+const SYSTEM_SKILL_SCOPE = "system";
+
 const ARCHIVED = /\barchived\b|\bunarchive\b/iu;
 const SESSION_MISSING = /no rollout found|not found/iu;
 
-const threadParams = (input: HarnessTurnInput) => {
+const skillsRefused = (message: string) =>
+  new HarnessStartError({ reason: "start_rejected", message });
+
+/**
+ * Gives the app server this turn's skill folders and answers every skill to
+ * switch off for the thread. A run's skills are Codex's own and the `SKILL.md`
+ * of each listed folder, and nothing else: Codex also loads the working
+ * directory's skills, the member's own, and anything under a root, however deep
+ * and through any link. The roots last as long as this process, one turn, and
+ * nothing is written to the Codex home. A turn whose skills cannot be
+ * established does not run.
+ */
+const establishSkills = async (
+  client: AppServerClient,
+  input: HarnessTurnInput,
+): Promise<Result<readonly string[], HarnessStartError>> => {
+  const folders = await loadableSkillFolders(input.skillFolders);
+  if (folders.length > 0) {
+    const set = await client.request("skills/extraRoots/set", {
+      extraRoots: folders.map(({ path: folder }) => folder),
+    });
+    if (Result.isError(set)) {
+      return Result.err(skillsRefused(set.error.message));
+    }
+  }
+  const listed = await client.request("skills/list", {
+    cwds: [input.workspaceDir],
+    forceReload: true,
+  });
+  if (Result.isError(listed)) {
+    return Result.err(skillsRefused(listed.error.message));
+  }
+  const parsed = v.safeParse(SkillsListResponseSchema, listed.value);
+  if (!parsed.success) {
+    return Result.err(
+      skillsRefused(
+        "The harness answered skills/list with an unexpected shape.",
+      ),
+    );
+  }
+  // A listing without the run's own folder named nothing it would load there,
+  // so switching off what it named would leave that folder's skills on.
+  const workspace = await realPathOf(input.workspaceDir);
+  const listsWorkspace = await Promise.all(
+    parsed.output.data.map(
+      async ({ cwd }) =>
+        cwd === input.workspaceDir || (await realPathOf(cwd)) === workspace,
+    ),
+  );
+  if (!listsWorkspace.includes(true)) {
+    return Result.err(
+      skillsRefused("The harness listed no skills for the run's folder."),
+    );
+  }
+  // A skill discovery could not read is in no listing, so nothing would
+  // switch it off.
+  if (parsed.output.data.some(({ errors }) => errors.length > 0)) {
+    return Result.err(
+      skillsRefused("The harness could not read every skill it found."),
+    );
+  }
+  const allowed = new Set(
+    await Promise.all(
+      folders.map(async ({ path: folder }) => realSkillFile(folder)),
+    ),
+  );
+  allowed.delete(null);
+  const skills = parsed.output.data.flatMap((entry) => entry.skills);
+  const kept = await Promise.all(
+    skills.map(
+      async ({ path: skillPath, scope }) =>
+        scope === SYSTEM_SKILL_SCOPE ||
+        allowed.has(await realPathOf(skillPath)),
+    ),
+  );
+  return Result.ok([
+    ...new Set(
+      skills.flatMap(({ path: skillPath }, index) =>
+        kept[index] === true ? [] : [skillPath],
+      ),
+    ),
+  ]);
+};
+
+const threadParams = (
+  input: HarnessTurnInput,
+  disabledSkills: readonly string[],
+) => {
   if (!MCP_SERVER_NAME.test(input.mcp.serverName)) {
     panic("Codex adapter: the MCP server name must be a bare TOML key");
   }
@@ -60,6 +155,14 @@ const threadParams = (input: HarnessTurnInput) => {
       "sandbox_workspace_write.writable_roots": [input.cacheDir],
       "sandbox_workspace_write.exclude_tmpdir_env_var": false,
       "sandbox_workspace_write.exclude_slash_tmp": false,
+      ...(disabledSkills.length > 0
+        ? {
+            "skills.config": disabledSkills.map((skillPath) => ({
+              path: skillPath,
+              enabled: false,
+            })),
+          }
+        : {}),
       // Only stella's server is overridden; others in the home survive. The
       // token travels over stdio, never on the command line.
       [`mcp_servers.${input.mcp.serverName}`]: {
@@ -106,7 +209,11 @@ export const openThread = async (
   client: AppServerClient,
   input: HarnessTurnInput,
 ): Promise<Result<OpenedThread, HarnessStartError>> => {
-  const params = threadParams(input);
+  const disabledSkills = await establishSkills(client, input);
+  if (Result.isError(disabledSkills)) {
+    return disabledSkills;
+  }
+  const params = threadParams(input, disabledSkills.value);
   if (input.continuation.type === "fresh") {
     return startThread(client, params, { type: "fresh" });
   }

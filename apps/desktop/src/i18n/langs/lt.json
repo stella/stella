@@ -763,5 +763,30 @@
         "storage": "Nepavyko išsaugoti {name} šiame kompiuteryje. Patikrinkite, ar diske yra laisvos vietos."
       }
     }
+  },
+  "localSkills": {
+    "title": "Vietiniai įgūdžiai",
+    "description": "Įgūdžių aplankai šiame kompiuteryje. Vietiniai šio kompiuterio vykdymai gali juos naudoti, ir niekas iš jų neįkeliama.",
+    "add": "Pridėti aplanką",
+    "remove": "Pašalinti",
+    "removeFolder": "Pašalinti {path}",
+    "unusable": "Negalima naudoti",
+    "notice": {
+      "action_failed": "Nepavyko. Bandykite dar kartą.",
+      "too_many": "Šiame kompiuteryje jau yra tiek įgūdžių aplankų, kiek galima naudoti. Pirmiausia pašalinkite vieną.",
+      "already_listed": "Šis aplankas jau yra sąraše.",
+      "missing": "Šio aplanko nebėra.",
+      "not_a_folder": "Tai nebėra aplankas.",
+      "no_skill_file": "Šiame aplanke nėra SKILL.md.",
+      "skill_file_not_regular": "SKILL.md turi būti įprastas failas, o ne nuoroda.",
+      "skill_file_too_large": "SKILL.md per didelis, kad būtų galima perskaityti.",
+      "unreadable": "Nepavyko perskaityti šio aplanko.",
+      "no_name": "SKILL.md antraštėje nėra pavadinimo.",
+      "invalid_name": "Pavadinime SKILL.md gali būti tik raidės, skaitmenys, taškai, brūkšneliai ir pabraukimo ženklai, ir jis turi prasidėti raide arba skaitmeniu.",
+      "duplicate_name": "Kitas sąraše esantis aplankas turi tokio pavadinimo įgūdį.",
+      "runs_can_write": "Vietiniai vykdymai gali rašyti į šį aplanką, todėl jame negali būti įgūdžio.",
+      "network_folder": "Šis aplankas yra tinklo bendrinimo vietoje. Įgūdžiai turi būti šio kompiuterio diske.",
+      "path_changed": "Pasikeitė aukštesnis aplankas. Pašalinkite šį aplanką ir pridėkite jį iš naujo."
+    }
   }
 }
