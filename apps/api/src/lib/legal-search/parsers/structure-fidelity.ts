@@ -17,11 +17,17 @@
  * structure-fidelity guard test runs it over every adapter's recorded
  * fixtures against a shrink-only baseline.
  *
- * The rules are language-agnostic and read only what the blocks state:
- * their order, type, role and text. A rule that needs a jurisdiction's
- * vocabulary belongs to that vocabulary's owner.
+ * The printed-page rules are language-agnostic and read only what the
+ * blocks state: their order, type, role and text. The role rules read a line
+ * through its language's role grammar (`@stll/legal-ast/decision-role-grammar`),
+ * the same owner every parser of that language calls, so a check and a
+ * parser can never read a signature or a reasons heading differently.
  */
 
+import {
+  type DecisionRoleGrammar,
+  decisionRoleGrammarOf,
+} from "@stll/legal-ast/decision-role-grammar";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -46,6 +52,16 @@ export const STRUCTURE_FIDELITY_RULES = {
    * judges sign, so a role carried past them was never closed.
    */
   HOLDING_AFTER_SIGNATURE: "holding-after-signature",
+  /**
+   * A line the decision is signed with, read as its ruling: the parser
+   * carried the operative part past the end of it.
+   */
+  SIGNATURE_AS_HOLDING: "signature-as-holding",
+  /**
+   * Holding after the reasons heading: the ruling precedes the reasons, so
+   * a parser that did not see the heading read the reasons as the ruling.
+   */
+  HOLDING_AFTER_REASONS: "holding-after-reasons",
 } as const;
 
 type StructureFidelityRule =
@@ -148,14 +164,49 @@ const isTableRow = (text: string): boolean => {
 
 const excerptOf = (text: string): string => text.slice(0, EXCERPT_CHARS);
 
-/** Every printed-page structure the blocks carry, in document order. */
+type RoleReading = {
+  grammar: DecisionRoleGrammar | undefined;
+  reasoned: boolean;
+};
+
+/** Whether a block opens the reasons, by the language's grammar. */
+const opensReasons = (
+  grammar: DecisionRoleGrammar | undefined,
+  block: Block,
+): boolean =>
+  grammar !== undefined &&
+  (block.type === "heading" || block.type === "paragraph") &&
+  grammar.isReasonsHeading(block.plainText);
+
+/** The role rules a holding paragraph breaks, by the language's grammar. */
+const holdingRoleRules = (
+  { grammar, reasoned }: RoleReading,
+  text: string,
+): StructureFidelityRule[] => [
+  ...(reasoned ? [STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_REASONS] : []),
+  ...(grammar?.isSignatureLine?.(text) === true
+    ? [STRUCTURE_FIDELITY_RULES.SIGNATURE_AS_HOLDING]
+    : []),
+];
+
+/**
+ * Every printed-page structure the blocks carry, in document order, and
+ * every role the decision's language grammar reads otherwise.
+ */
 export const structureFidelityIn = (
   blocks: readonly Block[],
+  language?: string,
 ): StructureFidelityFinding[] => {
   const findings: StructureFidelityFinding[] = [];
   let signed = false;
+  const reading: RoleReading = {
+    grammar: decisionRoleGrammarOf(language),
+    reasoned: false,
+  };
   for (const [index, block] of blocks.entries()) {
+    const opens = opensReasons(reading.grammar, block);
     if (block.type !== "paragraph") {
+      reading.reasoned ||= opens;
       continue;
     }
     const text = block.plainText.trim();
@@ -170,6 +221,11 @@ export const structureFidelityIn = (
     }
     if (block.role === "holding" && signed) {
       finding(STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_SIGNATURE);
+    }
+    if (block.role === "holding") {
+      for (const rule of holdingRoleRules(reading, text)) {
+        finding(rule);
+      }
     }
     if (isPageNumberLine(text)) {
       finding(STRUCTURE_FIDELITY_RULES.PAGE_NUMBER_BLOCK);
@@ -192,6 +248,7 @@ export const structureFidelityIn = (
         `${text.slice(-EXCERPT_CHARS / 2)} ⏎ ${nextText}`,
       );
     }
+    reading.reasoned ||= opens;
   }
   return findings;
 };
