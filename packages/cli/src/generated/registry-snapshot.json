@@ -550,6 +550,26 @@
             "kind": "filter"
           }
         },
+        "docket_registers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "description": "Only decisions whose Czech or Slovak docket carries one of these registers, case-insensitive: [\"Cdo\"] keeps Supreme Court civil appeals and leaves out \"Tdo\" criminal ones. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Other countries have no register to filter by and refuse it; a docket without one (Constitutional Court) never matches. Use a JSON array of strings; a single string is read as a one-item list.",
+          "x-stella-agent-input": {
+            "kind": "string-list"
+          }
+        },
+        "senate": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999,
+          "description": "The senate number a Czech or Slovak docket opens with, for example 21 in \"21 Cdo 641/2018\". Same limits as docket_registers."
+        },
         "provision": {
           "type": "string",
           "minLength": 1,
