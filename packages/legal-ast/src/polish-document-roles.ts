@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-uodo] only adds the bench-member and decision-date line predicates, which the data-protection reader does not call.
+// parser-output-unchanged: [pl-uodo] only narrows the signature-title opening, which the data-protection reader does not call.
 /**
  * How a Polish decision names its own parts: the operative verbs its ruling
  * opens with, the reasons heading, the recital before the ruling, the closing
@@ -305,12 +305,28 @@ const SIGNATURE_TITLE_RE =
 /** Longest line a signature title opening is read on. */
 const SIGNATURE_TITLE_LINE_MAX_CHARS = 120;
 
-/** Whether a short line opens on a judge's title or office. */
+/**
+ * Fewest words a lead-in ending on a colon runs to (`Prezes Urzędu ustalił
+ * następujący stan faktyczny:`); a signing label before its colon is one or
+ * two (`Przewodniczący:`, `Sędzia sprawozdawca:`).
+ */
+const LEAD_IN_MIN_WORDS = 4;
+
+/** Whether a line is a sentence leading in to what follows its colon. */
+const leadsIn = (line: string): boolean =>
+  line.endsWith(":") && line.split(" ").length >= LEAD_IN_MIN_WORDS;
+
+/**
+ * Whether a short line opens on a judge's title or office. A sentence that
+ * opens on the office and leads in to the reasons (`Prezes Urzędu ustalił
+ * następujący stan faktyczny:`) signs nothing.
+ */
 export const opensWithPlSignatureTitle = (text: string): boolean => {
   const line = grammarLine(text);
   return (
     line.length <= SIGNATURE_TITLE_LINE_MAX_CHARS &&
-    SIGNATURE_TITLE_RE.test(line)
+    SIGNATURE_TITLE_RE.test(line) &&
+    !leadsIn(line)
   );
 };
 

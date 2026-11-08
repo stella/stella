@@ -16,6 +16,7 @@ import {
   isPlSignatureLine,
   namesPlDocumentType,
   opensPlRuling,
+  opensWithPlSignatureTitle,
   startsWithPlOperativeVerb,
 } from "./polish-document-roles";
 
@@ -328,6 +329,24 @@ describe("a Polish head-matter line", () => {
     expect(
       isPlDecisionDateLine(
         "po rozpoznaniu na rozprawie w dniu 1 lutego 2022 roku",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("a line opening on an office", () => {
+  test.each([
+    "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+    "Przewodniczący: Anna Kowalska",
+    "Sędzia sprawozdawca:",
+  ])("%p signs", (line) => {
+    expect(opensWithPlSignatureTitle(line)).toBe(true);
+  });
+
+  test("a sentence leading in to the reasons signs nothing", () => {
+    expect(
+      opensWithPlSignatureTitle(
+        "Prezes Urzędu ustalił następujący stan faktyczny:",
       ),
     ).toBe(false);
   });

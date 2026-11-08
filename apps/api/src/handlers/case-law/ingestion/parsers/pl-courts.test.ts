@@ -1180,3 +1180,32 @@ describe("head matter a layout sets as headings", () => {
     ]);
   });
 });
+
+describe("an authority's reasons led in by its office", () => {
+  test("a sentence opening on the office and ending on a colon is the reasons, not a signature", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>DECYZJA nr DOZIK-5/2024</p><p>I. Na podstawie art. 26 ust. 1 ustawy uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie spółki.</p><p>UZASADNIENIE</p><p>Prezes Urzędu ustalił następujący stan faktyczny:</p><p>Spółka prowadzi sprzedaż w serwisie internetowym.</p><p>Prezes Urzędu Ochrony Konkurencji i Konsumentów</p>",
+        {
+          decisionType: "decyzja",
+          court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        },
+      ),
+    );
+    const roleOf = (text: string) =>
+      documentAst.blocks.find((block) => block.plainText === text);
+
+    expect(
+      roleOf("Prezes Urzędu ustalił następujący stan faktyczny:"),
+    ).toMatchObject({
+      type: "paragraph",
+      role: "argumentation",
+    });
+    expect(
+      roleOf("Prezes Urzędu Ochrony Konkurencji i Konsumentów"),
+    ).toMatchObject({
+      type: "paragraph",
+      role: "signature",
+    });
+  });
+});
