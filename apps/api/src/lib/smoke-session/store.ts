@@ -344,48 +344,65 @@ export const bringJourneyPrerequisitesForward = async (
     sql`least(now(), (select min(${schedulerJobs.nextRunAt}) from ${schedulerJobs}) - interval '1 millisecond')`,
   );
 
-const prerequisiteCheckFailures = async (
-  check: JourneyPrerequisiteCheck,
-): Promise<string[]> => {
+/** What each kind of check reads, loaded once per report. */
+type PrerequisiteCheckInputs = {
+  sanctions: Awaited<ReturnType<typeof readSanctionsFreshness>>;
+};
+
+const checkReadsSanctions = (check: JourneyPrerequisiteCheck): boolean => {
   switch (check.type) {
     case "sanctions-sources-available":
-      // The lists as public screening sees them, through its read-only role.
-      return unavailableSanctionsSources(
-        await readSanctionsFreshness({ db: sanctionsPublicReadDb }),
-        check.sources,
-      );
+      return true;
     default:
       check.type satisfies never;
       return panic("Unhandled journey prerequisite check");
   }
 };
 
-/** The latest run still running or finished at or after `since`. */
-const readLatestPrerequisiteRun = async (
-  jobId: DeclaredSchedulerJobId,
+const prerequisiteCheckFailures = (
+  check: JourneyPrerequisiteCheck,
+  inputs: PrerequisiteCheckInputs,
+): string[] => {
+  switch (check.type) {
+    case "sanctions-sources-available":
+      return unavailableSanctionsSources(inputs.sanctions, check.sources);
+    default:
+      check.type satisfies never;
+      return panic("Unhandled journey prerequisite check");
+  }
+};
+
+/** Each job's latest run still running or finished at or after `since`. */
+const readLatestPrerequisiteRuns = async (
+  jobIds: readonly DeclaredSchedulerJobId[],
   since: Date,
 ) => {
-  const [run] = await rootDb
-    .select({
-      status: schedulerJobRuns.status,
-      startedAt: schedulerJobRuns.startedAt,
-      finishedAt: schedulerJobRuns.finishedAt,
-      error: schedulerJobRuns.error,
-    })
-    .from(schedulerJobRuns)
-    .where(
-      and(
-        eq(schedulerJobRuns.jobId, jobId),
-        or(
-          isNull(schedulerJobRuns.finishedAt),
-          // The caller's instant, at millisecond precision, as a timestamptz.
-          sql`${schedulerJobRuns.finishedAt} >= ${since.toISOString()}::timestamptz`,
+  const read = await readBounded(
+    rootDb
+      .selectDistinctOn([schedulerJobRuns.jobId], {
+        jobId: schedulerJobRuns.jobId,
+        status: schedulerJobRuns.status,
+        startedAt: schedulerJobRuns.startedAt,
+        finishedAt: schedulerJobRuns.finishedAt,
+        error: schedulerJobRuns.error,
+      })
+      .from(schedulerJobRuns)
+      .where(
+        and(
+          inArray(schedulerJobRuns.jobId, jobIds),
+          or(
+            isNull(schedulerJobRuns.finishedAt),
+            // The caller's instant, at millisecond precision, as a timestamptz.
+            sql`${schedulerJobRuns.finishedAt} >= ${since.toISOString()}::timestamptz`,
+          ),
         ),
-      ),
-    )
-    .orderBy(desc(schedulerJobRuns.startedAt))
-    .limit(1);
-  return run ?? null;
+      )
+      .orderBy(schedulerJobRuns.jobId, desc(schedulerJobRuns.startedAt)),
+    jobIds.length,
+  );
+  return read.type === "complete"
+    ? read.rows
+    : panic("More latest runs than prerequisite jobs", { cap: read.cap });
 };
 
 /**
@@ -417,28 +434,43 @@ export const readJourneyPrerequisites = async (
       : panic("More prerequisite jobs than the journey declares", {
           cap: read.cap,
         });
+  const runs = await readLatestPrerequisiteRuns(
+    journeyPrerequisiteJobIds(journey),
+    since,
+  );
   const now = new Date();
-  return await Promise.all(
-    prerequisites.map(
-      async ({ jobId, check }): Promise<JourneyPrerequisiteReport> => {
-        const verdict = judgePrerequisiteRun({
-          jobId,
-          job: jobs.find(({ id }) => id === jobId) ?? null,
-          run: await readLatestPrerequisiteRun(jobId, since),
-          now,
-        });
-        if (verdict.state !== "check") {
-          return verdict;
-        }
-        const failures = await prerequisiteCheckFailures(check);
-        return failures.length === 0
-          ? { jobId, state: JOURNEY_PREREQUISITE_STATE.ready }
-          : {
-              jobId,
-              state: JOURNEY_PREREQUISITE_STATE.failed,
-              detail: `${jobId} ran, but ${failures.join("; ")}`,
-            };
-      },
-    ),
+  const verdicts = prerequisites.map(({ jobId, check }) => ({
+    jobId,
+    check,
+    verdict: judgePrerequisiteRun({
+      jobId,
+      job: jobs.find(({ id }) => id === jobId) ?? null,
+      run: runs.find((run) => run.jobId === jobId) ?? null,
+      now,
+    }),
+  }));
+  const inputs: PrerequisiteCheckInputs = {
+    // The lists as public screening sees them, through its read-only role.
+    sanctions: verdicts.some(
+      ({ check, verdict }) =>
+        verdict.state === "check" && checkReadsSanctions(check),
+    )
+      ? await readSanctionsFreshness({ db: sanctionsPublicReadDb })
+      : [],
+  };
+  return verdicts.map(
+    ({ jobId, check, verdict }): JourneyPrerequisiteReport => {
+      if (verdict.state !== "check") {
+        return verdict;
+      }
+      const failures = prerequisiteCheckFailures(check, inputs);
+      return failures.length === 0
+        ? { jobId, state: JOURNEY_PREREQUISITE_STATE.ready }
+        : {
+            jobId,
+            state: JOURNEY_PREREQUISITE_STATE.failed,
+            detail: `${jobId} ran, but ${failures.join("; ")}`,
+          };
+    },
   );
 };

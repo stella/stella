@@ -163,6 +163,32 @@ describe("journey prerequisite jobs (database)", () => {
     ]);
   });
 
+  test("judges the latest of several runs since the journey", async () => {
+    await testDb
+      .insert(schedulerJobs)
+      .values({ ...declaredJob(SANCTIONS_JOB_ID), nextRunAt: SANCTIONS_DUE });
+    await insertRun({
+      status: "skipped",
+      startedAt: at(1000),
+      finishedAt: at(2000),
+      error: "SchedulerLeaseLost",
+    });
+    await insertRun({
+      status: "running",
+      startedAt: at(5000),
+      finishedAt: null,
+      error: null,
+    });
+
+    expect(await readJourneyPrerequisites(JOURNEY, SINCE)).toEqual([
+      {
+        jobId: SANCTIONS_JOB_ID,
+        state: "pending",
+        detail: `${SANCTIONS_JOB_ID} has been running since ${at(5000).toISOString()}`,
+      },
+    ]);
+  });
+
   test("holds a successful run to the list it should have refreshed", async () => {
     await testDb
       .insert(schedulerJobs)
