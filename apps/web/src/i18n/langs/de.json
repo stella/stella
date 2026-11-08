@@ -1585,6 +1585,8 @@
       "full": "{percent} % voll",
       "instructions": "Systemanweisungen",
       "percent": "{percent} %",
+      "reported": "So hat es der Coding-Agent auf Ihrem Computer nach seiner letzten Antwort gemeldet. Der Agent verwaltet seinen Kontext selbst.",
+      "reportedTokens": "{used} / {total} Tokens",
       "summary": "Zusammenfassung älterer Nachrichten",
       "summaryWithCount": "Zusammenfassung von {count} älteren Nachrichten",
       "title": "Kontext der Unterhaltung",

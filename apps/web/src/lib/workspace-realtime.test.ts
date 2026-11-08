@@ -1,4 +1,9 @@
-import { hashKey, QueryClient, type QueryKey } from "@tanstack/react-query";
+import {
+  hashKey,
+  QueryClient,
+  type QueryKey,
+  QueryObserver,
+} from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
@@ -8,6 +13,7 @@ import {
   contactsQueryRoot,
   workspaceMembersQueryRoot,
 } from "@/lib/resource-query-roots.logic";
+import { createWorkspaceQueryActionBatch } from "@/lib/workspace-sse";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 
@@ -93,7 +99,7 @@ describe("workspace realtime policy", () => {
     ]);
   });
 
-  test("maps view changes and explicitly ignores resources without a policy", () => {
+  test("maps view changes and refreshes activity for resource facts", () => {
     const view = parseEvent({
       type: REALTIME_EVENT_TYPE.RESOURCE_UPDATED,
       resource: { type: RESOURCE_TYPE.WORKSPACE_VIEW, id: "view-1" },
@@ -119,13 +125,22 @@ describe("workspace realtime policy", () => {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["views", WORKSPACE_ID],
       },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: workspacesKeys.overviewActivityAll(WORKSPACE_ID),
+      },
     ]);
     expect(
       getWorkspaceRealtimeQueryActions(memory, {
         workspaceId: WORKSPACE_ID,
         queryClient: new QueryClient(),
       }),
-    ).toEqual([]);
+    ).toEqual([
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: workspacesKeys.overviewActivityAll(WORKSPACE_ID),
+      },
+    ]);
   });
 
   test("maps field changes to entity and field-file caches", () => {
@@ -156,6 +171,10 @@ describe("workspace realtime policy", () => {
       },
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: workspacesKeys.overviewActivityAll(WORKSPACE_ID),
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["files", WORKSPACE_ID, "field-1"],
       },
       {
@@ -172,6 +191,10 @@ describe("workspace realtime policy", () => {
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["entities", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: workspacesKeys.overviewActivityAll(WORKSPACE_ID),
       },
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX,
@@ -301,6 +324,10 @@ describe("workspace realtime policy", () => {
       {
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["entities", WORKSPACE_ID],
+      },
+      {
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: workspacesKeys.overviewActivityAll(WORKSPACE_ID),
       },
     ]);
   });
@@ -495,3 +522,68 @@ describe("matter query ownership", () => {
     );
   });
 });
+
+for (const rowCount of [10, 100]) {
+  test(`mixed entity and list events refresh overview activity once with ${rowCount} rows`, async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+    });
+    const starts = new Map<string, number>();
+    const keys = [
+      workspacesKeys.overview(WORKSPACE_ID),
+      workspacesKeys.overviewActivityAll(WORKSPACE_ID),
+    ];
+    const subscriptions = keys.map((queryKey) => {
+      client.setQueryData(
+        queryKey,
+        Array.from({ length: rowCount }, (_, id) => id),
+      );
+      return new QueryObserver(client, {
+        queryKey,
+        queryFn: async () => {
+          const hash = hashKey(queryKey);
+          starts.set(hash, (starts.get(hash) ?? 0) + 1);
+          return [];
+        },
+      }).subscribe(() => undefined);
+    });
+    const refreshes: Promise<void>[] = [];
+    const batch = createWorkspaceQueryActionBatch(
+      (actions) => {
+        for (const action of actions) {
+          if (action.type === WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE) {
+            refreshes.push(
+              client.invalidateQueries({ queryKey: action.queryKey }),
+            );
+          }
+        }
+      },
+      () => () => undefined,
+    );
+    try {
+      for (const resourceType of [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.LEGAL_LIST,
+      ]) {
+        batch.add(
+          getWorkspaceRealtimeQueryActions(
+            {
+              type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+              resourceType,
+            },
+            { workspaceId: WORKSPACE_ID, queryClient: client },
+          ),
+        );
+      }
+      batch.cancel();
+      await Promise.all(refreshes);
+      expect(keys.map((key) => starts.get(hashKey(key)) ?? 0)).toEqual([1, 1]);
+    } finally {
+      batch.cancel();
+      for (const unsubscribe of subscriptions) {
+        unsubscribe();
+      }
+      client.clear();
+    }
+  });
+}

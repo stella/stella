@@ -19,6 +19,7 @@ import * as v from "valibot";
 
 import {
   FAKE_APPROVAL_REASON,
+  FAKE_CLAUDE_CONTEXT_WINDOW,
   FAKE_CLAUDE_VERSION,
   FAKE_ESCAPE_COMMAND,
   FAKE_MCP_CALL,
@@ -352,6 +353,8 @@ describe("Claude Code adapter over stream-json stdio", () => {
       sessionId: harnessSessionId(sessionId ?? ""),
       continuation: { type: "fresh" },
     });
+    // The context is the main thread's last request, against the window of
+    // the model that made it.
     expect(terminal(events)).toEqual({
       type: "turn.completed",
       usage: {
@@ -359,6 +362,10 @@ describe("Claude Code adapter over stream-json stdio", () => {
         cachedInputTokens: 20,
         outputTokens: 30,
         reasoningOutputTokens: 0,
+        context: {
+          usedTokens: 4 + 600 + 10_000 + 40,
+          windowTokens: FAKE_CLAUDE_CONTEXT_WINDOW,
+        },
       },
     });
   });

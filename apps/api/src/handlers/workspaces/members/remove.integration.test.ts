@@ -62,11 +62,9 @@ const revokeWorkspaceSseAccessMock = mock(async () => undefined);
 const dependencies = {
   broadcastSessionEvent: broadcastSessionEventMock,
   broadcastWorkspaceResourceSetUpdated: (workspaceId, resourceType) =>
-    broadcastWorkspaceResourceSetUpdated(
-      workspaceId,
-      resourceType,
-      broadcastMock,
-    ),
+    broadcastWorkspaceResourceSetUpdated(workspaceId, resourceType, {
+      broadcastEvent: broadcastMock,
+    }),
   closeSessionConnections: closeSessionConnectionsMock,
   revokeWorkspaceSseAccess: revokeWorkspaceSseAccessMock,
 } satisfies NonNullable<

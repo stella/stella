@@ -27,6 +27,7 @@ import {
 } from "@stll/api-contract/chat";
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
@@ -53,8 +54,9 @@ import { compareCodeUnit } from "@stll/collation";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { user } from "@/api/db/auth-schema";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
+  chatMessageRevisions,
   chatMessages,
   chatThreads,
   chatTurns,
@@ -76,6 +78,7 @@ import {
   validateMessage,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
+import { resolveTruncationTarget } from "@/api/handlers/chat/history-window";
 import {
   createLocalChatRun,
   type LocalRunContext,
@@ -148,6 +151,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { chatLocalRunnersScalingScenario } from "@/api/tests/read-scaling/chat-local-runners";
 import { desktopRunnerUpgradeScalingScenario } from "@/api/tests/read-scaling/desktop-runner-upgrade";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
+import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import { createRlsDesktopCredentials } from "@/api/tests/security/rls-desktop-credentials";
 import {
   createTestIds,
@@ -2132,18 +2136,11 @@ describe("chat turns on a computer", () => {
   const turnOf = (chatThreadId: SafeId<"chatThread">) =>
     liveTurns.get(chatThreadId) ?? panic("the thread has no live turn");
 
-  /** Start a running turn on the thread, as a send that claimed it does. */
-  const startTurn = async (chatThreadId: SafeId<"chatThread">) => {
-    const userMessageId = createSafeId<"chatMessage">();
-    await db.insert(chatMessages).values({
-      id: userMessageId,
-      threadId: chatThreadId,
-      userId: ids.userA1,
-      role: "user",
-      content: toPersistedChatMessageContentV3({
-        data: [{ type: "text", content: "Work on the matter" }],
-      }),
-    });
+  /** Start a running turn answering stored user message `userMessageId`. */
+  const openTurn = async (
+    chatThreadId: SafeId<"chatThread">,
+    userMessageId: SafeId<"chatMessage">,
+  ) => {
     const turnId = createSafeId<"chatTurn">();
     await db.insert(chatTurns).values({
       id: turnId,
@@ -2157,6 +2154,21 @@ describe("chat turns on a computer", () => {
     });
     liveTurns.set(chatThreadId, turnId);
     return turnId;
+  };
+
+  /** Start a running turn on the thread, as a send that claimed it does. */
+  const startTurn = async (chatThreadId: SafeId<"chatThread">) => {
+    const userMessageId = createSafeId<"chatMessage">();
+    await db.insert(chatMessages).values({
+      id: userMessageId,
+      threadId: chatThreadId,
+      userId: ids.userA1,
+      role: "user",
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text", content: "Work on the matter" }],
+      }),
+    });
+    return await openTurn(chatThreadId, userMessageId);
   };
 
   /** End the thread's live turn as `reason` cancels it, with no message. */
@@ -2196,6 +2208,34 @@ describe("chat turns on a computer", () => {
         assistantMessageId,
         failureCode: "persistence",
         failureRetryable: true,
+        executionId: null,
+        leaseExpiresAt: null,
+        settledAt: new Date(clock.now),
+      })
+      .where(eq(chatTurns.id, turnId));
+  };
+
+  /** End turn `turnId` as completed with a stored answer, as a send does. */
+  const answerTurn = async (
+    chatThreadId: SafeId<"chatThread">,
+    turnId: SafeId<"chatTurn">,
+    text = "The matter holds one brief.",
+  ) => {
+    const assistantMessageId = createSafeId<"chatMessage">();
+    await db.insert(chatMessages).values({
+      id: assistantMessageId,
+      threadId: chatThreadId,
+      userId: ids.userA1,
+      role: "assistant",
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text", content: text }],
+      }),
+    });
+    await db
+      .update(chatTurns)
+      .set({
+        status: "completed",
+        assistantMessageId,
         executionId: null,
         leaseExpiresAt: null,
         settledAt: new Date(clock.now),
@@ -2426,6 +2466,7 @@ describe("chat turns on a computer", () => {
         cachedInputTokens: 0,
         outputTokens: 5,
         reasoningOutputTokens: 0,
+        context: { usedTokens: 15, windowTokens: 200_000 },
       },
     },
   ];
@@ -2741,6 +2782,61 @@ describe("chat turns on a computer", () => {
     });
   });
 
+  test("a finished run's context report reaches the turn, and one the desktop made up does not", async () => {
+    const finishedTurn = async (
+      rewrite: (chunk: unknown) => unknown,
+    ): Promise<unknown> => {
+      const chatThreadId = await newThread();
+      const { desktopId, desktop } = shared();
+      const turn = collect(
+        createLocalChatRun(
+          contextFor(chatThreadId),
+          startPlan(desktopId),
+        ).stream({
+          chatRunId: Bun.randomUUIDv7(),
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "What does the matter hold?" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+      const start = await desktop.receive("run.start");
+      desktop.send({ type: "run.accepted", runId: start.runId });
+      const run = desktopRun(desktop, start.runId);
+      await run.events(
+        (await harnessChunks(start.runId, completedTurn)).map(rewrite),
+      );
+      await run.finish("completed", "codex-session-1");
+      const finish = (await turn.done).findLast(
+        ({ type }) => type === EventType.RUN_FINISHED,
+      );
+      return finish?.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY];
+    };
+    const withReport = (report: unknown) => (chunk: unknown) =>
+      isRecord(chunk) && chunk["type"] === EventType.RUN_FINISHED
+        ? {
+            ...chunk,
+            metadata: {
+              ...(isRecord(chunk["metadata"]) ? chunk["metadata"] : {}),
+              [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: report,
+            },
+          }
+        : chunk;
+
+    expect(await finishedTurn((chunk) => chunk)).toEqual({
+      usedTokens: 15,
+      windowTokens: 200_000,
+    });
+    for (const forged of [
+      { usedTokens: 15, windowTokens: 200_000, label: "<b>full</b>" },
+      { usedTokens: 1.5, windowTokens: 200_000 },
+      { usedTokens: 15 },
+    ]) {
+      expect(await finishedTurn(withReport(forged))).toBeUndefined();
+    }
+  });
+
   test("the thread's next turn on the same computer resumes the harness session", async () => {
     const chatThreadId = await newThread();
     const { desktopId, desktop } = shared();
@@ -2764,8 +2860,9 @@ describe("chat turns on a computer", () => {
     await firstRun.events(await harnessChunks(firstStart.runId, completedTurn));
     await firstRun.finish("completed", "codex-session-1");
     await firstTurn.done;
+    await answerTurn(chatThreadId, turnOf(chatThreadId));
 
-    const secondTurnId = await nextTurn(chatThreadId);
+    const secondTurnId = await startTurn(chatThreadId);
     const secondTurn = collect(
       local.stream({
         chatRunId: "chat-run-second",
@@ -2795,6 +2892,279 @@ describe("chat turns on a computer", () => {
     );
     await secondRun.finish("completed", "codex-session-1");
     expect((await secondTurn.done).at(-1)?.type).toBe(EventType.RUN_FINISHED);
+  });
+
+  describe("which harness session a turn resumes", () => {
+    const answerText = "The matter holds one brief.";
+
+    /** The stored user message turn `turnId` answers. */
+    const askedBy = async (turnId: SafeId<"chatTurn">) =>
+      (
+        await db
+          .select({ userMessageId: chatTurns.userMessageId })
+          .from(chatTurns)
+          .where(eq(chatTurns.id, turnId))
+      ).at(0)?.userMessageId ?? panic("the turn is not stored");
+
+    /**
+     * Run turn `turnId` on the shared computer to its end, with the harness
+     * leaving session `sessionId`, and store its answer as the send does.
+     * Returns the session the run was started to resume.
+     */
+    const runTurn = async (
+      chatThreadId: SafeId<"chatThread">,
+      turnId: SafeId<"chatTurn">,
+      sessionId: string,
+    ) => {
+      const { desktopId, desktop } = shared();
+      const turn = collect(
+        createLocalChatRun(
+          contextFor(chatThreadId),
+          startPlan(desktopId),
+        ).stream({
+          chatRunId: `chat-run-${turnId}`,
+          chatTurnId: turnId,
+          messages: [{ role: "user", content: "Work on the matter" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+      // Each start for the thread is read by the turn that caused it.
+      const start = await desktop.receive(
+        "run.start",
+        (message) =>
+          message.type === "run.start" && message.folderId === chatThreadId,
+      );
+      const { runId } = start;
+      desktop.send({ type: "run.accepted", runId });
+      const run = desktopRun(desktop, runId);
+      await run.events(await harnessChunks(runId, completedTurn.slice(3)));
+      await run.finish("completed", sessionId);
+      expect((await turn.done).at(-1)?.type).toBe(EventType.RUN_FINISHED);
+      await answerTurn(chatThreadId, turnId, answerText);
+      return start.harnessSessionId;
+    };
+
+    /**
+     * Replay the thread from user message `messageId`, as an edit or a
+     * regeneration does when it is sent: the send's own resolution names
+     * every later message, which goes, the message is written again, and a
+     * new turn answers it.
+     */
+    const replayFrom = async (
+      chatThreadId: SafeId<"chatThread">,
+      messageId: SafeId<"chatMessage">,
+      text: string,
+    ) => {
+      const target =
+        (
+          await resolveTruncationTarget({
+            safeDb: toSafeDbMock(
+              asTestRaw<ScopedDb>(
+                async (callback: (tx: typeof db) => Promise<unknown>) =>
+                  await db.transaction(
+                    async (tx) => await callback(asTestRaw(tx)),
+                  ),
+              ),
+            ),
+            threadId: chatThreadId,
+            targetMessageId: messageId,
+          })
+        ).unwrap() ?? panic("the message is not in the thread");
+      await db
+        .delete(chatMessages)
+        .where(
+          and(
+            eq(chatMessages.threadId, chatThreadId),
+            inArray(chatMessages.id, target.deleteMessageIdsBeforeLatest),
+          ),
+        );
+      await db
+        .update(chatMessages)
+        .set({
+          content: toPersistedChatMessageContentV3({
+            data: [{ type: "text", content: text }],
+          }),
+        })
+        .where(eq(chatMessages.id, messageId));
+      return await openTurn(chatThreadId, messageId);
+    };
+
+    /** A thread whose first turn ran on the shared computer and left `sessionId`. */
+    const answeredThread = async (sessionId: string) => {
+      const chatThreadId = await newThread();
+      const firstTurnId = turnOf(chatThreadId);
+      expect(await runTurn(chatThreadId, firstTurnId, sessionId)).toBeNull();
+      return { chatThreadId, firstTurnId };
+    };
+
+    test("a plain follow-up resumes the session the previous answer left", async () => {
+      const { chatThreadId } = await answeredThread("codex-session-plain");
+      const secondTurnId = await startTurn(chatThreadId);
+      expect(
+        await runTurn(chatThreadId, secondTurnId, "codex-session-plain"),
+      ).toBe("codex-session-plain");
+      const thirdTurnId = await startTurn(chatThreadId);
+      expect(
+        await runTurn(chatThreadId, thirdTurnId, "codex-session-plain"),
+      ).toBe("codex-session-plain");
+    });
+
+    test("an edited earlier message starts a fresh session", async () => {
+      const { chatThreadId, firstTurnId } = await answeredThread(
+        "codex-session-edited",
+      );
+      const secondTurnId = await startTurn(chatThreadId);
+      expect(
+        await runTurn(chatThreadId, secondTurnId, "codex-session-edited"),
+      ).toBe("codex-session-edited");
+
+      const edited = await replayFrom(
+        chatThreadId,
+        await askedBy(firstTurnId),
+        "Work on the other matter",
+      );
+      expect(
+        await runTurn(chatThreadId, edited, "codex-session-new"),
+      ).toBeNull();
+      // The fresh session is the one the edited history continues.
+      const followUp = await startTurn(chatThreadId);
+      expect(await runTurn(chatThreadId, followUp, "codex-session-new")).toBe(
+        "codex-session-new",
+      );
+    });
+
+    test("an edit of an answered message in the middle starts fresh", async () => {
+      const { chatThreadId } = await answeredThread("codex-session-middle");
+      const secondTurnId = await startTurn(chatThreadId);
+      await runTurn(chatThreadId, secondTurnId, "codex-session-middle");
+      const thirdTurnId = await startTurn(chatThreadId);
+      await runTurn(chatThreadId, thirdTurnId, "codex-session-middle");
+
+      // The answer right before the edited message is still the first run's.
+      const edited = await replayFrom(
+        chatThreadId,
+        await askedBy(secondTurnId),
+        "Work on the other matter",
+      );
+      expect(
+        await runTurn(chatThreadId, edited, "codex-session-middle-new"),
+      ).toBeNull();
+    });
+
+    test("a regenerated answer starts a fresh session", async () => {
+      const { chatThreadId } = await answeredThread("codex-session-regen");
+      const secondTurnId = await startTurn(chatThreadId);
+      await runTurn(chatThreadId, secondTurnId, "codex-session-regen");
+
+      const regenerated = await replayFrom(
+        chatThreadId,
+        await askedBy(secondTurnId),
+        "Work on the matter",
+      );
+      expect(
+        await runTurn(chatThreadId, regenerated, "codex-session-regen-new"),
+      ).toBeNull();
+    });
+
+    test("an answer from elsewhere in between starts a fresh session", async () => {
+      const { chatThreadId } = await answeredThread("codex-session-cloud");
+      // A turn answered in the cloud: the computer's session never saw it.
+      const cloudTurnId = await startTurn(chatThreadId);
+      await answerTurn(chatThreadId, cloudTurnId, "Answered in the cloud.");
+      const nextTurnId = await startTurn(chatThreadId);
+      expect(
+        await runTurn(chatThreadId, nextTurnId, "codex-session-cloud-new"),
+      ).toBeNull();
+    });
+
+    test("a revised answer starts a fresh session", async () => {
+      const { chatThreadId, firstTurnId } = await answeredThread(
+        "codex-session-revised",
+      );
+      const [answered] = await db
+        .select({
+          id: chatMessages.id,
+          content: chatMessages.content,
+        })
+        .from(chatMessages)
+        .innerJoin(chatTurns, eq(chatTurns.assistantMessageId, chatMessages.id))
+        .where(eq(chatTurns.id, firstTurnId));
+      const answer = answered ?? panic("the first turn stored no answer");
+      // The revision keeps the replaced text; the message takes the new one.
+      await db.insert(chatMessageRevisions).values({
+        messageId: answer.id,
+        threadId: chatThreadId,
+        revision: 0,
+        content: answer.content,
+        edit: {
+          type: "ai_span",
+          start: 17,
+          end: 27,
+          instruction: "Say it holds none",
+          model: CHAT_MODEL,
+          keySource: "instance",
+        },
+        createdBy: ids.userA1,
+      });
+      await db
+        .update(chatMessages)
+        .set({
+          content: toPersistedChatMessageContentV3({
+            data: [{ type: "text", content: "The matter holds no brief." }],
+          }),
+          revision: 1,
+        })
+        .where(eq(chatMessages.id, answer.id));
+      const nextTurnId = await startTurn(chatThreadId);
+      expect(
+        await runTurn(chatThreadId, nextTurnId, "codex-session-revised-new"),
+      ).toBeNull();
+    });
+
+    test("a fork does not resume the session of the thread it was forked from", async () => {
+      const { chatThreadId } = await answeredThread("codex-session-parent");
+      // The fork copies the history under new ids and keeps its timestamps.
+      const forkId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+      await db.insert(chatThreads).values({
+        id: forkId,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        title: "A fork",
+        parentThreadId: chatThreadId,
+      });
+      const history = await db
+        .select({
+          role: chatMessages.role,
+          content: chatMessages.content,
+          createdAt: chatMessages.createdAt,
+        })
+        .from(chatMessages)
+        .where(eq(chatMessages.threadId, chatThreadId))
+        .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
+      await db.insert(chatMessages).values(
+        history.map((row) => ({
+          ...row,
+          id: createSafeId<"chatMessage">(),
+          threadId: forkId,
+          userId: ids.userA1,
+        })),
+      );
+      const forkTurnId = await startTurn(forkId);
+      expect(
+        await runTurn(forkId, forkTurnId, "codex-session-fork"),
+      ).toBeNull();
+      const forkFollowUp = await startTurn(forkId);
+      expect(await runTurn(forkId, forkFollowUp, "codex-session-fork")).toBe(
+        "codex-session-fork",
+      );
+      // The parent goes on with its own session.
+      const parentFollowUp = await startTurn(chatThreadId);
+      expect(
+        await runTurn(chatThreadId, parentFollowUp, "codex-session-parent"),
+      ).toBe("codex-session-parent");
+    });
   });
 
   test("an approval pauses the turn, and its answer continues the same run", async () => {

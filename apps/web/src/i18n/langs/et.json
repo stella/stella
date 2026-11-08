@@ -1585,6 +1585,8 @@
       "full": "{percent}% täis",
       "instructions": "Süsteemi juhised",
       "percent": "{percent}%",
+      "reported": "Nii, nagu sinu arvutis töötav programmeerimisagent pärast oma viimast vastust teatas. Agent haldab oma konteksti ise.",
+      "reportedTokens": "{used} / {total} tokenit",
       "summary": "Vanemate sõnumite kokkuvõte",
       "summaryWithCount": "{count} vanema sõnumi kokkuvõte",
       "title": "Vestluse kontekst",

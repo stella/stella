@@ -771,10 +771,20 @@ test("read-only lint reports a missing snapshot once per design-system rule", as
 });
 
 test("read-only branches reject worker fallback", async () => {
-  const patch = await readFile(
-    path.join(repositoryRoot, "patches/oxlint-tailwindcss@1.16.0.patch"),
-    "utf-8",
+  // The patch the root manifest applies, whatever plugin version it targets.
+  const { patchedDependencies } = v.parse(
+    v.object({ patchedDependencies: v.record(v.string(), v.string()) }),
+    JSON.parse(
+      await readFile(path.join(repositoryRoot, "package.json"), "utf-8"),
+    ),
   );
+  const patchPath = Object.entries(patchedDependencies).find(([spec]) =>
+    spec.startsWith("oxlint-tailwindcss@"),
+  )?.[1];
+  if (patchPath === undefined) {
+    throw new Error("package.json applies no oxlint-tailwindcss patch");
+  }
+  const patch = await readFile(path.join(repositoryRoot, patchPath), "utf-8");
   expect(patch).toContain(
     "if (CACHE_READ_ONLY) throw readOnlyCacheError(`missing snapshot",
   );

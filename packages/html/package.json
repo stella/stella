@@ -54,7 +54,7 @@
   "dependencies": {
     "better-result": "catalog:",
     "cheerio": "^1.2.0",
-    "domhandler": "^6.0.1",
+    "domhandler": "^5.0.3",
     "parse5": "catalog:",
     "parse5-htmlparser2-tree-adapter": "catalog:"
   }

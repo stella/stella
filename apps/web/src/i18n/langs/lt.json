@@ -1585,6 +1585,8 @@
       "full": "Užpildyta {percent}%",
       "instructions": "Sistemos instrukcijos",
       "percent": "{percent}%",
+      "reported": "Kaip pranešė programavimo agentas jūsų kompiuteryje po paskutinio atsakymo. Agentas pats tvarko savo kontekstą.",
+      "reportedTokens": "{used} / {total} tokenų",
       "summary": "Senesnių žinučių santrauka",
       "summaryWithCount": "{count} senesnių žinučių santrauka",
       "title": "Pokalbio kontekstas",

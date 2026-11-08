@@ -44,7 +44,10 @@ import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
-import { CHAT_LOCAL_RUN_LIMIT_METADATA_KEY } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+} from "@stll/api-contract/chat-run-target";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
   type VisualPreviewOutput,
@@ -7211,6 +7214,58 @@ test("a local run's usage limit reset is streamed, stored and reloaded, and only
     type: "failed",
     error: "local_runner_unavailable",
   });
+});
+
+test("a local turn's context report is stored with its answer and reloaded, and a malformed one is not", async () => {
+  const finishedWith = async (reported: unknown) => {
+    const chunks = async function* (): AsyncIterable<StreamChunk> {
+      yield { type: EventType.RUN_STARTED, runId: "run-1", threadId: "t-1" };
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "m-1",
+        role: "assistant",
+      };
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "m-1",
+        delta: "Done.",
+      };
+      yield { type: EventType.TEXT_MESSAGE_END, messageId: "m-1" };
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: "run-1",
+        threadId: "t-1",
+        finishReason: "stop",
+        metadata: { [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: reported },
+      };
+    };
+    const result = await persistNativeInterruptTurn(chunks());
+    const response =
+      result.finish?.responseMessage ?? panic("Expected terminal response");
+    return {
+      stored: response.metadata.localRunContext,
+      reloaded: normalizePersistedChatMessageContent(
+        toPersistedChatMessageContentV3({
+          data: response.parts,
+          metadata: response.metadata,
+        }),
+      ).metadata.localRunContext,
+    };
+  };
+
+  const report = { usedTokens: 48_200, windowTokens: 200_000 };
+  const reported = await finishedWith(report);
+  expect(reported.stored).toEqual(report);
+  expect(reported.reloaded).toEqual(report);
+
+  for (const malformed of [
+    { usedTokens: -1, windowTokens: 200_000 },
+    { usedTokens: 10, windowTokens: 0 },
+    { ...report, note: "extra" },
+    "48200/200000",
+  ]) {
+    expect((await finishedWith(malformed)).stored).toBeUndefined();
+  }
 });
 
 describe("decision passage court numbers", () => {
