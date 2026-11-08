@@ -64,10 +64,7 @@ describe("stella app resource persistence", () => {
       toolCallId: "app-call-one",
       toolName: "search_case_law",
     });
-    if (Result.isError(minted)) {
-      return panic(minted.error);
-    }
-    const part = minted.value;
+    const part = Result.isOk(minted) ? minted.value : panic(minted.error);
     expect(part.resource.mimeType).toBe(STELLA_MCP_APP_MIME_TYPE);
     expect(readStellaMcpAppCall(part)).toEqual(call);
 
@@ -103,15 +100,12 @@ describe("stella app resource persistence", () => {
       toolCallId: "app-call-stored",
       toolName: "read_provision_history",
     });
-    if (Result.isError(minted)) {
-      return panic(minted.error);
-    }
+    const part = Result.isOk(minted) ? minted.value : panic(minted.error);
     const continued = createVisualResourceOrigin({
-      persistedParts: [minted.value],
+      persistedParts: [part],
     });
     expect(
-      classifyChatPartForPersistence(structuredClone(minted.value), continued)
-        .type,
+      classifyChatPartForPersistence(structuredClone(part), continued).type,
     ).toBe("persist");
   });
 
@@ -146,20 +140,19 @@ describe("stella app resource persistence", () => {
       toolCallId: "app-call-reload",
       toolName: "search_case_law",
     });
-    if (Result.isError(minted)) {
-      return panic(minted.error);
-    }
+    const part = Result.isOk(minted) ? minted.value : panic(minted.error);
     const decision = classifyChatPartForPersistence(
-      structuredClone(minted.value),
+      structuredClone(part),
       origin,
     );
-    if (decision.type !== "persist") {
-      return panic("The minted part was not persisted");
-    }
-    const stored = toPersistedChatMessageContentV3({ data: [decision.part] });
+    const persisted =
+      decision.type === "persist"
+        ? decision.part
+        : panic("The minted part was not persisted");
+    const stored = toPersistedChatMessageContentV3({ data: [persisted] });
     const reloaded = normalizePersistedChatMessageContent(
       structuredClone(stored),
     ).parts;
-    expect(reloaded).toEqual([minted.value]);
+    expect(reloaded).toEqual([part]);
   });
 });
