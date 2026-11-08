@@ -2,6 +2,8 @@ import { Result, TaggedError } from "better-result";
 import { dlopen, FFIType } from "bun:ffi";
 import { closeSync, readdirSync, readFileSync } from "node:fs";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 /**
  * A harness CLI and every process it starts, ended together.
  *
@@ -164,6 +166,17 @@ type SessionListing =
 const LINUX_STAT_FIELDS = { state: 0, session: 3 } as const;
 
 /**
+ * A process or group id as `/proc` or `ps` writes it, or `null` for text that
+ * names none (`/proc/self`, a header) or one at or below 1, which no spawned
+ * process has.
+ */
+const processIdOf = (text: string | undefined): number | null =>
+  parseIntegerToken(text, { sign: "unsigned", min: 2 }).match({
+    ok: (id) => id,
+    err: () => null,
+  });
+
+/**
  * The session of `pid` from `/proc`, or `null` once it exited (a zombie
  * included) or cannot be read.
  */
@@ -179,7 +192,7 @@ const linuxSessionOf = (pid: number) => {
   const state = fields[LINUX_STAT_FIELDS.state];
   return state === "Z" || state === "X"
     ? null
-    : Number(fields[LINUX_STAT_FIELDS.session]);
+    : processIdOf(fields[LINUX_STAT_FIELDS.session]);
 };
 
 const linuxSessionMembers = (sessionId: number): SessionListing => {
@@ -189,14 +202,10 @@ const linuxSessionMembers = (sessionId: number): SessionListing => {
   }
   return {
     type: "listed",
-    pids: listed.value
-      .map(Number)
-      .filter(
-        (pid) =>
-          Number.isSafeInteger(pid) &&
-          pid > 1 &&
-          linuxSessionOf(pid) === sessionId,
-      ),
+    pids: listed.value.flatMap((name) => {
+      const pid = processIdOf(name);
+      return pid !== null && linuxSessionOf(pid) === sessionId ? [pid] : [];
+    }),
   };
 };
 
@@ -243,14 +252,13 @@ const darwinSessionMembers = async (
   const members: number[] = [];
   for (const line of text.split("\n")) {
     const [pidText, groupText, state] = line.trim().split(/\s+/u);
-    const pid = Number(pidText);
+    const pid = processIdOf(pidText);
     if (
-      Number.isSafeInteger(pid) &&
-      pid > 1 &&
+      pid !== null &&
       state !== undefined &&
       !state.startsWith("Z") &&
       (getsid === null
-        ? Number(groupText) === sessionId
+        ? processIdOf(groupText) === sessionId
         : getsid(pid) === sessionId)
     ) {
       members.push(pid);
@@ -348,9 +356,10 @@ const spawnSession = ({
     // The watcher went with the group: closing its pipe now cannot make it
     // signal a group id that was reused.
     if (typeof watch === "number") {
+      // A pipe that is closed already needs nothing more.
       Result.try(() => {
         closeSync(watch);
-      });
+      }).unwrapOr(undefined);
     }
   });
   return Result.ok({ child, end });
