@@ -149,7 +149,7 @@ export const HANGING_POINT_MARKER_RE =
 /** The number an authority sets before each paragraph: `(12)`, `[12]`. */
 export const AUTHORITY_PARAGRAPH_NUMBER_RE = /^(?:\(\d{1,3}\)|\[\d{1,3}\])\s/u;
 
-// parser-output-unchanged: the label shapes below moved here unchanged from cz-us, cz-nss, sk-us, page furniture and AST validation; a parser that reads only them keeps its output.
+// parser-output-unchanged: the label shapes below moved here unchanged from cz-us, cz-nss, sk-us, pl-courts, page furniture and AST validation; a parser that reads only them keeps its output.
 /** A bracketed paragraph number opening a line, and the space after it. */
 export const BRACKET_PARAGRAPH_MARKER_RE = /^\[(?:\d+)\]\s*/u;
 
@@ -170,6 +170,9 @@ export const COURT_PARAGRAPH_OPENING_RE = /^(?<number>\d{1,3})\.\s+\p{Lu}/u;
 
 /** A list item after a page break: `2.`, `b.`, `-`, whatever case follows. */
 export const PAGE_LIST_ITEM_RE = /^\s*(?:\d{1,4}[.)]|\p{L}[.)]|[-–•])\s/u;
+
+/** The outline number a bold subheading may open with (`2.1.`, `5.2.1.2`). */
+export const SUBHEADING_OUTLINE_NUMBER_RE = /^\d{1,2}(?:\.\d{1,2}){0,4}\.? /u;
 
 /** A heading's text without the number it opens with (`3. Odlišné …`). */
 export const withoutLeadingNumber = (text: string): string =>
