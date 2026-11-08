@@ -55,6 +55,7 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
 import { createTestRsaKeyPool } from "@/api/tests/helpers/test-pki";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -437,9 +438,7 @@ describe.skipIf(!runPostgresTests)("pdf signing finalize authority", () => {
             ).toBe(baseVersionId);
             return undefined;
           } finally {
-            await setup.db
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(setup.db, [organizationId]);
             await setup.db.delete(user).where(eq(user.id, userId));
           }
         },

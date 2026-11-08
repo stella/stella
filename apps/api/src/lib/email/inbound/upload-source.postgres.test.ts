@@ -382,7 +382,7 @@ if (!databaseUrl || !runPostgresTests) {
             entityId,
             workspaceId: ids.wsA1,
             versionNumber: 3,
-            createdBy: ids.userAdmin,
+            createdBy: ids.userA1,
           });
           await testDb.insert(fields).values({
             id: createSafeId<"field">(),
@@ -595,12 +595,14 @@ if (!databaseUrl || !runPostgresTests) {
           entityId,
           workspaceId: ids.wsA1,
           versionNumber: 1,
+          createdBy: ids.userA1,
         },
         {
           id: currentVersionId,
           entityId,
           workspaceId: ids.wsA1,
           versionNumber: 2,
+          createdBy: ids.userA1,
         },
       ]);
       await testDb.insert(fields).values(

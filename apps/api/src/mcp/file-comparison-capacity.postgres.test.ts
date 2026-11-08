@@ -16,6 +16,7 @@ import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -135,9 +136,7 @@ describe.skipIf(!runPostgresTests)(
               { size: REMAINING_BYTES / 4 },
             ]);
           } finally {
-            await db
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(db, [organizationId]);
             await db
               .delete(user)
               .where(inArray(user.id, [firstUserId, secondUserId]));

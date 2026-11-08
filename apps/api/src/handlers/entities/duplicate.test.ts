@@ -46,6 +46,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -216,9 +217,7 @@ afterAll(async () => {
   await fileUsageDb
     .delete(bufferObjectCleanupIntents)
     .where(eq(bufferObjectCleanupIntents.organizationId, organizationId));
-  await fileUsageDb
-    .delete(organization)
-    .where(eq(organization.id, organizationId));
+  await deleteOrganizationsForTest(fileUsageDb, [organizationId]);
   await releaseTestDb();
 });
 
@@ -285,9 +284,7 @@ test("reserves a copy destination before an ambiguous S3 failure", async () => {
     await copyDb
       .delete(bufferObjectCleanupIntents)
       .where(eq(bufferObjectCleanupIntents.organizationId, copyOrganizationId));
-    await copyDb
-      .delete(organization)
-      .where(eq(organization.id, copyOrganizationId));
+    await deleteOrganizationsForTest(copyDb, [copyOrganizationId]);
   }
 }, 30_000);
 
