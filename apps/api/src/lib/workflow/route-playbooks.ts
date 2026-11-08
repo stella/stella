@@ -10,6 +10,7 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { loadLatestApprovedVersions } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
 import {
@@ -284,22 +285,39 @@ export const routeClassifiedDocuments = async ({
     // A playbook routes on its pinned scope, so the candidates also include
     // every playbook with an approved snapshot on `onClassified`: its live
     // trigger may have been edited away since. The pinned check below decides.
-    const approvedOnClassified = await tx
-      .selectDistinct({
-        id: playbookDefinitionVersions.playbookDefinitionId,
-      })
-      .from(playbookDefinitionVersions)
-      .where(
-        and(
-          eq(playbookDefinitionVersions.organizationId, organizationId),
-          eq(
-            playbookDefinitionVersions.source,
-            PLAYBOOK_VERSION_SOURCE.APPROVAL,
+    // Bounded by the org's playbook cap: distinct definitions, each counted
+    // against it when created.
+    const approvedRead = await readBounded(
+      tx
+        .selectDistinct({
+          id: playbookDefinitionVersions.playbookDefinitionId,
+        })
+        .from(playbookDefinitionVersions)
+        .where(
+          and(
+            eq(playbookDefinitionVersions.organizationId, organizationId),
+            eq(
+              playbookDefinitionVersions.source,
+              PLAYBOOK_VERSION_SOURCE.APPROVAL,
+            ),
+            sql`${playbookDefinitionVersions.scope}->>'trigger' = 'onClassified'`,
           ),
-          sql`${playbookDefinitionVersions.scope}->>'trigger' = 'onClassified'`,
         ),
-      )
-      .limit(LIMITS.playbookDefinitionsCount);
+      LIMITS.playbookDefinitionsCount,
+    );
+    if (approvedRead.type === "overflow") {
+      // More approved playbooks than the org may hold: route on the live
+      // trigger alone this time rather than fail the classification.
+      captureError(
+        new Error("Approved onClassified playbooks exceed the playbook cap"),
+        handlerErrorContext("workflow.routeClassifiedDocuments", {
+          workspaceId,
+          cap: String(approvedRead.cap),
+        }),
+      );
+    }
+    const approvedOnClassified =
+      approvedRead.type === "complete" ? approvedRead.rows : [];
     const routable = await tx.query.playbookDefinitions.findMany({
       where: {
         organizationId: { eq: organizationId },
