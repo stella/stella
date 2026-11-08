@@ -174,6 +174,7 @@ import {
 } from "@/api/mcp/case-law-decision-read";
 import {
   CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS,
+  caseLawAgentSearchTotal,
   MANY_REQUIRED_TERMS_THRESHOLD,
   searchCaseLawTexts,
 } from "@/api/mcp/case-law-search-guidance";
@@ -3067,7 +3068,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
     paginationOutcome: mergedCaseLawPaginationOutcome(pages),
     results: merged.map(caseLawSearchResult),
-    total: single?.total ?? SEARCH_TOTAL_NOT_COUNTED,
+    total: caseLawAgentSearchTotal(single?.total ?? SEARCH_TOTAL_NOT_COUNTED),
     ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
   });
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));

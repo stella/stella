@@ -2793,6 +2793,13 @@ describe("OpenAI-compatible MCP tools", () => {
           ),
         ).toHaveLength(facets?.length ? 1 : 0);
         expect(requests.every(({ aggs }) => !("courtYear" in aggs))).toBe(true);
+        // An uncounted total says what it is where a number would be read.
+        const counted = queries.length === 1 && (facets?.length ?? 0) > 0;
+        expect(JSON.stringify(parseToolPayload(result))).toEqual(
+          counted
+            ? expect.not.stringContaining("does not mean zero")
+            : expect.stringContaining("does not mean zero"),
+        );
         expect(parseToolPayload(result)).toMatchObject({
           total:
             queries.length === 1 && (facets?.length ?? 0) > 0
@@ -2922,6 +2929,7 @@ describe("OpenAI-compatible MCP tools", () => {
           court: "Nejvyšší soud",
           dateFrom: "2024-01-01",
           decisionType: "judgment",
+          describeResultSet: false,
           limit: 5,
           sentenceAlignedExcerpt: true,
           headnotePresentation: "expanded",
@@ -3718,7 +3726,9 @@ describe("OpenAI-compatible MCP tools", () => {
       source: [],
       language: [],
     });
-    expect(payload.total).toEqual({ type: SEARCH_TOTAL_TYPE.NOT_COUNTED });
+    expect(payload.total).toMatchObject({
+      type: SEARCH_TOTAL_TYPE.NOT_COUNTED,
+    });
     // `limit` bounds the merged page, so each phrasing was asked for half.
     expect(
       searchDecisionsHandlerMock.mock.calls.map(
