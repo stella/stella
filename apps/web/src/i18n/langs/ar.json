@@ -636,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "لا يمكن أن يكون السعر بالساعة سالبًا",
     "hours": "الساعات",
+    "invalidNumberFormat": "تحقق من تنسيق الرقم",
     "invoiceComposer": {
       "addSellerProfile": "أضف ملف بائع في إعدادات الفوترة",
       "billedHours": "الساعات المفوترة",
@@ -1584,6 +1585,8 @@
       "full": "ممتلئة بنسبة {percent}%",
       "instructions": "تعليمات النظام",
       "percent": "{percent}%",
+      "reported": "كما أبلغ عنه وكيل البرمجة على حاسوبك بعد آخر إجابة له. يدير الوكيل سياقه بنفسه.",
+      "reportedTokens": "{used} / {total} رمز",
       "summary": "ملخّص الرسائل الأقدم",
       "summaryWithCount": "ملخّص {count} من الرسائل الأقدم",
       "title": "سياق المحادثة",

@@ -119,8 +119,8 @@ describe("contact text editable fields", () => {
 });
 
 describe("contact hourly rates", () => {
-  test("saves localized decimals and canonical dots with exact currency rounding", () => {
-    for (const locale of ["cs", "de", "fr"]) {
+  test("saves localized decimals and unambiguous dots exactly", () => {
+    for (const locale of ["sk", "cs", "de", "pl"]) {
       for (const trimmedInput of ["150,50", "150.50"]) {
         expect(
           buildContactRatePayload({ trimmedInput, currency: "EUR", locale }),
@@ -135,10 +135,7 @@ describe("contact hourly rates", () => {
           currency: "EUR",
           locale,
         }),
-      ).toEqual({
-        status: "valid",
-        payload: { defaultHourlyRate: cents(101) },
-      });
+      ).toEqual({ status: "invalid" });
       expect(
         buildContactRatePayload({
           trimmedInput: "150,500",
@@ -155,10 +152,7 @@ describe("contact hourly rates", () => {
           currency: "JPY",
           locale,
         }),
-      ).toEqual({
-        status: "valid",
-        payload: { defaultHourlyRate: cents(151) },
-      });
+      ).toEqual({ status: "invalid" });
     }
     expect(
       buildContactRatePayload({
@@ -176,25 +170,32 @@ describe("contact hourly rates", () => {
         currency: "EUR",
         locale: "en",
       }),
-    ).toEqual({ status: "invalid" });
+    ).toEqual({
+      status: "valid",
+      payload: { defaultHourlyRate: cents(15_050) },
+    });
   });
 
-  test("rejects grouping and mixed separators instead of reinterpreting a rate", () => {
+  test("accepts locale grouping but rejects ambiguous or mixed separators", () => {
+    for (const { locale, trimmedInput } of [
+      { locale: "en", trimmedInput: "1,234.50" },
+      { locale: "cs", trimmedInput: "1.234,50" },
+      { locale: "de", trimmedInput: "1.234,50" },
+      { locale: "fr", trimmedInput: "1 234,50" },
+      { locale: "fr", trimmedInput: "1\u00a0234,50" },
+      { locale: "fr", trimmedInput: "1\u202f234,50" },
+      { locale: "ar-u-nu-arab", trimmedInput: "١٬٢٣٤٫٥٠" },
+    ]) {
+      expect(
+        buildContactRatePayload({ trimmedInput, currency: "EUR", locale }),
+      ).toEqual({
+        status: "valid",
+        payload: { defaultHourlyRate: cents(123_450) },
+      });
+    }
+
     for (const locale of ["en", "cs", "de", "fr", "ar-u-nu-arab"]) {
-      for (const trimmedInput of [
-        "1,234.50",
-        "1.234,50",
-        "1.234.567",
-        "1,234,567",
-        "1 234,50",
-        "1\u00a0234,50",
-        "1\u202f234,50",
-        "١٬٢٣٤٫٥٠",
-        "150,,50",
-        "150..50",
-        "1e3",
-        "-0,001",
-      ]) {
+      for (const trimmedInput of ["150,,50", "150..50", "1e3", "-0,001"]) {
         expect(
           buildContactRatePayload({ trimmedInput, currency: "EUR", locale }),
         ).toEqual({ status: "invalid" });
@@ -213,7 +214,7 @@ describe("contact hourly rates", () => {
     },
   ]) {
     test(`${currency} displays and saves major units`, () => {
-      const displayed = contactRateInput(minorUnits, currency);
+      const displayed = contactRateInput(minorUnits, currency, "en");
       expect(displayed).toBe(text);
       expect(
         buildContactRatePayload({
@@ -225,13 +226,28 @@ describe("contact hourly rates", () => {
         status: "valid",
         payload: { defaultHourlyRate: cents(minorUnits) },
       });
-      expect(contactRateInput(0, currency)).toBe(zeroText);
+      expect(contactRateInput(0, currency, "en")).toBe(zeroText);
     });
   }
 
+  test("a saved rate redisplays in the locale it is edited in", () => {
+    const displayed = contactRateInput(150_500, "KWD", "sk");
+    expect(displayed).toBe("150,500");
+    expect(
+      buildContactRatePayload({
+        locale: "sk",
+        trimmedInput: displayed ?? "",
+        currency: "KWD",
+      }),
+    ).toEqual({
+      status: "valid",
+      payload: { defaultHourlyRate: cents(150_500) },
+    });
+  });
+
   test("requires currency for a nonempty rate and allows clearing", () => {
-    expect(contactRateInput(15_050, null)).toBeNull();
-    expect(contactRateInput(null, "EUR")).toBeNull();
+    expect(contactRateInput(15_050, null, "en")).toBeNull();
+    expect(contactRateInput(null, "EUR", "en")).toBeNull();
     expect(
       buildContactRatePayload({
         locale: "en",

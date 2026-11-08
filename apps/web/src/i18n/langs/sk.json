@@ -636,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Hodinová sadzba nesmie byť záporná",
     "hours": "Hodiny",
+    "invalidNumberFormat": "Skontrolujte formát čísla",
     "invoiceComposer": {
       "addSellerProfile": "Pridajte profil dodávateľa v nastaveniach fakturácie",
       "billedHours": "Účtované hodiny",
@@ -1584,6 +1585,8 @@
       "full": "{percent} % zaplnené",
       "instructions": "Systémové pokyny",
       "percent": "{percent} %",
+      "reported": "Podľa údajov programovacieho agenta vo vašom počítači po jeho poslednej odpovedi. Agent si kontext spravuje sám.",
+      "reportedTokens": "{used} / {total} tokenov",
       "summary": "Zhrnutie starších správ",
       "summaryWithCount": "Zhrnutie {count} starších správ",
       "title": "Kontext konverzácie",

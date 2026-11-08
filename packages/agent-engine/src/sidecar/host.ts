@@ -15,6 +15,10 @@ import type {
   HarnessTurn,
 } from "../harness/adapter";
 import {
+  createChunkCoalescer,
+  scheduleTimeout,
+} from "../harness/chunk-coalescer";
+import {
   claudeCodeLaunch,
   createClaudeCodeHarnessAdapter,
 } from "../harness/claude-code/adapter";
@@ -874,11 +878,20 @@ export class SidecarHost {
       generateId: () => crypto.randomUUID(),
       now: () => Temporal.Now.instant().epochMilliseconds,
     });
+    // Streamed deltas merge before they are sent: each run event is one
+    // stored message, and a run may store only so many.
+    const coalescer = createChunkCoalescer({
+      emit: (chunk) => {
+        // A plain copy: TanStack declares chunks as interfaces, which carry
+        // no index signature.
+        send({ type: "run.event", runId, chunk: { ...chunk } });
+      },
+      schedule: scheduleTimeout,
+    });
     for await (const chunk of chunks) {
-      // A plain copy: TanStack declares chunks as interfaces, which carry
-      // no index signature.
-      send({ type: "run.event", runId, chunk: { ...chunk } });
+      coalescer.push(chunk);
     }
+    coalescer.flush();
     await run.turn?.dispose();
     const finished = {
       type: "run.finished",

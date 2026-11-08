@@ -636,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Stundas likme nedrīkst būt negatīva",
     "hours": "Stundas",
+    "invalidNumberFormat": "Pārbaudiet skaitļa formātu",
     "invoiceComposer": {
       "addSellerProfile": "Pievienojiet pārdevēja profilu norēķinu iestatījumos",
       "billedHours": "Apmaksājamās stundas",
@@ -1584,6 +1585,8 @@
       "full": "Aizpildīts par {percent}%",
       "instructions": "Sistēmas norādes",
       "percent": "{percent}%",
+      "reported": "Kā ziņoja programmēšanas aģents jūsu datorā pēc savas pēdējās atbildes. Aģents savu kontekstu pārvalda pats.",
+      "reportedTokens": "{used} / {total} tokeni",
       "summary": "Vecāko ziņojumu kopsavilkums",
       "summaryWithCount": "{count} vecāko ziņojumu kopsavilkums",
       "title": "Sarunas konteksts",

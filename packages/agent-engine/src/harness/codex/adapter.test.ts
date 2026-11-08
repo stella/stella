@@ -36,6 +36,7 @@ import * as v from "valibot";
 import { createDetached } from "@stll/errors";
 
 import {
+  FAKE_CONTEXT_WINDOW,
   FAKE_MCP_CALL,
   FAKE_RESUMED_THREAD_ID,
   FAKE_THREAD_ID,
@@ -225,13 +226,16 @@ describe("Codex adapter over a stdio app-server", () => {
         },
       },
     });
+    // Usage sums the turn's two requests; the context is the last one's,
+    // against the window Codex reported.
     expect(terminal(events)).toEqual({
       type: "turn.completed",
       usage: {
-        inputTokens: 120,
+        inputTokens: 170,
         cachedInputTokens: 20,
-        outputTokens: 30,
+        outputTokens: 40,
         reasoningOutputTokens: 5,
+        context: { usedTokens: 150, windowTokens: FAKE_CONTEXT_WINDOW },
       },
     });
   });

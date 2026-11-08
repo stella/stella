@@ -636,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Az óradíj nem lehet negatív",
     "hours": "Órák",
+    "invalidNumberFormat": "Ellenőrizze a számformátumot",
     "invoiceComposer": {
       "addSellerProfile": "Hozzon létre eladói profilt a számlázási beállításokban",
       "billedHours": "Számlázott órák",
@@ -1584,6 +1585,8 @@
       "full": "{percent}% megtelt",
       "instructions": "Rendszerutasítások",
       "percent": "{percent}%",
+      "reported": "Ahogy a számítógépén futó kódoló ügynök a legutóbbi válasza után jelentette. Az ügynök maga kezeli a kontextusát.",
+      "reportedTokens": "{used} / {total} token",
       "summary": "Korábbi üzenetek összefoglalója",
       "summaryWithCount": "{count} korábbi üzenet összefoglalója",
       "title": "Beszélgetés kontextusa",

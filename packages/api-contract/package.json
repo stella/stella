@@ -7,6 +7,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./realtime-mutation-digest": "./src/realtime-mutation-digest.ts",
     "./api-date": "./src/api-date.ts",
     "./contact-date": "./src/contact-date.ts",
     "./contact-write": "./src/contact-write.ts",
