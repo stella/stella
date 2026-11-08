@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 
 import type { RecordValue } from "@stll/api-contract/record-schema";
-import { observeRegistryRequest } from "@stll/business-registries/shared/request-observer";
 import { Temporal } from "@stll/time";
 
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -131,7 +130,19 @@ export const createCzCnbRateTool = ({
       transport: async (url) => {
         requested.push(url);
         // Count the request as the registry clients do, success or failure.
-        observeRegistryRequest(observer);
+        // A failing reporter must not prevent the request.
+        if (observer !== "unobserved") {
+          const reported = Result.try({
+            try: observer.onRequest,
+            catch: (cause: unknown) => cause,
+          });
+          if (Result.isError(reported)) {
+            Result.try({
+              try: () => observer.onError(reported.error),
+              catch: (cause: unknown) => cause,
+            }).unwrapOr(undefined);
+          }
+        }
         return await transport(url);
       },
     });
