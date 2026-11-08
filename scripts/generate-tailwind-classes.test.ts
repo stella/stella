@@ -43,44 +43,6 @@ test("a stalled lint pass is stopped and fails generation, naming the pass", asy
   expect(performance.now() - started).toBeLessThan(4000);
 });
 
-test("a stalled lint pass reports its last plugin progress and the cache directory", async () => {
-  const cacheDirectory = await mkdtemp(path.join(tmpdir(), "tailwind-stall-"));
-  try {
-    await writeFile(path.join(cacheDirectory, "snapshot.lock"), "");
-    // A pass that logs more progress than the tail keeps, then hangs.
-    const script = [
-      `for (let i = 0; i < ${progressTailLines + 5}; i++) console.error("${pluginProgressPrefix} file " + i);`,
-      `console.error("not plugin progress");`,
-      "setInterval(() => {}, 1000);",
-    ].join("\n");
-    const rejection = await rejectionOf(
-      runLintPass([process.execPath, "-e", script], {
-        env: { ...process.env, OXLINT_TAILWINDCSS_CACHE_DIR: cacheDirectory },
-        pass: "stalled test",
-        timeoutMs: 1000,
-      }),
-    );
-    const message = rejection instanceof Error ? rejection.message : "";
-    // The message also quotes the command, which here is the script itself,
-    // so the progress assertions read only the section between the headings.
-    const heading = `Last plugin progress (${progressTailLines} lines):\n`;
-    expect(message).toContain(heading);
-    const progress = message
-      .slice(message.indexOf(heading) + heading.length)
-      .split("\nCache directory:\n")[0]
-      ?.split("\n");
-    expect(progress).toHaveLength(progressTailLines);
-    expect(progress?.at(0)).toBe(`${pluginProgressPrefix} file 5`);
-    expect(progress?.at(-1)).toBe(
-      `${pluginProgressPrefix} file ${progressTailLines + 4}`,
-    );
-    expect(progress).not.toContain("not plugin progress");
-    expect(message).toContain("Cache directory:\nsnapshot.lock 0 bytes");
-  } finally {
-    await rm(cacheDirectory, { recursive: true, force: true });
-  }
-});
-
 test.skipIf(process.platform !== "linux")(
   "a stall message names what the stopped pass's threads were waiting in",
   async () => {
@@ -117,4 +79,42 @@ test("collected classes are deduplicated and sorted by stylesheet", () => {
     ["/b.css", ["m-[3px]", "p-4", "w-[2px]"]],
   ]);
   expect(parseCollectedClasses("").size).toBe(0);
+});
+
+test("a stalled lint pass reports its last plugin progress and the cache directory", async () => {
+  const cacheDirectory = await mkdtemp(path.join(tmpdir(), "tailwind-stall-"));
+  try {
+    await writeFile(path.join(cacheDirectory, "snapshot.lock"), "");
+    // A pass that logs more progress than the tail keeps, then hangs.
+    const script = [
+      `for (let i = 0; i < ${progressTailLines + 5}; i++) console.error("${pluginProgressPrefix} file " + i);`,
+      `console.error("not plugin progress");`,
+      "setInterval(() => {}, 1000);",
+    ].join("\n");
+    const rejection = await rejectionOf(
+      runLintPass([process.execPath, "-e", script], {
+        env: { ...process.env, OXLINT_TAILWINDCSS_CACHE_DIR: cacheDirectory },
+        pass: "stalled test",
+        timeoutMs: 1000,
+      }),
+    );
+    const message = rejection instanceof Error ? rejection.message : "";
+    // The message also quotes the command, which here is the script itself,
+    // so the progress assertions read only the section between the headings.
+    const heading = `Last plugin progress (${progressTailLines} lines):\n`;
+    expect(message).toContain(heading);
+    const progress = message
+      .slice(message.indexOf(heading) + heading.length)
+      .split("\nCache directory:\n")[0]
+      ?.split("\n");
+    expect(progress).toHaveLength(progressTailLines);
+    expect(progress?.at(0)).toBe(`${pluginProgressPrefix} file 5`);
+    expect(progress?.at(-1)).toBe(
+      `${pluginProgressPrefix} file ${progressTailLines + 4}`,
+    );
+    expect(progress).not.toContain("not plugin progress");
+    expect(message).toContain("Cache directory:\nsnapshot.lock 0 bytes");
+  } finally {
+    await rm(cacheDirectory, { recursive: true, force: true });
+  }
 });
