@@ -323,6 +323,7 @@ import {
   relaxedFetchLimit,
   type RelaxedTopUpOutcome,
   relaxedTopUpOutcome,
+  type RelaxedTopUpState,
   shouldRelaxCaseLawSearch,
   termsForCoverage,
 } from "./search-relaxed";
@@ -2926,17 +2927,21 @@ const topUpSignal = (
 ): AbortSignal =>
   signal === undefined ? stepSignal : AbortSignal.any([signal, stepSignal]);
 
-/** The top-up's hits; a top-up that did not finish is reported and adds none. */
+/**
+ * The top-up's hits and how it ended. One that did not finish adds no hits and
+ * is reported, and its state goes back to the caller, so a page short of its
+ * partial matches does not read as a complete one.
+ */
 const settledRelaxedTopUp = <Hits>(
   outcome: RelaxedTopUpOutcome<Hits> | null,
   none: Hits,
-): Hits => {
+): { value: Hits; state: RelaxedTopUpState } => {
   if (outcome === null) {
-    return none;
+    return { value: none, state: "not_run" };
   }
   switch (outcome.type) {
     case "read":
-      return outcome.value;
+      return { value: outcome.value, state: "read" };
     case "skipped":
       observeFailure(outcome.error, { sink: RELAXED_TOP_UP_SKIPPED_SINK });
       reportCaseLawIncompleteAnswer({
@@ -2944,7 +2949,7 @@ const settledRelaxedTopUp = <Hits>(
         reason: "relaxed_top_up_skipped",
         count: 1,
       });
-      return none;
+      return { value: none, state: "skipped" };
     default:
       outcome satisfies never;
       return panic("Unhandled relaxed top-up outcome");
@@ -3597,7 +3602,7 @@ export const searchCorpusIndexDecisions = async ({
       scan: sumCorpusIndexScans(relaxedPage.scan, coverageScan),
     });
   };
-  const relaxed = settledRelaxedTopUp(
+  const { value: relaxed, state: relaxedTopUp } = settledRelaxedTopUp(
     shouldRelaxCaseLawSearch({
       body,
       intentType: intent.type,
@@ -3667,6 +3672,7 @@ export const searchCorpusIndexDecisions = async ({
     partialHitCount: relaxedHits.length,
     countsResultSet:
       isFirstPage && searchPageEnd(searchPage) === SEARCH_PAGE_END.COMPLETE,
+    relaxedTopUp,
   });
   return projectCaseLawSearchResponse(
     {

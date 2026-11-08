@@ -90,6 +90,7 @@ import {
   type AgentCaseLawSearchWarning,
   manyRequiredTermsWarning,
   partialMatchesAppendedWarning,
+  partialMatchesUnreadWarning,
   phrasingTimedOutWarning,
   provisionCitedWidelyWarning,
   withFacetValues,
@@ -2845,6 +2846,32 @@ const phrasingResultSet = <Facet>(
     ? { facets }
     : { facets: index === 0 ? facets : [], describeResultSet: false };
 
+type AnsweredPhrasingWarningsOptions = Parameters<
+  typeof manyRequiredTermsWarnings
+>[0] &
+  PartialMatchWarningOptions & {
+    query: string;
+    page: { relaxedTopUp?: "skipped" | undefined };
+  };
+
+/** What a phrasing that returned a page says about that page. */
+const answeredPhrasingWarnings = ({
+  guidance,
+  query,
+  subCursor,
+  page,
+  slots,
+  merged,
+  queryIndex,
+  countsStrictSet,
+}: AnsweredPhrasingWarningsOptions): AgentCaseLawSearchWarning[] => [
+  ...(page.relaxedTopUp === "skipped"
+    ? [partialMatchesUnreadWarning({ query })]
+    : []),
+  ...manyRequiredTermsWarnings({ guidance, subCursor, page, slots }),
+  ...partialMatchWarnings({ merged, queryIndex, countsStrictSet }),
+];
+
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
@@ -3045,13 +3072,12 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           ...outcome.page.warnings
             .filter(({ code }) => code !== "partial_matches_appended")
             .map((warning) => withFacetValues(warning, values)),
-          ...manyRequiredTermsWarnings({
+          ...answeredPhrasingWarnings({
             guidance: mcpCaseLawSearchGuidance(context),
+            query,
             subCursor,
             page: outcome.page,
             slots: perQueryLimit,
-          }),
-          ...partialMatchWarnings({
             merged,
             queryIndex: index,
             countsStrictSet: single !== undefined,

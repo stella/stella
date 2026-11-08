@@ -102,6 +102,9 @@ export const termsForCoverage = <Term extends { value: string }>(
     .toSorted((left, right) => right.value.length - left.value.length)
     .slice(0, TERM_COVERAGE_MAX_TERMS);
 
+/** How a search's partial-match phase ended. */
+export type RelaxedTopUpState = "not_run" | "read" | "skipped";
+
 export type RelaxedTopUpOutcome<T> =
   { type: "read"; value: T } | { type: "skipped"; error: unknown };
 
