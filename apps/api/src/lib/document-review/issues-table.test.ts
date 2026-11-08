@@ -46,6 +46,7 @@ const ephemeralPlaybook: PinnedPlaybook = {
   definitionSnapshot: {
     name: "Positions confirmed for this review",
     positions: { version: 3, items: [] },
+    scope: null,
   },
 };
 
@@ -225,6 +226,7 @@ describe("buildIssuesTableRows", () => {
           definitionSnapshot: {
             name: "SPA (buyer)",
             positions: { version: 3, items: [] },
+            scope: null,
           },
         },
         references: [],

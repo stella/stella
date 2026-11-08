@@ -141,6 +141,7 @@ const pinnedPlaybook = (
   definitionSnapshot: {
     name: "Termination review",
     positions: { version: 3, items: [gradedPosition] },
+    scope: null,
   },
 });
 

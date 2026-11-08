@@ -70,6 +70,7 @@ const basis: DocumentReviewRunBasis = {
           },
         ],
       },
+      scope: null,
     },
   },
   references: [reference],
@@ -197,6 +198,7 @@ describe("basisForReader", () => {
       definitionSnapshot: {
         name: basis.playbook.definitionSnapshot.name,
         positions: { version: 3, items: [{ ...pinned, ...prose }] },
+        scope: basis.playbook.definitionSnapshot.scope,
       },
     },
     references: basis.references,
@@ -319,6 +321,7 @@ describe("basis and finding projections agree", () => {
               definitionSnapshot: {
                 name: "Positions confirmed for this review",
                 positions: { version: 3, items: [position] },
+                scope: null,
               },
             },
             references: [],
