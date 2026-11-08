@@ -47,11 +47,15 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
-@@ -3745,6 +3760,11 @@ function resolveCacheDir() {
+@@ -3745,6 +3760,15 @@ function resolveCacheDir() {
  	return (0, node_path.join)((0, node_os.tmpdir)(), cacheDirName());
  }
  const CACHE_DIR = resolveCacheDir();
 +const CACHE_READ_ONLY = process.env.OXLINT_TAILWINDCSS_CACHE_READ_ONLY === "1";
++// Cache generation lints read-only and spawns no worker: a class without a
++// persisted declaration answer is appended to this file, and the generator
++// answers it in its own thread before its next pass.
++const CACHE_COLLECT_FILE = CACHE_READ_ONLY ? process.env.OXLINT_TAILWINDCSS_CACHE_COLLECT ?? "" : "";
 +const CACHE_GENERATE_COMMAND = "bun scripts/generate-tailwind-classes.ts --write";
 +function readOnlyCacheError(detail) {
 +	return new DesignSystemLoadError(`Tailwind cache is incomplete: ${detail}.`, `Run \`${CACHE_GENERATE_COMMAND}\` and commit the generated cache.`);
@@ -59,7 +63,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -3884,6 +3904,90 @@ function packageVersionFrom(fromDir, name) {
+@@ -3884,6 +3908,90 @@ function packageVersionFrom(fromDir, name) {
  		dir = parent;
  	}
  }
@@ -150,7 +154,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  /**
  * Everything a design system is built from besides the Tailwind engine, as one
  * string for the cache key — so the cache invalidates when any of it changes,
-@@ -3937,7 +4041,17 @@ function hashableContent(entryPath, entryContent) {
+@@ -3937,7 +4045,17 @@ function hashableContent(entryPath, entryContent) {
  		const baseDir = (0, node_path.dirname)(cssPath);
  		for (const spec of collect(IMPORT_RE, content)) {
  			if (!isPathSpecifier(spec)) {
@@ -169,7 +173,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  				continue;
  			}
  			const importPath = (0, node_path.resolve)(baseDir, spec);
-@@ -4195,7 +4309,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4195,7 +4313,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -178,7 +182,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4203,6 +4317,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4203,6 +4321,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -186,7 +190,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4705,6 +4820,7 @@ var DesignSystemWorker = class {
+@@ -4705,6 +4824,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -194,7 +198,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5640,6 +5756,73 @@ function answersFor(cache) {
+@@ -5640,6 +5760,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -268,14 +272,31 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5660,12 +5843,15 @@ function answersFor(cache) {
+@@ -5658,14 +5845,32 @@ function answersFor(cache) {
+ * `designSystemUnavailable` (what `enforce-canonical` does with the canonicalize
+ * worker), a DS-OPTIONAL rule catches it and degrades.
  */
++const collectedDeclarationQuestions = /* @__PURE__ */ new Map();
++function collectDeclarationQuestions(cssPath, classes) {
++	let seen = collectedDeclarationQuestions.get(cssPath);
++	if (!seen) {
++		seen = /* @__PURE__ */ new Set();
++		collectedDeclarationQuestions.set(cssPath, seen);
++	}
++	const fresh = classes.filter((cls) => !seen.has(cls));
++	if (fresh.length === 0) return;
++	for (const cls of fresh) seen.add(cls);
++	(0, node_fs.appendFileSync)(CACHE_COLLECT_FILE, `${JSON.stringify({ cssPath, classes: fresh })}\n`);
++}
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
 +	loadDeclarationAnswers(cssPath, cache, classes);
  	const pending = [...new Set(classes.filter((cls) => !known.has(cls)))];
  	if (pending.length === 0) return;
-+	if (CACHE_READ_ONLY) throw readOnlyCacheError(`missing declaration answer for ${JSON.stringify(pending[0])}`);
++	if (CACHE_READ_ONLY) {
++		if (CACHE_COLLECT_FILE !== "") return collectDeclarationQuestions(cssPath, pending);
++		throw readOnlyCacheError(`missing declaration answer for ${JSON.stringify(pending[0])}`);
++	}
  	const response = declWorker.callSync(cssPath, { classes: pending });
  	const invalid = new Set(response.invalid);
  	for (const cls of pending) known.set(cls, !invalid.has(cls));
