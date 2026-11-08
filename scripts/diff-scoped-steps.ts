@@ -313,6 +313,10 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-rest#Offline catalogue pinned-content policy": fullTree(
     "Checks every pinned catalogue entry.",
   ),
+  "ci.yml:ci-checks-rest#Check test execution paths and disabled states":
+    fullTree(
+      "Collects every test file and its registrations; the base keeps the scenario ledger shrinking and scopes the temporary changed-lines rollout.",
+    ),
   "ci.yml:ci-checks-rest#Check migration identity against the base branch":
     diffComplete("Concerns the migrations the change adds or removes."),
   "ci.yml:ci-checks-rest#Bridge-version guard": expands(
