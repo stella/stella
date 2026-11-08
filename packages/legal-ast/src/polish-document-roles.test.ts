@@ -3,7 +3,9 @@ import { describe, expect, test } from "bun:test";
 import {
   containsPlOperativeVerb,
   isPlAppealInstruction,
+  isPlBenchMemberLine,
   isPlCompositionLine,
+  isPlDecisionDateLine,
   isPlHoldingHeading,
   isPlInstructionHeading,
   isPlLegalBasisRuling,
@@ -290,5 +292,38 @@ describe("a Polish instruction on appeal", () => {
     expect(isPlRemedyFilingLine("Skarga została wniesiona w terminie.")).toBe(
       false,
     );
+  });
+});
+
+describe("a Polish head-matter line", () => {
+  test.each([
+    "Przewodniczący: Ewa Sikorska",
+    "Przewodnicząca: Agnieszka Trojanowska",
+    "Protokolant: Aldona Karpińska",
+    "Członkowie: Katarzyna Prowadzisz",
+  ])("%p names who sat", (line) => {
+    expect(isPlBenchMemberLine(line)).toBe(true);
+  });
+
+  test.each([
+    "Przewodniczący:…………………………",
+    "Przewodniczący:",
+    "Skład orzekający Izby:",
+  ])("%p is a signing label, not a name", (line) => {
+    expect(isPlBenchMemberLine(line)).toBe(false);
+  });
+
+  test("the decision's date on a line of its own", () => {
+    expect(isPlDecisionDateLine("z dnia 4 lutego 2022 r.")).toBe(true);
+    expect(isPlDecisionDateLine("Warszawa, dnia 1 września 2025 roku")).toBe(
+      true,
+    );
+    expect(isPlDecisionDateLine("Dnia 31 grudnia 2019 r.")).toBe(true);
+    expect(isPlDecisionDateLine("z dnia 12.03.2021 r.")).toBe(true);
+    expect(
+      isPlDecisionDateLine(
+        "po rozpoznaniu na rozprawie w dniu 1 lutego 2022 roku",
+      ),
+    ).toBe(false);
   });
 });

@@ -61,8 +61,10 @@ import {
 import {
   containsPlOperativeVerb,
   isPlAppealInstruction,
+  isPlBenchMemberLine,
   isPlClosingLine,
   isPlCompositionLine,
+  isPlDecisionDateLine,
   isPlHoldingHeading,
   isPlInstructionHeading,
   isPlLegalBasisRuling,
@@ -1337,6 +1339,69 @@ const parseListItemContent = ({
   return marker;
 };
 
+/** A heading element: a heading, or a line the layout only set apart. */
+const parseHeadingElement = (
+  $: cheerio.CheerioAPI,
+  state: ParserState,
+  $node: cheerio.Cheerio<AnyNode>,
+  tag: string,
+): void => {
+  const inlines = walkInlines($, $node, state);
+  const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
+  if (!plainText) {
+    return;
+  }
+
+  // A layout that sets the signing label apart as a heading still signs:
+  // it is the bench's line under the ruling, not a part of the decision.
+  if (
+    (state.section === "holding" || state.section === "reasoning") &&
+    isPlSignatureLine(plainText)
+  ) {
+    pushParagraph(state, plainText, inlines, "signature");
+    state.section = "reasoning";
+    return;
+  }
+
+  // A layout that sets the docket apart as a heading still prints the
+  // docket: it names the case, it heads no part of the decision.
+  if (isCaseNumberText(state, plainText)) {
+    pushParagraph(state, plainText, inlines, "case-number");
+    return;
+  }
+
+  if (handleHeadingText(state, plainText, inlines)) {
+    return;
+  }
+
+  // A layout that sets a line of the head matter apart as a heading (the
+  // decision's date, who sat on the bench) still prints the head matter:
+  // the line heads no part of the decision.
+  if (
+    state.sawDecisionTitle &&
+    (state.section === "preamble" ||
+      state.section === "composition" ||
+      state.section === "recital") &&
+    (isPlBenchMemberLine(plainText) || isPlDecisionDateLine(plainText))
+  ) {
+    pushParagraph(
+      state,
+      plainText,
+      inlines,
+      classifyParagraph(state, plainText),
+    );
+    return;
+  }
+
+  pushHeading(
+    state,
+    tag === "h1" || tag === "h2" ? 2 : 3,
+    plainText,
+    "section-heading",
+    inlines,
+  );
+};
+
 const parseNode = (
   $: cheerio.CheerioAPI,
   state: ParserState,
@@ -1386,41 +1451,7 @@ const parseNode = (
   }
 
   if (/^h[1-6]$/u.test(tag)) {
-    const inlines = walkInlines($, $node, state);
-    const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
-    if (!plainText) {
-      return;
-    }
-
-    // A layout that sets the signing label apart as a heading still signs:
-    // it is the bench's line under the ruling, not a part of the decision.
-    if (
-      (state.section === "holding" || state.section === "reasoning") &&
-      isPlSignatureLine(plainText)
-    ) {
-      pushParagraph(state, plainText, inlines, "signature");
-      state.section = "reasoning";
-      return;
-    }
-
-    // A layout that sets the docket apart as a heading still prints the
-    // docket: it names the case, it heads no part of the decision.
-    if (isCaseNumberText(state, plainText)) {
-      pushParagraph(state, plainText, inlines, "case-number");
-      return;
-    }
-
-    if (handleHeadingText(state, plainText, inlines)) {
-      return;
-    }
-
-    pushHeading(
-      state,
-      tag === "h1" || tag === "h2" ? 2 : 3,
-      plainText,
-      "section-heading",
-      inlines,
-    );
+    parseHeadingElement($, state, $node, tag);
     return;
   }
 

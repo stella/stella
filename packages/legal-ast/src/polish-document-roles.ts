@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-uodo] only adds the instruction-on-appeal, instruction-heading and remedy-filing predicates, which the data-protection reader does not call.
+// parser-output-unchanged: [pl-uodo] only adds the bench-member and decision-date line predicates, which the data-protection reader does not call.
 /**
  * How a Polish decision names its own parts: the operative verbs its ruling
  * opens with, the reasons heading, the recital before the ruling, the closing
@@ -427,3 +427,26 @@ const REMEDY_FILING_RE =
 /** Whether a line goes on with the instruction: where the remedy is filed. */
 export const isPlRemedyFilingLine = (text: string): boolean =>
   REMEDY_FILING_RE.test(grammarLine(text));
+
+/**
+ * A line of the head matter naming who sat (`Przewodniczący: Ewa Sikorska`,
+ * `Protokolant: Aldona Karpińska`, `Członkowie: …`): a label and the name
+ * after it. The same label with a blank after it signs the decision.
+ */
+const BENCH_MEMBER_LINE_RE =
+  /^(?:przewodnicząc[ya]|sędzi(?:a|owie)|członk(?:owie|inie)|protokolant(?:ka)?|ławni(?:k|cy|czka|czki)|prokurator) ?: ?\p{L}/iu;
+
+/** Whether a head-matter line names a member of the bench or its clerk. */
+export const isPlBenchMemberLine = (text: string): boolean =>
+  BENCH_MEMBER_LINE_RE.test(grammarLine(text));
+
+/**
+ * The date a decision was given, on a line of its own (`z dnia 4 lutego
+ * 2022 r.`, `Warszawa, dnia 1 września 2025 roku`).
+ */
+const DECISION_DATE_LINE_RE =
+  /^(?:\p{Lu}\p{Ll}+, )?(?:z )?dnia \d{1,2}(?:\. ?\d{1,2}\. ?| \p{Ll}+ )\d{4}(?: r\.| roku)?$/iu;
+
+/** Whether a line gives the date of the decision and nothing else. */
+export const isPlDecisionDateLine = (text: string): boolean =>
+  DECISION_DATE_LINE_RE.test(grammarLine(text));
