@@ -1,6 +1,8 @@
-// parser-output-unchanged: [cz-us] only adds the signed-name-with-degrees and copy-certification predicates, which only the Supreme and Supreme Administrative Court readers call.
-// parser-output-unchanged: [cz-regional] only adds the signed-name-with-degrees and copy-certification predicates, which only the Supreme and Supreme Administrative Court readers call.
-// parser-output-unchanged: [cz-uohs] only adds the signed-name-with-degrees and copy-certification predicates, which only the Supreme and Supreme Administrative Court readers call.
+// parser-output-unchanged: [cz-ns] only adds isCzechVerdictFormulaLine, which only the structure-fidelity guard calls.
+// parser-output-unchanged: [cz-nss] only adds isCzechVerdictFormulaLine, which only the structure-fidelity guard calls.
+// parser-output-unchanged: [cz-us] only adds isCzechVerdictFormulaLine, which only the structure-fidelity guard calls.
+// parser-output-unchanged: [cz-regional] only adds isCzechVerdictFormulaLine, which only the structure-fidelity guard calls.
+// parser-output-unchanged: [cz-uohs] only adds isCzechVerdictFormulaLine, which only the structure-fidelity guard calls.
 import { collapseSpacedLetters, normalizeUnicode } from "@stll/text-normalize";
 
 import type { Block, ParagraphBlock } from "./document-ast.js";
@@ -305,3 +307,18 @@ export const czechAuthorityHeadRoles = (
     return index < reasons ? "holding" : undefined;
   });
 };
+
+/**
+ * The lines a criminal verdict prints between the parts of its ruling, each
+ * on its own line: `je vinen, že`, `tedy`, `čímž spáchal`, `tím spáchal`,
+ * `přičemž`, `a odsuzuje se`. The verdict's sentence runs on across them by
+ * the court's own layout, not where a line or a page ended.
+ */
+const VERDICT_FORMULA_RE =
+  /^(?:(?:je|jsou) vinn?\p{Ll}*,? že|tedy|čímž? spáchal\p{Ll}*|tím spáchal\p{Ll}*|přičemž|a odsuzuj\p{Ll}+ se)(?!\p{L})/iu;
+
+/** Whether a line opens one of a criminal verdict's formula lines. */
+export const isCzechVerdictFormulaLine = (text: string): boolean =>
+  VERDICT_FORMULA_RE.test(
+    collapseSpacedLetters(text.trim()).replaceAll(/\s+/gu, " "),
+  );
