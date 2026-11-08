@@ -492,6 +492,8 @@ export type { OcrExportStatus } from "./ocr-export";
 export {
   chatRunsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
+  RESOURCE_MUTATION_ID_HEADER,
+  parseResourceMutationId,
   newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
