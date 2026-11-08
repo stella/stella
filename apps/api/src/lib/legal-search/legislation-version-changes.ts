@@ -456,9 +456,16 @@ export const writePreparedVersionChangesTx = async (
   await lockLegislationVersionRows(tx, ids);
   let written = 0;
   for (const batch of chunk(writes, SUMMARY_WRITE_BATCH_MAX)) {
-    const values = batch.map(
-      ({ targetId, base, summary }) =>
-        sql`(${targetId}::uuid, ${summary.payloadRevision}::bigint, ${base?.id ?? null}::uuid, ${base?.payloadRevision ?? null}::bigint, ${JSON.stringify(summary)}::text::jsonb)`,
+    // One JSON parameter, so the statement text is the same for every batch
+    // size. Bigint revisions travel as strings and convert by column type.
+    const rows = JSON.stringify(
+      batch.map(({ targetId, base, summary }) => ({
+        target_id: targetId,
+        target_revision: summary.payloadRevision,
+        base_id: base?.id ?? null,
+        base_revision: base === null ? null : base.payloadRevision.toString(),
+        summary,
+      })),
     );
     const current = alias(legislationDocuments, "current_base");
     const predecessor = predecessorIdOf(tx);
@@ -475,7 +482,7 @@ export const writePreparedVersionChangesTx = async (
         updatedAt: sql`${legislationDocuments.updatedAt}`,
       })
       .from(
-        sql`(VALUES ${sql.join(values, sql`, `)}) AS batch(target_id, target_revision, base_id, base_revision, summary)`,
+        sql`jsonb_to_recordset(${rows}::text::jsonb) AS batch(target_id uuid, target_revision bigint, base_id uuid, base_revision bigint, summary jsonb)`,
       )
       .where(
         and(

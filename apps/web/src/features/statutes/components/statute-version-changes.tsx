@@ -72,20 +72,22 @@ export const StatuteVersionChanges = ({
           render={
             <span
               aria-label={wordsLabel}
-              className="flex shrink-0 gap-px"
+              className="flex shrink-0"
               role="img"
             />
           }
         >
-          {Object.entries(versionChangeBar(changes.words)).map(
-            ([position, cell]) => (
-              <span
-                className={cn("size-1.5 rounded-xs", BAR_CELL_CLASS[cell])}
-                data-cell={cell}
-                key={position}
-              />
-            ),
-          )}
+          <span className="flex gap-px">
+            {Object.entries(versionChangeBar(changes.words)).map(
+              ([position, cell]) => (
+                <span
+                  className={cn("size-1.5 rounded-xs", BAR_CELL_CLASS[cell])}
+                  data-cell={cell}
+                  key={position}
+                />
+              ),
+            )}
+          </span>
         </Tooltip>
       )}
     </span>
