@@ -914,7 +914,7 @@ describe("workflow_run trust", () => {
 // (or builds the file name at run time) counts, unless its token is a
 // GitHub App token minted in the job.
 const DISPATCH_CALL =
-  /createWorkflowDispatch|\/dispatches\b|\bgh workflow run\b/u;
+  /createWorkflowDispatch|\/dispatches\b|\bgh workflow run\b|\bgh-dispatch-workflow\.sh\b/u;
 const COMPUTED_WORKFLOW_FILE = /\$\{?[A-Za-z_][A-Za-z0-9_]*\}?\.ya?ml\b/u;
 const APP_TOKEN = /^\$\{\{\s*steps\.[\w-]+\.outputs\.token\s*\}\}$/u;
 // Dispatches whose targets only the failed-run alerting workflow follows,
@@ -1069,6 +1069,10 @@ describe("a followed run is never started with GITHUB_TOKEN", () => {
       {
         run: "gh workflow run build.yml",
         env: { GH_TOKEN: githubExpression("secrets.GITHUB_TOKEN") },
+      },
+      {
+        run: 'bash scripts/gh-dispatch-workflow.sh o/r build.yml main "Build"',
+        env: { GH_TOKEN: githubExpression("github.token") },
       },
       {
         run: 'for workflow in build; do gh workflow run "$workflow.yml"; done',

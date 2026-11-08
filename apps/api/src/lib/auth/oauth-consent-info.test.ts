@@ -67,7 +67,7 @@ const FIRST_PARTY_DOCUMENTS = {
     redirectUris: [
       ...buildCliClientMetadataDocument(CLI_DOCUMENT).redirect_uris,
     ],
-    brand: "stella",
+    brand: "stella_cli",
   },
   mobile: {
     clientId: MOBILE_DOCUMENT,
@@ -431,7 +431,14 @@ describe("OAuth consent app details", () => {
   });
 
   test("an unverified client remains unverified when claiming a product name", () => {
-    for (const name of ["Claude", "Claude Code", "ChatGPT", "stella"]) {
+    for (const name of [
+      "Claude",
+      "Claude Code",
+      "ChatGPT",
+      "stella",
+      "stella CLI",
+      "stella-cli",
+    ]) {
       expect(
         redirectClient(["https://connector.example/callback"], name),
       ).toEqual({ type: "unverified", name });

@@ -3,13 +3,13 @@ import * as v from "valibot";
 import { VAT_RATE_PRESET_COUNTRIES } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 
-import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 
 export const vatRateParams = v.object({
   vatRateId: resourceIdSchema("vatRate"),
 });
 const code = v.pipe(v.string(), v.minLength(1), v.maxLength(64));
-const name = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
+const name = displayNameSchema({ maxLength: 128 });
 const rateBps = v.pipe(
   v.number(),
   v.integer(),

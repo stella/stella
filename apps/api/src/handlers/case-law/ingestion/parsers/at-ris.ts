@@ -1,8 +1,9 @@
-/** Parse the publisher-structured XML served by Austria's RIS. */
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
 
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+/** Parse the publisher-structured XML served by Austria's RIS. */
+import { load } from "@stll/html";
 import {
   type Block,
   type DocumentAst,
@@ -13,7 +14,6 @@ import {
   plainTextOf,
   startsDecisionBody,
 } from "@stll/legal-ast/document-ast";
-import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
 
 import {
   type AtCourtTextSection,
@@ -27,7 +27,7 @@ import {
   risTextFidelity,
 } from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
-import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 
 export type ParseRisDecisionInput = {
   sourceDocumentId: string;
@@ -166,7 +166,7 @@ const publisherFieldRole = (
  * the parser below is where an unreadable document is an error.
  */
 export const listRisDocumentContentTypes = (xml: string): readonly string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const content = $("nutzdaten").first();
   const contentTypes = new Set<string>();
   content.find("absatz[ct]").each((_, element) => {
@@ -337,7 +337,7 @@ const titlesHeadMatter = (next: RisItem | undefined): boolean => {
 export const parseRisDecisionXml = (
   input: ParseRisDecisionInput,
 ): Result<ParseRisDecisionOutput, ParseXmlError> => {
-  const $ = cheerio.load(input.xml, { xml: true });
+  const $ = load(input.xml, { xml: true });
   const content = $("nutzdaten").first().get(0);
   if (content === undefined) {
     return Result.err(
@@ -363,10 +363,7 @@ export const parseRisDecisionXml = (
     if (unit.type === "break") {
       return undefined;
     }
-    const inlines = rewriteInlineWhitespace(
-      unit.inlines,
-      collapseLetterSpacing,
-    );
+    const inlines = readInlineLetterSpacing(unit.inlines);
     return { inlines, text: plainTextOf(inlines) };
   });
   // The court's text is read whole before any role is given: where its

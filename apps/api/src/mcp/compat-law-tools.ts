@@ -17,6 +17,7 @@ import {
   decodeCompatCorpusId,
 } from "@/api/mcp/compat-ids";
 import {
+  COMPAT_PAIR_HOST_META,
   compatCorpusFetchResponse,
   compatSearchCursorError,
   compatSearchPageLimitResult,
@@ -25,13 +26,10 @@ import {
   invalidCompatIdResult,
   LAW_COMPAT_SEARCH_CURSOR_MAX_LENGTH,
 } from "@/api/mcp/compat-shared";
+import { cursorInput, nullAsAbsent } from "@/api/mcp/input-schemas";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
-import {
-  cursorInput,
-  nullAsAbsent,
-  validationErrorResult,
-} from "@/api/mcp/tool-utils";
+import { validationErrorResult } from "@/api/mcp/tool-utils";
 import {
   defineMcpToolOutput,
   defineValibotMcpTool,
@@ -101,6 +99,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       "Use `url` for the reader and `source_url` for the publisher.",
     feature: "FEATURE_PUBLIC_LAW",
     inputSchema: lawCompatSearchArgsSchema,
+    _meta: COMPAT_PAIR_HOST_META,
     name: "search",
     scope: "stella:search",
   }),
@@ -124,6 +123,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       "Use `url` for the reader and `source_url` for the publisher.",
     feature: "FEATURE_PUBLIC_LAW",
     inputSchema: lawCompatFetchArgsSchema,
+    _meta: COMPAT_PAIR_HOST_META,
     name: "fetch",
     scope: "stella:read",
   }),

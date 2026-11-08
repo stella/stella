@@ -29,6 +29,7 @@ import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/w
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -1097,9 +1098,7 @@ describe.skipIf(!runPostgresTests)("provider contract on Postgres", () => {
       expect(
         (await readState(tx, fixture.organizationId)).entitlements,
       ).toHaveLength(1);
-      await tx
-        .delete(organization)
-        .where(eq(organization.id, fixture.organizationId));
+      await deleteOrganizationsForTest(tx, [fixture.organizationId]);
 
       const renewal = await deliver({
         tx,

@@ -24,6 +24,7 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -89,6 +90,7 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
+import { MatterRunBadge, MatterRunMarks } from "@/components/matter-run-marks";
 import { PendingApprovalsNavBadge } from "@/components/pending-approvals-nav-badge";
 import {
   Sidebar,
@@ -124,6 +126,9 @@ import {
   MatterMenuItems,
   useMatterActions,
 } from "@/components/workspaces/matter-context-menu";
+import { activeChatRunsOptions } from "@/features/chat/active-runs";
+import { matterRunStatusByWorkspace } from "@/features/chat/active-runs.logic";
+import type { MatterRunStatus } from "@/features/chat/active-runs.logic";
 import {
   groupedChatThreadsOptions,
   mergeGroupedChatThreadPages,
@@ -140,7 +145,8 @@ import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeBillingChromeEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeChromeVisible } from "@/hooks/use-time-chrome-visible";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -158,6 +164,7 @@ import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
+import type { fetchWorkspaceNavigationPage } from "@/lib/memory-api";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { isPublicLawEnabled } from "@/lib/public-law-launch";
@@ -272,7 +279,8 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
   const publicLawEnabled = isPublicLawEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
-  const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
+  const timeBillingPreviewEnabled = useTimeBillingChromeEnabled();
+  const timeChromeVisible = useTimeChromeVisible();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
   const canReadInvoices = usePermissions({ workspace: ["read"] });
   const matterBillingLinks = getMatterBillingLinks({
@@ -286,7 +294,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     // The public /tools catalogue stays out of the authenticated app
     // nav; signed-in users manage tools via /knowledge/tools instead.
     includePublicTools: false,
-    includeTimesheets: timeBillingPreviewEnabled && canReadTimeEntries,
+    includeTimesheets: timeChromeVisible,
     publicKnowledge: isPublicKnowledgeEnabled(),
   });
   const user = useAuthenticatedUser();
@@ -351,6 +359,19 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
       : undefined,
   );
   const chatActivityByWorkspaceId = chatActivityByWorkspace(groupedChatThreads);
+  const activeRunsView = queryView(
+    useChromeQuery(
+      activeChatRunsOptions({
+        activeOrganizationId: user.activeOrganizationId,
+        userId: user.id,
+      }),
+    ),
+  );
+  // Run marks decorate matters that are listed anyway; an unreadable list
+  // shows no marks rather than holding the matters back.
+  const runStatusByWorkspaceId = matterRunStatusByWorkspace(
+    activeRunsView.type === "items" ? activeRunsView.items : [],
+  );
   const workspaces = workspacesData?.workspaces;
   const guideWorkspaceList = ((): GuideWorkspaceListState => {
     if (workspacesPending) {
@@ -838,6 +859,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
                 onReorder={reorderPinned}
                 billingLinks={matterBillingLinks}
                 onTogglePin={togglePin}
+                runStatus={runStatusByWorkspaceId.get(ws.id)}
                 workspace={ws}
               />
             ))}
@@ -854,6 +876,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
                 onExpandedChange={() => toggleMatterExpansion(ws.id)}
                 billingLinks={matterBillingLinks}
                 onTogglePin={togglePin}
+                runStatus={runStatusByWorkspaceId.get(ws.id)}
                 workspace={ws}
               />
             ))}
@@ -940,6 +963,9 @@ type MatterExpansion =
  * accept this type so `MatterIcon` always has a color.
  */
 type MatterIdentity = {
+  status: Awaited<
+    ReturnType<typeof fetchWorkspaceNavigationPage>
+  >["workspaces"][number]["status"];
   defaultViewId?: string | null;
   id: string;
   name: string;
@@ -1048,7 +1074,7 @@ const NavBadge = ({
   digit: number;
 }) => (
   <SidebarMenuBadge className={className}>
-    <kbd className="animate-in bg-muted text-muted-foreground fade-in text-3xs rounded border px-1.5 py-0.5 duration-150 motion-reduce:animate-none">
+    <kbd className="animate-in bg-muted text-muted-foreground fade-in text-3xs rounded-sm border px-1.5 py-0.5 duration-150 motion-reduce:animate-none">
       {digit}
     </kbd>
   </SidebarMenuBadge>
@@ -1086,6 +1112,8 @@ type MatterItemProps = {
     entities: CopyToMatterEntity[],
   ) => void;
   navBadge?: number | undefined;
+  /** What the reader's chats in this matter are doing; absent when none are open. */
+  runStatus: MatterRunStatus | undefined;
 };
 
 const MATTER_DRAG_TYPE = "stella/pinned-matter-id";
@@ -1157,6 +1185,7 @@ export const MatterItem = ({
   onEntityDrop,
   onExpandedChange,
   navBadge,
+  runStatus,
   userId,
 }: MatterItemProps) => {
   // Read pin state directly from the store so the menu label
@@ -1382,6 +1411,7 @@ export const MatterItem = ({
       name: ws.name,
       color: ws.color,
       client: ws.client ?? null,
+      isArchived: ws.status === WORKSPACE_STATUS.archived,
     },
     { onRename: startRename, onDeleted: () => onDeleted(ws.id) },
   );
@@ -1494,7 +1524,7 @@ export const MatterItem = ({
             showMatterNumber ? ws.reference : null,
           ]
             .filter(Boolean)
-            .join(" — ")}
+            .join(" · ")}
         >
           <Link data-active={isActive || undefined} {...navigationTarget}>
             {pinFlashSequence !== null && (
@@ -1517,23 +1547,29 @@ export const MatterItem = ({
                   className="size-4 shrink-0"
                   matter={{ id: ws.id, color: ws.color }}
                 />
+                <MatterRunBadge status={runStatus} />
               </MatterColorContextPicker>
             )}
             <span className="relative flex min-w-0 flex-col">
               <IdentityText className="whitespace-pre">{ws.name}</IdentityText>
-              <Tooltip
-                content={formatFullTimestamp(ws.lastActivityAt)}
-                render={
-                  <span className="text-muted-foreground text-3xs truncate leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
-                }
-              >
-                <BidiText>
-                  {ws.client
-                    ? ws.client.displayName
-                    : t("workspaces.parties.personalLabel")}
-                </BidiText>
-                {relTime ? ` · ${relTime}` : ""}
-              </Tooltip>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Tooltip
+                  content={formatFullTimestamp(ws.lastActivityAt)}
+                  render={
+                    <span className="text-muted-foreground text-3xs truncate leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
+                  }
+                >
+                  <BidiText>
+                    {ws.client
+                      ? ws.client.displayName
+                      : t("workspaces.parties.personalLabel")}
+                  </BidiText>
+                  {relTime ? ` · ${relTime}` : ""}
+                </Tooltip>
+                <span className="ms-auto">
+                  <MatterRunMarks status={runStatus} />
+                </span>
+              </span>
             </span>
           </Link>
         </SidebarMenuButton>

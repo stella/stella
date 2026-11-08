@@ -14,6 +14,7 @@ import {
   findInternalIdArguments,
   findMissingPluralCategories,
   findPlaceholderMismatch,
+  hasEmDash,
   hasInvalidCapitalizedStella,
   isBareErrorMessage,
   isSuppressed,
@@ -72,6 +73,19 @@ describe("stella wordmark casing", () => {
     expect(hasInvalidCapitalizedStella("stella reviews the document")).toBe(
       false,
     );
+  });
+});
+
+describe("em dash in catalogue copy", () => {
+  test("rejects the em dash and allows other punctuation and ranges", () => {
+    expect(hasEmDash("Saved \u2014 just now")).toBe(true);
+    expect(hasEmDash("Uloženo \u2014 právě teď")).toBe(true);
+    expect(hasEmDash("Saved: just now")).toBe(false);
+    expect(hasEmDash("Pages 2–4")).toBe(false);
+    expect(hasEmDash("Uloženo – právě teď")).toBe(false);
+    expect(hasEmDash("Draft (not sent)")).toBe(false);
+    expect(hasEmDash("\u2014")).toBe(false);
+    expect(hasEmDash(" \u2014 ")).toBe(true);
   });
 });
 

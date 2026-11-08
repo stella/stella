@@ -525,6 +525,101 @@ describe("paragraphs matching a query", () => {
     ).toEqual([4]);
   });
 
+  test("a query no paragraph holds whole answers empty and names the words", () => {
+    const found = paragraphsMatching({
+      budget: 8000,
+      language: "xx",
+      paragraphs: decisionParagraphs({
+        located: null,
+        text: "alpha beta\nbeta gamma delta\nepsilon",
+      }),
+      query: "alpha gamma delta zeta",
+    });
+    expect(found.hitCount).toBe(0);
+    expect(found.paragraphs).toEqual([]);
+    expect(found.warning?.code).toBe("query_words_apart");
+    expect(found.warning?.message).toContain("Nowhere in the decision: zeta.");
+    expect(found.warning?.message).toContain(
+      "without the rest: alpha, gamma, delta.",
+    );
+    expect(found.warning?.hint).toContain('query "gamma delta"');
+    expect(found.warning?.hint).toContain("1 paragraph holds");
+  });
+
+  test("a query with no word in the decision points elsewhere", () => {
+    const found = paragraphsMatching({
+      budget: 8000,
+      language: "cs",
+      paragraphs: decisionParagraphs({ located: null, text: "Nájem bytu." }),
+      query: "presumption of innocence",
+    });
+    expect(found.hitCount).toBe(0);
+    expect(found.warning?.code).toBe("query_words_absent");
+    expect(found.warning?.hint).toContain("search_case_law");
+    expect(found.warning?.hint).toContain("(cs)");
+  });
+
+  test("a query that matches carries no warning", () => {
+    expect(
+      paragraphsMatching({
+        budget: 8000,
+        language: "xx",
+        paragraphs: decisionParagraphs({ located: null, text: "alpha beta" }),
+        query: "alpha",
+      }).warning,
+    ).toBeNull();
+  });
+
+  test("case-law-decision-query.retry-call-finds-its-paragraph", () => {
+    assertProperty(
+      "case-law-decision-query.retry-call-finds-its-paragraph",
+      fc.property(
+        fc.array(
+          fc.array(fc.constantFrom("alfa", "beta", "gama", "delta", "eta"), {
+            minLength: 1,
+            maxLength: 4,
+          }),
+          { minLength: 1, maxLength: 8 },
+        ),
+        fc.uniqueArray(
+          fc.constantFrom("alfa", "beta", "gama", "delta", "eta", "zeta"),
+          { minLength: 1, maxLength: 6 },
+        ),
+        (lines, words) => {
+          const served = decisionParagraphs({
+            located: null,
+            text: lines.map((line) => line.join(" ")).join("\n"),
+          });
+          const found = paragraphsMatching({
+            budget: 8000,
+            language: "xx",
+            paragraphs: served,
+            query: words.join(" "),
+          });
+          // A hit and a warning exclude each other, so a partial match can
+          // never read as a full one.
+          expect(found.warning === null).toBe(found.hitCount > 0);
+          if (found.warning !== null) {
+            expect(found.paragraphs).toEqual([]);
+          }
+          if (found.warning?.code !== "query_words_apart") {
+            return;
+          }
+          const retry = /query "([^"]+)"/u.exec(found.warning.hint)?.[1] ?? "";
+          const count = /: (\d+) paragraph/u.exec(found.warning.hint)?.[1];
+          const again = paragraphsMatching({
+            budget: 8000,
+            language: "xx",
+            paragraphs: served,
+            query: retry,
+          });
+          expect(again.warning).toBeNull();
+          expect(String(again.hitCount)).toBe(count ?? "");
+        },
+      ),
+    );
+  });
+
   test("overlapping neighbourhoods are not repeated", () => {
     const found = paragraphsMatching({
       budget: 8000,

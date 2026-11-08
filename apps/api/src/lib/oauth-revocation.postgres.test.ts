@@ -15,7 +15,6 @@ import {
   oauthClient,
   oauthConsent,
   oauthRefreshToken,
-  organization,
   user,
 } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -31,6 +30,7 @@ import {
   refreshOAuthGrant,
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
 import rootManifest from "../../../../package.json" with { type: "json" };
@@ -80,8 +80,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       headers: browser.headers(),
     });
     cleanup.push(
-      async () =>
-        await rootDb.delete(organization).where(eq(organization.id, firm.id)),
+      async () => await deleteOrganizationsForTest(rootDb, [firm.id]),
     );
     await browser.setActiveOrganization(firm.id);
     const client = await registerOAuthClient(undefined, "none");

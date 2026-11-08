@@ -9,7 +9,7 @@ import {
   test,
 } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {

@@ -110,11 +110,11 @@ function PublicToolIcon({ entry }: { entry: LoadedCatalogueEntry }) {
     return (
       <div className="bg-muted/45 flex size-10 shrink-0 items-center justify-center rounded-lg">
         <CatalogueEntryIcon
-          className="text-muted-foreground"
           icon={entry.icon}
           iconUrl={entry.iconUrl ?? null}
           size={24}
           slug={entry.slug}
+          tone="muted"
         />
       </div>
     );

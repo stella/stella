@@ -1,4 +1,9 @@
-import { type PropsWithChildren, type ReactNode, useState } from "react";
+import {
+  type PropsWithChildren,
+  type ReactElement,
+  type ReactNode,
+  useState,
+} from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -32,6 +37,8 @@ import {
 import { offersCellReview } from "@/components/workspaces/row-actions.logic";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import type {
   WorkspaceEntity,
   WorkspaceField,
@@ -43,6 +50,7 @@ import {
   useWorkspaceStore,
 } from "@/lib/workspaces/store";
 import { AICellSourceCard } from "@/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card";
+import { CellOverrideCard } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-override-card";
 import {
   type AIExtractionTarget,
   isAIExtractionProperty,
@@ -74,6 +82,25 @@ const PropertyCellContent = ({
   const justification = useWorkspaceStore((s) =>
     selectJustificationByFieldId(s.justifications, field?.id),
   );
+  // Only a cell that holds an override asks for the beta decision.
+  const tableAnalysisEnabled = useCallerFeatureEnabled(
+    CALLER_FEATURE.tableAnalysis,
+    { enabled: cellMetadata?.override !== undefined },
+  );
+  const override = tableAnalysisEnabled ? cellMetadata?.override : undefined;
+  const withOverride = (cell: ReactElement): ReactElement =>
+    override === undefined || cellMetadata === undefined ? (
+      cell
+    ) : (
+      <CellOverrideCard
+        entity={entity}
+        metadata={cellMetadata}
+        override={override}
+        property={property}
+      >
+        {cell}
+      </CellOverrideCard>
+    );
   const extractionPreview = useWorkspaceStore((s) =>
     fieldContent?.type === "pending"
       ? s.getExtractionPreview(entity.entityId, property.id)
@@ -233,7 +260,7 @@ const PropertyCellContent = ({
       );
 
       if (!justification) {
-        return cell;
+        return withOverride(cell);
       }
       return (
         <AICellSourceCard
@@ -260,7 +287,7 @@ const PropertyCellContent = ({
     }
   }
 
-  return (
+  return withOverride(
     <>
       <CellMetadataFlags
         entityId={entity.entityId}
@@ -279,7 +306,7 @@ const PropertyCellContent = ({
         showDateIcon={false}
         workspaceId={property.workspaceId}
       />
-    </>
+    </>,
   );
 };
 

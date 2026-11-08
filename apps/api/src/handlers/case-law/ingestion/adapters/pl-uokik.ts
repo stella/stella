@@ -1,7 +1,7 @@
-// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
-// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
-// parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 import { panic, Result } from "better-result";
+
+import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
  *
@@ -57,9 +57,11 @@ import { panic, Result } from "better-result";
  * The shared fetch identifies itself as Stella's ingestion agent, and the
  * publisher gate spaces requests two seconds apart.
  */
-import * as cheerio from "cheerio";
-
-import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
+import { load } from "@stll/html";
 import {
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
@@ -111,9 +113,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -380,7 +382,7 @@ const PRINTED_DATE = /^(?<day>\d{2})\.(?<month>\d{2})\.(?<year>\d{4})$/u;
 
 /** Markup text as a reader sees it: entities decoded, spacing collapsed. */
 const textOf = (markup: string): string =>
-  visibleHtmlText(cheerio.load(`<body>${markup}</body>`)("body"))
+  visibleHtmlText(load(`<body>${markup}</body>`)("body"))
     .replace(/\s+/gu, " ")
     .trim();
 
@@ -711,7 +713,7 @@ const fileOf = (href: string): string | undefined => {
  * without that row is markup this reader does not know, never an empty record.
  */
 export const parsePlUokikDetail = (html: string): PlUokikDetail | null => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const table = $("div.ck-content table").first();
   if (table.length === 0) {
     return null;
@@ -1352,8 +1354,9 @@ const pageMetadataOf = ({ detail, files, id, row }: PageMetadataOptions) => {
           title: file.title,
           documentUrl: metadataAddressOf(id, file),
           status: fetched?.status,
+          // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
           sha256:
-            fetched?.bytes === undefined ? undefined : sha256(fetched.bytes),
+            fetched?.bytes !== undefined ? sha256(fetched.bytes) : undefined,
         };
       },
     ),
@@ -2090,16 +2093,18 @@ const metadataField = (key: string): SourceFieldDisposition => ({
   target: { type: "metadata", key },
 });
 
+type PlUokikPublisherRecord = Readonly<Record<PlUokikSourceField, unknown>>;
+
 const PL_UOKIK_SOURCE_FIELDS = {
-  "listing.@position": excludedSourceField(
+  "listing.@position": legacyExcludedSourceField(
     "the row's place in a view that shifts with every decision published; the crawl reads it, the row does not keep it",
   ),
   "listing.@unid": { disposition: "stored", target: { type: "identity" } },
   "listing.@noteid": metadataField("noteId"),
-  "listing.@siblings": excludedSourceField(
+  "listing.@siblings": legacyExcludedSourceField(
     "the view's size, the same on every row; the total probe reads it",
   ),
-  "listing.entrydata": excludedSourceField(
+  "listing.entrydata": legacyExcludedSourceField(
     "the column container; each value in it is declared below",
   ),
   "listing.column.Numer decyzji": metadataField("decisionNumberAsListed"),
@@ -2126,7 +2131,10 @@ const PL_UOKIK_SOURCE_FIELDS = {
   "detail.Status sprawy w sądzie": metadataField("courtStatus"),
   "detail.Orzecznictwo": metadataField("appealRulings"),
   "detail.(unlabelled)": metadataField("unlabelledFields"),
-} as const satisfies Record<PlUokikSourceField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof PlUokikPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /**
  * What the stored envelope states, by name. A label the page starts printing

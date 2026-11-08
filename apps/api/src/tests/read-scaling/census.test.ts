@@ -15,10 +15,14 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
+import { chatActiveRunsScalingScenario } from "./chat-active-runs";
+import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import { dictationScalingScenario } from "./dictation";
 import {
   documentAnnotationScalingScenarios,
@@ -33,6 +37,7 @@ import { mcpScalingScenarios } from "./mcp-scenarios";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
+import { organizationAuditExportScalingScenario } from "./organization-audit-export";
 import { organizationCreateScalingScenario } from "./organization-create";
 import { organizationSlugScalingScenario } from "./organization-slug";
 import {
@@ -61,8 +66,12 @@ const measuredApiScenarios = [
   decisionSummaryScalingScenario,
   decisionFilterValidationScalingScenario,
   accountExportDownloadScalingScenario,
+  desktopRunnerUpgradeScalingScenario,
+  chatLocalRunnersScalingScenario,
+  chatActiveRunsScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
+  ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
   mobileClientMetadataScalingScenario,
@@ -74,6 +83,7 @@ const measuredApiScenarios = [
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   organizationSlugScalingScenario,
+  organizationAuditExportScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>
@@ -238,9 +248,9 @@ for (const { kind, surface, ledger, measured } of [
           repoRoot,
           parseLedger: parseScalingLedger,
           // A write route this change mounts may enter with its reason.
-          normalizeBaseEntries: (base) =>
+          normalizeBaseEntries: ({ entries }) =>
             withNewWriteRoutes({
-              base,
+              base: entries,
               current: parseScalingLedger(
                 JSON.stringify(ledger),
                 `${kind}-scaling`,

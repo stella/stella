@@ -49,7 +49,7 @@ export const SegmentedIconToggle = <T extends string>({
         <ToggleGroupItem<T>
           aria-label={option.label}
           className={cn(
-            "h-6 w-7 rounded-[4px] sm:h-6",
+            "h-6 w-7 rounded-sm sm:h-6",
             size === "touch" &&
               "[@media(any-pointer:coarse)]:h-11 [@media(any-pointer:coarse)]:w-11",
           )}

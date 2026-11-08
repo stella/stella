@@ -1,0 +1,6 @@
+{
+  "capture": "synthetic",
+  "sha256": "583eb48c99e6cebaf6a9486c8cb19039c1788f61931a4108045a311ec3dd907b",
+  "note": "Composite excerpt of publisher-labelled value elements from public NSS detail records 638700, 641220 and 641750 observed on 2026-10-28. DOM-serialized and reduced for field-reader drift testing; no complete decision response is claimed.",
+  "sourceUrl": "https://vyhledavac.nssoud.cz/DokumentDetail/Index/641750"
+}
