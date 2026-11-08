@@ -222,6 +222,32 @@ context("test registration census", () => {
     },
   );
 
+  check("cyclic aliases still reach an environment read", () => {
+    const source = `
+      let first = second;
+      let second = first || process.env.CI;
+      test("cycle", () => {
+        if (!first) return;
+      });
+      test("unrelated", () => {
+        if (!other) return;
+      });
+    `;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+      { identity: "fixture.test.ts::cycle", type: "disabled" },
+    ]);
+  });
+
+  check("densely linked aliases without an environment read stay cheap", () => {
+    const names = Array.from({ length: 12 }, (_, index) => `alias${index}`);
+    const source = [
+      ...names.map((name) => `const ${name} = [${names.join(", ")}];`),
+      'test("linked", () => { if (!alias0) return; });',
+    ].join("\n");
+    // Every simple path through these names was once explored separately.
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([]);
+  });
+
   check.each(["process.env", "Bun.env", "import.meta.env"])(
     "environment aliases of %s cannot hide callback early returns",
     (environment) => {

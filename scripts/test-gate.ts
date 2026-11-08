@@ -611,9 +611,39 @@ const environmentControlledBodies = (
   return [];
 };
 
-const containsEnvironmentReturn = (node: ts.Node): boolean => {
+const isEnvironmentRoot = (candidate: ts.Node): boolean => {
+  if (
+    !ts.isPropertyAccessExpression(candidate) ||
+    candidate.name.text !== "env"
+  ) {
+    return false;
+  }
+  const object = candidate.expression;
+  if (ts.isIdentifier(object) && ["process", "Bun"].includes(object.text)) {
+    return true;
+  }
+  return (
+    ts.isMetaProperty(object) &&
+    object.keywordToken === ts.SyntaxKind.ImportKeyword &&
+    object.name.text === "meta"
+  );
+};
+
+// One detector per file: bindings are keyed by name across the whole file, so
+// re-expanding a common name per registration grows combinatorially.
+const environmentDetectors = new WeakMap<
+  ts.SourceFile,
+  (candidate: ts.Node) => boolean
+>();
+
+const environmentDetector = (
+  source: ts.SourceFile,
+): ((candidate: ts.Node) => boolean) => {
+  const known = environmentDetectors.get(source);
+  if (known !== undefined) {
+    return known;
+  }
   const bindings = new Map<string, ts.Expression[]>();
-  const source = node.getSourceFile();
   const bindNames = (
     name: ts.BindingName,
     initializer: ts.Expression,
@@ -640,49 +670,60 @@ const containsEnvironmentReturn = (node: ts.Node): boolean => {
     ts.forEachChild(candidate, collectBindings);
   };
   collectBindings(source);
-  const isEnvironmentRoot = (candidate: ts.Node): boolean => {
-    if (
-      !ts.isPropertyAccessExpression(candidate) ||
-      candidate.name.text !== "env"
-    ) {
-      return false;
-    }
-    const object = candidate.expression;
-    if (ts.isIdentifier(object) && ["process", "Bun"].includes(object.text)) {
-      return true;
-    }
-    return (
-      ts.isMetaProperty(object) &&
-      object.keywordToken === ts.SyntaxKind.ImportKeyword &&
-      object.name.text === "meta"
-    );
+  // A name carries the environment when its initializers reach an
+  // environment read through other names: reachability over the
+  // name -> referenced names graph, computed once from the direct readers.
+  const subtreeFacts = (initializer: ts.Node) => {
+    const names = new Set<string>();
+    let readsEnvironment = false;
+    const walk = (candidate: ts.Node): void => {
+      if (isEnvironmentRoot(candidate)) {
+        readsEnvironment = true;
+      }
+      if (ts.isIdentifier(candidate)) {
+        names.add(candidate.text);
+      }
+      ts.forEachChild(candidate, walk);
+    };
+    walk(initializer);
+    return { names, readsEnvironment };
   };
-  const containsEnvironment = (
-    candidate: ts.Node,
-    visited: ReadonlySet<string> = new Set(),
-  ): boolean => {
-    if (isEnvironmentRoot(candidate)) {
-      return true;
-    }
-    if (ts.isIdentifier(candidate) && !visited.has(candidate.text)) {
-      const initializers = bindings.get(candidate.text);
-      if (
-        initializers?.some((initializer) =>
-          containsEnvironment(
-            initializer,
-            new Set([...visited, candidate.text]),
-          ),
-        )
-      ) {
-        return true;
+  const referencedBy = new Map<string, Set<string>>();
+  const environmentNames = new Set<string>();
+  for (const [name, initializers] of bindings) {
+    for (const initializer of initializers) {
+      const { names, readsEnvironment } = subtreeFacts(initializer);
+      if (readsEnvironment) {
+        environmentNames.add(name);
+      }
+      for (const referenced of names) {
+        const dependants = referencedBy.get(referenced) ?? new Set<string>();
+        dependants.add(name);
+        referencedBy.set(referenced, dependants);
       }
     }
-    return (
-      ts.forEachChild(candidate, (child) =>
-        containsEnvironment(child, visited) ? true : undefined,
-      ) === true
-    );
-  };
+  }
+  const pending = [...environmentNames];
+  for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
+    for (const dependant of referencedBy.get(name) ?? []) {
+      if (!environmentNames.has(dependant)) {
+        environmentNames.add(dependant);
+        pending.push(dependant);
+      }
+    }
+  }
+  const containsEnvironment = (candidate: ts.Node): boolean =>
+    isEnvironmentRoot(candidate) ||
+    (ts.isIdentifier(candidate) && environmentNames.has(candidate.text)) ||
+    ts.forEachChild(candidate, (child) =>
+      containsEnvironment(child) ? true : undefined,
+    ) === true;
+  environmentDetectors.set(source, containsEnvironment);
+  return containsEnvironment;
+};
+
+const containsEnvironmentReturn = (node: ts.Node): boolean => {
+  const containsEnvironment = environmentDetector(node.getSourceFile());
   let found = false;
   const visit = (child: ts.Node): void => {
     if (
