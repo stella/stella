@@ -5,6 +5,7 @@ import entry3 from "./caseLaw.refreshSitemapShards.hourly";
 import entry4 from "./caseLaw.reportFreshness.fiveMinute";
 import entry5 from "./legislation.backfillExpressionIds.fiveMinute";
 import entry6 from "./requests.sweepReceipts.hourly";
+import entry7 from "./usage.eraseHostedCustomers.minute";
 
 export default {
   "caseLaw.backfillProvisionState.minutely": entry0,
@@ -14,4 +15,5 @@ export default {
   "caseLaw.reportFreshness.fiveMinute": entry4,
   "legislation.backfillExpressionIds.fiveMinute": entry5,
   "requests.sweepReceipts.hourly": entry6,
+  "usage.eraseHostedCustomers.minute": entry7,
 } as const;

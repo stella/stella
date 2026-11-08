@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
+
 import { organization, user } from "@/api/db/auth-schema";
 import { fileComparisonUploads } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
@@ -74,7 +76,7 @@ describe.skipIf(!runPostgresTests)(
             id: organizationId,
             name: "Comparison capacity",
             slug: organizationId,
-            createdAt: new Date(),
+            createdAt: dbClock.now(),
           });
           await db.insert(user).values(
             [firstUserId, secondUserId].map((id) => ({
@@ -95,7 +97,7 @@ describe.skipIf(!runPostgresTests)(
                 REMAINING_BYTES,
               declaredSha256: SHA,
               status: "pending",
-              expiresAt: new Date(Date.now() + 3_600_000),
+              expiresAt: dbClock.fromNow(3_600_000),
             });
             const context = contextFor(db, organizationId, secondUserId);
             // Row policies hide the first member's reservation from the second.

@@ -21,8 +21,8 @@ import {
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { reserveOrganizationFileObjectTransitions } from "@/api/lib/db/file-object-transitions";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
-import { reserveOrganizationFileObjectTransitions } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   insertWritingObjectCleanupIntents,

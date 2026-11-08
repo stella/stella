@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
+
+import { dbClock } from "@stll/test-kit/db";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -50,11 +52,21 @@ describe.skipIf(!enabled)("reader-answer account deletion", () => {
         id: organizationId,
         name: "Reader answer deletion",
         slug: organizationId,
-        createdAt: new Date(),
+        createdAt: dbClock.now(),
       });
+      const [databaseClock] = await rootDb
+        .select({
+          epochMs:
+            sql<number>`(extract(epoch from now()) * 1000)::float8`.mapWith(
+              Number,
+            ),
+        })
+        .from(sql`(SELECT 1) AS database_clock`);
       await recordNewOrganizationAccessState(rootDb, {
         organizationId,
-        now: new Date(),
+        now: new Date(
+          databaseClock?.epochMs ?? panic("Database clock missing"),
+        ),
       });
       await rootDb.insert(member).values([
         {
@@ -62,14 +74,14 @@ describe.skipIf(!enabled)("reader-answer account deletion", () => {
           organizationId,
           userId: targetUserId,
           role: "owner",
-          createdAt: new Date(),
+          createdAt: dbClock.now(),
         },
         {
           id: mintAuthProviderIdValue(),
           organizationId,
           userId: retainedOwnerId,
           role: "owner",
-          createdAt: new Date(),
+          createdAt: dbClock.now(),
         },
       ]);
       const readerDb = createScopedDb(

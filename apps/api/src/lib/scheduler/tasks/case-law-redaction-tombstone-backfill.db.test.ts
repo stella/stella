@@ -19,6 +19,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 
 import {
   BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
@@ -173,7 +174,7 @@ if (!databaseUrl || !runPostgresTests) {
       await db.insert(schedulerJobs).values({
         description: "redaction repair test",
         id: schedulerJobId,
-        lockedBy: leaseToken,
+        ...heldSchedulerLease(leaseToken),
         nextRunAt: new Date("2026-08-01T00:00:00.000Z"),
         schedule: { type: "interval", everyMs: 60_000 },
         task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,

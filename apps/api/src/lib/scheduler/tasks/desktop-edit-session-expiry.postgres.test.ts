@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -84,13 +86,13 @@ if (!databaseUrl || !runPostgresTests) {
           name: "Desktop expiry cleanup",
         });
         await db.insert(organization).values({
-          createdAt: new Date(),
+          createdAt: dbClock.now(),
           id: organizationId,
           name: "Desktop expiry cleanup",
           slug: organizationId,
         });
         await db.insert(member).values({
-          createdAt: new Date(),
+          createdAt: dbClock.now(),
           id: mintAuthProviderIdValue(),
           organizationId,
           role: "owner",
@@ -126,7 +128,7 @@ if (!databaseUrl || !runPostgresTests) {
           checkpointFileId,
           checkpointSha256Hex: "a".repeat(64),
           checkpointSizeBytes: Number(checkpointSizeBytes),
-          checkpointUpdatedAt: new Date(),
+          checkpointUpdatedAt: dbClock.now(),
           createdBy: userId,
           entityId,
           fileName: "desktop.docx",
@@ -302,14 +304,14 @@ if (!databaseUrl || !runPostgresTests) {
           name: "Desktop expiry checkpoint race",
         });
         await db.insert(organization).values({
-          createdAt: new Date(),
+          createdAt: dbClock.now(),
           id: organizationId,
           name: "Desktop expiry checkpoint race",
           slug: organizationId,
         });
         try {
           await db.insert(member).values({
-            createdAt: new Date(),
+            createdAt: dbClock.now(),
             id: mintAuthProviderIdValue(),
             organizationId,
             role: "owner",
@@ -381,7 +383,7 @@ if (!databaseUrl || !runPostgresTests) {
               .set({
                 checkpointSha256Hex: "b".repeat(64),
                 checkpointSizeBytes: Number(checkpointSizeBytes),
-                checkpointUpdatedAt: new Date(),
+                checkpointUpdatedAt: dbClock.now(),
               })
               .where(eq(desktopEditSessions.id, sessionId));
             written.resolve(

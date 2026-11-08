@@ -2,8 +2,12 @@ import { Result } from "better-result";
 
 import type { ScopedResponse } from "@stll/api-client";
 
-import { toAPIError } from "@/lib/errors/api";
-import { toAuthClientError } from "@/lib/errors/auth";
+import {
+  isSessionRefusal,
+  isTypedCodeRefusal,
+  toAPIError,
+} from "@/lib/errors/api";
+import { isAuthClientErrorCode, toAuthClientError } from "@/lib/errors/auth";
 
 type AuthErrorValue = {
   code?: string | undefined;
@@ -18,22 +22,14 @@ type UserVisibleReporter = (
   routeTemplate: string | undefined,
 ) => void;
 
-// These codes have an explicit inline outcome in the web client. Every other
-// server-declared auth code is unexpected and must not disappear into the
-// SDK's console-only error handling.
-const HANDLED_AUTH_CLIENT_CODES: ReadonlySet<string> = new Set([
-  "DISPOSABLE_EMAIL_NOT_ALLOWED",
-  "INVALID_BACKUP_CODE",
-  "INVALID_CODE",
-  "INVALID_OTP",
-  "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION",
-]);
-
 export const SOCIAL_LINK_HINT_PATH = "/social-link-hint";
 
 const isSocialLinkHintRequest = (requestUrl: URL | string): boolean =>
   new URL(requestUrl).pathname === `/api/auth${SOCIAL_LINK_HINT_PATH}`;
 
+// A refused code, a session that has ended and a code with a message of its own
+// each have an outcome in the web client. Any other server-declared auth code is
+// unexpected and must not disappear into the SDK's console-only error handling.
 export const reportUnhandledAuthClientError = (
   error: AuthErrorValue,
   report: UserVisibleReporter,
@@ -41,7 +37,9 @@ export const reportUnhandledAuthClientError = (
 ): void => {
   if (
     error.code === undefined ||
-    HANDLED_AUTH_CLIENT_CODES.has(error.code) ||
+    isAuthClientErrorCode(error.code) ||
+    isTypedCodeRefusal(error) ||
+    isSessionRefusal(error) ||
     isSocialLinkHintRequest(requestUrl)
   ) {
     return;
@@ -77,7 +75,8 @@ export const reportUnhandledMeResponse = async (
     typeof value !== "object" ||
     value === null ||
     !("code" in value) ||
-    typeof value.code !== "string"
+    typeof value.code !== "string" ||
+    isSessionRefusal({ code: value.code, status: response.status })
   ) {
     return;
   }

@@ -1,6 +1,6 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
@@ -38,6 +38,9 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 let testDb: TestDatabase;
 let ids: TestIds;
 let fake: FakeS3;
+/** The database's clock in epoch milliseconds; reconciliation reads its now(). */
+const databaseNowMs =
+  sql<number>`(extract(epoch from now()) * 1000)::float8`.mapWith(Number);
 const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
 const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
 const db = () =>
@@ -395,12 +398,17 @@ describe("abandoned organization file reservations", () => {
       db(),
     );
     expect(Result.isOk(overwrite)).toBe(true);
+    // The overwrite lands now on the database's clock, which stamps the
+    // reservation it is matched against.
+    const [databaseClock] = await testDb
+      .select({ epochMs: databaseNowMs })
+      .from(sql`(SELECT 1) AS database_clock`);
     fake.put(
       envBase.S3_BUCKET,
       key,
       new Uint8Array([7, 6, 5, 4, 3, 2, 1]),
       undefined,
-      new Date(),
+      new Date(databaseClock?.epochMs ?? panic("Database clock missing")),
     );
 
     for (
@@ -418,6 +426,7 @@ describe("abandoned organization file reservations", () => {
       expect(result.mismatched).toBe(1);
       const row = await testDb
         .select({
+          databaseNowMs,
           attemptCount: organizationFileObjects.reconciliationAttemptCount,
           reconcileAfter: organizationFileObjects.reconcileAfter,
           reconciliationState: organizationFileObjects.reconciliationState,
@@ -432,7 +441,9 @@ describe("abandoned organization file reservations", () => {
         expect(row?.reconciliationState).toBe(
           FILE_USAGE_RECONCILIATION_STATE.ACTIVE,
         );
-        expect(row?.reconcileAfter?.getTime()).toBeGreaterThan(Date.now());
+        expect(row?.reconcileAfter?.getTime()).toBeGreaterThan(
+          row?.databaseNowMs ?? panic("Database clock missing"),
+        );
       } else {
         expect(row?.reconciliationState).toBe(
           FILE_USAGE_RECONCILIATION_STATE.QUARANTINED,

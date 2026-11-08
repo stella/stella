@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { DOCX_MAX_ENTRIES } from "@/api/lib/docx-archive";
 
@@ -10,13 +9,13 @@ import { validateDocxBuffer } from "./validate-docx-buffer";
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
 const makeDocxBuffer = async (documentXml?: string) => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
 
   if (documentXml !== undefined) {
-    writeZipEntry(zip, "word/document.xml", documentXml);
+    zip.set("word/document.xml", documentXml);
   }
 
-  return await zip.generateAsync({ type: "arraybuffer" });
+  return (await zip.generate({ compression: "store" })).buffer;
 };
 
 describe("DOCX buffer validation", () => {
@@ -90,12 +89,12 @@ describe("DOCX buffer validation", () => {
   });
 
   test("separates an archive that breaks a decompression bound from one that will not open", async () => {
-    const zip = new JSZip();
-    writeZipEntry(zip, "word/document.xml", `<w:document xmlns:w="${W_NS}"/>`);
+    const zip = new ZipArchive();
+    zip.set("word/document.xml", `<w:document xmlns:w="${W_NS}"/>`);
     for (let index = 0; index < DOCX_MAX_ENTRIES; index += 1) {
-      writeZipEntry(zip, `word/media/${String(index)}.bin`, "x");
+      zip.set(`word/media/${String(index)}.bin`, "x");
     }
-    const overBound = await zip.generateAsync({ type: "arraybuffer" });
+    const overBound = (await zip.generate({ compression: "store" })).buffer;
 
     const result = await validateDocxBuffer(overBound);
 

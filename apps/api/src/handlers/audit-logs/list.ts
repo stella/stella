@@ -17,8 +17,9 @@ const config = {
     "entries newest first, each with its action, resource type and id, actor " +
     "user id, matter, timestamp, and change detail (null unless " +
     'changesStatus is "visible"). Filter by matterId, ' +
-    "action, resourceType (with optional resourceId), userId, and a " +
-    "created-at range (from/to, ISO date-time). Paginate with limit and " +
+    "action, resourceType (with optional resourceId), userId, performer " +
+    "(people or automations), and a created-at range (from/to, ISO " +
+    "date-time). Paginate with limit and " +
     "cursor. Requires organization audit-log access.",
   permissions: { auditLog: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

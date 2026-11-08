@@ -10,13 +10,10 @@ import { conditionHasFormula, conditionNodeSchema } from "@stll/conditions";
 
 import {
   manualInputToolSchema,
-  propertyContentSchema,
+  scalarPropertyContentSchema,
 } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
-import {
-  defaultVarcharSchema,
-  resourceIdSchema,
-} from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { logger } from "@/api/lib/observability/logger";
 import { PROPERTY_DEPENDENCY_LIMITS } from "@/api/lib/properties/dependency-limits";
 import { brandPersistedLegalListId } from "@/api/lib/safe-id-boundaries";
@@ -360,8 +357,8 @@ const tViewTemplatePropertyToolSchema = v.union([
 export const tViewTemplatePropertySchema = v.strictObject({
   version: v.literal(1),
   sourceId: v.pipe(v.string(), v.minLength(1)),
-  name: defaultVarcharSchema,
-  content: propertyContentSchema,
+  name: displayNameSchema(),
+  content: scalarPropertyContentSchema,
   tool: tViewTemplatePropertyToolSchema,
   role: v.optional(v.union([v.literal("document-type-classifier"), v.null()])),
   createIfMissing: v.boolean(),
@@ -384,13 +381,13 @@ export type ViewTemplateProperty = v.InferOutput<
 
 export const tCreateViewInputSchema = v.strictObject({
   id: resourceIdSchema("workspaceView"),
-  name: defaultVarcharSchema,
+  name: displayNameSchema(),
   layout: tViewLayoutSchema,
   templateProperties: v.optional(v.array(tViewTemplatePropertySchema)),
 });
 
 export const tUpdateViewBodySchema = v.strictObject({
-  name: v.optional(defaultVarcharSchema),
+  name: v.optional(displayNameSchema()),
   layout: v.optional(tViewLayoutSchema),
   templateProperties: v.optional(v.array(tViewTemplatePropertySchema)),
 });

@@ -29,10 +29,12 @@ import { PreviewPane } from "@stll/ui/preview-pane";
 
 import type { ClipboardSourceAppVisual } from "../clipboard/clipboard-types";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { WindowDragRegion } from "../shared/WindowDragRegion";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
+  failureReason,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import { appTotals, calendarDate, shiftDate } from "./activity-logic";
@@ -79,17 +81,20 @@ const reportActivityError = (
     "activityRead" | "activitySubscribe" | "activityUpdate"],
   code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[
     "eventSubscriptionFailed" | "invalidResponse" | "invokeFailed"],
+  rejection?: unknown,
 ) => {
   // Fixed codes only: nothing about what was recorded leaves the window.
   reportDesktopError({
     code,
     operation,
+    ...(rejection === undefined ? {} : { reason: failureReason(rejection) }),
     window: DESKTOP_TELEMETRY_WINDOWS.activity,
   });
 };
 
 const ActivityShell = ({ children }: React.PropsWithChildren) => (
   <main className="bg-background text-foreground min-h-dvh">
+    <WindowDragRegion />
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-6 pt-10 pb-8">
       {children}
     </div>
@@ -590,13 +595,14 @@ const useActivityDay = (
           setView({ snapshot: value, type: "ready" });
           return undefined;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (disposed || current !== requestId.current) {
             return;
           }
           reportActivityError(
             DESKTOP_TELEMETRY_OPERATIONS.activityRead,
             DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            error,
           );
           setView((previousView) =>
             previousView.type === "ready" ? previousView : { type: "failed" },
@@ -634,7 +640,6 @@ const ActivityApp = () => {
   const view = useActivityDay(date, setError);
   const [preferences, setPreferences] = useState<ActivityCalendarPreferences>({
     granularity: 30,
-    narrativeDeclines: 0,
   });
   const errorRead = t("errorRead");
 
@@ -645,11 +650,12 @@ const ActivityApp = () => {
         onSuccess?.();
         return undefined;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         onFailure?.();
         reportActivityError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          error,
         );
         setError(
           command === "activity_copy_text" ? t("errorCopy") : t("errorUpdate"),

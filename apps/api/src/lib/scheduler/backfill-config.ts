@@ -1,21 +1,39 @@
-import type { backfillHeartbeat } from "@stll/db-load-gate/health";
-import { defaultConfig } from "@stll/db-load-gate/health";
+import type {
+  backfillHeartbeat,
+  HealthConfig,
+} from "@stll/db-load-gate/health";
 
 import type { BackfillRunStatus } from "../../db/backfill-runtime";
+import { loadGateHealthConfig } from "../../env-online-index";
 
-export const SCHEDULER_BACKFILL_CONFIG = {
-  ...defaultConfig,
-  hardFloor: 65,
-  resumeFloor: 75,
-  startFloor: 80,
-};
+/** Scheduler backfills start, yield and resume on stricter floors than the shared gate. */
+export const schedulerBackfillConfig = (
+  health: HealthConfig = loadGateHealthConfig(),
+) =>
+  ({
+    ...health,
+    hardFloor: 65,
+    resumeFloor: 75,
+    startFloor: 80,
+  }) satisfies HealthConfig;
 
 export const SCHEDULER_BACKFILL_IDS = {
   claimedErasures: "caseLaw.reconcileClaimedErasures.minutely",
   coverage: "caseLaw.refreshCoverage.fiveMinute",
+  populationCounts: "caseLaw.foldPopulationCounts.minutely",
   decisionIdentifiers: "caseLaw.reconcileDecisionIdentifiers.minutely",
   provisionState: "caseLaw.backfillProvisionState.minutely",
+  parsedInputState: "caseLaw.backfillParsedInputState.fiveMinute",
   expressionIds: "legislation.backfillExpressionIds.fiveMinute",
+} as const;
+
+/**
+ * Scheduler jobs that batch through the backfill runtime on a migration-owned
+ * online repair's checkpoint. Their checkpoint carries the repair's name, not
+ * the job id, so the scheduler heartbeat above does not report them.
+ */
+export const SCHEDULER_REPAIR_BACKFILL_IDS = {
+  populationSeed: "caseLaw.seedPopulationCounts.minutely",
 } as const;
 
 export const emitSchedulerBackfillHeartbeat = (

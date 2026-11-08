@@ -19,6 +19,10 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
+import {
+  WORKSPACE_STATUS,
+  workspaceAcceptsWrites,
+} from "@stll/api-contract/workspace-status";
 import { mapWithConcurrency } from "@stll/concurrency";
 import {
   sanitizeErrorAttributesForOutput,
@@ -121,6 +125,7 @@ import {
   type OrganizationFileUsageError,
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
+import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -342,7 +347,7 @@ const writeOcrSearchablePdfDerivative = async ({
           // same order while binding the cleanup intent to the live claim.
           await lockOrganizationObjectIntentsForWriter(tx, run.organizationId);
           const workspace = await lockRunWorkspace(tx, run);
-          if (workspace?.status !== "active") {
+          if (!workspaceAcceptsWrites(workspace?.status)) {
             return null;
           }
           const claimLock = await withAggregateLock({
@@ -409,7 +414,7 @@ const writeOcrSearchablePdfDerivative = async ({
       }
       published = await withAggregateTransaction(database, async (tx) => {
         const workspace = await lockRunWorkspace(tx, run);
-        if (workspace?.status !== "active") {
+        if (!workspaceAcceptsWrites(workspace?.status)) {
           return false;
         }
         const claimLock = await withAggregateLock({
@@ -520,25 +525,22 @@ export const createDocumentProcessingLeaseRenewal = ({
       }
     };
     detached(
-      renewal.then(releaseRenewal, releaseRenewal),
+      async () => renewal.then(releaseRenewal, releaseRenewal),
       "document-processing.lease-heartbeat-release",
     );
-    detached(
-      (async () => {
-        const result = await Result.tryPromise({
-          try: async () =>
-            await withTimeout(async () => await renewal, {
-              label: "document processing lease heartbeat",
-              timeoutMs,
-            }),
-          catch: (cause) => cause,
-        });
-        if (Result.isError(result)) {
-          onError(result.error);
-        }
-      })(),
-      "document-processing.lease-heartbeat-renew",
-    );
+    detached(async () => {
+      const result = await Result.tryPromise({
+        try: async () =>
+          await withTimeout(async () => await renewal, {
+            label: "document processing lease heartbeat",
+            timeoutMs,
+          }),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(result)) {
+        onError(result.error);
+      }
+    }, "document-processing.lease-heartbeat-renew");
   };
 };
 
@@ -620,7 +622,7 @@ const readCurrentDocumentSource = async ({
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, organizationId),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
       ),
     )
     .innerJoin(
@@ -2015,7 +2017,10 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
     .where(
       and(
         eq(documentProcessingRuns.deadlineScoutStatus, "running"),
-        lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
+        lt(
+          documentProcessingRuns.deadlineScoutClaimedAt,
+          sql`${staleBefore}::timestamptz`,
+        ),
       ),
     )
     .orderBy(
@@ -2049,7 +2054,10 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
                 staleDispatches.map(({ id }) => id),
               ),
               eq(documentProcessingRuns.deadlineScoutStatus, "running"),
-              lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
+              lt(
+                documentProcessingRuns.deadlineScoutClaimedAt,
+                sql`${staleBefore}::timestamptz`,
+              ),
             ),
           )
           .returning({ id: documentProcessingRuns.id });
@@ -2061,7 +2069,7 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
       and(
         eq(scoutRuns.scoutKey, SCOUT_KEY.DOCUMENT_DEADLINES),
         eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
-        lt(scoutRuns.startedAt, staleBefore),
+        lt(scoutRuns.startedAt, sql`${staleBefore}::timestamptz`),
       ),
     )
     .orderBy(asc(scoutRuns.startedAt), asc(scoutRuns.id))
@@ -2085,7 +2093,7 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
                 staleCensusRuns.map(({ id }) => id),
               ),
               eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
-              lt(scoutRuns.startedAt, staleBefore),
+              lt(scoutRuns.startedAt, sql`${staleBefore}::timestamptz`),
             ),
           )
           .returning({ id: scoutRuns.id });
@@ -2257,7 +2265,7 @@ const recoverMissingNativeExtractionRuns = async (
       and(
         cursor === null ? undefined : gt(fields.id, cursor),
         lt(entityVersions.createdAt, settledBefore),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
         sql`${fields.content}->>'type' = 'file'
           AND ${fields.content}->>'encrypted' = 'false'`,
         notExists(
@@ -2457,6 +2465,45 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
         ? null
         : new Date(updatedAt.getTime() + ENQUEUE_FAILURE_RETRY_MS),
   };
+};
+
+/**
+ * Queued native extraction runs small enough for the API process, oldest
+ * first. Unlike a dispatch this ignores `nextDeliveryAt`: that only spaces
+ * out queue handoffs, and the run's lease decides who processes it.
+ */
+export const readInlineNativeExtractionRuns = async ({
+  database,
+  limit,
+}: {
+  database: typeof rootDb;
+  limit: number;
+}): Promise<{ id: SafeId<"documentProcessingRun"> }[]> => {
+  const now = new Date();
+  return await database
+    .select({ id: documentProcessingRuns.id })
+    .from(documentProcessingRuns)
+    .innerJoin(fields, eq(fields.id, documentProcessingRuns.fieldId))
+    .where(
+      and(
+        eq(documentProcessingRuns.status, "queued"),
+        eq(documentProcessingRuns.kind, "native-extraction"),
+        lt(
+          documentProcessingRuns.attemptCount,
+          DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+        ),
+        or(
+          isNull(documentProcessingRuns.nextAttemptAt),
+          lte(documentProcessingRuns.nextAttemptAt, now),
+        ),
+        sql`(${fields.content}->>'sizeBytes')::bigint <= ${LIMITS.documentProcessingInlineMaxBytes}`,
+      ),
+    )
+    .orderBy(
+      asc(documentProcessingRuns.createdAt),
+      asc(documentProcessingRuns.id),
+    )
+    .limit(limit);
 };
 
 /**
@@ -2823,7 +2870,7 @@ const recoverFailedOcrSearchIndexes = async (
       and(
         eq(workspaces.id, documentProcessingRuns.workspaceId),
         eq(workspaces.organizationId, documentProcessingRuns.organizationId),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
       ),
     )
     .where(
@@ -2990,7 +3037,7 @@ const recoverStaleDocumentProcessingRuns = async (
   };
 };
 
-const handleDocumentProcessingFailure = ({
+export const handleDocumentProcessingFailure = ({
   error,
   job,
 }: {
@@ -3393,17 +3440,18 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
     null;
   let closing = false;
   detached(
-    worker.waitUntilReady().then(() => {
-      if (closing) {
+    async () =>
+      worker.waitUntilReady().then(() => {
+        if (closing) {
+          return undefined;
+        }
+        if (ocrConfigured) {
+          readiness = startDocumentOcrWorkerReadiness(
+            envDocumentProcessingWorker.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES,
+          );
+        }
         return undefined;
-      }
-      if (ocrConfigured) {
-        readiness = startDocumentOcrWorkerReadiness(
-          envDocumentProcessingWorker.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES,
-        );
-      }
-      return undefined;
-    }),
+      }),
     "document-processing.publish-readiness",
   );
 
@@ -3419,18 +3467,19 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
     }
     reconciling = true;
     detached(
-      reconcileDocumentProcessing({
-        onComplete: () => {
-          reconciling = false;
-          if (!closing) {
-            detached(
-              scheduleReconciliation(),
-              "document-processing.schedule-reconciliation",
-            );
-          }
-        },
-        phases: reconciliationPhases,
-      }),
+      async () =>
+        reconcileDocumentProcessing({
+          onComplete: () => {
+            reconciling = false;
+            if (!closing) {
+              detached(
+                async () => scheduleReconciliation(),
+                "document-processing.schedule-reconciliation",
+              );
+            }
+          },
+          phases: reconciliationPhases,
+        }),
       "document-processing.reconcile",
     );
   };

@@ -10,6 +10,8 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -38,6 +40,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -310,12 +313,12 @@ describe("comparison sweep replay and runner capture", () => {
         task: SWEEP_FILE_COMPARISON_UPLOADS_TASK,
         schedule: { type: "interval", everyMs: 300_000 },
         nextRunAt: new Date(),
-        lockedBy: "test-lease",
+        ...heldSchedulerLease("test-lease"),
         payload: { cursor: null },
       })
       .onConflictDoUpdate({
         target: schedulerJobs.id,
-        set: { lockedBy: "test-lease" },
+        set: heldSchedulerLease("test-lease"),
       });
   });
   afterEach(async () => {
@@ -486,7 +489,7 @@ describe("comparison sweep replay and runner capture", () => {
       .update(fileComparisonUploads)
       .set({
         claimId: Bun.randomUUIDv7(),
-        claimExpiresAt: new Date(Date.now() + 60_000),
+        claimExpiresAt: dbClock.fromNow(60_000),
         status: "processing",
       })
       .where(eq(fileComparisonUploads.id, claimedId));
@@ -503,7 +506,7 @@ describe("comparison sweep replay and runner capture", () => {
 
     await testDb
       .update(fileComparisonUploads)
-      .set({ claimExpiresAt: new Date(Date.now() - 1) })
+      .set({ claimExpiresAt: dbClock.ago(1) })
       .where(eq(fileComparisonUploads.id, claimedId));
     expect(
       await sweepExpiredFileComparisonUploads({

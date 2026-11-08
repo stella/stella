@@ -3,139 +3,260 @@ import type { ParserVersionScopes } from "./parser-reparse-scopes";
 
 export const ADAPTER_KEYS = {
   AT_ASYLGH: "at-asylgh",
+
   AT_BKS: "at-bks",
+
   AT_BVWG: "at-bvwg",
+
   AT_COURTS: "at-courts",
+
   AT_FINDOK: "at-findok",
+
   AT_LVWG: "at-lvwg",
+
   AT_UBAS: "at-ubas",
+
   AT_UMSE: "at-umse",
+
   AT_UVS: "at-uvs",
+
   AT_VERG: "at-verg",
+
   AT_VFGH: "at-vfgh",
+
   AT_VWGH: "at-vwgh",
+
   CZ_NS: "cz-ns",
+
   CZ_NSS: "cz-nss",
+
   CZ_REGIONAL: "cz-regional",
+
   CZ_UOHS: "cz-uohs",
+
   CZ_US: "cz-us",
+
   EU_ECJ: "eu-ecj",
+
   HU_BHGY: "hu-bhgy",
+
   PL_COURTS: "pl-courts",
+
   PL_KIO: "pl-kio",
+
   PL_KIS: "pl-kis",
+
   PL_NCOURT: "pl-ncourt",
+
   PL_NSA: "pl-nsa",
+
   PL_SN: "pl-sn",
+
   PL_TK: "pl-tk",
+
   PL_UODO: "pl-uodo",
+
   PL_UOKIK: "pl-uokik",
+
   SK_COURTS: "sk-courts",
+
   SK_US: "sk-us",
+
   UK_FCL: "uk-fcl",
 } as const;
 export const IMPORT_SOURCE_KEYS = {
   COURTLISTENER: "us-courtlistener",
 } as const;
 export const PARSER_VERSIONS = {
-  [ADAPTER_KEYS.AT_ASYLGH]: 10,
-  [ADAPTER_KEYS.AT_BKS]: 10,
-  [ADAPTER_KEYS.AT_BVWG]: 10,
-  [ADAPTER_KEYS.AT_COURTS]: 10,
-  [ADAPTER_KEYS.AT_FINDOK]: 12,
-  [ADAPTER_KEYS.AT_LVWG]: 10,
-  [ADAPTER_KEYS.AT_UBAS]: 10,
-  [ADAPTER_KEYS.AT_UMSE]: 10,
-  [ADAPTER_KEYS.AT_UVS]: 10,
-  [ADAPTER_KEYS.AT_VERG]: 10,
-  [ADAPTER_KEYS.AT_VFGH]: 10,
-  [ADAPTER_KEYS.AT_VWGH]: 10,
-  [ADAPTER_KEYS.CZ_NS]: 22,
-  [ADAPTER_KEYS.CZ_NSS]: 26,
-  [ADAPTER_KEYS.CZ_REGIONAL]: 17,
-  [ADAPTER_KEYS.CZ_UOHS]: 8,
-  [ADAPTER_KEYS.CZ_US]: 33,
-  [ADAPTER_KEYS.EU_ECJ]: 20,
-  [ADAPTER_KEYS.HU_BHGY]: 22,
-  [ADAPTER_KEYS.PL_COURTS]: 20,
-  [ADAPTER_KEYS.PL_KIO]: 13,
-  [ADAPTER_KEYS.PL_KIS]: 14,
-  [ADAPTER_KEYS.PL_NCOURT]: 20,
-  [ADAPTER_KEYS.PL_NSA]: 10,
-  [ADAPTER_KEYS.PL_SN]: 12,
-  [ADAPTER_KEYS.PL_TK]: 11,
-  [ADAPTER_KEYS.PL_UODO]: 16,
-  [ADAPTER_KEYS.PL_UOKIK]: 14,
-  [ADAPTER_KEYS.SK_COURTS]: 24,
-  [ADAPTER_KEYS.SK_US]: 21,
-  [ADAPTER_KEYS.UK_FCL]: 4,
+  [ADAPTER_KEYS.AT_ASYLGH]: 12,
+
+  [ADAPTER_KEYS.AT_BKS]: 12,
+
+  [ADAPTER_KEYS.AT_BVWG]: 12,
+
+  [ADAPTER_KEYS.AT_COURTS]: 12,
+
+  [ADAPTER_KEYS.AT_FINDOK]: 14,
+
+  [ADAPTER_KEYS.AT_LVWG]: 12,
+
+  [ADAPTER_KEYS.AT_UBAS]: 12,
+
+  [ADAPTER_KEYS.AT_UMSE]: 12,
+
+  [ADAPTER_KEYS.AT_UVS]: 12,
+
+  [ADAPTER_KEYS.AT_VERG]: 12,
+
+  [ADAPTER_KEYS.AT_VFGH]: 12,
+
+  [ADAPTER_KEYS.AT_VWGH]: 12,
+
+  [ADAPTER_KEYS.CZ_NS]: 26,
+
+  [ADAPTER_KEYS.CZ_NSS]: 33,
+
+  [ADAPTER_KEYS.CZ_REGIONAL]: 21,
+
+  [ADAPTER_KEYS.CZ_UOHS]: 12,
+
+  [ADAPTER_KEYS.CZ_US]: 37,
+
+  [ADAPTER_KEYS.EU_ECJ]: 25,
+
+  [ADAPTER_KEYS.HU_BHGY]: 28,
+
+  [ADAPTER_KEYS.PL_COURTS]: 23,
+
+  [ADAPTER_KEYS.PL_KIO]: 16,
+
+  [ADAPTER_KEYS.PL_KIS]: 19,
+
+  [ADAPTER_KEYS.PL_NCOURT]: 23,
+
+  [ADAPTER_KEYS.PL_NSA]: 11,
+
+  [ADAPTER_KEYS.PL_SN]: 17,
+
+  [ADAPTER_KEYS.PL_TK]: 13,
+
+  [ADAPTER_KEYS.PL_UODO]: 17,
+
+  [ADAPTER_KEYS.PL_UOKIK]: 21,
+
+  [ADAPTER_KEYS.SK_COURTS]: 29,
+
+  [ADAPTER_KEYS.SK_US]: 24,
+
+  [ADAPTER_KEYS.UK_FCL]: 6,
 } as const satisfies Record<AdapterKey, number>;
 export const SOURCE_FINGERPRINT_VERSIONS = {
   [ADAPTER_KEYS.AT_ASYLGH]: 0,
+
   [ADAPTER_KEYS.AT_BKS]: 0,
+
   [ADAPTER_KEYS.AT_BVWG]: 0,
+
   [ADAPTER_KEYS.AT_COURTS]: 0,
+
   [ADAPTER_KEYS.AT_FINDOK]: 0,
+
   [ADAPTER_KEYS.AT_LVWG]: 0,
+
   [ADAPTER_KEYS.AT_UBAS]: 0,
+
   [ADAPTER_KEYS.AT_UMSE]: 0,
+
   [ADAPTER_KEYS.AT_UVS]: 0,
+
   [ADAPTER_KEYS.AT_VERG]: 0,
+
   [ADAPTER_KEYS.AT_VFGH]: 0,
+
   [ADAPTER_KEYS.AT_VWGH]: 0,
+
   [ADAPTER_KEYS.CZ_NS]: 0,
+
   [ADAPTER_KEYS.CZ_NSS]: 0,
+
   [ADAPTER_KEYS.CZ_REGIONAL]: 0,
+
   [ADAPTER_KEYS.CZ_UOHS]: 0,
+
   [ADAPTER_KEYS.CZ_US]: 0,
+
   [ADAPTER_KEYS.EU_ECJ]: 0,
+
   [ADAPTER_KEYS.HU_BHGY]: 0,
+
   [ADAPTER_KEYS.PL_COURTS]: 0,
+
   [ADAPTER_KEYS.PL_KIO]: 0,
+
   [ADAPTER_KEYS.PL_KIS]: 0,
+
   [ADAPTER_KEYS.PL_NCOURT]: 0,
+
   [ADAPTER_KEYS.PL_NSA]: 0,
+
   [ADAPTER_KEYS.PL_SN]: 0,
+
   [ADAPTER_KEYS.PL_TK]: 0,
+
   [ADAPTER_KEYS.PL_UODO]: 0,
+
   [ADAPTER_KEYS.PL_UOKIK]: 0,
+
   [ADAPTER_KEYS.SK_COURTS]: 0,
+
   [ADAPTER_KEYS.SK_US]: 0,
+
   [ADAPTER_KEYS.UK_FCL]: 0,
+
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: 0,
 } as const satisfies Record<AdapterKey | ImportSourceKey, number>;
 export const PARSER_VERSION_SCOPES = {
-  [ADAPTER_KEYS.AT_ASYLGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_ASYLGH], scope: {"type":"all","reason":"Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."} },
-  [ADAPTER_KEYS.AT_BKS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_BKS], scope: {"type":"all","reason":"Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."} },
-  [ADAPTER_KEYS.AT_BVWG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_BVWG], scope: {"type":"all","reason":"Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."} },
-  [ADAPTER_KEYS.AT_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_COURTS], scope: {"type":"all","reason":"Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."} },
-  [ADAPTER_KEYS.AT_FINDOK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK], scope: {"type":"all","reason":"Keep the line breaks of Findok paragraphs, emphasis, superscripts and links as inlines, so sentences either side of a break stay apart."} },
-  [ADAPTER_KEYS.AT_LVWG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_LVWG], scope: {"type":"all","reason":"Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."} },
-  [ADAPTER_KEYS.AT_UBAS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UBAS], scope: {"type":"all","reason":"Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."} },
-  [ADAPTER_KEYS.AT_UMSE]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UMSE], scope: {"type":"all","reason":"Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."} },
-  [ADAPTER_KEYS.AT_UVS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UVS], scope: {"type":"all","reason":"Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."} },
-  [ADAPTER_KEYS.AT_VERG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VERG], scope: {"type":"all","reason":"Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."} },
-  [ADAPTER_KEYS.AT_VFGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VFGH], scope: {"type":"all","reason":"Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."} },
-  [ADAPTER_KEYS.AT_VWGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VWGH], scope: {"type":"all","reason":"Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."} },
-  [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage."} },
-  [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage."} },
-  [ADAPTER_KEYS.CZ_REGIONAL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage."} },
-  [ADAPTER_KEYS.CZ_UOHS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage."} },
-  [ADAPTER_KEYS.CZ_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage."} },
-  [ADAPTER_KEYS.EU_ECJ]: { version: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters; the work's language manifest and the listed manifestation type join the row's metadata, which has no feature storage of its own"} },
-  [ADAPTER_KEYS.HU_BHGY]: { version: PARSER_VERSIONS[ADAPTER_KEYS.HU_BHGY], scope: {"type":"all","reason":"Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.PL_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS], scope: {"type":"all","reason":"Re-read common-court opening recitals as whole sentences when the editor lays them out across adjacent lines."} },
-  [ADAPTER_KEYS.PL_KIO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
-  [ADAPTER_KEYS.PL_KIS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS], scope: {"type":"all","reason":"Re-read word-processor HTML so single printed line breaks stay inside their sentence and blank lines alone end paragraphs."} },
-  [ADAPTER_KEYS.PL_NCOURT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NCOURT], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped. Also revalidates publisher head-matter ordering across the complete document AST."} },
-  [ADAPTER_KEYS.PL_NSA]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NSA], scope: {"type":"all","reason":"Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.PL_SN]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_SN], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
-  [ADAPTER_KEYS.PL_TK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
-  [ADAPTER_KEYS.PL_UODO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
-  [ADAPTER_KEYS.PL_UOKIK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."} },
-  [ADAPTER_KEYS.SK_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Revalidate deferred stored PDF payloads through the shared typed corpus-validation result; invalid textless structure is a classified no-document outcome, while readable source text and AST retain the same parser. Preserve PDF paragraph gaps, lettered items and the bounded first-page metadata table when rebuilding document text and block boundaries from captured PDF bytes. Rows without captured PDF bytes yield a metadata-only replay outcome and retain their applied parser version; populated historical rows require an explicit PDF capture refresh. Metadata-derived titles require extracted document blocks. Paragraph-gap thresholds derive from font metrics rather than the frequency of observed gaps. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage."} },
-  [ADAPTER_KEYS.SK_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_US], scope: {"type":"all","reason":"Recompute paragraph text and line breaks from stored markup: retain a line break when its newline survives whitespace trimming and drop it when the newline is removed; paragraph AST has no separate feature storage. Normalize repeated block identities and publisher head-matter order before reading stored decisions; AST identities and roles have no independent feature storage. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage."} },
-  [ADAPTER_KEYS.UK_FCL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.UK_FCL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."} },
+  [ADAPTER_KEYS.AT_ASYLGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_ASYLGH], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_BKS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_BKS], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_BVWG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_BVWG], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_COURTS], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_FINDOK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_LVWG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_LVWG], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_UBAS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UBAS], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_UMSE]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UMSE], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_UVS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UVS], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_VERG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VERG], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_VFGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VFGH], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.AT_VWGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VWGH], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Recompute the signing judge's name from the stored print page: a letter-spaced surname is now joined, and the name has no feature storage of its own. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Signature roles are recomputed from the stored decision through the shared Czech role grammar, which reads the office a judge signs under (the president or a member of an extended or grand chamber, the President of a top court); they have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Section headings, the formula lines, the takto lead-in and letter-spaced words are recomputed with them. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl. Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own. Read inline style declarations with CSS cascade semantics. Re-read reporter and matched registry fields from captured publisher responses; missing historical captures require a re-crawl. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Signature roles are recomputed from the stored decision through the shared Czech role grammar, which reads the office a judge signs under (the president or a member of an extended or grand chamber, the President of a top court); they have no feature storage of their own. A separate-opinion heading that ends on the docket it names opens that opinion, whose paragraph numbers are its own; a bare name under the closing signs."} },
+
+  [ADAPTER_KEYS.CZ_REGIONAL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL], scope: {"type":"all","reason":"Recompute the instructions from stored raw so the court's own Poučení label, alone or opening the first instruction, is printed once under the synthesized heading; AST blocks have no separate feature storage. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Signature roles are recomputed from the stored decision through the shared Czech role grammar, which reads the office a judge signs under (the president or a member of an extended or grand chamber, the President of a top court); they have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.CZ_UOHS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. Re-read the body and footnotes from stored PDF bytes through the shared PDF band reader: running headers, barcodes and page numbers leave the body by their shape, footnotes are read off each page's foot with their raised references as linked superscripts, and printed lines join into paragraphs across page breaks; the AST has no separate feature storage. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own. Re-derive the file number with its year from the export record (older rows state only the serial), the issue date from the reference-number letterhead line, and the decision type from the printed title, typing its absence when none is printed; the identifiers and the case number have no separate feature storage."} },
+
+  [ADAPTER_KEYS.CZ_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. the plenary ruling roles, the formula lines, the takto lead-in and the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own. Ruling roles also open after an SbNU nález caption and end at the signatures, the closing line and the instruction; they have no feature storage of their own. A bare signatory name directly under a closing or another signature line, the way the Court's judges sign a separate opinion, is a signature; signature roles are recomputed from the stored page and have no feature storage of their own. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Signature roles are recomputed from the stored decision through the shared Czech role grammar, which reads the office a judge signs under (the president or a member of an extended or grand chamber, the President of a top court); they have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.EU_ECJ]: { version: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ], scope: {"type":"all","reason":"The sentence introducing the ruling (On those grounds, THE COURT hereby rules:) loses the holding role where the Court sets it on several lines: the General Court's unmarked opening row and the oldest layout's bare paragraphs. Derive the case number from every case-law CELEX document form by its court letter, so a Civil Service Tribunal order (62013FO0060) reads F-60/13 instead of the raw CELEX; the case number has no separate feature storage. A bare number after a dash in the keyword chain closes a range inside the keyword before it instead of standing as a keyword of its own; keywords have no separate feature storage. Retain the publisher's excluded notice fields in the stored notice instead of naming them as exclusions. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own. Re-read stored CJEU documents: a title set over several lines (an opinion's author and delivery line, a judgment's chamber and date) is one decision-title heading, and each footnote-list entry is a footnote note keyed by its anchor; headings and notes have no separate feature storage."} },
+
+  [ADAPTER_KEYS.HU_BHGY]: { version: PARSER_VERSIONS[ADAPTER_KEYS.HU_BHGY], scope: {"type":"all","reason":"Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Read a partial or interim judgment's operative introduction and the kind printed below a header table as opening the operative part; a header label needs its colon; paragraph roles and the decision type have no separate feature storage. Type the reasons printed after the ruling as argumentation, not as the document's tail, in the sections derived from the AST. Read the publisher citation restriction from retained raw records into decision metadata; null or absent restrictions remain absent. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own. Re-mark anonymisation placeholders from stored Hungarian documents: a placeholder's number and field word end the token, so amounts, years and longer words beside a party label stay text; inline anonymisation marks have no separate feature storage."} },
+
+  [ADAPTER_KEYS.PL_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS], scope: {"type":"all","reason":"Re-read common-court opening recitals as whole sentences when the editor lays them out across adjacent lines. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Paragraph roles are recomputed from stored raw through the shared Polish role grammar on letter-spacing-collapsed text: a bench's names or a signing label with its blank under the ruling sign it, and a letter-spaced reasons heading opens the reasons; roles have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.PL_KIO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters; A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Paragraph roles are recomputed from stored raw through the shared Polish role grammar on letter-spacing-collapsed text: a bench's names or a signing label with its blank under the ruling sign it, and a letter-spaced reasons heading opens the reasons; roles have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.PL_KIS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS], scope: {"type":"all","reason":"Re-read word-processor HTML so single printed line breaks stay inside their sentence and blank lines alone end paragraphs. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Paragraph roles are recomputed from stored raw through the shared Polish role grammar on letter-spacing-collapsed text: a bench's names or a signing label with its blank under the ruling sign it, and a letter-spaced reasons heading opens the reasons; roles have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.PL_NCOURT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NCOURT], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped. Also revalidates publisher head-matter ordering across the complete document AST; A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Paragraph roles are recomputed from stored raw through the shared Polish role grammar on letter-spacing-collapsed text: a bench's names or a signing label with its blank under the ruling sign it, and a letter-spaced reasons heading opens the reasons; roles have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.PL_NSA]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NSA], scope: {"type":"all","reason":"Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.PL_SN]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_SN], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read printed title order and opening, operative and signature roles from stored source; preserve inline bold and italic emphasis in PDFs. Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text; preserve sentence continuations across spacing and indentation while retaining explicit paragraph points. Translate separately extracted reference positions after inline indices are stripped. Classify attached footnote regions before repeated furniture, using their measured line pitch and a page body-height fallback. These values have no separate feature storage. Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters; A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own. Paragraph roles are recomputed from stored raw through the shared Polish role grammar on letter-spacing-collapsed text: a bench's names or a signing label with its blank under the ruling sign it, and a letter-spaced reasons heading opens the reasons; roles have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.PL_TK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Read inline style declarations with CSS cascade semantics. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.PL_UODO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.PL_UOKIK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text alongside printed roles, title order, bold and italic emphasis; preserve sentence continuations across spacing and indentation while retaining explicit paragraph points. Translate separately extracted reference positions after inline indices are stripped. Classify attached footnote regions before repeated furniture, using their measured line pitch and a page body-height fallback. These values have no separate feature storage. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own. Read `Ŝ`, which a common Polish font encoding prints for `ż`, as `ż` in body, note and ruling text; the letter has no feature storage of its own. Drop a running header or footer set in body type and the first page's letterhead footer by their shape from stored PDF text, and read a footnote reference raised right after a number when the foot of the page opens that note; these have no separate feature storage. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Paragraph roles are recomputed from stored raw through the shared Polish role grammar on letter-spacing-collapsed text: a bench's names or a signing label with its blank under the ruling sign it, and a letter-spaced reasons heading opens the reasons; roles have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.SK_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Revalidate deferred stored PDF payloads through the shared typed corpus-validation result; invalid textless structure is a classified no-document outcome, while readable source text and AST retain the same parser. Preserve PDF paragraph gaps, lettered items and the bounded first-page metadata table when rebuilding document text and block boundaries from captured PDF bytes. Rows without captured PDF bytes yield a metadata-only replay outcome and retain their applied parser version; populated historical rows require an explicit PDF capture refresh. Metadata-derived titles require extracted document blocks. Paragraph-gap thresholds derive from font metrics rather than the frequency of observed gaps. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. Read words the court sets letter-spaced as words, keeping the wider gap between two of them as the word boundary; paragraph text has no separate feature storage. Paragraph text and block boundaries are recomputed from stored PDFs through the shared hard-wrap reader, preserving first-line and hanging indentation, line pitch and short final lines; multiline titles and all block anchors are rebuilt with document-unique identities; none has feature storage of its own. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. The formula a court decides under (V MENE SLOVENSKEJ REPUBLIKY), set in the title's type, is read apart from the title as an opening paragraph from the stored PDF bytes; the AST has no separate feature storage. Every row of the portal's metadata box printed above the decision is front matter."} },
+
+  [ADAPTER_KEYS.SK_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_US], scope: {"type":"all","reason":"Recompute paragraph text and line breaks from stored markup: retain a line break when its newline survives whitespace trimming and drop it when the newline is removed; paragraph AST has no separate feature storage. Normalize repeated block identities and publisher head-matter order before reading stored decisions; AST identities and roles have no independent feature storage. Multiline preamble titles and document-unique block anchors are rebuilt from stored markup, alongside paragraph text, paragraph numbers and anonymization markers before whitespace trimming, including unpainted non-breaking-space redaction runs and uneven letter-spaced chunks witnessed by intact words; none has feature storage of its own. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage. Read files that set word gaps as no-break spaces at their text-layer seams: a plain space inside a word joins it, and one after a finished sentence before a numbered point restores the lost line break; paragraph AST has no separate feature storage. In files with plain word gaps too, the court's next numbered point or a part marker run onto a finished sentence opens its own line again, so ruling points and the reasoning are read apart; paragraph roles have no separate feature storage. A page that ends a part before a separate opinion opens a fresh page with the docket may be short, so the page numbers around it leave the text; paragraph text has no separate feature storage. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.UK_FCL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.UK_FCL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Date a tribunal decision by its decision date, so a document named a decision is read rather than refused. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own."} },
 } as const satisfies ParserVersionScopes<typeof PARSER_VERSIONS>;
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
 export type ImportSourceKey = (typeof IMPORT_SOURCE_KEYS)[keyof typeof IMPORT_SOURCE_KEYS];

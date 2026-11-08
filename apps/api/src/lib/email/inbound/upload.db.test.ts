@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { dkimSign } from "mailauth";
 import { generateKeyPairSync } from "node:crypto";
 
@@ -48,10 +48,7 @@ import {
   UploadedMailUnavailableError,
 } from "@/api/lib/email/inbound/upload";
 import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
-import {
-  processUploadedMailJob,
-  UploadedMailSourceUnresolvedError,
-} from "@/api/lib/email/inbound/upload-queue";
+import { processUploadedMailJob } from "@/api/lib/email/inbound/upload-queue";
 import { toArrayBuffer } from "@/api/lib/files/outlook-msg.test-fixture";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
@@ -62,6 +59,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -72,8 +70,6 @@ const uploaderId = mintAuthProviderId<"user">();
 const outsiderId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
 const otherWorkspaceId = createSafeId<"workspace">();
-const filePropertyId = createSafeId<"property">();
-const otherFilePropertyId = createSafeId<"property">();
 let db: GatedTestDb;
 const fixtureScoped = () =>
   createScopedDb(
@@ -89,133 +85,96 @@ const unverifiedOriginal: typeof verifyOriginalSignature = async () =>
 type StoreEmailFileOptions = {
   createdBy: SafeId<"user">;
   fileWorkspaceId?: SafeId<"workspace">;
-  mimeType?: string;
-  versionCreatedBy?: SafeId<"user">;
-};
-
-type StoredEmailSource = Parameters<typeof fileUploadedMail>[0]["source"];
-const storedSources = new Map<SafeId<"entity">, StoredEmailSource>();
-
-const sourceFor = (entityId: SafeId<"entity">): StoredEmailSource => {
-  const source = storedSources.get(entityId);
-  if (source === undefined) {
-    throw new Error("expected a stored email source");
-  }
-  return source;
 };
 
 const storeEmailFile = async ({
   createdBy,
   fileWorkspaceId = workspaceId,
-  mimeType = EML_MIME_TYPE,
-  versionCreatedBy = createdBy,
 }: StoreEmailFileOptions) => {
   const entityId = createSafeId<"entity">();
-  const entityVersionId = createSafeId<"entityVersion">();
-  const fieldId = createSafeId<"field">();
-  const sourceFileId = createSafeId<"userFile">();
-  const sourceSha256Hex = "a".repeat(64);
   await db.insert(entities).values({
     id: entityId,
     workspaceId: fileWorkspaceId,
     name: "letter.eml",
     createdBy,
   });
-  await db.insert(entityVersions).values({
-    id: entityVersionId,
-    entityId,
-    workspaceId: fileWorkspaceId,
-    versionNumber: 1,
-    createdBy: versionCreatedBy,
-  });
-  await db
-    .update(entities)
-    .set({ currentVersionId: entityVersionId })
-    .where(eq(entities.id, entityId));
-  await db.insert(fields).values({
-    id: fieldId,
-    workspaceId: fileWorkspaceId,
-    entityVersionId,
-    propertyId:
-      fileWorkspaceId === workspaceId ? filePropertyId : otherFilePropertyId,
-    content: {
-      type: "file",
-      version: 1,
-      id: sourceFileId,
-      sha256Hex: sourceSha256Hex,
-      fileName: "letter.eml",
-      mimeType,
-      sizeBytes: 100,
-      encrypted: false,
-      pdfFileId: null,
-    },
-  });
-  storedSources.set(entityId, {
-    organizationId,
-    workspaceId: fileWorkspaceId,
-    entityId,
-    entityVersionId,
-    fieldId,
-    sourceFileId,
-    sourceSha256Hex,
-    storageMimeType: mimeType,
-    extractionMimeType: mimeType,
-  });
   return entityId;
 };
 
-const promoteEmailVersion = async ({
-  entityId,
-  createdBy,
-}: {
-  entityId: SafeId<"entity">;
-  createdBy: SafeId<"user">;
-}) => {
-  const entityVersionId = createSafeId<"entityVersion">();
-  await db.insert(entityVersions).values({
-    id: entityVersionId,
-    entityId,
+type StoreVersionedEmailFileOptions = {
+  entityCreatedBy: SafeId<"user">;
+  versionCreatedBy: SafeId<"user">;
+};
+
+/** An email file whose current version was added by another member. */
+const storeVersionedEmailFile = async ({
+  entityCreatedBy,
+  versionCreatedBy,
+}: StoreVersionedEmailFileOptions) => {
+  const entityId = await storeEmailFile({ createdBy: entityCreatedBy });
+  const propertyId = createSafeId<"property">();
+  const versionId = createSafeId<"entityVersion">();
+  const sourceFileId = `source-${versionId}`;
+  await db.insert(properties).values({
+    id: propertyId,
     workspaceId,
-    versionNumber: 2,
-    createdBy,
+    name: `File ${propertyId}`,
+    status: "fresh",
+    content: { version: 1, type: "file" },
+    tool: { version: 1, type: "manual-input" },
+  });
+  await db.insert(entityVersions).values({
+    id: versionId,
+    workspaceId,
+    entityId,
+    versionNumber: 1,
+    createdBy: versionCreatedBy,
   });
   await db.insert(fields).values({
     id: createSafeId<"field">(),
     workspaceId,
-    entityVersionId,
-    propertyId: filePropertyId,
+    entityVersionId: versionId,
+    propertyId,
     content: {
       type: "file",
-      version: 1,
-      id: createSafeId<"userFile">(),
-      sha256Hex: "b".repeat(64),
-      fileName: "replacement.eml",
+      id: sourceFileId,
       mimeType: EML_MIME_TYPE,
-      sizeBytes: 100,
-      encrypted: false,
+      fileName: "letter.eml",
+      sizeBytes: 128,
       pdfFileId: null,
+      sha256Hex: "a".repeat(64),
+      encrypted: false,
+      version: 1,
     },
   });
   await db
     .update(entities)
-    .set({ currentVersionId: entityVersionId })
+    .set({ currentVersionId: versionId })
     .where(eq(entities.id, entityId));
+  return { entityId, sourceFileId };
 };
 
 type ProcessUploadOptions = {
   entityId: SafeId<"entity">;
   bytes: ArrayBuffer;
+  mimeType?: string;
+  sourceFileId?: string;
   verifyOriginal?: typeof verifyOriginalSignature;
 };
 
 const processUpload = async ({
   entityId,
   bytes,
+  mimeType = EML_MIME_TYPE,
+  // Unversioned fixture files fence no generation.
+  sourceFileId = "unversioned-file",
   verifyOriginal = unverifiedOriginal,
 }: ProcessUploadOptions) =>
   await fileUploadedMail({
     bytes,
-    source: sourceFor(entityId),
+    mimeType,
+    sourceFileId,
+    scope: { organizationId, workspaceId, entityId },
     database: db,
     scopedDbForUploader: (scope) =>
       createScopedDb(
@@ -297,7 +256,7 @@ if (!databaseUrl || !runPostgresTests) {
     const gated = openGatedTestDatabase(databaseUrl);
     db = gated.db;
     gated.cleanUp(async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       for (const id of [uploaderId, outsiderId]) {
         await db.delete(user).where(eq(user.id, id));
       }
@@ -363,32 +322,9 @@ if (!databaseUrl || !runPostgresTests) {
         workspaceId,
         userId: uploaderId,
       });
-      await db.insert(properties).values([
-        {
-          id: filePropertyId,
-          workspaceId,
-          name: "File",
-          content: { type: "file", version: 1 },
-          tool: { type: "manual-input", version: 1 },
-          status: "fresh",
-          kinds: ["document"],
-          system: true,
-        },
-        {
-          id: otherFilePropertyId,
-          workspaceId: otherWorkspaceId,
-          name: "File",
-          content: { type: "file", version: 1 },
-          tool: { type: "manual-input", version: 1 },
-          status: "fresh",
-          kinds: ["document"],
-          system: true,
-        },
-      ]);
     }, 60_000);
 
     beforeEach(async () => {
-      storedSources.clear();
       await fixtureScoped()(
         async (tx) =>
           await tx
@@ -597,92 +533,9 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await records()).toMatchObject([{ direction: "out" }]);
     });
 
-    test("the current version author is the filer, not the entity creator", async () => {
-      const entityId = await storeEmailFile({
-        createdBy: outsiderId,
-        versionCreatedBy: uploaderId,
-      });
-      const outcome = await processUpload({
-        entityId,
-        bytes: emlFile({ ...GOLDEN_MESSAGE, from: "uploader@example.test" }),
-      });
-
-      expect(outcome.isOk() && outcome.value.status).toBe("filed");
-      expect(await records()).toMatchObject([{ direction: "out" }]);
-      expect(await filers()).toMatchObject([{ filedByUserId: uploaderId }]);
-    });
-
-    test("a version author without matter access cannot borrow the entity creator's authority", async () => {
-      const entityId = await storeEmailFile({
-        createdBy: uploaderId,
-        versionCreatedBy: outsiderId,
-      });
-      const outcome = await processUpload({
-        entityId,
-        bytes: emlFile(GOLDEN_MESSAGE),
-      });
-
-      expect(outcome.isOk() && outcome.value).toEqual({
-        status: "skipped",
-        reason: "no_matter_access",
-      });
-      expect(await records()).toHaveLength(0);
-    });
-
-    test("a source promoted after parsing cannot create correspondence", async () => {
-      const entityId = await storeEmailFile({ createdBy: uploaderId });
-      let promoted = false;
-      const verifyOriginal: typeof verifyOriginalSignature = async () => {
-        if (!promoted) {
-          promoted = true;
-          await promoteEmailVersion({ entityId, createdBy: uploaderId });
-        }
-        return Result.ok({ status: "unverified" });
-      };
-
-      const outcome = await processUpload({
-        entityId,
-        bytes: emlFile(GOLDEN_MESSAGE),
-        verifyOriginal,
-      });
-
-      expect(outcome.isOk() && outcome.value).toEqual({
-        status: "skipped",
-        reason: "source_changed",
-      });
-      expect(await records()).toHaveLength(0);
-      expect(await filers()).toHaveLength(0);
-    });
-
-    test("a source deleted while parsing cannot create correspondence", async () => {
-      const entityId = await storeEmailFile({ createdBy: uploaderId });
-      // Deleting a document removes its entity row; versions and fields
-      // cascade with it.
-      const verifyOriginal: typeof verifyOriginalSignature = async () => {
-        await db.delete(entities).where(eq(entities.id, entityId));
-        return Result.ok({ status: "unverified" });
-      };
-
-      const outcome = await processUpload({
-        entityId,
-        bytes: emlFile(GOLDEN_MESSAGE),
-        verifyOriginal,
-      });
-
-      expect(outcome.isOk() && outcome.value).toEqual({
-        status: "skipped",
-        reason: "source_changed",
-      });
-      expect(await records()).toHaveLength(0);
-      expect(await filers()).toHaveLength(0);
-    });
-
     test("an Outlook file yields the same record fields as its RFC 5322 twin", async () => {
       const emlEntity = await storeEmailFile({ createdBy: uploaderId });
-      const msgEntity = await storeEmailFile({
-        createdBy: uploaderId,
-        mimeType: MSG_MIME_TYPE,
-      });
+      const msgEntity = await storeEmailFile({ createdBy: uploaderId });
       await processUpload({
         entityId: emlEntity,
         bytes: emlFile(GOLDEN_MESSAGE),
@@ -690,6 +543,7 @@ if (!databaseUrl || !runPostgresTests) {
       const msgOutcome = await processUpload({
         entityId: msgEntity,
         bytes: msgFile(GOLDEN_MESSAGE),
+        mimeType: MSG_MIME_TYPE,
       });
       expect(msgOutcome.isOk() && msgOutcome.value.status).toBe("filed");
       const content = async (sourceEntityId: SafeId<"entity">) =>
@@ -759,15 +613,13 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     test("an Outlook file is always unverified", async () => {
-      const entityId = await storeEmailFile({
-        createdBy: uploaderId,
-        mimeType: MSG_MIME_TYPE,
-      });
+      const entityId = await storeEmailFile({ createdBy: uploaderId });
       const verifyOriginal: typeof verifyOriginalSignature = async () =>
         Result.ok({ status: "verified", domain: "example.com" });
       await processUpload({
         entityId,
         bytes: msgFile(GOLDEN_MESSAGE),
+        mimeType: MSG_MIME_TYPE,
         verifyOriginal,
       });
       expect(await records()).toMatchObject([
@@ -779,6 +631,38 @@ if (!databaseUrl || !runPostgresTests) {
       const entityId = await storeEmailFile({ createdBy: outsiderId });
       const outcome = await processUpload({
         entityId,
+        bytes: emlFile(GOLDEN_MESSAGE),
+      });
+      expect(outcome.isOk() && outcome.value).toEqual({
+        status: "skipped",
+        reason: "no_matter_access",
+      });
+      expect(await records()).toHaveLength(0);
+      expect(await filers()).toHaveLength(0);
+    });
+
+    test("an uploaded version is filed under the member who added that version", async () => {
+      const { entityId, sourceFileId } = await storeVersionedEmailFile({
+        entityCreatedBy: outsiderId,
+        versionCreatedBy: uploaderId,
+      });
+      const outcome = await processUpload({
+        entityId,
+        sourceFileId,
+        bytes: emlFile(GOLDEN_MESSAGE),
+      });
+      expect(outcome.isOk() && outcome.value.status).toBe("filed");
+      expect(await filers()).toMatchObject([{ filedByUserId: uploaderId }]);
+    });
+
+    test("an uploaded version added by a member without matter access files nothing", async () => {
+      const { entityId, sourceFileId } = await storeVersionedEmailFile({
+        entityCreatedBy: uploaderId,
+        versionCreatedBy: outsiderId,
+      });
+      const outcome = await processUpload({
+        entityId,
+        sourceFileId,
         bytes: emlFile(GOLDEN_MESSAGE),
       });
       expect(outcome.isOk() && outcome.value).toEqual({
@@ -801,15 +685,11 @@ if (!databaseUrl || !runPostgresTests) {
           scope.userId,
         );
       const queued: Parameters<typeof processUploadedMailJob>[0]["data"][] = [];
-      const source = sourceFor(entityId);
       await enqueueUploadedMailFiling({
         file: {
-          entityVersionId: source.entityVersionId,
-          fieldId: source.fieldId,
-          sourceFileId: source.sourceFileId,
-          sourceSha256Hex: source.sourceSha256Hex,
-          storageMimeType: source.storageMimeType,
-          extractionMimeType: source.extractionMimeType,
+          sourceFileId: "file_1",
+          storageMimeType: EML_MIME_TYPE,
+          mimeType: EML_MIME_TYPE,
         },
         scope: { organizationId, workspaceId, entityId },
         queue: {
@@ -860,75 +740,6 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await filers()).toHaveLength(1);
     });
 
-    const fileLegacyJob = async (
-      data: Parameters<typeof processUploadedMailJob>[0]["data"],
-      filedSources: StoredEmailSource[] = [],
-    ) =>
-      await processUploadedMailJob({
-        data,
-        database: db,
-        readFile: async () =>
-          testScannedFile({
-            bytes: emlFile(GOLDEN_MESSAGE),
-            mimeType: EML_MIME_TYPE,
-          }),
-        fileMail: async (options) => {
-          filedSources.push(options.source);
-          return await fileUploadedMail({
-            ...options,
-            scopedDbForUploader: (scope) =>
-              createScopedDb(
-                markRlsDatabase(db),
-                [scope.workspaceId],
-                scope.organizationId,
-                scope.userId,
-              ),
-            verifyOriginal: unverifiedOriginal,
-          });
-        },
-      });
-
-    test("a job the previous release queued is filed from the version naming its file", async () => {
-      const entityId = await storeEmailFile({ createdBy: uploaderId });
-      const source = sourceFor(entityId);
-      const filedSources: StoredEmailSource[] = [];
-      // The previous release's producer queued `{ ...scope, ...file }`.
-      const legacyJob = {
-        organizationId,
-        workspaceId,
-        entityId,
-        sourceFileId: source.sourceFileId,
-        storageMimeType: source.storageMimeType,
-        mimeType: source.extractionMimeType,
-      };
-
-      expect(await fileLegacyJob(legacyJob, filedSources)).toMatchObject({
-        status: "filed",
-      });
-      expect(filedSources).toEqual([source]);
-      expect(await records()).toMatchObject([
-        { source: "upload", sourceEntityId: entityId },
-      ]);
-      expect(await filers()).toHaveLength(1);
-    });
-
-    test("a previous-release job whose file no stored version names fails the attempt", async () => {
-      const entityId = await storeEmailFile({ createdBy: uploaderId });
-      const legacyJob = {
-        organizationId,
-        workspaceId,
-        entityId,
-        sourceFileId: createSafeId<"userFile">(),
-        storageMimeType: EML_MIME_TYPE,
-        mimeType: EML_MIME_TYPE,
-      };
-
-      expect(await rejectionOf(fileLegacyJob(legacyJob))).toBeInstanceOf(
-        UploadedMailSourceUnresolvedError,
-      );
-      expect(await records()).toHaveLength(0);
-    });
-
     test("an uploaded file with a blocked attachment type is still filed", async () => {
       const entityId = await storeEmailFile({ createdBy: uploaderId });
       const outcome = await processUpload({
@@ -953,7 +764,23 @@ if (!databaseUrl || !runPostgresTests) {
       await processUpload({ entityId, bytes: emlFile(GOLDEN_MESSAGE) });
       expect(await records()).toHaveLength(1);
 
-      await db.delete(entities).where(eq(entities.id, entityId));
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT
+          set_config('app.correspondence_source_organization_id', 'outer-organization', true),
+          set_config('app.correspondence_source_workspace_id', ${otherWorkspaceId}, true),
+          set_config('app.correspondence_source_record_id', ${createSafeId<"correspondence">()}, true),
+          set_config('app.correspondence_source_entity_id', ${createSafeId<"entity">()}, true)
+        `);
+        const scope = sql`SELECT
+          current_setting('app.correspondence_source_organization_id', true) AS organization_id,
+          current_setting('app.correspondence_source_workspace_id', true) AS workspace_id,
+          current_setting('app.correspondence_source_record_id', true) AS record_id,
+          current_setting('app.correspondence_source_entity_id', true) AS entity_id
+        `;
+        const before = await tx.execute(scope);
+        await tx.delete(entities).where(eq(entities.id, entityId));
+        expect(await tx.execute(scope)).toEqual(before);
+      });
 
       expect(await records()).toHaveLength(0);
       expect(await filers()).toHaveLength(0);
@@ -989,13 +816,11 @@ if (!databaseUrl || !runPostgresTests) {
     ] as const)(
       "%s files nothing and leaves the file in place",
       async (_label, bytes, mimeType, reason) => {
-        const entityId = await storeEmailFile({
-          createdBy: uploaderId,
-          mimeType,
-        });
+        const entityId = await storeEmailFile({ createdBy: uploaderId });
         const outcome = await processUpload({
           entityId,
           bytes: toArrayBuffer(bytes),
+          mimeType,
         });
         expect(outcome.isOk() && outcome.value).toEqual({
           status: "skipped",
@@ -1173,13 +998,25 @@ if (!databaseUrl || !runPostgresTests) {
             .insert(correspondence)
             .values({ ...recordRow(), ...uploadProvenance(entityId) }),
       );
+      const otherEntityId = await storeEmailFile({ createdBy: uploaderId });
+      const otherRecord = recordRow();
+      await fixtureScoped()(
+        async (tx) =>
+          await tx.insert(correspondence).values({
+            ...otherRecord,
+            ...uploadProvenance(otherEntityId),
+          }),
+      );
+      // Insertion with a new dedup key is a source-generation transition.
+      // Updating another record isolates the source-pointer uniqueness guard.
       const duplicate = await Result.tryPromise(
         async () =>
           await fixtureScoped()(
             async (tx) =>
               await tx
-                .insert(correspondence)
-                .values({ ...recordRow(), ...uploadProvenance(entityId) }),
+                .update(correspondence)
+                .set({ sourceEntityId: entityId })
+                .where(eq(correspondence.id, otherRecord.id)),
           ),
       );
       expect(

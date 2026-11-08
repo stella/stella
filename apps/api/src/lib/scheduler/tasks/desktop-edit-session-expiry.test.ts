@@ -207,7 +207,7 @@ describe("publishDesktopEditSessionExpiryNotifications", () => {
       },
       (error: unknown) => {
         if (!(error instanceof Error)) {
-          throw new Error("Expected publish to reject with an Error");
+          throw new TypeError("Expected publish to reject with an Error");
         }
         expect(error.message).toBe("publish failed");
       },
@@ -270,7 +270,7 @@ describe("publishDesktopEditSessionExpiryNotifications", () => {
       },
       (error: unknown) => {
         if (!(error instanceof Error)) {
-          throw new Error("Expected publish to reject with an Error");
+          throw new TypeError("Expected publish to reject with an Error");
         }
         expect(error.message).toBe("publish failed");
       },

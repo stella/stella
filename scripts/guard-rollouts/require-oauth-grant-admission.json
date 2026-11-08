@@ -1,0 +1,17 @@
+{
+  "id": "require-oauth-grant-admission",
+  "rules": ["require-oauth-grant-admission/require-oauth-grant-admission"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "require-oauth-grant-admission/require-oauth-grant-admission",
+    "apps/api/src"
+  ]
+}

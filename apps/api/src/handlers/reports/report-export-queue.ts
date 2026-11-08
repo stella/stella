@@ -33,7 +33,7 @@ import {
 import { REPORT_EXPORT_PERMISSIONS } from "@/api/handlers/reports/views/export-input";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
@@ -182,16 +182,23 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
     // The job body already persists failures onto the row; this is the last
     // resort if the process itself threw before that could run.
     if (job) {
-      markExportFailed(job.data, toExportErrorMessage(error)).catch(
-        (markError: unknown) => {
-          captureError(
-            markError,
-            handlerErrorContext("reports.initReportExportWorker.markError", {
-              exportId: job.data.exportId,
-              workspaceId: job.data.workspaceId,
-            }),
-          );
-        },
+      detached(
+        async () =>
+          markExportFailed(job.data, toExportErrorMessage(error)).catch(
+            (markError: unknown) => {
+              captureError(
+                markError,
+                handlerErrorContext(
+                  "reports.initReportExportWorker.markError",
+                  {
+                    exportId: job.data.exportId,
+                    workspaceId: job.data.workspaceId,
+                  },
+                ),
+              );
+            },
+          ),
+        "report-export-queue.mark-export-failed",
       );
     }
     captureError(

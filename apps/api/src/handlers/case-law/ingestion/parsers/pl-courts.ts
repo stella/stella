@@ -1,3 +1,5 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: footnoteIds is supplied only by the PL-SN and UOKIK PDF readers; other callers retain sanitizeUrl and their existing link output.
 // parser-output-unchanged: [cz-nss] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
 // parser-output-unchanged: [cz-uohs] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
 // parser-output-unchanged: [pl-sn] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
@@ -7,6 +9,8 @@
 // parser-output-unchanged: Retention validation moved to the ingestion pipeline; the bounded plaintext load that enforces a source's DOM budget is kept on byte-identical markup, so blocks and rejections are unchanged.
 // parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
+// parser-output-unchanged: [cz-nss] the clerk-mark role is set only by parsePlDecisionContent, which this source never calls.
+// parser-output-unchanged: [cz-uohs] the clerk-mark role is set only by parsePlDecisionContent, which this source never calls.
 // parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
 // parser-output-unchanged: the `superscripts` input is opt-in; callers that do not opt in retain their previous `<sup>` reading.
 // parser-output-unchanged: [pl-sn] the reader's HTML is generated from single-spaced PDF lines and holds no ordered list, so collapsing markup whitespace and numbering list items leave it as it was; every captured Supreme Court PDF parses to an identical AST.
@@ -26,18 +30,20 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import {
   type AnyNode,
   cloneNode,
-  Element,
+  createElement,
+  type Element,
   hasChildren,
   isComment,
   isTag,
   isText,
-} from "domhandler";
-
-import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+} from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
 import type {
@@ -48,6 +54,18 @@ import type {
   TableCell,
 } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import {
+  isPlClosingLine,
+  isPlHoldingHeading,
+  isPlNumberedReasonsHeading,
+  isPlOpeningRecital,
+  isPlReasonsHeading,
+  isPlSignatureBlank,
+  isPlSignatureLine,
+  opensWithPlSignatureTitle,
+  startsWithPlOperativeVerb,
+} from "@stll/legal-ast/polish-document-roles";
+import { collapseLetterSpacing } from "@stll/text-normalize";
 
 import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
 import {
@@ -55,14 +73,11 @@ import {
   renderHtmlWhiteSpace,
 } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
 import { readCommonCourtInlines } from "./pl-common-court-inlines";
-import {
-  isPlHoldingHeading,
-  startsWithPlOperativeVerb,
-} from "./pl-operative-verbs";
 import {
   appendTextInline,
   inlinesToPlainText,
@@ -103,6 +118,8 @@ type ParsePlDecisionInput = {
    * the unwrapped reading their stored documents were made with.
    */
   superscripts?: boolean | undefined;
+  /** IDs of footnotes actually parsed from this document; all other links keep URL sanitization. */
+  footnoteIds?: readonly string[] | undefined;
   /**
    * Whose markup conventions the HTML follows. Omitted, the HTML is read as
    * any publisher's.
@@ -157,19 +174,9 @@ const DECISION_TITLES: ReadonlySet<string> = new Set(
   ),
 );
 const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt[:\s]/iu;
-const REASONS_HEADING_RE = /^uzasadnienie\b/iu;
-// The editor numbers the reasons on from the operative points when they
-// share one outline ("V. UZASADNIENIE" after point IV).
-const NUMBERED_REASONS_HEADING_RE = /^[IVXLC]+\s*[.)]\s*uzasadnienie$/iu;
 const DECISION_ITEM_PREFIX_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
 const AUTHORITY_DECISION_TITLE_RE = /^decyzja\s+nr\b/iu;
 const COMPOSITION_LINE_RE = /\bw składzie\s*:/iu;
-const OPENING_RECITAL_RE =
-  /^(?:po rozpoznaniu|po rozpatrzeniu|na posiedzeniu|na rozprawie|w sprawie)\b/iu;
-const CLOSING_RE =
-  /^[A-ZĄĆĘŁŃÓŚŹŻ][\p{L} .-]+,\s+dnia\s+\d{1,2}\s+\p{L}+\s+\d{4}\s*r?\.?$/u;
-const SIGNATURE_RE =
-  /^(?:SSA|SSA del\.|SSO|SSR|sędzia|Sędzia|Przewodniczący|Przewodnicząca|Prezes|sprawozdawca)\b/u;
 const PANEL_MEMBER_RE = /^(?:SSN|SSA|SSO|SSR)\b|\(ławnik[^)]*\)$/iu;
 const CLERK_MARK_RE = /^\[(?:\p{L}{2,3}|\p{L}\.(?:\p{L}\.?){1,3})\]$/u;
 const CLERK_INITIALS_RE = /^(?:\p{Lu}\.){1,4}$/u;
@@ -199,6 +206,7 @@ type ParserState = {
   pendingMarker: Inline[] | undefined;
   listMarkers: WeakMap<Element, WeakMap<Element, string | null>>;
   listItemBoundaries: WeakMap<Element, boolean>;
+  footnoteHrefs: ReadonlySet<string>;
 };
 
 const hasHtmlTags = (content: string): boolean =>
@@ -210,13 +218,15 @@ const normalizeWhitespace = (text: string): string =>
     .replace(/(?<![ \t])[ \t]+\n/gu, "\n")
     .trim();
 
+// Each line is read through the letter-spacing owner while the wider gap
+// between two spaced words still marks the word boundary.
 const normalizeLegacyPlainText = (text: string): string =>
   text
     .replace(/\r\n/gu, "\n")
     .replace(/\u00a0/gu, " ")
     .replace(/\t+/gu, " ")
     .split("\n")
-    .map((line) => line.replace(/ {2,}/gu, " ").trim())
+    .map((line) => collapseLetterSpacing(line).replace(/ {2,}/gu, " ").trim())
     .join("\n")
     .replace(/\n{3,}/gu, "\n\n")
     .trim();
@@ -247,9 +257,11 @@ type CreateStateOptions = {
   markup: PlDecisionMarkup | undefined;
   caseNumber: string;
   fallbackDecisionTitle: string | undefined;
+  footnoteIds: readonly string[] | undefined;
 };
 
 const createState = ({
+  footnoteIds,
   superscripts,
   markup,
   caseNumber,
@@ -267,6 +279,7 @@ const createState = ({
   fallbackDecisionTitle,
   normalizedCaseNumber: caseNumber.replace(/\s+/gu, " ").trim(),
   panelNames: [],
+  footnoteHrefs: new Set(footnoteIds?.map((noteId) => `#${noteId}`)),
   superscripts,
   markup,
   pendingMarker: undefined,
@@ -411,13 +424,16 @@ const walkInlines = (
 ): Inline[] =>
   trimLineBreaks(
     lineBreaksOf(
-      readMarkupInlines(
-        state,
-        walkInlinesShared($, el, {
-          sanitizeHref: sanitizeUrl,
-          anonymized: false,
-          superscripts: state.superscripts,
-        }),
+      readInlineLetterSpacing(
+        readMarkupInlines(
+          state,
+          walkInlinesShared($, el, {
+            sanitizeHref: (href) =>
+              state.footnoteHrefs.has(href) ? href : sanitizeUrl(href),
+            anonymized: false,
+            superscripts: state.superscripts,
+          }),
+        ),
       ),
     ),
   );
@@ -632,6 +648,16 @@ const orderedListMarker = (
   return marker ?? undefined;
 };
 
+/** The blank a signing label leaves for the signature, under that label. */
+const signsBlank = (state: ParserState, plainText: string): boolean => {
+  const previous = state.blocks.at(-1);
+  return (
+    isPlSignatureBlank(plainText) &&
+    previous?.type === "paragraph" &&
+    previous.role === "signature"
+  );
+};
+
 const inferParagraphRole = (
   state: ParserState,
   plainText: string,
@@ -678,15 +704,22 @@ const inferParagraphRole = (
 
   switch (state.section) {
     case "reasoning":
-      if (CLOSING_RE.test(plainText)) {
+      if (isPlClosingLine(plainText)) {
         return "closing";
       }
-      if (plainText.length <= 120 && SIGNATURE_RE.test(plainText)) {
+      if (
+        isPlSignatureLine(plainText) ||
+        opensWithPlSignatureTitle(plainText) ||
+        signsBlank(state, plainText)
+      ) {
         return "signature";
       }
       return "argumentation";
     case "holding":
-      return "holding";
+      // The bench signs under its ruling: the operative part is over.
+      return isPlSignatureLine(plainText) || signsBlank(state, plainText)
+        ? "signature"
+        : "holding";
     case "preamble":
     case "composition":
     case "recital":
@@ -727,7 +760,7 @@ const classifyParagraph = (
     return role;
   }
   if (state.section === "preamble" || state.section === "composition") {
-    if (OPENING_RECITAL_RE.test(plainText)) {
+    if (isPlOpeningRecital(plainText)) {
       state.section = "recital";
     } else if (COMPOSITION_LINE_RE.test(plainText)) {
       state.section = "composition";
@@ -753,7 +786,7 @@ const handleHeadingText = (
   }
 
   if (
-    REASONS_HEADING_RE.test(plainText) &&
+    isPlReasonsHeading(plainText) &&
     !state.sawDecisionTitle &&
     state.fallbackDecisionTitle !== undefined &&
     state.fallbackDecisionTitle !== POLISH_DECISION_TITLE_MAP.uzasadnienie
@@ -770,13 +803,13 @@ const handleHeadingText = (
       state.decisionTitle?.trim().toLocaleUpperCase("pl-PL") ===
         normalizedPlainText
     ) {
-      if (REASONS_HEADING_RE.test(plainText)) {
+      if (isPlReasonsHeading(plainText)) {
         state.section = "reasoning";
       }
       return true;
     }
 
-    if (REASONS_HEADING_RE.test(plainText) && state.sawDecisionTitle) {
+    if (isPlReasonsHeading(plainText) && state.sawDecisionTitle) {
       pushHeading(state, 2, plainText, "section-heading", inlines);
       state.section = "reasoning";
       return true;
@@ -785,16 +818,16 @@ const handleHeadingText = (
     pushHeading(state, 1, plainText, "decision-title", inlines);
     state.sawDecisionTitle = true;
     state.decisionTitle = plainText;
-    if (REASONS_HEADING_RE.test(plainText)) {
+    if (isPlReasonsHeading(plainText)) {
       state.section = "reasoning";
     }
     return true;
   }
 
   if (
-    REASONS_HEADING_RE.test(plainText) ||
+    isPlReasonsHeading(plainText) ||
     (state.markup === PL_DECISION_MARKUP.COMMON_COURT &&
-      NUMBERED_REASONS_HEADING_RE.test(plainText))
+      isPlNumberedReasonsHeading(plainText))
   ) {
     pushHeading(state, 2, plainText, "section-heading", inlines);
     state.section = "reasoning";
@@ -1009,7 +1042,7 @@ const parseListItemContent = ({
   let start = 0;
   const readInline = (end: number): void => {
     if (end > start) {
-      const segment = new Element(
+      const segment = createElement(
         item.name,
         item.attribs,
         children.slice(start, end),
@@ -1108,6 +1141,16 @@ const parseNode = (
     const inlines = walkInlines($, $node, state);
     const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
     if (!plainText) {
+      return;
+    }
+
+    // A layout that sets the signing label apart as a heading still signs:
+    // it is the bench's line under the ruling, not a part of the decision.
+    if (
+      (state.section === "holding" || state.section === "reasoning") &&
+      isPlSignatureLine(plainText)
+    ) {
+      pushParagraph(state, plainText, inlines, "signature");
       return;
     }
 
@@ -1553,8 +1596,9 @@ const enforcePlainTextExpansionBudget = (
 export const parsePlDecisionContent = (
   input: ParsePlDecisionInput,
 ): ParsePlDecisionOutput => {
-  const loadHtml = input.loadHtml ?? cheerio.load;
+  const loadHtml = input.loadHtml ?? load;
   const state = createState({
+    footnoteIds: input.footnoteIds,
     superscripts: input.superscripts === true,
     markup: input.markup,
     caseNumber: input.caseNumber,
@@ -1625,7 +1669,9 @@ export const parsePlDecisionContent = (
       CLERK_MARK_RE.test(block.plainText) ||
       (sawTerminalSignature && CLERK_INITIALS_RE.test(block.plainText))
     ) {
-      block.role = "apparatus";
+      // The clerk's mark is printed after the decision: a publisher note,
+      // never head matter, which only precedes the body.
+      block.role = "publisher-note";
       continue;
     }
     break;

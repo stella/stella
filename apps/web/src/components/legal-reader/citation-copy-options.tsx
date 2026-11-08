@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { READER_COPY_MODES } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderCopyMode } from "@stll/api-contract/legal-reader-annotations";
 import { copyToClipboard } from "@stll/clipboard";
+import { Button } from "@stll/ui/button";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -62,8 +63,10 @@ export const CitationCopyOptions = ({
       }
     >
       {READER_COPY_MODES.map((mode) => (
-        <button
-          className="hover:bg-accent block w-full rounded-sm px-2 py-1.5 text-start text-xs whitespace-nowrap"
+        <Button
+          className="block w-full"
+          focusRing="inside"
+          variant="plain"
           key={mode}
           onClick={() => {
             const text = citationCopyText(mode, { citation, marks, quote });
@@ -85,10 +88,11 @@ export const CitationCopyOptions = ({
           // A press must not move focus: the readers' selection would clear.
           onMouseDown={(event) => event.preventDefault()}
           onMouseEnter={() => setPreviewMode(mode)}
-          type="button"
         >
-          {t(`legalReader.copyMenu.${mode}`)}
-        </button>
+          <span className="hover:bg-accent block rounded-sm px-2 py-1.5 text-xs whitespace-nowrap">
+            {t(`legalReader.copyMenu.${mode}`)}
+          </span>
+        </Button>
       ))}
     </MenuPreviewLayout>
   );

@@ -310,9 +310,9 @@ export const mcpOAuthState = p.pgTable(
     p
       .index("mcp_oauth_state_org_user_idx")
       .on(table.organizationId, table.userId),
-    p
-      .uniqueIndex("mcp_oauth_state_org_connector_user_uidx")
-      .on(table.organizationId, table.connectorId, table.userId),
+    // The (organization, connector, user) unique index ships with the pending
+    // contract step (pending-contract-migrations/20261028061200_*); declare it
+    // here when that step moves into drizzle/.
     ...mcpOAuthStatePolicies(),
   ],
 );

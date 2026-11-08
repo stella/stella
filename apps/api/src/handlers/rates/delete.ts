@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import * as v from "valibot";
 
 import { rateTables } from "@/api/db/schema";
@@ -23,9 +23,10 @@ const deleteRateTable = createSafeHandler(
     contract: "patch",
     description:
       "Permanently delete one rate table from a matter and, with it, every " +
-      "per-user rate line it holds. The matter's default rate table is refused " +
-      "until another table is made the default; time entries already recorded " +
-      "keep the rate they were billed at.",
+      "per-user rate line it holds. While the matter has other tables, its " +
+      "default table is refused until another table is made the default; " +
+      "the matter's last table can always be deleted. Time entries already " +
+      "recorded keep the rate they were billed at.",
     permissions: { rate: ["delete"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -40,12 +41,13 @@ const deleteRateTable = createSafeHandler(
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
+        // The matter lock that creating and updating a table take, so the
+        // default decided here cannot change before this delete commits.
         await lockRateTableWorkspace(tx, workspaceId);
         // Previous builds create and move entries under this lock alone.
         await lockLegacyRateEntryTable(tx, body.id);
-        const rows = await tx
+        const [existing] = await tx
           .select({
-            id: rateTables.id,
             name: rateTables.name,
             currency: rateTables.currency,
             isDefault: rateTables.isDefault,
@@ -57,12 +59,27 @@ const deleteRateTable = createSafeHandler(
               eq(rateTables.workspaceId, workspaceId),
             ),
           );
-        const existing = rows.at(0);
+
         if (!existing) {
           return { status: "not-found" as const };
         }
+
+        // A matter with tables keeps exactly one default, so the default may
+        // go only when it is the last table.
         if (existing.isDefault) {
-          return { status: "default" as const };
+          const [otherTable] = await tx
+            .select({ id: rateTables.id })
+            .from(rateTables)
+            .where(
+              and(
+                eq(rateTables.workspaceId, workspaceId),
+                ne(rateTables.id, body.id),
+              ),
+            )
+            .limit(1);
+          if (otherTable) {
+            return { status: "default-with-others" as const };
+          }
         }
 
         await tx
@@ -97,13 +114,13 @@ const deleteRateTable = createSafeHandler(
         new HandlerError({ status: 404, message: "Rate table not found" }),
       );
     }
-    if (outcome.status === "default") {
+    if (outcome.status === "default-with-others") {
       return Result.err(
         new HandlerError({
           status: 400,
           message:
-            "Cannot delete the default rate table. " +
-            "Set another table as default first.",
+            "Cannot delete the default rate table while the matter has " +
+            "other tables. Set another table as default first.",
         }),
       );
     }

@@ -960,7 +960,7 @@ const createRunLogReader = ({
       restoreRolesAfter,
     });
   const unsettledTailAfter = (log: RunLogHeader) => {
-    if (log?.closedAt !== null) {
+    if (log === undefined || log.closedAt !== null) {
       return undefined;
     }
     if (log.tailType === EventType.TEXT_MESSAGE_END && log.tailHasTiming) {

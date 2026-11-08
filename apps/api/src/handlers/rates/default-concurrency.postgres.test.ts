@@ -29,6 +29,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import createRateTable from "./create";
 import deleteRateTable from "./delete";
@@ -376,8 +377,8 @@ if (!databaseUrl || !runPostgres) {
           code: 400,
           response: {
             message:
-              "Cannot delete the default rate table. " +
-              "Set another table as default first.",
+              "Cannot delete the default rate table while the matter has " +
+              "other tables. Set another table as default first.",
           },
         });
         expect(await defaultIds()).toEqual([firstTable.id]);
@@ -388,10 +389,65 @@ if (!databaseUrl || !runPostgres) {
           ),
         ).toBe(2);
         expect(await auditCount()).toBe(beforePromoteDelete + 2);
+
+        // A table created without isDefault stays non-default while the
+        // matter has a default, and becomes the default when it has none.
+        const createPlain = async (name: string) =>
+          await createRateTable.handler(
+            createTestHandlerContext<CreateContext>({
+              scopedDb: NO_DB,
+              workspaceId,
+              session: { activeOrganizationId: organizationId },
+              user: { id: userId },
+              safeDb: firstSafe,
+              audit: record,
+              body: { name, currency: "USD" },
+            }),
+          );
+        type PlainDeleteContext = Parameters<typeof deleteRateTable.handler>[0];
+        const removeTable = async (id: typeof firstTable.id) =>
+          await deleteRateTable.handler(
+            createTestHandlerContext<PlainDeleteContext>({
+              scopedDb: NO_DB,
+              workspaceId,
+              session: { activeOrganizationId: organizationId },
+              user: { id: userId },
+              safeDb: firstSafe,
+              audit: record,
+              body: { id },
+            }),
+          );
+        await createPlain("Third");
+        expect(await defaultIds()).toEqual([firstTable.id]);
+
+        // The default goes only as the matter's last table.
+        expect(await removeTable(firstTable.id)).toMatchObject({ code: 400 });
+        expect(await defaultIds()).toEqual([firstTable.id]);
+        const others = await firstDb
+          .select({ id: rateTables.id })
+          .from(rateTables)
+          .where(
+            and(
+              eq(rateTables.workspaceId, workspaceId),
+              eq(rateTables.isDefault, false),
+            ),
+          );
+        for (const other of others) {
+          expect(await removeTable(other.id)).toEqual({ deleted: true });
+        }
+        expect(await removeTable(firstTable.id)).toEqual({ deleted: true });
+        expect(
+          await firstDb.$count(
+            rateTables,
+            eq(rateTables.workspaceId, workspaceId),
+          ),
+        ).toBe(0);
+
+        const fresh = await createPlain("Fresh");
+        expect(fresh).toHaveProperty("id");
+        expect(await defaultIds()).toHaveLength(1);
       } finally {
-        await firstDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(firstDb, [organizationId]);
         await firstDb.delete(user).where(eq(user.id, userId));
       }
     });

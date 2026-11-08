@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { ownedMessage } from "@/api/lib/observability/owned-message";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -186,7 +187,7 @@ describe("tenant action size boundaries", () => {
     expect(
       actionSizeErrorResponse(
         new ActionSizeError({
-          message: "Missing limits",
+          message: ownedMessage("Missing limits"),
           reason: "configuration",
         }),
       ).status,
@@ -195,7 +196,7 @@ describe("tenant action size boundaries", () => {
       (
         await actionSizeErrorResponse(
           new ActionSizeError({
-            message: "Over limit",
+            message: ownedMessage("Over limit"),
             reason: "request_too_large",
           }),
           0,

@@ -69,4 +69,21 @@ describe("browser action approval summary", () => {
       }),
     ).toContainEqual({ type: "key", value: "Enter" });
   });
+
+  test("shows the website a new tab or a tab switch leads to", () => {
+    expect(
+      getBrowserApprovalDetails({
+        action: "open",
+        newTab: true,
+        url: "https://example.com/news",
+      }),
+    ).toEqual([{ type: "website", value: "https://example.com/news" }]);
+    expect(
+      getBrowserApprovalDetails({
+        action: "switch-tab",
+        tabId: 9,
+        url: "https://example.com/results",
+      }),
+    ).toEqual([{ type: "website", value: "https://example.com/results" }]);
+  });
 });

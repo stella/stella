@@ -22,8 +22,8 @@ defaults:
 # /releases/latest/download deep links never 404 and in-app updaters see no
 # spurious update.
 #
-# Builds Windows + macOS in parallel. Windows uses Azure Trusted
-# Signing; macOS uses a Developer ID Application cert + App Store
+# Builds Windows (x64 and ARM64) + macOS in parallel. Windows uses Azure
+# Trusted Signing; macOS uses a Developer ID Application cert + App Store
 # Connect API key for notarization.
 
 on:
@@ -227,7 +227,7 @@ jobs:
   build:
     needs: resolve
     if: ${{ needs.resolve.outputs.should_build == 'true' }}
-    name: Build ${{ matrix.os }}
+    name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
@@ -243,6 +243,14 @@ jobs:
             runner: windows-latest
             target: x86_64-pc-windows-msvc
             rust_targets: x86_64-pc-windows-msvc
+            install_timeout_minutes: 30
+          # Cross-compiled on the x64 runner: the frontend build and signing
+          # tools stay x64 and only the Rust binary targets ARM64. Build
+          # scripts run on x64, so its crates are fetched too.
+          - os: windows
+            runner: windows-latest
+            target: aarch64-pc-windows-msvc
+            rust_targets: aarch64-pc-windows-msvc,x86_64-pc-windows-msvc
             install_timeout_minutes: 30
           - os: macos
             runner: macos-15
@@ -317,9 +325,9 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: ${{ matrix.rust_targets }}
 
       # The locked crates for every target download once, retried as a unit;
@@ -483,6 +491,24 @@ jobs:
           APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api.p8
         run: |
           printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
+          # Stapling and validation fetch the ticket from Apple's servers.
+          # Both are idempotent: a dropped connection (NSURLErrorDomain) is
+          # retried up to three attempts; any other failure fails at once.
+          stapler() {
+            local dmg="$1" action="$2" attempt output
+            for attempt in 1 2 3; do
+              if output=$(xcrun stapler "$action" "$dmg" 2>&1); then
+                printf '%s\n' "$output"
+                return 0
+              fi
+              printf '%s\n' "$output" >&2
+              if ((attempt == 3)) || ! grep -q 'NSURLErrorDomain' <<< "$output"; then
+                return 1
+              fi
+              echo "stapler $action: network error on attempt $attempt/3; retrying in $((attempt * 20))s" >&2
+              sleep $((attempt * 20))
+            done
+          }
           bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
           for dmg in "$bundle_dir"/dmg/*.dmg; do
             [[ -f "$dmg" ]] || continue
@@ -495,8 +521,8 @@ jobs:
               --key-id   "$APPLE_API_KEY_ID" \
               --issuer   "$APPLE_API_ISSUER" \
               --wait --timeout 30m
-            xcrun stapler staple "$dmg"
-            xcrun stapler validate "$dmg"
+            stapler "$dmg" staple
+            stapler "$dmg" validate
           done
 
       - name: Rename artifacts to stable, version-less filenames
@@ -507,7 +533,7 @@ jobs:
         # Stella-windows-x64-setup.exe` regardless of the release
         # version. The .sig files for updater archives keep their
         # ordering so latest.json continues to find them.
-        run: bash scripts/rename-desktop-artifacts.sh "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
+        run: bash scripts/rename-desktop-artifacts.sh "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle" "${{ matrix.target }}"
 
       - name: Upload installers to GitHub Release
         env:

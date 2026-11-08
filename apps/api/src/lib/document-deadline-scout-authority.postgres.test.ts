@@ -9,6 +9,8 @@ import {
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
+
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
   documentProcessingRuns,
@@ -70,14 +72,14 @@ test("matter removal before model dispatch cancels deadline extraction", async (
     sourceSha256Hex: "c".repeat(64),
     workspaceId: ids.wsA1,
     status: "succeeded",
-    finishedAt: new Date(),
+    finishedAt: dbClock.now(),
     deadlineScoutStatus: "pending",
   });
   await testDb.insert(extractedContent).values({
     charCount: text.length,
     ciphertext: encrypted.ciphertext,
     entityId: ids.entityA1,
-    extractedAt: new Date(),
+    extractedAt: dbClock.now(),
     iv: encrypted.iv,
     ocrPayloadCiphertext: Buffer.from("synthetic-ocr-payload"),
     ocrPayloadIv: Buffer.from("synthetic-ocr-iv"),

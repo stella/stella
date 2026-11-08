@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { createTestClock } from "@stll/test-kit";
 
 import { desktopEditSessionEventsHandler } from "@/api/handlers/entities/desktop-edit-session-events";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -25,6 +26,7 @@ const sessionId = toSafeId<"desktopEditSession">(
   "019aa0bc-d957-7bb3-9234-9c2440377225",
 );
 const sessionToken = "a".repeat(64);
+const testClock = createTestClock();
 
 /** Stands in for the session's scoped handle: one fresh transaction per call. */
 const createSessionScope = () => {
@@ -78,7 +80,7 @@ describe("desktop edit session events", () => {
     });
 
     if (!(response instanceof Response)) {
-      throw new Error(
+      throw new TypeError(
         "Expected desktop edit events to return an SSE response.",
       );
     }
@@ -141,7 +143,7 @@ describe("desktop edit session events", () => {
 
     const response = await responsePromise;
     if (!(response instanceof Response)) {
-      throw new Error(
+      throw new TypeError(
         "Expected desktop edit events to return an SSE response.",
       );
     }
@@ -222,7 +224,7 @@ describe("desktop edit session events", () => {
       type: "takeover-requested",
       data: {
         requestedBy: "Replacement editor",
-        requestedAt: new Date().toISOString(),
+        requestedAt: new Date(testClock.now()).toISOString(),
       },
     });
     expect(await reader.read()).toEqual({ done: true, value: undefined });

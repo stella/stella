@@ -254,7 +254,7 @@ export const desktopEditSessionEventsHandler = async (
 
   const scheduleLivenessRefresh = (): void => {
     detached(
-      refreshLivenessInBackground(),
+      refreshLivenessInBackground,
       "desktop-edit-session.liveness-refresh",
     );
   };

@@ -1,11 +1,14 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+
 import {
   assembleCaseLawCoverageAnswer,
   type CaseLawCoveragePart,
 } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
+import { CASE_LAW_COVERAGE_PARTS } from "@/api/lib/case-law/coverage-parts";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
 type Assembly = Parameters<typeof assembleCaseLawCoverageAnswer>[0];
@@ -91,20 +94,18 @@ const failing = (part: CaseLawCoveragePart): Assembly => {
   }
 };
 
-const PARTS = [
-  "arrivals",
-  "slice-completeness",
-  "facets",
-  "courts",
-  "provision-processing",
-] as const satisfies readonly CaseLawCoveragePart[];
+const PARTS = CASE_LAW_COVERAGE_PARTS;
 
 describe("coverage summary publication eligibility", () => {
   test("a complete answer can replace the stored summary", async () => {
     const computation = await assembleCaseLawCoverageAnswer(answeringReaders());
 
     expect(computation.complete).toBe(true);
-    expect("message" in computation.answer).toBe(false);
+    if ("message" in computation.answer) {
+      panic("The readers must produce a coverage answer");
+    }
+    expect(computation.answer.unreadParts).toEqual([]);
+    expect(computation.answer.countries.at(0)?.unreadParts).toEqual([]);
   });
 
   for (const { storedTotal, storedTotalAsOf, storedDecisions } of [
@@ -147,13 +148,66 @@ describe("coverage summary publication eligibility", () => {
   }
 
   for (const part of PARTS) {
-    test(`an answer without ${part} cannot replace the stored summary`, async () => {
+    test(`an answer without ${part} is partial and names it on the country`, async () => {
       const computation = await assembleCaseLawCoverageAnswer(failing(part));
 
-      expect("message" in computation.answer).toBe(false);
       expect(computation.complete).toBe(false);
+      if ("message" in computation.answer) {
+        panic("A missing part must leave the rest of the answer");
+      }
+      expect(computation.answer.unreadParts).toEqual([part]);
+      expect(
+        computation.answer.countries.map(({ unreadParts }) => unreadParts),
+      ).toEqual([[part]]);
     });
   }
+
+  test("parts read once for every country are named on each country", async () => {
+    const readers = answeringReaders();
+    const [source] = await readers.load.readSources();
+    if (source === undefined) {
+      panic("The readers must name a source");
+    }
+    const computation = await assembleCaseLawCoverageAnswer({
+      readProvisionProcessing: async () => await Promise.reject(readFailure),
+      load: {
+        ...readers.load,
+        readSources: async () => [
+          source,
+          {
+            ...source,
+            id: createSafeId<"caseLawSource">(),
+            adapterKey: ADAPTER_KEYS.SK_US,
+          },
+        ],
+        readArrivals: async () => null,
+        readCourts: async () => await Promise.reject(readFailure),
+      },
+    });
+
+    if ("message" in computation.answer) {
+      panic("Unread parts must leave the rest of the answer");
+    }
+    expect(computation.answer.unreadParts).toEqual([
+      "arrivals",
+      "courts",
+      "provision-processing",
+    ]);
+    // Only an admitted country reads courts; every country lacks the shared parts.
+    expect(
+      computation.answer.countries.map(({ country, unreadParts }) => [
+        country,
+        unreadParts,
+      ]),
+    ).toEqual(
+      (["CZE", "SVK"] as const).map((country) => [
+        country,
+        isPublicCaseLawCountry(country)
+          ? ["arrivals", "courts", "provision-processing"]
+          : ["arrivals", "provision-processing"],
+      ]),
+    );
+  });
 
   test("an unavailable answer cannot replace the stored summary", async () => {
     const readers = answeringReaders();

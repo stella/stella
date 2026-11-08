@@ -12,14 +12,14 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { defaultVarcharSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import { lockRateTableWorkspace } from "./rate-table-lock";
 
 const createRateTableBodySchema = v.object({
-  name: defaultVarcharSchema,
+  name: displayNameSchema(),
   currency: currencyCodeSchema,
   isDefault: v.optional(v.boolean()),
 });
@@ -45,10 +45,10 @@ export const createRateTableHandler = async function* ({
     abortableTx(safeDb, async (tx) => {
       // Row locks cannot serialize the first table in an empty matter.
       await lockRateTableWorkspace(tx, workspaceId);
-      // Lock rows then count to serialize concurrent adds.
-      // PG rejects FOR UPDATE with aggregate functions.
+      // Every rate-table write in the matter holds the lock above, so this
+      // read stays current until the insert commits.
       const lockedRows = await tx
-        .select({ id: rateTables.id })
+        .select({ id: rateTables.id, isDefault: rateTables.isDefault })
         .from(rateTables)
         .where(eq(rateTables.workspaceId, workspaceId));
 
@@ -59,7 +59,13 @@ export const createRateTableHandler = async function* ({
         });
       }
 
-      const previousDefaults = body.isDefault
+      // Rates resolve only from a matter's default table, so a matter that
+      // has tables always has exactly one default: a table created while the
+      // matter has none becomes the default whatever the request asked.
+      const isDefault =
+        body.isDefault === true || !lockedRows.some((row) => row.isDefault);
+
+      const previousDefaults = isDefault
         ? await tx
             .update(rateTables)
             .set({ isDefault: false, updatedAt: new Date() })
@@ -79,7 +85,7 @@ export const createRateTableHandler = async function* ({
           workspaceId,
           name: body.name,
           currency: body.currency,
-          isDefault: body.isDefault ?? false,
+          isDefault,
         })
         .returning({ id: rateTables.id });
 
@@ -103,7 +109,7 @@ export const createRateTableHandler = async function* ({
               new: {
                 name: body.name,
                 currency: body.currency,
-                isDefault: body.isDefault ?? false,
+                isDefault,
               },
             },
           },
@@ -131,9 +137,11 @@ const createRateTable = createSafeHandler(
     idempotency: { type: "replay" },
     description:
       "Create a rate table, a named set of hourly rates in a single " +
-      "currency, in a matter. Pass isDefault to make it the matter's " +
-      "default, which clears the flag on the previous default; matters have " +
-      "a fixed cap on how many rate tables they may hold. Add the rates " +
+      "currency, in a matter. Rates apply only from the matter's default " +
+      "table. Pass isDefault to make it the default, which clears the flag " +
+      "on the previous default; a table created while the matter has no " +
+      "default becomes the default. Matters have a fixed cap on how many " +
+      "rate tables they may hold. Add the rates " +
       "themselves with rates.entries.create.",
     permissions: { rate: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,

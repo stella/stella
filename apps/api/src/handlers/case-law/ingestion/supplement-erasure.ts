@@ -52,6 +52,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import type { SafeId } from "@/api/lib/branded-types";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type {
@@ -122,10 +123,10 @@ const discoverClaimHolders = async (claim: CaseLawRedactionClaim) => {
           .where(eq(caseLawDecisions.id, decisionId))
           .limit(1)
       ).at(0);
-      if (
-        erased?.sourceDocumentId === undefined ||
-        erased.sourceDocumentId === null
-      ) {
+      if (erased === undefined) {
+        return [];
+      }
+      if (erased.sourceDocumentId === null) {
         return [];
       }
       // The accepted claim has tombstoned the source. Drain preceding writes
@@ -194,14 +195,16 @@ const withholdHolder = async (
     await tx
       .delete(caseLawCitations)
       .where(eq(caseLawCitations.citingDecisionId, judgmentId));
+    const write = replayWrite(
+      caseLawDecisions,
+      { metadata: metadataMarkedListingOnly(caseLawDecisions.metadata) },
+      { modifiedAt: { column: caseLawDecisions.updatedAt, value: new Date() } },
+    );
     // audit: skip — GDPR redaction; recorded in case_law_index_jobs by the erasure
     await tx
       .update(caseLawDecisions)
-      .set({
-        metadata: metadataMarkedListingOnly(caseLawDecisions.metadata),
-        updatedAt: new Date(),
-      })
-      .where(eq(caseLawDecisions.id, judgmentId));
+      .set(write.set)
+      .where(and(write.setWhere, eq(caseLawDecisions.id, judgmentId)));
   });
   return Result.ok("withheld");
 };

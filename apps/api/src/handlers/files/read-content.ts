@@ -51,7 +51,11 @@ const verifyFileContentGrant =
     return checked.status === "valid"
       ? Result.ok(checked.grant)
       : Result.err(
-          new HandlerError({ status: 404, message: "File grant not found." }),
+          new HandlerError({
+            status: 404,
+            code: "not_found",
+            message: "File grant not found.",
+          }),
         );
   };
 

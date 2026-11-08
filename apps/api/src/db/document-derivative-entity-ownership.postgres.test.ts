@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
+
 import {
   bilingualTranslationRows,
   bilingualTranslationRuns,
@@ -115,7 +117,7 @@ test("permanent entity deletion cascades every copied document derivative", asyn
     total: 1,
     completed: 1,
     requestedBy: ids.userA1,
-    finishedAt: new Date(),
+    finishedAt: dbClock.now(),
   });
   await testDb.insert(bilingualTranslationRows).values({
     id: createSafeId<"bilingualTranslationRow">(),
@@ -144,8 +146,8 @@ test("permanent entity deletion cascades every copied document derivative", asyn
     total: 1,
     completed: 1,
     requestedBy: ids.userA1,
-    startedAt: new Date(),
-    finishedAt: new Date(),
+    startedAt: dbClock.now(),
+    finishedAt: dbClock.now(),
   });
   await testDb.insert(documentReviewFindings).values({
     id: createSafeId<"documentReviewFinding">(),

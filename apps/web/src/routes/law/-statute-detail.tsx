@@ -5,12 +5,14 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { statuteEliParts } from "@stll/api-contract/statute-act-number";
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   createStatuteRouteParams,
   normalizeStatuteStoredSlug,
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
+import { READER_BREADCRUMB_CLEARANCE } from "@stll/decision-reader/reader-landing";
 import {
   jumpToAnchor,
   resolveAnchorPct,
@@ -46,7 +48,6 @@ import {
   outlineMatchItems,
   rankOutlineMatches,
 } from "@/components/legal-reader/outline-jump-field.logic";
-import { READER_BREADCRUMB_CLEARANCE } from "@/components/legal-reader/reader-breadcrumb-scroll";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { useRecordOpenedLawDocument } from "@/features/law-search-history/law-search-history-query";
@@ -261,6 +262,7 @@ export const PublicStatuteViewer = ({
 
   useStatuteRouteLanding({
     blocks,
+    country: header.country,
     exactJumpId: outlineMatches.exactId,
     readerRef,
     requestedJump,
@@ -559,6 +561,8 @@ function useStatuteNavigation({
 
 type StatuteRouteLandingOptions = {
   blocks: readonly Block[];
+  /** The statute's country, whose publisher's grammar its anchors are in. */
+  country: string;
   exactJumpId: string | null;
   readerRef: RefObject<HTMLElement | null>;
   requestedJump: string | undefined;
@@ -567,6 +571,7 @@ type StatuteRouteLandingOptions = {
 
 function useStatuteRouteLanding({
   blocks,
+  country,
   exactJumpId,
   readerRef,
   requestedJump,
@@ -599,7 +604,10 @@ function useStatuteRouteLanding({
     if (container === null || requestedAnchorId === "") {
       return;
     }
-    const resolved = resolveDocumentAnchor(blocks, requestedAnchorId);
+    const resolved = resolveDocumentAnchor(
+      { blocks, scheme: statuteAnchorSchemeFor(country) },
+      requestedAnchorId,
+    );
     if (resolved === null || resolved.anchorId === requestedAnchorId) {
       return;
     }

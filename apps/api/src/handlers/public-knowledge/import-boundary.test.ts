@@ -87,6 +87,7 @@ const allowedExternal = new Set([
   "@stll/agent-input",
   "@stll/api-contract",
   "@stll/collation",
+  "@stll/docx-core/zip",
   "@stll/docx-utils",
   // Pure error classifications do not expose storage or data access.
   "@stll/errors/fingerprint-fields",
@@ -96,7 +97,6 @@ const allowedExternal = new Set([
   "@stll/template-packs",
   "@stll/text-normalize",
   "better-result",
-  "jszip",
   "node:async_hooks",
   "node:fs",
   "node:path",

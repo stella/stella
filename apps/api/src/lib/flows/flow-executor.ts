@@ -28,7 +28,7 @@ import {
   loadManagedAIResidency,
   loadOrgAIConfig,
 } from "@/api/lib/ai-config-loader";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   AUDIT_ACTION,
@@ -273,15 +273,20 @@ export const executeFlowStep = async (
     ) {
       return null;
     }
+    const startedAt = new Date();
     await tx
       .update(flowRunSteps)
-      .set({ status: "running", startedAt: new Date() })
+      .set({ status: "running", startedAt })
       .where(
         and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
       );
     await tx
       .update(flowRuns)
-      .set({ status: "running" })
+      .set({
+        status: "running",
+        // A run starts when it leaves `pending`; later steps keep that time.
+        ...(current.run.status === "pending" ? { startedAt } : {}),
+      })
       .where(eq(flowRuns.id, runId));
     return await readRunProgress(tx, runId);
   });
@@ -321,7 +326,7 @@ export const executeFlowStep = async (
           workspaceIds: [run.workspaceId],
         }),
         signal,
-        generateTextForTask,
+        dispatchText: async (options) => await generateTextForTask(options),
         loadAIConfig,
       });
       await completeStepAndAdvance({
@@ -438,7 +443,7 @@ type RunAiStepArgs = {
   scopedDb: ReturnType<typeof createRootScopedDb>;
   safeDb: SafeDb;
   signal: AbortSignal;
-  generateTextForTask: typeof generateTanStackTextForTask;
+  dispatchText: typeof generateTanStackTextForTask;
   loadAIConfig: typeof loadOrgAIConfig;
 };
 
@@ -455,7 +460,7 @@ const runAiStep = async ({
   scopedDb,
   safeDb,
   signal,
-  generateTextForTask,
+  dispatchText,
   loadAIConfig,
 }: RunAiStepArgs): Promise<FlowStepOutput> => {
   const priorOutputs = await scopedDb(
@@ -538,7 +543,7 @@ const runAiStep = async ({
   // exactly the retry signal the worker wants, so we let it propagate. Works
   // unchanged under `USE_MOCK_AI` (model resolution short-circuits to the mock
   // adapter). No tools are ever passed.
-  const markdown = await generateTextForTask({
+  const markdown = await dispatchText({
     userId: admission.userId,
     dataClass: "customer",
     task: "chat",
@@ -1239,10 +1244,14 @@ const pauseAtReviewGate = async ({
   const { payload, pings, taskEntityId } = paused;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
-  flushSearchRepairs([taskEntityId]).catch(
-    createErrorCapture(
-      handlerErrorContext("pauseAtReviewGate.flushSearchRepairs"),
-    ),
+  detached(
+    async () =>
+      flushSearchRepairs([taskEntityId]).catch(
+        createErrorCapture(
+          handlerErrorContext("pauseAtReviewGate.flushSearchRepairs"),
+        ),
+      ),
+    "flow-executor.flush-search-repairs",
   );
 };
 

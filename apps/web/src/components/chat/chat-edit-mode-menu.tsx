@@ -14,6 +14,7 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from "@stll/ui/menu";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import type { TranslationKey } from "@/i18n/types";
 import type {
@@ -62,16 +63,20 @@ export const DocxEditSafetyChip = ({ safety }: { safety: DocxEditSafety }) => {
     return null;
   }
   return (
-    <span
-      className="text-muted-foreground text-2xs inline-flex max-w-[180px] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5"
-      title={t("folio.unsupportedDocxEditDescription")}
-    >
-      <LockIcon aria-hidden="true" className="size-3 shrink-0" />
-      {/* min-w-0: a flex item defaults to min-width:auto, so without this the
-          label refuses to shrink below its content and the chip overruns
-          max-w, colliding with the row's end cluster in longer locales. */}
-      <span className="min-w-0 truncate">{t("folio.viewOnly")}</span>
-    </span>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="text-muted-foreground text-2xs inline-flex max-w-[180px] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5" />
+        }
+      >
+        <LockIcon aria-hidden="true" className="size-3 shrink-0" />
+        {/* min-w-0: a flex item defaults to min-width:auto, so without this the
+            label refuses to shrink below its content and the chip overruns
+            max-w, colliding with the row's end cluster in longer locales. */}
+        <span className="min-w-0 truncate">{t("folio.viewOnly")}</span>
+      </TooltipTrigger>
+      <TooltipPopup>{t("folio.unsupportedDocxEditDescription")}</TooltipPopup>
+    </Tooltip>
   );
 };
 
