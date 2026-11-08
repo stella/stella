@@ -5,8 +5,7 @@ import { afterAll, expect, test } from "bun:test";
 
 import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
 import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const { act, renderHook, cleanup } = await import("@testing-library/react");
