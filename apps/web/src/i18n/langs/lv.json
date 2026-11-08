@@ -2027,6 +2027,7 @@
       "search-past-chats": "Meklē iepriekšējās tērzēšanās",
       "set_field_value": "Iestatīt lauka vērtību",
       "set_practice_jurisdictions": "Iestatīt prakses jurisdikcijas",
+      "show_app": "Rāda interaktīvu skatu",
       "show_in_document": "Rādīšana dokumentā",
       "spawn_subagents": "Deleģēšana apakšaģentiem",
       "suggestChangesApplied": "{applied, plural, zero {Nav lietots neviens labojums} one {Lietots # labojums} other {Lietoti # labojumi}}",

@@ -2027,6 +2027,7 @@
       "search-past-chats": "Buscando en chats anteriores",
       "set_field_value": "Establecer valor del campo",
       "set_practice_jurisdictions": "Establecer jurisdicciones de práctica",
+      "show_app": "Mostrando vista interactiva",
       "show_in_document": "Mostrando en el documento",
       "spawn_subagents": "Delegando en subagentes",
       "suggestChangesApplied": "{applied, plural, one {Se aplicó # cambio} other {Se aplicaron # cambios} many {Se aplicaron # cambios}}",

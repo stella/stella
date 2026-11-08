@@ -2027,6 +2027,7 @@
       "search-past-chats": "Recherche dans les conversations précédentes",
       "set_field_value": "Définir la valeur du champ",
       "set_practice_jurisdictions": "Définir les juridictions d’exercice",
+      "show_app": "Affichage de la vue interactive",
       "show_in_document": "Affichage dans le document",
       "spawn_subagents": "Délégation à des sous-agents",
       "suggestChangesApplied": "{applied, plural, one {# modification appliquée} other {# modifications appliquées} many {# modifications appliquées}}",

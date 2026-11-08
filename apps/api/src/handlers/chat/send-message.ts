@@ -3100,6 +3100,7 @@ export const createSendMessage = (
         };
         const chatToolContext = {
           visualTools,
+          appTools: { origin: visualOrigin },
           featureAccessSnapshot,
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,

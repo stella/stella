@@ -2027,6 +2027,7 @@
       "search-past-chats": "البحث في الدردشات السابقة",
       "set_field_value": "تعيين قيمة الحقل",
       "set_practice_jurisdictions": "ضبط الولايات القضائية للممارسة",
+      "show_app": "عرض طريقة عرض تفاعلية",
       "show_in_document": "العرض في المستند",
       "spawn_subagents": "تفويض المهام إلى وكلاء فرعيين",
       "suggestChangesApplied": "{applied, plural, zero {لم يتم تطبيق أي تعديلات} one {تم تطبيق تعديل واحد} two {تم تطبيق تعديلين} few {تم تطبيق # تعديلات} many {تم تطبيق # تعديلًا} other {تم تطبيق # تعديل}}",
