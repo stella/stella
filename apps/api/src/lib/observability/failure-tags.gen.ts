@@ -239,6 +239,7 @@ export const FAILURE_TAGS = [
   "HandoffCompletionError",
   "HarnessProbeError",
   "HarnessRespondError",
+  "HarnessSpawnError",
   "HarnessStartError",
   "HealthCheckError",
   "HeavyWorkSlotError",

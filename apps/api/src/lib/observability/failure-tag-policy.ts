@@ -250,6 +250,7 @@ export const TAGGED_FAILURE_REASON = {
   HandoffCompletionError: "tagged_failure",
   HarnessProbeError: "tagged_failure",
   HarnessRespondError: "tagged_failure",
+  HarnessSpawnError: "tagged_failure",
   HarnessStartError: "tagged_failure",
   HealthCheckError: "tagged_failure",
   HeavyWorkSlotError: "tagged_failure",
