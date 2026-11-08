@@ -11,6 +11,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   notInArray,
   or,
   SQL,
@@ -25,6 +26,7 @@ import type {
 } from "drizzle-orm/pg-core/query-builders/select.types";
 import * as v from "valibot";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { compareCodeUnit } from "@stll/collation";
 import { declareFingerprintFields } from "@stll/errors";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
@@ -3036,6 +3038,43 @@ export const lockWorkspaceLifecycle = async (
   workspaceId: SafeId<"workspace">,
 ): Promise<void> => {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+};
+
+type HoldLiveSourceWorkspacesOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  workspaceIds: readonly SafeId<"workspace">[];
+};
+
+/**
+ * Takes the lifecycle fence of every matter a row will cite as a data source,
+ * and reports whether all of them still stand. Nothing else stops such a row:
+ * its source column has no foreign key. Under the fence a deletion has either
+ * committed, so this returns false, or waits and then removes the cited row.
+ */
+export const holdLiveSourceWorkspaces = async ({
+  tx,
+  organizationId,
+  workspaceIds,
+}: HoldLiveSourceWorkspacesOptions): Promise<boolean> => {
+  if (workspaceIds.length === 0) {
+    return true;
+  }
+  for (const workspaceId of workspaceIds.toSorted(compareCodeUnit)) {
+    await lockWorkspaceLifecycle(tx, workspaceId);
+  }
+  const live = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      and(
+        inArray(workspaces.id, [...workspaceIds]),
+        eq(workspaces.organizationId, organizationId),
+        ne(workspaces.status, WORKSPACE_STATUS.deleting),
+      ),
+    )
+    .limit(workspaceIds.length);
+  return live.length === workspaceIds.length;
 };
 
 export const TIMER_MATTER_LOCK_SCOPE = {

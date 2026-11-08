@@ -219,7 +219,8 @@ export type RootRunActor<
    * row records those matters as its data sources. Returns `null` unless the
    * requester can open every one of them now. A matter being deleted does not
    * count: the row policies that guard source data refuse it, so a row citing
-   * it could never be read.
+   * it could never be read. This proves access only; a deletion can still
+   * overlap the write, which must take `holdLiveSourceWorkspaces` as well.
    */
   writeDbWithReadableSources: (
     sourceWorkspaceIds: readonly SafeId<"workspace">[],

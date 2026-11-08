@@ -27,6 +27,7 @@ import { and, count, eq, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { holdLiveSourceWorkspaces } from "@/api/lib/db/aggregate-lock";
 import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
 import { basisFixSourceWorkspaceIds } from "@/api/lib/document-review/reference-passages";
 import {
@@ -228,7 +229,9 @@ type FinalizeWorkerRunArgs = {
  * staged fix records the other matters its text came from, and row security
  * lets a writer record only matters it holds. So the transaction also pins them
  * when the requester can open them all, and otherwise withholds the fixes and
- * completes the run anyway.
+ * completes the run anyway. Those matters are checked again inside the
+ * transaction, under their lifecycle fence, because a deletion that overlaps
+ * this write would otherwise miss the rows citing them.
  */
 export const finalizeWorkerRun = async ({
   actor,
@@ -243,22 +246,27 @@ export const finalizeWorkerRun = async ({
   const sourcesDb = await actor.writeDbWithReadableSources(
     sourceDataWorkspaceIds,
   );
-  const fixStaging: ReviewFixStaging =
-    sourcesDb === null
-      ? { type: REVIEW_FIX_STAGING.withheld }
-      : { type: REVIEW_FIX_STAGING.stage, sourceDataWorkspaceIds };
   const writeDb = sourcesDb ?? actor.writeDb;
-  return await writeDb(
-    async (tx) =>
-      await finalizeReviewRun({
+  return await writeDb(async (tx) => {
+    const sourcesStand =
+      sourcesDb !== null &&
+      (await holdLiveSourceWorkspaces({
         tx,
-        workspaceId: actor.workspaceId,
-        runId: actor.runId,
-        entityId,
-        fileFieldId,
-        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
-        fixStaging,
-        expectedFindingCount,
-      }),
-  );
+        organizationId: actor.organizationId,
+        workspaceIds: sourceDataWorkspaceIds,
+      }));
+    const fixStaging: ReviewFixStaging = sourcesStand
+      ? { type: REVIEW_FIX_STAGING.stage, sourceDataWorkspaceIds }
+      : { type: REVIEW_FIX_STAGING.withheld };
+    return await finalizeReviewRun({
+      tx,
+      workspaceId: actor.workspaceId,
+      runId: actor.runId,
+      entityId,
+      fileFieldId,
+      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
+      fixStaging,
+      expectedFindingCount,
+    });
+  });
 };
