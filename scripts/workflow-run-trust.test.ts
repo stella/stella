@@ -1288,6 +1288,73 @@ esac
   });
 });
 
+test("an unreadable upstream run or job list is not a missing receipt", () => {
+  const sha = "a".repeat(40);
+  const run = {
+    head_repository: { full_name: "stella/stella" },
+    path: ".github/workflows/release.yml",
+    event: "push",
+    display_title: "Release Artifacts v1.2.3",
+    head_sha: sha,
+  };
+  const jobs = [
+    { jobs: [{ name: "promote-production", conclusion: "success" }] },
+  ];
+  for (const [label, failing] of [
+    ["run", "runs/123$"],
+    ["jobs", "/jobs?"],
+  ] as const) {
+    const work = mkdtempSync(path.join(tmpdir(), "stella-publication-source-"));
+    try {
+      const stub = path.join(work, "gh-retry.sh");
+      writeFileSync(
+        stub,
+        `[[ "$*" =~ ${failing.replace("?", "\\?")} ]] && exit 1
+case "$*" in
+  *'/jobs?'*) printf '%s' "$JOBS" ;;
+  *) printf '%s' "$RUN" ;;
+esac
+`,
+      );
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          path.join(import.meta.dir, "check-release-publication-source.sh"),
+          "123",
+          "v1.2.3",
+          sha,
+        ],
+        {
+          env: {
+            ...process.env,
+            GH_RETRY_SCRIPT: stub,
+            GITHUB_REPOSITORY: "stella/stella",
+            RUN: JSON.stringify(run),
+            JOBS: JSON.stringify(jobs),
+          },
+        },
+      );
+      expect(result.exitCode, label).toBe(2);
+      expect(result.stderr.toString(), label).toContain("unreadable");
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  }
+});
+
+test("npm and desktop fail on an unreadable receipt instead of skipping", () => {
+  for (const file of ["publish-npm.yml", "release-desktop.yml"]) {
+    const source = readFileSync(
+      new URL(`../.github/workflows/${file}`, import.meta.url),
+      "utf-8",
+    );
+    expect(source, file).toContain("|| receipt_status=$?");
+    expect(source, file).toMatch(
+      /case "\$receipt_status" in[\s\S]*?\n\s+1\)[\s\S]*?\n\s+\*\)[\s\S]*?exit 1/u,
+    );
+  }
+});
+
 test("npm and desktop consume the production receipt guard", () => {
   for (const file of ["publish-npm.yml", "release-desktop.yml"]) {
     const source = readFileSync(
