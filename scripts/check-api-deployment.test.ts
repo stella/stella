@@ -75,6 +75,7 @@ describe("API deployment health receipt", () => {
   type WorkflowRun = {
     run_number: number;
     head_sha: string;
+    head_branch: string;
     event: string;
     display_title: string;
   };
@@ -233,6 +234,7 @@ describe("API deployment health receipt", () => {
   const sameWork = (overrides: Partial<WorkflowRun> = {}): WorkflowRun => ({
     run_number: RUN_NUMBER + 1,
     head_sha: RUN_SHA,
+    head_branch: "main",
     event: "push",
     display_title: RUN_TITLE,
     ...overrides,
@@ -329,7 +331,10 @@ describe("API deployment health receipt", () => {
         label: "newer run from another event",
         newer: [sameWork({ event: "workflow_dispatch" })],
       },
-      { label: "newer run lookup fails", newer: undefined },
+      {
+        label: "newer run on another ref",
+        newer: [sameWork({ head_branch: "v1.2.3" })],
+      },
     ]) {
       for (const [jobs, annotations] of [
         [cancelledJobs, supersession],
@@ -345,6 +350,26 @@ describe("API deployment health receipt", () => {
         expect(outage.send, label).toBe(true);
         expect(outage.readsNewer, label).toBe(true);
         expect(outage.readsHistory, label).toBe(true);
+      }
+    }
+  });
+
+  test("a superseded cancel pages when newer runs are unreadable, even during an outage", async () => {
+    for (const history of [["success"], ["failure"]]) {
+      for (const [jobs, annotations] of [
+        [cancelledJobs, supersession],
+        [noJobs, undefined],
+      ] as const) {
+        const outage = await detectOutage({
+          conclusion: "cancelled",
+          history,
+          jobs,
+          annotations,
+          newer: undefined,
+        });
+        expect(outage.send, `after ${history[0]}`).toBe(true);
+        expect(outage.readsNewer).toBe(true);
+        expect(outage.readsHistory).toBe(false);
       }
     }
   });
@@ -380,7 +405,7 @@ describe("API deployment health receipt", () => {
       { message: "The operation was canceled." },
       { message: "The run was canceled by @someone." },
     ]);
-    for (const { label, jobs, annotations } of [
+    for (const { label, jobs, annotations, unreadable: unreadableCase } of [
       {
         label: "other annotations",
         jobs: cancelledJobs,
@@ -391,10 +416,21 @@ describe("API deployment health receipt", () => {
         label: "annotation lookup fails",
         jobs: cancelledJobs,
         annotations: undefined,
+        unreadable: true,
       },
       { label: "invalid annotations", jobs: cancelledJobs, annotations: "{" },
-      { label: "job lookup fails", jobs: undefined, annotations: supersession },
-      { label: "invalid jobs", jobs: "{", annotations: supersession },
+      {
+        label: "job lookup fails",
+        jobs: undefined,
+        annotations: supersession,
+        unreadable: true,
+      },
+      {
+        label: "invalid jobs",
+        jobs: "{",
+        annotations: supersession,
+        unreadable: true,
+      },
       {
         label: "no cancelled job",
         jobs: { total_count: 1, jobs: cancelledJobs.jobs.slice(0, 1) },
@@ -413,17 +449,29 @@ describe("API deployment health receipt", () => {
         },
         annotations: supersession,
       },
-    ]) {
-      const outage = await detectOutage({
-        conclusion: "cancelled",
-        history: ["success"],
-        jobs,
-        annotations,
-        newer: [sameWork()],
-      });
-      expect(outage.send, label).toBe(true);
-      expect(outage.readsNewer, label).toBe(false);
-      expect(outage.readsHistory, label).toBe(true);
+    ] as {
+      label: string;
+      jobs: unknown;
+      annotations: string | undefined;
+      unreadable?: boolean;
+    }[]) {
+      for (const history of [["success"], ["failure"]]) {
+        const outage = await detectOutage({
+          conclusion: "cancelled",
+          history,
+          jobs,
+          annotations,
+          newer: [sameWork()],
+        });
+        const unreadable = unreadableCase === true;
+        // An unreadable record pages without consulting the outage history;
+        // a readable cancel without a supersession follows that history.
+        expect(outage.send, `${label} after ${history[0]}`).toBe(
+          unreadable || history[0] === "success",
+        );
+        expect(outage.readsNewer, label).toBe(false);
+        expect(outage.readsHistory, label).toBe(!unreadable);
+      }
     }
     // An unverified cancel during a continuing outage stays suppressed.
     const continuing = await detectOutage({
