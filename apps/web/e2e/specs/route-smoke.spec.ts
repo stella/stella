@@ -101,6 +101,9 @@ const DEFAULT_SETTLE_MS = 1000;
 const GIT_REF_OUTPUT_MAX_BYTES = 64 * 1024;
 const ROUTE_SCALE_LEDGER_OUTPUT_MAX_BYTES = 256 * 1024;
 const SCALE_LEDGER = parseRouteScaleLedger(JSON.stringify(scaleLedger));
+// The small/large matter comparison walks every route three times, so it runs
+// in the nightly route-scale workflow; pull requests walk the baseline only.
+const ROUTE_SCALE = process.env["E2E_ROUTE_SCALE"] === "1";
 
 // Repo-root .playwright/storage-state.json — mirrors apps/web/e2e/playwright.config.ts
 // (seed-test-user.ts writes it there). The route walk owns its API request
@@ -253,7 +256,7 @@ const declareRouteSmokeGroup = ({
     let apiRequest: APIRequestContext;
     let browserForPages: Browser;
     let world: SmokeWorld | null = null;
-    let worlds: Awaited<ReturnType<typeof getSmokeWorlds>>;
+    let worlds: Awaited<ReturnType<typeof getSmokeWorlds>> | null = null;
     // Recorded the moment each fixture is created (not only after the whole
     // setup succeeds), so a registry failure still tears down what exists.
     let createdWorkspace: SmokeWorld["workspace"] | null = null;
@@ -267,8 +270,8 @@ const declareRouteSmokeGroup = ({
     const largeRenderResults = new Map<string, RouteRenderMetrics>();
 
     test.beforeAll(async ({ browser }, testInfo) => {
-      // timeout: build the baseline world plus two isolated 100/1000-row matters before measuring routes.
-      test.setTimeout(180_000);
+      // timeout: build the baseline world, plus two isolated 100/1000-row matters in scale runs, before measuring routes.
+      test.setTimeout(ROUTE_SCALE ? 180_000 : 60_000);
       apiRequest = await apiRequestFactory.newContext({
         storageState: STORAGE_STATE,
       });
@@ -320,7 +323,9 @@ const declareRouteSmokeGroup = ({
         email,
       });
       world = { workspace, contactId, documentRoute, correspondenceId };
-      worlds = await getSmokeWorlds(testInfo.project.outputDir);
+      if (ROUTE_SCALE) {
+        worlds = await getSmokeWorlds(testInfo.project.outputDir);
+      }
     });
 
     test.afterAll(async () => {
@@ -361,32 +366,38 @@ const declareRouteSmokeGroup = ({
     // beforeAll.
     const declareRouteTest = (def: SmokeRouteDef) => {
       test(def.template, async () => {
-        // timeout: three isolated worlds each retain the former 60s navigation allowance.
-        test.setTimeout(180_000);
+        // timeout: each measured world retains the former 60s navigation allowance.
+        test.setTimeout(ROUTE_SCALE ? 180_000 : 60_000);
         if (world === null) {
           throw new Error("route-smoke baseline world was not initialized");
         }
         const baselineWorld = world;
+        const measureBaseline = async () =>
+          await smokeRoute({
+            browser: browserForPages,
+            results: networkResults,
+            route: resolveRoute(def, baselineWorld),
+          });
+        if (worlds === null) {
+          await measureBaseline();
+          return;
+        }
+        const scaleWorlds = worlds;
         const measured = await measureSmokeWorlds({
-          baseline: async () =>
-            await smokeRoute({
-              browser: browserForPages,
-              results: networkResults,
-              route: resolveRoute(def, baselineWorld),
-            }),
+          baseline: measureBaseline,
           small: async () =>
             await smokeRoute({
               browser: browserForPages,
               results: smallScaleResults,
               renderResults: smallRenderResults,
-              route: resolveRoute(def, worlds.small),
+              route: resolveRoute(def, scaleWorlds.small),
             }),
           large: async () =>
             await smokeRoute({
               browser: browserForPages,
               results: scaleResults,
               renderResults: largeRenderResults,
-              route: resolveRoute(def, worlds.large),
+              route: resolveRoute(def, scaleWorlds.large),
             }),
         });
         if (measured.isErr()) {
@@ -410,8 +421,8 @@ const declareRouteSmokeGroup = ({
             {
               route: key,
               cardinalities: {
-                small: worlds.small.cardinalities,
-                large: worlds.large.cardinalities,
+                small: scaleWorlds.small.cardinalities,
+                large: scaleWorlds.large.cardinalities,
               },
               small,
               large,
@@ -609,29 +620,31 @@ const declareRouteSmokeGroup = ({
       });
     }
 
-    test("route cost stays bounded as the matter grows tenfold", () => {
-      // A route missing either measurement stays absent and fails the census.
-      const measurements = (
-        network: ReadonlyMap<string, RouteNetworkMetrics>,
-        renders: ReadonlyMap<string, RouteRenderMetrics>,
-      ) => {
-        const joined = new Map<string, RouteScaleMeasurement>();
-        for (const [route, metrics] of network) {
-          const routeRenders = renders.get(route);
-          if (routeRenders !== undefined) {
-            joined.set(route, { network: metrics, renders: routeRenders });
+    if (ROUTE_SCALE) {
+      test("route cost stays bounded as the matter grows tenfold", () => {
+        // A route missing either measurement stays absent and fails the census.
+        const measurements = (
+          network: ReadonlyMap<string, RouteNetworkMetrics>,
+          renders: ReadonlyMap<string, RouteRenderMetrics>,
+        ) => {
+          const joined = new Map<string, RouteScaleMeasurement>();
+          for (const [route, metrics] of network) {
+            const routeRenders = renders.get(route);
+            if (routeRenders !== undefined) {
+              joined.set(route, { network: metrics, renders: routeRenders });
+            }
           }
-        }
-        return joined;
-      };
-      const problems = routeScaleCensus({
-        routes: defs.map(networkBaselineKey),
-        small: measurements(smallScaleResults, smallRenderResults),
-        large: measurements(scaleResults, largeRenderResults),
-        ledger: SCALE_LEDGER,
+          return joined;
+        };
+        const problems = routeScaleCensus({
+          routes: defs.map(networkBaselineKey),
+          small: measurements(smallScaleResults, smallRenderResults),
+          large: measurements(scaleResults, largeRenderResults),
+          ledger: SCALE_LEDGER,
+        });
+        expect(problems).toEqual([]);
       });
-      expect(problems).toEqual([]);
-    });
+    }
 
     test("network manifest matches the committed baseline", async () => {
       await test.info().attach("observed-network-baseline", {
