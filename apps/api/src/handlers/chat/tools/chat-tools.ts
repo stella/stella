@@ -70,6 +70,7 @@ import { createSecretTools } from "@/api/handlers/chat/tools/secret-tools";
 import {
   createShowAppTool,
   createTurnAppLedger,
+  SHOW_APP_DEPLOYMENT_FEATURE,
 } from "@/api/handlers/chat/tools/show-app-tool";
 import type { TurnAppLedger } from "@/api/handlers/chat/tools/show-app-tool";
 import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
@@ -449,7 +450,7 @@ const turnAppTools = (
 } => {
   if (
     appTools === undefined ||
-    !isMcpToolFeatureEnabled("FEATURE_PUBLIC_LAW")
+    !isMcpToolFeatureEnabled(SHOW_APP_DEPLOYMENT_FEATURE)
   ) {
     return { codeMode: {}, tools: {} };
   }

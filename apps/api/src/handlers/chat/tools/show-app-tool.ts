@@ -11,11 +11,11 @@ import {
 import type {
   ShowAppOutput,
   StellaMcpAppCall,
+  StellaMcpAppPart,
 } from "@stll/api-contract/stella-mcp-app";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
-import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { chatMcpAppForTool } from "@/api/lib/chat/mcp-app-catalog";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 
@@ -83,9 +83,24 @@ const SHOW_APP_DESCRIPTION =
   "for example a decision or a statute they asked to see; answer in text as usual. " +
   "Show each read at most once, and only reads of this turn.";
 
+/**
+ * Every app chat shows presents a public-law read, so a deployment without
+ * the public corpus offers no `show_app`.
+ */
+export const SHOW_APP_DEPLOYMENT_FEATURE = "FEATURE_PUBLIC_LAW";
+
+/** What the turn's resource origin offers the tool: minting an app part. */
+type AppPartIssuer = {
+  issueMcpApp: (options: {
+    call: StellaMcpAppCall;
+    toolCallId: string;
+    toolName: string;
+  }) => Result<StellaMcpAppPart, string>;
+};
+
 type CreateShowAppToolOptions = {
   ledger: TurnAppLedger;
-  origin: Pick<VisualResourceOrigin, "issueMcpApp">;
+  origin: AppPartIssuer;
 };
 
 export const createShowAppTool = ({
