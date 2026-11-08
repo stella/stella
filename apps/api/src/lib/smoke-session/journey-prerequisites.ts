@@ -31,10 +31,13 @@ import type { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 export type DeclaredSchedulerJobId =
   (typeof DECLARED_SCHEDULER_JOBS)[number]["id"];
 
-/** What a successful run must have left in place for the journey to hold. */
+/**
+ * What a successful run must have left in place for the journey to hold: the
+ * sanctions lists it screens against, available for screening. A job that
+ * refreshes something else adds its own field here and its read in the store.
+ */
 export type JourneyPrerequisiteCheck = {
-  type: "sanctions-sources-available";
-  sources: readonly [SanctionsSource, ...SanctionsSource[]];
+  sanctionsSources: readonly [SanctionsSource, ...SanctionsSource[]];
 };
 
 export type JourneyPrerequisite = {
@@ -51,7 +54,7 @@ export const JOURNEY_PREREQUISITES = {
   [JOURNEY_PREREQUISITE.sanctionsScreening]: [
     {
       jobId: "sanctions.refreshSources.twoHourly",
-      check: { type: "sanctions-sources-available", sources: ["eu"] },
+      check: { sanctionsSources: ["eu"] },
     },
   ],
 } as const satisfies Record<

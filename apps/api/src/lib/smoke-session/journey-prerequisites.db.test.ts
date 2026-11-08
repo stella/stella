@@ -110,6 +110,9 @@ describe("journey prerequisite jobs (database)", () => {
       pauseReason: "Scheduler maintenance",
     });
     const pausedUntil = (await readJob(SANCTIONS_JOB_ID))?.pausedUntil;
+    if (pausedUntil === undefined || pausedUntil === null) {
+      throw new Error("The paused job lost its pause");
+    }
 
     expect(await bringJourneyPrerequisitesForward(JOURNEY)).toEqual([]);
     expect((await readJob(SANCTIONS_JOB_ID))?.nextRunAt).toEqual(SANCTIONS_DUE);
@@ -117,7 +120,7 @@ describe("journey prerequisite jobs (database)", () => {
       {
         jobId: SANCTIONS_JOB_ID,
         state: "failed",
-        detail: `${SANCTIONS_JOB_ID} is paused until ${pausedUntil?.toISOString()}`,
+        detail: `${SANCTIONS_JOB_ID} is paused until ${pausedUntil.toISOString()}`,
       },
     ]);
   });

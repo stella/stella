@@ -344,33 +344,16 @@ export const bringJourneyPrerequisitesForward = async (
     sql`least(now(), (select min(${schedulerJobs.nextRunAt}) from ${schedulerJobs}) - interval '1 millisecond')`,
   );
 
-/** What each kind of check reads, loaded once per report. */
+/** What the checks read, loaded once per report. */
 type PrerequisiteCheckInputs = {
   sanctions: Awaited<ReturnType<typeof readSanctionsFreshness>>;
-};
-
-const checkReadsSanctions = (check: JourneyPrerequisiteCheck): boolean => {
-  switch (check.type) {
-    case "sanctions-sources-available":
-      return true;
-    default:
-      check.type satisfies never;
-      return panic("Unhandled journey prerequisite check");
-  }
 };
 
 const prerequisiteCheckFailures = (
   check: JourneyPrerequisiteCheck,
   inputs: PrerequisiteCheckInputs,
-): string[] => {
-  switch (check.type) {
-    case "sanctions-sources-available":
-      return unavailableSanctionsSources(inputs.sanctions, check.sources);
-    default:
-      check.type satisfies never;
-      return panic("Unhandled journey prerequisite check");
-  }
-};
+): string[] =>
+  unavailableSanctionsSources(inputs.sanctions, check.sanctionsSources);
 
 /** Each job's latest run still running or finished at or after `since`. */
 const readLatestPrerequisiteRuns = async (
@@ -451,10 +434,7 @@ export const readJourneyPrerequisites = async (
   }));
   const inputs: PrerequisiteCheckInputs = {
     // The lists as public screening sees them, through its read-only role.
-    sanctions: verdicts.some(
-      ({ check, verdict }) =>
-        verdict.state === "check" && checkReadsSanctions(check),
-    )
+    sanctions: verdicts.some(({ verdict }) => verdict.state === "check")
       ? await readSanctionsFreshness({ db: sanctionsPublicReadDb })
       : [],
   };
