@@ -968,7 +968,10 @@ const collectFindokDocuments = async ({
  */
 const SK_COURTS_DECISION_PDFS = [
   "sk-courts-0t-107-2015.pdf",
+  "sk-courts-15copr-4-2020.pdf",
+  "sk-courts-16c-45-2025.pdf",
   "sk-courts-2t-103-2020.pdf",
+  "sk-courts-4cdo-21-2022.pdf",
   "sk-courts-6cop-34-2011.pdf",
 ] as const;
 
