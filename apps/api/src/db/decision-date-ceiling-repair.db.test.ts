@@ -327,7 +327,7 @@ test("the migration swaps the CHECK untouched, the repair clears and reopens, bo
   expect(repaired.citations).toEqual([
     {
       citingDecisionId: citingId,
-      citedDecisionId: null,
+      citedDecisionId: clearedId,
       citationText: "a incoming",
       resolutionStatus: "pending",
     },
@@ -339,7 +339,7 @@ test("the migration swaps the CHECK untouched, the repair clears and reopens, bo
     },
     {
       citingDecisionId: clearedId,
-      citedDecisionId: null,
+      citedDecisionId: keptId,
       citationText: "c outgoing",
       resolutionStatus: "pending",
     },
