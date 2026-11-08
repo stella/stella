@@ -142,3 +142,54 @@ describe("Okresný súd Trenčín 19C/150/2006", () => {
     ).toHaveLength(1);
   });
 });
+
+describe("Okresný súd Martin 2T/103/2020", () => {
+  test("a lettered point after `písm.` at a line wrap continues the citation", async () => {
+    const blocks = await read({
+      file: "sk-courts-2t-103-2020.pdf",
+      court: "Okresný súd Martin",
+      caseNumber: "2T/103/2020",
+      ecli: undefined,
+    });
+    expect(startingWith(blocks, "e) Tr. zák.")).toEqual([]);
+    expect(
+      blocks.some(({ text }) =>
+        text.includes(
+          "s poukazom na § 139 ods. 1 písm. e) Tr. zák. a na § 127 ods. 3 Tr. zák.",
+        ),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("Mestský súd Bratislava IV 16C/45/2025", () => {
+  const decision = {
+    file: "sk-courts-16c-45-2025.pdf",
+    court: "Mestský súd Bratislava IV",
+    caseNumber: "16C/45/2025",
+    ecli: "ECLI:SK:MSBA4:2026:6125388965.3",
+  };
+
+  test("sub-paragraphs 6.12 and 6.13 stay apart", async () => {
+    const blocks = await read(decision);
+    expect(startingWith(blocks, "6.12. ")).toEqual([
+      {
+        number: undefined,
+        text: "6.12. Podľa § 524 ods. 1 O.z. veriteľ môže svoju pohľadávku aj bez súhlasu dlžníka postúpiť písomnou zmluvou inému.",
+      },
+    ]);
+    expect(startingWith(blocks, "6.13. ")).toHaveLength(1);
+  });
+
+  test("the court's paragraph numbers are block numbers beside its sub-paragraphs", async () => {
+    const blocks = await read(decision);
+    const numbers = blocks.flatMap(({ number }) => number ?? []);
+    expect(numbers.slice(0, 6)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(blocks.find(({ number }) => number === 5)?.text).toBe(
+      "Súd pri rozhodovaní vychádzal z nasledovného skutkového stavu:",
+    );
+    expect(
+      blocks.filter(({ text }) => /^5\.\d{1,2}\. /u.test(text)),
+    ).toHaveLength(11);
+  });
+});

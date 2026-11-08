@@ -294,6 +294,11 @@ describe("ÚOHS JSON-LD", () => {
         "jednání konaném v rámci správního řízení ve dnech",
         "29. 4. 2016",
       ],
+      [
+        "cz-uohs-2024-R0145.pdf",
+        "v zadávacím řízení“ ze dne",
+        "29. 8. 2024, které je ve správním spise",
+      ],
     ] as const)(
       "%s: a date wrapped after its day goes on in its paragraph",
       async (fixture, sentence, date) => {
