@@ -8,7 +8,6 @@ import {
 import {
   backfillHeartbeat,
   combine,
-  defaultConfig,
   initialBatchState,
 } from "@stll/db-load-gate/health";
 import type {
@@ -30,6 +29,7 @@ import {
 } from "@stll/db-load-gate/slot";
 import { Temporal } from "@stll/time";
 
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { admitCaseLawPopulationMaintenance } from "@/api/lib/case-law/population-maintenance-admission";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 
@@ -406,7 +406,7 @@ const createRuntime = <BatchTransaction>({
   transactionQuery,
   slot,
   close,
-  config = defaultConfig,
+  config = loadGateHealthConfig(),
   clock = () => Temporal.Now.instant().epochMilliseconds,
   readVerdict,
   readEbsSignal,
@@ -630,7 +630,7 @@ export const createScriptBackfillHealthReader = ({
   db,
   tableName,
   clock,
-  config = defaultConfig,
+  config = loadGateHealthConfig(),
 }: {
   db: { transaction: IngestionTransactionRunner<Transaction> };
   tableName: string;
@@ -745,7 +745,7 @@ type DatabaseLoadVerdictReaderOptions = {
 export const createDatabaseLoadVerdictReader = ({
   db,
   tableName,
-  config = defaultConfig,
+  config = loadGateHealthConfig(),
   clock = () => Temporal.Now.instant().epochMilliseconds,
   readEbsSignal,
   warn,
@@ -849,6 +849,16 @@ export const createDatabaseLoadVerdictReader = ({
   };
 };
 
+/** The runtime's batch bounds always admit its initial size. */
+const sizedRuntimeConfig = ({
+  config = loadGateHealthConfig(),
+  initialSize,
+}: Pick<RuntimeOptions, "config" | "initialSize">): HealthConfig => ({
+  ...config,
+  minSize: Math.min(initialSize, config.minSize),
+  maxSize: Math.max(initialSize, config.maxSize),
+});
+
 export const createScriptBackfillRuntime = ({
   db,
   slot: injectedSlot,
@@ -876,17 +886,7 @@ export const createScriptBackfillRuntime = ({
   return createRuntime({
     ...options,
     transactionQuery: (tx: Transaction) => drizzleQuery(tx),
-    config: {
-      ...(options.config ?? defaultConfig),
-      minSize: Math.min(
-        options.initialSize,
-        (options.config ?? defaultConfig).minSize,
-      ),
-      maxSize: Math.max(
-        options.initialSize,
-        (options.config ?? defaultConfig).maxSize,
-      ),
-    },
+    config: sizedRuntimeConfig(options),
     runInTransaction: db.transaction.bind(db),
     slot,
     close: async () => await Promise.resolve(),
@@ -938,17 +938,7 @@ export const createBackfillRuntime = (
     transactionQuery: (
       tx: Pick<OnlineMigrationConnection, "execute" | "query">,
     ) => tx.query,
-    config: {
-      ...(options.config ?? defaultConfig),
-      minSize: Math.min(
-        options.initialSize,
-        (options.config ?? defaultConfig).minSize,
-      ),
-      maxSize: Math.max(
-        options.initialSize,
-        (options.config ?? defaultConfig).maxSize,
-      ),
-    },
+    config: sizedRuntimeConfig(options),
     runInTransaction,
     close: slot.close,
   });

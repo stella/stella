@@ -13,6 +13,7 @@ import {
   readNonRedistributableCaseLawSourceIds,
 } from "@/api/lib/case-law/non-redistributable-sources";
 import {
+  isCaseLawPopulationBuilding,
   populationCountsCacheVersion,
   readCaseLawPopulationFreshness,
 } from "@/api/lib/case-law/population-count-freshness";
@@ -51,6 +52,12 @@ const EMPTY_FACETS: LegalBrowseFacets = {
   court: [],
   year: [],
   countsFreshness: { status: "unavailable" },
+};
+
+/** No bucket is served while the seed is pending; the state says why. */
+const BUILDING_FACETS: LegalBrowseFacets = {
+  ...EMPTY_FACETS,
+  countsFreshness: { status: "building" },
 };
 
 const browseFacets = createBrowseFacetsCache({
@@ -162,6 +169,10 @@ export const readBrowseFacets = async (
   });
   const facets = Result.isError(result) ? result : result.value;
   if (Result.isError(facets)) {
+    if (isCaseLawPopulationBuilding(facets.error)) {
+      logger.info("case_law.browse_facets.building");
+      return BUILDING_FACETS;
+    }
     // An empty set collapses the selects into free-text filters, which is a
     // degraded page, not a broken one.
     logger.warn("case_law.browse_facets.unavailable", {

@@ -254,7 +254,7 @@ function TemplateStudioInspectorView({
                   content={tag}
                   key={tag}
                   render={
-                    <span className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5 font-medium">
+                    <span className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5 font-medium">
                       {languageChipLabel(tag, lang)}
                     </span>
                   }

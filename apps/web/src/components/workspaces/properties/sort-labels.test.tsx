@@ -33,7 +33,9 @@ test("every kind's labels are the header menu's keys, translated", () => {
 // property's chip says what its column header's item says.
 test.each(
   Object.entries(PROPERTY_SORT_KINDS).flatMap(([type, kind]) =>
-    SORT_DIRECTIONS.map((direction) => [type, kind, direction] as const),
+    kind === null
+      ? []
+      : SORT_DIRECTIONS.map((direction) => [type, kind, direction] as const),
   ),
 )(
   "a %s property's chip reads the header's %s label sorted %s",

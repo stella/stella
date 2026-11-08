@@ -31,6 +31,8 @@ import {
   buildExtractedFileMessage,
   buildPromptsMessage,
   buildTextInputsMessage,
+  PROMPT_TRUNCATION_MARKER,
+  recordPromptInputTruncation,
   WORKFLOW_SYSTEM_PROMPT,
 } from "@/api/lib/workflow/ai-prompts";
 import {
@@ -118,9 +120,6 @@ export const EXTRACTED_TEXT_PROMPT_LIMITS = {
   totalChars: 100_000,
 } as const;
 
-const EXTRACTED_TEXT_TRUNCATION_MARKER =
-  "\n\n[… content truncated to fit AI prompt limits …]";
-
 type LimitExtractedTextPromptContentOptions = {
   content: string;
   fileCount: number;
@@ -143,10 +142,17 @@ export const limitExtractedTextPromptContent = ({
   if (content.length <= maxChars) {
     return content;
   }
-  if (maxChars <= EXTRACTED_TEXT_TRUNCATION_MARKER.length) {
-    return EXTRACTED_TEXT_TRUNCATION_MARKER.slice(0, maxChars);
+  const keptChars = Math.max(maxChars - PROMPT_TRUNCATION_MARKER.length, 0);
+  recordPromptInputTruncation({
+    input: "extracted_text",
+    truncatedParts: 1,
+    droppedChars: content.length - keptChars,
+    maxChars,
+  });
+  if (maxChars <= PROMPT_TRUNCATION_MARKER.length) {
+    return PROMPT_TRUNCATION_MARKER.slice(0, maxChars);
   }
-  return `${content.slice(0, maxChars - EXTRACTED_TEXT_TRUNCATION_MARKER.length)}${EXTRACTED_TEXT_TRUNCATION_MARKER}`;
+  return `${content.slice(0, maxChars - PROMPT_TRUNCATION_MARKER.length)}${PROMPT_TRUNCATION_MARKER}`;
 };
 
 export const buildWorkflowAIAnalyticsProps = ({

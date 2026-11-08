@@ -424,7 +424,7 @@ test(
       false,
     );
     const indexes = unionScans.map(({ index }) => index);
-    expect(indexes).toContain("case_law_decisions_ecli_idx");
+    expect(indexes).toContain("case_law_decisions_ecli_upper_idx");
     expect(indexes).toContain("case_law_decision_identifiers_lookup_idx");
     assertPlan(
       accessPathViolations(
@@ -484,7 +484,7 @@ test(
     expect(decisions).toHaveLength(3);
     expect(decisions[0]?.nodeType).not.toBe("Seq Scan");
     expect(decisions[0]?.index).toBe(
-      "case_law_decisions_sitemap_shard_published_idx",
+      "case_law_decisions_sitemap_month_published_idx",
     );
     // The country and both ends of the month bound the range the scan reads.
     expect(decisions[0]?.indexCond).toMatch(/\bcountry(?:\)::text)? = /u);
@@ -515,14 +515,18 @@ test.each(["case-law.sitemap-month-count", "case-law.sitemap-shard-read"])(
     const decisions = scans.filter(
       ({ relation }) => relation === "case_law_decisions",
     );
-    expect(decisions).toHaveLength(3);
-    const outer = decisions.find(({ alias }) => alias === "case_law_decisions");
-    expect(outer?.index).toBe("case_law_decisions_sitemap_shard_published_idx");
+    // The shard read then fetches its page's rows by primary key.
+    expect(decisions).toHaveLength(
+      id === "case-law.sitemap-shard-read" ? 4 : 3,
+    );
+    const outer = decisions.find(
+      ({ index }) => index === "case_law_decisions_sitemap_month_published_idx",
+    );
     expect(outer?.indexCond).toMatch(/\bcountry(?:\)::text)? = /u);
     expect(outer?.indexCond).toMatch(/\bdecision_date >= /u);
     expect(outer?.indexCond).toMatch(/\bdecision_date < /u);
-    const representative = decisions.find(({ filter }) =>
-      filter?.includes("id < case_law_decisions.id"),
+    const representative = decisions.find(({ indexCond }) =>
+      indexCond?.includes("id < case_law_decisions"),
     );
     const alternate = decisions.find(({ filter }) =>
       filter?.includes("language)::text <> (case_law_decisions.language"),
@@ -530,17 +534,15 @@ test.each(["case-law.sitemap-month-count", "case-law.sitemap-shard-read"])(
     expect(representative).toBeDefined();
     expect(alternate).toBeDefined();
     for (const probe of [representative, alternate]) {
-      expect(probe?.index?.split(", ")).toContain(
-        "case_law_decisions_lang_group_idx",
+      expect(probe?.index).toBe(
+        "case_law_decisions_language_group_published_idx",
       );
       expect(probe?.indexCond).toMatch(
-        /language_group_key\)::text = \(case_law_decisions.language_group_key/u,
+        /language_group_key(?:\)::text)? = \(case_law_decisions\w*\.language_group_key/u,
       );
-      expect([probe?.indexCond, probe?.filter].join(" ")).toMatch(
-        /country\)::text = \(case_law_decisions.country/u,
+      expect(probe?.indexCond).toMatch(
+        /country(?:\)::text)? = \(case_law_decisions\w*\.country/u,
       );
-      expect(probe?.filter).toContain("redacted_at IS NULL");
-      expect(probe?.filter).toContain("isListingOnly");
     }
     for (const alias of [
       "sitemap_sibling_source",

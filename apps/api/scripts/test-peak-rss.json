@@ -7624,22 +7624,6 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/desktop-time-entries/narrative-model.test.ts": {
-      "peakMb": 272,
-      "baselineMb": 212,
-      "source": {
-        "runId": "41265299690",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/desktop-time-entries/narrative.test.ts": {
-      "peakMb": 307,
-      "baselineMb": 213,
-      "source": {
-        "runId": "41265299690",
-        "job": "measure-3"
-      }
-    },
     "src/handlers/desktop-time-entries/routes.test.ts": {
       "peakMb": 309,
       "baselineMb": 224,

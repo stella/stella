@@ -25,6 +25,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import createPlaybookFromRun from "./create";
 
@@ -211,9 +212,7 @@ describe.skipIf(!enabled)("playbook source access on PostgreSQL", () => {
         await db
           .delete(workspaces)
           .where(eq(workspaces.organizationId, organizationId));
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(eq(user.id, userId));
       }
     });

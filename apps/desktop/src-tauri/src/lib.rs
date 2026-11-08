@@ -10,9 +10,14 @@ mod activity_window;
 mod app_lifecycle;
 mod app_window;
 mod autostart;
+mod billing_draft_commands;
+mod billing_draft_settings;
+mod billing_draft_submit;
 mod bridge;
 mod chatgpt_auth;
 mod chatgpt_auth_commands;
+mod claude_code_auth;
+mod claude_code_auth_commands;
 mod clipboard;
 mod clipboard_commands;
 #[cfg(target_os = "macos")]
@@ -28,6 +33,7 @@ mod config;
 mod deep_link;
 mod desktop_crash;
 mod desktop_crash_native;
+mod desktop_runner;
 mod desktop_telemetry;
 mod device_preference;
 mod device_proof;
@@ -41,6 +47,7 @@ mod dictation_engine;
 mod dictation_input;
 #[cfg(dictation)]
 mod dictation_worker;
+mod document_sessions;
 #[cfg(test)]
 mod e2e;
 mod feature_access;
@@ -49,9 +56,11 @@ mod foreground_app;
 mod foreground_app_visual;
 mod handoff;
 mod harness_archive;
+mod harness_auto_install;
 mod harness_commands;
 mod harness_installation;
 mod harness_release;
+mod harness_sidecar;
 mod http_client;
 mod i18n;
 mod idle_time;
@@ -67,6 +76,7 @@ mod permissions;
 mod presence;
 mod registry;
 mod relaunch;
+mod runner_protocol;
 mod session_manager;
 mod session_store;
 mod sse;
@@ -87,6 +97,7 @@ macro_rules! generate_stella_handler {
   };
 }
 
+use crate::logging::best_effort;
 use clipboard::{ClipboardAppState, ClipboardManager};
 use commands::AppState;
 use session_manager::SessionManager;
@@ -127,7 +138,13 @@ pub fn run() {
   let bridge_port = config::resolve_bridge_port();
   let allowed_origins = config::resolve_allowed_origins();
 
-  let manager = Arc::new(Mutex::new(SessionManager::new()));
+  let manager = match SessionManager::new() {
+    Ok(manager) => Arc::new(Mutex::new(manager)),
+    Err(error) => {
+      tracing::error!(error = %error, "document session initialization failed");
+      return;
+    }
+  };
   let account = Arc::new(Mutex::new(account::AccountStore::default()));
   let clipboard_manager = Arc::new(std::sync::Mutex::new(ClipboardManager::new()));
   let activity_manager: activity::ActivityAppState =
@@ -191,6 +208,7 @@ pub fn run() {
       managed_policy::current().blocked_features(),
     ))
     .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
+    .manage(desktop_runner::DesktopRunnerControl::default())
     .manage(crash_monitor)
     .manage(desktop_telemetry.clone())
     .setup(move |app| {
@@ -257,7 +275,9 @@ pub fn run() {
       if let Some(installation) = harness_installation::HarnessInstallation::open_default() {
         app.manage(installation);
       }
+      harness_commands::manage(&handle);
       chatgpt_auth_commands::manage(&handle);
+      claude_code_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));
       {
         let manager = Arc::clone(&manager);
@@ -282,6 +302,8 @@ pub fn run() {
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
               chatgpt_auth_commands::apply_feature_gate(app, enabled);
+              desktop_runner::apply_feature_gate(app, enabled);
+              claude_code_auth_commands::apply_feature_gate(app, enabled);
             }
           }),
         );
@@ -290,37 +312,31 @@ pub fn run() {
       // Restore sessions and build the initial tray menu off the main thread.
       // Session restore reads the OS keychain, which can block on user
       // authorization; the event loop is not running yet, so blocking setup
-      // makes macOS report the app as not responding. The guard is acquired
-      // synchronously here so every other manager consumer (bridge, deep
-      // links, tray actions) queues behind the restore instead of racing it.
+      // makes macOS report the app as not responding. Read the account before
+      // locking the session manager, following account request lock order.
+      // set_account_owner serializes restoration with other manager consumers.
       {
         let manager = Arc::clone(&manager);
-        // A second-instance notification can race this lock on Windows and
-        // Linux, so fall back to awaiting instead of panicking.
-        let setup_guard = Arc::clone(&manager).try_lock_owned();
         let handle = handle.clone();
         tauri::async_runtime::spawn(async move {
-          let mut mgr = match setup_guard {
-            Ok(guard) => guard,
-            Err(_) => {
-              tracing::warn!("session manager contended during setup");
-              Arc::clone(&manager).lock_owned().await
+          manager.lock().await.set_app_handle(handle.clone());
+          let _lease = account::lock_requests().await;
+          let account = handle.state::<account::AccountState>();
+          let owner = match account::current(&account).await {
+            Ok(account) => account.as_ref().map(document_sessions::AccountOwner::for_account),
+            Err(error) => {
+              tracing::warn!(error = %error, "document account is unavailable during restore");
+              return;
             }
           };
-          mgr.set_app_handle(handle.clone());
-          mgr.initialize().await;
-          let session_ids = mgr.session_ids_needing_watchers();
-          drop(mgr);
-
-          // Attach file watchers and SSE listeners outside the lock
-          for sid in &session_ids {
-            SessionManager::attach_watcher(&manager, sid).await;
-          }
-
           let mut mgr = manager.lock().await;
-          for sid in &session_ids {
-            mgr.ensure_sse_listener(&manager, sid);
+          if let Err(error) = mgr.set_account_owner(owner).await {
+            tracing::warn!(error = %error, "document session restore remains pending");
+            return;
           }
+          drop(mgr);
+          SessionManager::attach_pending_listeners(&manager).await;
+          let mgr = manager.lock().await;
 
           tray::refresh(&handle, &mgr.get_snapshot());
         });
@@ -355,10 +371,13 @@ pub fn run() {
               }
               tray::MenuAction::SetActivityRecording(status) => {
                 if activity::set_recording_from_tray(&handle, status).is_err() {
-                  let _ = handle.notification().builder()
-                    .title(i18n::t("tray.activity"))
-                    .body(i18n::t("activity.errorUpdate"))
-                    .show();
+                  best_effort(
+                    handle.notification().builder()
+                      .title(i18n::t("tray.activity"))
+                      .body(i18n::t("activity.errorUpdate"))
+                      .show(),
+                    "activity recording failure was not notified",
+                  );
                   activity_window::show(&handle);
                 }
               }
@@ -411,7 +430,7 @@ pub fn run() {
                 mgr.reveal_support_root();
               }
               tray::MenuAction::OpenSessionFile(id) => {
-                let mgr = manager.lock().await;
+                let mut mgr = manager.lock().await;
                 mgr.open_session_file(&id);
               }
               tray::MenuAction::RevealSession(id) => {
@@ -479,6 +498,7 @@ pub fn run() {
       }
 
       presence::start(handle.clone());
+      desktop_runner::watch_state(&handle);
 
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
@@ -597,16 +617,19 @@ impl PreferencesTab {
 pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab) {
   // Accessory apps must explicitly activate to bring windows to front.
   #[cfg(target_os = "macos")]
-  let _ = handle.show();
+  best_effort(handle.show(), "app could not be shown");
 
   let tab = tab.id();
   if let Some(window) = handle.get_webview_window(SETTINGS_WINDOW_LABEL) {
-    let _ = window.show();
-    let _ = window.set_focus();
-    let _ = handle.emit_to(
-      SETTINGS_WINDOW_LABEL,
-      "activate-tab",
-      serde_json::json!({ "tab": tab }),
+    best_effort(window.show(), "settings window could not be shown");
+    best_effort(window.set_focus(), "settings window could not be focused");
+    best_effort(
+      handle.emit_to(
+        SETTINGS_WINDOW_LABEL,
+        "activate-tab",
+        serde_json::json!({ "tab": tab }),
+      ),
+      "settings tab change was not announced",
     );
     return;
   }
@@ -635,15 +658,21 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab)
         if matches!(event, tauri::WindowEvent::Destroyed) {
           clipboard_shortcut::resume_after_window_closed(&resume_handle);
         }
+        if matches!(event, tauri::WindowEvent::Focused(true)) {
+          feature_access::refresh_now();
+        }
       });
       // Emit tab activation after a short delay to let the webview load
       let handle = handle.clone();
       tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        let _ = handle.emit_to(
-          SETTINGS_WINDOW_LABEL,
-          "activate-tab",
-          serde_json::json!({ "tab": tab }),
+        best_effort(
+          handle.emit_to(
+            SETTINGS_WINDOW_LABEL,
+            "activate-tab",
+            serde_json::json!({ "tab": tab }),
+          ),
+          "tab activation was not announced",
         );
       });
     }

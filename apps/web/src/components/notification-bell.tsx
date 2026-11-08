@@ -5,7 +5,6 @@ import { Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { REALTIME_EVENT_TYPE } from "@stll/api-contract";
 import {
   NOTIFICATION_ENTITY_TYPE,
   NOTIFICATION_KIND,
@@ -29,6 +28,7 @@ import { cn } from "@stll/ui/utils";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -38,7 +38,6 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  firstNotificationsPageRefresh,
   notificationsOptions,
   refetchFirstNotificationsPage,
 } from "@/lib/notification-queries";
@@ -47,7 +46,6 @@ import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/acces
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { toSafeId } from "@/lib/safe-id";
 import { useUnreadFaviconDot } from "@/lib/unread-favicon-dot";
-import { useUserEventsSSE } from "@/lib/user-events-sse";
 
 /**
  * Unread awareness for the signed-in person: mentions, task assignments,
@@ -80,19 +78,6 @@ export const NotificationBell = () => {
   const items = data ? data.pages.flatMap((page) => page.items) : [];
 
   useUnreadFaviconDot(unreadCount > 0);
-
-  useUserEventsSSE(organizationId, ({ type: eventType }) => {
-    // The user channel carries a single event kind today; this bind makes a
-    // second kind a compile error here instead of a silently ignored event.
-    eventType satisfies typeof REALTIME_EVENT_TYPE.NEW_NOTIFICATION;
-    return [
-      firstNotificationsPageRefresh({
-        organizationId,
-        queryClient,
-        userId,
-      }),
-    ];
-  });
 
   useExternalSyncEffect(() => {
     if (listError === null) {
@@ -284,6 +269,7 @@ type NotificationRowProps = {
 };
 
 const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
+  const relativeTime = useRelativeTime();
   const unread = notification.readAt === null;
   const rowClassName = cn(
     "hover:bg-muted flex w-full items-start gap-2 px-3 py-2 text-start text-sm",
@@ -298,8 +284,16 @@ const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
           unread ? "bg-primary" : "bg-transparent",
         )}
       />
-      <span className="min-w-0 flex-1">
-        <NotificationMessage notification={notification} />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span>
+          <NotificationMessage notification={notification} />
+        </span>
+        <time
+          className="text-muted-foreground text-xs font-normal"
+          dateTime={notification.createdAt}
+        >
+          {relativeTime(notification.createdAt)}
+        </time>
       </span>
     </>
   );
@@ -308,9 +302,9 @@ const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
   return (
     <li>
       {target === null ? (
-        <button className={rowClassName} onClick={onRead} type="button">
-          {body}
-        </button>
+        <Button className="block w-full" onClick={onRead} variant="plain">
+          <span className={rowClassName}>{body}</span>
+        </Button>
       ) : (
         <NotificationLink
           className={rowClassName}

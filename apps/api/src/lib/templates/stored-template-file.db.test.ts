@@ -17,10 +17,9 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
-import JSZip from "jszip";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { styleSets, templates, templateVersions } from "@/api/db/schema";
@@ -154,16 +153,14 @@ const expectErr = <T, E>(result: Result<T, E>): E => {
 /** A DOCX whose only relationship links an external Word template, which
  *  the upload scan rejects. */
 const attachedTemplateDocx = async (): Promise<Uint8Array> => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
       "<w:body><w:p><w:r><w:t>{{ client_name }}</w:t></w:r></w:p></w:body></w:document>",
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/_rels/document.xml.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -172,7 +169,7 @@ const attachedTemplateDocx = async (): Promise<Uint8Array> => {
       'Target="https://templates.example/remote.dotm" TargetMode="External"/>' +
       "</Relationships>",
   );
-  return await zip.generateAsync({ type: "uint8array" });
+  return await zip.generate({ compression: "store" });
 };
 
 /** A template and its first version naming one stored file, inserted without

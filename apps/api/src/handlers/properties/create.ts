@@ -18,18 +18,23 @@ import {
 } from "@/api/lib/properties/create-schema";
 import { propertyKindsForTool } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
+import { CREATE_PROPERTY_TABLE_ANALYSIS_ACCESS } from "@/api/lib/properties/table-analysis-access";
 
 const config = {
   contract: "patch",
   description:
     "Add one property (a column) to a matter: its name, value type, and " +
     "either an AI prompt tool, optionally depending on other columns, or a " +
-    "manual-input tool. An AI column is created stale, so its values are " +
+    "manual-input tool. A money column takes manual input unless toolType " +
+    "is ai-model, when the model reads the amount and the currency the " +
+    "source states, falling back to the column's currency. An AI column is " +
+    "created stale, so its values are " +
     "produced by the next run rather than immediately. Refused when the " +
     "matter is at its property limit, when a dependency is not a property of " +
     "this matter, or when the matter already has a document-type classifier " +
     "column.",
   permissions: { property: ["create"] },
+  featureAccess: CREATE_PROPERTY_TABLE_ANALYSIS_ACCESS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: propertyRealtimeUpdates,
   mcp: {

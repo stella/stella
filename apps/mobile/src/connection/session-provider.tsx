@@ -30,6 +30,10 @@ import { revokeRefreshToken } from "@/connection/tokens";
 import { APP_VARIANT, PUSH_NOTIFICATIONS } from "@/env";
 import { deviceAccountStore } from "@/native/account-store";
 import { currentPushDevice } from "@/native/push-device";
+import {
+  forgetTimerActivityDevice,
+  stopTimerActivityUpdates,
+} from "@/native/timer-activity-device";
 import { unregisterPushDevice } from "@/state/push-devices";
 import { forgetRecentSearches } from "@/state/recent-searches";
 
@@ -95,14 +99,15 @@ const revokeSession = async (session: StoredSession) => {
 export const SessionProvider = ({ children }: React.PropsWithChildren) => {
   const restored = use(restoredSource);
   const [state, setState] = useState<SessionState>(() =>
-    restored?.session() === undefined
-      ? { status: "signed-out", ended: false }
-      : { status: "signed-in", source: restored },
+    restored?.session() !== undefined
+      ? { status: "signed-in", source: restored }
+      : { status: "signed-out", ended: false },
   );
   const [boundary] = useState(() => {
     const created = createSessionEndBoundary();
     // What the app keeps on the device for the account goes with its session.
     created.register(forgetRecentSearches(deviceAccountStore));
+    created.register(forgetTimerActivityDevice);
     return created;
   });
   // Several requests can find the same session refused at once; its
@@ -166,6 +171,7 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
         beforeEnd: async (session) => {
           if (state.status === "signed-in") {
             ending.add(state.source);
+            await stopTimerActivityUpdates(state.source);
             await boundary.run("signed-out", session);
             await stopPushNotifications(state.source);
           }
@@ -201,6 +207,7 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       const generation = deviceSessionStore.generation();
       ending.add(source);
       const signOutAfterHandlers = async () => {
+        await stopTimerActivityUpdates(source);
         await boundary.run("ended", session);
         await stopPushNotifications(source);
         setState(

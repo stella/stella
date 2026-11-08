@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { caseLawReadingLanguages } from "@stll/api-contract/case-law-reading-languages";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 
@@ -69,7 +69,8 @@ describe("picking the language version to open", () => {
   });
 
   test("always returns one of the alternates, and the best reading language offered", () => {
-    fc.assert(
+    assertProperty(
+      "always returns one of the alternates, and the best reading language offered",
       fc.property(
         variants,
         languageTag,
@@ -97,7 +98,7 @@ describe("picking the language version to open", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

@@ -5,6 +5,7 @@ export const MCP_CAPABILITY_EXECUTORS = {
   write: "write_capability",
 } as const;
 export const MCP_HTTP_PATH = "/mcp/advanced" as const;
+export const MCP_API_CONTRACT_HEADER = "x-stella-api-contract-version" as const;
 export const MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource/mcp/advanced" as const;
 export const MCP_TOOL_NAME_MAX_LENGTH = 71;

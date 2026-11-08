@@ -60,7 +60,6 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
-import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -147,6 +146,7 @@ import {
   type CreateDocumentDraftPersistence,
   getCreateDocumentDraftPersistence,
 } from "@/components/chat/create-document-draft-runtime";
+import { DockedComposerPending } from "@/components/chat/docked-composer";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
@@ -816,18 +816,6 @@ const hasPersistedActiveDraftChatBinding = ({
     );
   });
 
-const FileChatFallback = () => {
-  const t = useTranslations("common");
-  return (
-    <div
-      className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
-      aria-busy="true"
-    >
-      <Loader label={t("loading")} size="sm" />
-    </div>
-  );
-};
-
 export const FileChatOverlay = ({
   workspaceId,
   chatThreadId,
@@ -857,7 +845,7 @@ export const FileChatOverlay = ({
     }
 
     return (
-      <Suspense fallback={<FileChatFallback />}>
+      <Suspense fallback={<DockedComposerPending surface="chat" />}>
         <ResolvedFileChatOverlay
           activeFile={{ ...activeFile, fileFieldId }}
           draftPersistence={draftPersistence}
@@ -875,7 +863,7 @@ export const FileChatOverlay = ({
   }
 
   return (
-    <Suspense fallback={<FileChatFallback />}>
+    <Suspense fallback={<DockedComposerPending surface="chat" />}>
       <FileChatOverlayInner
         activeExternal={activeExternal}
         activeDraft={activeDraft}
@@ -1655,7 +1643,12 @@ const FileChatOverlayInner = ({
       // minimised it earlier — they're sending a new prompt
       // and want to see the response stream in.
       setPanelOpen(true);
-      await sendMessage(await buildChatRequestMessage({ files, html: prompt }));
+      const message = await buildChatRequestMessage({ files, html: prompt });
+      if (message.isErr()) {
+        notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
+      await sendMessage(message.value);
       return CHAT_SEND_SENT;
     },
   );
@@ -2262,7 +2255,7 @@ const FileChatOverlayInner = ({
             threadId: createChatThreadId(),
             workspaceId,
           };
-    await startNewThreadCommandHandoff({
+    const handoff = await startNewThreadCommandHandoff({
       activeOrganizationId,
       context: {
         ...chatThreadContext,
@@ -2273,6 +2266,10 @@ const FileChatOverlayInner = ({
       queryClient,
       threadRef: newThreadRef,
     });
+    if (handoff.isErr()) {
+      notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+      return CHAT_SEND_KEPT;
+    }
     await commitNewThread(newThreadRef.threadId, pendingReview);
     return CHAT_SEND_SENT;
   };
@@ -2665,7 +2662,6 @@ const FileChatOverlayInner = ({
               }}
               queuedMessages={queuedMessages}
               scrollContainerRef={threadScrollRef}
-              showThinkingIndicator
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
             />
@@ -2700,7 +2696,15 @@ const FileChatOverlayInner = ({
                     ) {
                       return CHAT_SEND_KEPT;
                     }
-                    await sendMessage(await buildChatRequestMessage(draft));
+                    const message = await buildChatRequestMessage(draft);
+                    if (message.isErr()) {
+                      notifyUserError(
+                        message.error,
+                        t("chat.sendErrorMessageEmpty"),
+                      );
+                      return CHAT_SEND_KEPT;
+                    }
+                    await sendMessage(message.value);
                     return CHAT_SEND_SENT;
                   }),
                   "file-chat-overlay.submit",

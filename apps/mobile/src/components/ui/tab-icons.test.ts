@@ -35,7 +35,8 @@ const tabGlyphs = (): Map<string, string> => {
   return new Map(
     [
       ...layout.matchAll(
-        /Trigger name="(\w+)"[^>]*>[\s\S]*?tabIcon\("([\w-]+)"\)/gu,
+        // Props sort alphabetically, so `name` need not come first.
+        /Trigger\b[^>]*?\bname="(\w+)"[^>]*>[\s\S]*?tabIcon\("([\w-]+)"\)/gu,
       ),
     ].map(([, route, glyph]) => [route ?? "", glyph ?? ""]),
   );

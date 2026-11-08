@@ -11,7 +11,7 @@ import {
   test,
 } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 

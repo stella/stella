@@ -3,8 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 
 import * as astValidation from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseUkFclDecision } from "./uk-fcl";
+import { parseUkFclDecision as uncheckedParseUkFclDecision } from "./uk-fcl";
+
+const parseUkFclDecision = guardParser(uncheckedParseUkFclDecision);
 
 const xml = await readFile(
   new URL("__fixtures__/uk-fcl.xml", import.meta.url),

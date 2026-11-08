@@ -8,7 +8,6 @@ import { Button } from "@stll/ui/button";
 import { CheckIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
-import { cn } from "@stll/ui/utils";
 
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import type { Workspace } from "@/lib/workspaces/types";
@@ -73,13 +72,13 @@ export const ClientFilterPopover = ({
           filtered.map((c) => {
             const active = selected.has(c.id);
             return (
-              <button
-                className={cn(
-                  "hover:bg-accent flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-sm",
-                )}
+              <Button
+                aria-pressed={active}
+                className="justify-between"
                 key={c.id}
                 onClick={() => toggle(c.id)}
-                type="button"
+                size="row"
+                variant="ghost"
               >
                 <BidiText as="span" className="truncate">
                   {c.displayName}
@@ -87,7 +86,7 @@ export const ClientFilterPopover = ({
                 {active && (
                   <CheckIcon className="text-primary size-3.5 shrink-0" />
                 )}
-              </button>
+              </Button>
             );
           })
         )}
