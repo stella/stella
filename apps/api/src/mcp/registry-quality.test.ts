@@ -316,6 +316,11 @@ test("every read tool permission declaration stays visible in review", () => {
       },
       {
         "kind": "open-read",
+        "name": "read_guidance",
+        "reason": "public regulator guidance corpus",
+      },
+      {
+        "kind": "open-read",
         "name": "read_provision_history",
         "reason": "public legislation corpus",
       },
@@ -362,6 +367,11 @@ test("every read tool permission declaration stays visible in review", () => {
         "kind": "open-read",
         "name": "search_case_law",
         "reason": "public case-law corpus",
+      },
+      {
+        "kind": "open-read",
+        "name": "search_guidance",
+        "reason": "public regulator guidance corpus",
       },
       {
         "kind": "open-read",

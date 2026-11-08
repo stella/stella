@@ -193,6 +193,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // A reader's highlights and comments: personal knowledge, like clauses.
   "legal-reader": "stella:knowledge_write",
   legislation: "stella:read",
+  "soft-law": "stella:read",
   lists: "stella:matters_write",
   // Assistant memory is replayed into future chat prompts, so it shares the
   // assistant's own consent rather than a workspace write.
@@ -465,6 +466,7 @@ const DOMAIN_FEATURE: Record<string, string> = {
   invoices: "FEATURE_TIME_BILLING",
   "client-invoices": "FEATURE_TIME_BILLING",
   legislation: "FEATURE_PUBLIC_LAW",
+  "soft-law": "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
   memories: "FEATURE_AI_MEMORY",
   "number-series": "FEATURE_TIME_BILLING",

@@ -80,7 +80,7 @@ Destructive tools refuse to run unless you pass \`confirm: true\`, and you must 
  */
 const lawTools = (publicLawEnabled: boolean): string =>
   publicLawEnabled
-    ? "Corpus: search, then fetch ids (`decision:<uuid>`, `statute:<eli>`). Case law: search_case_law, resolve_case_law_decision, read_case_law_decision, read_case_law_citations, open_case_law_decision for the user; case_law_coverage before declaring a decision absent. Legislation: resolve_law_citation for a provision, search_legislation, read_statute, read_statute_provisions, read_provision_history."
+    ? "Corpus: search, then fetch ids (`decision:<uuid>`, `statute:<eli>`). Case law: search_case_law, resolve_case_law_decision, read_case_law_decision, read_case_law_citations, open_case_law_decision for the user; case_law_coverage before declaring a decision absent. Legislation: resolve_law_citation for a provision, search_legislation, read_statute, read_statute_provisions, read_provision_history. Regulator guidance (not case law): search_guidance, read_guidance; keep its attribution with what you show."
     : "The public legal corpus is not enabled on this deployment, so this surface lists no tools.";
 
 const lawInstructions = (

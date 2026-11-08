@@ -567,6 +567,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `skills.update` | write | stella:skills | — | generic invoke → `stella capability skills update` |
 | `skills.upload` | write | stella:skills | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. Use uploads.create then uploads.update instead: presign with purpose agent_skill, PUT the skill pack to the returned URL, then finalize |
 
+## soft-law
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `soft-law.get` | read | stella:read | FEATURE_PUBLIC_LAW | curated tool `read_guidance` |
+| `soft-law.search` | read | stella:read | FEATURE_PUBLIC_LAW | curated tool `search_guidance` |
+
 ## style-sets
 
 | Capability | Access | Scope | Feature | Reachable via |

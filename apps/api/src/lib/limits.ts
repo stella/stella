@@ -280,6 +280,10 @@ export const LIMITS = {
   mcpPageSizeMin: 1,
   /** Shortest value a required MCP text or list input takes: not empty. */
   mcpNonEmptyMin: 1,
+  softLawAuthorityMaxLength: 64,
+  softLawJurisdictionMinLength: 2,
+  softLawJurisdictionMaxLength: 3,
+  isoDateLength: 10,
   /** Characters of a language code an MCP filter takes (`cs`, `pt-BR`). */
   mcpLanguageCodeMaxChars: 8,
   /** Characters of an ISO calendar date an MCP filter takes (YYYY-MM-DD). */
