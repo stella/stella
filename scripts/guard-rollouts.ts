@@ -26,16 +26,18 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const FIXTURE_ROOT = path.join(ROOT, ".oxlint-plugins", "__fixtures__");
 const lineCache = new Map<string, ReadonlySet<number>>();
 let mergeBase: string | undefined;
+const gitMergeBase = (root: string) =>
+  execFileSync("git", ["merge-base", "origin/main", "HEAD"], {
+    cwd: root,
+    encoding: "utf-8",
+    maxBuffer: 2 ** 30,
+  }).trim();
 const changedLinesFor = (file: string): ReadonlySet<number> => {
   const cached = lineCache.get(file);
   if (cached !== undefined) {
     return cached;
   }
-  mergeBase ??= execFileSync("git", ["merge-base", "origin/main", "HEAD"], {
-    cwd: ROOT,
-    encoding: "utf-8",
-    maxBuffer: 2 ** 30,
-  }).trim();
+  mergeBase ??= gitMergeBase(ROOT);
   const tracked = execFileSync("git", ["ls-files", "--", file], {
     cwd: ROOT,
     encoding: "utf-8",
@@ -70,6 +72,43 @@ type GuardLineOptions = {
 // A passing deadline does not widen the scope: that would fail changes that
 // never touched the guarded line. scripts/dated-waivers.ts owns the deadline,
 // and healing restores `type: "full"` once the full check passes.
+/**
+ * Changed lines of many tracked files from one diff against the merge base.
+ * A caller that asks about thousands of files would otherwise start two Git
+ * processes per file. Renames are not followed, so a moved file counts as
+ * wholly added, as a diff of that path alone reports it.
+ */
+export const changedLinesForTrackedFiles = (
+  files: readonly string[],
+  root = ROOT,
+): ReadonlyMap<string, ReadonlySet<number>> => {
+  const base =
+    root === ROOT ? (mergeBase ??= gitMergeBase(root)) : gitMergeBase(root);
+  const diff = execFileSync(
+    "git",
+    [
+      "-c",
+      "core.quotePath=false",
+      "diff",
+      "--no-ext-diff",
+      "--no-renames",
+      "--unified=0",
+      base,
+    ],
+    { cwd: root, encoding: "utf-8", maxBuffer: 2 ** 30 },
+  );
+  const byFile = new Map<string, ReadonlySet<number>>();
+  for (const section of diff.split(/^diff --git /mu).slice(1)) {
+    const target = /^\+\+\+ b\/(.+?)\t?$/mu.exec(section)?.[1];
+    if (target !== undefined) {
+      byFile.set(target, changedLineNumbers(section));
+    }
+  }
+  return new Map(
+    files.map((file) => [file, byFile.get(file) ?? new Set<number>()]),
+  );
+};
+
 export const guardEnforcesLine = ({
   guard,
   rollouts = GUARD_ROLLOUTS,

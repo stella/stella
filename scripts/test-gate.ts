@@ -24,7 +24,10 @@ import {
   evaluate,
   type OutputAliasDefinition,
 } from "./github-expression";
-import { guardEnforcesLine } from "./guard-rollouts";
+import {
+  changedLinesForTrackedFiles,
+  guardEnforcesLine,
+} from "./guard-rollouts";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { unlistedTests } from "./run-unlisted-script-tests";
 import {
@@ -6555,8 +6558,10 @@ const run = (): void => {
   )) {
     errors.push(`scenario ledger is shrink-only: added ${file}`);
   }
+  // One diff for every test file; a diff per file costs minutes.
+  const changedLines = changedLinesForTrackedFiles(files);
   const enforcesLine = (file: string, line: number) =>
-    guardEnforcesLine({ guard: "test-gate", file, line });
+    guardEnforcesLine({ guard: "test-gate", file, line, changedLines });
   const enforcedFiles = new Set(
     files.filter((file) =>
       readFileSync(path.join(ROOT, file), "utf-8")
