@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { PACKAGE_CACHE_FOLDERS } from "../src/harness/package-cache";
@@ -34,6 +35,13 @@ type FakeStep =
   | { awaitResponse: true }
   /** Survive SIGTERM, as a server that ignores it would. */
   | { ignoreTerm: true }
+  /**
+   * Start a long-lived process, as an agent's command does, and log its pid.
+   * `in: "own_group"` starts it in a process group of its own, as Codex runs
+   * commands; `in: "orphan"` starts it in the background of a shell that
+   * exits at once, as `command &` does.
+   */
+  | { spawn: readonly string[]; in?: "own_group" | "orphan" }
   | { raw: string }
   | { sleep: number }
   | { exit: number };
@@ -205,6 +213,30 @@ const commandApproval = (reason: string | null): FakeStep[] => [
   completed(),
 ];
 
+/** The context window the fake reports, as Codex does with its token usage. */
+export const FAKE_CONTEXT_WINDOW = 258_400;
+
+/** One request's counts as Codex reports them, totals included. */
+const usageBreakdown = (counts: {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+}) => ({
+  ...counts,
+  totalTokens: counts.inputTokens + counts.outputTokens,
+  cacheWriteInputTokens: 0,
+});
+
+const tokenUsage = (usage: {
+  last: object;
+  total: object;
+  modelContextWindow: number | null;
+}): FakeStep => ({
+  notify: "thread/tokenUsage/updated",
+  params: { threadId: FAKE_THREAD_ID, turnId: FAKE_TURN_ID, tokenUsage: usage },
+});
+
 const FAKE_SCENARIOS = {
   /**
    * The shared stella tool calls through the stella MCP binding, step by
@@ -323,6 +355,22 @@ const FAKE_SCENARIOS = {
         exitCode: 0,
       }),
     ),
+    // The turn's first model request; the answer below is its second.
+    tokenUsage({
+      last: usageBreakdown({
+        inputTokens: 50,
+        cachedInputTokens: 0,
+        outputTokens: 10,
+        reasoningOutputTokens: 0,
+      }),
+      total: usageBreakdown({
+        inputTokens: 50,
+        cachedInputTokens: 0,
+        outputTokens: 10,
+        reasoningOutputTokens: 0,
+      }),
+      modelContextWindow: FAKE_CONTEXT_WINDOW,
+    }),
     {
       notify: "item/agentMessage/delta",
       params: {
@@ -333,23 +381,21 @@ const FAKE_SCENARIOS = {
       },
     },
     item("completed", agentMessage("m-1", "Found two leases.")),
-    {
-      notify: "thread/tokenUsage/updated",
-      params: {
-        threadId: FAKE_THREAD_ID,
-        turnId: FAKE_TURN_ID,
-        tokenUsage: {
-          last: {
-            totalTokens: 150,
-            inputTokens: 120,
-            cachedInputTokens: 20,
-            cacheWriteInputTokens: 0,
-            outputTokens: 30,
-            reasoningOutputTokens: 5,
-          },
-        },
-      },
-    },
+    tokenUsage({
+      last: usageBreakdown({
+        inputTokens: 120,
+        cachedInputTokens: 20,
+        outputTokens: 30,
+        reasoningOutputTokens: 5,
+      }),
+      total: usageBreakdown({
+        inputTokens: 170,
+        cachedInputTokens: 20,
+        outputTokens: 40,
+        reasoningOutputTokens: 5,
+      }),
+      modelContextWindow: FAKE_CONTEXT_WINDOW,
+    }),
     completed(),
   ],
   approval: commandApproval("Deletes a file"),
@@ -444,6 +490,18 @@ const FAKE_SCENARIOS = {
     { ignoreTerm: true },
     { notify: "fake/ready", params: {} },
     { sleep: 60_000 },
+  ],
+  /**
+   * Leaves processes running the ways an agent's commands do, says when they
+   * are up, and waits for its client.
+   */
+  leaves_processes: [
+    { spawn: ["/bin/sleep", "600"] },
+    { spawn: ["/bin/sleep", "600"], in: "own_group" },
+    { spawn: ["/bin/sleep", "600"], in: "orphan" },
+    // Signals a process ignores stay ignored across exec.
+    { spawn: ["/bin/sh", "-c", "trap '' TERM; exec /bin/sleep 600"] },
+    { notify: "fake/ready", params: {} },
   ],
   async_question: [
     ...freshTurn(),
@@ -723,6 +781,45 @@ const IncomingSchema = v.looseObject({
   method: v.optional(v.string()),
 });
 
+/** Start `argv` the way `placement` says; its pid. */
+const spawnLongLived = async (
+  argv: readonly string[],
+  placement: "own_group" | "orphan" | undefined,
+) => {
+  const quiet = {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  } as const;
+  switch (placement) {
+    case undefined:
+      return Bun.spawn([...argv], quiet).pid;
+    case "own_group":
+      return Bun.spawn(
+        ["perl", "-e", "setpgrp(0, 0); exec @ARGV", ...argv],
+        quiet,
+      ).pid;
+    case "orphan": {
+      const shell = Bun.spawn(
+        [
+          "/bin/sh",
+          "-c",
+          '"$@" </dev/null >/dev/null 2>&1 & echo "$!"',
+          "orphan",
+          ...argv,
+        ],
+        { stdin: "ignore", stdout: "pipe", stderr: "ignore" },
+      );
+      const pid = Number((await new Response(shell.stdout).text()).trim());
+      await shell.exited;
+      return pid;
+    }
+    default:
+      placement satisfies never;
+      return panic("Unknown spawn placement");
+  }
+};
+
 const run = async (
   steps: readonly FakeStep[],
   log: (entry: object) => void,
@@ -775,6 +872,8 @@ const run = async (
       process.on("SIGTERM", () => {
         log({ ignored: "SIGTERM" });
       });
+    } else if ("spawn" in step) {
+      log({ spawned: await spawnLongLived(step.spawn, step.in) });
     } else if ("raw" in step) {
       process.stdout.write(`${step.raw}\n`);
     } else if ("sleep" in step) {

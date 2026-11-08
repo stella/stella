@@ -242,7 +242,6 @@
     "headnote": "Headnote",
     "textUnavailable": "No text is available for this decision",
     "openSource": "Open original source",
-    "openFailed": "The link could not be opened.",
     "loadFailed": "Case law could not be loaded.",
     "share": "Share"
   },
@@ -346,5 +345,11 @@
   "pane": {
     "showList": "Show the list",
     "hideList": "Hide the list"
+  },
+  "link": {
+    "open": "Open",
+    "share": "Share",
+    "cancel": "Cancel",
+    "openFailed": "The link could not be opened."
   }
 }

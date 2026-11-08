@@ -362,7 +362,9 @@ impl ClaudeCodeAuth {
     // A cancel during this read stops its CLI too, so the attempt lets go
     // of the sign-in at once.
     let stop = async {
-      let _ = (&mut cancelled).await;
+      if (&mut cancelled).await.is_err() {
+        tracing::debug!("Claude Code sign-in lost its cancel handle");
+      }
     };
     AttemptEnd::Settled(match self.read_sign_in(&launch, stop).await {
       Err(Stopped) => return AttemptEnd::Cancelled,

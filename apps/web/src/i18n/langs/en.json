@@ -152,6 +152,7 @@
     "emailPlaceholder": "you@example.com",
     "error": {
       "generic": "Something went wrong while signing you in. Please try again.",
+      "providerUnavailable": "The sign-in provider isn't responding right now. Please try again in a minute.",
       "title": "We couldn't sign you in"
     },
     "handoffAccount": "Continue as <account>{email}</account> in <organization>{organizationName}</organization>?",
@@ -635,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Hourly rate cannot be negative",
     "hours": "Hours",
+    "invalidNumberFormat": "Check the number format",
     "invoiceComposer": {
       "addSellerProfile": "Add a seller profile in billing settings",
       "billedHours": "Billed hours",
@@ -1583,6 +1585,8 @@
       "full": "{percent}% full",
       "instructions": "System instructions",
       "percent": "{percent}%",
+      "reported": "As the coding agent on your computer reported it after its latest answer. The agent manages its own context.",
+      "reportedTokens": "{used} / {total} tokens",
       "summary": "Summary of older messages",
       "summaryWithCount": "Summary of {count} older messages",
       "title": "Conversation context",
@@ -1686,6 +1690,7 @@
     "localRun": {
       "cloud": "stella cloud",
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
+      "errorLimitResetsAt": "The coding agent on your computer reached its usage limit. You can try again after {time}.",
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
       "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
       "filesNotShared": "Files that could not be shared stay on your computer: {fileNames}",

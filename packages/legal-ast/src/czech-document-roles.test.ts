@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CZ_TAKTO_TAIL_RE,
+  isCzechBareSignatoryName,
   isCzechOpeningFormula,
+  isCzechReasonsHeading,
+  isCzechSignatureLine,
   isCzechTaktoLine,
   normalizeCzechJudgeName,
   withInferredCzechSignatureRoles,
@@ -46,6 +49,57 @@ describe("Czech legal-document signatures", () => {
       expect(block.type === "paragraph" ? block.role : null).toBe("signature");
     }
   });
+});
+
+describe("the office a Czech judge signs under", () => {
+  test.each([
+    "předseda senátu",
+    "předsedkyně senátu:",
+    "místopředseda senátu",
+    "předseda rozšířeného senátu",
+    "člen rozšířeného senátu",
+    "členka rozšířeného senátu",
+    "předseda velkého senátu",
+    "předseda Ústavního soudu",
+    "předsedkyně Nejvyššího správního soudu",
+    "JUDr. Jan Novák v. r.",
+  ])("%j signs", (text) => {
+    expect(isCzechSignatureLine(text)).toBe(true);
+  });
+
+  test.each([
+    // Declined forms belong to running text, never to a signature.
+    "rozhodl v senátě složeném z předsedy rozšířeného senátu",
+    "předsedy Ústavního soudu",
+    "člena rozšířeného senátu",
+    "Ve vyjádření k ústavní stížnosti, které podal jako účastník řízení Krajský soud v Brně a které podepsal předseda senátu, se uvádí",
+    "předseda Krajského soudu",
+  ])("%j does not sign", (text) => {
+    expect(isCzechSignatureLine(text)).toBe(false);
+  });
+
+  test("a bare name signs only as a name", () => {
+    expect(isCzechBareSignatoryName("Josef Baxa")).toBe(true);
+    expect(isCzechBareSignatoryName("Petra Svobodová-Dvořáková")).toBe(true);
+    expect(isCzechBareSignatoryName("Josef")).toBe(false);
+    expect(isCzechBareSignatoryName("Kasační stížnost se zamítá.")).toBe(false);
+  });
+});
+
+describe("the Czech reasons heading", () => {
+  test.each(["Odůvodnění:", "ODŮVODNĚNÍ", "O d ů v o d n ě n í :"])(
+    "%j opens the reasons",
+    (text) => {
+      expect(isCzechReasonsHeading(text)).toBe(true);
+    },
+  );
+
+  test.each(["V odůvodnění rozsudku", "Odůvodnění rozhodnutí je stručné."])(
+    "%j does not",
+    (text) => {
+      expect(isCzechReasonsHeading(text)).toBe(false);
+    },
+  );
 });
 
 describe("opening formula and lead-in", () => {

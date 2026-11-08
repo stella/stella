@@ -301,34 +301,32 @@ const connect = async ({
     initialized: false,
     refusal: null,
   };
-  const started = Result.try(() =>
-    startClaudeCli({
-      launch: options.launch,
-      args,
-      detached: createDetached(options.onBackgroundError),
-      deadlines: {
-        requestMs: options.requestTimeoutMs,
-        terminateMs: options.gracePeriodMs,
+  const started = startClaudeCli({
+    launch: options.launch,
+    args,
+    detached: createDetached(options.onBackgroundError),
+    deadlines: {
+      requestMs: options.requestTimeoutMs,
+      terminateMs: options.gracePeriodMs,
+    },
+    cwd,
+    env: childEnvironment(options, environment),
+    handlers: {
+      ...handlers,
+      message: (type, raw) => {
+        if (!startup.initialized && type === "result") {
+          const errors = v.safeParse(
+            v.object({ errors: v.array(v.string()) }),
+            raw,
+          );
+          startup.refusal = errors.success
+            ? errors.output.errors.join("\n")
+            : "The harness could not start the session.";
+        }
+        handlers.message(type, raw);
       },
-      cwd,
-      env: childEnvironment(options, environment),
-      handlers: {
-        ...handlers,
-        message: (type, raw) => {
-          if (!startup.initialized && type === "result") {
-            const errors = v.safeParse(
-              v.object({ errors: v.array(v.string()) }),
-              raw,
-            );
-            startup.refusal = errors.success
-              ? errors.output.errors.join("\n")
-              : "The harness could not start the session.";
-          }
-          handlers.message(type, raw);
-        },
-      },
-    }),
-  );
+    },
+  });
   if (Result.isError(started)) {
     return Result.err({
       reason: "harness_unavailable",

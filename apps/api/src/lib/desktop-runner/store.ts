@@ -10,6 +10,7 @@ import {
   isNull,
   lt,
   max,
+  notExists,
   or,
   type SQL,
   sql,
@@ -28,6 +29,8 @@ import {
 
 import type { RootDatabase, Transaction } from "@/api/db/root";
 import {
+  chatMessageRevisions,
+  chatMessages,
   chatThreads,
   chatTurns,
   desktopRunnerCommands,
@@ -1748,37 +1751,94 @@ export const readMemberRunners = async (
 
 type ChatRunSessionOptions = {
   owner: RunOwner;
-  chatThreadId: SafeId<"chatThread">;
+  /** The thread and the turn about to start on the computer. */
+  chat: ChatRunBinding;
   desktopId: string;
   harness: AgentHarness;
 };
 
 /**
- * The harness session the thread's newest finished run on this computer and
- * harness left behind, for the next turn to resume; `null` when none did.
+ * The harness session turn `chat.turnId` resumes on this computer and
+ * harness, or `null` when the turn starts a fresh one and hands the harness
+ * the chat's own history.
+ *
+ * A session holds every turn the runs that continued it were given and
+ * answered, so it is resumed only while the chat still holds exactly those:
+ * the newest run of the thread on this computer and harness left it, and its
+ * turn's answer is still the message right before the one this turn answers.
+ * An edit or a regeneration deletes that answer and every later message, and
+ * an answer from the cloud or from another computer or harness takes its
+ * place, so any of them starts fresh; a revision of any message of the thread
+ * since that run's turn began does too, because the session holds the text
+ * it replaced (no revision is accepted while a turn runs). A fork is another
+ * thread and holds no run, so it starts fresh.
  */
 export const readChatRunSession = async (
   db: Pick<DesktopRunnerDb, "select">,
-  { owner, chatThreadId, desktopId, harness }: ChatRunSessionOptions,
-): Promise<string | null> =>
-  (
-    await db
-      .select({ harnessSessionId: runs.harnessSessionId })
-      .from(runs)
-      .where(
-        and(
-          eq(runs.chatThreadId, chatThreadId),
-          eq(runs.desktopId, desktopId),
-          eq(runs.harness, harness),
-          eq(runs.userId, owner.userId),
-          eq(runs.organizationId, owner.organizationId),
-          eq(runs.state, "finished"),
-          isNotNull(runs.harnessSessionId),
+  { owner, chat, desktopId, harness }: ChatRunSessionOptions,
+): Promise<string | null> => {
+  // The run that last wrote the session: a later one resumed it or replaced
+  // it, whatever state it ended in.
+  const newest = db
+    .select({
+      state: runs.state,
+      harnessSessionId: runs.harnessSessionId,
+      chatTurnId: runs.chatTurnId,
+    })
+    .from(runs)
+    .where(
+      and(
+        eq(runs.chatThreadId, chat.threadId),
+        eq(runs.desktopId, desktopId),
+        eq(runs.harness, harness),
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+      ),
+    )
+    .orderBy(desc(runs.createdAt), desc(runs.runId))
+    .limit(1)
+    .as("newest_run");
+  // The message right before the one this turn answers, in the thread's
+  // order: the answer this turn continues. The boundary is the asking
+  // message's own row, read in the database by id.
+  const continued = db
+    .select({ id: chatMessages.id })
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.threadId, chat.threadId),
+        sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (select m.created_at, m.id from chat_messages m join chat_turns t on t.user_message_id = m.id and t.thread_id = m.thread_id where t.id = ${chat.turnId} and t.thread_id = ${chat.threadId})`,
+      ),
+    )
+    .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+    .limit(1);
+  const rows = await db
+    .select({ harnessSessionId: newest.harnessSessionId })
+    .from(newest)
+    .innerJoin(chatTurns, eq(chatTurns.id, newest.chatTurnId))
+    .where(
+      and(
+        eq(newest.state, "finished"),
+        isNotNull(newest.harnessSessionId),
+        eq(chatTurns.threadId, chat.threadId),
+        eq(chatTurns.assistantMessageId, sql`(${continued})`),
+        // Both times are the database's own: the turn's start, read by id.
+        notExists(
+          db
+            .select({ id: chatMessageRevisions.id })
+            .from(chatMessageRevisions)
+            .where(
+              and(
+                eq(chatMessageRevisions.threadId, chat.threadId),
+                sql`${chatMessageRevisions.createdAt} >= (select t.created_at from chat_turns t where t.id = ${newest.chatTurnId})`,
+              ),
+            ),
         ),
-      )
-      .orderBy(desc(runs.updatedAt))
-      .limit(1)
-  ).at(0)?.harnessSessionId ?? null;
+      ),
+    )
+    .limit(1);
+  return rows.at(0)?.harnessSessionId ?? null;
+};
 
 type ChatRunForRequestOptions = {
   owner: RunOwner;

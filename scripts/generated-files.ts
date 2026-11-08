@@ -1025,7 +1025,7 @@ const GENERATOR_DECLARATIONS = [
       "oxlint.config.ts",
       "oxlint.tailwind.config.ts",
       "scripts/generate-tailwind-classes.ts",
-      "patches/oxlint-tailwindcss@1.16.0.patch",
+      "patches/oxlint-tailwindcss@*.patch",
       "package.json",
       "bun.lock",
     ],

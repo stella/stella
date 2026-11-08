@@ -2143,9 +2143,10 @@
           "heading": 21,
           "paragraph-intro": 3,
           "paragraph-holding": 2,
-          "paragraph": 94,
+          "paragraph": 92,
           "paragraph-closing": 3,
-          "paragraph-dissent": 47
+          "paragraph-signature": 6,
+          "paragraph-dissent": 43
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2175,9 +2176,10 @@
           "heading": 21,
           "paragraph-intro": 3,
           "paragraph-holding": 2,
-          "paragraph": 93,
+          "paragraph": 91,
           "paragraph-closing": 3,
-          "paragraph-dissent": 47
+          "paragraph-signature": 6,
+          "paragraph-dissent": 43
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2213,9 +2215,10 @@
           "heading": 21,
           "paragraph-intro": 3,
           "paragraph-holding": 2,
-          "paragraph": 95,
+          "paragraph": 93,
           "paragraph-closing": 3,
-          "paragraph-dissent": 47
+          "paragraph-signature": 6,
+          "paragraph-dissent": 43
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2245,9 +2248,10 @@
           "heading": 21,
           "paragraph-intro": 3,
           "paragraph-holding": 2,
-          "paragraph": 94,
+          "paragraph": 92,
           "paragraph-closing": 3,
-          "paragraph-dissent": 47
+          "paragraph-signature": 6,
+          "paragraph-dissent": 43
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2277,9 +2281,10 @@
           "heading": 21,
           "paragraph-intro": 3,
           "paragraph-holding": 2,
-          "paragraph": 94,
+          "paragraph": 92,
           "paragraph-closing": 3,
-          "paragraph-dissent": 47
+          "paragraph-signature": 6,
+          "paragraph-dissent": 43
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2309,9 +2314,10 @@
           "heading": 21,
           "paragraph-intro": 3,
           "paragraph-holding": 2,
-          "paragraph": 93,
+          "paragraph": 91,
           "paragraph-closing": 3,
-          "paragraph-dissent": 47
+          "paragraph-signature": 6,
+          "paragraph-dissent": 43
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -3878,8 +3884,9 @@
           "heading": 16,
           "paragraph-intro": 1,
           "paragraph-holding": 3,
-          "paragraph": 78,
+          "paragraph": 76,
           "paragraph-closing": 7,
+          "paragraph-signature": 2,
           "paragraph-dissent": 73
         },
         "tinyBlocks": 0,
@@ -3923,8 +3930,9 @@
           "heading": 16,
           "paragraph-intro": 1,
           "paragraph-holding": 3,
-          "paragraph": 78,
+          "paragraph": 76,
           "paragraph-closing": 7,
+          "paragraph-signature": 2,
           "paragraph-dissent": 72
         },
         "tinyBlocks": 0,
@@ -3961,8 +3969,9 @@
           "heading": 16,
           "paragraph-intro": 1,
           "paragraph-holding": 3,
-          "paragraph": 78,
+          "paragraph": 76,
           "paragraph-closing": 7,
+          "paragraph-signature": 2,
           "paragraph-dissent": 74
         },
         "tinyBlocks": 0,
@@ -3993,8 +4002,9 @@
           "heading": 16,
           "paragraph-intro": 1,
           "paragraph-holding": 3,
-          "paragraph": 78,
+          "paragraph": 76,
           "paragraph-closing": 7,
+          "paragraph-signature": 2,
           "paragraph-dissent": 73
         },
         "tinyBlocks": 0,
@@ -4025,8 +4035,9 @@
           "heading": 16,
           "paragraph-intro": 1,
           "paragraph-holding": 3,
-          "paragraph": 78,
+          "paragraph": 76,
           "paragraph-closing": 7,
+          "paragraph-signature": 2,
           "paragraph-dissent": 73
         },
         "tinyBlocks": 0,
