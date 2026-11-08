@@ -27,6 +27,8 @@ import {
 const PURE_AUTOFIX = {
   // Converts the static manifest schema and shared version policy; no DB imports.
   "data-export-schema": "apps/api/scripts/generate-data-export-schema.ts",
+  // Emits export lines from committed entry filenames; values stay in their owners.
+  "online-migration-entries": "scripts/generate-online-migration-entries.ts",
   "db-registry-entries": "scripts/db-registry-entries.ts",
   // Reads canonical source-entry JSON; Git staging never changes the literal maps.
   "parser-registry": "scripts/generate-parser-registry.ts",
@@ -34,12 +36,9 @@ const PURE_AUTOFIX = {
     "apps/web/scripts/sync-withdrawn-decision-labels.ts",
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and
   // contents use content hashes and never consult the network, clock, or env.
-  "tailwind-class-cache": "scripts/generate-tailwind-classes.ts",
   // Toolchain pins are read from committed manifests; temporary git state
   // merely exposes those files to the pinned cloud-setup renderer.
   "cloud-setup": "scripts/generate-cloud-setup.ts",
-  // Lists the committed rollout file names; never imports or runs them.
-  "guard-rollout-manifest": "scripts/generate-guard-rollouts.ts",
   // Parses the install tooling import closure and replaces one Docker block.
   "api-image-install-tooling": "scripts/docker-source-closure.ts",
   // Serializes package.json's packageManager pin.
@@ -118,6 +117,8 @@ const EXCLUDED_AUTOFIX = {
     "Device descriptors are refreshed explicitly from the installed SDK",
   "ci-job-classification-digests":
     "Protected workflow metadata is refreshed outside pull-request autofix",
+  "merge-group-parser":
+    "Workflow script blocks are refreshed outside pull-request autofix",
   "failure-tags": "Generated census is excluded by the current owner policy",
   "migration-lock-baseline": "Migration lock decisions require human review",
   "model-catalog-inputs": "Fetches upstream model catalogs",
@@ -140,6 +141,8 @@ const EXCLUDED_AUTOFIX = {
   "chat-transcripts": "Runs service-backed chat recording suites",
   "case-law-publication-migration":
     "Migration SQL requires review rather than automatic rewriting",
+  "package-api-reports":
+    "API changes require explicit review and release intent",
 } as const;
 
 test("every committed generator has an explicit autofix purity decision", () => {

@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "CZ_UOHS",
   "key": "cz-uohs",
-  "parserVersion": 7,
+  "parserVersion": 13,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."
+    "reason": "Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. Re-read the body and footnotes from stored PDF bytes through the shared PDF band reader: running headers, barcodes and page numbers leave the body by their shape, footnotes are read off each page's foot with their raised references as linked superscripts, and printed lines join into paragraphs across page breaks; the AST has no separate feature storage. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own. Re-derive the file number with its year from the export record (older rows state only the serial), the issue date from the reference-number letterhead line, and the decision type from the printed title, typing its absence when none is printed; the identifiers and the case number have no separate feature storage. Roles are recomputed from stored PDF bytes through the shared Czech grammar of an authority's decision: the head matter up to the lead-in (rozhodl takto:, ROZHODNUTÍ:) is intro, the operative part after it is holding, the reasons from their heading carry no ruling role, the document barcode is apparatus and the head of the Office signs under its office; the title, the reasons and instruction headings and the reasons' Roman section titles are headings. Roles and headings have no feature storage of their own."
   }
 }

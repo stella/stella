@@ -1,3 +1,5 @@
+import { STELLA_API_VERSION_PREFIX } from "./api-version";
+
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
 
@@ -127,6 +129,7 @@ export {
   CHAT_TURN_INTENT,
   REQUEST_ID_HEADER,
 } from "./chat";
+export type { ChatTurnIntent } from "./chat";
 export {
   CLAUSE_WARNINGS_HEADER,
   UNDECIDED_CONDITIONS_HEADER,
@@ -223,6 +226,7 @@ export type {
   ChatSourceCitationTarget,
 } from "./chat-source-citations";
 export {
+  CONTACT_BULK_DELETE_LIMIT,
   CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
   CONTACT_IMPORT_FIELDS,
   CONTACT_IMPORT_IGNORE_DESTINATION,
@@ -360,9 +364,13 @@ export {
   IDEMPOTENCY_KEY_REUSED_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_INPUT_REFUSAL_CODE,
+  CHAT_MESSAGE_EDIT_ERROR_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
   FILE_SECURITY_REMEDIATION,
   MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
@@ -370,6 +378,7 @@ export {
   parseApiValidationIssues,
 } from "./error";
 export type {
+  ChatInputRefusalCode,
   ApiErrorInput,
   ApiErrorObjectValue,
   ApiErrorValue,
@@ -379,6 +388,7 @@ export type {
   ApiValidationConstraint,
   ApiValidationErrorValue,
   ApiValidationIssue,
+  ChatMessageEditErrorCode,
   FileSecurityRemediation,
   NormalizedApiError,
 } from "./error";
@@ -480,7 +490,10 @@ export type {
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
 export {
+  chatRunsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
+  RESOURCE_MUTATION_ID_HEADER,
+  parseResourceMutationId,
   newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
@@ -596,8 +609,7 @@ export type {
   ChatMentionResourceLinkTarget,
 } from "./resource-link";
 
-/** Path prefix shared by the REST router and direct-fetch clients. */
-export const STELLA_API_VERSION_PREFIX = "/v1" as const;
+export { STELLA_API_VERSION_PREFIX } from "./api-version";
 export const MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES = 1024 * 1024;
 export const EMAIL_TEXT_ATTACHMENT_CHARSET = {
   big5: "big5",

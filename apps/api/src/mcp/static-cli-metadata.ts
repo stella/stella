@@ -35,6 +35,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       excluded: true,
       scope: "read",
     },
+    list_case_law_courts: {
+      command: ["case-law", "courts"],
+      excluded: true,
+      scope: "read",
+    },
     search: { command: ["search"], excluded: true, scope: "search" },
     fetch: { command: ["fetch"], excluded: true, scope: "read" },
 
@@ -294,7 +299,6 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["template", "list"],
       scope: "templates",
       itemsKey: "templates",
-      paginationless: true,
       singleReadWhen: "template_id",
     },
     fill_template: { command: ["template", "fill"], scope: "templates" },
@@ -442,6 +446,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     remove_matter_member: {
       command: ["matter", "remove-member"],
       scope: "admin_write",
+    },
+    create_organization: {
+      confirmPassthrough: true,
+      command: ["organization", "create"],
+      scope: "organization_create",
     },
     update_organization_settings: {
       command: ["organization", "update-settings"],

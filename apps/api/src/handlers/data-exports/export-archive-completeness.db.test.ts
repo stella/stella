@@ -14,13 +14,13 @@ import {
 import type { SQL } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { PgColumn } from "drizzle-orm/pg-core";
-import JSZip from "jszip";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { Transaction } from "@/api/db/root";
 import * as schema from "@/api/db/schema";
@@ -145,6 +145,8 @@ const TABLE_CLASSIFICATIONS = {
   bilingualTranslationRuns: FORMAT_SCOPE_EXCLUSION,
   billingArrangements: FORMAT_SCOPE_EXCLUSION,
   billingCodes: FORMAT_SCOPE_EXCLUSION,
+  billingDraftUserSettings: FORMAT_SCOPE_EXCLUSION,
+  billingGuidelineFiles: FORMAT_SCOPE_EXCLUSION,
   bufferObjectCleanupIntents: FORMAT_SCOPE_EXCLUSION,
   businessRegistryCredentials: FORMAT_SCOPE_EXCLUSION,
   caseLawAnalysisFailures: RESEARCH_CORPUS_EXCLUSION,
@@ -181,6 +183,10 @@ const TABLE_CLASSIFICATIONS = {
   caseLawJudges: RESEARCH_CORPUS_EXCLUSION,
   caseLawMatterLinks: RESEARCH_CORPUS_EXCLUSION,
   caseLawPolarityRules: RESEARCH_CORPUS_EXCLUSION,
+  caseLawPopulationCounts: RESEARCH_CORPUS_EXCLUSION,
+  caseLawPopulationDeltas: RESEARCH_CORPUS_EXCLUSION,
+  caseLawPopulationProjections: RESEARCH_CORPUS_EXCLUSION,
+  caseLawPopulationSeedState: RESEARCH_CORPUS_EXCLUSION,
   caseLawProvisionAdmission: RESEARCH_CORPUS_EXCLUSION,
   caseLawProvisionCitations: RESEARCH_CORPUS_EXCLUSION,
   caseLawProvisionExtractionRevisions: RESEARCH_CORPUS_EXCLUSION,
@@ -189,6 +195,7 @@ const TABLE_CLASSIFICATIONS = {
   caseLawProvisionExtractions: RESEARCH_CORPUS_EXCLUSION,
   caseLawProvisionRepairCursors: RESEARCH_CORPUS_EXCLUSION,
   caseLawProvisionScopeTransitions: RESEARCH_CORPUS_EXCLUSION,
+  caseLawRankingSignalChanges: RESEARCH_CORPUS_EXCLUSION,
   caseLawRawSweeps: RESEARCH_CORPUS_EXCLUSION,
   caseLawReconciliationItems: RESEARCH_CORPUS_EXCLUSION,
   caseLawRemovalReconciliationItems: RESEARCH_CORPUS_EXCLUSION,
@@ -251,11 +258,16 @@ const TABLE_CLASSIFICATIONS = {
   correspondenceAttachments: FORMAT_SCOPE_EXCLUSION,
   correspondenceDropLogs: FORMAT_SCOPE_EXCLUSION,
   correspondenceFilers: FORMAT_SCOPE_EXCLUSION,
+  correspondenceSources: FORMAT_SCOPE_EXCLUSION,
   databaseBackfillStates: FORMAT_SCOPE_EXCLUSION,
   desktopDeviceProofReplays: FORMAT_SCOPE_EXCLUSION,
   desktopEditHandoffs: FORMAT_SCOPE_EXCLUSION,
   desktopEditSessions: FORMAT_SCOPE_EXCLUSION,
   desktopPresence: FORMAT_SCOPE_EXCLUSION,
+  desktopRunnerCommands: FORMAT_SCOPE_EXCLUSION,
+  desktopRunnerEvents: FORMAT_SCOPE_EXCLUSION,
+  desktopRunnerRuns: FORMAT_SCOPE_EXCLUSION,
+  desktopRunners: FORMAT_SCOPE_EXCLUSION,
   desktopTimeEntryBatches: FORMAT_SCOPE_EXCLUSION,
   documentCounters: FORMAT_SCOPE_EXCLUSION,
   documentProcessingRuns: FORMAT_SCOPE_EXCLUSION,
@@ -296,6 +308,7 @@ const TABLE_CLASSIFICATIONS = {
   folioCollabRoomTokens: FORMAT_SCOPE_EXCLUSION,
   folioCollabRooms: FORMAT_SCOPE_EXCLUSION,
   hostedCheckoutClaims: FORMAT_SCOPE_EXCLUSION,
+  hostedCustomerErasures: FORMAT_SCOPE_EXCLUSION,
   hostedUsageWebhookEvents: FORMAT_SCOPE_EXCLUSION,
   infoSoudTrackedCases: FORMAT_SCOPE_EXCLUSION,
   invoiceLines: "included",
@@ -330,6 +343,7 @@ const TABLE_CLASSIFICATIONS = {
   legislationFacetCounts: RESEARCH_CORPUS_EXCLUSION,
   legislationFacetRefreshes: RESEARCH_CORPUS_EXCLUSION,
   legislationIndexJobs: RESEARCH_CORPUS_EXCLUSION,
+  legislationMatterLinks: RESEARCH_CORPUS_EXCLUSION,
   legislationSearchDocuments: RESEARCH_CORPUS_EXCLUSION,
   legislationSources: RESEARCH_CORPUS_EXCLUSION,
   legislationWorkChanges: RESEARCH_CORPUS_EXCLUSION,
@@ -347,9 +361,11 @@ const TABLE_CLASSIFICATIONS = {
   numberSeries: FORMAT_SCOPE_EXCLUSION,
   numberSeriesAllocations: FORMAT_SCOPE_EXCLUSION,
   numberSeriesCounters: FORMAT_SCOPE_EXCLUSION,
+  oauthGrantRevocations: FORMAT_SCOPE_EXCLUSION,
   officeFileEvidence: FORMAT_SCOPE_EXCLUSION,
   organizationAccessStates: FORMAT_SCOPE_EXCLUSION,
   organizationConfiguredAccess: FORMAT_SCOPE_EXCLUSION,
+  organizationCreationRequests: FORMAT_SCOPE_EXCLUSION,
   organizationDataExports: FORMAT_SCOPE_EXCLUSION,
   organizationFileObjects: FORMAT_SCOPE_EXCLUSION,
   organizationFileUsage: FORMAT_SCOPE_EXCLUSION,
@@ -361,6 +377,7 @@ const TABLE_CLASSIFICATIONS = {
   playbookDefinitions: FORMAT_SCOPE_EXCLUSION,
   properties: FORMAT_SCOPE_EXCLUSION,
   propertyDependencies: FORMAT_SCOPE_EXCLUSION,
+  pushDevices: FORMAT_SCOPE_EXCLUSION,
   rateEntries: FORMAT_SCOPE_EXCLUSION,
   rateTables: FORMAT_SCOPE_EXCLUSION,
   registrationDailyBudget: FORMAT_SCOPE_EXCLUSION,
@@ -421,6 +438,7 @@ const TABLE_CLASSIFICATIONS = {
   timeEntryTimerStates: FORMAT_SCOPE_EXCLUSION,
   timeTimerConfirmations: FORMAT_SCOPE_EXCLUSION,
   timeTimers: FORMAT_SCOPE_EXCLUSION,
+  timerActivityDevices: FORMAT_SCOPE_EXCLUSION,
   usageAllocations: FORMAT_SCOPE_EXCLUSION,
   usageEntitlements: FORMAT_SCOPE_EXCLUSION,
   usageEvents: FORMAT_SCOPE_EXCLUSION,
@@ -491,14 +509,11 @@ const foundFile = (data: Uint8Array) => ({
 });
 
 const readRecordTable = async (
-  zip: JSZip,
+  zip: ZipArchive,
   ref: ManifestRecordFile,
 ): Promise<JsonRow[]> => {
-  const file = required(zip.file(ref.json), ref.json);
-  const rows = v.parse(
-    recordRowsSchema,
-    JSON.parse(await file.async("string")),
-  );
+  const file = required(zip.entry(ref.json), ref.json);
+  const rows = v.parse(recordRowsSchema, JSON.parse(await file.text()));
   expect(rows).toHaveLength(ref.count);
   return rows;
 };
@@ -559,16 +574,13 @@ const buildArchive = async (fixture: DataExportCompletenessFixture) => {
   const manifest = built.unwrap();
   expect(manifest.parts).toHaveLength(1);
   const [, chunks] = required([...memory.parts.entries()].at(0), "built part");
-  const zip = await JSZip.loadAsync(Buffer.concat(chunks));
+  const zip = await ZipArchive.read(Buffer.concat(chunks));
   const plannedPart = required(plan.parts.at(0), "first planned part");
   const partFile = required(
-    zip.file(plannedPart.paths.manifest),
+    zip.entry(plannedPart.paths.manifest),
     plannedPart.paths.manifest,
   );
-  const part = v.parse(
-    partManifestSchema,
-    JSON.parse(await partFile.async("string")),
-  );
+  const part = v.parse(partManifestSchema, JSON.parse(await partFile.text()));
   return { plan, part, zip };
 };
 
@@ -593,7 +605,7 @@ type ArchiveRows = {
 };
 
 const readArchiveRows = async (
-  zip: JSZip,
+  zip: ZipArchive,
   part: PartManifest,
 ): Promise<ArchiveRows> => {
   const organization = required(
@@ -627,9 +639,9 @@ const readArchiveRows = async (
         v.object({ id: v.string(), contacts: recordRowsSchema }),
         JSON.parse(
           await required(
-            zip.file(matter.records.matter),
+            zip.entry(matter.records.matter),
             "matter record",
-          ).async("string"),
+          ).text(),
         ),
       ),
       tasks: await readRecordTable(zip, matter.records.tasks),

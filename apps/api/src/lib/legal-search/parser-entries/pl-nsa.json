@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_NSA",
   "key": "pl-nsa",
-  "parserVersion": 10,
+  "parserVersion": 11,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage."
+    "reason": "Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."
   }
 }

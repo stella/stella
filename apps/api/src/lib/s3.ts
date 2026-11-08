@@ -18,6 +18,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { classifyFailure } from "@stll/errors";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -89,7 +90,7 @@ const isCredentialsShape = (
 type CredentialResponseOptions<T> = {
   url: string;
   fetchImpl: Fetcher;
-  consume: (response: Response) => Promise<T>;
+  consume: (bytes: Uint8Array) => T | Promise<T>;
   signal?: AbortSignal | undefined;
   headers?: Record<string, string> | undefined;
   method?: string;
@@ -115,7 +116,7 @@ const readCredentialResponse = async <T>({
               ...(headers === undefined ? {} : { headers }),
               ...(method === undefined ? {} : { method }),
               signal,
-              timeout: { type: "idle", ms: 2000 },
+              timeout: { type: "headers", ms: 2000 },
             },
             async (response) => {
               if (!response.ok) {
@@ -126,7 +127,11 @@ const readCredentialResponse = async <T>({
                   }),
                 );
               }
-              return Result.ok(await consume(response));
+              const bytes = await readBodyWithIdleDeadline(response, {
+                idleMs: 2000,
+                signal,
+              });
+              return Result.ok(await consume(bytes));
             },
             fetchImpl,
           ),
@@ -156,8 +161,8 @@ const fetchCredentialJson = async (
     fetchImpl,
     headers,
     signal,
-    consume: async (response) => {
-      const creds: unknown = await response.json();
+    consume: (bytes) => {
+      const creds: unknown = JSON.parse(new TextDecoder().decode(bytes));
       if (!isCredentialsShape(creds)) {
         return null;
       }
@@ -287,7 +292,7 @@ const fetchImdsCredentials = async ({
     method: "PUT",
     headers: { "X-aws-ec2-metadata-token-ttl-seconds": "300" },
     signal,
-    consume: async (response) => await response.text(),
+    consume: (bytes) => new TextDecoder().decode(bytes),
   });
   const fetched = await token.andThenAsync(async (imdsToken) => {
     const role = await readCredentialResponse({
@@ -295,7 +300,7 @@ const fetchImdsCredentials = async ({
       fetchImpl,
       headers: { "X-aws-ec2-metadata-token": imdsToken },
       signal,
-      consume: async (response) => (await response.text()).trim(),
+      consume: (bytes) => new TextDecoder().decode(bytes).trim(),
     });
     return await role.andThenAsync(async (roleName) => {
       const credentials = await readCredentialResponse({
@@ -303,7 +308,8 @@ const fetchImdsCredentials = async ({
         fetchImpl,
         headers: { "X-aws-ec2-metadata-token": imdsToken },
         signal,
-        consume: async (response) => await response.json(),
+        consume: (bytes): unknown =>
+          JSON.parse(new TextDecoder().decode(bytes)),
       });
       return credentials.map((creds) => {
         if (!isCredentialsShape(creds)) {

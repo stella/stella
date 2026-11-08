@@ -25,6 +25,7 @@ import {
   createTestHandlerContext,
   NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 export const seedDataExportReadScaling = async (
   db: GatedTestDb,
@@ -62,7 +63,7 @@ export const seedDataExportReadScaling = async (
     userId,
   });
   const cleanup = async () => {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   };
   try {

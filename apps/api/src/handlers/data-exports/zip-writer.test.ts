@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -94,11 +94,11 @@ describe("export ZIP writer", () => {
       },
     ]);
 
-    const zip = await JSZip.loadAsync(archive);
-    expect(await zip.file("matters/a/doc.pdf")?.async("uint8array")).toEqual(
-      pdf,
+    const zip = await ZipArchive.read(archive);
+    expect(await zip.entry("matters/a/doc.pdf")?.bytes()).toEqual(pdf);
+    expect(await zip.entry("manifest.json")?.bytes()).toEqual(
+      new Uint8Array(json),
     );
-    expect(await zip.file("manifest.json")?.async("uint8array")).toEqual(json);
     expect(findCentralHeader(archive, "matters/a/doc.pdf").method).toBe(0);
     expect(findCentralHeader(archive, "manifest.json").method).toBe(8);
   });
@@ -130,8 +130,8 @@ describe("export ZIP writer", () => {
         uncompressedSize: random.byteLength,
       },
     ]);
-    const zip = await JSZip.loadAsync(archive);
-    expect(await zip.file("noise.bin")?.async("uint8array")).toEqual(random);
+    const zip = await ZipArchive.read(archive);
+    expect(await zip.entry("noise.bin")?.bytes()).toEqual(random);
   });
 
   test("sets the UTF-8 flag and writes names as UTF-8", async () => {
@@ -151,8 +151,8 @@ describe("export ZIP writer", () => {
     expect(hasUtf8Flag(header.flags)).toBe(true);
     const local = view(archive);
     expect(hasUtf8Flag(local.getUint16(6, true))).toBe(true);
-    const zip = await JSZip.loadAsync(archive);
-    expect(Object.keys(zip.files)).toEqual([name]);
+    const zip = await ZipArchive.read(archive);
+    expect(zip.paths()).toEqual([name]);
   });
 
   test("refuses duplicate entry names", async () => {
@@ -283,8 +283,10 @@ describe("export ZIP writer", () => {
     expect(data.getUint32(zip64Offset, true)).toBe(0x06_06_4b_50);
     expect(Number(data.getBigUint64(zip64Offset + 32, true))).toBe(UINT16_MAX);
 
-    const zip = await JSZip.loadAsync(archive);
-    expect(Object.keys(zip.files)).toHaveLength(UINT16_MAX);
+    const zip = await ZipArchive.read(archive, {
+      limits: { maxEntries: UINT16_MAX },
+    });
+    expect(zip.paths()).toHaveLength(UINT16_MAX);
   });
 
   test("stays on classic end records one entry below the ZIP64 boundary", () => {
@@ -366,11 +368,11 @@ describe("export ZIP writer", () => {
     const header = findCentralHeader(archive, "matters/a/large.pdf");
     expect(header.method).toBe(0);
     expect(Math.floor(header.flags / FLAG_DATA_DESCRIPTOR) % 2).toBe(1);
-    const zip = await JSZip.loadAsync(archive, { checkCRC32: true });
-    expect(await zip.file("matters/a/large.pdf")?.async("uint8array")).toEqual(
+    const zip = await ZipArchive.read(archive);
+    expect(await zip.entry("matters/a/large.pdf")?.bytes()).toEqual(
       new Uint8Array(whole),
     );
-    expect(await zip.file("manifest.json")?.async("string")).toBe("{}");
+    expect(await zip.entry("manifest.json")?.text()).toBe("{}");
   });
 
   test("refuses a stream that ends at another length than announced", async () => {

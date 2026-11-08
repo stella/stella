@@ -152,7 +152,7 @@ jobs:
       - name: Discover models and validate IDs, rates, and capabilities
         run: |
           bun packages/scripts/src/model-catalog-upstream.ts
-          bun packages/scripts/src/model-catalog-capabilities-gen.ts --check
+          bun --preload ./scripts/offline-network-preload.ts packages/scripts/src/model-catalog-capabilities-gen.ts --check
 
       - name: Validate benchmarks
         id: benchmarks

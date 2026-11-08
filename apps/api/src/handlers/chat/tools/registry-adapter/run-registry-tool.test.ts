@@ -66,6 +66,9 @@ const buildContext = ({
         accessibleWorkspaceIds,
         pinnedIds: [],
       }),
+      workspaceStatusById: new Map(
+        accessibleWorkspaceIds.map((id) => [id, "active" as const]),
+      ),
       userId: toSafeId<"user">("user_1"),
       userEmail: "standard@example.test",
     }),

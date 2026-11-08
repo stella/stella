@@ -2,14 +2,18 @@
 // plain Text views. Deliberately small: headings, paragraphs, lists, quotes,
 // fenced code, and bold, italic, code and link spans. Anything else reads as
 // text. Scanned by hand rather than with regular expressions, so a long
-// answer costs linear time.
+// answer costs linear time. A link becomes a link span only when
+// `./links.ts` accepts where it goes; any other link reads as its text.
+
+import { openableLink } from "./links";
+import type { OpenableLink } from "./links";
 
 export type Span = {
   readonly text: string;
   readonly bold?: true;
   readonly italic?: true;
   readonly code?: true;
-  readonly href?: string;
+  readonly link?: OpenableLink;
 };
 
 export type Block =
@@ -78,8 +82,15 @@ const heading = (
   };
 };
 
-/** Spans of one line or paragraph. An opening marker with no closing one is text. */
-export const parseInline = (text: string): Span[] => {
+/**
+ * Spans of one line or paragraph. An opening marker with no closing one is
+ * text, and so is a link `./links.ts` refuses. `appScheme` is this build's
+ * own link scheme.
+ */
+export const parseInline = (
+  text: string,
+  appScheme: string | undefined,
+): Span[] => {
   const spans: Span[] = [];
   let plain = "";
   const flush = () => {
@@ -126,11 +137,14 @@ export const parseInline = (text: string): Span[] => {
       const close = text.indexOf("](", at + 1);
       const end = close === -1 ? -1 : text.indexOf(")", close + 2);
       if (close > at + 1 && end > close + 2) {
-        flush();
-        spans.push({
-          text: text.slice(at + 1, close),
-          href: text.slice(close + 2, end),
-        });
+        const label = text.slice(at + 1, close);
+        const link = openableLink(text.slice(close + 2, end), appScheme);
+        if (link === undefined) {
+          plain += label;
+        } else {
+          flush();
+          spans.push({ text: label, link });
+        }
         at = end + 1;
         continue;
       }
@@ -148,8 +162,11 @@ const isWordChar = (char: string | undefined): boolean =>
     (char >= "A" && char <= "Z") ||
     isDigit(char));
 
-/** Blocks of a whole answer. */
-export const parseMarkdown = (markdown: string): Block[] => {
+/** Blocks of a whole answer; `appScheme` is this build's own link scheme. */
+export const parseMarkdown = (
+  markdown: string,
+  appScheme: string | undefined,
+): Block[] => {
   const blocks: Block[] = [];
   const lines = markdown.replaceAll("\r\n", "\n").split("\n");
   let paragraph: string[] = [];
@@ -158,7 +175,7 @@ export const parseMarkdown = (markdown: string): Block[] => {
     if (paragraph.length > 0) {
       blocks.push({
         type: "paragraph",
-        spans: parseInline(paragraph.join(" ")),
+        spans: parseInline(paragraph.join(" "), appScheme),
       });
       paragraph = [];
     }
@@ -200,7 +217,7 @@ export const parseMarkdown = (markdown: string): Block[] => {
       blocks.push({
         type: "heading",
         level: title.level,
-        spans: parseInline(title.text),
+        spans: parseInline(title.text, appScheme),
       });
       continue;
     }
@@ -211,7 +228,7 @@ export const parseMarkdown = (markdown: string): Block[] => {
         flushList();
       }
       list ??= { ordered: item.ordered, items: [] };
-      list.items.push(parseInline(item.text));
+      list.items.push(parseInline(item.text, appScheme));
       continue;
     }
     if (trimmed.startsWith(">")) {
@@ -219,7 +236,7 @@ export const parseMarkdown = (markdown: string): Block[] => {
       flushList();
       blocks.push({
         type: "quote",
-        spans: parseInline(trimmed.slice(1).trim()),
+        spans: parseInline(trimmed.slice(1).trim(), appScheme),
       });
       continue;
     }

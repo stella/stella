@@ -1,9 +1,9 @@
 import { Ajv } from "ajv";
 import addFormats from "ajv-formats";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 import * as v from "valibot";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -351,7 +351,7 @@ const run = async (
       const bytes = memory.bytesOf(part.fileName);
       expect(bytes.byteLength).toBe(part.sizeBytes);
       expect(sha256Hex(bytes)).toBe(part.sha256);
-      return await JSZip.loadAsync(bytes);
+      return await ZipArchive.read(bytes);
     }),
   );
   const partManifests = await Promise.all(
@@ -364,7 +364,7 @@ const run = async (
       if (planned === undefined) {
         throw new Error(`part ${completed.index} is absent from the plan`);
       }
-      const text = await zip.file(planned.paths.manifest)?.async("string");
+      const text = await zip.entry(planned.paths.manifest)?.text();
       if (text === undefined) {
         throw new Error(`part has no ${planned.paths.manifest}`);
       }
@@ -550,9 +550,7 @@ describe("organisation data export archive paths", () => {
     };
     const { zips } = await run(world);
     const paths = zips.flatMap((zip) =>
-      Object.values(zip.files)
-        .filter((entry) => !entry.dir)
-        .map((entry) => entry.name),
+      zip.paths().filter((path) => !path.endsWith("/")),
     );
     // No file path is also the directory of another file.
     for (const path of paths) {
@@ -586,9 +584,7 @@ describe("organisation data export archive paths", () => {
     );
 
     const allFilePaths = result.zips.flatMap((zip) =>
-      Object.values(zip.files)
-        .filter((entry) => !entry.dir)
-        .map((entry) => entry.name),
+      zip.paths().filter((path) => !path.endsWith("/")),
     );
     const foldedPaths = allFilePaths.map(archivePathKey);
     expect(new Set(foldedPaths).size).toBe(allFilePaths.length);
@@ -597,8 +593,8 @@ describe("organisation data export archive paths", () => {
       if (zip === undefined) {
         throw new Error(`missing ZIP for part ${planned.index}`);
       }
-      expect(zip.file(planned.paths.manifest)).not.toBeNull();
-      expect(zip.file(planned.paths.readme)).not.toBeNull();
+      expect(zip.has(planned.paths.manifest)).toBe(true);
+      expect(zip.has(planned.paths.readme)).toBe(true);
     }
   });
 });
@@ -631,7 +627,7 @@ describe("organisation data export builder", () => {
       `${matterDirectory}/documents/Pleadings/Žaloba.pdf`,
     ]);
     for (const file of files) {
-      const bytes = await zip.file(file.path)?.async("uint8array");
+      const bytes = await zip.entry(file.path)?.bytes();
       expect(bytes).toBeDefined();
       expect(sha256Hex(bytes ?? new Uint8Array())).toBe(file.sha256);
       expect(bytes?.byteLength).toBe(file.sizeBytes);
@@ -660,25 +656,23 @@ describe("organisation data export builder", () => {
     ) {
       throw new Error("expected task records");
     }
-    const json = JSON.parse(
-      (await zip.file(tasksRef.json)?.async("string")) ?? "",
-    );
+    const json = JSON.parse((await zip.entry(tasksRef.json)?.text()) ?? "");
     expect(json).toEqual([{ id: "task-m-1", name: "=SUM(A1)" }]);
-    const csv = (await zip.file(tasksRef.csv)?.async("string")) ?? "";
+    const csv = (await zip.entry(tasksRef.csv)?.text()) ?? "";
     expect(csv).toContain('"\t=SUM(A1)"');
     const invoicesRef = partManifests[0]?.organizationRecords?.invoices;
     expect(invoicesRef?.count).toBe(1);
     const invoiceJson =
       invoicesRef === undefined
         ? undefined
-        : await zip.file(invoicesRef.json)?.async("string");
+        : await zip.entry(invoicesRef.json)?.text();
     expect(JSON.parse(invoiceJson ?? "null")).toEqual(
       organizationFixture().invoices.rows,
     );
     expect(
-      Object.keys(zip.files).filter((path) =>
-        path.endsWith("invoices-without-matter.json"),
-      ),
+      zip
+        .paths()
+        .filter((path) => path.endsWith("invoices-without-matter.json")),
     ).toHaveLength(1);
   });
 
@@ -707,7 +701,7 @@ describe("organisation data export builder", () => {
       for (const matter of part.matters) {
         for (const document of matter.documents) {
           for (const file of document.versions.flatMap((ver) => ver.files)) {
-            expect(zip?.file(file.path)).not.toBeNull();
+            expect(zip?.has(file.path)).toBe(true);
           }
         }
       }
@@ -746,9 +740,7 @@ describe("organisation data export builder", () => {
         for (const document of matter.documents) {
           for (const version of document.versions) {
             for (const file of version.files) {
-              const bytes = await zips[index]
-                ?.file(file.path)
-                ?.async("uint8array");
+              const bytes = await zips[index]?.entry(file.path)?.bytes();
               expect(bytes).toBeDefined();
               expect(bytes?.byteLength).toBe(file.sizeBytes);
               checkedFiles += 1;
@@ -788,17 +780,17 @@ describe("organisation data export builder", () => {
       ) {
         throw new Error("no planned item was removed in this world");
       }
-      const entry = zips[0]?.file(problem.path) ?? null;
+      const entry = zips[0]?.entry(problem.path);
       if (problem.reason === "checksum_mismatch") {
         // Shipped as stored, so the person can still inspect it.
-        expect(await entry?.async("string")).toBe("tampered");
+        expect(await entry?.text()).toBe("tampered");
         // The checksum recorded at upload, not the one of the bytes found.
         expect(problem.recordedSha256).toBe(
           sha256Hex(encoder.encode("other matter document")),
         );
         continue;
       }
-      expect(entry).toBeNull();
+      expect(entry).toBeUndefined();
     }
   });
 
@@ -864,10 +856,10 @@ describe("organisation data export builder", () => {
         ...remainingIndices,
       ]);
       expect(resumedAfterRename.plan.paths).toEqual(first.plan.paths);
-      const filePaths = (zip: JSZip) =>
-        Object.values(zip.files)
-          .filter((entry) => !entry.dir)
-          .map((entry) => entry.name)
+      const filePaths = (zip: ZipArchive) =>
+        zip
+          .paths()
+          .filter((path) => !path.endsWith("/"))
           .toSorted();
       expect(resumedAfterRename.zips.map(filePaths)).toEqual(
         first.zips.slice(completedCount).map(filePaths),
@@ -949,8 +941,8 @@ describe("organisation data export builder", () => {
     ) {
       throw new Error("expected planned current-version file bytes");
     }
-    expect(await zip.file(file.path)?.async("uint8array")).toEqual(
-      expectedFile.bytes,
+    expect(await zip.entry(file.path)?.bytes()).toEqual(
+      new Uint8Array(expectedFile.bytes),
     );
   });
 
@@ -1154,7 +1146,7 @@ describe("organisation data export builder", () => {
       expect(validate({ ...broken, formatVersion: 2 })).toBe(false);
       for (const [index, part] of partManifests.entries()) {
         const zip = zips.at(index);
-        for (const path of Object.keys(zip?.files ?? {})) {
+        for (const path of zip?.paths() ?? []) {
           expect(encoder.encode(path).byteLength).toBeLessThanOrEqual(
             DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
           );
@@ -1169,7 +1161,7 @@ describe("organisation data export builder", () => {
           for (const document of matter.documents) {
             for (const version of document.versions) {
               for (const file of version.files) {
-                expect(zip?.file(file.path)).not.toBeNull();
+                expect(zip?.has(file.path)).toBe(true);
               }
             }
           }

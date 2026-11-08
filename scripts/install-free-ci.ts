@@ -853,11 +853,11 @@ const includedInSparseCheckout = (
       .replace(/^!/u, "")
       .replace(/^\//u, "")
       .replace(/\/$/u, "");
-    if (
+    const matches =
       file === pattern ||
       file.startsWith(`${pattern}/`) ||
-      new Bun.Glob(pattern).match(file)
-    ) {
+      new Bun.Glob(pattern).match(file);
+    if (matches) {
       included = !excluded;
     }
   }

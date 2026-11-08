@@ -6,6 +6,7 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import type { seedSitemapReadBudget, ServedCaseLaw } from "./corpus-seed";
 import type { DataExportScenario } from "./data-export-seed";
+import type { measureHostedErasureHistory } from "./hosted-erasure-run";
 import type { RequestReceiptScenario } from "./request-receipt-seed";
 
 export type TenantStatementMeasurement = {
@@ -38,4 +39,9 @@ export type ScheduledJobMeasurement = {
     size: ScheduledJobScenario;
     double?: ScheduledJobScenario;
   }[];
+  /**
+   * A job that writes measures its own fixed batch, rolled back, at two
+   * independently seeded history sizes instead of running scenarios.
+   */
+  measure?: typeof measureHostedErasureHistory;
 };

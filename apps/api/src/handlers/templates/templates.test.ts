@@ -1,8 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { discoverHandler } from "@/api/handlers/templates/discover";
@@ -30,10 +29,9 @@ const WRAP = (body: string) =>
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", documentXml);
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -46,7 +44,7 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
       "</Types>",
     ].join(""),
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const makeEmptyDocx = async () => makeDocx(WRAP(P("Hello")));
@@ -75,7 +73,7 @@ const makeDocxWithParts = async (opts: {
   headers?: Record<string, string>;
   footers?: Record<string, string>;
 }): Promise<ScannedFile> => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   const relationships: string[] = [];
   const sectionRefs: string[] = [];
   let nextRId = 1;
@@ -89,7 +87,7 @@ const makeDocxWithParts = async (opts: {
     kind: "header" | "footer",
   ): void => {
     for (const [name, xml] of Object.entries(parts ?? {})) {
-      writeZipEntry(zip, `word/${name}`, xml);
+      zip.set(`word/${name}`, xml);
       const rId = `rId${nextRId++}`;
       relationships.push(
         `<Relationship Id="${rId}" Type="${REL_NS}/${kind}" Target="${name}"/>`,
@@ -108,16 +106,14 @@ const makeDocxWithParts = async (opts: {
         "</w:body>",
         () => `<w:sectPr>${sectionRefs.join("")}</w:sectPr></w:body>`,
       );
-    writeZipEntry(
-      zip,
+    zip.set(
       "word/_rels/document.xml.rels",
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
         `<Relationships xmlns="${PKG_REL_NS}">${relationships.join("")}</Relationships>`,
     );
   }
-  writeZipEntry(zip, "word/document.xml", documentXml);
-  writeZipEntry(
-    zip,
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -130,7 +126,7 @@ const makeDocxWithParts = async (opts: {
       "</Types>",
     ].join(""),
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const DOCX_MIME =
@@ -373,8 +369,8 @@ describe("template fill", () => {
     expect(result.file.bytes).toBeInstanceOf(ArrayBuffer);
     expect(result.file.bytes.byteLength).toBeGreaterThan(0);
 
-    const zip = await JSZip.loadAsync(result.file.bytes);
-    const docXml = await zip.file("word/document.xml")?.async("string");
+    const zip = await ZipArchive.read(result.file.bytes);
+    const docXml = await zip.entry("word/document.xml")?.text();
     expect(docXml).toContain("Alice");
     expect(docXml).toContain("2026-01-15");
     expect(result.unmatchedPlaceholders).toEqual([]);
@@ -870,8 +866,8 @@ describe("fill handler download response", () => {
     expect(resp.headers.get("Content-Disposition")).toContain("attachment");
 
     const bytes = Buffer.from(await resp.arrayBuffer());
-    const zip = await JSZip.loadAsync(bytes);
-    const docXml = await zip.file("word/document.xml")?.async("string");
+    const zip = await ZipArchive.read(bytes);
+    const docXml = await zip.entry("word/document.xml")?.text();
     expect(docXml).toContain("Małgorzata Wróblewska-Żak");
   });
 });
@@ -907,8 +903,8 @@ describe("discover → fill round-trip", () => {
     expect(result.unmatchedPlaceholders).toEqual([]);
     expect(result.unusedValues).toEqual([]);
 
-    const zip = await JSZip.loadAsync(result.file.bytes);
-    const docXml = await zip.file("word/document.xml")?.async("string");
+    const zip = await ZipArchive.read(result.file.bytes);
+    const docXml = await zip.entry("word/document.xml")?.text();
     expect(docXml).toContain("value_for_client_name");
     expect(docXml).toContain("value_for_effective_date");
     expect(docXml).toContain("value_for_amount");
@@ -925,8 +921,8 @@ describe("discover → fill round-trip", () => {
 
     const result = await fillTemplate(buf, { clientName: "Acme Corp" });
 
-    const zip = await JSZip.loadAsync(result.file.bytes);
-    const docXml = await zip.file("word/document.xml")?.async("string");
+    const zip = await ZipArchive.read(result.file.bytes);
+    const docXml = await zip.entry("word/document.xml")?.text();
     expect(docXml).toContain("Acme Corp");
     // The filled document carries the value, not the configuration that asked
     // for it: no filter chain rides along to the counterparty.

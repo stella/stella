@@ -9,12 +9,13 @@ export class OAuthMetadataError extends OAuthMetadataErrorBase<{
   cause?: unknown;
 }> {}
 
-const ClientRegistrationErrorBase: TaggedErrorClass<"ClientRegistrationError"> =
-  TaggedError("ClientRegistrationError");
+const ClientDocumentUnsupportedErrorBase: TaggedErrorClass<"ClientDocumentUnsupportedError"> =
+  TaggedError("ClientDocumentUnsupportedError");
 
-export class ClientRegistrationError extends ClientRegistrationErrorBase<{
+/** The server cannot identify the CLI by the client document it publishes. */
+export class ClientDocumentUnsupportedError extends ClientDocumentUnsupportedErrorBase<{
   message: string;
-  cause?: unknown;
+  serverUrl: string;
 }> {}
 
 const TokenExchangeErrorBase: TaggedErrorClass<"TokenExchangeError"> =
@@ -99,7 +100,7 @@ export class NoRefreshTokenError extends NoRefreshTokenErrorBase<{
 
 export type CliAuthError =
   | OAuthMetadataError
-  | ClientRegistrationError
+  | ClientDocumentUnsupportedError
   | TokenExchangeError
   | TokenRefreshError
   | LoopbackTimeoutError

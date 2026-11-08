@@ -1,15 +1,27 @@
 import { panic } from "better-result";
 
+import { readBillingDraftSettings } from "@/api/handlers/desktop-time-entries/billing-draft-settings";
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
 import readEntities from "@/api/handlers/entities/list";
 import readVersions from "@/api/handlers/entities/versions/list";
+import {
+  listBillingKnowledgeFiles,
+  readBillingKnowledgeFile,
+} from "@/api/handlers/organization-settings/billing-drafts";
+import readBillingDraftConfiguration from "@/api/handlers/organization-settings/billing-drafts/get";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { measureDesktopBillingDraftSettings } from "@/api/tests/read-scaling/desktop-billing-drafts";
 import type { seedEntityReadScaling } from "@/api/tests/read-scaling/entity-fixture";
 import { measureReadFilesystemTree } from "@/api/tests/read-scaling/filesystem-tree";
+import {
+  measureBillingDraftConfiguration,
+  measureBillingKnowledgeFile,
+  measureBillingKnowledgeFiles,
+} from "@/api/tests/read-scaling/organization-billing-drafts";
 
 type ReadFixture = Awaited<ReturnType<typeof seedEntityReadScaling>>;
 
@@ -17,6 +29,7 @@ type ReadFixture = Awaited<ReturnType<typeof seedEntityReadScaling>>;
 export const readScalingScenarios = [
   {
     name: "entity list",
+    expectedRows: 10,
     definition: readEntities,
     measure: async (fixture: ReadFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
@@ -45,11 +58,13 @@ export const readScalingScenarios = [
   },
   {
     name: "filesystem tree",
+    expectedRows: 10,
     definition: readFilesystemTree,
     measure: measureReadFilesystemTree,
   },
   {
     name: "version history",
+    expectedRows: 10,
     definition: readVersions,
     measure: async (fixture: ReadFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
@@ -77,5 +92,29 @@ export const readScalingScenarios = [
           rows: response.versions.length,
         };
       }),
+  },
+  {
+    name: "desktop billing draft settings",
+    expectedRows: 1,
+    definition: readBillingDraftSettings,
+    measure: measureDesktopBillingDraftSettings,
+  },
+  {
+    name: "organization billing draft configuration",
+    expectedRows: 1,
+    definition: readBillingDraftConfiguration,
+    measure: measureBillingDraftConfiguration,
+  },
+  {
+    name: "billing knowledge file page",
+    expectedRows: 20,
+    definition: listBillingKnowledgeFiles,
+    measure: measureBillingKnowledgeFiles,
+  },
+  {
+    name: "billing knowledge file content",
+    expectedRows: 1,
+    definition: readBillingKnowledgeFile,
+    measure: measureBillingKnowledgeFile,
   },
 ];

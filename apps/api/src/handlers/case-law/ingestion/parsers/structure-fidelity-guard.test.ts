@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { beforeAll, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
@@ -13,6 +13,7 @@ import {
   structureFidelityDrift,
 } from "@/api/tests/helpers/structure-fidelity-baseline";
 import { collectStructureFidelityCensus } from "@/api/tests/helpers/structure-fidelity-census";
+import { withTestFetchInterceptor } from "@/api/tests/helpers/test-fetch";
 
 const baseline = v.parse(structureFidelityBaselineSchema, baselineJson);
 
@@ -71,22 +72,25 @@ const BASELINE_PATH =
 const UPDATE_COMMAND =
   "bun apps/api/scripts/update-structure-fidelity-baseline.ts";
 
-const originalFetch = globalThis.fetch;
-afterAll(() => {
-  globalThis.fetch = originalFetch;
-});
-
 // Replaying every adapter's fixtures is the expensive step; both tests read
 // the one census.
-const censusResult = collectStructureFidelityCensus();
+let censusResult: Awaited<ReturnType<typeof collectStructureFidelityCensus>>;
 
 const COLLECTION_TIMEOUT_MS = 180_000;
+
+// timeout: the census replays every registered source's recorded fixtures through its parser.
+beforeAll(async () => {
+  censusResult = await withTestFetchInterceptor(
+    async (input, init, delegate) => await delegate(input, init),
+    collectStructureFidelityCensus,
+  );
+}, COLLECTION_TIMEOUT_MS);
 
 // timeout: awaits the census, which replays every registered source's recorded fixtures through its parser.
 test(
   "every registered source is read from recorded fixtures or states why not",
-  async () => {
-    const { documentedAdapters } = await censusResult;
+  () => {
+    const { documentedAdapters } = censusResult;
     const registered = listSourceRegistrations().map(({ key }) => key);
     const mismatches = registered.flatMap((key) => {
       const coverage = FIXTURE_COVERAGE[key];
@@ -114,8 +118,8 @@ test(
 // timeout: awaits the census, which replays every registered source's recorded fixtures through its parser.
 test(
   "structure-fidelity findings only shrink",
-  async () => {
-    const { census } = await censusResult;
+  () => {
+    const { census } = censusResult;
     assertStructureFidelityBaselineHistory({
       repositoryRoot: fileURLToPath(
         new URL("../../../../../../../", import.meta.url),
@@ -126,9 +130,11 @@ test(
       actual: census,
       expected: baseline.findings,
     });
-    // A new finding is a parser storing printed-page layout as structure:
-    // fix the parser through the shared owners (hard-wrapped-lines.ts,
-    // page-furniture.ts, letter-spacing.ts), never by raising the baseline.
+    // A new finding is a parser storing printed-page layout as structure, or
+    // a role its language's grammar reads otherwise: fix the parser through
+    // the shared owners (hard-wrapped-lines.ts, page-furniture.ts,
+    // letter-spacing.ts, the `@stll/legal-ast` role grammars), never by
+    // raising the baseline.
     expect(added).toEqual([]);
     // A finding the parsers no longer produce leaves the baseline, so the
     // ratchet keeps the gain.

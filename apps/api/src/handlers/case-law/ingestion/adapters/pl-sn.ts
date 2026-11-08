@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -82,6 +83,7 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
@@ -1003,6 +1005,10 @@ const SOURCE_FIELDS = [
   "data_modyfikacji",
 ] as const;
 
+type PlSnPublisherRecord = Readonly<
+  Record<(typeof SOURCE_FIELDS)[number], unknown>
+>;
+
 const PL_SN_SOURCE_FIELDS = {
   sygnatura_sprawy: {
     disposition: "stored",
@@ -1063,10 +1069,7 @@ const PL_SN_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "modifiedDate" },
   },
-} as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
-  SourceFieldDisposition
->;
+} as const satisfies Record<keyof PlSnPublisherRecord, SourceFieldDisposition>;
 
 /**
  * What the publisher labels for one decision.
@@ -1376,6 +1379,7 @@ const plSnFetchPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: window.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlSnCursor(window),
     });
   }
@@ -1459,6 +1463,7 @@ const plSnFetchPage = async (
             },
           }),
       sourceUrl: window.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlSnCursor(window),
     });
   }
@@ -1478,6 +1483,7 @@ const plSnFetchPage = async (
             },
           }),
       sourceUrl: window.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlSnCursor({
         month: window.month,
         offset: window.offset + window.served,
@@ -1497,6 +1503,7 @@ const plSnFetchPage = async (
           },
         }),
     sourceUrl: window.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor:
       next === null
         ? // The current month's tail, which is where the crawl lives once it

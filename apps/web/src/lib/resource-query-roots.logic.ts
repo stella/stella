@@ -14,8 +14,11 @@ export const organizationSettingsQueryRoot = () =>
 export const billingCodesQueryRoot = (workspaceId: string) =>
   ["billingCodes", workspaceId] as const;
 
+/** Every matter's correspondence, for changes that reach across matters. */
+export const allCorrespondenceQueryRoot = () => ["correspondence"] as const;
+
 export const correspondenceQueryRoot = (workspaceId: string) =>
-  ["correspondence", workspaceId] as const;
+  [...allCorrespondenceQueryRoot(), workspaceId] as const;
 
 export const allExpensesQueryRoot = () => ["expenses"] as const;
 

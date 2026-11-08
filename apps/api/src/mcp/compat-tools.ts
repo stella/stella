@@ -37,6 +37,7 @@ import {
   decodeCompatId,
 } from "@/api/mcp/compat-ids";
 import {
+  COMPAT_PAIR_HOST_META,
   COMPAT_SEARCH_CURSOR_MAX_LENGTH,
   compatCorpusFetchResponse,
   compatSearchCursorError,
@@ -48,6 +49,7 @@ import {
   publicLawDisabledResult,
 } from "@/api/mcp/compat-shared";
 import type { McpRequestResources } from "@/api/mcp/context";
+import { cursorInput, nullAsAbsent } from "@/api/mcp/input-schemas";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpCompatSearchResult,
@@ -58,14 +60,12 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildDocumentUrl,
   buildMatterUrl,
-  cursorInput,
   DEFAULT_COMPAT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
   internalFailureResult,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
-  nullAsAbsent,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -368,6 +368,7 @@ const COMPAT_TOOL_DEFINITIONS = [
       `holds, the organization's practice jurisdictions first. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim. ` +
       "Use legal citation `url` for the reader and `source_url` for the publisher.",
     inputSchema: compatSearchArgsSchema,
+    _meta: COMPAT_PAIR_HOST_META,
     name: "search",
     scope: "stella:search",
   }),
@@ -401,6 +402,7 @@ const COMPAT_TOOL_DEFINITIONS = [
       "as cursor to read more. " +
       "Use legal citation `url` for the reader and `source_url` for the publisher.",
     inputSchema: compatFetchArgsSchema,
+    _meta: COMPAT_PAIR_HOST_META,
     name: "fetch",
     scope: "stella:read",
   }),

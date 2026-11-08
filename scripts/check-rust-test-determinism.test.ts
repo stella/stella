@@ -99,6 +99,18 @@ test("does not count local synchronization values as process-global state", () =
   );
 });
 
+test("reads a 'static lifetime and a path's double colon as neither a static nor its type", () => {
+  const source = `fn sender() -> &'static tokio::sync::watch::Sender<u64> {
+  static WAKES: OnceLock<tokio::sync::watch::Sender<u64>> = OnceLock::new();
+  WAKES.get_or_init(|| tokio::sync::watch::channel(0).0)
+}
+#[test] fn example() { let (send, receive) = tokio::sync::mpsc::unbounded_channel::<u64>(); }
+#[test] fn shared() { let value = &WAKES; }`;
+  expect(scanRustTestDeterminism({ source, integrationTest: false })).toEqual([
+    { line: 6, kind: "global-lock", escaped: false },
+  ]);
+});
+
 test("ignores nested comments, ordinary and raw strings, byte strings and characters", () => {
   const source = `#[test] fn example() {
   // thread::sleep(duration); Instant::now();

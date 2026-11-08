@@ -35,6 +35,7 @@ const HISTOGRAM_RESOLUTION_MS = 10;
 
 export const createExportPacer = (
   options: PacerOptions = DATA_EXPORT_PACER_OPTIONS,
+  sleep: (milliseconds: number) => Promise<void> = Bun.sleep,
 ): ExportPacer => {
   const histogram = monitorEventLoopDelay({
     resolution: HISTOGRAM_RESOLUTION_MS,
@@ -45,7 +46,7 @@ export const createExportPacer = (
       const lagMs = histogram.percentile(99) / NANOS_PER_MILLI;
       // Each pause judges only the delay since the previous one.
       histogram.reset();
-      await Bun.sleep(paceDelayMs(lagMs, options));
+      await sleep(paceDelayMs(lagMs, options));
     },
     close: () => {
       histogram.disable();

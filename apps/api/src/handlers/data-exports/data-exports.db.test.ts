@@ -9,11 +9,12 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import JSZip from "jszip";
 import * as v from "valibot";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { cents } from "@stll/money";
 import { sha256Hex } from "@stll/sha256/bun";
+import { dbClock } from "@stll/test-kit/db";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -146,7 +147,7 @@ beforeAll(async () => {
       workspaceId: ids.wsA1,
       entityId: documentId,
       versionNumber: 4,
-      deletedAt: new Date(),
+      deletedAt: dbClock.now(),
     },
   ]);
   await testDb.insert(fields).values(
@@ -191,6 +192,9 @@ afterAll(async () => {
   await testDb.delete(entities).where(eq(entities.id, documentId));
   await releaseRlsFixture();
 });
+
+// Beyond any retention window, so a ready export stays downloadable.
+const NOT_YET_EXPIRED = new Date("2099-01-01T00:00:00.000Z");
 
 const insertExport = async (
   values: Partial<typeof organizationDataExports.$inferInsert> & {
@@ -391,15 +395,15 @@ const readStoredPartManifest = async (
   ) {
     panic("The completed export must store its part manifest and bytes");
   }
-  const zip = await JSZip.loadAsync(Buffer.concat(partChunks));
-  const file = zip.file(manifestPath);
-  if (file === null) {
+  const zip = await ZipArchive.read(Buffer.concat(partChunks));
+  const file = zip.entry(manifestPath);
+  if (file === undefined) {
     panic(`The stored part must include ${manifestPath}`);
   }
   return {
     row,
     zip,
-    part: v.parse(partManifestSchema, JSON.parse(await file.async("string"))),
+    part: v.parse(partManifestSchema, JSON.parse(await file.text())),
   };
 };
 
@@ -477,7 +481,7 @@ describe("data export permissions", () => {
       organizationId: ids.orgB,
       requestedBy: ids.userB1,
       status: "ready",
-      expiresAt: new Date(Date.now() + DATA_EXPORT_RETENTION_MS),
+      expiresAt: NOT_YET_EXPIRED,
       parts: [
         {
           index: 1,
@@ -551,10 +555,10 @@ describe("data export run", () => {
     }
 
     const [partChunks] = [...memory.parts.values()];
-    const zip = await JSZip.loadAsync(Buffer.concat(partChunks ?? []));
+    const zip = await ZipArchive.read(Buffer.concat(partChunks ?? []));
     const partManifest = v.parse(
       partManifestSchema,
-      JSON.parse((await zip.file(partManifestPath)?.async("string")) ?? ""),
+      JSON.parse((await zip.entry(partManifestPath)?.text()) ?? ""),
     );
     const matterIds = partManifest.matters.map((m) => m.id);
     expect(matterIds).toContain(ids.wsA1);
@@ -571,7 +575,7 @@ describe("data export run", () => {
       expect(file?.sha256).toBe(
         sha256Hex(fileBytes[index] ?? new Uint8Array()),
       );
-      const stored = await zip.file(file?.path ?? "")?.async("uint8array");
+      const stored = await zip.entry(file?.path ?? "")?.bytes();
       expect(stored).toEqual(fileBytes[index]);
     }
 
@@ -645,9 +649,7 @@ describe("data export run", () => {
       if (file === undefined) {
         panic("The planned current version must retain its file");
       }
-      expect(await zip.file(file.path)?.async("uint8array")).toEqual(
-        fileBytes[0],
-      );
+      expect(await zip.entry(file.path)?.bytes()).toEqual(fileBytes[0]);
       expect(row.status).toBe("ready");
       expect(row.problemCount).toBe(part.problems.length);
     } finally {
@@ -1038,17 +1040,15 @@ describe("personal matters", () => {
           panic("The completed export must store its part manifest path");
         }
         const [partChunks] = [...memory.parts.values()];
-        const zip = await JSZip.loadAsync(Buffer.concat(partChunks ?? []));
+        const zip = await ZipArchive.read(Buffer.concat(partChunks ?? []));
         const manifest = v.parse(
           partManifestSchema,
-          JSON.parse((await zip.file(partManifestPath)?.async("string")) ?? ""),
+          JSON.parse((await zip.entry(partManifestPath)?.text()) ?? ""),
         );
         const matterIds = manifest.matters.map((matter) => matter.id);
         expect(matterIds).toContain(ids.wsA1);
         expect(matterIds).not.toContain(personalId);
-        expect(Object.keys(zip.files).join("\n")).not.toContain(
-          "Personal notes",
-        );
+        expect(zip.paths().join("\n")).not.toContain("Personal notes");
       }
     } finally {
       await setRole(ids.memberA1org, "member");
@@ -1204,7 +1204,7 @@ describe("starting an export", () => {
       organizationId: ids.orgB,
       requestedBy: ids.userB1,
       status: "ready",
-      expiresAt: new Date(Date.now() + DATA_EXPORT_RETENTION_MS),
+      expiresAt: NOT_YET_EXPIRED,
     });
     const route = "/v1/data-exports/:exportId/download";
     const body = { file: { type: "manifest" } };
@@ -1236,7 +1236,7 @@ describe("starting an export", () => {
             state: "completed",
             responseCode: 200,
             responseBody,
-            completedAt: new Date(),
+            completedAt: dbClock.now(),
           }),
       );
       const context = createTestHandlerContext({

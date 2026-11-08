@@ -67,7 +67,11 @@ const listDataExports = createSafeRootHandler(
         : dataExportCreatedAtCursor.decode(query.cursor);
     if (query.cursor !== undefined && cursor === null) {
       return Result.err(
-        new HandlerError({ status: 400, message: "Invalid cursor" }),
+        new HandlerError({
+          status: 400,
+          code: "invalid_cursor",
+          message: "Invalid cursor",
+        }),
       );
     }
     const rows = yield* Result.await(

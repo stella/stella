@@ -1,15 +1,24 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-import * as cheerio from "cheerio";
-import { isTag } from "domhandler";
 
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import { load } from "@stll/html";
+import { isTag } from "@stll/html/nodes";
+import {
+  hasInlineChildren,
+  headMatterPrecedesBody,
+} from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import {
   PL_KIO_HTML_BUDGET,
   PlKioHtmlBudgetError,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  parsePlDecisionContent as uncheckedParsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
@@ -58,6 +67,37 @@ const flattenInlineText = (inlines: Inline[]): string =>
     .join("");
 
 describe("parsePlDecisionContent", () => {
+  test.each([
+    [
+      "Sąd Apelacyjny w Szczecinie III Wydział Pracy i Ubezpieczeń Społecznych w osobie sędziego SA Urszuli Iwanowskiej, po rozpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym,",
+      '<strong>sprawy z odwołania </strong><span class="anon-block">A. N.</span>',
+    ],
+    [
+      "po rozpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym,",
+      '<strong>sprawy z odwołania </strong><span class="anon-block"> (...) DRUKARNIA spółki z ograniczoną odpowiedzialnością</span> w <span class="anon-block">S.</span>',
+    ],
+  ])(
+    "a common-court opening recital stays whole across its printed lines",
+    (opening, continuation) => {
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(`<p>${opening}</p><p>${continuation}</p>`, {
+          markup: PL_DECISION_MARKUP.COMMON_COURT,
+        }),
+      );
+      const recital = documentAst.blocks.find((block) =>
+        block.plainText.startsWith(opening),
+      );
+      expect(recital?.plainText).toBe(
+        `${opening} ${load(continuation).text()}`.replace(/\s+/gu, " "),
+      );
+      expect(
+        documentAst.blocks.some((block) =>
+          block.plainText.startsWith("sprawy z odwołania"),
+        ),
+      ).toBe(false);
+    },
+  );
+
   test("keeps a Polish court's printed order and assigns roles from its text", () => {
     const content = `
       <p><strong>II CSKP 1456/22</strong></p>
@@ -92,8 +132,8 @@ describe("parsePlDecisionContent", () => {
     ]);
     expect(blocks.at(8)).toMatchObject({ role: "holding" });
     expect(blocks.slice(9).map(roleOfBlock)).toEqual([
-      "apparatus",
-      "apparatus",
+      "publisher-note",
+      "publisher-note",
       "signature",
     ]);
   });
@@ -279,7 +319,9 @@ describe("parsePlDecisionContent", () => {
         ),
       );
       expect(documentAst.blocks.at(1)).toMatchObject({ role: "holding" });
-      expect(documentAst.blocks.at(-1)).toMatchObject({ role: "apparatus" });
+      expect(documentAst.blocks.at(-1)).toMatchObject({
+        role: "publisher-note",
+      });
     },
   );
 
@@ -603,7 +645,7 @@ describe("markup whitespace", () => {
       const html = await gunzipText(name);
       // The capture reaches the fault: a paragraph whose markup puts a line
       // break or a run of spaces between two of its words.
-      const $ = cheerio.load(html);
+      const $ = load(html);
       expect(
         $("p")
           .toArray()
@@ -686,6 +728,25 @@ describe("markup whitespace", () => {
         { type: "text", text: "B" },
       ],
     });
+  });
+
+  test("a printed blank line inside an inline element splits its formatting", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<p><b>First<br> \n <br>Second</b></p>", {
+        decisionType: undefined,
+        markup: PL_DECISION_MARKUP.PRINTED_LINES,
+      }),
+    );
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "First",
+      "Second",
+    ]);
+    expect(
+      documentAst.blocks.map((block) =>
+        "inlines" in block ? block.inlines.at(0)?.type : undefined,
+      ),
+    ).toEqual(["bold", "bold"]);
   });
 
   test("paragraphs inside one cell stay apart, a line each", () => {
@@ -786,6 +847,20 @@ describe("ordered list items print the number a browser gives them", () => {
     expect(itemsOf(html)).toEqual(expected);
   });
 
+  test("a numbered first paragraph keeps a printed blank line", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<ol><li><p>First<br> \n <br>Second</p></li></ol>", {
+        decisionType: undefined,
+        markup: PL_DECISION_MARKUP.PRINTED_LINES,
+      }),
+    );
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "1. First",
+      "Second",
+    ]);
+  });
+
   test("reading an item's runs around its blocks costs work linear in the item", () => {
     // Every inline walk lists an element's children once; the total listed
     // is the work. Copying the item per run made it quadratic.
@@ -795,7 +870,7 @@ describe("ordered list items print the number a browser gives them", () => {
       value !== null &&
       Object.hasOwn(value, "contents");
     // The prototype cheerio defines `contents` on, above each load's class.
-    let contentsOwner: unknown = cheerio.load("<p></p>").root();
+    let contentsOwner: unknown = load("<p></p>").root();
     while (contentsOwner !== null && !ownsContents(contentsOwner)) {
       contentsOwner = Object.getPrototypeOf(contentsOwner);
     }
@@ -837,7 +912,7 @@ describe("ordered list items print the number a browser gives them", () => {
         baseInput(`<ol>${"<li>Treść punktu</li>".repeat(count)}</ol>`, {
           decisionType: undefined,
           loadHtml: (html) => {
-            const $ = cheerio.load(html);
+            const $ = load(html);
             $("li").each((_, element) => {
               if (!isTag(element)) {
                 return;
@@ -926,4 +1001,158 @@ test("retains nested table text only in its owning outer cell", () => {
   expect(fulltext.match(/Inner/gu)).toHaveLength(1);
   expect(fulltext).toContain("Header");
   expect(fulltext).toContain("Footer");
+});
+
+const parsedLinkHrefs = (inlines: readonly Inline[]): string[] =>
+  inlines.flatMap((inline) => [
+    ...(inline.type === "link" ? [inline.href] : []),
+    ...(hasInlineChildren(inline) ? parsedLinkHrefs(inline.children) : []),
+  ]);
+
+const footnoteLinksOf = (content: string, footnoteIds?: readonly string[]) => {
+  const result = parsePlDecisionContent(baseInput(content, { footnoteIds }));
+  return result.documentAst.blocks.flatMap((block) =>
+    "inlines" in block ? parsedLinkHrefs(block.inlines) : [],
+  );
+};
+
+test("only exact footnotes from the current document extend the URL policy", async () => {
+  const html = await Bun.file(
+    new URL("__fixtures__/pl-footnote-fragments.html", import.meta.url),
+  ).text();
+  expect(footnoteLinksOf(html)).toEqual(["https://example.test/source"]);
+  expect(footnoteLinksOf(html, ["note"])).toEqual([
+    "#note",
+    "https://example.test/source",
+  ]);
+  expect(
+    footnoteLinksOf(
+      '<p>Other <a href="#note">source</a> <a href="#other-document-note">note</a></p>',
+      ["other-document-note"],
+    ),
+  ).toEqual(["#other-document-note"]);
+});
+
+describe("an authority's ruling points on their legal basis", () => {
+  // The layout of RGD-1/2026 (Prezes UOKiK, Gdańsk): the letterhead lines
+  // follow the title, and the ruling points open on their legal basis with
+  // no line naming the ruling's verb before them.
+  test("each point that rules on its basis is the holding, after any letterhead", () => {
+    const html = [
+      "<p>PREZES</p>",
+      "<p>URZĘDU OCHRONY KONKURENCJI I KONSUMENTÓW</p>",
+      "<p>Gdańsk, dnia 16 lutego 2026 r.</p>",
+      "<p>RGD-2.610.3.2026.AG</p>",
+      "<p>DECYZJA RGD - 1/2026</p>",
+      "<p>I. Na podstawie art. 27 ust. 1 i 2 ustawy o ochronie konkurencji i konsumentów uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie spółki.</p>",
+      "<p>II. Na podstawie art. 106 ust. 1 pkt 4 tej ustawy nakłada się na spółkę karę pieniężną.</p>",
+      "<p>UZASADNIENIE</p>",
+      "<p>[1] Prezes Urzędu wszczął postępowanie.</p>",
+    ].join("");
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(html, {
+        decisionType: "decyzja",
+        court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+      }),
+    );
+    const roles = documentAst.blocks.flatMap((block) =>
+      block.type === "paragraph"
+        ? [`${block.role ?? "-"} ${block.plainText.slice(0, 20)}`]
+        : [],
+    );
+
+    expect(roles).toEqual([
+      "intro PREZES",
+      "intro URZĘDU OCHRONY KONKU",
+      "intro Gdańsk, dnia 16 lute",
+      "intro RGD-2.610.3.2026.AG",
+      "intro DECYZJA RGD - 1/2026",
+      "holding I. Na podstawie art.",
+      "holding II. Na podstawie art",
+      "argumentation [1] Prezes Urzędu ws",
+    ]);
+  });
+});
+
+describe("navigation, subheadings and stray marks in an authority's PDF", () => {
+  // The layouts of DOZIK-5/2024 and RGD-1/2026 (Prezes UOKiK), as the PDF
+  // reader hands them on: a lone mark above the letterhead, a printed table
+  // of contents, and subheadings set as short bold lines.
+  const html = [
+    "<p>-</p>",
+    "<p>DECYZJA nr DOZIK-5/2024</p>",
+    "<p>I. Na podstawie art. 26 ust. 1 ustawy o ochronie konkurencji i konsumentów uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie spółki.</p>",
+    "<p>UZASADNIENIE</p>",
+    "<p>Prezes Urzędu ustalił następujący stan faktyczny .......................................... 9</p>",
+    "<p>1. Sprzedawca Amazon EU SARL ................................................ 9</p>",
+    "<p>2. Proces zakupowy ........................................ 10 2.1. Katalog produktów ................. 11</p>",
+    "<p>[1] Prezes Urzędu wszczął postępowanie.</p>",
+    "<p><b>Platforma i jej uczestnicy</b></p>",
+    "<p>[2] Spółka prowadziła platformę.</p>",
+    "<p><b>2.1. Katalog produktów</b></p>",
+    "<p><b>Elite Pack 149,00 USD 99,99 USD</b></p>",
+    "<p><b>Sąd zważył, co następuje:</b></p>",
+  ].join("");
+  const read = (boldSubheadings: boolean) =>
+    parsePlDecisionContent(
+      baseInput(html, {
+        decisionType: "decyzja",
+        court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        boldSubheadings,
+      }),
+    ).documentAst.blocks.map(
+      (block) =>
+        `${block.type === "heading" ? "heading" : (roleOfBlock(block) ?? "-")} ${block.plainText.slice(0, 26)}`,
+    );
+  const ast = (boldSubheadings: boolean) =>
+    parsePlDecisionContent(
+      baseInput(html, {
+        decisionType: "decyzja",
+        court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        boldSubheadings,
+      }),
+    ).documentAst;
+
+  test("the contents after the ruling are a publisher's note, the subheadings headings, the lone mark no text", () => {
+    expect(read(true)).toEqual([
+      "- -",
+      "heading DECYZJA nr DOZIK-5/2024",
+      "holding I. Na podstawie art. 26 us",
+      "heading UZASADNIENIE",
+      "publisher-note Prezes Urzędu ustalił nast",
+      "publisher-note 1. Sprzedawca Amazon EU SA",
+      "publisher-note 2. Proces zakupowy .......",
+      "argumentation [1] Prezes Urzędu wszczął ",
+      "heading Platforma i jej uczestnicy",
+      "argumentation [2] Spółka prowadziła plat",
+      "heading 2.1. Katalog produktów",
+      "argumentation Elite Pack 149,00 USD 99,9",
+      "argumentation Sąd zważył, co następuje:",
+    ]);
+  });
+
+  test("the contents keep head matter ahead of the body", () => {
+    expect(headMatterPrecedesBody(ast(true).blocks)).toBe(true);
+  });
+
+  test("contents printed before the body are apparatus", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>Spis treści ............................................ 2</p><p>WYROK</p><p>1. oddala powództwo.</p>",
+      ),
+    );
+    const contents = documentAst.blocks.find((block) =>
+      block.plainText.startsWith("Spis treści"),
+    );
+    expect(contents === undefined ? undefined : roleOfBlock(contents)).toBe(
+      "apparatus",
+    );
+    expect(headMatterPrecedesBody(documentAst.blocks)).toBe(true);
+  });
+
+  test("a publisher's markup keeps its bold lines as paragraphs", () => {
+    const blocks = read(false);
+    expect(blocks).toContain("argumentation Platforma i jej uczestnicy");
+    expect(blocks).toContain("argumentation 2.1. Katalog produktów");
+  });
 });

@@ -22,6 +22,7 @@ import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createLeasedSchedulerJobFixture } from "@/api/tests/helpers/leased-scheduler-job";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -170,9 +171,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           } finally {
             release.resolve(undefined);
             await Promise.allSettled(launched);
-            await observer.db
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(observer.db, [organizationId]);
             await observer.db.delete(user).where(eq(user.id, userId));
             await observer.db
               .delete(schedulerJobs)
@@ -283,11 +282,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           expect(await run()).toEqual(Result.ok(undefined));
           expect(enqueued).toContain(lateExportId);
         } finally {
-          await client.db.delete(organization).where(
-            inArray(
-              organization.id,
-              organizations.map(({ id }) => id),
-            ),
+          await deleteOrganizationsForTest(
+            client.db,
+            organizations.map(({ id }) => id),
           );
           await client.db.delete(user).where(eq(user.id, userId));
           await client.db

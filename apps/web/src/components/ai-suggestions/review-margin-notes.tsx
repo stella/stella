@@ -22,6 +22,7 @@ import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef, FolioAIBlock } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import { ChevronDownIcon, ChevronUpIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -330,32 +331,36 @@ const MarginNoteBody = ({
   note: Omit<ReviewMarginNote, "blockId">;
   onOpen: (findingId: string) => void;
 }) => (
-  <button
-    className={cn(
-      "hover:bg-muted/70 focus-visible:ring-ring flex min-h-11 w-full flex-col justify-center gap-0.5 border-s-2 px-2.5 py-1.5 text-start focus-visible:ring-2 focus-visible:outline-none",
-      note.accent ? "border-destructive" : "border-border",
-    )}
+  <Button
+    className="flex w-full"
     onClick={() => onOpen(note.id)}
-    type="button"
+    variant="plain"
   >
-    <BidiText
-      as="span"
-      className="text-foreground text-xs leading-5 font-medium"
+    <span
+      className={cn(
+        "hover:bg-muted/70 flex min-h-11 w-full flex-col justify-center gap-0.5 border-s-2 px-2.5 py-1.5",
+        note.accent ? "border-destructive" : "border-border",
+      )}
     >
-      {note.title}
-    </BidiText>
-    <span className="text-muted-foreground text-2xs leading-4">
-      {note.label}
-    </span>
-    {note.caption !== null && (
       <BidiText
         as="span"
-        className="text-muted-foreground text-2xs line-clamp-3 leading-4 text-pretty"
+        className="text-foreground text-xs leading-5 font-medium"
       >
-        {note.caption}
+        {note.title}
       </BidiText>
-    )}
-  </button>
+      <span className="text-muted-foreground text-2xs leading-4">
+        {note.label}
+      </span>
+      {note.caption !== null && (
+        <BidiText
+          as="span"
+          className="text-muted-foreground text-2xs line-clamp-3 leading-4 text-pretty"
+        >
+          {note.caption}
+        </BidiText>
+      )}
+    </span>
+  </Button>
 );
 
 /** How many findings sit past one edge of the column, and the way back to the
@@ -404,16 +409,18 @@ const EdgePill = ({
         position,
       )}
     >
-      <button
-        // The pill stays small; its target does not. The pseudo-element
-        // widens the hit area without moving the pill or its neighbours.
-        className="bg-background/90 text-muted-foreground hover:text-foreground focus-visible:ring-ring text-2xs pointer-events-auto relative flex items-center gap-1 rounded-full border px-2 py-1 tabular-nums shadow-xs backdrop-blur before:absolute before:-inset-2.5 before:content-[''] focus-visible:ring-2 focus-visible:outline-none"
+      <Button
+        className="pointer-events-auto relative flex"
         onClick={() => onScrollTo(nearest)}
-        type="button"
+        variant="plain"
       >
-        <Icon className="size-3" />
-        {t(labelKey, { count: ids.length })}
-      </button>
+        {/* The pill stays small; its target does not. The pseudo-element
+            widens the hit area without moving the pill or its neighbours. */}
+        <span className="bg-background/90 text-muted-foreground hover:text-foreground text-2xs relative flex items-center gap-1 rounded-full border px-2 py-1 tabular-nums shadow-xs backdrop-blur before:absolute before:-inset-2.5 before:content-['']">
+          <Icon className="size-3" />
+          {t(labelKey, { count: ids.length })}
+        </span>
+      </Button>
     </div>
   );
 };

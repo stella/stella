@@ -12,8 +12,7 @@ import {
 } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });

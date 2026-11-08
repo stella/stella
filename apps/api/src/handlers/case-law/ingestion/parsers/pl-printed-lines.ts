@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-kio] the shared paragraph helpers keep the same default markers and calculations; only the named argument shape changes for this caller.
 // parser-output-unchanged: [pl-sn] the paragraph helpers and their constants moved unchanged from pl-sn.ts; their positioned-line inputs and calculations are identical.
 // parser-output-unchanged: [pl-kis] moved unchanged out of pl-sn.ts so the procurement reader shares it; the Supreme Court reading is the only caller in pl-sn.ts.
 // parser-output-unchanged: [pl-uokik] moved unchanged out of pl-sn.ts so the procurement reader shares it; the Supreme Court reading is the only caller in pl-sn.ts.
@@ -55,6 +56,26 @@ export const opensNumberedPoint = (
 ): boolean =>
   NUMBERED_POINT.test(line.text.trimStart()) && !takesANumber(previous.text);
 
+/** How a publisher marks the points and paragraphs a line can open. */
+export type PointMarkers = {
+  /** A list point's own number or bullet. */
+  readonly list: RegExp;
+  /** A number no wrapped sentence starts with. */
+  readonly numbered: RegExp;
+  /**
+   * The number a publisher hangs out left of each paragraph: it opens one
+   * where the line below starts further right. A sentence can wrap onto the
+   * same characters (`w pkt 3 podpkt.` / `(1) i (2) pisma`), set flush with
+   * the lines around it, so the characters alone are not a point.
+   */
+  readonly paragraphNumber?: RegExp | undefined;
+};
+
+export const POINT_MARKERS: PointMarkers = {
+  list: LIST_MARKER,
+  numbered: NUMBERED_POINT,
+};
+
 /** A line ending a sentence or a list point, closing quotes included. */
 const ENDS_SENTENCE = /[.;:!?…]["”')\]]*$/u;
 /** A capital, or an opening bracket or quote: also how a clerk's mark (`[SOP]`) starts. */
@@ -69,17 +90,25 @@ const STARTS_SENTENCE = /^[\p{Lu}[(„"]/u;
  * paragraphs merged would hide the structure, where a missed continuation
  * only leaves the line break the reading had before.
  */
-export const ranOutOfRoom = (
-  previous: PrintedLine,
-  line: PrintedLine,
-  rightEdge: number,
-): boolean => {
+type RanOutOfRoomOptions = {
+  previous: PrintedLine;
+  line: PrintedLine;
+  rightEdge: number;
+  markers?: PointMarkers | undefined;
+};
+
+export const ranOutOfRoom = ({
+  previous,
+  line,
+  rightEdge,
+  markers = POINT_MARKERS,
+}: RanOutOfRoomOptions): boolean => {
   const opening = line.text.trimStart();
   if (
     previous.right === undefined ||
     line.right === undefined ||
     (ENDS_SENTENCE.test(previous.text.trimEnd()) &&
-      (STARTS_SENTENCE.test(opening) || LIST_MARKER.test(opening)))
+      (STARTS_SENTENCE.test(opening) || markers.list.test(opening)))
   ) {
     return false;
   }
@@ -117,27 +146,48 @@ export const continuesSentence = (
  * is what keeps two one-line points of an operative part apart. A list
  * point opens a paragraph wherever it starts, though nothing indents it.
  */
-export const opensBlockParagraph = (
-  previous: PrintedLine | undefined,
-  line: PrintedLine,
-  indented: boolean,
-  rightEdge: number,
-): boolean => {
+type PrintedParagraphOptions = {
+  previous: PrintedLine | undefined;
+  line: PrintedLine;
+  next?: PrintedLine | undefined;
+  indented: boolean;
+  rightEdge: number;
+  markers?: PointMarkers | undefined;
+};
+
+export const opensBlockParagraph = ({
+  previous,
+  line,
+  next,
+  indented,
+  rightEdge,
+  markers = POINT_MARKERS,
+}: PrintedParagraphOptions): boolean => {
   if (previous === undefined || previous.text.length === 0) {
     return indented;
   }
+  // A numbered point opens its own paragraph however full the line above
+  // ran, unless that line ended on a word the number belongs to (`art.`).
   // Dashes, initials (`C. B.`) and abbreviations (`w. z`) wrap inside
   // sentences, so only the full-line test reads those.
-  if (opensNumberedPoint(previous, line)) {
+  if (
+    (markers.numbered.test(line.text.trimStart()) &&
+      !TAKES_A_NUMBER.test(previous.text.trimEnd())) ||
+    (markers.paragraphNumber?.test(line.text.trimStart()) === true &&
+      next !== undefined &&
+      next.text.length > 0 &&
+      next.x - line.x >= INDENT_THRESHOLD_PT)
+  ) {
     return true;
   }
-  const full = ranOutOfRoom(previous, line, rightEdge);
+  const full = ranOutOfRoom({ previous, line, rightEdge, markers });
   if (!indented) {
-    return !full && LIST_MARKER.test(line.text.trimStart());
+    return !full && markers.list.test(line.text.trimStart());
   }
   return !(
     full &&
     (line.x - previous.x < INDENT_THRESHOLD_PT ||
-      LIST_MARKER.test(previous.text.trimStart()))
+      markers.list.test(previous.text.trimStart()) ||
+      markers.paragraphNumber?.test(previous.text.trimStart()) === true)
   );
 };

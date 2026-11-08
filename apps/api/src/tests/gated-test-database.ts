@@ -101,6 +101,8 @@ type OpenClientOptions = {
   readonly max?: number;
   /** Seconds of inactivity before Bun closes a connection. */
   readonly idleTimeout?: number;
+  /** Seconds before Bun retires a connection, once its running work has finished. */
+  readonly maxLifetime?: number;
   /** PostgreSQL settings sent when each connection opens. */
   readonly connection?: {
     readonly application_name?: string;
@@ -138,6 +140,7 @@ export const withGatedTestClients = async <T>(
     databaseUrl: clientDatabaseUrl = databaseUrl,
     max = 1,
     idleTimeout,
+    maxLifetime,
     connection,
     logger,
   }: OpenClientOptions = {}) => {
@@ -147,6 +150,7 @@ export const withGatedTestClients = async <T>(
           url: clientDatabaseUrl,
           max,
           idleTimeout,
+          maxLifetime,
           connection,
         }),
       ),

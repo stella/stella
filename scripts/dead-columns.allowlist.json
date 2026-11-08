@@ -1,10 +1,5 @@
 [
   {
-    "table": "organization_settings",
-    "column": "documentStampEnabled",
-    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
-  },
-  {
     "table": "buffer_object_cleanup_intents",
     "column": "writerUserId",
     "reason": "not app-code dead: default expression pulls the PostgreSQL session var and the column only appears inside the RLS policy predicate built alongside the table in schema/entities.ts, which this check excludes as the definitions. Allowlisted rather than a scanner fix -- picking it up would require reading inside the excluded schema files, defeating the point of the exclusion."
@@ -18,6 +13,11 @@
     "table": "case_law_corpus_jurisdictions",
     "column": "firstObservedAt",
     "reason": "not app-code dead: append-only audit timestamp written by a migration-owned trigger (see schema/case-law.ts comment). Migrations are excluded by design."
+  },
+  {
+    "table": "case_law_population_seed_state",
+    "column": "foldGeneration",
+    "reason": "not app-code dead: incremented by the migration-owned fold function (apps/api/drizzle/20261101022151_case_law_population_counts/migration.sql) and read back through read_case_law_population_freshness(), which serves it as the fold number. Migrations are excluded by design."
   },
   {
     "table": "case_law_citation_resolution_census_runs",

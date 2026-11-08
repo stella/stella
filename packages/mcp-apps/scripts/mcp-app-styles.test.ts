@@ -14,7 +14,7 @@ import postcss from "postcss";
 
 import { MCP_APPS } from "../src/manifest";
 
-test("MCP styles stay unchanged when generated bundles contain stale utilities", async () => {
+test("MCP styles ignore utilities in generated bundles and non-production sources", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "mcp-app-styles-"));
   try {
     const appsRoot = path.join(root, "packages/mcp-apps/src");
@@ -48,6 +48,34 @@ test("MCP styles stay unchanged when generated bundles contain stale utilities",
     expect(clean).toContain(".leading-3\\.5");
     expect(clean).toContain(".px-1");
     expect(clean).not.toContain(".leading-3 {");
+
+    for (const sourceRoot of [
+      path.join(appsRoot, "case-law-results"),
+      uiRoot,
+      path.join(root, "packages/decision-reader/src"),
+    ]) {
+      mkdirSync(path.join(sourceRoot, "fixtures"), { recursive: true });
+      for (const suffix of [
+        "test.tsx",
+        "dom.test.tsx",
+        "test.ts",
+        "spec.tsx",
+        "story.tsx",
+        "stories.tsx",
+        "fixture.tsx",
+      ]) {
+        writeFileSync(
+          path.join(sourceRoot, `unused.${suffix}`),
+          '<div className="mt-97" />',
+        );
+      }
+      writeFileSync(
+        path.join(sourceRoot, "fixtures/example.tsx"),
+        '<div className="mt-97" />',
+      );
+    }
+
+    expect(await compile()).toBe(clean);
 
     for (const { directory } of MCP_APPS) {
       const generated = path.join(appsRoot, directory, "generated");

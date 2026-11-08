@@ -15,7 +15,7 @@ covered by one, or through `read_capability` or
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transcribe`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -113,6 +113,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `contacts.bulk.delete` | write, destructive | stella:contacts_write | — | generic invoke → `stella capability contacts bulk-delete` |
 | `contacts.business-registries.check` | read | stella:read | — | curated tool `check_counterparty` |
 | `contacts.business-registries.lookup` | read | stella:read | — | curated tool `lookup_business_registry` |
 | `contacts.create` | write | stella:contacts_write | — | curated tool `save_contact` |
@@ -135,6 +136,12 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | --- | --- | --- | --- | --- |
 | `data-exports.get` | read | stella:admin_read | — | generic invoke → `stella capability data-exports get` |
 | `data-exports.list` | read | stella:admin_read | — | generic invoke → `stella capability data-exports list` |
+
+## dictation
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `dictation.transcribe` | write | stella:chat | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. No JSON-transport alternative: Use POST /v1/dictation/transcribe with a multipart audio file. |
 
 ## document-translations
 
@@ -292,6 +299,10 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `legislation.boe.text-block.get` | read | stella:read | FEATURE_PUBLIC_LAW | covered by `search_boe_legislation` |
 | `legislation.borme.summary.get` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation borme-summary-get` |
 | `legislation.get` | read | stella:read | FEATURE_PUBLIC_LAW | covered by `read_statute` |
+| `legislation.matter-links.batch.create` | write | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation matter-links-batch-create` |
+| `legislation.matter-links.create` | write | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation matter-links-create` |
+| `legislation.matter-links.delete` | write, destructive | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation matter-links-delete` |
+| `legislation.matter-links.list` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation matter-links-list` |
 | `legislation.search` | read | stella:read | FEATURE_PUBLIC_LAW | curated tool `search_legislation` |
 
 ## lists
@@ -398,11 +409,16 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.ai-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings ai-availability-get` |
 | `organization-settings.anonymization-blacklist.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings anonymization-blacklist-get` |
 | `organization-settings.anonymization-blacklist.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings anonymization-blacklist-update` |
+| `organization-settings.billing-drafts.get` | read | stella:admin_read | FEATURE_TIME_BILLING | generic invoke → `stella capability organization-settings billing-drafts-get` |
+| `organization-settings.billing-drafts.update` | write | stella:admin_write | FEATURE_TIME_BILLING | generic invoke → `stella capability organization-settings billing-drafts-update` |
 | `organization-settings.correspondence.allowed-senders.create` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-create` |
 | `organization-settings.correspondence.allowed-senders.delete` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-delete` |
 | `organization-settings.correspondence.allowed-senders.list` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-list` |
 | `organization-settings.correspondence.allowed-senders.scope.add` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-scope-add` |
 | `organization-settings.correspondence.allowed-senders.scope.remove` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-scope-remove` |
+| `organization-settings.correspondence.data-boxes.create` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-create` |
+| `organization-settings.correspondence.data-boxes.delete` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-delete` |
+| `organization-settings.correspondence.data-boxes.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-get` |
 | `organization-settings.deepl-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings deepl-availability-get` |
 | `organization-settings.document-ocr-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings document-ocr-availability-get` |
 | `organization-settings.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings get` |
@@ -410,6 +426,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.preview` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings preview` |
 | `organization-settings.sanctions-monitoring.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings sanctions-monitoring-update` |
 | `organization-settings.update` | write | stella:admin_write | — | curated tool `update_organization_settings` |
+
+## organizations
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `organizations.create` | write | stella:organization_create | — | generic invoke → `stella capability organizations create` |
+| `organizations.slug.update` | write | stella:admin_write | — | generic invoke → `stella capability organizations slug-update` |
 
 ## playbooks
 
@@ -477,6 +500,12 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `saved-time-narratives.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives delete` |
 | `saved-time-narratives.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives list` |
 | `saved-time-narratives.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives update` |
+
+## search
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `search.results.list` | read | stella:read | — | generic invoke → `stella capability search results-list` |
 
 ## search-history
 
@@ -662,6 +691,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `time-entries.me.suggestions.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries me-suggestions-list` |
 | `time-entries.members.daily-target.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries members-daily-target-update` |
 | `time-entries.pdf.export` | read | stella:read | FEATURE_TIME_BILLING | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. time-entries.csv.export covers part of this: returns the same entries as CSV text (time-entries.ledes.export returns LEDES instead); the rendered PDF is not produced |
+| `time-entries.report.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries report-get` |
 | `time-entries.split` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries split` |
 | `time-entries.suggestions.decisions.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries suggestions-decisions-create` |
 | `time-entries.suggestions.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries suggestions-list` |
@@ -743,24 +773,25 @@ mechanics, and similar), not gaps in coverage.
 
 | Reason | Count |
 | --- | --- |
-| account_lifecycle | 4 |
-| assistant_chat | 15 |
-| auth_plumbing | 33 |
-| billing_ui | 2 |
-| chat_thread_ui | 18 |
+| account_lifecycle | 6 |
+| assistant_chat | 16 |
+| auth_plumbing | 38 |
+| billing_ui | 1 |
+| chat_thread_ui | 21 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 26 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
+| native_device | 5 |
 | native_tool_ui | 8 |
 | organization_export | 2 |
 | provider_secret | 34 |
 | public_indexing | 9 |
 | realtime_stream | 9 |
-| search_ui | 19 |
+| search_ui | 20 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 21 |
+| upload_mechanics | 22 |
 | url_preview | 2 |

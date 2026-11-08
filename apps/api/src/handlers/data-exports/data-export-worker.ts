@@ -42,6 +42,7 @@ import type {
 } from "@/api/handlers/data-exports/build-export";
 import { createExportSource } from "@/api/handlers/data-exports/export-source";
 import { createExportPacer } from "@/api/handlers/data-exports/pacer";
+import { detached } from "@/api/lib/analytics/capture";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -822,14 +823,19 @@ export const initDataExportWorker = (_context: BullMqWorkerContext) => {
   );
   // A queue-wide cap across every API process, so exports for many
   // organisations never take more than a sliver of storage and database.
-  getDataExportQueue()
-    .setGlobalConcurrency(DATA_EXPORT_GLOBAL_CONCURRENCY)
-    .catch((error: unknown) => {
+  detached(
+    async () =>
+      await getDataExportQueue().setGlobalConcurrency(
+        DATA_EXPORT_GLOBAL_CONCURRENCY,
+      ),
+    "data-export.global-concurrency",
+    (error) => {
       observeFailure(error, {
         sink: dataExportGlobalConcurrencyFailed,
         ctx: { operation: "data_export.global_concurrency" },
       });
-    });
+    },
+  );
   worker.on("error", createQueueWorkerErrorLogger("data_export.worker_error"));
   logger.info("data_export.worker_started", {
     concurrency: String(WORKER_CONCURRENCY),

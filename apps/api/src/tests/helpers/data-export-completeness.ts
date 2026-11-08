@@ -37,6 +37,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 export type DataExportCompletenessFixture = {
@@ -773,9 +774,7 @@ export const seedDataExportCompleteness = async (
 ): Promise<DataExportCompletenessFixture> => {
   const state = createState(db);
   const cleanup = async () => {
-    await db
-      .delete(organization)
-      .where(eq(organization.id, state.organizationId));
+    await deleteOrganizationsForTest(db, [state.organizationId]);
     await db.delete(user).where(eq(user.id, state.userId));
   };
   const seeded = await Result.tryPromise({

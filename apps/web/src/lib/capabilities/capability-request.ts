@@ -29,11 +29,13 @@ export const invokeCapability = async <TResult>(
 ): Promise<TResult> => await call(capabilityRequest(capability));
 
 export type AppOnlyWriteId =
+  | "chat.mcp-apps.call"
   | "files.document-properties.update"
   | "files.email-attachment.save"
   | "folio-collaboration.join"
   | "folio-collaboration.refresh-token"
-  | "folio-collaboration.seed.acknowledge";
+  | "folio-collaboration.seed.acknowledge"
+  | "organizations.audit-export.create";
 
 /** Declares an app-only write that deliberately has no automation capability. */
 export const invokeAppOnlyWrite = async <TResult>(

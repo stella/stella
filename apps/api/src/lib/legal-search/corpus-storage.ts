@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { Column, SQL } from "drizzle-orm";
 import * as v from "valibot";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import {
   type DocumentAst,
   headMatterOrderDegradations,
@@ -60,6 +61,7 @@ import type {
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
@@ -177,12 +179,24 @@ export const parsePersistedCorpusAst = (
     }
     throw error;
   }
-  const degradations = [
-    ...persistedAstDegradations(value),
-    ...(parsed.output !== null && "blocks" in parsed.output
+  // Late head matter is a known state of stored rows that a read serves as
+  // stored: a line per read, so its rate stays visible, and no exception, since
+  // no one can act on each read of the same row. Undeclared vocabulary is the
+  // schema falling behind what was stored, and is reported as a failure.
+  const lateHeadMatter =
+    parsed.output !== null && "blocks" in parsed.output
       ? headMatterOrderDegradations(parsed.output.blocks)
-      : []),
-  ];
+      : [];
+  if (lateHeadMatter.length > 0) {
+    logger.warn(
+      "case_law.decision.stored_ast_head_matter_order",
+      sanitizeErrorAttributesForOutput({
+        ...(documentId === undefined ? {} : { documentId }),
+        lateBlockCount: lateHeadMatter.length,
+      }),
+    );
+  }
+  const degradations = persistedAstDegradations(value);
   if (degradations.length > 0) {
     captureError(
       new StoredAstDegradedError({

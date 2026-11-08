@@ -24,6 +24,7 @@ import { allocateNumber } from "@/api/lib/billing/number-series";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolTimeBilling } from "@/api/tests/helpers/time-billing-enrolment";
 import {
@@ -297,17 +298,13 @@ describe("number series allocation", () => {
           (error: unknown) => error,
         );
       expect(deletionError).toMatchObject({ cause: { code: "23503" } });
-      await testDb
-        .delete(organization)
-        .where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(testDb, [organizationId]);
     } finally {
       await testDb.delete(numberSeries).where(eq(numberSeries.id, seriesId));
       await testDb
         .delete(sellerProfiles)
         .where(eq(sellerProfiles.id, sellerProfileId));
-      await testDb
-        .delete(organization)
-        .where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(testDb, [organizationId]);
     }
   });
 

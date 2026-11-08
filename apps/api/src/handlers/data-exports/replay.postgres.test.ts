@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
+
 import { member, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
@@ -47,7 +49,7 @@ describe.skipIf(!enabled)("organization export replay (postgres)", () => {
             organizationId,
             userId,
             role: "admin",
-            createdAt: new Date(),
+            createdAt: dbClock.now(),
           });
           const scopedDb = createScopedDb(
             markRlsDatabase(db),
@@ -174,7 +176,7 @@ describe.skipIf(!enabled)("organization export replay (postgres)", () => {
                       state: "completed",
                       responseCode: 200,
                       responseBody,
-                      completedAt: new Date(),
+                      completedAt: dbClock.now(),
                     }),
                 );
                 const context = createTestHandlerContext<

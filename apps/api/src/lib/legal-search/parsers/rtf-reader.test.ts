@@ -11,7 +11,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import type { BlockContent, Paragraph, Run } from "@stll/docx-core/model";
-import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
@@ -255,7 +255,8 @@ describe("code pages", () => {
       ({ charset }, index) =>
         String.raw`{\f${String(index)}\fcharset${String(charset)} F;}`,
     ).join("");
-    fc.assert(
+    assertProperty(
+      "every byte reads in the font active when it was written",
       fc.property(
         fc.integer({ min: 0, max: FONTS.length - 1 }),
         fc.array(step(3), { maxLength: 30 }),
@@ -265,7 +266,7 @@ describe("code pages", () => {
           expect(paragraphsOf(rtf).join("")).toBe(text);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 

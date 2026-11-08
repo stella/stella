@@ -1,4 +1,7 @@
-import type { AgentCaseLawSearchWarning } from "../lib/case-law/search-warnings";
+import type {
+  AgentCaseLawSearchWarning,
+  DecisionQueryWarning,
+} from "../lib/case-law/search-warnings";
 
 /** Agent guidance remains in tool results, never in the human-facing app. */
 export const MCP_NOTE_AUDIENCE = {
@@ -9,9 +12,15 @@ export const MCP_NOTE_AUDIENCE = {
   partial_matches_appended: "agent",
   filter_read: "agent",
   filter_dropped: "agent",
+  filter_unread: "agent",
   many_required_terms: "agent",
   provision_cited_widely: "agent",
+  phrasing_timed_out: "agent",
+  query_words_apart: "agent",
+  query_words_absent: "agent",
 } as const satisfies Record<
-  AgentCaseLawSearchWarning["code"] | "input_read",
+  | AgentCaseLawSearchWarning["code"]
+  | DecisionQueryWarning["code"]
+  | "input_read",
   "agent" | "user"
 >;

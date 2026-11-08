@@ -18,14 +18,21 @@ describe("export pacing", () => {
   });
 
   test("always pauses, even when the process is idle", async () => {
-    const pacer = createExportPacer({
-      baseDelayMs: 20,
-      busyDelayMs: 20,
-      busyLagMs: 1_000_000,
-    });
-    const started = performance.now();
+    const pauses: number[] = [];
+    const pacer = createExportPacer(
+      {
+        baseDelayMs: 20,
+        busyDelayMs: 500,
+        busyLagMs: 1_000_000,
+      },
+      async (milliseconds) => {
+        pauses.push(milliseconds);
+        await Promise.resolve();
+      },
+    );
+    await pacer.pace();
     await pacer.pace();
     pacer.close();
-    expect(performance.now() - started).toBeGreaterThanOrEqual(15);
+    expect(pauses).toEqual([20, 20]);
   });
 });

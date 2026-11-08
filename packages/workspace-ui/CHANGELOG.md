@@ -1,5 +1,67 @@
 # @stll/workspace-ui
 
+## 0.16.0
+
+### Minor Changes
+
+- [#7941](https://github.com/stella/stella/pull/7941) [`c06a3b7`](https://github.com/stella/stella/commit/c06a3b75576febd3108abf6c769c62ecf5d47624) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `record` field content type: a cell holding typed records from a data source or a structured AI answer. `FieldValue` renders it as a summary (the record's values, a record count, a prompt to choose among unselected candidates, or a review or not-found note), and `RecordFieldValue`, `summarizeRecordField` and the `RecordField*` types are exported. `GenericProperty` and `PropertyIconType` accept `record`.
+
+### Patch Changes
+
+- Updated dependencies [[`4c623bb`](https://github.com/stella/stella/commit/4c623bbc19a13167e06f819783849e10c8cbddc0), [`61932c3`](https://github.com/stella/stella/commit/61932c325b3ce81881dbd917961a301891b7d949), [`50c904c`](https://github.com/stella/stella/commit/50c904c50877280367403165f00ef5d92663b23c), [`fa90f18`](https://github.com/stella/stella/commit/fa90f18c69c45e42359e2c5dc2e4511bf69466df), [`b137d1b`](https://github.com/stella/stella/commit/b137d1b048e6d36123ba60d24ab99baaf8208de7)]:
+  - @stll/ui@0.67.0
+
+## 0.15.8
+
+### Patch Changes
+
+- [#7427](https://github.com/stella/stella/pull/7427) [`d05a124`](https://github.com/stella/stella/commit/d05a124a296d0426288f86684f0c77c1b1072db4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ChatModelSelector` now renders the `@stll/ui` select (a button and a popup list) instead of a native `<select>`: a host must load the `@stll/ui` stylesheet (`@stll/ui/theme.css` with Tailwind scanning `@stll/ui`) for it to draw. `ChatLink` shows its new-tab notice or source title as a tooltip and as the link's accessible description. The condition builder's number fields use `NumberInput` without locale grouping.
+- Updated dependencies [[`21f18d7`](https://github.com/stella/stella/commit/21f18d7eae6c328149c77ebf2a1baff624de33c6), [`e5ee9a9`](https://github.com/stella/stella/commit/e5ee9a9c120441b0bea4476df78e1432ace3146d), [`254bf05`](https://github.com/stella/stella/commit/254bf058b481c2ea137f8e37664a37b80c537190), [`72b68c8`](https://github.com/stella/stella/commit/72b68c8fc423618a9e060ead157dc3f2f30e1583)]:
+  - @stll/ui@0.66.0
+
+## 0.15.7
+
+### Patch Changes
+
+- [#7844](https://github.com/stella/stella/pull/7844) [`f630d4c`](https://github.com/stella/stella/commit/f630d4c14cffb0b8e8ccef327601ba4d2760c217) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ViewSwitcher` renders view names isolated and without directional controls.
+- Updated dependencies [[`b94d282`](https://github.com/stella/stella/commit/b94d282e58eb483f7abf6cc7e81b859c7709ce3b)]:
+  - @stll/ui@0.65.0
+
+## 0.15.6
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/ui@0.64.0
+
+## 0.15.5
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/ui@0.63.0
+
+## 0.15.4
+
+### Patch Changes
+
+- Updated dependencies [[`adf1c80`](https://github.com/stella/stella/commit/adf1c80ebf26167d25ca898c5a84ab2ec7f3f7df), [`8c6d81b`](https://github.com/stella/stella/commit/8c6d81bce91505c9adb7a4ce110e59ca9f14d995), [`1a9cfef`](https://github.com/stella/stella/commit/1a9cfefef3dffb7d7dd7b719b274a3a17038a7d3), [`2d19088`](https://github.com/stella/stella/commit/2d19088ff7e50ef7c05626cb0acea99d833ee040), [`9a630f2`](https://github.com/stella/stella/commit/9a630f22434730827a062f801da6dba99c1ff470), [`d606df6`](https://github.com/stella/stella/commit/d606df66432d07b47ffac383ef63489f7a3d881f), [`18d7fab`](https://github.com/stella/stella/commit/18d7fabf3c8b36d91f3520e327a4ebae17f5cee0), [`d9f4906`](https://github.com/stella/stella/commit/d9f49066d72b5e611e7ab38b3d041a87bb252d28), [`e88b3ff`](https://github.com/stella/stella/commit/e88b3fff72fa8bcf7c81a66c54b58c425ab1fee7)]:
+  - @stll/ui@0.62.0
+
+## 0.15.3
+
+### Patch Changes
+
+- Updated dependencies [[`a2ff7a7`](https://github.com/stella/stella/commit/a2ff7a75f1f1f0d1cc9e64517449fe2462a2e636)]:
+  - @stll/ui@0.61.0
+
+## 0.15.2
+
+### Patch Changes
+
+- Updated dependencies [[`a8532a0`](https://github.com/stella/stella/commit/a8532a054628dc979e3bc7e48d807cb44e2d66b2), [`496eff7`](https://github.com/stella/stella/commit/496eff74a703471be2b2075d24c2e78159e2bc57), [`ac06603`](https://github.com/stella/stella/commit/ac06603f5b187b45bc1ca741cf9d2496959eab5a), [`92038d5`](https://github.com/stella/stella/commit/92038d59d484f5f59e36fa35e297cc19bf3e6e2c), [`8f35c0f`](https://github.com/stella/stella/commit/8f35c0f990c12833a18adf4cdb86a69b3681acdc), [`8f35c0f`](https://github.com/stella/stella/commit/8f35c0f990c12833a18adf4cdb86a69b3681acdc)]:
+  - @stll/ui@0.60.0
+
 ## 0.15.1
 
 ### Patch Changes

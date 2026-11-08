@@ -72,6 +72,7 @@ const createDataExport = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 409,
+          code: "data_export_just_finished",
           message: "Another export just finished; start a new one.",
         }),
       );

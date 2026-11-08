@@ -54,7 +54,11 @@ const readDataExport = createSafeRootHandler(
     const row = rows.at(0);
     if (row === undefined) {
       return Result.err(
-        new HandlerError({ status: 404, message: "Export not found" }),
+        new HandlerError({
+          status: 404,
+          code: "data_export_not_found",
+          message: "Export not found",
+        }),
       );
     }
     return Result.ok(toDataExportSummary(row));

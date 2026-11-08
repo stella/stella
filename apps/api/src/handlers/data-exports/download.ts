@@ -171,18 +171,27 @@ const downloadDataExport = createSafeRootHandler(
     switch (granted.type) {
       case "not_found":
         return Result.err(
-          new HandlerError({ status: 404, message: "Export not found" }),
+          new HandlerError({
+            status: 404,
+            code: "data_export_not_found",
+            message: "Export not found",
+          }),
         );
       case "unavailable":
         return Result.err(
           new HandlerError({
             status: 409,
+            code: "data_export_unavailable",
             message: UNAVAILABLE_MESSAGE[granted.status],
           }),
         );
       case "no_such_part":
         return Result.err(
-          new HandlerError({ status: 404, message: "No such part" }),
+          new HandlerError({
+            status: 404,
+            code: "data_export_part_not_found",
+            message: "No such part",
+          }),
         );
       case "granted":
         return Result.ok({
