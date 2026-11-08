@@ -807,6 +807,16 @@ const APP_PAIR_SINK = failureSink({
 
 type ReportedAppCall = { toolName: string; args: string };
 
+/**
+ * A result the harness reported as failed: the chunk normalizer moves the
+ * result's state into its `tanstack` metadata.
+ */
+const failedResult = (chunk: PublicStreamChunk) => {
+  const metadata: unknown = "metadata" in chunk ? chunk.metadata : undefined;
+  const tanstack = isRecord(metadata) ? metadata["tanstack"] : undefined;
+  return isRecord(tanstack) && tanstack["state"] === "output-error";
+};
+
 const isPlainArgs = (value: unknown): value is Record<string, unknown> =>
   isRecord(value) && !Array.isArray(value);
 
@@ -857,7 +867,13 @@ const createRunApps = (context: LocalRunContext, runnerRunId: string) => {
       }
       const call = reported.get(chunk.toolCallId);
       reported.delete(chunk.toolCallId);
-      if (call === undefined || minted >= MAX_APPS_PER_READ) {
+      // A failed call was answered nothing to show, and must not claim the
+      // row of a retry with the same arguments.
+      if (
+        call === undefined ||
+        failedResult(chunk) ||
+        minted >= MAX_APPS_PER_READ
+      ) {
         return;
       }
       const decoded = Result.try((): unknown =>

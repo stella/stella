@@ -107,14 +107,20 @@ const storedTurn = async (
     toolName,
     input,
     extra = [],
-  }: { toolName: string; input: unknown; extra?: unknown[] },
+    status = "succeeded",
+  }: {
+    toolName: string;
+    input: unknown;
+    extra?: unknown[];
+    status?: "succeeded" | "failed";
+  },
 ) => {
   const events: HarnessEvent[] = [
     { type: "tool.started", toolCall: { id: "tool-1", name: toolName, input } },
     {
       type: "tool.completed",
       toolCall: { id: "tool-1", name: toolName, input },
-      result: { content: "results", status: "succeeded" },
+      result: { content: "results", status },
     },
     { type: "text.completed", messageId: "msg_1", text: "Found one." },
     { type: "turn.completed", usage: null },
@@ -298,6 +304,30 @@ describe("an app shown for a local run's call", () => {
         part,
       ]);
     }
+  });
+
+  test("is not minted for a failed call, which leaves the answer to its retry", async () => {
+    const runId = await seedRun(owner);
+    await recordServerAnswer(runId);
+    const failed = await readTurn({
+      runId,
+      chunks: await storedTurn(runId, {
+        toolName: "search_case_law",
+        input: args,
+        status: "failed",
+      }),
+      origin: createVisualResourceOrigin(),
+    });
+    expect(appParts(failed)).toEqual([]);
+    const retried = await readTurn({
+      runId,
+      chunks: await storedTurn(runId, {
+        toolName: "search_case_law",
+        input: args,
+      }),
+      origin: createVisualResourceOrigin(),
+    });
+    expect(appParts(retried)).toHaveLength(1);
   });
 
   test("is not minted for a call the server never answered", async () => {

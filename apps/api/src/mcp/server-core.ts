@@ -1200,18 +1200,11 @@ export const createMcpHttpRequestHandler = ({
               }),
           ),
       );
-      // Before the answer leaves, so a chat turn reading the run finds it.
-      await recordAgentRunAppCall({
-        context,
-        toolName,
-        args: toolRequest.params.arguments ?? {},
-        result,
-      });
       const decoratedResult =
         toolName === MCP_WEB_HANDOFF_TOOL || mode === "anonymized"
           ? result
           : await decorateToolResult(result, context);
-      return await boundMcpToolResult({
+      const answered = await boundMcpToolResult({
         result: decoratedResult,
         requestId: mcpReq.id,
         definition,
@@ -1221,6 +1214,16 @@ export const createMcpHttpRequestHandler = ({
         toolName,
         chargeReadBytes,
       });
+      // What the run is answered, once its limits passed, and before the
+      // answer leaves, so a chat turn reading the run finds it. A read the
+      // limits refused answers an error, which keeps nothing.
+      await recordAgentRunAppCall({
+        context,
+        toolName,
+        args: toolRequest.params.arguments ?? {},
+        result: answered,
+      });
+      return answered;
     };
     let consumesServices = definition.consumesServices;
     if (
