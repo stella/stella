@@ -12,6 +12,7 @@ import {
   createFileRoute,
   Navigate,
   redirect,
+  useLocation,
   useNavigate,
 } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
@@ -57,6 +58,7 @@ import {
 } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
+  getOauthContinuationHref,
   getOauthHashFragment,
   getOauthRedirectUrl,
   getSignedOauthQuery,
@@ -119,6 +121,16 @@ export const Route = createFileRoute("/auth/organization")({
     const isOauthPostLogin =
       bridgedQuery !== null || isOauthPostLoginFromSearch;
 
+    // A sign-in step hands the authorization on inside `redirectTo`. Picking
+    // here would set the organization without it and land on this page again
+    // with the request, or on the home page; resume it on this page first.
+    const continuation = isOauthPostLogin
+      ? null
+      : getOauthContinuationHref(search.redirectTo);
+    if (continuation !== null) {
+      throw redirect({ href: continuation, replace: true });
+    }
+
     const isDevQuickStart =
       import.meta.env.DEV && search.devQuickStart === true;
     if (
@@ -130,7 +142,7 @@ export const Route = createFileRoute("/auth/organization")({
       throw redirect(destinationNavigation(search.redirectTo ?? "/"));
     }
 
-    return { isOauthPostLoginFromSearch, userId: context.session.userId };
+    return { userId: context.session.userId };
   },
   component: Organization,
 });
@@ -179,23 +191,16 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
   const organizationView = queryView(useQuery(organizationListOptions(userId)));
   const redirectTo = Route.useSearch({ select: (search) => search.redirectTo });
-  const isOauthPostLoginFromSearch = Route.useRouteContext({
-    select: (context) => context.isOauthPostLoginFromSearch,
+  // Read from the router, never from `window.location` during render: this
+  // page stays mounted when a navigation only changes its query or fragment,
+  // and a value read outside React's inputs keeps its first answer.
+  const signedOauthQuery = useLocation({
+    select: ({ hash, searchStr }) => getSignedOauthQuery({ hash, searchStr }),
   });
-  const isOauthPostLogin =
-    isOauthPostLoginFromSearch ||
-    (hydrated && getSignedOauthQueryFromHash(window.location.hash) !== null);
+  const isOauthPostLogin = signedOauthQuery !== null;
   // A client asking for account selection gets this step even for a single
   // membership, so the account can still be switched before consent.
-  const isAccountSelection =
-    hydrated &&
-    hasOauthPrompt(
-      getSignedOauthQuery({
-        hash: window.location.hash,
-        searchStr: window.location.search,
-      }),
-      "select_account",
-    );
+  const isAccountSelection = hasOauthPrompt(signedOauthQuery, "select_account");
 
   if (hydrated && organizationView.type === "empty" && !isOauthPostLogin) {
     return <Navigate {...onboardingNavigation(redirectTo)} />;
