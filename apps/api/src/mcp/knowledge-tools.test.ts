@@ -1197,6 +1197,7 @@ describe("MCP knowledge tools", () => {
       id: APPROVED_VERSION_ID,
       name: "Approved name",
       positions: positionsSaying("As approved"),
+      scope: null,
     });
     materializePlaybookRunMock.mockResolvedValue({
       ok: true,
@@ -1253,6 +1254,7 @@ describe("MCP knowledge tools", () => {
         definitionSnapshot: {
           name: "Approved name",
           positions: positionsSaying("As approved"),
+          scope: null,
         },
       },
     });
