@@ -7,6 +7,9 @@ import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
  * The exact wording of every verified block a justification cites. Only a
  * verified citation holds text the server looked up; an unverified one is
  * whatever the model typed, and a Bates citation points at a page with no text.
+ *
+ * An answer that also cites a PDF yields no passages. Its PDF terms exist only
+ * in the answer, so grading the DOCX passages alone would miss them.
  */
 export const verifiedPassageTexts = (
   content: JustificationContent,
@@ -24,6 +27,7 @@ export const verifiedPassageTexts = (
         }
         break;
       case "pdf-bates":
+        return [];
       case "playbook-verdict":
       case "decision-passage":
         break;

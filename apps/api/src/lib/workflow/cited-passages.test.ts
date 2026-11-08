@@ -4,6 +4,7 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import type { JustificationContent } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   sharePassages,
@@ -99,6 +100,42 @@ describe("verifiedPassageTexts", () => {
         ],
       }),
     ).toEqual([]);
+  });
+
+  test("an answer citing both a DOCX and a PDF has no passages, in either order", () => {
+    const docx = {
+      kind: "docx-folio",
+      fileFieldId,
+      statements: [
+        {
+          text: "Payment term.",
+          citations: [
+            {
+              citationStatus: "verified",
+              blockId: "b1",
+              text: "Payable within 30 days.",
+            },
+          ],
+        },
+      ],
+    } as const satisfies JustificationContent["blocks"][number];
+    const pdf = {
+      kind: "pdf-bates",
+      fileFieldId,
+      statements: [
+        {
+          text: "Late fee.",
+          citations: [{ bates: "F1-0002", pageNumber: 2 }],
+        },
+      ],
+    } as const satisfies JustificationContent["blocks"][number];
+
+    expect(verifiedPassageTexts({ version: 1, blocks: [docx, pdf] })).toEqual(
+      [],
+    );
+    expect(verifiedPassageTexts({ version: 1, blocks: [pdf, docx] })).toEqual(
+      [],
+    );
   });
 });
 
