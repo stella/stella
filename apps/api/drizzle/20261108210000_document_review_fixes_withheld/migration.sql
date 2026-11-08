@@ -1,5 +1,5 @@
-SET lock_timeout = '1s';--> statement-breakpoint
-SET statement_timeout = '5s';--> statement-breakpoint
+SET LOCAL lock_timeout = '1s';--> statement-breakpoint
+SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
 -- How many fixes a review run did not stage because its requester could not
 -- open every matter its reference text came from. A constant default, so the
