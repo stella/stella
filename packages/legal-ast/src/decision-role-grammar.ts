@@ -1,7 +1,7 @@
 /**
  * The role grammar of a decision's language, for checks that read every
- * source's blocks: which line signs the decision and which opens its
- * reasons.
+ * source's blocks: which line signs the decision, which opens its reasons,
+ * which rules and which is the head matter before the ruling.
  *
  * Each language's vocabulary lives in its own owner (`czech-document-roles`,
  * `slovak-document-roles`, `polish-document-roles`), which the parsers of
@@ -14,7 +14,10 @@ import {
   isCzechSignatureLine,
 } from "./czech-document-roles.js";
 import {
+  containsPlOperativeVerb,
+  isPlHoldingHeading,
   isPlReasonsHeading,
+  isPlRecitalLine,
   isPlSignatureLine,
 } from "./polish-document-roles.js";
 import { isSkReasoningMarker } from "./slovak-document-roles.js";
@@ -24,7 +27,17 @@ export type DecisionRoleGrammar = {
   readonly isReasonsHeading: (text: string) => boolean;
   /** A line that signs the decision, where the language has one to read. */
   readonly isSignatureLine?: (text: string) => boolean;
+  /**
+   * A line of the head matter before the ruling (the recital, the legal
+   * basis), where the language has one to read.
+   */
+  readonly isRecitalLine?: (text: string) => boolean;
+  /** A line that rules: it holds an operative verb. */
+  readonly isOperativeLine?: (text: string) => boolean;
 };
+
+const isPlOperativeLine = (text: string): boolean =>
+  containsPlOperativeVerb(text) || isPlHoldingHeading(text);
 
 const DECISION_ROLE_GRAMMARS: ReadonlyMap<string, DecisionRoleGrammar> =
   new Map([
@@ -40,6 +53,8 @@ const DECISION_ROLE_GRAMMARS: ReadonlyMap<string, DecisionRoleGrammar> =
       {
         isReasonsHeading: isPlReasonsHeading,
         isSignatureLine: isPlSignatureLine,
+        isRecitalLine: isPlRecitalLine,
+        isOperativeLine: isPlOperativeLine,
       },
     ],
     ["sk", { isReasonsHeading: isSkReasoningMarker }],

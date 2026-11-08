@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  containsPlOperativeVerb,
   isPlHoldingHeading,
   isPlReasonsHeading,
+  isPlRecitalLine,
   isPlSignatureBlank,
   isPlSignatureLine,
   startsWithPlOperativeVerb,
@@ -78,6 +80,7 @@ describe("a Polish holding heading", () => {
     "uchwala",
     "uchwalić",
     "uchwalił:",
+    "ustalił:",
     "zarządza",
   ])("recognizes a bare holding heading: %s", (text) => {
     expect(isPlHoldingHeading(text)).toBe(true);
@@ -151,4 +154,37 @@ describe("the Polish reasons heading", () => {
       expect(isPlReasonsHeading(text)).toBe(false);
     },
   );
+});
+
+describe("the Polish head matter before the ruling", () => {
+  test.each([
+    "po rozpoznaniu w sprawie przeciwko skazanemu D. P.",
+    "po przeprowadzeniu postępowania administracyjnego w sprawie przetwarzania danych osobowych przez Burmistrza G., Prezes Urzędu Ochrony Danych Osobowych",
+    "Na podstawie art. 104 § 1 ustawy z dnia 14 czerwca 1960 r. Kodeks postępowania administracyjnego,",
+    "na podstawie art. 437 § 2 kpk",
+  ])("introduces the ruling: %s", (text) => {
+    expect(isPlRecitalLine(text)).toBe(true);
+  });
+
+  test.each([
+    // A ruling point that rules on its legal basis is the ruling.
+    "na podstawie art. 4 ust. 2 ustawy o Trybunale Konstytucyjnym umorzyć postępowanie",
+    "po rozpoznaniu apelacji oddala ją",
+    "1. zasądza od pozwanego kwotę 100 zł",
+  ])("rules: %s", (text) => {
+    expect(isPlRecitalLine(text)).toBe(false);
+  });
+
+  test("a ruling point that opens on its object still rules", () => {
+    expect(containsPlOperativeVerb("I. powództwo oddala,")).toBe(true);
+    expect(containsPlOperativeVerb("o d d a l a apelację")).toBe(true);
+    expect(containsPlOperativeVerb("sprawy z powództwa M. D.")).toBe(false);
+    expect(containsPlOperativeVerb("o oddaleniu powództwa")).toBe(false);
+  });
+
+  test("a spaced holding heading is the heading", () => {
+    expect(isPlHoldingHeading("p o s t a n a w i a")).toBe(true);
+    expect(isPlHoldingHeading("o r z e k a :")).toBe(true);
+    expect(startsWithPlOperativeVerb("o d d a l a apelację")).toBe(true);
+  });
 });

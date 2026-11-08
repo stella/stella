@@ -62,6 +62,11 @@ export const STRUCTURE_FIDELITY_RULES = {
    * a parser that did not see the heading read the reasons as the ruling.
    */
   HOLDING_AFTER_REASONS: "holding-after-reasons",
+  /**
+   * The recital or the legal basis before the ruling, read as the ruling:
+   * the parser opened the operative part before its first operative line.
+   */
+  RECITAL_AS_HOLDING: "recital-as-holding",
 } as const;
 
 type StructureFidelityRule =
@@ -167,6 +172,8 @@ const excerptOf = (text: string): string => text.slice(0, EXCERPT_CHARS);
 type RoleReading = {
   grammar: DecisionRoleGrammar | undefined;
   reasoned: boolean;
+  /** Whether a line that rules has been read: the head matter is over. */
+  ruled: boolean;
 };
 
 /** Whether a block opens the reasons, by the language's grammar. */
@@ -180,14 +187,25 @@ const opensReasons = (
 
 /** The role rules a holding paragraph breaks, by the language's grammar. */
 const holdingRoleRules = (
-  { grammar, reasoned }: RoleReading,
+  { grammar, reasoned, ruled }: RoleReading,
   text: string,
 ): StructureFidelityRule[] => [
   ...(reasoned ? [STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_REASONS] : []),
   ...(grammar?.isSignatureLine?.(text) === true
     ? [STRUCTURE_FIDELITY_RULES.SIGNATURE_AS_HOLDING]
     : []),
+  ...(!ruled && grammar?.isRecitalLine?.(text) === true
+    ? [STRUCTURE_FIDELITY_RULES.RECITAL_AS_HOLDING]
+    : []),
 ];
+
+/** Whether a block rules, by the language's grammar. */
+const rules = (
+  grammar: DecisionRoleGrammar | undefined,
+  block: Block,
+): boolean =>
+  (block.type === "heading" || block.type === "paragraph") &&
+  grammar?.isOperativeLine?.(block.plainText) === true;
 
 /**
  * Every printed-page structure the blocks carry, in document order, and
@@ -202,9 +220,11 @@ export const structureFidelityIn = (
   const reading: RoleReading = {
     grammar: decisionRoleGrammarOf(language),
     reasoned: false,
+    ruled: false,
   };
   for (const [index, block] of blocks.entries()) {
     const opens = opensReasons(reading.grammar, block);
+    reading.ruled ||= rules(reading.grammar, block);
     if (block.type !== "paragraph") {
       reading.reasoned ||= opens;
       continue;

@@ -1,8 +1,9 @@
 /**
  * Roles of recorded Polish decisions, read through the one Polish role
- * grammar: the bench signs under its ruling, a signing label leaves a blank
- * for the signature, and the reasons open under their heading however the
- * court spaced it.
+ * grammar: the recital and the legal basis introduce the ruling, the ruling
+ * opens at its operative verb, the bench signs under it, a signing label
+ * leaves a blank for the signature, and the reasons open under their heading
+ * however the court spaced it.
  */
 
 import { panic } from "better-result";
@@ -17,13 +18,27 @@ import {
   normalizeSaosDumpItem,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { assemblePlKioDecision as uncheckedAssemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { parsePlUodoDecisionXml as uncheckedParsePlUodoDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import { structureFidelityIn } from "@/api/lib/legal-search/parsers/structure-fidelity";
 import { isRecord } from "@/api/lib/type-guards";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
+const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);
+const parsePlUodoDecisionXml = guardParser(uncheckedParsePlUodoDecisionXml);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
+/** Decisions recorded for their roles, read by their parser alone. */
+const ROLE_FIXTURES = new URL(
+  "../parsers/__fixtures__/decision-roles/",
+  import.meta.url,
+);
+
+const roleFixtureText = async (name: string): Promise<string> =>
+  new TextDecoder().decode(
+    Bun.gunzipSync(await Bun.file(new URL(name, ROLE_FIXTURES)).bytes()),
+  );
 
 const fixtureText = async (name: string): Promise<string> => {
   const bytes = await Bun.file(new URL(name, FIXTURES)).bytes();
@@ -72,6 +87,21 @@ const kioBlocks = async (id: string): Promise<Block[]> => {
     : panic(`KIO ${id} did not build: ${built.type}`);
 };
 
+/** A portal judgment, given the listing context the parser tests use. */
+const ncourtBlocks = async (name: string): Promise<Block[]> => {
+  const built = assemblePlNcourtDecision({
+    listingXml:
+      "<judgement><id>1</id><signature>IV Kz 73/19</signature><courtId>15502000</courtId></judgement>",
+    detailXml: await fixtureText(
+      "pl-ncourt-detail-151005000004027_VIII_GC_000227_2021_Uz_2021-12-23_002.xml",
+    ),
+    contentXml: await roleFixtureText(name),
+  });
+  return built.type === "built"
+    ? blocksOf(built.decision.documentAst)
+    : panic(`${name} did not build: ${built.type}`);
+};
+
 const paragraphs = (blocks: readonly Block[]): ParagraphBlock[] =>
   blocks.filter((block): block is ParagraphBlock => block.type === "paragraph");
 
@@ -90,6 +120,7 @@ const roleFindings = (blocks: readonly Block[]): string[] =>
       ({ rule }) =>
         rule === "signature-as-holding" ||
         rule === "holding-after-reasons" ||
+        rule === "recital-as-holding" ||
         rule === "holding-after-signature",
     )
     .map(({ rule, anchorId }) => `${rule} ${anchorId}`);
@@ -154,6 +185,132 @@ describe("Polish decisions sign under their ruling", () => {
     expect(
       withRole(blocks.slice(reasons + 1), "argumentation").length,
     ).toBeGreaterThan(80);
+    expect(roleFindings(blocks)).toEqual([]);
+  });
+});
+
+/** A judgment of the recorded SAOS dump day, read as ingestion reads it. */
+const dumpDayBlocks = async (id: number): Promise<Block[]> => {
+  const payload: unknown = JSON.parse(
+    await fixtureText("pl-courts-dump-day.json.gz"),
+  );
+  const items =
+    isRecord(payload) && Array.isArray(payload["items"])
+      ? payload["items"].filter(isRecord)
+      : panic("pl-courts-dump-day is not a SAOS dump page");
+  const row =
+    items.find((item) => item["id"] === id) ??
+    panic(`pl-courts-dump-day lists no judgment ${id}`);
+  const decision =
+    buildPlDecision({
+      listingItem: normalizeSaosDumpItem(row),
+      detail: null,
+      rawParts: { "listing-dump": JSON.stringify(row) },
+    }) ?? panic(`judgment ${id} builds no decision`);
+  return blocksOf(decision.documentAst);
+};
+
+describe("Polish decisions rule after their recital", () => {
+  test("IV Kz 73/19: the recital printed line by line introduces the ruling, which opens at the spaced verb", async () => {
+    const blocks = await ncourtBlocks("pl-ncourt-iv-kz-73-19.xml.gz");
+    // The court prints the verb spaced out (`p o s t a n a w i a`).
+    const verb = blocks.findIndex((block) => block.plainText === "postanawia");
+
+    expect(blocks[verb]).toMatchObject({
+      type: "heading",
+      role: "section-heading",
+    });
+    expect(withRole(blocks.slice(0, verb), "holding")).toEqual([]);
+    expect(withRole(blocks.slice(0, verb), "intro")).toEqual(
+      expect.arrayContaining([
+        "po rozpoznaniu w sprawie przeciwko skazanemu D. P.",
+        "s. J. urodz. (...)",
+        "na podstawie art. 437 § 2 kpk",
+      ]),
+    );
+    expect(withRole(blocks, "holding")).toEqual([
+      "uchylić zaskarżone postanowienie i sprawę skazanego D. P. przekazać do ponownego rozpoznania Sądowi Rejonowemu w Legnicy.",
+    ]);
+    expect(roleFindings(blocks)).toEqual([]);
+  });
+
+  test("ZSPU.421.3.2019: the legal basis and the recital introduce the ruling, and the reasons are argued", async () => {
+    const parsed = parsePlUodoDecisionXml({
+      xml: await roleFixtureText("pl-uodo-zspu-421-3-2019.xml.gz"),
+      documentId: "PublicDocument-20191018-000000-000-3f8cb4bd",
+      caseNumber: "ZSPU.421.3.2019",
+      court: "Prezes Urzędu Ochrony Danych Osobowych",
+      decisionDate: undefined,
+      decisionType: "decyzja",
+      sourceUrl: undefined,
+    });
+    const blocks = parsed.isOk()
+      ? parsed.value.documentAst.blocks
+      : panic(parsed.error.message);
+    const body = paragraphs(blocks).filter((block) => block.note === undefined);
+    const reasons = blocks.findIndex(
+      (block) =>
+        block.type === "heading" && isPlReasonsHeading(block.plainText),
+    );
+
+    expect(body.slice(1, 3).map((block) => block.role)).toEqual([
+      "intro",
+      "intro",
+    ]);
+    expect(body[1]?.plainText).toStartWith("Na podstawie art. 104 § 1");
+    expect(body[2]?.plainText).toStartWith(
+      "po przeprowadzeniu postępowania administracyjnego",
+    );
+    expect(body[3]).toMatchObject({ role: "holding" });
+    expect(body[3]?.plainText).toStartWith("I. stwierdzając naruszenie");
+    const reasonsBody = paragraphs(blocks.slice(reasons + 1)).filter(
+      (block) => block.note === undefined,
+    );
+    expect(reasonsBody.length).toBeGreaterThan(60);
+    expect(
+      reasonsBody.filter(
+        (block) => block.role !== "argumentation" && block.role !== "quote",
+      ),
+    ).toEqual([]);
+    expect(roleFindings(blocks)).toEqual([]);
+  });
+});
+
+describe("Polish recitals that list what they name", () => {
+  test("II K 4/18: the judgments a recital lists stay in it, and the ruling opens at its own points", async () => {
+    const blocks = await dumpDayBlocks(334_847);
+    const holdings = withRole(blocks, "holding");
+
+    expect(holdings.map((text) => text.slice(0, 4))).toEqual([
+      "I. n",
+      "II. ",
+      "III.",
+      "IV. ",
+      "V. n",
+    ]);
+    expect(withRole(blocks, "intro")).toEqual(
+      expect.arrayContaining([
+        "J. D., s. H. i M. z d. S., ur. (...) w S.",
+        "skazanego prawomocnymi wyrokami:",
+      ]),
+    );
+    expect(
+      withRole(blocks, "intro").filter((text) =>
+        /^(?:[12]\)|[a-d]\))/u.test(text),
+      ),
+    ).toHaveLength(6);
+    expect(roleFindings(blocks)).toEqual([]);
+  });
+
+  test("II K 373/17: the accused's particulars and the charge introduce the ruling", async () => {
+    const blocks = await dumpDayBlocks(335_042);
+
+    expect(withRole(blocks, "holding")[0]).toStartWith(
+      "1. Oskarżonego J. J. (1) uznaje za winnego",
+    );
+    expect(withRole(blocks, "intro")).toEqual(
+      expect.arrayContaining(["J. J. (1)", "oskarżonego o to, że:"]),
+    );
     expect(roleFindings(blocks)).toEqual([]);
   });
 });

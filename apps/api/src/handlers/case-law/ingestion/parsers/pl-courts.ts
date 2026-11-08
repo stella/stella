@@ -55,6 +55,7 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import {
+  containsPlOperativeVerb,
   isPlClosingLine,
   isPlHoldingHeading,
   isPlNumberedReasonsHeading,
@@ -175,6 +176,32 @@ const DECISION_TITLES: ReadonlySet<string> = new Set(
 );
 const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt[:\s]/iu;
 const DECISION_ITEM_PREFIX_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
+const DECISION_ITEM_MARKER_RE =
+  /^(?<marker>[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
+
+/** How a list numbers its points: `1)`, `I.`, `a)`. */
+type ItemFamily = "arabic" | "roman" | "letter";
+
+const itemFamilyOf = (text: string): ItemFamily | undefined => {
+  const marker = DECISION_ITEM_MARKER_RE.exec(text)?.groups?.["marker"];
+  if (marker === undefined) {
+    return undefined;
+  }
+  if (/^\d+$/u.test(marker)) {
+    return "arabic";
+  }
+  // One lowercase letter is a letter point; `ii`, `I`, `IV` are Roman.
+  return /^[IVXLCDM]+$/u.test(marker) || /^[ivxlcdm]{2,}$/u.test(marker)
+    ? "roman"
+    : "letter";
+};
+/**
+ * A one-letter marker other than a list's first (`a)`, `i.`): in the head
+ * matter it is an abbreviation (`s. J. urodz.`, "son of"; `c.`, "daughter
+ * of"), not a ruling point, since a ruling's lettered points start at `a`.
+ * Numbered and multi-letter Roman points are never read this way.
+ */
+const LETTER_ABBREVIATION_PREFIX_RE = /^[b-hj-z][.)](?:\s+|$)/iu;
 const AUTHORITY_DECISION_TITLE_RE = /^decyzja\s+nr\b/iu;
 const COMPOSITION_LINE_RE = /\bw składzie\s*:/iu;
 const PANEL_MEMBER_RE = /^(?:SSN|SSA|SSO|SSR)\b|\(ławnik[^)]*\)$/iu;
@@ -202,6 +229,12 @@ type ParserState = {
   panelNames: string[];
   superscripts: boolean;
   markup: PlDecisionMarkup | undefined;
+  /**
+   * How the list a recital announced numbers its points (`… o zbadanie:`
+   * then `1)`, `2)`, `a)`): its points, and the points nested under them,
+   * stay in the recital; a point numbered otherwise opens the ruling.
+   */
+  recitalList: ItemFamily | undefined;
   /** A list item's marker, waiting to open the item's first paragraph. */
   pendingMarker: Inline[] | undefined;
   listMarkers: WeakMap<Element, WeakMap<Element, string | null>>;
@@ -282,6 +315,7 @@ const createState = ({
   footnoteHrefs: new Set(footnoteIds?.map((noteId) => `#${noteId}`)),
   superscripts,
   markup,
+  recitalList: undefined,
   pendingMarker: undefined,
   listMarkers: new WeakMap(),
   listItemBoundaries: new WeakMap(),
@@ -648,6 +682,18 @@ const orderedListMarker = (
   return marker ?? undefined;
 };
 
+/**
+ * A recital line that announces a list of its own (`… o zbadanie:`): the
+ * points under it are the provisions or claims the recital names, not the
+ * ruling, which a line that rules (`… orzeka:`) would open. The bench line
+ * (`w składzie:`) announces its members, and the ruling follows it.
+ */
+const announcesRecitalList = (previous: Block | undefined): boolean =>
+  previous?.type === "paragraph" &&
+  previous.role === "intro" &&
+  previous.plainText.trimEnd().endsWith(":") &&
+  !containsPlOperativeVerb(previous.plainText);
+
 /** The blank a signing label leaves for the signature, under that label. */
 const signsBlank = (state: ParserState, plainText: string): boolean => {
   const previous = state.blocks.at(-1);
@@ -671,8 +717,8 @@ const inferParagraphRole = (
   const previous = state.blocks.at(-1);
   const isStructuredHolding =
     numbered &&
-    (state.section === "composition" ||
-      state.section === "recital" ||
+    (((state.section === "composition" || state.section === "recital") &&
+      !LETTER_ABBREVIATION_PREFIX_RE.test(normalizedText)) ||
       (previous?.type === "heading" && previous.role === "decision-title"));
   const isUnnumberedOperative =
     !numbered && startsWithPlOperativeVerb(normalizedText);
@@ -749,14 +795,47 @@ const rememberPanelMember = (
   }
 };
 
+/**
+ * The family of a point that belongs to the list its recital announced, or
+ * nothing when the point is not one: a point under a recital line ending
+ * `:` with no operative verb starts the list, and a point of the same
+ * family, or a letter point nested under one, goes on with it.
+ */
+const recitalListItem = (
+  state: ParserState,
+  plainText: string,
+): ItemFamily | undefined => {
+  if (state.section !== "recital") {
+    return undefined;
+  }
+  const family = itemFamilyOf(plainText.replace(/\s+/gu, " ").trim());
+  if (family === undefined) {
+    return undefined;
+  }
+  if (announcesRecitalList(state.blocks.at(-1))) {
+    return family;
+  }
+  return state.recitalList !== undefined &&
+    (family === state.recitalList || family === "letter")
+    ? state.recitalList
+    : undefined;
+};
+
 const classifyParagraph = (
   state: ParserState,
   plainText: string,
 ): ParagraphRole | undefined => {
+  const listed = recitalListItem(state, plainText);
+  if (listed !== undefined) {
+    // The list goes on across the recital's own lines between its points.
+    state.recitalList = listed;
+    return "intro";
+  }
   const role = inferParagraphRole(state, plainText);
   rememberPanelMember(state, plainText, role);
   if (role === "holding") {
     state.section = "holding";
+    state.recitalList = undefined;
     return role;
   }
   if (state.section === "preamble" || state.section === "composition") {

@@ -152,7 +152,8 @@ const roleFindings = (
     .filter(
       ({ rule }) =>
         rule === STRUCTURE_FIDELITY_RULES.SIGNATURE_AS_HOLDING ||
-        rule === STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_REASONS,
+        rule === STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_REASONS ||
+        rule === STRUCTURE_FIDELITY_RULES.RECITAL_AS_HOLDING,
     )
     .map(({ rule, anchorId }) => `${rule} ${anchorId}`);
 
@@ -221,6 +222,34 @@ test("a language without a role grammar is read for printed-page shapes only", (
         ["signature", "SSO Katarzyna Banko"],
         ["heading", "Uzasadnienie"],
         ["argumentation", "Powód domagał się zasądzenia."],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+});
+
+test("the recital before the first line that rules is not the ruling", () => {
+  expect(
+    roleFindings(
+      [
+        ["intro", "po rozpoznaniu w sprawie przeciwko skazanemu D. P."],
+        ["holding", "zażalenia wniesionego przez Prokuratora Rejonowego"],
+        ["holding", "na podstawie art. 437 § 2 kpk"],
+        ["heading", "p o s t a n a w i a"],
+        ["holding", "uchylić zaskarżone postanowienie"],
+        ["holding", "na podstawie art. 438 kpk"],
+      ],
+      "pl",
+    ),
+  ).toEqual(["recital-as-holding p-2"]);
+  expect(
+    roleFindings(
+      [
+        [
+          "intro",
+          "Na podstawie art. 104 § 1 Kodeksu postępowania administracyjnego,",
+        ],
+        ["holding", "na podstawie art. 4 ust. 2 umorzyć postępowanie"],
       ],
       "pl",
     ),
