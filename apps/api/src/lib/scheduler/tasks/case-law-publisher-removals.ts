@@ -14,8 +14,8 @@ import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import { selectDueErasureSources } from "@/api/lib/legal-search/removal-reconciliation-store";
 import { brandPersistedCaseLawSourceId } from "@/api/lib/safe-id-boundaries";
 import {
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import {
   type SchedulerTask,
@@ -94,7 +94,7 @@ export const createReconcileClaimedErasuresTask =
       name: SCHEDULER_BACKFILL_IDS.claimedErasures,
       tableName: "case_law_removal_reconciliation_items",
       initialSize: 1,
-      config: { ...SCHEDULER_BACKFILL_CONFIG, minSize: 1, maxSize: 1 },
+      config: { ...schedulerBackfillConfig(), minSize: 1, maxSize: 1 },
     });
     const settled = await Result.tryPromise({
       try: async () => {
