@@ -346,3 +346,25 @@ describe("committed CZ ÚS fixtures", () => {
     }
   });
 });
+
+describe("a CZ ÚS bench recital printed before a takto: of its own line", () => {
+  test("IV. ÚS 35/96: the court's name and the bench introduce the ruling", async () => {
+    const name = "cz-us-iv-us-35-96.html.gz";
+    const { documentAst } = parseUsDecisionHtml(
+      inputFor(
+        name,
+        await gunzipText(new URL(`decision-roles/${name}`, FIXTURES)),
+      ),
+    );
+    const head = bodyParagraphs(documentAst.blocks)
+      .slice(0, 4)
+      .map((block) => `${block.role ?? "-"} ${block.plainText.slice(0, 24)}`);
+
+    expect(head).toEqual([
+      "intro Ústavní soud České repub",
+      "intro v senátě rozhodl ve věci",
+      "intro takto:",
+      "holding 1. Rozsudek Krajského so",
+    ]);
+  });
+});

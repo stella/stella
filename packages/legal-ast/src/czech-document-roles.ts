@@ -1,8 +1,6 @@
-// parser-output-unchanged: [cz-ns] only adds isCzechVerdictFormulaLine, which only the structure-fidelity guard calls.
-// parser-output-unchanged: [cz-nss] only adds isCzechVerdictFormulaLine, which only the structure-fidelity guard calls.
-// parser-output-unchanged: [cz-us] only adds isCzechVerdictFormulaLine, which only the structure-fidelity guard calls.
-// parser-output-unchanged: [cz-regional] only adds isCzechVerdictFormulaLine, which only the structure-fidelity guard calls.
-// parser-output-unchanged: [cz-uohs] only adds isCzechVerdictFormulaLine, which only the structure-fidelity guard calls.
+// parser-output-unchanged: [cz-regional] only adds the bench-recital rule, which only the Supreme and Constitutional Court readers call.
+// parser-output-unchanged: [cz-uohs] only adds the bench-recital rule, which only the Supreme and Constitutional Court readers call.
+// parser-output-unchanged: [cz-nss] only adds the bench-recital rule, which only the Supreme and Constitutional Court readers call.
 import { collapseSpacedLetters, normalizeUnicode } from "@stll/text-normalize";
 
 import type { Block, ParagraphBlock } from "./document-ast.js";
@@ -322,3 +320,48 @@ export const isCzechVerdictFormulaLine = (text: string): boolean =>
   VERDICT_FORMULA_RE.test(
     collapseSpacedLetters(text.trim()).replaceAll(/\s+/gu, " "),
   );
+
+/** Most paragraphs a bench recital is printed in. */
+const BENCH_RECITAL_MAX_PARAGRAPHS = 3;
+/** A paragraph opening on the court's number (`12.`, `[12]`) is reasoning. */
+const COURT_NUMBERED_RE = /^(?:\[\d{1,4}\]|\d{1,4}\.)\s/u;
+
+/**
+ * Where the bench recital ending before `end` starts (`Ústavní soud České
+ * republiky` / `v senátě rozhodl ve věci … `, or one paragraph ending
+ * `takto:`): the role-less paragraphs that run back to the decision's head
+ * matter (its title, docket or opening formula). Only a short recital that
+ * carries no court number is one, so a `takto:` the reasons quote is not;
+ * `undefined` when the paragraphs before `end` are no recital. A reader
+ * whose blocks open after the head matter it keeps apart says so with
+ * `opensAfterHeadMatter`: a recital may then run back to its first block.
+ */
+export const czechBenchRecitalStart = (
+  blocks: readonly Block[],
+  end: number,
+  { opensAfterHeadMatter = false }: { opensAfterHeadMatter?: boolean } = {},
+): number | undefined => {
+  let start = end;
+  while (start > 0) {
+    const previous = blocks.at(start - 1);
+    if (previous?.type !== "paragraph" || previous.role !== undefined) {
+      break;
+    }
+    start -= 1;
+  }
+  // `at(-1)` would read the last block: at the start there is no head.
+  const head = start > 0 ? blocks.at(start - 1) : undefined;
+  const followsHeadMatter =
+    head === undefined
+      ? opensAfterHeadMatter
+      : (head.type === "heading" && head.role === "decision-title") ||
+        (head.type === "paragraph" &&
+          (head.role === "case-number" || head.role === "intro"));
+  const recital = blocks.slice(start, end);
+  return followsHeadMatter &&
+    recital.length > 0 &&
+    recital.length <= BENCH_RECITAL_MAX_PARAGRAPHS &&
+    !recital.some((block) => COURT_NUMBERED_RE.test(block.plainText.trim()))
+    ? start
+    : undefined;
+};

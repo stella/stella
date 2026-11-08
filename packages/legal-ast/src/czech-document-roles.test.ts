@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   CZ_TAKTO_TAIL_RE,
   czechAuthorityHeadRoles,
+  czechBenchRecitalStart,
   isCzechAuthorityDecisionTitle,
   isCzechAuthoritySignatureLine,
   isCzechBareSignatoryName,
@@ -300,4 +301,58 @@ describe("a Czech criminal verdict's formula lines", () => {
       expect(isCzechVerdictFormulaLine(line)).toBe(false);
     },
   );
+});
+
+describe("a Czech bench recital", () => {
+  const recitalLine = (
+    plainText: string,
+    role?: "intro" | "case-number",
+  ): Block => ({
+    id: plainText,
+    anchorId: plainText,
+    type: "paragraph",
+    inlines: inlineText(plainText),
+    plainText,
+    ...(role === undefined ? {} : { role }),
+  });
+  const title: Block = {
+    id: "t",
+    anchorId: "t",
+    type: "heading",
+    level: 1,
+    role: "decision-title",
+    inlines: inlineText("NÁLEZ"),
+    plainText: "NÁLEZ",
+  };
+
+  test("runs back to the title, or to the first block of a body that opens after it", () => {
+    const recital = [
+      recitalLine("Ústavní soud České republiky"),
+      recitalLine("v senátě rozhodl ve věci ústavní stížnosti"),
+    ];
+    expect(czechBenchRecitalStart([title, ...recital], 3)).toBe(1);
+    expect(czechBenchRecitalStart(recital, 2)).toBeUndefined();
+    expect(
+      czechBenchRecitalStart(recital, 2, { opensAfterHeadMatter: true }),
+    ).toBe(0);
+  });
+
+  test("is short and carries no court number", () => {
+    expect(
+      czechBenchRecitalStart(
+        [
+          title,
+          recitalLine("1. Odvolací soud rozhodl."),
+          recitalLine("2. Soud rozhodl takto:"),
+        ],
+        3,
+      ),
+    ).toBeUndefined();
+    expect(
+      czechBenchRecitalStart(
+        [title, ...["a", "b", "c", "d"].map((text) => recitalLine(text))],
+        5,
+      ),
+    ).toBeUndefined();
+  });
 });
