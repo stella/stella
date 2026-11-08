@@ -28,6 +28,8 @@ const SKILL_FILE = "SKILL.md";
  */
 export const CI_MARKDOWN_READER_INPUTS = [] as const;
 const LOOK_BUDGET_MS = 2000;
+/** The largest `SKILL.md` the desktop lists, as it measures it. */
+const MAX_SKILL_FILE_BYTES = 1024 * 1024;
 
 const withinBudget = async <T>(look: Promise<T>, otherwise: T): Promise<T> =>
   Promise.race([look, Bun.sleep(LOOK_BUDGET_MS).then(() => otherwise)]);
@@ -74,7 +76,15 @@ const holdsSkill = async (folder: string, name: string) =>
       if (!entry.isDirectory() || !file.isFile()) {
         return false;
       }
-      return headerName(await Bun.file(skillFile).text()) === name;
+      // Read no further than the desktop allows a skill file to be: it may
+      // have grown since.
+      const head = await Bun.file(skillFile)
+        .slice(0, MAX_SKILL_FILE_BYTES + 1)
+        .bytes();
+      return (
+        head.byteLength <= MAX_SKILL_FILE_BYTES &&
+        headerName(new TextDecoder().decode(head)) === name
+      );
     }).then((held) => Result.isOk(held) && held.value),
     false,
   );

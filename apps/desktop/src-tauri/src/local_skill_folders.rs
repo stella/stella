@@ -12,6 +12,7 @@
 
 use std::{
   fs,
+  io::Read,
   path::{Path, PathBuf},
   sync::{Mutex, PoisonError},
 };
@@ -171,9 +172,19 @@ fn inspect_folder(folder: &Path) -> Result<String, SkillFolderProblem> {
   if file_meta.len() > MAX_SKILL_FILE_BYTES {
     return Err(SkillFolderProblem::SkillFileTooLarge);
   }
-  let contents = fs::read_to_string(&skill_file)
+  // The file can grow after the size check, so the read itself is bounded.
+  let mut contents = String::new();
+  fs::File::open(&skill_file)
+    .and_then(|file| {
+      file
+        .take(MAX_SKILL_FILE_BYTES + 1)
+        .read_to_string(&mut contents)
+    })
     .ok()
     .ok_or(SkillFolderProblem::Unreadable)?;
+  if contents.len() as u64 > MAX_SKILL_FILE_BYTES {
+    return Err(SkillFolderProblem::SkillFileTooLarge);
+  }
   skill_name(&contents)
 }
 

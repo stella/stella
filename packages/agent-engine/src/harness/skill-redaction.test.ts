@@ -154,7 +154,7 @@ describe("what a turn reports about its skill folders", () => {
               header: `Run ${FOLDER}/scripts/run.ts?`,
               prompt: `It reads ${FOLDER}/SKILL.md.`,
               options: [
-                { label: `${FOLDER}/a.md`, description: `From ${FOLDER}` },
+                { label: `${FOLDER}/a.md`, description: `From ${FOLDER}.` },
               ],
               allowsFreeText: false,
               multiSelect: false,
@@ -171,7 +171,7 @@ describe("what a turn reports about its skill folders", () => {
     expect(question?.header).toBe("Run <skill:fixture-skill>/scripts/run.ts?");
     expect(question?.prompt).toBe("It reads <skill:fixture-skill>/SKILL.md.");
     expect(question?.options).toEqual([
-      { label: `${FOLDER}/a.md`, description: "From <skill:fixture-skill>" },
+      { label: `${FOLDER}/a.md`, description: "From <skill:fixture-skill>." },
     ]);
   });
 

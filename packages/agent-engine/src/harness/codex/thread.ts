@@ -101,6 +101,13 @@ const establishSkills = async (
       skillsRefused("The harness listed no skills for the run's folder."),
     );
   }
+  // A skill discovery could not read is in no listing, so nothing would
+  // switch it off.
+  if (parsed.output.data.some(({ errors }) => errors.length > 0)) {
+    return Result.err(
+      skillsRefused("The harness could not read every skill it found."),
+    );
+  }
   const allowed = new Set(
     await Promise.all(
       folders.map(async ({ path: folder }) => realSkillFile(folder)),

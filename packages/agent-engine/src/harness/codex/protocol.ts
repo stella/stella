@@ -63,6 +63,8 @@ export const SkillsListResponseSchema = v.object({
     v.object({
       /** The working directory this entry lists skills for. */
       cwd: v.string(),
+      /** Skills discovery could not read, so it could not list them either. */
+      errors: v.array(v.unknown()),
       skills: v.array(
         v.object({
           /** The `SKILL.md`, as `skills.config` names it. */

@@ -81,9 +81,10 @@ const rulesFor = ({ folders, plugin }: SkillPathScope): Rule[] => {
     .toSorted((one, other) => other.literal.length - one.literal.length)
     .flatMap(({ literal, replacement }) =>
       spellings(literal).map((spelling) => ({
-        // Not a longer name that merely starts the same.
+        // Not a longer name that merely starts the same; a full stop that
+        // ends a sentence is not part of a name.
         pattern: new RegExp(
-          `${escapeForPattern(spelling)}(?![\\w.-])`,
+          `${escapeForPattern(spelling)}(?![\\w-]|\\.[\\w.-])`,
           WINDOWS_DRIVE.test(spelling) ? "giu" : "gu",
         ),
         replacement,
