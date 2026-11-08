@@ -31,7 +31,15 @@ installer="$(mktemp)"
 binary_download="$(mktemp)"
 trap 'rm -f "$installer" "$binary_download"' EXIT
 
-fetch_asset install-safe-chain.sh "$installer"
+# The installer is cached beside the binary, so a warm job downloads nothing
+# from GitHub releases. A restored installer is untrusted input like a fetched
+# one: the same pin below verifies it, and a mismatch fails the job.
+cached_installer="${HOME}/.safe-chain/installer/install-safe-chain.sh"
+if [[ -f "$cached_installer" ]]; then
+  cp "$cached_installer" "$installer"
+else
+  fetch_asset install-safe-chain.sh "$installer"
+fi
 
 actual="$(sha256sum "$installer" | cut -d' ' -f1)"
 if [[ "$actual" != "$SAFE_CHAIN_SHA256" ]]; then
@@ -39,6 +47,8 @@ if [[ "$actual" != "$SAFE_CHAIN_SHA256" ]]; then
        "expected ${SAFE_CHAIN_SHA256}, got ${actual}"
   exit 1
 fi
+mkdir -p "$(dirname "$cached_installer")"
+cp "$installer" "$cached_installer"
 
 # The installer is the root of trust and stays pinned, but it is read,
 # not run: its own binary download has no retry. Its baked-in asset

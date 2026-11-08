@@ -64,6 +64,7 @@ type InstallOptions = {
   mirrorStatus: "ok" | "down";
   corrupt?: "installer" | "binary" | "primary-installer";
   cache?: "verified" | "poisoned";
+  cachedInstaller?: "verified" | "poisoned";
 };
 
 const runInstall = ({
@@ -71,6 +72,7 @@ const runInstall = ({
   mirrorStatus,
   corrupt,
   cache,
+  cachedInstaller,
 }: InstallOptions) => {
   const directory = mkdtempSync(path.join(tmpdir(), "safe-chain-install-"));
   const home = path.join(directory, "home");
@@ -115,6 +117,14 @@ const runInstall = ({
         cache === "verified" ? binary : `${binary}# tampered\n`,
       );
     }
+    const installerCache = path.join(home, ".safe-chain/installer");
+    if (cachedInstaller) {
+      mkdirSync(installerCache, { recursive: true });
+      writeFileSync(
+        path.join(installerCache, "install-safe-chain.sh"),
+        cachedInstaller === "verified" ? installer : `${installer}# tampered\n`,
+      );
+    }
     const fakeCurl = path.join(commands, "curl");
     writeFileSync(fakeCurl, curl);
     chmodSync(fakeCurl, 0o755);
@@ -152,7 +162,18 @@ const runInstall = ({
       output: result.stdout + result.stderr,
       installed: existsSync(installed),
       githubEnv: readFileSync(githubEnv, "utf-8"),
-      requests: readFileSync(requests, "utf-8").trim().split("\n"),
+      requests: readFileSync(requests, "utf-8")
+        .trim()
+        .split("\n")
+        .filter(Boolean),
+      cachedInstaller: existsSync(
+        path.join(installerCache, "install-safe-chain.sh"),
+      )
+        ? readFileSync(
+            path.join(installerCache, "install-safe-chain.sh"),
+            "utf-8",
+          )
+        : null,
     };
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -242,6 +263,45 @@ describe("Safe Chain download verification", () => {
       `${primary}/install-safe-chain.sh`,
       `${mirror}/install-safe-chain.sh`,
     ]);
+    expect(result.installed).toBe(false);
+    expect(result.githubEnv).toBe("");
+  });
+
+  test("a fetched installer is kept for the cache only after verification", () => {
+    const fresh = runInstall({ primaryStatus: "ok", mirrorStatus: "down" });
+    expect(fresh.status).toBe(0);
+    expect(fresh.cachedInstaller).toBe(installer);
+    const tampered = runInstall({
+      primaryStatus: "ok",
+      mirrorStatus: "ok",
+      corrupt: "primary-installer",
+    });
+    expect(tampered.status).not.toBe(0);
+    expect(tampered.cachedInstaller).toBeNull();
+  });
+
+  test("a warm cache installs with both release sources down", () => {
+    const result = runInstall({
+      primaryStatus: "down",
+      mirrorStatus: "down",
+      cache: "verified",
+      cachedInstaller: "verified",
+    });
+    expect(result.status).toBe(0);
+    expect(result.installed).toBe(true);
+    expect(result.requests).toEqual([]);
+  });
+
+  test("a restored installer is verified before its binary pin is read", () => {
+    const result = runInstall({
+      primaryStatus: "ok",
+      mirrorStatus: "ok",
+      cache: "verified",
+      cachedInstaller: "poisoned",
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.output).toContain("Safe Chain installer hash mismatch");
+    expect(result.requests).toEqual([]);
     expect(result.installed).toBe(false);
     expect(result.githubEnv).toBe("");
   });

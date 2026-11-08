@@ -15,5 +15,5 @@ the public mirror assets without authentication and verify the hashes again.
 Keep the source available with the mirrored binary as required by upstream's
 AGPL license. Never execute the installer to obtain its hash or its binary pin.
 
-The `safe-chain-cache.yml` workflow warms the same verified binary cache in
+The `safe-chain-cache.yml` workflow warms the same verified installer and binary cache in
 main's scope on every push to main and daily; PRs and merge groups can restore it.

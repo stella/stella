@@ -15,7 +15,8 @@ description: >
 
   Keep the scanning job's Bun cache cold: Safe Chain's Bun integration proxies
   registry downloads and cannot rescan tarballs restored before it starts. The
-  cache below holds only the hash-pinned Safe Chain binary, no packages.
+  cache below holds only the hash-pinned Safe Chain installer and binary,
+  no packages.
 
   Safe Chain is AGPL-3.0-or-later. It is installed as a standalone CI tool and
   must never be added to package.json: dependency-review.yml blocks AGPL in the
@@ -44,7 +45,10 @@ runs:
     - name: Restore Safe Chain binary
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ~/.safe-chain/bin
+        # The pinned installer too, so a warm job fetches nothing.
+        path: |
+          ~/.safe-chain/bin
+          ~/.safe-chain/installer
         key: safe-chain-${{ inputs.version }}-${{ inputs.sha256 }}-${{ runner.os }}-${{ runner.arch }}
 
     - name: Install Safe Chain
