@@ -61,6 +61,7 @@ import {
 import {
   containsPlOperativeVerb,
   isPlAppealInstruction,
+  isPlAuthorityDecisionTitle,
   isPlBenchMemberLine,
   isPlClosingLine,
   isPlCompositionLine,
@@ -224,7 +225,6 @@ const itemFamilyOf = (text: string): ItemFamily | undefined => {
  * Numbered and multi-letter Roman points are never read this way.
  */
 const LETTER_ABBREVIATION_PREFIX_RE = /^[b-hj-z][.)](?:\s+|$)/iu;
-const AUTHORITY_DECISION_TITLE_RE = /^decyzja\s+nr\b/iu;
 const PANEL_MEMBER_RE = /^(?:SSN|SSA|SSO|SSR)\b|\(ławnik[^)]*\)$/iu;
 const CLERK_MARK_RE = /^\[(?:\p{L}{2,3}|\p{L}\.(?:\p{L}\.?){1,3})\]$/u;
 const CLERK_INITIALS_RE = /^(?:\p{Lu}\.){1,4}$/u;
@@ -735,7 +735,17 @@ const MARKS_ONLY_RE = /^[-–—.,;:·•*_<>■□▪]+$/u;
 /** Longest line a subheading set in bold runs to. */
 const BOLD_SUBHEADING_MAX_CHARS = 120;
 const TERMINAL_MARK_RE = /[.,;:!?…]$/u;
-const DIGIT_RE = /\p{N}/u;
+/**
+ * A figure a table row prints, which a subheading never does: an amount with
+ * its decimals (`149,00`), a number of three digits or more, or a currency
+ * or percent sign. A subheading may number itself (`Przykład nr 12`).
+ */
+const TABLE_FIGURE_RE =
+  /\d,\d{2}(?!\d)|\d{3,}|(?<!\p{L})(?:USD|EUR|PLN|CHF|zł|%)(?!\p{L})/u;
+/** A word a heading names its part with: an abbreviation (`a/a`) is none. */
+const HEADING_WORD_RE = /\p{L}{3,}/u;
+/** A ruling's own point number (`I.`, `a)`), which never heads the reasons. */
+const RULING_POINT_PREFIX_RE = /^(?:[IVXLCDM]+|[a-z])[.)](?:\s|$)/iu;
 
 /**
  * A short line set wholly in bold between paragraphs of the reasons, with no
@@ -748,8 +758,9 @@ const isBoldSubheading = (inlines: readonly Inline[], plainText: string) =>
   plainText.length <= BOLD_SUBHEADING_MAX_CHARS &&
   WORD_CHAR_RE.test(plainText) &&
   !TERMINAL_MARK_RE.test(plainText) &&
-  !DECISION_ITEM_PREFIX_RE.test(plainText) &&
-  !DIGIT_RE.test(plainText.replace(SUBHEADING_OUTLINE_NUMBER_RE, "")) &&
+  !RULING_POINT_PREFIX_RE.test(plainText) &&
+  !TABLE_FIGURE_RE.test(plainText.replace(SUBHEADING_OUTLINE_NUMBER_RE, "")) &&
+  HEADING_WORD_RE.test(plainText) &&
   inlines.some((inline) => inline.type === "bold") &&
   inlines.every(
     (inline) =>
@@ -802,6 +813,47 @@ const instructsOnAppeal = (state: ParserState, plainText: string): boolean => {
   return underInstructionHeading(state) && !closesOrSigns(state, plainText);
 };
 
+/** Whether the line before a numbered point titles the decision. */
+const titlesDecision = (block: Block | undefined): boolean =>
+  (block?.type === "heading" && block.role === "decision-title") ||
+  // The authority's numbered title, printed under the bare type word that
+  // already titles the document, also opens the ruling under it.
+  (block?.type === "paragraph" && isPlAuthorityDecisionTitle(block.plainText));
+
+/** A head-matter line printed between a title and its ruling: a date. */
+const standsBetweenTitleAndRuling = (block: Block | undefined): boolean =>
+  block?.type === "paragraph" &&
+  block.role === "intro" &&
+  isPlDecisionDateLine(block.plainText);
+
+/**
+ * Whether the blocks before a numbered point end on the decision's title,
+ * across a date line printed between the title and the ruling.
+ */
+const followsDecisionTitle = (blocks: readonly Block[]): boolean => {
+  let index = blocks.length - 1;
+  while (standsBetweenTitleAndRuling(blocks.at(index))) {
+    index -= 1;
+  }
+  return index >= 0 && titlesDecision(blocks.at(index));
+};
+
+/**
+ * Whether a numbered point opens the ruling: a point that rules on its own
+ * legal basis (`I. Na podstawie art. 27 … uznaje …`) opens it wherever the
+ * head matter ends, with or without a line that names the ruling's verb
+ * first.
+ */
+const opensStructuredHolding = (
+  state: ParserState,
+  normalizedText: string,
+): boolean =>
+  ((state.section === "composition" || state.section === "recital") &&
+    !LETTER_ABBREVIATION_PREFIX_RE.test(normalizedText)) ||
+  followsDecisionTitle(state.blocks) ||
+  opensPlRuling(normalizedText) ||
+  isPlLegalBasisRuling(normalizedText.replace(DECISION_ITEM_PREFIX_RE, ""));
+
 const inferParagraphRole = (
   state: ParserState,
   plainText: string,
@@ -812,19 +864,8 @@ const inferParagraphRole = (
   }
 
   const numbered = DECISION_ITEM_PREFIX_RE.test(normalizedText);
-  const previous = state.blocks.at(-1);
-  // A point that rules on its own legal basis (`I. Na podstawie art. 27 …
-  // uznaje …`) opens the ruling wherever the head matter ends, with or
-  // without a line that names the ruling's verb first.
   const isStructuredHolding =
-    numbered &&
-    (((state.section === "composition" || state.section === "recital") &&
-      !LETTER_ABBREVIATION_PREFIX_RE.test(normalizedText)) ||
-      (previous?.type === "heading" && previous.role === "decision-title") ||
-      opensPlRuling(normalizedText) ||
-      isPlLegalBasisRuling(
-        normalizedText.replace(DECISION_ITEM_PREFIX_RE, ""),
-      ));
+    numbered && opensStructuredHolding(state, normalizedText);
   // The ruling also opens on its legal basis when the same sentence rules
   // (`Na podstawie art. 14b … stwierdza, że …`).
   const isUnnumberedOperative =
@@ -993,7 +1034,7 @@ const handleHeadingText = (
   if (
     !state.sawDecisionTitle &&
     state.fallbackDecisionTitle === POLISH_DECISION_TITLE_MAP.decyzja &&
-    AUTHORITY_DECISION_TITLE_RE.test(plainText)
+    isPlAuthorityDecisionTitle(plainText)
   ) {
     pushHeading(state, 1, plainText, "decision-title", inlines);
     state.sawDecisionTitle = true;

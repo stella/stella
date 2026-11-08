@@ -252,6 +252,8 @@ const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
     "chat.localRun.refusalModelUnavailable",
   [CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable]:
     "chat.localRun.refusalPermissionUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit]:
+    "chat.localRun.refusalPermissionAboveLimit",
   [CHAT_LOCAL_RUN_REFUSAL.tooLarge]: "chat.localRun.refusalTooLarge",
   [CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode]:
     "chat.localRun.refusalConflictingRunMode",

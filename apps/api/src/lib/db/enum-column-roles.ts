@@ -494,6 +494,7 @@ export const ENUM_COLUMN_ROLES = {
     ai_billing_drafts_mode: ATTRIBUTE,
     document_processing_mode: ATTRIBUTE,
     invoice_language: ATTRIBUTE,
+    local_run_max_approval_mode: ATTRIBUTE,
     managed_ai_residency: ATTRIBUTE,
     personal_api_key_policy: ATTRIBUTE,
     sanctions_monitoring_mode: ATTRIBUTE,

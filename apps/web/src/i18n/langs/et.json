@@ -1696,6 +1696,7 @@
       "errorUnavailable": "Sinu arvuti lõpetas selle vastuse töötlemise. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti.",
       "filesNotShared": "Failid, mida ei õnnestunud jagada, jäävad sinu arvutisse: {fileNames}",
       "onThisComputer": "{harness} selles arvutis",
+      "permissionAboveLimit": "Sinu organisatsioon seda ei luba",
       "permissionAskDescription": "Muudab vestluse kaustas olevaid faile ise; kõige muu kohta küsib.",
       "permissionAutoDescription": "Teeb ise seda, mida peab ohutuks; ülejäänu kohta küsib.",
       "permissionFullAuto": "Täisautomaatne",
@@ -1707,6 +1708,7 @@
       "refusalHarnessUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa seda päringut praegu vastu võtta. Kontrolli seda stella desktopis.",
       "refusalModelUnavailable": "Sinu arvutis töötav programmeerimisagent seda mudelit enam ei paku. Vali menüüs Käivita mõni teine.",
       "refusalNoComputer": "Ükski sinu arvuti pole ühendatud. Ava stella desktop ja saada uuesti.",
+      "refusalPermissionAboveLimit": "Sinu organisatsioon ei luba sinu arvutis töötavale programmeerimisagendile neid õigusi. Vali menüüs Õigused mõni muu valik.",
       "refusalPermissionUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa nende õigustega töötada. Vali menüüs Õigused mõni muu valik.",
       "refusalTooLarge": "See vestlus on sinu arvutile üleandmiseks liiga pikk. Alusta uut vestlust, et seda seal käitada.",
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
@@ -5641,6 +5643,11 @@
         "labelAria": "Dokumendiliigi nimi",
         "reorder": "Muuda dokumendiliigi järjestust",
         "title": "Dokumendiliigid"
+      },
+      "localRuns": {
+        "description": "Kõige rohkem, mida programmeerimisagent tohib küsimata teha, kui ta käitab vestlust liikme arvutis. Madalam piir kehtib iga liikme järgmisest sõnumist; juba käimasolev käivitus säilitab oma õigused.",
+        "title": "Programmeerimisagendid liikmete arvutites",
+        "updated": "Programmeerimisagentide õigused on uuendatud"
       },
       "matterNumbering": "Toimikute nummerdamine",
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",

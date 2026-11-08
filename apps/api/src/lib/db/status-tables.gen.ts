@@ -487,6 +487,7 @@ export const ENUM_COLUMNS = {
     "ai_billing_drafts_mode",
     "document_processing_mode",
     "invoice_language",
+    "local_run_max_approval_mode",
     "managed_ai_residency",
     "personal_api_key_policy",
     "sanctions_monitoring_mode",

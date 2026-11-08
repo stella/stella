@@ -1696,6 +1696,7 @@
       "errorUnavailable": "Tu ordenador dejó de procesar esta respuesta. Comprueba que stella desktop esté abierto y conectado, y vuelve a intentarlo.",
       "filesNotShared": "Los archivos que no se pudieron compartir siguen en tu ordenador: {fileNames}",
       "onThisComputer": "{harness} en este ordenador",
+      "permissionAboveLimit": "Tu organización no lo permite",
       "permissionAskDescription": "Edita por su cuenta los archivos de la carpeta del chat; pregunta antes de cualquier otra cosa.",
       "permissionAutoDescription": "Hace por su cuenta lo que considera seguro; pregunta por el resto.",
       "permissionFullAuto": "Totalmente automático",
@@ -1707,6 +1708,7 @@
       "refusalHarnessUnavailable": "El agente de programación de tu ordenador no puede atender esta solicitud ahora. Revísalo en stella desktop.",
       "refusalModelUnavailable": "El agente de programación de tu ordenador ya no ofrece este modelo. Elige otro en Ejecutar en.",
       "refusalNoComputer": "Ninguno de tus ordenadores está conectado. Abre stella desktop y vuelve a enviar.",
+      "refusalPermissionAboveLimit": "Tu organización no permite estos permisos para el agente de programación de tu ordenador. Elige otra opción en Permisos.",
       "refusalPermissionUnavailable": "El agente de programación de tu ordenador no puede ejecutarse con estos permisos. Elige otra opción en Permisos.",
       "refusalTooLarge": "Esta conversación es demasiado larga para pasarla a tu ordenador. Empieza un chat nuevo para ejecutarla allí.",
       "refusalUnavailable": "Ejecutar chats en tu ordenador no está disponible para tu cuenta.",
@@ -5641,6 +5643,11 @@
         "labelAria": "Nombre del tipo de documento",
         "reorder": "Reordenar tipo de documento",
         "title": "Tipos de documentos"
+      },
+      "localRuns": {
+        "description": "Lo máximo que puede hacer un agente de programación sin preguntar cuando ejecuta un chat en el ordenador de un miembro. Un límite más bajo se aplica a partir del siguiente mensaje de cada miembro; una ejecución ya en curso conserva sus permisos.",
+        "title": "Agentes de programación en los ordenadores de los miembros",
+        "updated": "Permisos de los agentes de programación actualizados"
       },
       "matterNumbering": "Numeración de asuntos",
       "matterNumberingDescription": "Configura cómo se generan los números de referencia de los asuntos nuevos",

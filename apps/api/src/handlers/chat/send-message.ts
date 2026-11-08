@@ -293,6 +293,7 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { resolveCredentialMemberExecutionContext } from "@/api/lib/chat/credential-member-execution-context";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
+import { readLocalRunApprovalCeiling } from "@/api/lib/chat/local-run-approval-ceiling";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   CHAT_REF_ENCODING,
@@ -2822,6 +2823,11 @@ export const createSendMessage = (
               pinnedIds: effectiveContextMatterIds,
               accessibleWorkspaceIds,
             }),
+            readApprovalCeiling: async () =>
+              await readLocalRunApprovalCeiling(
+                safeDb,
+                session.activeOrganizationId,
+              ),
             ...(dependencies.localRunRuntime === undefined
               ? {}
               : { runtime: dependencies.localRunRuntime }),
