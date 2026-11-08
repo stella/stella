@@ -130,7 +130,10 @@ export const caseLawSearchWarnings = ({
  *   that cite it rather than every one; the count and the narrowing are said.
  * - `phrasing_timed_out`: one of several phrasings ran out of the call's time
  *   budget, so the page holds the phrasings that finished and none of its
- *   hits; the hint names how to run it again.
+ *   hits; the returned cursor runs it again.
+ * - `partial_matches_unavailable`: a phrasing's decisions holding every word
+ *   are on the page, but the top-up of those holding only some of them was
+ *   given up inside the call's time budget.
  */
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
@@ -139,6 +142,7 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "many_required_terms",
   "provision_cited_widely",
   "phrasing_timed_out",
+  "partial_matches_unavailable",
 ] as const;
 
 type AgentCaseLawSearchWarningCode =
@@ -302,25 +306,36 @@ export const filterUnreadWarning = ({
 /**
  * A phrasing of a several-phrasing search stopped on the call's time budget
  * while the others finished. Its absence from the page is not "nothing
- * matched", so it is said: a continuation of the page retries it, and a
- * phrasing that had not returned a page yet is rerun by name, since the
- * cursor cannot hold a first page that never ran.
+ * matched", so it is said, and the page's cursor runs it again from where it
+ * stood: its continuation, or its first page if it had not returned one.
  */
 export const phrasingTimedOutWarning = ({
   query,
-  retriedByCursor,
 }: {
   query: string;
-  /** Whether the page's cursor carries this phrasing's continuation. */
-  retriedByCursor: boolean;
 }): AgentCaseLawSearchWarning => ({
   code: "phrasing_timed_out",
   // The phrasing is named: two phrasings can time out on one page, and the
   // call keeps each distinct note once, so identical wording would merge them.
   message: `The phrasing ${JSON.stringify(query)} ran out of the search's time budget, so the page holds none of its hits; the phrasings that finished are on the page.`,
-  hint: retriedByCursor
-    ? "Pass the returned cursor to retry this phrasing with the others, or search it on its own."
-    : `Search this phrasing on its own (queries: [${JSON.stringify(query)}]), or narrow it with a court, date range or provision filter.`,
+  hint: "Pass the returned nextCursor as cursor, with the same queries in the same order, to run this phrasing again; the phrasings that finished continue from their next page. If it times out again, search it on its own or narrow it with a court, date range or provision filter.",
+});
+
+/**
+ * A phrasing's own page was read but the decisions holding only some of its
+ * words were not, inside the call's time budget. Every decision holding all
+ * of its words is on the page (a top-up only runs once that set has ended),
+ * so nothing it reports is wrong; what it leaves out is said rather than left
+ * to read as "few decisions touch this".
+ */
+export const partialMatchesUnavailableWarning = ({
+  query,
+}: {
+  query: string;
+}): AgentCaseLawSearchWarning => ({
+  code: "partial_matches_unavailable",
+  message: `Decisions holding only some of the words of ${JSON.stringify(query)} could not be read within the search's time budget, so the page holds only the decisions holding every word.`,
+  hint: `Search this phrasing on its own (queries: [${JSON.stringify(query)}]) or with fewer words to read them.`,
 });
 
 export const manyRequiredTermsWarning = ({
@@ -440,10 +455,9 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       slots: 5,
     }),
   phrasing_timed_out: () =>
-    phrasingTimedOutWarning({
-      query: "náhrada škody promlčení",
-      retriedByCursor: false,
-    }),
+    phrasingTimedOutWarning({ query: "náhrada škody promlčení" }),
+  partial_matches_unavailable: () =>
+    partialMatchesUnavailableWarning({ query: "náhrada škody promlčení" }),
 } as const satisfies Record<
   AgentCaseLawSearchWarningCode,
   () => AgentCaseLawSearchWarning

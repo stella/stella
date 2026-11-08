@@ -307,6 +307,7 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import {
   decodePaginationCursor,
@@ -325,9 +326,11 @@ import { isRecord } from "@/api/lib/type-guards";
 
 import {
   rankByTermCoverage,
+  readRelaxedTopUp,
   readTermCoverage,
   type RelaxedExclusions,
   relaxedFetchLimit,
+  type RelaxedTopUp,
   shouldRelaxCaseLawSearch,
 } from "./search-relaxed";
 import { projectCaseLawSearchResponse } from "./search-response";
@@ -401,6 +404,13 @@ type SearchDecisionsBody = v.InferOutput<typeof searchDecisionsBodySchema> & {
    * result set, so a caller that discards them should not pay for them.
    */
   describeResultSet?: false;
+  /**
+   * Internal: `best_effort` when the caller answers under a deadline and
+   * reports a given-up top-up itself (`relaxedTopUp` on the page), so running
+   * out of time keeps the strict hits. An agent search's phrasings ask for
+   * it; every other caller keeps the top-up required.
+   */
+  relaxedTopUp?: "best_effort";
 };
 
 type PostgresSearchBody = Omit<
@@ -2911,6 +2921,37 @@ const decodeCaseLawCorpusCursor = (
   return parsedCursor;
 };
 
+const RELAXED_TOP_UP_GIVEN_UP_SINK = failureSink({
+  event: "case_law.search_relaxed_top_up.given_up",
+  expected: [],
+});
+
+/**
+ * What a relaxed phase leaves the page: its read, or no hits and the marker
+ * that says so. A given-up phase is observed here, once, for either surface.
+ */
+const settleRelaxedTopUp = <TRead, TError, TNone>(
+  topUp: RelaxedTopUp<TRead, TError>,
+  none: TNone,
+): {
+  relaxed: Result<TRead, TError> | TNone;
+  shedMarker: { relaxedTopUp?: "shed" };
+} => {
+  if (topUp.type === "read") {
+    return { relaxed: topUp.read, shedMarker: {} };
+  }
+  observeFailure(topUp.cause, {
+    sink: RELAXED_TOP_UP_GIVEN_UP_SINK,
+    ctx: { source: "case_law_search" },
+  });
+  reportCaseLawIncompleteAnswer({
+    surface: "search",
+    reason: "relaxed_top_up_given_up",
+    count: 1,
+  });
+  return { relaxed: none, shedMarker: { relaxedTopUp: "shed" } };
+};
+
 const TERM_COVERAGE_FAILURE_SINK = failureSink({
   event: "case_law.search_term_coverage.failed",
   expected: [],
@@ -3577,18 +3618,27 @@ export const searchCorpusIndexDecisions = async ({
       scan: sumCorpusIndexScans(relaxedPage.scan, coverageScan),
     });
   };
-  const relaxed = shouldRelaxCaseLawSearch({
-    body,
-    intentType: intent.type,
-    isFirstPage,
-    requiredTermCount: requiredTerms.length,
-    sort,
-    strictHitCount: page.hits.length,
-    limit,
-    strictEnd: searchPageEnd(searchPage),
-  })
-    ? await readRelaxedHits()
-    : Result.ok({ hits: [], scan: emptyCorpusIndexScan() });
+  const noRelaxedHits = () =>
+    Result.ok({ hits: [], scan: emptyCorpusIndexScan() });
+  const { relaxed, shedMarker } = settleRelaxedTopUp(
+    shouldRelaxCaseLawSearch({
+      body,
+      intentType: intent.type,
+      isFirstPage,
+      requiredTermCount: requiredTerms.length,
+      sort,
+      strictHitCount: page.hits.length,
+      limit,
+      strictEnd: searchPageEnd(searchPage),
+    })
+      ? await readRelaxedTopUp({
+          mode: body.relaxedTopUp,
+          strictHitCount: page.hits.length,
+          read: readRelaxedHits,
+        })
+      : { type: "read" as const, read: noRelaxedHits() },
+    noRelaxedHits(),
+  );
   if (Result.isError(relaxed)) {
     return termCoverageFailure(relaxed.error);
   }
@@ -3651,6 +3701,7 @@ export const searchCorpusIndexDecisions = async ({
       paginationOutcome: searchPage.paginationOutcome,
       pageReach: searchPage.reach,
       ...answer,
+      ...shedMarker,
     },
     decisionHeadnoteMaxChars(body.headnotePresentation),
   );

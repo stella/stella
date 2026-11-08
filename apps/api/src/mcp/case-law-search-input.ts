@@ -102,7 +102,7 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
       ),
       cursor: cursorInput({
         description:
-          "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
+          "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId. A phrasing that ran out of time runs again from where it stopped.",
         maxLength: CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
       }),
       court: v.optional(

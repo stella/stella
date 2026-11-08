@@ -10,9 +10,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
+import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
 import { corpusIndexReadRefusal } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { runOptionalRequestSlice } from "@/api/lib/load/request-latency-budget";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -83,6 +85,60 @@ const RELAXED_OVERFETCH = 3;
  */
 export const relaxedFetchLimit = (needed: number): number =>
   Math.min(needed * RELAXED_OVERFETCH, LIMITS.caseLawSearchPageSizeMax);
+
+/**
+ * How long an agent search's top-up may run: inside the call's budget, and
+ * short enough to leave room for the phrasings still reading their strict
+ * pages.
+ */
+const RELAXED_TOP_UP_SLICE_MS = 4000;
+
+export type RelaxedTopUp<TRead, TError> =
+  | { type: "read"; read: Result<TRead, TError> }
+  /** The caller's deadline ended the top-up; the strict hits stand. */
+  | { type: "shed"; cause: unknown };
+
+type ReadRelaxedTopUpOptions<TRead, TError> = {
+  mode: "best_effort" | undefined;
+  strictHitCount: number;
+  read: () => Promise<Result<TRead, TError>>;
+};
+
+/**
+ * The relaxed phase, which an agent search gives up first: the strict hits are
+ * already in hand, and losing them to a top-up is the worse answer. A page
+ * with no strict hits has nothing to keep, so its failure stays the phrasing's
+ * own, which the phrasing's cursor runs again. Only running out of time is
+ * shed; any other failure stays what it was.
+ */
+export const readRelaxedTopUp = async <TRead, TError>({
+  mode,
+  strictHitCount,
+  read,
+}: ReadRelaxedTopUpOptions<TRead, TError>): Promise<
+  RelaxedTopUp<TRead, TError>
+> => {
+  if (mode !== "best_effort" || strictHitCount === 0) {
+    return { type: "read", read: await read() };
+  }
+  const attempt = await Result.tryPromise({
+    try: async () =>
+      await runOptionalRequestSlice(
+        { label: "case_law.relaxed_top_up", budgetMs: RELAXED_TOP_UP_SLICE_MS },
+        read,
+      ),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(attempt)) {
+    return publicReadTimeoutError(attempt.error) === null
+      ? await Promise.reject(attempt.error)
+      : { type: "shed", cause: attempt.error };
+  }
+  const topUp = attempt.value;
+  return Result.isError(topUp) && publicReadTimeoutError(topUp.error) !== null
+    ? { type: "shed", cause: topUp.error }
+    : { type: "read", read: topUp };
+};
 
 const TERM_COVERAGE_CONCURRENCY = 4;
 

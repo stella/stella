@@ -90,6 +90,7 @@ import {
   type AgentCaseLawSearchWarning,
   manyRequiredTermsWarning,
   partialMatchesAppendedWarning,
+  partialMatchesUnavailableWarning,
   phrasingTimedOutWarning,
   provisionCitedWidelyWarning,
   withFacetValues,
@@ -124,6 +125,7 @@ import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { storedCorpusValidationFailure } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { LIMITS } from "@/api/lib/limits";
+import { runBeforeRequestDeadline } from "@/api/lib/load/request-latency-budget";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1948,6 +1950,13 @@ const mergeCaseLawSearchHits = (
 };
 
 /**
+ * A phrasing in the merged cursor that has returned no page yet. `null` means
+ * the phrasing ended and a string is its continuation; a timed-out first page
+ * is neither, and this marks it so the next call runs that page.
+ */
+const CASE_LAW_PHRASING_FIRST_PAGE_PENDING = "";
+
+/**
  * The per-query cursors a call resumes from. `null` is a query whose page
  * ended, which is not re-run; `undefined` is a query on its first page.
  */
@@ -1997,7 +2006,12 @@ const resolveCaseLawSearchCursors = ({
     return { type: "invalid" };
   }
   return parts.length === queryCount
-    ? { type: "cursors", cursors: parts }
+    ? {
+        type: "cursors",
+        cursors: parts.map((part) =>
+          part === CASE_LAW_PHRASING_FIRST_PAGE_PENDING ? undefined : part,
+        ),
+      }
     : { type: "count_mismatch", encoded: parts.length };
 };
 
@@ -2442,10 +2456,9 @@ const mergedCaseLawSearchCursor = (
       case "page":
         return outcome.page.nextCursor;
       case "timed_out":
-        // A continuation runs the page again. A first page has no cursor to
-        // carry, and the envelope's `null` would read as ended, so it is
-        // `null` here and its warning names the call that reruns it.
-        return outcome.subCursor ?? null;
+        // A continuation runs the page again; a first page runs for the
+        // first time, so it is carried as pending rather than as ended.
+        return outcome.subCursor ?? CASE_LAW_PHRASING_FIRST_PAGE_PENDING;
       default:
         outcome satisfies never;
         return panic("Unhandled case-law query outcome");
@@ -2458,7 +2471,7 @@ const mergedCaseLawSearchCursor = (
 
 /**
  * The merged page's outcome: truncated on the time budget when a phrasing
- * timed out (the reader is told to rerun it), else on the exclusion budget
+ * timed out (the page's cursor runs it again), else on the exclusion budget
  * when a phrasing's own page stopped there, else complete.
  */
 const mergedCaseLawPaginationOutcome = (
@@ -2668,36 +2681,25 @@ type CaseLawSearchCallOutcome =
 /**
  * The rejected search the call hands to the tool boundary, if any.
  *
- * A rejection is this phrasing's alone only when it is the time budget
- * running out and another phrasing answered with a page. Otherwise the first
- * rejected search goes to the boundary unchanged, which reads it as it always
- * has (a public-read timeout, an admission outcome, its failure grade).
+ * A rejection that is the time budget running out is that phrasing's alone,
+ * and stays with the phrasings. Any other rejected search goes to the boundary
+ * unchanged, which reads it as it always has (an admission outcome, its
+ * failure grade).
  */
 const caseLawSearchRejectionForBoundary = (
   outcomes: readonly CaseLawSearchCallOutcome[],
-): Extract<CaseLawSearchCallOutcome, { type: "rejected" }> | null => {
-  const rejected = outcomes.filter(
-    (
-      outcome,
-    ): outcome is Extract<CaseLawSearchCallOutcome, { type: "rejected" }> =>
-      outcome.type === "rejected",
-  );
-  const first = rejected.at(0);
-  if (first === undefined) {
-    return null;
-  }
-  const answeredWithPage = outcomes.some(
-    (outcome) =>
-      outcome.type === "answered" && isSearchCaseLawSuccess(outcome.result),
-  );
-  if (!answeredWithPage) {
-    return first;
-  }
-  return rejected.find(({ error }) => !isCaseLawSearchTimeout(error)) ?? null;
-};
+): Extract<CaseLawSearchCallOutcome, { type: "rejected" }> | null =>
+  outcomes
+    .filter(
+      (
+        outcome,
+      ): outcome is Extract<CaseLawSearchCallOutcome, { type: "rejected" }> =>
+        outcome.type === "rejected",
+    )
+    .find(({ error }) => !isCaseLawSearchTimeout(error)) ?? null;
 
 /**
- * Each phrasing's page, the call's failure, or the rejected search the call
+ * Each phrasing's outcome, the call's failure, or the rejected search the call
  * hands to the tool boundary.
  *
  * A phrasing that failed for any reason but its time budget sinks the call.
@@ -2705,15 +2707,15 @@ const caseLawSearchRejectionForBoundary = (
  * carries the phrasings that finished, and the timed-out one is reported as
  * such (`phrasing_timed_out`, truncated outcome) rather than left out, since a
  * merged page silently missing one phrasing reads as "that phrasing found
- * nothing", which is a different answer. When no phrasing answered, the call
- * fails as it did before: an answered timeout with the retryable time-budget
- * error, a rejected search at the tool boundary.
+ * nothing", which is a different answer. `none_finished` is every phrasing
+ * run this call having run out of time, however each one expired.
  */
 const readCaseLawQueryPages = (
   outcomes: readonly CaseLawSearchCallOutcome[],
   cursor: string | undefined,
 ):
   | { type: "failed"; result: InternalToolErrorResult }
+  | { type: "none_finished"; result: InternalToolErrorResult }
   | {
       type: "rejected";
       run: Promise<Parameters<typeof readCaseLawSearchAnswer>[0]>;
@@ -2731,10 +2733,10 @@ const readCaseLawQueryPages = (
         pages.push({ type: "exhausted" });
         break;
       case "rejected":
-        // Only a time-budget rejection beside a page reaches here.
+        // Only a time-budget rejection reaches here.
         timeout ??=
           caseLawSearchTimeoutResult(outcome.error) ??
-          panic("A rejection kept beside a page is not a timeout");
+          panic("A rejection kept with the phrasings is not a timeout");
         pages.push({ type: "timed_out", subCursor: outcome.subCursor });
         break;
       case "answered": {
@@ -2761,7 +2763,7 @@ const readCaseLawQueryPages = (
     }
   }
   if (timeout !== null && !pages.some(({ type }) => type === "page")) {
-    return { type: "failed", result: timeout };
+    return { type: "none_finished", result: timeout };
   }
   return { type: "pages", pages };
 };
@@ -2785,6 +2787,14 @@ const settleCaseLawQueryPages = async (
 };
 
 /**
+ * How long before the call's deadline each phrasing stops, so the call can
+ * still answer from the phrasings that finished: merging, projecting and
+ * writing the response come after the last phrasing, against the same
+ * deadline.
+ */
+const CASE_LAW_PHRASING_ANSWER_RESERVE_MS = 1000;
+
+/**
  * Run one phrasing's search and keep its promise: a statement the time budget
  * cancelled rejects rather than answers, and whether that rejection is this
  * phrasing's alone is decided once every phrasing has settled. Its index
@@ -2800,7 +2810,17 @@ const runCaseLawPhrasing = async (
   if (subCursor === null) {
     return { type: "exhausted" };
   }
-  const run = runInCorpusSearchLane(lane, start);
+  const run = runInCorpusSearchLane(
+    lane,
+    async () =>
+      await runBeforeRequestDeadline(
+        {
+          label: "search_case_law.phrasing",
+          reserveMs: CASE_LAW_PHRASING_ANSWER_RESERVE_MS,
+        },
+        start,
+      ),
+  );
   const answered = await Result.tryPromise({
     try: async () => await run,
     catch: (cause) => cause,
@@ -2810,22 +2830,54 @@ const runCaseLawPhrasing = async (
     : { type: "rejected", subCursor, run, error: answered.error };
 };
 
+type RunCaseLawPhrasingsOptions = {
+  requests: readonly {
+    body: Parameters<typeof defaultSearchDecisionsHandler>[0]["body"];
+    subCursor: string | null | undefined;
+  }[];
+  search: typeof defaultSearchDecisionsHandler;
+  observer: Parameters<typeof defaultSearchDecisionsHandler>[0]["observer"];
+  signal: AbortSignal | undefined;
+};
+
+/** Every phrasing's outcome, each in its own lane, in input order. */
+const runCaseLawPhrasings = async ({
+  requests,
+  search,
+  observer,
+  signal,
+}: RunCaseLawPhrasingsOptions): Promise<CaseLawSearchCallOutcome[]> =>
+  await mapWithConcurrency({
+    items: requests.map((request, lane) => ({ ...request, lane })),
+    limit: LIMITS.caseLawSearchQueriesMax,
+    operation: async ({ body, subCursor, lane }) =>
+      await runCaseLawPhrasing(
+        subCursor,
+        lane,
+        async () =>
+          await search({
+            body,
+            caseLawDb: caseLawPublicReadDb,
+            observer,
+            signal,
+          }),
+      ),
+  });
+
 /** The `searches[]` entry of a phrasing the time budget stopped. */
 const timedOutPhrasingNote = ({
   query,
   queryUsed,
-  retriedByCursor,
   warnings,
 }: {
   query: string;
   queryUsed: string;
-  retriedByCursor: boolean;
   warnings: readonly AgentCaseLawSearchWarning[];
 }) => ({
   query,
   queryUsed,
   paginationOutcome: SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
-  warnings: [...warnings, phrasingTimedOutWarning({ query, retriedByCursor })],
+  warnings: [...warnings, phrasingTimedOutWarning({ query })],
 });
 
 const SEARCH_ADMISSION = { domain: "caseLaw", surface: "search" } as const;
@@ -2949,6 +3001,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       sentenceAlignedExcerpt: true,
       headnotePresentation: "expanded" as const,
       limit: perQueryLimit,
+      relaxedTopUp: "best_effort" as const,
       ...(typeof subCursor === "string" ? { cursor: subCursor } : {}),
       ...(courtFilter === undefined ? {} : { court: courtFilter }),
       ...(courtListFilter === undefined ? {} : { courts: courtListFilter }),
@@ -2967,25 +3020,20 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       }),
     };
   });
-  const outcomes = await mapWithConcurrency({
-    items: requests.map((request, lane) => ({ ...request, lane })),
-    limit: LIMITS.caseLawSearchQueriesMax,
-    operation: async ({ body, subCursor, lane }) =>
-      await runCaseLawPhrasing(
-        subCursor,
-        lane,
-        async () =>
-          await search({
-            body,
-            caseLawDb: caseLawPublicReadDb,
-            observer,
-            signal: context.request?.signal,
-          }),
-      ),
+  const outcomes = await runCaseLawPhrasings({
+    requests,
+    search,
+    observer,
+    signal: context.request?.signal,
   });
 
   const read = await settleCaseLawQueryPages(outcomes, cursor);
   if (read.type === "failed") {
+    return read.result;
+  }
+  // Interim: the one place a search that finished nothing inside its budget
+  // answers an error. An overload continuation replaces this branch.
+  if (read.type === "none_finished") {
     return read.result;
   }
   const { pages } = read;
@@ -3010,7 +3058,6 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         return timedOutPhrasingNote({
           query,
           queryUsed: interpretation.queryUsed,
-          retriedByCursor: outcome.subCursor !== undefined,
           warnings: [...warnings, ...provisionRead.warnings],
         });
       }
@@ -3045,6 +3092,9 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           ...outcome.page.warnings
             .filter(({ code }) => code !== "partial_matches_appended")
             .map((warning) => withFacetValues(warning, values)),
+          ...(outcome.page.relaxedTopUp === "shed"
+            ? [partialMatchesUnavailableWarning({ query })]
+            : []),
           ...manyRequiredTermsWarnings({
             guidance: mcpCaseLawSearchGuidance(context),
             subCursor,
