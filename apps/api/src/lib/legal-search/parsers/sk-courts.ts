@@ -41,7 +41,11 @@ import { SecurityError } from "@libpdf/core";
 
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import { plainTextOf } from "@stll/legal-ast/document-ast";
-import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
+import {
+  rewriteInlineWhitespace,
+  stripInlinePrefix,
+  stripInlineSuffix,
+} from "@stll/legal-ast/inline-line";
 import { LINE_JOIN, splitsDate } from "@stll/legal-ast/line-wrap";
 import {
   isSkDecisionTitle,
@@ -53,7 +57,7 @@ import {
   SK_CLOSING_RE,
   SK_JUDGE_TITLE_RE,
   skSectionHeading,
-  splitSkTitleFormula,
+  skTitleFormulaStart,
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 import { collapseLetterSpacing } from "@stll/text-normalize";
@@ -742,12 +746,10 @@ const readLetterSpacing = (line: PdfLine): ReadPdfLine => {
   return { ...line, inlines, text: plainTextOf(inlines).trim() };
 };
 
-const hasBold = (inlines: readonly Inline[]): boolean =>
-  inlines.some((inline) => inline.type === "bold");
-
 /**
  * Read the formula off a title it was set in one run with: the title keeps
- * its words, and the formula follows as the court's opening words.
+ * its words, and the formula follows as the court's opening words, each with
+ * the inline formatting it was printed in.
  */
 const separateOpeningFormula = ({
   blocks,
@@ -758,21 +760,21 @@ const separateOpeningFormula = ({
   if (title?.type !== "heading" || title.role !== "decision-title") {
     return;
   }
-  const split = splitSkTitleFormula(title.plainText);
-  if (split === undefined) {
+  const text = plainTextOf(title.inlines);
+  const start = skTitleFormulaStart(text);
+  if (start === undefined) {
     return;
   }
-  const inlinesOf = (text: string): Inline[] =>
-    hasBold(title.inlines) ? boldInline(text) : [{ type: "text", text }];
-  title.plainText = split.title;
-  title.inlines = inlinesOf(split.title);
+  const formulaInlines = stripInlinePrefix(title.inlines, start);
+  title.inlines = stripInlineSuffix(title.inlines, text.length - start);
+  title.plainText = plainTextOf(title.inlines).trim();
   blocks.push({
     id: makeId(),
     anchorId: makeAnchor("p-formula"),
     type: "paragraph",
     role: "intro",
-    inlines: inlinesOf(split.formula),
-    plainText: split.formula,
+    inlines: formulaInlines,
+    plainText: plainTextOf(formulaInlines).trim(),
   });
 };
 

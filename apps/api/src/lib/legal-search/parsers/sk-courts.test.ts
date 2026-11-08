@@ -9,7 +9,8 @@ import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { documentAstSchema } from "@stll/legal-ast/document-ast";
+import type { Inline } from "@stll/legal-ast/document-ast";
+import { documentAstSchema, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import appealLines from "@/api/lib/legal-search/parsers/fixtures/sk-courts-appeal-lines.json";
@@ -599,6 +600,44 @@ describe("reader-compatible Slovak heading identities", () => {
       plainText: "V MENE SLOVENSKEJ REPUBLIKY",
     });
     expect(v.safeParse(documentAstSchema, ast).success).toBe(true);
+  });
+
+  test("the formula keeps the formatting it was printed in when read off the title", () => {
+    const blocks = buildSkDecisionPdfBlocks({
+      lines: [
+        { text: "ROZSUDOK V MENE", bold: true },
+        { text: "SLOVENSKEJ REPUBLIKY", bold: false },
+        { text: "rozhodol:", bold: true },
+      ].map(({ text, bold }) => ({
+        text,
+        segments: [bold ? { text, bold: true as const } : { text }],
+        bold,
+        fontSize: text === text.toUpperCase() ? 20 : 10,
+        pageIndex: 0,
+      })),
+      metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
+    });
+    const [title, formula] = blocks;
+    expect(title).toMatchObject({
+      type: "heading",
+      role: "decision-title",
+      plainText: "ROZSUDOK",
+    });
+    expect(formula).toMatchObject({
+      type: "paragraph",
+      role: "intro",
+      plainText: "V MENE SLOVENSKEJ REPUBLIKY",
+    });
+    const boldTexts = (inlines: readonly Inline[]): string[] =>
+      inlines.flatMap((inline) =>
+        inline.type === "bold" ? [plainTextOf(inline.children)] : [],
+      );
+    expect(title?.type === "heading" ? boldTexts(title.inlines) : []).toEqual([
+      "ROZSUDOK",
+    ]);
+    expect(
+      formula?.type === "paragraph" ? boldTexts(formula.inlines) : [],
+    ).toEqual(["V MENE"]);
   });
 
   test("repeated fixed section anchors remain unique for the reader", () => {

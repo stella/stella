@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   isSkOpeningFormula,
   skSectionHeading,
-  splitSkTitleFormula,
+  skTitleFormulaStart,
 } from "./slovak-document-roles";
 
 describe("Slovak Roman section headings", () => {
@@ -67,19 +67,14 @@ describe("the Slovak opening formula", () => {
   });
 
   test("is read off a title it runs on from", () => {
-    expect(splitSkTitleFormula("ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY")).toEqual(
-      { title: "ROZSUDOK", formula: "V MENE SLOVENSKEJ REPUBLIKY" },
-    );
+    expect(skTitleFormulaStart("ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY")).toBe(9);
     expect(
-      splitSkTitleFormula("TRESTNÝ ROZKAZ V MENE SLOVENSKEJ REPUBLIKY"),
-    ).toEqual({
-      title: "TRESTNÝ ROZKAZ",
-      formula: "V MENE SLOVENSKEJ REPUBLIKY",
-    });
-    expect(splitSkTitleFormula("ROZSUDOK")).toBeUndefined();
-    expect(splitSkTitleFormula("ROZSUDOK V MENE")).toBeUndefined();
+      skTitleFormulaStart("TRESTNÝ ROZKAZ  V MENE SLOVENSKEJ REPUBLIKY"),
+    ).toBe(16);
+    expect(skTitleFormulaStart("ROZSUDOK")).toBeUndefined();
+    expect(skTitleFormulaStart("ROZSUDOK V MENE")).toBeUndefined();
     expect(
-      splitSkTitleFormula("Súd rozhodol V MENE SLOVENSKEJ REPUBLIKY"),
+      skTitleFormulaStart("Súd rozhodol V MENE SLOVENSKEJ REPUBLIKY"),
     ).toBeUndefined();
   });
 });

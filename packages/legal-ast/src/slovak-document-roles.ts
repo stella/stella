@@ -1,4 +1,4 @@
-// parser-output-unchanged: [sk-us] only adds isSkOpeningFormula and splitSkTitleFormula, which only the Slovak courts' PDF reader calls; this source's lines are read as before.
+// parser-output-unchanged: [sk-us] only adds isSkOpeningFormula and skTitleFormulaStart, which only the Slovak courts' PDF reader calls; this source's lines are read as before.
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { caseLawSectionHeading } from "./case-law-heading";
@@ -73,19 +73,17 @@ export const isSkOpeningFormula = (text: string): boolean =>
 
 /**
  * A title line run on into the formula, as the court sets them in one type
- * (`ROZSUDOK V MENE` / `SLOVENSKEJ REPUBLIKY`): the title and the formula,
- * split at the word where the formula begins, or nothing when the line is
- * not that run.
+ * (`ROZSUDOK V MENE` / `SLOVENSKEJ REPUBLIKY`): the offset in `text` where
+ * the formula's first word begins, or nothing when the line is not that run.
  */
-export const splitSkTitleFormula = (
-  text: string,
-): { title: string; formula: string } | undefined => {
-  const words = text.trim().split(/\s+/u);
-  for (let at = 1; at < words.length; at += 1) {
-    const title = words.slice(0, at).join(" ");
-    const formula = words.slice(at).join(" ");
-    if (isSkDecisionTitle(title) && isSkOpeningFormula(formula)) {
-      return { title, formula };
+export const skTitleFormulaStart = (text: string): number | undefined => {
+  const starts = [...text.matchAll(/\S+/gu)].map((word) => word.index);
+  for (const start of starts.slice(1)) {
+    if (
+      isSkDecisionTitle(text.slice(0, start)) &&
+      isSkOpeningFormula(text.slice(start))
+    ) {
+      return start;
     }
   }
   return undefined;
