@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import type { PermissionInput } from "@stll/permissions";
 
 import { member } from "@/api/db/auth-schema";
@@ -107,7 +108,7 @@ export const hasCurrentActiveWorkspaceMemberPermission = async ({
   const authority = await resolveWorkspaceMemberAuthority(lookup, db);
   return (
     authority !== null &&
-    workspace?.status === "active" &&
+    workspaceAcceptsWrites(workspace?.status) &&
     isMemberRole(authority.role) &&
     hasCurrentMemberPermission(authority.role, permissions)
   );

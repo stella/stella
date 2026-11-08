@@ -1,7 +1,7 @@
 {
   "name": "@stll/docx-utils",
   "version": "0.2.0",
-  "description": "Low-level helpers for reading and writing DOCX/OOXML zip packages: text and binary extraction, relationship and content-type management, and namespace constants.",
+  "description": "Low-level OOXML helpers: relationship and content-type management, attached-template handling, office format metadata, and namespace constants.",
   "keywords": [
     "docx",
     "ooxml",
@@ -49,8 +49,8 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
+    "@stll/docx-core": "catalog:",
     "better-result": "catalog:",
-    "jszip": "catalog:",
     "slimdom": "^4.3.5"
   },
   "devDependencies": {

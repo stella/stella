@@ -20,6 +20,7 @@ import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { catalogueRoute } from "@/api/handlers/catalogue/routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
+import { chatRunOutputsRoute } from "@/api/handlers/chat/run-outputs/routes";
 import {
   clauseCategoriesRoute,
   clausesRoute,
@@ -29,6 +30,7 @@ import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
+import { desktopRunnerRoute } from "@/api/handlers/desktop-runner/routes";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
 import { dictationRoute } from "@/api/handlers/dictation/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
@@ -269,6 +271,7 @@ export const apiRoutes = mount([
       legalReaderRoute,
       legalResolveRoute,
       chatRoute,
+      chatRunOutputsRoute,
       dictationRoute,
       userFilesRoute,
       skillsRoute,
@@ -301,4 +304,5 @@ export const apiRoutes = mount([
   desktopPresenceRoute,
   desktopFeatureAccessRoute,
   desktopTimeEntriesRoute,
+  desktopRunnerRoute,
 ]);

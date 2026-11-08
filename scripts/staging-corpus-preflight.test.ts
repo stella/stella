@@ -50,6 +50,7 @@ type PreflightCase = {
   stubs?: Partial<Record<ProbeName, ProbeStub>>;
   source?: string;
   edgeHeader?: string;
+  stagingState?: string;
 };
 
 const readyBody = JSON.stringify({
@@ -78,15 +79,18 @@ const runPreflight = async ({
   stubs = {},
   source = script,
   edgeHeader = "",
+  stagingState = "",
 }: PreflightCase = {}) => {
   const directory = await mkdtemp(path.join(workspace, "case-"));
   const scriptPath = path.join(directory, "preflight.sh");
   const callsPath = path.join(directory, "calls.txt");
   const summaryPath = path.join(directory, "summary.md");
+  const outputPath = path.join(directory, "output.txt");
   await Promise.all([
     Bun.write(scriptPath, source),
     Bun.write(callsPath, ""),
     Bun.write(summaryPath, ""),
+    Bun.write(outputPath, ""),
   ]);
   const result = Bun.spawnSync(["bash", scriptPath], {
     env: {
@@ -94,6 +98,8 @@ const runPreflight = async ({
       PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
       RUNNER_TEMP: directory,
       GITHUB_STEP_SUMMARY: summaryPath,
+      GITHUB_OUTPUT: outputPath,
+      STAGING_STATE: stagingState,
       E2E_API_URL: "https://api-staging.example.test",
       E2E_EDGE_HEADER_NAME: "x-stella-edge-token",
       E2E_EDGE_HEADER_VALUE: edgeHeader,
@@ -106,6 +112,7 @@ const runPreflight = async ({
     stdout: result.stdout.toString(),
     calls: await Bun.file(callsPath).text(),
     summary: await Bun.file(summaryPath).text(),
+    output: await Bun.file(outputPath).text(),
   };
 };
 
@@ -226,6 +233,46 @@ test("each unavailable backend is reported once", async () => {
     "corpus index down: staging legislation-search preflight failed (HTTP 503).",
     "corpus index down: staging case-law-coverage preflight failed (HTTP 503).",
   ]);
+});
+
+const searchOnly = '{"corpus_reads":"search-only"}';
+
+test("a declared gap reports legislation and coverage without gating, and skips MCP", async () => {
+  const down = { status: "503", body: '{"message":"unavailable"}' };
+  const result = await runPreflight({
+    stubs: { legislation: down, coverage: down },
+    stagingState: searchOnly,
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.output).toContain("declared_gap=true");
+  expect(result.stdout).toContain("::warning title=corpus read not proven::");
+  expect(result.summary).toContain("not proven: staging legislation-search");
+  expect(result.summary).toContain("not proven: staging case-law-coverage");
+  expect(result.summary).not.toContain("backend answered");
+});
+
+test("a declared gap never excuses case-law search", async () => {
+  const result = await runPreflight({
+    stubs: { search: { status: "503", body: '{"message":"down"}' } },
+    stagingState: searchOnly,
+  });
+  expect(result.exitCode).toBe(1);
+  expect(result.summary).toContain(
+    "corpus index down: staging case-law-search",
+  );
+});
+
+test("once the declared reads answer, MCP gates again", async () => {
+  const result = await runPreflight({ stagingState: searchOnly });
+  expect(result.exitCode).toBe(0);
+  expect(result.output).toBe("");
+  expect(result.summary).toContain("backend answered");
+});
+
+test("a malformed staging state fails closed", async () => {
+  const result = await runPreflight({ stagingState: "{" });
+  expect(result.exitCode).not.toBe(0);
+  expect(result.calls).toBe("");
 });
 
 test("the former missing preflight and an ungated MCP smoke violate the contract", async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   decodePaginationCursor,
@@ -24,23 +24,25 @@ const cursorPrimitive = fc.oneof(
 
 describe("pagination cursor codec (properties)", () => {
   test("decode ∘ encode is the identity on cursor-part arrays", () => {
-    fc.assert(
+    assertProperty(
+      "decode ∘ encode is the identity on cursor-part arrays",
       fc.property(fc.array(cursorPrimitive), (parts) => {
         expect(decodePaginationCursor(encodePaginationCursor(parts))).toEqual(
           parts,
         );
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
   test("decode never throws and yields an array or null for any string", () => {
-    fc.assert(
+    assertProperty(
+      "decode never throws and yields an array or null for any string",
       fc.property(fc.string(), (raw) => {
         const decoded = decodePaginationCursor(raw);
         expect(decoded === null || Array.isArray(decoded)).toBe(true);
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
@@ -52,7 +54,8 @@ describe("pagination cursor codec (properties)", () => {
       fc.constant(null),
       fc.dictionary(fc.string(), fc.string()),
     );
-    fc.assert(
+    assertProperty(
+      "a well-formed but non-array payload decodes to null",
       fc.property(nonArray, (value) => {
         const encoded = Buffer.from(JSON.stringify(value)).toBase64({
           alphabet: "base64url",
@@ -60,7 +63,7 @@ describe("pagination cursor codec (properties)", () => {
         });
         expect(decodePaginationCursor(encoded)).toBeNull();
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });

@@ -154,8 +154,11 @@ export const createOtpAccountLimitPlugin = ({
               verificationType === "change-email" ||
               verificationType === "current-email";
             const emailFromBody = isRecord(body) ? body["email"] : undefined;
+            const sessionUser = usesSessionEmail
+              ? (await getAuthoritativeSessionFromCtx(ctx))?.user
+              : undefined;
             const email: unknown = usesSessionEmail
-              ? (await getAuthoritativeSessionFromCtx(ctx))?.user.email
+              ? sessionUser?.email
               : emailFromBody;
             if (typeof email !== "string") {
               return undefined;
@@ -178,10 +181,12 @@ export const createOtpAccountLimitPlugin = ({
               }
               case "change-email": {
                 const newEmail = isRecord(body) ? body["newEmail"] : undefined;
-                if (typeof newEmail !== "string") {
+                if (typeof newEmail !== "string" || sessionUser === undefined) {
                   return undefined;
                 }
-                identifier = `change-email-otp-${accountEmail}-${normalizeEmail(newEmail)}`;
+                // Better Auth binds a pending email change to the account id and
+                // the folded new address (email-otp `changeEmailEmailOTP`).
+                identifier = `change-email-otp-${sessionUser.id}:${normalizeEmail(newEmail)}`;
                 break;
               }
               case "current-email": {

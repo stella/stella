@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { AiDisclosureContext } from "@stll/api-contract/ai-disclosure";
+import type { ReaderAiDisclosureContext } from "@stll/api-contract/ai-disclosure";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -124,7 +124,7 @@ const ReaderContentsList = ({
       {children}
     </Button>
   );
-  const aiLabel = (disclosure: AiDisclosureContext) => (
+  const aiLabel = (disclosure: ReaderAiDisclosureContext) => (
     <span className="text-muted-foreground shrink-0 pe-2 text-xs">
       <ReaderAiLabel context={disclosure} label={t("caseLaw.notesFilter.ai")} />
     </span>

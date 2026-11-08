@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import type { AiDisclosureContext } from "@stll/api-contract/ai-disclosure";
+import type { ReaderAiDisclosureContext } from "@stll/api-contract/ai-disclosure";
 import { comparableHeadingTitle } from "@stll/legal-ast/source-contents";
 
 import type { ReaderBreadcrumbModel } from "./reader-breadcrumb-paths";
@@ -8,7 +8,7 @@ import type { ReaderBreadcrumbSegment } from "./reader-breadcrumb.logic";
 
 /** Sections a model wrote over the document, each keyed by the block it starts at. */
 export type ReaderAnalysisOutline = {
-  disclosure: AiDisclosureContext;
+  disclosure: ReaderAiDisclosureContext;
   sections: ReaderBreadcrumbModel;
 };
 
@@ -18,7 +18,7 @@ export type ReaderContentsRow =
       type: "analysis";
       anchorId: string;
       title: string;
-      disclosure: AiDisclosureContext;
+      disclosure: ReaderAiDisclosureContext;
     }
   | {
       type: "headingWithAnalysis";
@@ -26,7 +26,7 @@ export type ReaderContentsRow =
       /** The document's own heading; the model's title never replaces it. */
       title: string;
       analysisTitle: string;
-      disclosure: AiDisclosureContext;
+      disclosure: ReaderAiDisclosureContext;
     };
 
 /** The breadcrumb trail, and whether the document or a model titled it. */
@@ -35,7 +35,7 @@ export type ReaderTrail =
   | {
       type: "analysis";
       segments: readonly ReaderBreadcrumbSegment[];
-      disclosure: AiDisclosureContext;
+      disclosure: ReaderAiDisclosureContext;
     };
 
 export type ReaderContents = {
@@ -59,7 +59,7 @@ type ReaderContentsOptions = {
   analysis: ReaderAnalysisOutline | undefined;
 };
 
-type PlacedSection = { title: string; disclosure: AiDisclosureContext };
+type PlacedSection = { title: string; disclosure: ReaderAiDisclosureContext };
 
 /**
  * The document heading a model's section belongs to, when it has one.

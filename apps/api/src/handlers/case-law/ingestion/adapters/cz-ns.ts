@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -54,8 +55,8 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
+  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -296,6 +297,8 @@ const CZ_NS_SOURCE_FIELDS = [
 
 type CzNsSourceField = (typeof CZ_NS_SOURCE_FIELDS)[number];
 
+type CzNsPublisherRecord = Readonly<Record<CzNsSourceField, unknown>>;
+
 const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
   Anotace: {
     disposition: "stored",
@@ -326,7 +329,7 @@ const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
     disposition: "stored",
     target: { type: "textField", key: "legalSentence" },
   },
-  "Senátní značka": excludedSourceField(
+  "Senátní značka": legacyExcludedSourceField(
     "The same docket under the label this court prints for its insolvency senate register. The row's docket is the one the listing entry states, which is what the document was fetched by.",
   ),
   /**
@@ -348,7 +351,7 @@ const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
     disposition: "stored",
     target: { type: "metadata", key: "zverejnenoNaWebu" },
   },
-} as const satisfies Record<CzNsSourceField, SourceFieldDisposition>;
+} as const satisfies Record<keyof CzNsPublisherRecord, SourceFieldDisposition>;
 
 /** The label cell of a detail-page row. */
 const CZ_NS_DETAIL_LABEL_RE =

@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
 import { SelectRowContent } from "@/components/workspaces/table/select-row-content";
 import type { StatuteRowData } from "@/components/workspaces/table/types";
@@ -9,7 +11,6 @@ import { selectColId } from "@/components/workspaces/table/workspace-table/inter
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
@@ -105,6 +106,9 @@ test("selection names rows and exposes count, clear, and page select-all", () =>
   });
   const first = view.getByRole("checkbox", { name: /12 C 1\/2026/u });
   const second = view.getByRole("checkbox", { name: /18 C 2\/2026/u });
+  expect(
+    view.queryByRole("button", { name: messages.common.clearSelection }),
+  ).toBeNull();
 
   fireEvent.click(first);
   fireEvent.click(second);

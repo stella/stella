@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DECISION_HEADNOTE_TRUNCATION_MARK } from "@stll/api-contract/case-law-text-field";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   collapseDecisionHeadnote,
@@ -23,7 +23,8 @@ const headnoteTextArbitrary = fc.oneof(
 
 describe("headnote text fits one row", () => {
   test("never exceeds the budget and never carries stray whitespace", () => {
-    fc.assert(
+    assertProperty(
+      "never exceeds the budget and never carries stray whitespace",
       fc.property(headnoteTextArbitrary, (raw) => {
         const headnote = normalizeDecisionHeadnote(raw);
         if (headnote === null) {
@@ -41,7 +42,7 @@ describe("headnote text fits one row", () => {
         expect(headnote.text).not.toMatch(/[\t\r]/u);
         expect(headnote.text.isWellFormed()).toBe(true);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -105,7 +106,8 @@ describe("headnote text fits one row", () => {
   });
 
   test("the preview is the whole line's own opening", () => {
-    fc.assert(
+    assertProperty(
+      "the preview is the whole line's own opening",
       fc.property(headnoteTextArbitrary, (raw) => {
         const whole = collapseDecisionHeadnote(raw);
         const preview = normalizeDecisionHeadnote(raw);
@@ -127,7 +129,7 @@ describe("headnote text fits one row", () => {
         ).toBe(true);
         expect(whole.length).toBeGreaterThan(preview.text.length);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -142,7 +144,8 @@ describe("headnote cuts are explicit word-boundary decisions", () => {
   test("preserves short text and cuts arbitrary long text only between segments", () => {
     const segmenter = new Intl.Segmenter("und", { granularity: "word" });
 
-    fc.assert(
+    assertProperty(
+      "preserves short text and cuts arbitrary long text only between segments",
       fc.property(headnoteTextArbitrary, (text) => {
         const headnote = truncateDecisionHeadnote(text);
         if (text.length <= LIMITS.caseLawHeadnoteMaxChars) {
@@ -169,7 +172,7 @@ describe("headnote cuts are explicit word-boundary decisions", () => {
         );
         expect(prefix.length === 0 || boundaries.has(prefix.length)).toBe(true);
       }),
-      propertyConfig(),
+      {},
     );
   });
 

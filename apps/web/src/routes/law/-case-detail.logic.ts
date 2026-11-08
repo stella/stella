@@ -24,6 +24,7 @@ import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match
 import {
   decisionCitationsInfiniteOptions,
   decisionCitationSummaryOptions,
+  decisionInTextCitationsInfiniteOptions,
 } from "@/features/case-law/queries/citations";
 import {
   decisionBySlugOptions,
@@ -202,6 +203,14 @@ const primeDecisionProvisions = (
       captureError,
     ),
     "case-law.citations-outgoing-prefetch",
+  );
+  detached(
+    prefetchNonCriticalInfiniteQuery(
+      queryClient,
+      routeQueryOptions(decisionInTextCitationsInfiniteOptions(decisionId)),
+      captureError,
+    ),
+    "case-law.citations-in-text-prefetch",
   );
 };
 

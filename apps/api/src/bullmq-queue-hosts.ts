@@ -22,6 +22,7 @@ export const BULLMQ_QUEUE_HOSTS = {
   "push-notifications": "api",
   "report-exports": "api",
   "style-set-package-cleanup": "api",
+  "timer-activity-updates": "api",
   "uploaded-mail-correspondence": "api",
   workflow: "api",
   "workflow-flex": "api",

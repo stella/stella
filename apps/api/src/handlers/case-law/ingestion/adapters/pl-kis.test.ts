@@ -5,7 +5,7 @@ import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-gra
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
-  assemblePlKisDecision,
+  assemblePlKisDecision as uncheckedAssemblePlKisDecision,
   encodePlKisCursor,
   parsePlKisCursor,
   parsePlKisProvision,
@@ -29,7 +29,7 @@ import {
   readPlKisListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import type { PlKisBuildResult } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
-import { parsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
+import { parsePlKisDocumentHtml as uncheckedParsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import {
   decodeSourceRawEnvelope,
@@ -51,9 +51,15 @@ import type {
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { isRecord } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
+
+const assemblePlKisDecision = guardParser(uncheckedAssemblePlKisDecision);
+
+const parsePlKisDocumentHtml = guardParser(uncheckedParsePlKisDocumentHtml);
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -157,10 +163,9 @@ const urlOf = (input: string | URL | Request): string => {
 const stubPublisher = (
   answer: (call: Call) => Response,
 ): { calls: Call[]; restore: () => void } => {
-  const original = globalThis.fetch;
   const calls: Call[] = [];
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  const installation = installTestFetch(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const call = {
         url: urlOf(input),
         method: init?.method ?? "GET",
@@ -168,14 +173,9 @@ const stubPublisher = (
       };
       calls.push(call);
       return await Promise.resolve(answer(call));
-    },
+    }),
   );
-  return {
-    calls,
-    restore: () => {
-      globalThis.fetch = original;
-    },
-  };
+  return { calls, restore: installation.restore };
 };
 
 const json = (body: unknown, status = 200): Response =>

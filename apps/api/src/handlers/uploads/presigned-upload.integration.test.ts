@@ -4,10 +4,10 @@ import {
   describe,
   expect,
   setDefaultTimeout,
+  spyOn,
   test,
 } from "bun:test";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
-import JSZip from "jszip";
 
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
@@ -15,10 +15,8 @@ import {
   FILE_SECURITY_REMEDIATION,
 } from "@stll/api-contract";
 import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
-import {
-  ATTACHED_TEMPLATE_SECURITY_RULE,
-  writeZipEntry,
-} from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
+import { ATTACHED_TEMPLATE_SECURITY_RULE } from "@stll/docx-utils";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import {
@@ -87,9 +85,8 @@ const ATTACHED_TEMPLATE_MESSAGE =
 const ATTACHED_TEMPLATE_REJECTION_MESSAGE = `File rejected by security rule ${ATTACHED_TEMPLATE_SECURITY_RULE}: ${ATTACHED_TEMPLATE_MESSAGE}`;
 
 const makeAttachedTemplateDocx = async (): Promise<Uint8Array> => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "[Content_Types].xml",
     '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
@@ -97,20 +94,17 @@ const makeAttachedTemplateDocx = async (): Promise<Uint8Array> => {
       '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
       "</Types>",
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/settings.xml",
     '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       '<w:attachedTemplate r:id="rId1"/></w:settings>',
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/_rels/settings.xml.rels",
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" ' +
@@ -118,10 +112,7 @@ const makeAttachedTemplateDocx = async (): Promise<Uint8Array> => {
       'Target="file:///C:/Templates/Contract.dotx" TargetMode="External"/>' +
       "</Relationships>",
   );
-  return await zip.generateAsync({
-    type: "uint8array",
-    compression: "DEFLATE",
-  });
+  return await zip.generate();
 };
 
 beforeAll(async () => {
@@ -617,8 +608,8 @@ describe("presigned upload mutation flow", () => {
           "Expected the idle admission budget to admit the hold.",
         );
       }
+      const replayAdmissions = spyOn(UPLOAD_FINALIZE_ADMISSION, "acquire");
       try {
-        const startedAt = performance.now();
         const replayed = await finalizeUpload.handler(
           asTestRaw<FinalizeCtx>(
             createContext({
@@ -630,15 +621,14 @@ describe("presigned upload mutation flow", () => {
           ),
         );
         expect(replayed).toEqual(finalized);
+        expect(replayAdmissions).not.toHaveBeenCalled();
         expect(
           recording.records.filter(
             ({ message }) => message === "uploads.finalize_admitted",
           ),
         ).toHaveLength(1);
-        expect(performance.now() - startedAt).toBeLessThan(
-          LIMITS.uploadFinalizeAdmissionWaitMs,
-        );
       } finally {
+        replayAdmissions.mockRestore();
         holdAgain();
       }
     } finally {
@@ -863,8 +853,8 @@ describe("presigned upload finalize lifecycle", () => {
       declaredSha256:
         "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
       status: "pending",
-      expiresAt: new Date(Date.now() + 60_000),
-      createdAt: new Date(),
+      expiresAt: sql`now() + interval '1 minute'`,
+      createdAt: sql`now()`,
     });
     seededUploadIds.push(uploadId);
 

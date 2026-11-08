@@ -983,7 +983,10 @@ const explainVmError = (
   err: DumpedError | undefined,
   nameGuide: SandboxNameGuide | undefined,
 ): SandboxError | undefined => {
-  if (nameGuide === undefined || err?.message === undefined) {
+  if (nameGuide === undefined || err === undefined) {
+    return undefined;
+  }
+  if (err.message === undefined) {
     return undefined;
   }
   if (err.name === SANDBOX_NAME_GUIDE_ERROR_NAME) {

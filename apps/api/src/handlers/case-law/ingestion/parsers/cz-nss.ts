@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 // parser-output-unchanged: AST validation reuses the unmodified parsed document; diagnostics and stored parser output remain unchanged.
 /**
@@ -26,11 +27,12 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { isComment, isTag, isText } from "domhandler";
-import type { AnyNode } from "domhandler";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import { isComment, isTag, isText } from "@stll/html/nodes";
+import type { AnyNode } from "@stll/html/nodes";
 import { labelledHeading } from "@stll/legal-ast/case-law-heading";
 import { closedQuotationParagraphStarts } from "@stll/legal-ast/closed-quotation-paragraphs";
 import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
@@ -50,14 +52,18 @@ import type {
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
-import { normalizeUnicode } from "@stll/text-normalize";
-
-import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
-import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
   collapseLetterSpacing,
-  withAttestedLetterSpacing,
-} from "@/api/lib/legal-search/parsers/letter-spacing";
+  isLetterSpacedEmphasis,
+  normalizeUnicode,
+} from "@stll/text-normalize";
+
+import {
+  inlineStyleDeclaresProperty,
+  inlineStyleValue,
+} from "@/api/lib/legal-search/document-builders/inline-style";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
+import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   continuesAcrossPageBreak,
   CZ_RUNNING_HEADER_SOURCE,
@@ -100,7 +106,7 @@ type ParseNssDecisionOutput = {
 export const parseNssDecisionHtml = (
   input: ParseNssDecisionInput,
 ): ParseNssDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const chunks = extractChunks($);
   const blocks = courtParagraphNumbers(
     withAttestedLetterSpacing(classifyChunks(chunks)),
@@ -187,9 +193,7 @@ const footnoteOf = (el: cheerio.Cheerio<AnyNode>): PChunk["footnote"] => {
     : { anchorId: id, label };
 };
 
-const SPACED_EMPHASIS_RE = /^(?:\p{L} +)+\p{L}(?: *[,:;.!?])?$/u;
 const SINGLE_LETTER_RE = /^\p{L}$/u;
-const MULTI_SPACE_MARKER = "\u0000";
 
 type SpacedBoldRun = {
   children: Inline[];
@@ -284,7 +288,7 @@ const collectSpacedBoldRun = (
   }
 
   const text = inlinesToPlainText(children).replace(/\s/gu, " ").trim();
-  return SPACED_EMPHASIS_RE.test(text) ? { children, endIndex } : null;
+  return isLetterSpacedEmphasis(text) ? { children, endIndex } : null;
 };
 
 /**
@@ -353,20 +357,14 @@ const normalizeNssInlines = (
         /\s/gu,
         " ",
       );
-      const trimmed = whitespaceNormalized.trim();
-      // The gap around a spaced word is the word boundary: "n e j s o u"
-      // and the spaces after it read as "nejsou ", not "nejsou".
-      const text =
-        spacedEmphasis && SPACED_EMPHASIS_RE.test(trimmed)
-          ? `${whitespaceNormalized.startsWith(" ") ? " " : ""}${trimmed
-              .replace(/ {2,}/gu, () => MULTI_SPACE_MARKER)
-              .replace(/(?<=\p{L}) (?=\p{L})/gu, "")
-              .replaceAll(MULTI_SPACE_MARKER, " ")
-              .replace(
-                /(?<=\p{L}) +(?=[,:;.!?])/gu,
-                "",
-              )}${whitespaceNormalized.endsWith(" ") ? " " : ""}`
-          : collapseLetterSpacing(whitespaceNormalized).replace(/ {2,}/gu, " ");
+      // A bold node set wholly in spaced letters is emphasis however short
+      // its words: every run in it is a spaced word. The gap around a spaced
+      // word is the word boundary: "n e j s o u" and the spaces after it
+      // read as "nejsou ", not "nejsou".
+      const text = collapseLetterSpacing(whitespaceNormalized, {
+        emphasis:
+          spacedEmphasis && isLetterSpacedEmphasis(whitespaceNormalized),
+      }).replace(/ {2,}/gu, " ");
       return node.anonymized === true
         ? { type: "text", text, anonymized: true }
         : { type: "text", text };
@@ -580,9 +578,13 @@ const styledBlockChunk = (
     plainText,
     centered: styleCentres($el.get(0)),
     bold: mostlyBold($el.get(0), plainText),
-    letterSpacing:
-      style.includes("letter-spacing") ||
-      $el.find("span[style*='letter-spacing']").length > 0,
+    letterSpacing: $el
+      .find("span")
+      .addBack()
+      .toArray()
+      .some(
+        (el) => isTag(el) && inlineStyleDeclaresProperty(el, "letter-spacing"),
+      ),
     fontSize: parseFontSize(style),
     paragraphLayout: paragraphLayoutOf($el.get(0)),
     kind: "paragraph",
@@ -603,7 +605,10 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
 
   // Skip the first-page header div (Aspose artifact)
   const body = $("body");
-  body.find("div[style*='-aw-headerfooter-type']").remove();
+  body
+    .find("div")
+    .filter((_, el) => inlineStyleDeclaresProperty(el, "-aw-headerfooter-type"))
+    .remove();
 
   const blockSelector =
     "p, ol, ul, table, div, blockquote, h1, h2, h3, h4, h5, h6";

@@ -21,6 +21,8 @@ const README_PATH = path.join(PLUGIN_DIRECTORY, "README.md");
 export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "aggregate-lock-sites.ts",
   "budget-ledger.ts",
+  "case-law-replay-imports.ts",
+  "case-law-replay-writer-registry.ts",
   "database-access.ts",
   "api-client-chain.ts",
   "icon-ownership.ts",
@@ -32,6 +34,8 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "public-read-io-provenance.ts",
   "restricted-import.ts",
   "utils.ts",
+  "test-determinism-rule.ts",
+  "test-time-resolver.ts",
 ]);
 
 const pluginFiles = readdirSync(PLUGIN_DIRECTORY)

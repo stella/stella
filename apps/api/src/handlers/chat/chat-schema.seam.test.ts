@@ -247,6 +247,7 @@ const continuationOutcome = async ({
   rawArguments: string;
 }): Promise<string> => {
   const result = await validateMessage({
+    toolCallOwnership: "cloud",
     message: {
       id: MESSAGE_ID,
       role: "assistant",

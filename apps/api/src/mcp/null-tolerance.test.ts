@@ -300,7 +300,6 @@ describe("capability executors read explicit null on plain optional fields as om
   // A contact body with everything the schema requires, so each case below
   // differs from its omitted twin in exactly the one null under test.
   const contact = {
-    id: "0d0d3b3c-3a55-4f9d-9d3f-2c9b1c9a8f10",
     type: "person",
     displayName: "Ada Lovelace",
   };

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   buildOcrPage,
@@ -62,7 +62,8 @@ const pageInputArb = fc
 
 describe("buildOcrPage → parseOcrPage fixed point", () => {
   test("every built page validates after a JSON round trip", () => {
-    fc.assert(
+    assertProperty(
+      "every built page validates after a JSON round trip",
       fc.property(pageInputArb, ({ lines, pointHeight, pointWidth }) => {
         const page = buildOcrPage({ lines, pointHeight, pointWidth });
         // A JSON round trip, not a clone: the worker serializes pages over
@@ -80,7 +81,7 @@ describe("buildOcrPage → parseOcrPage fixed point", () => {
           expect(line.box[3]).toBeLessThanOrEqual(page.height);
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

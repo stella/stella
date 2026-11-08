@@ -153,6 +153,14 @@ export const MODEL_REASONING_CAPABILITIES = {
     anthropicThinking: "none",
     replayCompatibility: [],
   },
+  "openai/gpt-6.1-terra": {
+    support: "supported",
+    emittedFormats: ["none"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [],
+  },
   "openai/gpt-6-astra": {
     support: "supported",
     emittedFormats: ["none"],
@@ -339,6 +347,20 @@ export const MODEL_REASONING_CAPABILITIES = {
       {
         provider: "openai",
         model: "gpt-6.1-sol",
+        format: "openai-encrypted-content",
+      },
+    ],
+  },
+  "gpt-6.1-terra": {
+    support: "supported",
+    emittedFormats: ["openai-encrypted-content"],
+    openAIIncludeEncryptedContent: true,
+    openAIStore: false,
+    anthropicThinking: "none",
+    replayCompatibility: [
+      {
+        provider: "openai",
+        model: "gpt-6.1-terra",
         format: "openai-encrypted-content",
       },
     ],

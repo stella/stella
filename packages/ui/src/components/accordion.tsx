@@ -5,9 +5,24 @@ import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
 import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
 
-const Accordion = <Value = unknown,>(
-  props: AccordionPrimitive.Root.Props<Value>,
-) => <AccordionPrimitive.Root data-slot="accordion" {...props} />;
+/**
+ * Closed panels stay in the document. Once mounted they are
+ * `hidden="until-found"`, so find-in-page reaches their content and opens
+ * the section, as it would a native `<details>`; server-rendered markup
+ * carries a plain `hidden` until hydration. Pass `hiddenUntilFound={false}` (here, or on one
+ * `AccordionPanel`) to unmount closed content instead: a heavy panel that
+ * should not render until asked for.
+ */
+const Accordion = <Value = unknown,>({
+  hiddenUntilFound = true,
+  ...props
+}: AccordionPrimitive.Root.Props<Value>) => (
+  <AccordionPrimitive.Root
+    data-slot="accordion"
+    hiddenUntilFound={hiddenUntilFound}
+    {...props}
+  />
+);
 
 const AccordionItem = ({
   className,
@@ -29,7 +44,7 @@ const AccordionItem = ({
 type AccordionSize = "default" | "sm" | "compact";
 
 const TRIGGER_SIZE_CLASS_NAME = {
-  compact: "py-2 text-xs",
+  compact: "py-1.5 text-xs",
   default: "py-4 text-sm",
   sm: "min-h-11 items-center py-2 text-sm",
 } as const satisfies Record<AccordionSize, string>;
@@ -57,10 +72,19 @@ const AccordionTrigger = ({
   children,
   size = "default",
   variant = "default",
+  trailing,
   ...props
 }: AccordionPrimitive.Trigger.Props & {
   size?: AccordionSize;
   variant?: AccordionTriggerVariant;
+  /**
+   * Status at the end of the row, before the chevron: a count, "2 unsaved",
+   * a last-updated date. It is part of the trigger, so it is read with the
+   * heading. It is typed as text so it can never be a control: a button
+   * inside the trigger's button is unreachable and its click would toggle
+   * the panel.
+   */
+  trailing?: string | number;
 }) => (
   <AccordionPrimitive.Header className="flex">
     <AccordionPrimitive.Trigger
@@ -74,6 +98,16 @@ const AccordionTrigger = ({
       {...props}
     >
       {children}
+      {trailing === undefined ? null : (
+        // A long status wraps within the row instead of pushing the chevron
+        // past the trigger's edge.
+        <span
+          className="text-muted-foreground ms-auto min-w-0 text-end text-xs font-normal tabular-nums"
+          data-slot="accordion-trigger-trailing"
+        >
+          {trailing}
+        </span>
+      )}
       <ChevronDownIcon
         className="pointer-events-none size-4 shrink-0 translate-y-0.5 opacity-80 transition-transform duration-200 ease-in-out"
         data-slot="accordion-indicator"
@@ -89,7 +123,7 @@ const AccordionPanel = ({
   ...props
 }: AccordionPrimitive.Panel.Props & { size?: AccordionSize }) => (
   <AccordionPrimitive.Panel
-    className="text-muted-foreground h-(--accordion-panel-height) overflow-hidden text-sm transition-[height] duration-200 ease-in-out data-ending-style:h-0 data-starting-style:h-0"
+    className="text-muted-foreground h-(--accordion-panel-height) overflow-hidden text-sm transition-[height] duration-200 ease-in-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none [&[hidden]:not([hidden=until-found])]:hidden"
     data-slot="accordion-panel"
     {...props}
   >

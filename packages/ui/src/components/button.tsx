@@ -19,6 +19,7 @@ import {
   resolveButtonDisposition,
 } from "../lib/button-disposition";
 import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";
+import { rendersNothing } from "../lib/renders-nothing";
 import { cn } from "../lib/utils";
 import {
   BUTTON_PLAIN_VARIANT,
@@ -103,6 +104,7 @@ const BUTTON_SIZE_CLASS_NAMES = {
   // Small controls read in small type; `SelectTrigger` and `Input`
   // share the height, so a toolbar of `sm` controls shares one scale.
   sm: "h-8 gap-1.5 px-[calc(--spacing(2.5)-1px)] text-sm sm:h-7 sm:text-xs",
+  touch: "min-h-[44px] min-w-[44px] px-[calc(--spacing(3.5)-1px)]",
   xl: "h-11 px-[calc(--spacing(4)-1px)] text-lg sm:h-10 sm:text-base [&_svg:not([class*='size-'])]:size-5 sm:[&_svg:not([class*='size-'])]:size-4.5",
   xs: "h-7 gap-1 rounded-md px-[calc(--spacing(2)-1px)] text-sm before:rounded-[calc(var(--radius-md)-1px)] sm:h-6 sm:text-xs [&_svg:not([class*='size-'])]:size-4 sm:[&_svg:not([class*='size-'])]:size-3.5",
 } as const satisfies Record<ButtonSize, string>;
@@ -239,6 +241,7 @@ const BUTTON_SIZE_CONTENT = {
   lg: BUTTON_CONTENT.text,
   row: BUTTON_CONTENT.text,
   sm: BUTTON_CONTENT.text,
+  touch: BUTTON_CONTENT.text,
   xl: BUTTON_CONTENT.text,
   xs: BUTTON_CONTENT.text,
 } as const satisfies {
@@ -389,24 +392,13 @@ function Button({
   const isActivationPreservingDisabled = accessibleDisabled !== undefined;
 
   const defaultProps = {
-    children: (
-      <>
-        {loading ? (
-          <Loader
-            animation="none"
-            className="[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0"
-            data-slot="button-loader"
-            size="sm"
-            variant="decorative"
-          />
-        ) : (
-          icon
-        )}
-        {cutsLabel({ layout, size, variant })
-          ? containedLabel(children)
-          : children}
-      </>
-    ),
+    children: buttonContent({
+      icon,
+      label: cutsLabel({ layout, size, variant })
+        ? containedLabel(children)
+        : children,
+      loading,
+    }),
     className: cn(
       variant === BUTTON_PLAIN_VARIANT
         ? cn(BUTTON_PLAIN_CLASS, BUTTON_PLAIN_SHAPE_CLASS[shape], className)
@@ -454,6 +446,64 @@ function Button({
     tooltip: tooltipContent,
     trigger: button,
   });
+}
+
+/**
+ * What the button shows. Loading never changes its width: with an `icon`,
+ * the loader takes the icon's place; without one, the label (already cut to
+ * the button's width where it is cut) stays in place but transparent (still
+ * the accessible name) and the loader sits over its centre, so a row of
+ * buttons does not shift when one starts saving.
+ */
+function buttonContent({
+  icon,
+  label,
+  loading,
+}: {
+  icon: ReactNode;
+  label: ReactNode;
+  loading: boolean | undefined;
+}): ReactNode {
+  if (!loading) {
+    return (
+      <>
+        {icon}
+        {label}
+      </>
+    );
+  }
+  const hasIcon = !rendersNothing(icon);
+  const loader = (
+    <Loader
+      animation="none"
+      className={cn(
+        "[transition:opacity_150ms_ease-out,scale_320ms_var(--ease-spring)] motion-reduce:transition-none starting:scale-50 starting:opacity-0",
+        !hasIcon && "absolute inset-0 m-auto",
+      )}
+      data-slot="button-loader"
+      size="sm"
+      variant="decorative"
+    />
+  );
+  if (hasIcon) {
+    return (
+      <>
+        {loader}
+        {label}
+      </>
+    );
+  }
+  return (
+    <>
+      <span
+        className="inline-flex min-w-0 items-center gap-[inherit] opacity-0"
+        data-slot="button-loading-label"
+      >
+        {label}
+      </span>
+      {loader}
+    </>
+  );
 }
 
 /**

@@ -14,6 +14,7 @@ import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { notifyUserProblem } from "@/lib/errors/user-toast";
 import {
+  coalesceWorkspaceQueryActions,
   getWorkspaceRealtimeQueryActions,
   getWorkspaceReconnectQueryActions,
   isWorkspaceQueryKey,
@@ -29,6 +30,7 @@ import {
 import type { WorkspaceStreamAccess } from "@/lib/workspace-sse-connection.logic";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { getRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
+import { handleWorkspaceMutationEvent } from "@/lib/workspaces/workspace-mutation";
 
 const WORKSPACE_SSE_EVENT_SOURCE_INIT = {
   withCredentials: true,
@@ -68,7 +70,7 @@ export const createWorkspaceQueryActionBatch = (
     if (actions.length === 0) {
       return;
     }
-    apply(actions);
+    apply(coalesceWorkspaceQueryActions(actions));
   };
 
   return {
@@ -256,7 +258,9 @@ export const useWorkspaceSSE = (
       onMessage: (data) => {
         const parsed = parseWorkspaceRealtimeMessage(data);
         if (parsed) {
-          actionBatch.add(handleParsedEvent(parsed));
+          handleWorkspaceMutationEvent(queryClient, parsed, () => {
+            actionBatch.add(handleParsedEvent(parsed));
+          });
         }
       },
       onOutage: captureConnectionOutage,
@@ -270,6 +274,7 @@ export const useWorkspaceSSE = (
       disconnect();
     };
   }, [
+    queryClient,
     workspaceId,
     applyBatchedQueryActions,
     captureConnectionOutage,
