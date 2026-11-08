@@ -375,10 +375,12 @@ export const parseCzUohsDocumentPdf = async (
 /**
  * The letterhead of every ÚOHS decision states its issue date beside the
  * place, in one of the layouts the office has used: labelled ("Datum, místo
- * 12. 10. 2026, Brno"), or on the reference-number line ("Č. j.:
- * ÚOHS-R0003/2018/HS-31751/310/MHf   Brno 1. listopadu 2018", "… Brno:
- * 17. 10. 2016"). Body dates ("dne 5. 8. 2026") carry neither the label nor
- * the reference, so only these two shapes are read, and only from the head.
+ * 12. 10. 2026, Brno"), or after a labelled reference ("Č. j.:
+ * ÚOHS-R0003/2018/HS-31751/310/MHf   Brno 1. listopadu 2018", "Číslo
+ * jednací: ÚOHS-37007/2024/163 Brno 1. 10. 2024", "Spisová značka:
+ * ÚOHS-S0876/2023/KS Brno 8. 1. 2024 Číslo jednací: …"). Body dates ("dne
+ * 5. 8. 2026", "sp. zn. ÚOHS-… ze dne …") carry neither the label nor the
+ * place, so only these shapes are read, and only from the head.
  */
 const LETTERHEAD_SPAN = 1500;
 const PRINTED_DATE = printedDatePattern(CZ_PROFILE.versionGrammar.monthNames);
@@ -386,7 +388,7 @@ const PRINTED_DATE = printedDatePattern(CZ_PROFILE.versionGrammar.monthNames);
 const LETTERHEAD_DATES = [
   new RegExp(`Datum,\\s*místo\\s+${PRINTED_DATE},\\s*Brno`, "u"),
   new RegExp(
-    `Č\\.\\s?j\\.:?\\s*ÚOHS-[^\\s]+\\s*Brno:?\\s*${PRINTED_DATE}`,
+    `(?:Č\\.\\s?j\\.|Číslo jednací|Spisová značka):?\\s*ÚOHS-[^\\s]+\\s*Brno:?\\s*${PRINTED_DATE}`,
     "u",
   ),
 ] as const;

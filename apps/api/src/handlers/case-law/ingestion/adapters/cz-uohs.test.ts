@@ -603,6 +603,17 @@ describe("ÚOHS JSON-LD", () => {
         "Č. j.: ÚOHS-S0569/2015/KD-42098/2016/852/MAd Brno: 17. 10. 2016\n",
       ),
     ).toBe("2016-10-17");
+    // The 2023 and 2024 letterheads label both references, in either order.
+    expect(
+      czUohsLetterheadDate(
+        "ROZHODNUTÍ\nSpisová značka: ÚOHS-R0145/2024/VZ Číslo jednací: ÚOHS-37007/2024/163 Brno 1. 10. 2024\n",
+      ),
+    ).toBe("2024-10-01");
+    expect(
+      czUohsLetterheadDate(
+        "ROZHODNUTÍ\nSpisová značka: ÚOHS-S0876/2023/KS Brno 8. 1. 2024 Číslo jednací: ÚOHS-00750/2024/873\n",
+      ),
+    ).toBe("2024-01-08");
     // A cited reference in the body is followed by "ze dne", not the place.
     expect(
       czUohsLetterheadDate(
