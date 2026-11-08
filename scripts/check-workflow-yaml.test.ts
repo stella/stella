@@ -492,6 +492,24 @@ describe("workspace actions run after the checkout that brings them", () => {
     ).toThrow("before checking out the repository there");
   });
 
+  test("checkout and action paths compare as the checkout resolves them", () => {
+    for (const [destination, uses] of [
+      ["source//nested/", "./source/nested/.github/actions/build"],
+      ["./source/./nested", "./source/nested/.github/actions/build"],
+      ["source/nested", "./source//nested/.github/actions/build"],
+      ["./", "./.github/actions/build"],
+    ] as const) {
+      expect(
+        () =>
+          validateLocalActionsAfterCheckout(
+            job([{ uses: CHECKOUT, with: { path: destination } }, { uses }]),
+            file,
+          ),
+        `${destination} -> ${uses}`,
+      ).not.toThrow();
+    }
+  });
+
   test("a checkout of another repository does not bring this one's actions", () => {
     expect(() =>
       validateLocalActionsAfterCheckout(

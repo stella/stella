@@ -286,9 +286,11 @@ const checkoutDirectory = (step: Record<string, unknown>): string | null => {
   if (typeof destination !== "string" || destination === ".") {
     return "";
   }
-  let directory = destination.startsWith("./")
-    ? destination.slice(2)
-    : destination;
+  // The checkout action resolves `a//b` and `./a/./b` to `a/b`.
+  let directory = path.posix.normalize(destination);
+  if (directory === "." || directory === "./") {
+    return "";
+  }
   while (directory.endsWith("/")) {
     directory = directory.slice(0, -1);
   }
@@ -315,7 +317,7 @@ export const validateLocalActionsAfterCheckout = (
     for (const step of flattenWorkflowSteps(job["steps"])) {
       const uses = step["uses"];
       if (typeof uses === "string" && uses.startsWith("./")) {
-        const target = uses.slice(2);
+        const target = path.posix.normalize(uses.slice(2));
         const reachable = [...checkedOut].some(
           (directory) => directory === "" || target.startsWith(`${directory}/`),
         );
