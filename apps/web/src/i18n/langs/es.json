@@ -3625,6 +3625,12 @@
     "versionCreatedTitle": "Versión creada",
     "viewOnly": "Solo lectura"
   },
+  "guidance": {
+    "notCaseLaw": "Orientación emitida por un organismo regulador. No es una resolución judicial.",
+    "openAtPublisher": "Abrir en el sitio del editor",
+    "source": "Fuente: {attribution}",
+    "textUnavailable": "El texto de este documento no está disponible aquí. Consúltelo en el sitio del editor."
+  },
   "guides": {
     "action": {
       "replay": "Volver a empezar",

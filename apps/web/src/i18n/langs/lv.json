@@ -3625,6 +3625,12 @@
     "versionCreatedTitle": "Versija izveidota",
     "viewOnly": "Tikai skatīšana"
   },
+  "guidance": {
+    "notCaseLaw": "Regulatora izdotas vadlīnijas. Tas nav tiesas nolēmums.",
+    "openAtPublisher": "Atvērt izdevēja vietnē",
+    "source": "Avots: {attribution}",
+    "textUnavailable": "Šī dokumenta teksts šeit nav pieejams. Izlasiet to izdevēja vietnē."
+  },
   "guides": {
     "action": {
       "replay": "Sākt no jauna",

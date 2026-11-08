@@ -3625,6 +3625,12 @@
     "versionCreatedTitle": "Verzia vytvorená",
     "viewOnly": "Len na čítanie"
   },
+  "guidance": {
+    "notCaseLaw": "Metodický dokument vydaný regulátorom. Nejde o súdne rozhodnutie.",
+    "openAtPublisher": "Otvoriť u vydavateľa",
+    "source": "Zdroj: {attribution}",
+    "textUnavailable": "Text tohto dokumentu tu nie je k dispozícii. Prečítajte si ho u vydavateľa."
+  },
   "guides": {
     "action": {
       "replay": "Spustiť znova",

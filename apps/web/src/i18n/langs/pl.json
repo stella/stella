@@ -3625,6 +3625,12 @@
     "versionCreatedTitle": "Wersja utworzona",
     "viewOnly": "Tylko do odczytu"
   },
+  "guidance": {
+    "notCaseLaw": "Wytyczne wydane przez organ regulacyjny. To nie jest orzeczenie sądu.",
+    "openAtPublisher": "Otwórz u wydawcy",
+    "source": "Źródło: {attribution}",
+    "textUnavailable": "Tekst tego dokumentu nie jest tu dostępny. Przeczytaj go u wydawcy."
+  },
   "guides": {
     "action": {
       "replay": "Uruchom ponownie",

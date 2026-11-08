@@ -3625,6 +3625,12 @@
     "versionCreatedTitle": "Version erstellt",
     "viewOnly": "Nur Ansicht"
   },
+  "guidance": {
+    "notCaseLaw": "Von einer Aufsichtsbehörde herausgegebene Leitlinie. Dies ist keine Gerichtsentscheidung.",
+    "openAtPublisher": "Beim Herausgeber öffnen",
+    "source": "Quelle: {attribution}",
+    "textUnavailable": "Der Text dieses Dokuments ist hier nicht verfügbar. Lesen Sie ihn beim Herausgeber."
+  },
   "guides": {
     "action": {
       "replay": "Neu starten",
