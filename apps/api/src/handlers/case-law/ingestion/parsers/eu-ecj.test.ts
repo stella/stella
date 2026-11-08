@@ -1379,3 +1379,44 @@ describe("title lines and the footnote list", () => {
     ]);
   });
 });
+
+describe("the table of contents after the signatures", () => {
+  // The shape EUR-Lex serves for a General Court judgment (T-612/17): the
+  // operative part, the signatures, then the converter's own contents table.
+  const html = [
+    "<html><body>",
+    "<p class='coj-sum-title-1'>JUDGMENT OF THE GENERAL COURT (Ninth Chamber, Extended Composition)</p>",
+    "<table><tr><td><span class='coj-count' id='point1'>1</span></td><td><p class='coj-normal'>The background to the dispute.</p></td></tr></table>",
+    "<table><tr><td><span class='coj-count' id='point2'>2</span></td><td><p class='coj-normal'>The action is unfounded in part.</p></td></tr></table>",
+    "<p class='coj-normal'>hereby:</p>",
+    "<table><tr><td><p class='coj-normal'>1.</p></td><td><p class='coj-normal'>Annuls Article 1 of the decision;</p></td></tr></table>",
+    "<table><tr><td><p class='coj-normal'>2.</p></td><td><p class='coj-normal'>Dismisses the action as to the remainder;</p></td></tr></table>",
+    "<p class='coj-sum-title-1'>Table of contents</p>",
+    "<table><tbody>",
+    "<tr><td> </td><td valign='top'><p class='coj-NTOC2'>I. Background to the dispute</p></td></tr>",
+    "<tr><td> </td><td valign='top'><p class='coj-NTOC3'>A. Context</p></td></tr>",
+    "<tr><td> </td><td valign='top'><p class='coj-NTOC2'>V. Costs</p></td></tr>",
+    "</tbody></table>",
+    "</body></html>",
+  ].join("");
+
+  test("contents entries are publisher notes, not the operative part", () => {
+    const { documentAst } = parseEcjDecisionHtml({
+      caseNumber: "T-612/17",
+      ecli: undefined,
+      court: "General Court",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62017TJ0612",
+      html,
+    });
+    const roleOf = (text: string) =>
+      documentAst.blocks.find((block) => block.plainText.endsWith(text))?.role;
+    expect(roleOf("Annuls Article 1 of the decision;")).toBe("holding");
+    expect(roleOf("Dismisses the action as to the remainder;")).toBe("holding");
+    expect(roleOf("I. Background to the dispute")).toBe("publisher-note");
+    expect(roleOf("A. Context")).toBe("publisher-note");
+    expect(roleOf("V. Costs")).toBe("publisher-note");
+  });
+});
