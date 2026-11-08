@@ -1562,6 +1562,10 @@ export const TOOLING_ENV_KEYS = new Set([
   // The merge group's base revision.
   "BRIDGE_BASE_SHA",
   "MERGE_GROUP_BASE_SHA",
+  // The CLI contract guard compares the base and head generated capability
+  // catalogs.
+  "CLI_CONTRACT_BASE_CATALOG",
+  "CLI_CONTRACT_HEAD_CATALOG",
   // The scan engine drift check builds into a scratch directory and compares it.
   "SCAN_ENGINE_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.

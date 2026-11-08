@@ -203,7 +203,8 @@
     },
     "Test CLI contract changeset guard over derived catalogs": {
       "minutes": 30,
-      "samples": 0
+      "samples": 0,
+      "peakRssMiB": 4096
     },
     "Generated files manifest guard": {
       "minutes": 49,
@@ -646,7 +647,8 @@
     },
     "Capability file-transport ledger": {
       "minutes": 30,
-      "samples": 0
+      "samples": 0,
+      "peakRssMiB": 4096
     },
     "MCP coverage guard": {
       "minutes": 5,
