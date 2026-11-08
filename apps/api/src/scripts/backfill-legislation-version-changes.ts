@@ -35,6 +35,7 @@ import {
 } from "@/api/db/backfill-runtime";
 import { withLongRunningConnection } from "@/api/db/long-running-connection";
 import type { ScopedDb } from "@/api/db/safe-db";
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import {
   applyVersionChangesPageTx,
   backfillVersionChangesPage,
@@ -103,6 +104,7 @@ type VersionChangesCheckpointBatch = {
 const runVersionChangesPass = async (
   slot: ReturnType<typeof createHeavyWorkSlot> | null,
 ) => {
+  const healthConfig = loadGateHealthConfig();
   const runtime =
     slot !== null
       ? plan.open((options) => {
@@ -167,7 +169,10 @@ const runVersionChangesPass = async (
             await runtime.health.settle();
           }
         })();
-        if (decideStart(verdict, "backfill_batch").decision === "wait") {
+        if (
+          decideStart(verdict, "backfill_batch", healthConfig).decision ===
+          "wait"
+        ) {
           throw new BackfillHeldError({
             message: "Version comparison is busy",
             holdUntil: null,
