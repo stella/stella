@@ -1585,6 +1585,8 @@
       "full": "{percent}% full",
       "instructions": "System instructions",
       "percent": "{percent}%",
+      "reported": "As the coding agent on your computer reported it after its latest answer. The agent manages its own context.",
+      "reportedTokens": "{used} / {total} tokens",
       "summary": "Summary of older messages",
       "summaryWithCount": "Summary of {count} older messages",
       "title": "Conversation context",

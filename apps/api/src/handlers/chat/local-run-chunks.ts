@@ -19,10 +19,12 @@ import {
 import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
   type ChatLocalRunComputerEvent,
+  chatLocalRunContextSchema,
   type ChatLocalRunFile,
   type ChatLocalRunHarness,
   type ChatLocalRunLimit,
@@ -333,6 +335,28 @@ const MESSAGE_METADATA_EVENTS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * A finished run's context report as the chat reads it: under its one key
+ * only when it is a valid report. A desktop is not trusted, so anything else
+ * under the key is dropped.
+ */
+const withCheckedContext = (
+  chunk: Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>,
+) => {
+  if (chunk.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY] !== undefined) {
+    const { [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: reported, ...metadata } =
+      chunk.metadata;
+    const parsed = v.safeParse(chatLocalRunContextSchema, reported);
+    return {
+      ...chunk,
+      metadata: parsed.success
+        ? { ...metadata, [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: parsed.output }
+        : metadata,
+    };
+  }
+  return chunk;
+};
+
+/**
  * The chunk as this chat run carries it: its run, thread and call ids, and
  * every call owned by the harness that ran it, whatever the desktop said, so
  * no call of a local turn ever reads as one the API or the browser runs.
@@ -362,7 +386,7 @@ const asChatChunk = (
   }
   if (chunk.type === EventType.RUN_FINISHED) {
     return {
-      ...chunk,
+      ...withCheckedContext(chunk),
       runId: chatRunId,
       threadId,
       ...(chunk.outcome?.type === "interrupt"

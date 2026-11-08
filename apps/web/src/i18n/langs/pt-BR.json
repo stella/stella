@@ -1585,6 +1585,8 @@
       "full": "{percent}% cheio",
       "instructions": "Instruções do sistema",
       "percent": "{percent}%",
+      "reported": "Conforme informado pelo agente de programação do seu computador após a última resposta. O agente gerencia o próprio contexto.",
+      "reportedTokens": "{used} de {total} tokens",
       "summary": "Resumo das mensagens mais antigas",
       "summaryWithCount": "Resumo de {count} mensagens mais antigas",
       "title": "Contexto da conversa",
