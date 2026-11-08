@@ -367,7 +367,7 @@ describe("API deployment health receipt", () => {
           annotations,
           newer: undefined,
         });
-        expect(outage.send, `after ${history[0]}`).toBe(true);
+        expect(outage.send, `after ${history.join(",")}`).toBe(true);
         expect(outage.readsNewer).toBe(true);
         expect(outage.readsHistory).toBe(false);
       }
@@ -466,7 +466,7 @@ describe("API deployment health receipt", () => {
         const unreadable = unreadableCase === true;
         // An unreadable record pages without consulting the outage history;
         // a readable cancel without a supersession follows that history.
-        expect(outage.send, `${label} after ${history[0]}`).toBe(
+        expect(outage.send, `${label} after ${history.join(",")}`).toBe(
           unreadable || history[0] === "success",
         );
         expect(outage.readsNewer, label).toBe(false);
