@@ -1,3 +1,7 @@
+// parser-output-unchanged: [cz-ns] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
+// parser-output-unchanged: [cz-nss] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
+// parser-output-unchanged: [cz-us] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
+// parser-output-unchanged: [cz-regional] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
 import { collapseSpacedLetters, normalizeUnicode } from "@stll/text-normalize";
 
 import type { Block, ParagraphBlock } from "./document-ast.js";
@@ -51,6 +55,26 @@ const REASONS_HEADINGS: ReadonlySet<string> = new Set([
 /** Whether a line is the heading of the reasons (`O d ů v o d n ě n í :`). */
 export const isCzechReasonsHeading = (text: string): boolean =>
   REASONS_HEADINGS.has(compactUpper(text));
+
+/** The heading the instruction on remedies opens under. */
+const INSTRUCTION_HEADINGS: ReadonlySet<string> = new Set([
+  "POUČENÍ",
+  "POUČENÍ:",
+]);
+
+/** Whether a line is the heading of the instruction (`P o u č e n í :`). */
+export const isCzechInstructionHeading = (text: string): boolean =>
+  INSTRUCTION_HEADINGS.has(compactUpper(text));
+
+/**
+ * Whether a line is an authority's decision title: the decision word alone
+ * or with its issuer (`ROZHODNUTÍ`, `ROZHODNUTÍ PŘEDSEDY ÚŘADU …`), never the
+ * lead-in `ROZHODNUTÍ:`.
+ */
+export const isCzechAuthorityDecisionTitle = (text: string): boolean => {
+  const line = text.replaceAll(/\s+/gu, " ").trim();
+  return /^ROZHODNUTÍ(?: \p{Lu}[\p{Lu} ]*)?$/u.test(line);
+};
 
 /** The lead-in to the operative part, alone on its line. */
 const TAKTO_LINE_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
@@ -168,4 +192,69 @@ export const withInferredCzechSignatureRoles = (
   return blocks.map((block, index) =>
     signatureIndexes.has(index) ? asSignatureParagraph(block) : block,
   );
+};
+
+/**
+ * The lead-in an authority's operative part opens after: the sentence that
+ * ends `rozhodl takto:`, a bare `rozhodl:`, or the decision word on its own
+ * line (`ROZHODNUTÍ:`) after `vydává … toto`.
+ */
+const RULED_TAIL_RE = /(?:^|[\s,])rozhodl[ao]?\s?:$/iu;
+const DECISION_WORD_LEAD_IN = "ROZHODNUTÍ:";
+
+/** Whether a line is the lead-in the operative part follows. */
+export const isCzechRulingLeadIn = (text: string): boolean => {
+  const line = collapseSpacedLetters(text).replaceAll(/\s+/gu, " ").trim();
+  return (
+    isCzechTaktoLine(line) ||
+    CZ_TAKTO_TAIL_RE.test(line) ||
+    RULED_TAIL_RE.test(line) ||
+    compactUpper(line) === DECISION_WORD_LEAD_IN
+  );
+};
+
+/**
+ * The office an authority's head signs under (`předseda Úřadu …`,
+ * `I. místopředseda Úřadu`, `… místopředsedkyně`), on a short line.
+ */
+const CZ_AUTHORITY_OFFICE_RE =
+  /(?:^|\s)(?:místo)?(?:předseda|předsedkyně)(?:\sÚřadu(?:\spro\sochranu\shospodářské\ssoutěže)?)?$/u;
+
+/** Longest line an authority's signature runs to: titles, name and office. */
+const AUTHORITY_SIGNATURE_MAX_CHARS = 120;
+
+/** Whether a short line signs an authority's decision under its office. */
+export const isCzechAuthoritySignatureLine = (text: string): boolean => {
+  const line = text.replaceAll(/\s+/gu, " ").trim();
+  return (
+    line.length < AUTHORITY_SIGNATURE_MAX_CHARS &&
+    CZ_AUTHORITY_OFFICE_RE.test(line)
+  );
+};
+
+/**
+ * The roles of an authority's decision up to its reasons, read from the
+ * decision's own parts: the head matter (letterhead, title, the sentence
+ * naming the proceedings) up to and with the lead-in is `intro`, the
+ * operative part after it is `holding`, and from the reasons heading on
+ * nothing is read. Nothing is returned when the decision prints no lead-in
+ * or no reasons heading, so a caller keeps its own reading.
+ */
+export const czechAuthorityHeadRoles = (
+  texts: readonly string[],
+): ("intro" | "holding" | undefined)[] | undefined => {
+  const reasons = texts.findIndex(isCzechReasonsHeading);
+  if (reasons === -1) {
+    return undefined;
+  }
+  const leadIn = texts.slice(0, reasons).findIndex(isCzechRulingLeadIn);
+  if (leadIn === -1) {
+    return undefined;
+  }
+  return texts.map((_, index) => {
+    if (index <= leadIn) {
+      return "intro";
+    }
+    return index < reasons ? "holding" : undefined;
+  });
 };
