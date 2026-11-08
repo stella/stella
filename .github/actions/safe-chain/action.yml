@@ -15,8 +15,7 @@ description: >
 
   Keep the scanning job's Bun cache cold: Safe Chain's Bun integration proxies
   registry downloads and cannot rescan tarballs restored before it starts. The
-  cache below holds only the hash-pinned Safe Chain installer and binary,
-  no packages.
+  cache below holds only the hash-pinned Safe Chain binary, no packages.
 
   Safe Chain is AGPL-3.0-or-later. It is installed as a standalone CI tool and
   must never be added to package.json: dependency-review.yml blocks AGPL in the
@@ -38,6 +37,15 @@ inputs:
       unverified installer.
     required: false
     default: d41816ab564e9b9238946786433eec15e2d0e699698fa81c1fd1bdd3a78adf5c
+  binary-sha256:
+    description: >
+      Expected SHA-256 of that release's safe-chain-linuxstatic-x64, the
+      SHA256_LINUXSTATIC_X64 value inside the pinned installer. Must be updated
+      together with `version` and `sha256`. A cached binary is verified against
+      it alone, so a warm job downloads nothing; a cold job also requires the
+      installer to carry the same value.
+    required: false
+    default: d29ddbf950f2c21dc1ef3120a75d4d3bffcfd5cc742d81140300b7731fe8d25a
 
 runs:
   using: composite
@@ -45,10 +53,7 @@ runs:
     - name: Restore Safe Chain binary
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        # The pinned installer too, so a warm job fetches nothing.
-        path: |
-          ~/.safe-chain/bin
-          ~/.safe-chain/installer
+        path: ~/.safe-chain/bin
         key: safe-chain-${{ inputs.version }}-${{ inputs.sha256 }}-${{ runner.os }}-${{ runner.arch }}
 
     - name: Install Safe Chain
@@ -56,6 +61,7 @@ runs:
       env:
         SAFE_CHAIN_RELEASE_VERSION: ${{ inputs.version }}
         SAFE_CHAIN_SHA256: ${{ inputs.sha256 }}
+        SAFE_CHAIN_BINARY_SHA256: ${{ inputs.binary-sha256 }}
         SAFE_CHAIN_PRIMARY_RELEASE_URL: https://github.com/AikidoSec/safe-chain/releases/download/${{ inputs.version }}
         SAFE_CHAIN_MIRROR_RELEASE_URL: https://github.com/stella/.github/releases/download/mirror-safe-chain-${{ inputs.version }}
       # In container jobs `github.action_path` is the host path; the env var is
