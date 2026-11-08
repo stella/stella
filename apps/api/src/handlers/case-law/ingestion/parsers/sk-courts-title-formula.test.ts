@@ -39,6 +39,7 @@ describe("a Slovak decision's title and formula", () => {
     // `SLOVENSKEJ REPUBLIKY`.
     ["sk-courts-19c-150-2006.pdf", "19C/150/2006", "ROZSUDOK"],
     ["sk-courts-0t-107-2015.pdf", "0T/107/2015", "TRESTNÝ ROZKAZ"],
+    ["sk-courts-2t-103-2020.pdf", "2T/103/2020", "ROZSUDOK"],
   ])(
     "%s: the title, then the formula as opening words",
     async (file, caseNumber, title) => {
@@ -64,5 +65,40 @@ describe("a Slovak decision's title and formula", () => {
       text: "Uznesenie",
     });
     expect(next?.text).toStartWith("Krajský súd v Trenčíne");
+  });
+});
+
+describe("the portal's metadata box", () => {
+  // The portal prints the record's metadata above every decision. It is
+  // kept as printed, as front matter in every row, never as the body.
+  test.each([
+    ["sk-courts-2t-103-2020.pdf", "2T/103/2020"],
+    ["sk-courts-19c-150-2006.pdf", "19C/150/2006"],
+  ])("%s: every row is front matter", async (file, caseNumber) => {
+    const parsed = await parseSkDecisionPdf({
+      pdfBytes: await Bun.file(new URL(file, FIXTURES)).bytes(),
+      caseNumber,
+      ecli: undefined,
+      court: "Okresný súd",
+      decisionDate: undefined,
+      decisionType: undefined,
+    });
+    const blocks = parsed.documentAst.blocks;
+    const title = blocks.findIndex(
+      (block) => block.type === "heading" && block.role === "decision-title",
+    );
+    const box = blocks.slice(0, title);
+
+    expect(box.map((block) => block.plainText.split(":")[0])).toEqual([
+      "Súd",
+      "Spisová značka",
+      "Identifikačné číslo súdneho spisu",
+      "Dátum vydania rozhodnutia",
+      "Meno a priezvisko sudcu, VSÚ",
+      "ECLI",
+    ]);
+    expect(
+      box.map((block) => ("role" in block ? block.role : undefined)),
+    ).toEqual(box.map(() => "front-matter"));
   });
 });

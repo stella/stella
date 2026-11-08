@@ -39,7 +39,12 @@
 
 import { SecurityError } from "@libpdf/core";
 
-import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DocumentAst,
+  Inline,
+  ParagraphRole,
+} from "@stll/legal-ast/document-ast";
 import { plainTextOf } from "@stll/legal-ast/document-ast";
 import {
   rewriteInlineWhitespace,
@@ -52,6 +57,7 @@ import {
   isSkHoldingMarker,
   isSkInstructionMarker,
   isSkOpeningFormula,
+  isSkPortalMetadataRow,
   isSkReasoningMarker,
   isSkStandaloneInstructionMarker,
   SK_CLOSING_RE,
@@ -779,6 +785,28 @@ const separateOpeningFormula = ({
 };
 
 /**
+ * A plain paragraph's role by its section: the holding's, the portal's
+ * metadata box as front matter (one role for every row, kept as printed and
+ * never the decision's body), and the opening paragraph's intro.
+ */
+const paragraphRoleOf = (
+  section: Section,
+  text: string,
+  blocks: readonly Block[],
+): ParagraphRole | undefined => {
+  if (section === "holding") {
+    return "holding";
+  }
+  if (section !== "preamble") {
+    return undefined;
+  }
+  if (isSkPortalMetadataRow(text)) {
+    return "front-matter";
+  }
+  return blocks.length <= 1 ? "intro" : undefined;
+};
+
+/**
  * Classify extracted PDF lines into AST blocks.
  *
  * Bold and font size come directly from PDF font metadata;
@@ -962,10 +990,9 @@ const classifyLines = (lines: readonly ReadPdfLine[]): Block[] => {
       plainText: text,
     };
 
-    if (section === "holding") {
-      block.role = "holding";
-    } else if (section === "preamble" && blocks.length <= 1) {
-      block.role = "intro";
+    const role = paragraphRoleOf(section, text, blocks);
+    if (role !== undefined) {
+      block.role = role;
     }
 
     blocks.push(block);

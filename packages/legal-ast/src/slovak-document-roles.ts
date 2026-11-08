@@ -1,4 +1,4 @@
-// parser-output-unchanged: [sk-us] only adds isSkOpeningFormula and skTitleFormulaStart, which only the Slovak courts' PDF reader calls; this source's lines are read as before.
+// parser-output-unchanged: [sk-us] only adds isSkOpeningFormula, skTitleFormulaStart and isSkPortalMetadataRow, which only the Slovak courts' PDF reader calls; this source's lines are read as before.
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { caseLawSectionHeading } from "./case-law-heading";
@@ -70,6 +70,17 @@ const OPENING_FORMULAE: ReadonlySet<string> = new Set([
 
 export const isSkOpeningFormula = (text: string): boolean =>
   OPENING_FORMULAE.has(normalized(text));
+
+/**
+ * A row of the box the court portal prints at the head of every decision
+ * file (`Súd: …`, `Spisová značka: …`, `ECLI: …`): the record's metadata
+ * repeated, not the court's words, so never body text.
+ */
+const PORTAL_METADATA_ROW_RE =
+  /^(?:Súd|Spisová značka|Identifikačné číslo súdneho spisu|Dátum vydania rozhodnutia|Meno a priezvisko sudcu, VSÚ|ECLI):/u;
+
+export const isSkPortalMetadataRow = (text: string): boolean =>
+  PORTAL_METADATA_ROW_RE.test(text.trim());
 
 /**
  * A title line run on into the formula, as the court sets them in one type

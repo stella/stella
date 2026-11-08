@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   isSkOpeningFormula,
+  isSkPortalMetadataRow,
   skSectionHeading,
   skTitleFormulaStart,
 } from "./slovak-document-roles";
@@ -77,4 +78,25 @@ describe("the Slovak opening formula", () => {
       skTitleFormulaStart("Súd rozhodol V MENE SLOVENSKEJ REPUBLIKY"),
     ).toBeUndefined();
   });
+});
+
+describe("the portal's metadata box", () => {
+  test.each([
+    "Súd: Okresný súd Martin",
+    "Spisová značka: 2T/103/2020",
+    "Identifikačné číslo súdneho spisu: 5720011372",
+    "Dátum vydania rozhodnutia: 07. 10. 2026",
+    "Meno a priezvisko sudcu, VSÚ: Mgr. Mariana Juríková",
+    "ECLI: ECLI:SK:OSMT:2026:5720011372.8",
+    "ECLI:",
+  ])("%j is a row of it", (text) => {
+    expect(isSkPortalMetadataRow(text)).toBe(true);
+  });
+
+  test.each(["Súd rozhodol takto:", "Okresný súd Martin v senáte zloženom"])(
+    "%j is not",
+    (text) => {
+      expect(isSkPortalMetadataRow(text)).toBe(false);
+    },
+  );
 });
