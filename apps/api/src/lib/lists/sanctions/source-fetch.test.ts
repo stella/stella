@@ -21,6 +21,7 @@ import {
   parseSafeOutboundUrl,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
+import { createSilentPublisher } from "@/api/tests/helpers/silent-publisher";
 
 import { SANCTIONS_SOURCE_CONFIG } from "./source-config";
 import {
@@ -29,7 +30,6 @@ import {
   fetchSanctionsEdition,
   fetchSanctionsMarker,
 } from "./source-fetch";
-import { createSilentPublisher } from "./test-fixtures/silent-publisher";
 
 const FIXTURES = path.join(
   import.meta.dir,
@@ -570,7 +570,7 @@ describe("EU list refresh", () => {
   test("gives up on a feed that never answers within the request time limit", async () => {
     // Each attempt ends only when the transport's own time limit fires; a
     // missing limit leaves this test waiting until the runner fails it.
-    const publisher = createSilentPublisher({ timeoutMs: 50 });
+    const publisher = createSilentPublisher({ timeoutMs: 50 }); // timeout under test
     try {
       const marker = await fetchSanctionsMarker("eu", {
         permit,

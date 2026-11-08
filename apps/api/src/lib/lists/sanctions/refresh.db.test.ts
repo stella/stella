@@ -27,7 +27,7 @@ import {
   fetchSanctionsMarker,
   SanctionsRefreshError,
 } from "@/api/lib/lists/sanctions/source-fetch";
-import { createSilentPublisher } from "@/api/lib/lists/sanctions/test-fixtures/silent-publisher";
+import { createSilentPublisher } from "@/api/tests/helpers/silent-publisher";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -704,7 +704,7 @@ test("a publisher feed that never answers records a fetch failure and keeps the 
     .set({ activeEditionId: edition.id })
     .where(eq(sanctionsSources.id, "eu"));
 
-  const publisher = createSilentPublisher({ timeoutMs: 50 });
+  const publisher = createSilentPublisher({ timeoutMs: 50 }); // timeout under test
   let downloads = 0;
   try {
     const outcome = await refreshSanctionsSource({
