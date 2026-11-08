@@ -281,6 +281,32 @@ describe("CZ ÚS decisions as the court numbered and set them", () => {
   });
 });
 
+describe("typewriter lines the margin broke", () => {
+  test("IV. ÚS 35/96: a citation wrapped after `písm.` stays in its sentence", async () => {
+    const { documentAst } = await parsedFixture("cz-us-iv-us-35-96.html.gz");
+    const texts = bodyParagraphs(documentAst.blocks).map(
+      (block) => block.plainText,
+    );
+    expect(texts.filter((text) => text.startsWith("b) uvedeného"))).toEqual([]);
+    expect(
+      texts.some((text) =>
+        text.includes("Podle § 1 odst. 1 písm. b) uvedeného dekretu"),
+      ),
+    ).toBe(true);
+  });
+
+  test("Pl. ÚS 42/2000: a paragraph's last line set one space in goes on", async () => {
+    const { documentAst } = await parsedFixture("cz-us-pl-us-42-2000.html.gz");
+    const texts = bodyParagraphs(documentAst.blocks).map(
+      (block) => block.plainText,
+    );
+    expect(texts.filter((text) => text.startsWith("pojistka."))).toEqual([]);
+    expect(
+      texts.some((text) => text.includes("jakákoli podobná pojistka.")),
+    ).toBe(true);
+  });
+});
+
 describe("committed CZ ÚS fixtures", () => {
   test("retain their complete serialized parser output", async () => {
     const names = await fixtureNames();
