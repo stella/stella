@@ -36,9 +36,9 @@ const APP_ROOT = path.resolve(import.meta.dir, "..");
  * this fingerprint itself, so neither may feed it; everything else in the app
  * config does, the variant's name, identifier and scheme included.
  */
-// The flags are distinct bits, so their sum is the combined mask.
-export const FINGERPRINT_SOURCE_SKIPS: number =
-  SourceSkips.ExpoConfigVersions + SourceSkips.ExpoConfigRuntimeVersionIfString;
+export const FINGERPRINT_SOURCE_SKIPS: SourceSkips =
+  // oxlint-disable-next-line no-bitwise -- SourceSkips is a flag enum: its members are bits, combined into one mask.
+  SourceSkips.ExpoConfigVersions | SourceSkips.ExpoConfigRuntimeVersionIfString;
 
 /**
  * The part of the store version an update may not cross: the major version,
