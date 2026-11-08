@@ -23,6 +23,7 @@ import { isOwnKey } from "@stll/api-contract/own-key";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
+import { withLocalRunLimitResetsAt } from "@/features/chat/chat-local-run-limit";
 import type { TranslationKey } from "@/i18n/types";
 import type { WebApiRoutes } from "@/lib/api";
 import type {
@@ -1086,9 +1087,12 @@ export const getChatAssistantTurnError = (
   switch (outcome.type) {
     case "failed":
       return outcome.refusal === undefined
-        ? withProviderDiagnostic(
-            new Error(outcome.error),
-            outcome.providerDiagnostic,
+        ? withLocalRunLimitResetsAt(
+            withProviderDiagnostic(
+              new Error(outcome.error),
+              outcome.providerDiagnostic,
+            ),
+            outcome.limitResetsAt,
           )
         : toAPIError({
             status: ACTION_ADMISSION_REFUSALS[outcome.refusal.code].status,

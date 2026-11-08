@@ -12,7 +12,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
-  gradedDocumentFetchBudget,
   isDeferredDocumentFetchable,
   readThroughDeferredDocument,
   recordDocumentPacingOutcome,
@@ -30,6 +29,7 @@ import {
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { gradedDocumentFetchBudget } from "@/api/lib/legal-search/document-fetch-budget";
 import type {
   BackfilledDocument,
   PendingDocument,

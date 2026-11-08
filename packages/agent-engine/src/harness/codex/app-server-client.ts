@@ -5,6 +5,7 @@ import {
   type HarnessProcessDeadlines,
   startHarnessProcess,
 } from "../harness-process";
+import type { HarnessSpawnError } from "../process-tree";
 import type { Detached, HarnessExit } from "../turn-lifecycle";
 import { type CodexRequestId, JsonRpcMessageSchema } from "./protocol";
 
@@ -67,7 +68,7 @@ export const startAppServer = ({
   cwd,
   env,
   handlers,
-}: StartAppServerOptions): AppServerClient => {
+}: StartAppServerOptions): Result<AppServerClient, HarnessSpawnError> => {
   const state = { nextId: 1 };
 
   const dispatch = (value: unknown) => {
@@ -102,7 +103,7 @@ export const startAppServer = ({
     }
   };
 
-  const server = startHarnessProcess<CodexRequestId, AppServerRequestError>({
+  const started = startHarnessProcess<CodexRequestId, AppServerRequestError>({
     command: [launch.executable, ...launch.args],
     cwd,
     env,
@@ -115,8 +116,12 @@ export const startAppServer = ({
     violation: handlers.violation,
     exit: handlers.exit,
   });
+  if (Result.isError(started)) {
+    return started;
+  }
+  const server = started.value;
 
-  return {
+  return Result.ok({
     pid: server.pid,
     request: async (method, params) => {
       const id = state.nextId;
@@ -135,5 +140,5 @@ export const startAppServer = ({
     exited: server.exited,
     closeInput: server.closeInput,
     kill: server.kill,
-  };
+  });
 };

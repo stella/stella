@@ -21,7 +21,37 @@
           "space": "type"
         },
         {
+          "name": "EMPTY_LOCALE_INPUT_TEXT",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "FormatLocaleDecimalInputParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FormatLocaleMinorUnitsInputParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "FormatMoneyCentsParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "LocaleAmountParseError",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "LocaleInputSource",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "LocaleInputText",
           "kind": "type",
           "space": "type"
         },
@@ -32,6 +62,16 @@
         },
         {
           "name": "MoneyTotalsEntry",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ParseLocaleDecimalParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ParseLocaleMinorUnitsParams",
           "kind": "type",
           "space": "type"
         },
@@ -76,7 +116,32 @@
           "space": "value"
         },
         {
+          "name": "formatLocaleDecimalInput",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatLocaleMinorUnitsInput",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "formatMoneyCents",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "localeInputText",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseLocaleDecimal",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseLocaleMinorUnits",
           "kind": "variable",
           "space": "value"
         },
@@ -120,7 +185,7 @@
   },
   "declarations": {
     "./src/cents.d.ts": "declare const __cents: unique symbol;\nexport type CentsAmount = number & {\n    readonly [__cents]: \"CentsAmount\";\n};\nexport declare const isMinorUnitAmount: (value: number) => value is CentsAmount;\nexport declare const cents: (value: number) => CentsAmount;\nexport declare const unsafeCents: (value: number) => CentsAmount;\nexport {};\n",
-    "./src/format.d.ts": "import { type CentsAmount } from \"./cents\";\nexport declare const currencyMinorUnitDigits: (currency: string) => number;\nexport type ToMinorUnitsParams = {\n    amount: number | string;\n    currency: string;\n};\nexport declare const toMinorUnits: (params: ToMinorUnitsParams) => CentsAmount;\nexport declare const tryToMinorUnits: ({ amount, currency, }: ToMinorUnitsParams) => CentsAmount | null;\nexport type ToMajorUnitsParams = {\n    amountCents: number;\n    currency: string;\n};\nexport declare const toMajorUnits: ({ amountCents, currency, }: ToMajorUnitsParams) => number;\nexport declare const toMajorUnitsText: ({ amountCents, currency, }: ToMajorUnitsParams) => string;\nexport type FormatMoneyCentsParams = {\n    amountCents: number;\n    currency: string;\n    locale: string;\n    fractionDigits?: number;\n};\nexport declare const formatMoneyCents: ({ amountCents, currency, locale, fractionDigits, }: FormatMoneyCentsParams) => string;\n",
-    "./src/index.d.ts": "import { type CentsAmount } from \"./cents\";\nexport { type CentsAmount, cents, unsafeCents } from \"./cents\";\nexport type ProrateHourlyCentsInput = {\n    billedMinutes: number;\n    hourlyRateCents: CentsAmount;\n};\nexport declare const prorateHourlyCents: ({ billedMinutes, hourlyRateCents, }: ProrateHourlyCentsInput) => CentsAmount;\ntype TimeEntryAmountInput = {\n    billedMinutes: number;\n    rateAtEntry: CentsAmount;\n    noCharge: boolean;\n};\nexport declare const timeEntryAmount: (entry: TimeEntryAmountInput) => CentsAmount;\nexport type ApplyMarkupCentsInput = {\n    amountCents: CentsAmount;\n    markupPercent: number;\n};\nexport declare const applyMarkupCents: ({ amountCents, markupPercent, }: ApplyMarkupCentsInput) => CentsAmount;\ndeclare const __currency: unique symbol;\nexport type CurrencyCents<C extends string = string> = CentsAmount & {\n    readonly [__currency]: C;\n};\nexport declare const currencyCents: <C extends string>(currency: C, amount: number) => CurrencyCents<C>;\ntype UnionToIntersection<U> = (U extends unknown ? (x: U) => void : never) extends (x: infer I) => void ? I : never;\ntype IsSingletonCurrency<C extends string> = string extends C ? never : [\n    C\n] extends [\n    UnionToIntersection<C>\n] ? C : never;\nexport declare const addCents: <A extends string, B extends A = A>(a: IsSingletonCurrency<A> extends never ? never : CurrencyCents<A>, b: IsSingletonCurrency<B> extends never ? never : CurrencyCents<B>) => CurrencyCents<A>;\nexport type MoneyTotalsEntry = {\n    currency: string;\n    amountCents: CentsAmount;\n};\nexport declare class MoneyTotals {\n    #private;\n    add(currency: string, amountCents: CentsAmount): void;\n    entries(): MoneyTotalsEntry[];\n}\nexport { currencyMinorUnitDigits, formatMoneyCents, type FormatMoneyCentsParams, toMajorUnits, type ToMajorUnitsParams, toMajorUnitsText, toMinorUnits, type ToMinorUnitsParams, tryToMinorUnits, } from \"./format\";\n"
+    "./src/format.d.ts": "import { Result } from \"better-result\";\nimport { type CentsAmount } from \"./cents\";\nexport declare const currencyMinorUnitDigits: (currency: string) => number;\nexport type LocaleAmountParseError = {\n    reason: \"empty\" | \"syntax\" | \"ambiguous\" | \"precision\" | \"unsafe-integer\" | \"locale\";\n    message: string;\n};\nexport type ParseLocaleMinorUnitsParams = {\n    amount: string;\n    currency: string;\n    locale: string;\n};\nexport type ParseLocaleDecimalParams = {\n    amount: string;\n    locale: string;\n    maximumFractionDigits?: number;\n};\ndeclare const localeInputTextBrand: unique symbol;\nexport type LocaleInputText = string & {\n    readonly [localeInputTextBrand]: \"LocaleInputText\";\n};\nexport type LocaleInputSource = {\n    readonly value: string;\n    readonly tagName: string;\n};\nexport declare const localeInputText: (source: LocaleInputSource) => LocaleInputText;\nexport declare const EMPTY_LOCALE_INPUT_TEXT: LocaleInputText;\nexport declare const parseLocaleDecimal: ({ amount, locale, maximumFractionDigits, }: ParseLocaleDecimalParams) => Result<string, LocaleAmountParseError>;\nexport declare const parseLocaleMinorUnits: ({ amount, currency, locale, }: ParseLocaleMinorUnitsParams) => Result<CentsAmount, LocaleAmountParseError>;\nexport type FormatLocaleMinorUnitsInputParams = {\n    amountCents: number;\n    currency: string;\n    locale: string;\n};\nexport type FormatLocaleDecimalInputParams = {\n    amount: string;\n    locale: string;\n};\nexport declare const formatLocaleDecimalInput: ({ amount, locale, }: FormatLocaleDecimalInputParams) => LocaleInputText;\nexport declare const formatLocaleMinorUnitsInput: ({ amountCents, currency, locale, }: FormatLocaleMinorUnitsInputParams) => LocaleInputText;\nexport type ToMinorUnitsParams = {\n    amount: number | string;\n    currency: string;\n};\nexport declare const toMinorUnits: (params: ToMinorUnitsParams) => CentsAmount;\nexport declare const tryToMinorUnits: ({ amount, currency, }: ToMinorUnitsParams) => CentsAmount | null;\nexport type ToMajorUnitsParams = {\n    amountCents: number;\n    currency: string;\n};\nexport declare const toMajorUnits: ({ amountCents, currency, }: ToMajorUnitsParams) => number;\nexport declare const toMajorUnitsText: ({ amountCents, currency, }: ToMajorUnitsParams) => string;\nexport type FormatMoneyCentsParams = {\n    amountCents: number;\n    currency: string;\n    locale: string;\n    fractionDigits?: number;\n};\nexport declare const formatMoneyCents: ({ amountCents, currency, locale, fractionDigits, }: FormatMoneyCentsParams) => string;\nexport {};\n",
+    "./src/index.d.ts": "import { type CentsAmount } from \"./cents\";\nexport { type CentsAmount, cents, unsafeCents } from \"./cents\";\nexport type ProrateHourlyCentsInput = {\n    billedMinutes: number;\n    hourlyRateCents: CentsAmount;\n};\nexport declare const prorateHourlyCents: ({ billedMinutes, hourlyRateCents, }: ProrateHourlyCentsInput) => CentsAmount;\ntype TimeEntryAmountInput = {\n    billedMinutes: number;\n    rateAtEntry: CentsAmount;\n    noCharge: boolean;\n};\nexport declare const timeEntryAmount: (entry: TimeEntryAmountInput) => CentsAmount;\nexport type ApplyMarkupCentsInput = {\n    amountCents: CentsAmount;\n    markupPercent: number;\n};\nexport declare const applyMarkupCents: ({ amountCents, markupPercent, }: ApplyMarkupCentsInput) => CentsAmount;\ndeclare const __currency: unique symbol;\nexport type CurrencyCents<C extends string = string> = CentsAmount & {\n    readonly [__currency]: C;\n};\nexport declare const currencyCents: <C extends string>(currency: C, amount: number) => CurrencyCents<C>;\ntype UnionToIntersection<U> = (U extends unknown ? (x: U) => void : never) extends (x: infer I) => void ? I : never;\ntype IsSingletonCurrency<C extends string> = string extends C ? never : [\n    C\n] extends [\n    UnionToIntersection<C>\n] ? C : never;\nexport declare const addCents: <A extends string, B extends A = A>(a: IsSingletonCurrency<A> extends never ? never : CurrencyCents<A>, b: IsSingletonCurrency<B> extends never ? never : CurrencyCents<B>) => CurrencyCents<A>;\nexport type MoneyTotalsEntry = {\n    currency: string;\n    amountCents: CentsAmount;\n};\nexport declare class MoneyTotals {\n    #private;\n    add(currency: string, amountCents: CentsAmount): void;\n    entries(): MoneyTotalsEntry[];\n}\nexport { currencyMinorUnitDigits, EMPTY_LOCALE_INPUT_TEXT, formatLocaleDecimalInput, type FormatLocaleDecimalInputParams, formatLocaleMinorUnitsInput, type FormatLocaleMinorUnitsInputParams, formatMoneyCents, type FormatMoneyCentsParams, type LocaleAmountParseError, type LocaleInputSource, type LocaleInputText, localeInputText, parseLocaleDecimal, type ParseLocaleDecimalParams, parseLocaleMinorUnits, type ParseLocaleMinorUnitsParams, toMajorUnits, type ToMajorUnitsParams, toMajorUnitsText, toMinorUnits, type ToMinorUnitsParams, tryToMinorUnits, } from \"./format\";\n"
   }
 }

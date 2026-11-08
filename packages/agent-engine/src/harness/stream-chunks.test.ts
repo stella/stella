@@ -11,7 +11,14 @@ import {
 } from "@tanstack/ai-codex";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
+import {
+  CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  chatLocalRunContextSchema,
+  chatLocalRunLimitSchema,
+} from "@stll/api-contract/chat-run-target";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -21,6 +28,7 @@ import {
   type HarnessFailure,
   harnessSessionId,
   type HarnessToolCall,
+  type HarnessUsage,
 } from "./events";
 import {
   HARNESS_CONTINUATION_EVENT,
@@ -206,6 +214,7 @@ describe("local harness chunks", () => {
           cachedInputTokens: 20,
           outputTokens: 30,
           reasoningOutputTokens: 5,
+          context: null,
         },
       },
     ];
@@ -441,6 +450,70 @@ describe("local harness chunks", () => {
       codes.add(String(last.code));
     }
     expect(codes.size).toBe(Object.keys(failures).length);
+  });
+
+  test("a usage limit says when it resets, and only a limit with a known reset", async () => {
+    const limited = async (resetsAt: string | null) =>
+      (
+        await localChunks([
+          {
+            type: "turn.failed",
+            failure: {
+              type: "usage_limit",
+              message: "Limit reached.",
+              resetsAt,
+            },
+          },
+        ])
+      ).at(-1);
+    const known = await limited("2026-10-28T14:00:00.000Z");
+    expect(known).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: "harness.usage_limit",
+      metadata: {
+        [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: {
+          resetsAt: "2026-10-28T14:00:00.000Z",
+        },
+      },
+    });
+    expect(
+      v.is(
+        chatLocalRunLimitSchema,
+        known?.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+      ),
+    ).toBe(true);
+    const unknown = await limited(null);
+    expect(
+      unknown?.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+    ).toBeUndefined();
+  });
+
+  test("a finished turn reports the context the harness measured, and only a measured one", async () => {
+    const finished = async (context: HarnessUsage["context"]) =>
+      (
+        await localChunks([
+          {
+            type: "turn.completed",
+            usage: {
+              inputTokens: 120,
+              cachedInputTokens: 20,
+              outputTokens: 30,
+              reasoningOutputTokens: 0,
+              context,
+            },
+          },
+        ])
+      ).findLast((chunk) => chunk.type === EventType.RUN_FINISHED);
+    const measured = await finished({ usedTokens: 150, windowTokens: 258_400 });
+    const reported = measured?.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY];
+    expect(reported).toEqual({ usedTokens: 150, windowTokens: 258_400 });
+    expect(v.is(chatLocalRunContextSchema, reported)).toBe(true);
+    // Billing usage still rides the chunk as the cloud engine's does.
+    expect(measured?.usage).toBeDefined();
+    const unmeasured = await finished(null);
+    expect(
+      unmeasured?.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY],
+    ).toBeUndefined();
   });
 
   test("a stream that ends without a terminal event fails as a protocol violation", async () => {

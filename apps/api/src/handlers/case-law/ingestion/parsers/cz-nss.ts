@@ -52,17 +52,18 @@ import type {
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
-import { normalizeUnicode } from "@stll/text-normalize";
+import {
+  collapseLetterSpacing,
+  isLetterSpacedEmphasis,
+  normalizeUnicode,
+} from "@stll/text-normalize";
 
 import {
   inlineStyleDeclaresProperty,
   inlineStyleValue,
 } from "@/api/lib/legal-search/document-builders/inline-style";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import {
-  collapseLetterSpacing,
-  withAttestedLetterSpacing,
-} from "@/api/lib/legal-search/parsers/letter-spacing";
+import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   continuesAcrossPageBreak,
   CZ_RUNNING_HEADER_SOURCE,
@@ -192,9 +193,7 @@ const footnoteOf = (el: cheerio.Cheerio<AnyNode>): PChunk["footnote"] => {
     : { anchorId: id, label };
 };
 
-const SPACED_EMPHASIS_RE = /^(?:\p{L} +)+\p{L}(?: *[,:;.!?])?$/u;
 const SINGLE_LETTER_RE = /^\p{L}$/u;
-const MULTI_SPACE_MARKER = "\u0000";
 
 type SpacedBoldRun = {
   children: Inline[];
@@ -289,7 +288,7 @@ const collectSpacedBoldRun = (
   }
 
   const text = inlinesToPlainText(children).replace(/\s/gu, " ").trim();
-  return SPACED_EMPHASIS_RE.test(text) ? { children, endIndex } : null;
+  return isLetterSpacedEmphasis(text) ? { children, endIndex } : null;
 };
 
 /**
@@ -358,20 +357,14 @@ const normalizeNssInlines = (
         /\s/gu,
         " ",
       );
-      const trimmed = whitespaceNormalized.trim();
-      // The gap around a spaced word is the word boundary: "n e j s o u"
-      // and the spaces after it read as "nejsou ", not "nejsou".
-      const text =
-        spacedEmphasis && SPACED_EMPHASIS_RE.test(trimmed)
-          ? `${whitespaceNormalized.startsWith(" ") ? " " : ""}${trimmed
-              .replace(/ {2,}/gu, () => MULTI_SPACE_MARKER)
-              .replace(/(?<=\p{L}) (?=\p{L})/gu, "")
-              .replaceAll(MULTI_SPACE_MARKER, " ")
-              .replace(
-                /(?<=\p{L}) +(?=[,:;.!?])/gu,
-                "",
-              )}${whitespaceNormalized.endsWith(" ") ? " " : ""}`
-          : collapseLetterSpacing(whitespaceNormalized).replace(/ {2,}/gu, " ");
+      // A bold node set wholly in spaced letters is emphasis however short
+      // its words: every run in it is a spaced word. The gap around a spaced
+      // word is the word boundary: "n e j s o u" and the spaces after it
+      // read as "nejsou ", not "nejsou".
+      const text = collapseLetterSpacing(whitespaceNormalized, {
+        emphasis:
+          spacedEmphasis && isLetterSpacedEmphasis(whitespaceNormalized),
+      }).replace(/ {2,}/gu, " ");
       return node.anonymized === true
         ? { type: "text", text, anonymized: true }
         : { type: "text", text };

@@ -1,10 +1,15 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { logger } from "@/api/lib/observability/logger";
+import { answerSchemaForContent } from "@/api/lib/workflow/ai-answer-schema";
 import {
   buildBatchSchema,
   buildDocxBlocksMessage,
+  DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS,
+  PROMPT_INPUT_TRUNCATED_EVENT,
+  PROMPT_TRUNCATION_MARKER,
 } from "@/api/lib/workflow/ai-prompts";
 import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
@@ -97,6 +102,20 @@ describe("buildBatchSchema — absent answers", () => {
   });
 });
 
+describe("buildBatchSchema — text answer length", () => {
+  test("the length limit gives way when the prompt asks for quoted wording", () => {
+    expect(answerSchemaForContent(textProperty.content)).toMatchObject({
+      pipe: expect.arrayContaining([
+        expect.objectContaining({
+          description: expect.stringMatching(
+            /less than 100 characters, unless the prompt asks for the source's wording to be quoted/u,
+          ),
+        }),
+      ]),
+    });
+  });
+});
+
 describe("buildBatchSchema — select answers pass through for downstream validation", () => {
   // The picklist is guidance in the description, not a JSON Schema enum: an
   // out-of-picklist answer must reach `validateAIOutput` as a visible
@@ -140,12 +159,66 @@ describe("buildDocxBlocksMessage", () => {
     expect(messageFor(clause)).toContain(JSON.stringify(clause));
   });
 
-  test("cuts only a paragraph above the guard", () => {
-    const longest = "a".repeat(40_000);
+  test("cuts only a paragraph above the guard, and marks the cut", () => {
+    const longest = "a".repeat(DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS);
+    const kept =
+      DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS - PROMPT_TRUNCATION_MARKER.length;
 
     expect(messageFor(longest)).toContain(JSON.stringify(longest));
     expect(messageFor(`${longest}a`)).toContain(
-      JSON.stringify(`${"a".repeat(39_999)}…`),
+      JSON.stringify(`${"a".repeat(kept)}${PROMPT_TRUNCATION_MARKER}`),
     );
+  });
+
+  describe("records a cut", () => {
+    test("counts each cut block and the characters it dropped", () => {
+      const logInfo = spyOn(logger, "info").mockImplementation(() => {});
+      try {
+        const over = DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS + 10;
+
+        buildDocxBlocksMessage({
+          simplifiedName: "F0",
+          blocks: [
+            {
+              id: "b1",
+              kind: "paragraph",
+              statedNumbering: { kind: "inherit" },
+              text: "a".repeat(over),
+            },
+            {
+              id: "b2",
+              kind: "paragraph",
+              statedNumbering: { kind: "inherit" },
+              text: "short",
+            },
+          ],
+        });
+
+        expect(logInfo).toHaveBeenCalledTimes(1);
+        expect(logInfo).toHaveBeenCalledWith(PROMPT_INPUT_TRUNCATED_EVENT, {
+          input: "docx_blocks",
+          truncated_parts: "1",
+          dropped_chars: String(
+            over -
+              (DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS -
+                PROMPT_TRUNCATION_MARKER.length),
+          ),
+          max_chars: String(DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS),
+        });
+      } finally {
+        logInfo.mockRestore();
+      }
+    });
+
+    test("records nothing when every block fits", () => {
+      const logInfo = spyOn(logger, "info").mockImplementation(() => {});
+      try {
+        messageFor("a".repeat(DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS));
+
+        expect(logInfo).not.toHaveBeenCalled();
+      } finally {
+        logInfo.mockRestore();
+      }
+    });
   });
 });

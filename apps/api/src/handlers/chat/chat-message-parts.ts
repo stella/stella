@@ -1897,6 +1897,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.anonRestorations === undefined &&
   metadata.answerQuotes === undefined &&
   metadata.contextNotice === undefined &&
+  metadata.localRunContext === undefined &&
   metadata.localRunFilesNotShared === undefined &&
   metadata.mentions === undefined &&
   metadata.refContext === undefined &&

@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-nss] imports the shared PDF reader from its new owner, pdf-bands.ts, under its new names; the default reading is the same code.
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 import { Result } from "better-result";
 
@@ -9,10 +10,10 @@ import { PublisherTargetError } from "@/api/handlers/case-law/ingestion/adapters
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import type { ParseNssDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import {
-  assemblePlSnParagraphs,
-  extractPlSnLines,
-  plSnParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  assemblePdfParagraphs,
+  extractPdfLines,
+  pdfParagraphsToHtml,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import {
   ownTableRows,
   visibleHtmlText,
@@ -117,8 +118,8 @@ type ParseNssPdfOptions = {
 export const parseNssPdf = async ({ input, bytes }: ParseNssPdfOptions) =>
   parseNssDecisionHtml({
     ...input,
-    html: plSnParagraphsToHtml(
-      assemblePlSnParagraphs(await extractPlSnLines(bytes)),
+    html: pdfParagraphsToHtml(
+      assemblePdfParagraphs(await extractPdfLines(bytes)),
     ),
   });
 

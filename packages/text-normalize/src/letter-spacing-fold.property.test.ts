@@ -1,7 +1,7 @@
 /**
  * Properties of `collapseSpacedLetters` over its whole input class.
  *
- * The golden vectors in `spaced-letters.test.ts` pin the cases someone
+ * The golden vectors in `letter-spacing-fold.test.ts` pin the cases someone
  * thought of. These pin the invariants instead, generated over letters ×
  * gap encodings × sentence shapes, because the defect this function
  * exists to survive was a *gap encoding* nobody had a vector for: an
@@ -14,7 +14,7 @@ import fc from "fast-check";
 
 import { assertProperty, propertySeed } from "@stll/property-testing";
 
-import { collapseSpacedLetters } from "./spaced-letters.js";
+import { collapseSpacedLetters } from "./letter-spacing.js";
 
 // Seeded in PR CI so a counterexample is reproducible from the log, and
 // unseeded under the nightly sweep so it explores new inputs. See
@@ -190,13 +190,12 @@ describe("collapseSpacedLetters (properties)", () => {
    * emphasized word, a wider gap separates two of them. If this ever
    * reads "Žalobasezamítá", that distinction has been lost.
    *
-   * "s e" stays spaced because of the documented four-letter floor —
-   * Czech and Slovak spell too many one-letter words to join a shorter
-   * run safely.
+   * "s e" between two spaced words is one of them: wide gaps set it apart
+   * inside the spaced phrase (see `collapseLetterSpacing`).
    */
   test("keeps letter-spaced words apart when the word gap is wider", () => {
     expect(collapseSpacedLetters("Ž a l o b a  s e  z a m í t á")).toBe(
-      "Žaloba s e zamítá",
+      "Žaloba se zamítá",
     );
     expect(collapseSpacedLetters("Ž a l o b a  z a m í t á")).toBe(
       "Žaloba zamítá",

@@ -7,6 +7,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./realtime-mutation-digest": "./src/realtime-mutation-digest.ts",
     "./api-date": "./src/api-date.ts",
     "./contact-date": "./src/contact-date.ts",
     "./contact-write": "./src/contact-write.ts",
@@ -207,7 +208,7 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/template-conditions": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "@stll/uuid-codec": "workspace:*",
     "@tanstack/ai": "catalog:",
     "@valibot/to-json-schema": "^1.8.0",

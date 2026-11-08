@@ -165,6 +165,7 @@ const fileField = ({
 }): WritableEntityVersionSnapshot["fields"][number] => ({
   id: toSafeId<"field">(id),
   propertyId,
+  aiSettlement: null,
   content: {
     type: "file",
     version: 1,
