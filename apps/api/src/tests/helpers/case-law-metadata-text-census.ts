@@ -175,6 +175,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   decisionNumberAsListed: INSPECTED,
   decisionTextDocument: INSPECTED,
   decisionType: INSPECTED,
+  decisionTypeAvailability: INSPECTED,
   decisionTypeKey: INSPECTED,
   decisionTypeRaw: INSPECTED,
   decisionTypes: INSPECTED,

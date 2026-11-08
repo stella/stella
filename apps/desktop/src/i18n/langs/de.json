@@ -763,5 +763,30 @@
         "storage": "{name} konnte auf diesem Computer nicht gespeichert werden. Prüfen Sie, ob auf dem Datenträger genügend Speicherplatz frei ist."
       }
     }
+  },
+  "localSkills": {
+    "title": "Lokale Skills",
+    "description": "Skill-Ordner auf diesem Computer. Lokale Ausführungen auf diesem Computer können sie nutzen, und nichts daraus wird hochgeladen.",
+    "add": "Ordner hinzufügen",
+    "remove": "Entfernen",
+    "removeFolder": "{path} entfernen",
+    "unusable": "Nicht nutzbar",
+    "notice": {
+      "action_failed": "Das hat nicht funktioniert. Versuchen Sie es erneut.",
+      "too_many": "Dieser Computer hat bereits so viele Skill-Ordner, wie er nutzen kann. Entfernen Sie zuerst einen.",
+      "already_listed": "Dieser Ordner ist bereits aufgeführt.",
+      "missing": "Dieser Ordner existiert nicht mehr.",
+      "not_a_folder": "Dies ist kein Ordner mehr.",
+      "no_skill_file": "Dieser Ordner enthält keine SKILL.md.",
+      "skill_file_not_regular": "SKILL.md muss eine normale Datei sein, keine Verknüpfung.",
+      "skill_file_too_large": "SKILL.md ist zu groß zum Lesen.",
+      "unreadable": "Dieser Ordner konnte nicht gelesen werden.",
+      "no_name": "Der Kopf von SKILL.md enthält keinen Namen.",
+      "invalid_name": "Der Name in SKILL.md darf nur Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche enthalten und muss mit einem Buchstaben oder einer Ziffer beginnen.",
+      "duplicate_name": "Ein anderer aufgeführter Ordner hat einen Skill mit diesem Namen.",
+      "runs_can_write": "Lokale Ausführungen können in diesen Ordner schreiben, daher kann er keinen Skill enthalten.",
+      "network_folder": "Dieser Ordner liegt auf einer Netzwerkfreigabe. Skills müssen auf dem eigenen Laufwerk dieses Computers liegen.",
+      "path_changed": "Ein übergeordneter Ordner hat sich geändert. Entfernen Sie diesen Ordner und fügen Sie ihn erneut hinzu."
+    }
   }
 }

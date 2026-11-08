@@ -1388,6 +1388,9 @@
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#2"
           },
           {
+            "location": "apps/web/src/components/chat/chat-context-meter.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-decision-citation.tsx#1"
           },
           {
@@ -6856,6 +6859,9 @@
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#2"
           },
           {
+            "location": "apps/web/src/components/chat/chat-context-meter.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-decision-citation.tsx#1"
           },
           {
@@ -10112,6 +10118,9 @@
             "location": "apps/api/src/lib/auth/social-link-hint.ts#5"
           },
           {
+            "location": "apps/api/src/lib/auth/social-token-exchange.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/auth.ts#5"
           },
           {
@@ -10659,7 +10668,7 @@
             "location": "apps/mobile/src/components/due-date-picker.ios.tsx#2"
           },
           {
-            "location": "apps/mobile/src/widgets/timer-activity.ios.tsx#9"
+            "location": "apps/mobile/src/widgets/timer-activity.ios.tsx#12"
           },
           {
             "location": "apps/mobile/src/components/due-date-picker.tsx#1"
@@ -14379,10 +14388,10 @@
             "location": "apps/api/src/dev/register-mock-ai.ts#9"
           },
           {
-            "location": "apps/api/src/handlers/chat/attempt-answer.ts#9"
+            "location": "apps/api/src/handlers/chat/attempt-answer.ts#10"
           },
           {
-            "location": "apps/api/src/handlers/chat/attempt-answer.ts#10"
+            "location": "apps/api/src/handlers/chat/attempt-answer.ts#11"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#1"
@@ -14745,10 +14754,16 @@
             "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#11"
           },
           {
+            "location": "packages/agent-engine/src/harness/chunk-coalescer.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/harness/stream-chunks.ts#8"
           },
           {
             "location": "packages/agent-engine/src/sidecar/holder.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/outputs.ts#1"
           },
           {
             "location": "packages/agent-engine/src/sidecar/protocol.ts#1"
@@ -16101,6 +16116,9 @@
             "location": "apps/web/src/lib/workspaces/table-store.ts#1"
           },
           {
+            "location": "apps/web/src/lib/workspaces/workspace-mutation.ts#1"
+          },
+          {
             "location": "apps/web/src/queries/feature-enrolments.ts#6"
           },
           {
@@ -17130,7 +17148,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/workflows.tsx#1"
@@ -18216,7 +18234,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/timesheets.tsx#3"
@@ -20387,6 +20405,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-context-meter.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-decision-citation.tsx#1"
@@ -25652,6 +25673,9 @@
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#2"
           },
           {
+            "location": "apps/web/src/components/chat/chat-context-meter.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-decision-citation.tsx#1"
           },
           {
@@ -29339,6 +29363,12 @@
             "location": "apps/api/src/lib/auth/social-link-hint.ts#7"
           },
           {
+            "location": "apps/api/src/lib/auth/social-token-exchange.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/auth/social-token-exchange.ts#3"
+          },
+          {
             "location": "apps/api/src/lib/auth/two-factor-trusted-device.ts#1"
           },
           {
@@ -29463,6 +29493,9 @@
           },
           {
             "location": "apps/api/src/lib/auth/social-link-hint.ts#7"
+          },
+          {
+            "location": "apps/api/src/lib/auth/social-token-exchange.ts#3"
           },
           {
             "location": "apps/api/src/lib/auth.ts#13"
@@ -29623,6 +29656,9 @@
             "location": "apps/api/evals/lib/generated-views-score.ts#1"
           },
           {
+            "location": "apps/api/evals/lib/org-model-targets.ts#1"
+          },
+          {
             "location": "apps/api/evals/lib/playbook-store.ts#9"
           },
           {
@@ -29630,6 +29666,9 @@
           },
           {
             "location": "apps/api/evals/playbook-authoring.ts#38"
+          },
+          {
+            "location": "apps/api/evals/playbook-clause-extraction.ts#25"
           },
           {
             "location": "apps/api/evals/reader-explain-local.ts#2"
@@ -30019,7 +30058,10 @@
             "location": "apps/api/src/db/contact-vat-id-repair.ts#1"
           },
           {
-            "location": "apps/api/src/db/corpus-projection-delete-receipt-repair.ts#27"
+            "location": "apps/api/src/db/corpus-projection-applied-revision-settled-repair.ts#16"
+          },
+          {
+            "location": "apps/api/src/db/corpus-projection-revision-walk.ts#11"
           },
           {
             "location": "apps/api/src/db/corpus-schema-lane.ts#50"
@@ -30427,7 +30469,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts#6"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss-documents.ts#2"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss-documents.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts#7"
@@ -30649,6 +30691,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/parse-xml-error.ts#14"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pdf-bands.ts#31"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-common-court-inlines.ts#29"
           },
           {
@@ -30659,9 +30704,6 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-operative-verbs.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-sn.ts#26"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-tk.ts#19"
@@ -30970,7 +31012,7 @@
             "location": "apps/api/src/handlers/chat/attachment-validation.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/attempt-answer.ts#11"
+            "location": "apps/api/src/handlers/chat/attempt-answer.ts#12"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#4"
@@ -31169,6 +31211,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/rotate-template-thread.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/run-outputs/upload.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/runs/list.ts#1"
@@ -32441,6 +32486,9 @@
           },
           {
             "location": "apps/api/src/handlers/me/send-otp.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/me/timer-activity-devices/act.ts#1"
           },
           {
             "location": "apps/api/src/handlers/me/timer-activity-devices/register.ts#1"
@@ -33898,6 +33946,9 @@
             "location": "apps/api/src/lib/auth/social-link-hint.ts#8"
           },
           {
+            "location": "apps/api/src/lib/auth/social-token-exchange.ts#4"
+          },
+          {
             "location": "apps/api/src/lib/auth/third-party-outbound-permit.ts#1"
           },
           {
@@ -34342,6 +34393,27 @@
             "location": "apps/api/src/lib/corpus-ingestion-checkpoint.ts#1"
           },
           {
+            "location": "apps/api/src/lib/data-sources/contract.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/data-sources/contract.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/data-sources/run.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/data-sources/tools/cz-ares-lookup.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/data-sources/tools/cz-cnb-rate.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/data-sources/tools/cz-company-id.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/data-sources/tools/cz-isir-proceedings.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/data-url.ts#1"
           },
           {
@@ -34511,6 +34583,9 @@
           },
           {
             "location": "apps/api/src/lib/document-processing-retry.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/decision-carry-over.ts#21"
           },
           {
             "location": "apps/api/src/lib/document-review/issues-table.ts#8"
@@ -35753,6 +35828,9 @@
           },
           {
             "location": "apps/api/src/lib/push/push-delivery-worker.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/push/timer-activity-actions.ts#1"
           },
           {
             "location": "apps/api/src/lib/push/timer-activity-worker.ts#1"
@@ -37786,6 +37864,9 @@
             "location": "apps/web/src/features/chat/chat-fetch.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/chat-local-run-limit.ts#1"
+          },
+          {
             "location": "apps/web/src/features/chat/chat-rejoin-messages.ts#3"
           },
           {
@@ -38248,6 +38329,9 @@
             "location": "apps/web/src/lib/workspace-sse.ts#4"
           },
           {
+            "location": "apps/web/src/lib/workspaces/archived-matters.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/workspaces/calculations.ts#9"
           },
           {
@@ -38288,6 +38372,9 @@
           },
           {
             "location": "apps/web/src/lib/workspaces/table-store.ts#7"
+          },
+          {
+            "location": "apps/web/src/lib/workspaces/workspace-mutation.ts#2"
           },
           {
             "location": "apps/web/src/queries/feature-enrolments.ts#7"
@@ -38558,6 +38645,9 @@
           },
           {
             "location": "packages/agent-engine/src/sidecar/mcp-proxy.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/outputs.ts#2"
           },
           {
             "location": "packages/agent-engine/src/sidecar/protocol.ts#2"
@@ -41200,7 +41290,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/matter-card.tsx#5"
@@ -42916,6 +43006,9 @@
             "location": "apps/api/src/db/schema/corpus-index-jobs.ts#8"
           },
           {
+            "location": "apps/api/src/db/schema/corpus-index-projections.ts#1"
+          },
+          {
             "location": "apps/api/src/db/schema/correspondence.ts#1"
           },
           {
@@ -43099,13 +43192,13 @@
             "location": "apps/api/src/handlers/case-law/decisions/citation-digest.ts#14"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#2"
+            "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#3"
+            "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#4"
+            "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#14"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/citation-passages.ts#17"
@@ -43490,6 +43583,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/resolve-file-thread.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/run-outputs/upload.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/runs/list.ts#2"
@@ -45433,9 +45529,6 @@
             "location": "apps/api/src/lib/db/aggregate-lock-child.fixture.ts#1"
           },
           {
-            "location": "apps/api/src/lib/db/aggregate-lock.ts#17"
-          },
-          {
             "location": "apps/api/src/lib/db/aggregate-lock.ts#18"
           },
           {
@@ -45445,7 +45538,10 @@
             "location": "apps/api/src/lib/db/aggregate-lock.ts#20"
           },
           {
-            "location": "apps/api/src/lib/db/aggregate-lock.ts#24"
+            "location": "apps/api/src/lib/db/aggregate-lock.ts#21"
+          },
+          {
+            "location": "apps/api/src/lib/db/aggregate-lock.ts#25"
           },
           {
             "location": "apps/api/src/lib/db/assert-database-login-posture.ts#1"
@@ -45604,7 +45700,7 @@
             "location": "apps/api/src/lib/document-review/approved-playbook-versions.ts#11"
           },
           {
-            "location": "apps/api/src/lib/document-review/decision-carry-over.ts#19"
+            "location": "apps/api/src/lib/document-review/decision-carry-over.ts#22"
           },
           {
             "location": "apps/api/src/lib/document-review/decision-counts.ts#15"
@@ -45643,7 +45739,7 @@
             "location": "apps/api/src/lib/document-review/review-suggestion-staging.ts#16"
           },
           {
-            "location": "apps/api/src/lib/document-review/run-finalize.ts#23"
+            "location": "apps/api/src/lib/document-review/run-finalize.ts#24"
           },
           {
             "location": "apps/api/src/lib/document-review/run-inputs.ts#1"
@@ -46036,7 +46132,7 @@
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-sql.ts#1"
           },
           {
-            "location": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts#13"
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts#12"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-provider.ts#2"
@@ -47236,7 +47332,7 @@
             "location": "apps/api/src/db/state-fields.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#4"
+            "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#14"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#4"
@@ -47329,10 +47425,10 @@
             "location": "apps/api/src/lib/case-law/replay-write.ts#5"
           },
           {
-            "location": "apps/api/src/lib/db/aggregate-lock.ts#19"
+            "location": "apps/api/src/lib/db/aggregate-lock.ts#20"
           },
           {
-            "location": "apps/api/src/lib/db/aggregate-lock.ts#20"
+            "location": "apps/api/src/lib/db/aggregate-lock.ts#21"
           },
           {
             "location": "apps/api/src/lib/db/audit-recording.ts#2"
@@ -47464,7 +47560,7 @@
             "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#4"
           },
           {
-            "location": "apps/api/src/lib/db/aggregate-lock.ts#24"
+            "location": "apps/api/src/lib/db/aggregate-lock.ts#25"
           }
         ]
       },
@@ -48627,10 +48723,10 @@
             "location": "apps/mobile/src/components/timer-activity-sync.tsx#6"
           },
           {
-            "location": "apps/mobile/src/widgets/timer-activity.ios.tsx#10"
+            "location": "apps/mobile/src/widgets/timer-activity.ios.tsx#13"
           },
           {
-            "location": "apps/mobile/src/widgets/timer-activity.ios.tsx#15"
+            "location": "apps/mobile/src/widgets/timer-activity.ios.tsx#18"
           },
           {
             "location": "apps/mobile/src/widgets/timer-activity.tsx#1"
@@ -48710,6 +48806,9 @@
           },
           {
             "location": "apps/mobile/src/native/document-scanner.ts#2"
+          },
+          {
+            "location": "apps/mobile/src/native/timer-actions.ts#1"
           },
           {
             "location": "apps/mobile/src/components/decision-text.dom.tsx#10"
@@ -53982,6 +54081,9 @@
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#2"
           },
           {
+            "location": "apps/web/src/components/chat/chat-context-meter.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-decision-citation.tsx#1"
           },
           {
@@ -57860,6 +57962,9 @@
             "location": "packages/workspace-ui/src/feature-previews/format.ts#1"
           },
           {
+            "location": "apps/mobile/src/components/timer-activity-sync.tsx#8"
+          },
+          {
             "location": "packages/ui/src/calendar/day-calendar.tsx#11"
           },
           {
@@ -57993,6 +58098,9 @@
           },
           {
             "location": "packages/workspace-ui/src/feature-previews/format.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/timer-activity-sync.tsx#8"
           },
           {
             "location": "packages/ui/src/calendar/day-calendar.tsx#11"
@@ -58786,9 +58894,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#11"
-          },
-          {
             "location": "apps/web/src/routes/knowledge/-components/clause-detail.tsx#4"
           },
           {
@@ -59358,7 +59463,7 @@
             "location": "apps/mobile/src/components/task-status-control.tsx#5"
           },
           {
-            "location": "apps/mobile/src/components/timer-activity-sync.tsx#8"
+            "location": "apps/mobile/src/components/timer-activity-sync.tsx#9"
           },
           {
             "location": "apps/mobile/src/components/timer-card.tsx#5"
@@ -59568,7 +59673,7 @@
             "location": "apps/web/src/components/chat/chat-composer-dock.tsx#5"
           },
           {
-            "location": "apps/web/src/components/chat/chat-context-meter.tsx#1"
+            "location": "apps/web/src/components/chat/chat-context-meter.tsx#3"
           },
           {
             "location": "apps/web/src/components/chat/chat-decision-citation-feedback.tsx#2"
@@ -61356,7 +61461,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#12"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#10"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/timesheets.tsx#4"
@@ -62157,7 +62262,7 @@
             "location": "apps/api/src/handlers/case-law/analysis/significance.ts#18"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#5"
+            "location": "apps/api/src/handlers/case-law/decisions/citation-graph.ts#15"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/coverage.ts#3"
@@ -62374,6 +62479,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/rotate-template-thread.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/run-outputs/upload.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/runs/list.ts#4"
@@ -63235,6 +63343,9 @@
           },
           {
             "location": "apps/api/src/handlers/me/push-devices/unregister.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/me/timer-activity-devices/act.ts#2"
           },
           {
             "location": "apps/api/src/handlers/me/update-guide-progress.ts#2"
@@ -64269,10 +64380,13 @@
             "location": "apps/api/src/lib/custom-schema.ts#1"
           },
           {
+            "location": "apps/api/src/lib/data-sources/run.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/db/account-row.ts#2"
           },
           {
-            "location": "apps/api/src/lib/db/aggregate-lock.ts#25"
+            "location": "apps/api/src/lib/db/aggregate-lock.ts#26"
           },
           {
             "location": "apps/api/src/lib/db/parent-lock-reference.fixture.ts#2"
@@ -65136,6 +65250,9 @@
             "location": "apps/web/src/features/chat/browser-control/browser-approval-mode.ts#4"
           },
           {
+            "location": "apps/web/src/features/chat/chat-local-run-limit.ts#2"
+          },
+          {
             "location": "apps/web/src/features/chat/chat-runtime.ts#12"
           },
           {
@@ -65364,6 +65481,9 @@
             "location": "packages/agent-engine/src/sidecar/host.ts#3"
           },
           {
+            "location": "packages/agent-engine/src/sidecar/outputs.ts#6"
+          },
+          {
             "location": "packages/agent-engine/src/sidecar/protocol.ts#3"
           },
           {
@@ -65488,6 +65608,9 @@
           },
           {
             "location": "packages/api-contract/src/realtime-events.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/realtime-mutation-digest.ts#1"
           },
           {
             "location": "packages/api-contract/src/record-cell.ts#2"
@@ -65886,7 +66009,7 @@
             "location": "apps/mobile/src/components/load-failure.tsx#4"
           },
           {
-            "location": "apps/mobile/src/components/timer-activity-sync.tsx#9"
+            "location": "apps/mobile/src/components/timer-activity-sync.tsx#10"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#6"

@@ -25,9 +25,12 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -84,6 +87,7 @@ const FAST_CAPACITY_RETRY = { maxAttempts: 5, baseDelayMs: 5, maxDelayMs: 20 };
 const harnessFor = (
   scenario: FakeScenario,
   capacityRetry = FAST_CAPACITY_RETRY,
+  environment: Readonly<Record<string, string>> = {},
 ) => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-codex-adapter-"));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
@@ -95,7 +99,11 @@ const harnessFor = (
   const adapter = createCodexHarnessAdapter({
     launch: { executable: process.execPath, args: [FAKE_SERVER, scenario] },
     codexHome,
-    environment: { FAKE_HARNESS_LOG: logPath, PATH: process.env["PATH"] ?? "" },
+    environment: {
+      ...environment,
+      FAKE_HARNESS_LOG: logPath,
+      PATH: process.env["PATH"] ?? "",
+    },
     clientVersion: "0.0.1",
     gracePeriodMs: 1000,
     requestTimeoutMs: 10_000,
@@ -147,6 +155,7 @@ const turnInput = (
   transcript,
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
+  skillFolders: [],
   ...overrides,
 });
 
@@ -255,6 +264,219 @@ describe("Codex adapter over a stdio app-server", () => {
       },
     });
     expect(startup().packageCache).toEqual(packageCacheEnvironment(CACHE_DIR));
+  });
+
+  describe("skill folders", () => {
+    /** A real skill folder, outside the harness's own directories. */
+    const skillFolder = (name: string) => {
+      const root = mkdtempSync(path.join(tmpdir(), "stella-skill-folder-"));
+      cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+      const folder = path.join(root, name);
+      mkdirSync(folder);
+      writeFileSync(
+        path.join(folder, "SKILL.md"),
+        `---\nname: ${name}\ndescription: An invented skill.\n---\nBody.\n`,
+      );
+      return { name, path: folder };
+    };
+
+    /** Runs a turn in a workspace `prepare` may fill first. */
+    const runIn = async (
+      scenario: FakeScenario,
+      overrides: Partial<HarnessTurnInput>,
+      prepare: (workspaceDir: string) => void = () => undefined,
+      environment: Readonly<Record<string, string>> = {},
+    ) => {
+      const harness = harnessFor(scenario, FAST_CAPACITY_RETRY, environment);
+      prepare(harness.workspaceDir);
+      const started = await harness.adapter.startTurn(
+        turnInput(harness.workspaceDir, overrides),
+      );
+      const events: HarnessEvent[] = [];
+      if (Result.isOk(started)) {
+        for await (const event of started.value.events) {
+          events.push(event);
+        }
+        await started.value.dispose();
+      }
+      return { ...harness, started, events };
+    };
+
+    const paramsOf = (
+      received: readonly { method?: string; params?: unknown }[],
+      method: string,
+    ) => received.find((message) => message.method === method)?.params;
+
+    const plantSkill = (workspaceDir: string) => {
+      const planted = path.join(workspaceDir, ".agents", "skills", "planted");
+      mkdirSync(planted, { recursive: true });
+      writeFileSync(
+        path.join(planted, "SKILL.md"),
+        "---\nname: planted\ndescription: x\n---\nx\n",
+      );
+      return path.join(planted, "SKILL.md");
+    };
+
+    test("a listed folder is a root for this process, read-only, and writes nothing to the home", async () => {
+      const skill = skillFolder("fixture-skill");
+      const { received, codexHome } = await runIn("tool_calls", {
+        skillFolders: [skill],
+      });
+      expect(paramsOf(received(), "skills/extraRoots/set")).toEqual({
+        extraRoots: [skill.path],
+      });
+      expect(
+        received().findIndex(
+          ({ method }) => method === "skills/extraRoots/set",
+        ),
+      ).toBeLessThan(
+        received().findIndex(({ method }) => method === "thread/start"),
+      );
+      expect(paramsOf(received(), "thread/start")).toMatchObject({
+        config: { "sandbox_workspace_write.writable_roots": [CACHE_DIR] },
+      });
+      expect(
+        JSON.stringify(paramsOf(received(), "thread/start")),
+      ).not.toContain(skill.path);
+      expect(readdirSync(codexHome)).toEqual([]);
+    });
+
+    test("without skill folders no root is set", async () => {
+      const { received } = await runIn("tool_calls", {});
+      expect(paramsOf(received(), "skills/extraRoots/set")).toBeUndefined();
+      expect(paramsOf(received(), "thread/start")).not.toMatchObject({
+        config: { "skills.config": expect.anything() },
+      });
+    });
+
+    test("a folder that vanished, holds no SKILL.md or is a link is left out", async () => {
+      const good = skillFolder("good-skill");
+      const vanished = skillFolder("vanished-skill");
+      rmSync(vanished.path, { recursive: true });
+      const empty = skillFolder("empty-skill");
+      rmSync(path.join(empty.path, "SKILL.md"));
+      const target = skillFolder("linked-skill");
+      const linked = { name: "linked", path: `${target.path}-link` };
+      symlinkSync(target.path, linked.path);
+      cleanups.push(() => rmSync(linked.path, { force: true }));
+
+      const { received } = await runIn("tool_calls", {
+        skillFolders: [vanished, empty, linked, good],
+      });
+      expect(paramsOf(received(), "skills/extraRoots/set")).toEqual({
+        extraRoots: [good.path],
+      });
+    });
+
+    test("a skill the workspace brings in is switched off, a listed one is not", async () => {
+      const skill = skillFolder("fixture-skill");
+      let planted = "";
+      const { received } = await runIn(
+        "tool_calls",
+        { skillFolders: [skill] },
+        (workspaceDir) => {
+          planted = plantSkill(workspaceDir);
+        },
+      );
+      expect(paramsOf(received(), "thread/start")).toMatchObject({
+        config: { "skills.config": [{ path: planted, enabled: false }] },
+      });
+    });
+
+    test("a resumed thread switches a workspace's skill off too", async () => {
+      let planted = "";
+      const { received } = await runIn(
+        "resume_ok",
+        {
+          continuation: {
+            type: "resume",
+            sessionId: harnessSessionId(FAKE_RESUMED_THREAD_ID),
+          },
+        },
+        (workspaceDir) => {
+          planted = plantSkill(workspaceDir);
+        },
+      );
+      expect(paramsOf(received(), "thread/resume")).toMatchObject({
+        config: { "skills.config": [{ path: planted, enabled: false }] },
+      });
+    });
+
+    test("only a listed folder's own SKILL.md stays on: not the member's, nothing nested, nothing through a link", async () => {
+      const skill = skillFolder("fixture-skill");
+      const home = skillFolder("home-holder");
+      const member = path.join(home.path, ".agents", "skills", "member-skill");
+      mkdirSync(member, { recursive: true });
+      writeFileSync(path.join(member, "SKILL.md"), "x");
+      const nested = path.join(skill.path, "vendor", "nested-skill");
+      mkdirSync(nested, { recursive: true });
+      writeFileSync(path.join(nested, "SKILL.md"), "x");
+      const elsewhere = skillFolder("elsewhere-skill");
+      const linked = path.join(skill.path, "linked");
+      symlinkSync(elsewhere.path, linked);
+
+      const { received } = await runIn(
+        "tool_calls",
+        { skillFolders: [skill] },
+        () => undefined,
+        { HOME: home.path },
+      );
+
+      const config = paramsOf(received(), "thread/start");
+      const disabled = v
+        .parse(
+          v.object({
+            config: v.object({
+              "skills.config": v.array(
+                v.object({ path: v.string(), enabled: v.boolean() }),
+              ),
+            }),
+          }),
+          config,
+        )
+        .config["skills.config"].map(({ path: file, enabled }) => {
+          expect(enabled).toBe(false);
+          return file;
+        });
+      expect(disabled.toSorted()).toEqual(
+        [
+          path.join(member, "SKILL.md"),
+          path.join(nested, "SKILL.md"),
+          path.join(linked, "SKILL.md"),
+        ].toSorted(),
+      );
+    });
+
+    test("a read of a skill reaches stella by name and status, an unrelated call unchanged", async () => {
+      const skill = skillFolder("fixture-skill");
+      const { events } = await runIn(
+        "reads_skill",
+        { skillFolders: [skill] },
+        () => undefined,
+        { FAKE_SKILL_PATH: skill.path },
+      );
+      expect(JSON.stringify(events)).not.toContain(skill.path);
+      expect(JSON.stringify(events)).not.toContain("Licensed");
+      const completed = events.flatMap((event) =>
+        event.type === "tool.completed" ? [event] : [],
+      );
+      expect(completed[0]?.toolCall.input).toEqual({
+        command: `cat <skill:${skill.name}>/SKILL.md`,
+      });
+      expect(completed[0]?.result).toEqual({
+        content: JSON.stringify({ status: "completed" }),
+        status: "succeeded",
+      });
+      expect(completed[1]?.result.content).toContain("notes.md");
+    });
+
+    test("a turn whose skills cannot be established does not run", async () => {
+      const { received, started } = await runIn("skills_refused", {});
+      expect(Result.isError(started) && started.error.reason).toBe(
+        "start_rejected",
+      );
+      expect(paramsOf(received(), "thread/start")).toBeUndefined();
+    });
   });
 
   test("an approval mode it does not offer refuses the turn before the harness starts", async () => {
@@ -531,7 +753,7 @@ describe("Codex adapter over a stdio app-server", () => {
     const log = path.join(root, "fake.log");
     const exits: { exitCode: number | null; signal: string | null }[] = [];
     const ready = Promise.withResolvers<undefined>();
-    const client = startAppServer({
+    const started = startAppServer({
       launch: {
         executable: process.execPath,
         args: [FAKE_SERVER, "unresponsive"],
@@ -555,6 +777,9 @@ describe("Codex adapter over a stdio app-server", () => {
         },
       },
     });
+    const client = Result.isOk(started)
+      ? started.value
+      : panic("the app-server did not start");
     // The deadline runs from the request: wait until the server is up, so a
     // slow start is never mistaken for silence.
     await ready.promise;
@@ -1184,7 +1409,7 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
     const codexHome = path.join(root, "home");
     const cliErrors: unknown[] = [];
     mkdirSync(codexHome);
-    const client = startAppServer({
+    const started = startAppServer({
       launch: { executable: codex ?? "", args: ["app-server"] },
       detached: createDetached((error) => {
         cliErrors.push(error);
@@ -1203,6 +1428,9 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
         exit: () => undefined,
       },
     });
+    const client = Result.isOk(started)
+      ? started.value
+      : panic("the app-server did not start");
     const initialized = await client.request("initialize", {
       clientInfo: { name: "stella", title: "stella", version: "0.0.0" },
       capabilities: { experimentalApi: true, requestAttestation: false },

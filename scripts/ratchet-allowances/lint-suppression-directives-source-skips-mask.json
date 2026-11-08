@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "SourceSkips is a flag enum from @expo/fingerprint and createFingerprintAsync takes the combined mask. A bitwise or is the only form no-unsafe-enum-assignment accepts: a sum and an assertion are both rejected."
+}

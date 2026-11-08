@@ -47,6 +47,7 @@ use crate::harness_installation::HarnessInstallation;
 use crate::harness_release::ManagedHarness;
 use crate::harness_sidecar::{
   HarnessLaunchSettings, ReconnectBackoff, SidecarLaunch, SidecarSettings,
+  SkillFolderRef,
 };
 use crate::keychain::LocalDataKey;
 use crate::local_store::{self, StoreKey};
@@ -305,6 +306,20 @@ const HOLDER_DIRECTORY: &str = "agent-holder";
 const RUNS_DIRECTORY: &str = "agent-runs";
 const PACKAGE_CACHE_DIRECTORY: &str = "agent-package-cache";
 
+/// The folders on this computer every run writes to, which a skill folder must
+/// stay out of.
+pub(crate) fn run_folders_on_this_computer() -> Vec<std::path::PathBuf> {
+  dirs::data_dir()
+    .map(|data| data.join(crate::config::APP_DATA_DIR_NAME))
+    .map(|data| {
+      vec![
+        data.join(RUNS_DIRECTORY),
+        data.join(PACKAGE_CACHE_DIRECTORY),
+      ]
+    })
+    .unwrap_or_default()
+}
+
 /// The app's harness host: the bundled sidecar, the managed CLIs and the
 /// ChatGPT connection. `None` without a data folder.
 fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
@@ -347,6 +362,10 @@ struct ManagedHarnesses {
 }
 
 impl LocalHarnesses for ManagedHarnesses {
+  fn skill_folders(&self) -> Vec<SkillFolderRef> {
+    crate::local_skill_folders::SkillFolders::for_this_computer().for_run()
+  }
+
   fn on_install_settled(&self, settled: InstallSettled) {
     let Some(installation) = self.app.try_state::<HarnessInstallation>() else {
       return;

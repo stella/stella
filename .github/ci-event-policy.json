@@ -233,6 +233,7 @@
     "type-cost-measurement.yml/prepare": "main",
     "type-cost-measurement.yml/measure": "main",
     "queue-admission.yml/admission": "dispatch-only",
+    "playbook-clause-eval.yml/playbook-clause-eval": "dispatch-only",
     "ci-runner-loss-retry.yml/retry": "pr-fast",
     "ci.yml/dependency-review": "pr-fast",
     "ci.yml/dependency-audit": "pr-fast",

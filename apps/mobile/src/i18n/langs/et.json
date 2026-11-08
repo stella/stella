@@ -242,7 +242,6 @@
     "headnote": "Lühikokkuvõte",
     "textUnavailable": "Selle lahendi teksti ei ole saadaval",
     "openSource": "Ava algallikas",
-    "openFailed": "Linki ei õnnestunud avada.",
     "loadFailed": "Kohtupraktikat ei õnnestunud laadida.",
     "share": "Jaga"
   },
@@ -346,5 +345,11 @@
   "pane": {
     "showList": "Näita loendit",
     "hideList": "Peida loend"
+  },
+  "link": {
+    "open": "Ava",
+    "share": "Jaga",
+    "cancel": "Loobu",
+    "openFailed": "Linki ei õnnestunud avada."
   }
 }
