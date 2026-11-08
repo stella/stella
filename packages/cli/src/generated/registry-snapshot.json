@@ -582,6 +582,15 @@
             "kind": "filter"
           }
         },
+        "preferred_language": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8,
+          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, and matchedLanguage names the language its snippet came from; otherwise it stays in the language that matched. Decisions in one language are unaffected. Ignored together with language. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
         "decision_type": {
           "type": "string",
           "minLength": 1,
@@ -856,6 +865,9 @@
               },
               "matchingPassages": {
                 "type": "number"
+              },
+              "matchedLanguage": {
+                "type": "string"
               },
               "textAvailability": {
                 "enum": ["available", "metadata_only"],
@@ -1226,6 +1238,11 @@
           "type": "string",
           "maxLength": 24,
           "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
+        },
+        "preferred_language": {
+          "type": "string",
+          "maxLength": 8,
+          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed."
         },
         "query": {
           "type": "string",
