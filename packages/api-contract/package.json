@@ -28,6 +28,7 @@
     "./currency-code": "./src/currency-code.ts",
     "./billing": "./src/billing.ts",
     "./workspace-status": "./src/workspace-status.ts",
+    "./journey-prerequisites": "./src/journey-prerequisites.ts",
     "./visual-preview": "./src/visual-preview.ts",
     "./ai-disclosure": "./src/ai-disclosure.ts",
     "./ai-decision-provider": "./src/ai-decision-provider.ts",
