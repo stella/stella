@@ -17,6 +17,7 @@ import {
   provisionAnchorSubtreeSql,
 } from "@/api/lib/case-law/provision-anchor-lineage";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
@@ -490,7 +491,14 @@ export const readCaseLawProvisionScopeWithinBudget = async (
   ).catch(async (error: unknown) =>
     getPgErrorCode(error) === PG_ERROR.QUERY_CANCELED
       ? ({ type: "broad" } as const)
-      : await Promise.reject(error),
+      : await Promise.reject(
+          error instanceof Error
+            ? error
+            : new DatabaseError({
+                message: "Provision scope read rejected with a non-Error value",
+                cause: error,
+              }),
+        ),
   );
 
 /**
