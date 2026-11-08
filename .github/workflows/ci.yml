@@ -4783,6 +4783,13 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      - name: Install the docs MCP server
+        # typecheck:repo checks .claude/mcp against the packages installed
+        # there, which are outside the root lockfile.
+        run: bash scripts/retry.sh bun run setup:mcp
+        env:
+          NPM_TOKEN: ""
+
       - name: Full release typecheck
         # Avoid overlapping compiler heaps for tasks that compile API sources.
         run: bun run typecheck --concurrency=1 && bun run typecheck:repo
