@@ -11,9 +11,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { prDepthJobs, prHeavyJobs, QUICK_GATED_CLAUSE } from "./ci-pr-jobs";
 import { evaluate } from "./github-expression";
-import { isRepositoryCheckoutAction } from "./workflow-steps";
 
 const readWorkflow = (name: string) =>
   v.parse(

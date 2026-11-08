@@ -13,11 +13,8 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import {
-  isRepositoryCheckoutAction,
-  workflowJobSteps,
-  workflowStepByName,
-} from "./workflow-steps";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const read = (name: string) =>
   readFileSync(

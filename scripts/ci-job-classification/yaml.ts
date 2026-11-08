@@ -1,7 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import { isRepositoryCheckoutAction } from "../workflow-steps";
+import { isRepositoryCheckoutAction } from "./checkout-actions";
 import { sha256 } from "./classification-values";
 import { requestsRepositoryWrite, shapeWritesRepository } from "./review";
 

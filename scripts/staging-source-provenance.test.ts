@@ -10,8 +10,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { type Context, contextFromNested, evaluate } from "./github-expression";
-import { isRepositoryCheckoutAction } from "./workflow-steps";
 
 const evaluateInput = (input: unknown, context: Context) => {
   if (typeof input !== "string") {

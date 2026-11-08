@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { isRepositoryCheckoutAction } from "./workflow-steps";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 
 // Jobs check helper scripts out into .gh-retry, then check the source out
 // into the workspace root, which removes .gh-retry. A helper that a later

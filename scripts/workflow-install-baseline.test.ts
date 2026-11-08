@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { validateWorkspaceAppBoundaries } from "../packages/scripts/src/workspace-app-boundaries";
-import { isRepositoryCheckoutAction } from "./workflow-steps";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 
 // An install that runs lifecycle scripts runs the workspace hygiene check,
 // which in CI reads the app-boundary ledger at the merge base with

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import { isRepositoryCheckoutAction } from "./workflow-steps";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 
 const read = (path: string) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf-8");

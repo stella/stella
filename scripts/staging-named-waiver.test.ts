@@ -13,8 +13,8 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { evaluate } from "./github-expression";
-import { isRepositoryCheckoutAction } from "./workflow-steps";
 
 const stepSchema = v.looseObject({
   name: v.string(),

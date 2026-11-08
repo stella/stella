@@ -8,6 +8,7 @@ import path from "node:path";
  * scope; script literal argv checks exclude template/f-string interpolation.
  */
 import { repoRelativePath } from "../packages/portable-path/src/index";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import {
   conditionOperands,
   impliesCondition,
@@ -17,7 +18,6 @@ import {
 import { readStringLiterals } from "./test-input-readers";
 import {
   flattenWorkflowSteps,
-  isRepositoryCheckoutAction,
   mergeWorkflowParallelProofs,
   synchronizeWorkflowBackgroundSteps,
 } from "./workflow-steps";

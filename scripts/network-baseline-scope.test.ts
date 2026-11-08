@@ -12,12 +12,12 @@ import os from "node:os";
 import path from "node:path";
 
 import { isCanonicalFailureCancellation } from "./ci-cancellation-contract";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import {
   NETWORK_DEPTH_METHOD,
   prepareComparisonBaseline,
   validateBaselineFile,
 } from "./network-baseline-scope";
-import { isRepositoryCheckoutAction } from "./workflow-steps";
 
 const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
 

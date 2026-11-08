@@ -7,7 +7,7 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { isRepositoryCheckoutAction } from "./workflow-steps";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 
 const workflow = v.parse(
   v.looseObject({

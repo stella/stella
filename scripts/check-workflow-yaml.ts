@@ -6,6 +6,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const WORKFLOW_DIRECTORY = ".github/workflows";
@@ -267,22 +268,13 @@ export const validateLocalActionReferences = ({
 /** The `repository` input that names the workflow's own repository. */
 const SAME_REPOSITORY = ["$", "{{ github.repository }}"].join("");
 
-/** Remote actions that check this repository out into the workspace. */
-const CHECKOUT_ACTIONS = [
-  "actions/checkout@",
-  "stella/.github/actions/partial-clone-checkout@",
-] as const;
-
 /**
  * The workspace directory a step checks this repository out into, `""` for
  * the root, or null for any other step (another repository included).
  */
 const checkoutDirectory = (step: Record<string, unknown>): string | null => {
   const uses = step["uses"];
-  if (
-    typeof uses !== "string" ||
-    !CHECKOUT_ACTIONS.some((prefix) => uses.startsWith(prefix))
-  ) {
+  if (!isRepositoryCheckoutAction(uses)) {
     return null;
   }
   const inputs = isRecord(step["with"]) ? step["with"] : {};

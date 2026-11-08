@@ -14,9 +14,9 @@ import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { ciExpressionContext } from "./ci-expression-context";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { contextFromNested, evaluate, UNKNOWN } from "./github-expression";
 import { mainHeavyJobs, thinJobs } from "./main-heavy-plan";
-import { isRepositoryCheckoutAction } from "./workflow-steps";
 
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),

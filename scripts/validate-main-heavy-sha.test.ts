@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { isRepositoryCheckoutAction } from "./workflow-steps";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),

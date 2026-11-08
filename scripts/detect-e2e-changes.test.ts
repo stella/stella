@@ -14,6 +14,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import {
   type ChangedFileScopeDetectors,
   computeChangedFileScope,
@@ -25,11 +26,7 @@ import { rootCheckGate } from "./ci-root-check-gate";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
 import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
-import {
-  isRepositoryCheckoutAction,
-  workflowJobSteps,
-  workflowStepByName,
-} from "./workflow-steps";
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
 const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");

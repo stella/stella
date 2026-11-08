@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { DESKTOP_WINDOWS_DRY_RUN_INPUTS } from "./ci-plan-scope";
 import {
   configureWindowsSigning,
@@ -10,7 +11,6 @@ import {
   stampCargoPackageVersion,
   stampDesktopRelease,
 } from "./desktop-release-step";
-import { isRepositoryCheckoutAction } from "./workflow-steps";
 
 const githubExpression = (body: string): string => `\${{ ${body} }}`;
 
