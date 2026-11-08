@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { TokenError } from "./errors";
+import { type InstallMarker, madeByThisInstall } from "./install-marker";
 import type { SessionGeneration, SessionStore, StoredSession } from "./session";
 
 type KeepSignInOptions = {
@@ -91,4 +92,42 @@ export const signOutSession = async ({
   return Result.isError(cleared)
     ? Result.err(cleared.error)
     : Result.ok(undefined);
+};
+
+type RestoreSessionOptions = {
+  readonly store: SessionStore;
+  readonly generation: SessionGeneration;
+  readonly marker: InstallMarker;
+  readonly beforeEnd: (session: StoredSession) => Promise<void>;
+  readonly revoke: (session: StoredSession) => Promise<void>;
+};
+
+/**
+ * The session a launch starts with. One an earlier installation kept (the
+ * app was deleted and installed again) is signed out the way the person
+ * would sign out, before any screen shows it, and the launch starts signed
+ * out.
+ */
+export const restoreSession = async ({
+  store,
+  generation,
+  marker,
+  beforeEnd,
+  revoke,
+}: RestoreSessionOptions): Promise<StoredSession | undefined> => {
+  const session = await store.read(generation);
+  if (session === undefined || (await madeByThisInstall(marker, session))) {
+    return session;
+  }
+  // Nothing shows the session yet, so there is nothing to publish; a
+  // keychain that keeps it is cleared on the next launch instead.
+  await signOutSession({
+    store,
+    session,
+    beforeEnd,
+    revoke,
+    publish: () => undefined,
+    kept: () => undefined,
+  });
+  return undefined;
 };

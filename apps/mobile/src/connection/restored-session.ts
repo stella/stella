@@ -5,7 +5,7 @@
 import { Result } from "better-result";
 
 import { epochMilliseconds } from "@/connection/clock";
-import { deviceSessionStore } from "@/connection/platform";
+import { deviceInstallMarker, deviceSessionStore } from "@/connection/platform";
 import { createAccessTokenSource } from "@/connection/session";
 import type {
   AccessToken,
@@ -13,6 +13,39 @@ import type {
   SessionGeneration,
   StoredSession,
 } from "@/connection/session";
+import { restoreSession } from "@/connection/session-actions";
+import {
+  createSessionEndBoundary,
+  type SessionEndBoundary,
+} from "@/connection/session-end";
+import { revokeRefreshToken } from "@/connection/tokens";
+import { deviceAccountStore } from "@/native/account-store";
+import { clearTimerActions } from "@/native/timer-actions";
+import { forgetTimerActivityDevice } from "@/native/timer-activity-device";
+import { forgetRecentSearches } from "@/state/recent-searches";
+
+/**
+ * Every sign-out's last word on the device: what the app keeps there for
+ * the account goes with its session.
+ */
+export const createDeviceSessionEnd = (): SessionEndBoundary => {
+  const boundary = createSessionEndBoundary();
+  boundary.register(forgetRecentSearches(deviceAccountStore));
+  boundary.register(forgetTimerActivityDevice);
+  return boundary;
+};
+
+/** Gives a grant back to the server. Best effort: an unrevoked grant expires unused. */
+export const revokeSession = async (session: StoredSession) => {
+  (
+    await revokeRefreshToken({
+      clientId: session.clientId,
+      fetch,
+      refreshToken: session.refreshToken,
+      revocationEndpoint: session.revocationEndpoint,
+    })
+  ).unwrapOr(undefined);
+};
 
 /**
  * The session a previous run kept, read once as the app starts. A keychain
@@ -21,7 +54,29 @@ import type {
  */
 const restoredGeneration = deviceSessionStore.generation();
 const restoredSession: Promise<StoredSession | undefined> = Result.tryPromise(
-  async () => await deviceSessionStore.read(restoredGeneration),
+  async () =>
+    await restoreSession({
+      store: deviceSessionStore,
+      generation: restoredGeneration,
+      marker: deviceInstallMarker,
+      // A session an earlier installation kept has no screen, recording or
+      // Live Activity in this one, so the sign-out clears only what the
+      // device keeps: the account's items and the Lock Screen buttons' key.
+      // The server drops this phone's push and timer registrations on its
+      // own, as after any sign-out whose requests fail.
+      beforeEnd: async (session) => {
+        const boundary = createDeviceSessionEnd();
+        boundary.register(async () => {
+          clearTimerActions();
+        });
+        await boundary.run("signed-out", session);
+      },
+      // The launch does not wait on the network: the revocation, which
+      // never rejects, carries on while the sign-in screen opens.
+      revoke: async (session) => {
+        void revokeSession(session);
+      },
+    }),
 ).then((read) => (Result.isOk(read) ? read.value : undefined));
 
 type SourceOptions = {
