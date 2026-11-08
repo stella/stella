@@ -49,8 +49,7 @@ const OTHER_OPERATION_WRITERS = new Set([
   "apps/api/src/lib/uploads/entity-create.ts",
   "apps/api/src/lib/entity-versions/write-file-version.ts",
   "apps/api/src/lib/entity-versions/insert-entity-batch.ts",
-  // Carries a cloned cell's lock and override beside the cloned rows.
-  "apps/api/src/lib/entity-versions/cell-companions.ts",
+  "apps/api/src/handlers/entities/copy-utils.ts",
   // Extraction runs and derived files, which honour the manual-edit lock.
   "apps/api/src/lib/workflow-queue.ts",
   "apps/api/src/lib/workflow/orphan-cells.ts",

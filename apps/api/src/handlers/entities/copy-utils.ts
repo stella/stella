@@ -5,7 +5,14 @@ import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import {
+  cellMetadata,
+  entities,
+  entityVersions,
+  fields,
+  justifications,
+  workspaces,
+} from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -26,7 +33,10 @@ import {
   lockWorkspacesForEntityCap,
   lockWorkspacesForEntityTransfer,
 } from "@/api/lib/entity-cap-lock";
-import { carryCellCompanions } from "@/api/lib/entity-versions/cell-companions";
+import {
+  CELL_COMPANION_BATCH,
+  planCellCompanions,
+} from "@/api/lib/entity-versions/cell-companions";
 import {
   CARRIED_FIELD_COLUMNS,
   type CarriedFieldColumns,
@@ -1588,7 +1598,7 @@ const writeCopyPlan = async ({
   });
   // A cell's lock, override and citations travel with it; a move deletes the
   // source rows afterwards, so they are carried before that.
-  await carryCellCompanions({
+  const companions = await planCellCompanions({
     tx,
     kind: transfer.type,
     sourceWorkspaceId: sourceWorkspaceId ?? targetWorkspaceId,
@@ -1596,6 +1606,17 @@ const writeCopyPlan = async ({
     versions: plan.versionTransfers,
     fieldClones: plan.fieldClones,
   });
+  for (const rows of chunkItems(companions.metadata, CELL_COMPANION_BATCH)) {
+    // db-await-in-loop: bounded companion batches written with this clone
+    await tx.insert(cellMetadata).values(rows);
+  }
+  for (const rows of chunkItems(
+    companions.justifications,
+    CELL_COMPANION_BATCH,
+  )) {
+    // db-await-in-loop: bounded companion batches written with this clone
+    await tx.insert(justifications).values(rows);
+  }
 
   // A copy's versions were minted their own codes by the insert above. A move
   // is the same document elsewhere, so the codes already printed on its

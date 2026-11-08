@@ -43,7 +43,7 @@ export type VersionClone = {
   targetVersionId: SafeId<"entityVersion">;
 };
 
-type CarryCellCompanionsOptions<Kind extends CellCloneKind> = {
+type PlanCellCompanionsOptions<Kind extends CellCloneKind> = {
   tx: Transaction;
   kind: Kind;
   sourceWorkspaceId: SafeId<"workspace">;
@@ -58,23 +58,40 @@ type CarryCellCompanionsOptions<Kind extends CellCloneKind> = {
     }
   : { fieldClones?: never });
 
-const ID_BATCH = 500;
+/** Rows a caller inserts in batches of this size. */
+export const CELL_COMPANION_BATCH = 500;
 
-const carryMetadata = async ({
+type CellMetadataRow = typeof cellMetadata.$inferInsert;
+type JustificationRow = typeof justifications.$inferInsert;
+
+/** The companion rows a clone writes beside its cloned cells. */
+export type CellCompanionRows = {
+  metadata: CellMetadataRow[];
+  justifications: JustificationRow[];
+};
+
+const planMetadata = async ({
   tx,
   sourceWorkspaceId,
   targetWorkspaceId,
   versions,
   replacedPropertyIds = [],
-}: Omit<CarryCellCompanionsOptions<CellCloneKind>, "kind" | "fieldClones">) => {
+}: Omit<
+  PlanCellCompanionsOptions<CellCloneKind>,
+  "kind" | "fieldClones"
+>): Promise<CellMetadataRow[]> => {
   const targetVersionIds = new Map(
     versions.map((version) => [
       version.sourceVersionId,
       version.targetVersionId,
     ]),
   );
-  for (const batch of chunkItems([...targetVersionIds.keys()], ID_BATCH)) {
-    // db-await-in-loop: one read and one insert per bounded batch of source versions
+  const planned: CellMetadataRow[] = [];
+  for (const batch of chunkItems(
+    [...targetVersionIds.keys()],
+    CELL_COMPANION_BATCH,
+  )) {
+    // db-await-in-loop: one read per bounded batch of source versions
     const rows = await tx
       .select({
         entityVersionId: cellMetadata.entityVersionId,
@@ -92,22 +109,21 @@ const carryMetadata = async ({
           inArray(cellMetadata.entityVersionId, batch),
         ),
       );
-    const carried = rows.filter(
-      (row) => !replacedPropertyIds.includes(row.propertyId),
-    );
-    if (carried.length > 0) {
-      // audit: skip - the caller audits the clone these rows belong to.
-      // db-await-in-loop: the insert for the batch read above
-      await tx.insert(cellMetadata).values(
-        carried.map(({ entityVersionId, ...row }) => ({
+    for (const { entityVersionId, ...row } of rows) {
+      const targetVersionId = targetVersionIds.get(entityVersionId);
+      if (
+        targetVersionId !== undefined &&
+        !replacedPropertyIds.includes(row.propertyId)
+      ) {
+        planned.push({
           ...row,
           workspaceId: targetWorkspaceId,
-          entityVersionId:
-            targetVersionIds.get(entityVersionId) ?? entityVersionId,
-        })),
-      );
+          entityVersionId: targetVersionId,
+        });
+      }
     }
   }
+  return planned;
 };
 
 /**
@@ -129,7 +145,7 @@ const remapCitedCells = (
   }),
 });
 
-const carryJustifications = async ({
+const planJustifications = async ({
   tx,
   sourceWorkspaceId,
   targetWorkspaceId,
@@ -139,9 +155,13 @@ const carryJustifications = async ({
   sourceWorkspaceId: SafeId<"workspace">;
   targetWorkspaceId: SafeId<"workspace">;
   fieldClones: ReadonlyMap<SafeId<"field">, SafeId<"field">>;
-}) => {
-  for (const batch of chunkItems([...fieldClones.keys()], ID_BATCH)) {
-    // db-await-in-loop: one read and one insert per bounded batch of cloned cells
+}): Promise<JustificationRow[]> => {
+  const planned: JustificationRow[] = [];
+  for (const batch of chunkItems(
+    [...fieldClones.keys()],
+    CELL_COMPANION_BATCH,
+  )) {
+    // db-await-in-loop: one read per bounded batch of cloned cells
     const rows = await tx
       .select({
         fieldId: justifications.fieldId,
@@ -156,51 +176,49 @@ const carryJustifications = async ({
           inArray(justifications.fieldId, batch),
         ),
       );
-    const carried = rows.flatMap((row) => {
+    for (const row of rows) {
       const fieldId = fieldClones.get(row.fieldId);
-      return fieldId === undefined
-        ? []
-        : [
-            {
-              id: createSafeId<"justification">(),
-              workspaceId: targetWorkspaceId,
-              fieldId,
-              content: remapCitedCells(row.content, fieldClones),
-              boundingBoxes: row.boundingBoxes,
-              fileFieldIds: row.fileFieldIds.flatMap((cited) => {
-                const clone = fieldClones.get(cited);
-                return clone === undefined ? [] : [clone];
-              }),
-            },
-          ];
-    });
-    if (carried.length > 0) {
-      // audit: skip - the caller audits the clone these rows belong to.
-      // db-await-in-loop: the insert for the batch read above
-      await tx.insert(justifications).values(carried);
+      if (fieldId === undefined) {
+        continue;
+      }
+      planned.push({
+        id: createSafeId<"justification">(),
+        workspaceId: targetWorkspaceId,
+        fieldId,
+        content: remapCitedCells(row.content, fieldClones),
+        boundingBoxes: row.boundingBoxes,
+        fileFieldIds: row.fileFieldIds.flatMap((cited) => {
+          const clone = fieldClones.get(cited);
+          return clone === undefined ? [] : [clone];
+        }),
+      });
     }
   }
+  return planned;
 };
 
 /**
- * Carry what a cell clone keeps beside its rows, per
- * {@link CELL_COMPANION_POLICY}. Call it after the cloned cells are written,
- * in the same transaction, and before any source rows are deleted.
+ * The rows a cell clone writes beside its cells, per
+ * {@link CELL_COMPANION_POLICY}. Read after the cloned cells are written, in
+ * the same transaction and before any source rows are deleted; the caller
+ * inserts them in {@link CELL_COMPANION_BATCH}-row batches next to the audit
+ * event it records for the clone.
  */
-export const carryCellCompanions = async <Kind extends CellCloneKind>(
-  options: CarryCellCompanionsOptions<Kind>,
-): Promise<void> => {
+export const planCellCompanions = async <Kind extends CellCloneKind>(
+  options: PlanCellCompanionsOptions<Kind>,
+): Promise<CellCompanionRows> => {
   const policy: CellCompanionPolicy[CellCloneKind] =
     CELL_COMPANION_POLICY[options.kind];
-  if (policy.metadata === "carried") {
-    await carryMetadata(options);
-  }
-  if (policy.justifications === "carried" && options.fieldClones) {
-    await carryJustifications({
-      tx: options.tx,
-      sourceWorkspaceId: options.sourceWorkspaceId,
-      targetWorkspaceId: options.targetWorkspaceId,
-      fieldClones: options.fieldClones,
-    });
-  }
+  return {
+    metadata: policy.metadata === "carried" ? await planMetadata(options) : [],
+    justifications:
+      policy.justifications === "carried" && options.fieldClones
+        ? await planJustifications({
+            tx: options.tx,
+            sourceWorkspaceId: options.sourceWorkspaceId,
+            targetWorkspaceId: options.targetWorkspaceId,
+            fieldClones: options.fieldClones,
+          })
+        : [],
+  };
 };

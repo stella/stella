@@ -6,7 +6,10 @@ import { cellMetadata, fields, justifications } from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { carryCellCompanions } from "@/api/lib/entity-versions/cell-companions";
+import {
+  type CellCompanionRows,
+  planCellCompanions,
+} from "@/api/lib/entity-versions/cell-companions";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -124,6 +127,18 @@ const seedClone = async (tx: TestDatabaseTransaction) => {
   return { targetVersionId, fieldClones };
 };
 
+const writeCompanions = async (
+  tx: TestDatabaseTransaction,
+  { metadata, justifications: cited }: CellCompanionRows,
+) => {
+  if (metadata.length > 0) {
+    await tx.insert(cellMetadata).values(metadata);
+  }
+  if (cited.length > 0) {
+    await tx.insert(justifications).values(cited);
+  }
+};
+
 const lockOf = async (
   tx: TestDatabaseTransaction,
   entityVersionId: SafeId<"entityVersion">,
@@ -148,7 +163,7 @@ describe("cell companions across a clone", () => {
       const clonedText = fieldClones.get(ids.fieldA1);
       const clonedFile = fieldClones.get(ids.fileFieldA1);
 
-      await carryCellCompanions({
+      const companions = await planCellCompanions({
         tx: asTestRaw<Transaction>(tx),
         kind: "restore",
         sourceWorkspaceId: ids.wsA1,
@@ -156,6 +171,7 @@ describe("cell companions across a clone", () => {
         versions: [{ sourceVersionId: ids.entityVersionA1, targetVersionId }],
         fieldClones,
       });
+      await writeCompanions(tx, companions);
 
       expect(await lockOf(tx, targetVersionId, ids.propertyA1)).toBe(true);
       const carried = await tx
@@ -184,7 +200,7 @@ describe("cell companions across a clone", () => {
         metadata: { version: 1, manualFlags: [], locked: true },
       });
 
-      await carryCellCompanions({
+      const companions = await planCellCompanions({
         tx: asTestRaw<Transaction>(tx),
         kind: "desktop-edit",
         sourceWorkspaceId: ids.wsA1,
@@ -192,6 +208,8 @@ describe("cell companions across a clone", () => {
         versions: [{ sourceVersionId: ids.entityVersionA1, targetVersionId }],
         replacedPropertyIds: [ids.filePropertyA1],
       });
+      expect(companions.justifications).toEqual([]);
+      await writeCompanions(tx, companions);
 
       expect(await lockOf(tx, targetVersionId, ids.propertyA1)).toBe(true);
       expect(

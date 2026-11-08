@@ -2,15 +2,26 @@ import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import {
+  cellMetadata,
+  entities,
+  entityVersions,
+  fields,
+  justifications,
+  workspaces,
+} from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { carryCellCompanions } from "@/api/lib/entity-versions/cell-companions";
+import {
+  CELL_COMPANION_BATCH,
+  planCellCompanions,
+} from "@/api/lib/entity-versions/cell-companions";
 import {
   CARRIED_FIELD_COLUMNS,
   carriedFieldValues,
@@ -180,7 +191,7 @@ export default createSafeHandler(
             })),
           );
         }
-        await carryCellCompanions({
+        const { metadata, justifications: cited } = await planCellCompanions({
           tx,
           kind: "restore",
           sourceWorkspaceId: workspaceId,
@@ -190,6 +201,14 @@ export default createSafeHandler(
           ],
           fieldClones,
         });
+        for (const rows of chunkItems(metadata, CELL_COMPANION_BATCH)) {
+          // db-await-in-loop: bounded companion batches written with this clone
+          await tx.insert(cellMetadata).values(rows);
+        }
+        for (const rows of chunkItems(cited, CELL_COMPANION_BATCH)) {
+          // db-await-in-loop: bounded companion batches written with this clone
+          await tx.insert(justifications).values(rows);
+        }
 
         // Point entity to the new version
 
