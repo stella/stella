@@ -10,7 +10,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { regexSourceVisitors } from "./utils.ts";
+import { regexSourceVisitors } from "./regex-sources.ts";
 
 /** A letter class, perhaps with its combining marks. */
 const LETTER = String.raw`\\p\{L[lu]?\}(?:\\p\{M\}(?:[*+?]|\{\d*,?\d*\}))?`;

@@ -12,7 +12,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { regexSourceVisitors } from "./utils.ts";
+import { regexSourceVisitors } from "./regex-sources.ts";
 
 /** A line start, perhaps after spaces, a group and an opening bracket. */
 const OPENING = String.raw`^\^(?:\\s[*+?]?|\[[^\]]*\][*+?]?)?(?:\\\(\??|\\\[)?(?:\(\?:|\((?:\?<\w+>)?)?(?:\\\(\??|\\\[)?`;
