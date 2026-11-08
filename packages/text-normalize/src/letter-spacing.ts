@@ -418,8 +418,7 @@ const opensWord = (
   return (
     start === 0 ||
     tokens[start]?.gap !== LETTER_GAP ||
-    previous === undefined ||
-    previous.mark !== "" ||
+    previous?.mark !== "" ||
     (counts.get(wordKey(previous.letters)) ?? 0) > 1
   );
 };
