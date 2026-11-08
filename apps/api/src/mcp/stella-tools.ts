@@ -76,6 +76,7 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { CITATION_READ_DETAIL } from "@/api/lib/case-law/citation-vocabulary";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
 import {
@@ -169,6 +170,7 @@ import {
   decisionTextVersion,
   pageOfOffset,
   paragraphsMatching,
+  paragraphWordsMatcher,
   textPageSpan,
   textPageStarts,
 } from "@/api/mcp/case-law-decision-read";
@@ -1058,7 +1060,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       `available. \`passage.text\` is at most ${LIMITS.caseLawCitationPassageChars} ` +
       "characters, cut when `passage.truncated`; `passage.mention` is " +
       "'sole', 'classified_section' (the mention polarity came from) or " +
-      "'latest_of_several' (it may not be). Pass nextCursor as cursor. Use " +
+      "'latest_of_several' (it may not be). `detail`, `passage_query` narrow " +
+      "replies. Pass nextCursor as cursor. Use " +
       "`url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
@@ -3900,13 +3903,32 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
   const {
     cursor,
     decision_id: decisionId,
+    detail,
     direction,
     doctrine,
+    passage_query: passageQuery,
     polarity,
   } = parsed.output;
   const limit = normalizePage(
     parsed.output.limit ?? LIMITS.caseLawAgentCitationPageSizeDefault,
   );
+  const passageFilter =
+    passageQuery === undefined
+      ? undefined
+      : paragraphWordsMatcher(passageQuery);
+  if (passageFilter === null) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "passage_query holds no word to look for",
+      issues: [
+        {
+          path: "passage_query",
+          message: "Pass at least one word, or omit passage_query.",
+        },
+      ],
+      hint: "Call read_case_law_citations again with words in passage_query, or without it.",
+    });
+  }
 
   // The same publication gate the decision read applies, and for the same
   // reason: a decision's citation texts are as much its content as its
@@ -3921,6 +3943,10 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
     direction,
     ...(doctrine === undefined ? {} : { doctrine }),
     ...(polarity === undefined ? {} : { polarity }),
+    ...(detail === CITATION_READ_DETAIL.COMPACT
+      ? { passageChars: LIMITS.caseLawCitationCompactPassageChars }
+      : {}),
+    ...(passageFilter === undefined ? {} : { passageFilter }),
     limit,
     surface: "search",
   });
@@ -3955,6 +3981,12 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
       doctrineAvailability: read.page.doctrineAvailability,
       ...(doctrine === undefined ? {} : { doctrine }),
       ...(polarity === undefined ? {} : { polarity }),
+      ...(passageQuery === undefined
+        ? {}
+        : {
+            passageQuery,
+            scannedCitations: read.page.scannedCitations,
+          }),
       decisionId,
       direction,
       nextCursor: read.page.nextCursor,

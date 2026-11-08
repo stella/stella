@@ -84,6 +84,7 @@ import type {
 } from "@/api/lib/business-registries/sanctions-check";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
+  CITATION_READ_DETAILS,
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
@@ -1686,6 +1687,18 @@ describe("OpenAI-compatible MCP tools", () => {
           type: "string",
           enum: [...CITATION_TREATMENTS],
           description: "Only citations with this polarity reading.",
+        },
+        detail: {
+          type: "string",
+          enum: [...CITATION_READ_DETAILS],
+          description: `Defaults to 'full'. 'compact' cuts each passage to ${LIMITS.caseLawCitationCompactPassageChars} characters around the citation, without evidenceQuote.`,
+        },
+        passage_query: {
+          type: "string",
+          description:
+            "Only citations whose citing paragraph holds every word, in any inflection. Filters page by page: `scannedCitations` is how many the page read; an empty page with `nextCursor` may still match later.",
+          minLength: 1,
+          maxLength: LIMITS.caseLawCitationPassageQueryChars,
         },
         limit: withKind(
           {
@@ -4592,6 +4605,99 @@ describe("OpenAI-compatible MCP tools", () => {
       message: "Decision not found",
       hint: "Find a decision with search_case_law and pass its decisionId as decision_id.",
     });
+  });
+
+  test("read_case_law_citations compact detail asks for the short passage", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "page",
+      page: {
+        doctrineAvailability: "unavailable",
+        items: [],
+        nextCursor: null,
+      },
+    });
+
+    await handleMcpToolCall({
+      args: {
+        decision_id: DECISION_ID,
+        direction: "cited_by",
+        detail: "compact",
+      },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+
+    expect(readGatedDecisionCitationsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        passageChars: LIMITS.caseLawCitationCompactPassageChars,
+      }),
+    );
+    // Full detail is the default and carries no passage budget of its own.
+    await handleMcpToolCall({
+      args: { decision_id: DECISION_ID, direction: "cited_by" },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+    expect(readGatedDecisionCitationsMock).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ passageChars: expect.anything() }),
+    );
+  });
+
+  test("read_case_law_citations filters passages and says how many it read", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "page",
+      page: {
+        doctrineAvailability: "unavailable",
+        items: [],
+        nextCursor: "Y2l0YXRpb25fY3Vyc29yXzI",
+        scannedCitations: 20,
+      },
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        decision_id: DECISION_ID,
+        direction: "cited_by",
+        passage_query: "kamerový záznam",
+      },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+
+    const [options] = readGatedDecisionCitationsMock.mock.lastCall ?? [];
+    expect(
+      options?.passageFilter?.("Kamerové záznamy byly smazány.", "cs"),
+    ).toBe(true);
+    expect(options?.passageFilter?.("Kamerové systémy.", "cs")).toBe(false);
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toMatchObject({
+      passageQuery: "kamerový záznam",
+      scannedCitations: 20,
+      citations: [],
+      nextCursor: "Y2l0YXRpb25fY3Vyc29yXzI",
+    });
+  });
+
+  test("read_case_law_citations refuses a passage_query with no word", async () => {
+    readGatedDecisionCitationsMock.mockClear();
+
+    const result = await handleMcpToolCall({
+      args: {
+        decision_id: DECISION_ID,
+        direction: "cited_by",
+        passage_query: "...",
+      },
+      context: createContext(),
+      toolName: "read_case_law_citations",
+    });
+
+    expect(validationEnvelope(result)["issues"]).toEqual([
+      {
+        path: "passage_query",
+        message: "Pass at least one word, or omit passage_query.",
+      },
+    ]);
+    expect(readGatedDecisionCitationsMock).not.toHaveBeenCalled();
   });
 
   test("read_case_law_citations names the next call when the cursor is unreadable", async () => {

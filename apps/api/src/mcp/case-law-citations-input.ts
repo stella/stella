@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import {
+  CITATION_READ_DETAILS,
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
@@ -32,6 +33,24 @@ export const readCaseLawCitationsArgsSchema = nullAsAbsent(
       v.pipe(
         v.picklist(CITATION_TREATMENTS),
         v.description("Only citations with this polarity reading."),
+      ),
+    ),
+    detail: v.optional(
+      v.pipe(
+        v.picklist(CITATION_READ_DETAILS),
+        v.description(
+          `Defaults to 'full'. 'compact' cuts each passage to ${LIMITS.caseLawCitationCompactPassageChars} characters around the citation, without evidenceQuote.`,
+        ),
+      ),
+    ),
+    passage_query: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(LIMITS.mcpNonEmptyMin),
+        v.maxLength(LIMITS.caseLawCitationPassageQueryChars),
+        v.description(
+          "Only citations whose citing paragraph holds every word, in any inflection. Filters page by page: `scannedCitations` is how many the page read; an empty page with `nextCursor` may still match later.",
+        ),
       ),
     ),
     limit: v.optional(
