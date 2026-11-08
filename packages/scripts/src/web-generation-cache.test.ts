@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -319,12 +320,13 @@ test("web sources generate once across compiler tasks and restore until source i
       path.join(directory, ".turbo/cache"),
     ];
     run([...command.slice(0, 2), ...consumers, ...command.slice(3)]);
+    // Web compilers read the in-memory capability catalog, so a web run does
+    // not produce the CLI's capability manifests.
     expect(
-      readFileSync(
+      existsSync(
         path.join(directory, "packages/cli/capabilities/fixture.list.json"),
-        "utf-8",
       ),
-    ).toBe(JSON.stringify({ id: "fixture.list" }));
+    ).toBe(false);
     const executions = readFileSync(path.join(directory, "runs.log"), "utf-8");
     expect(executions.trim().split("\n")).toHaveLength(3);
     run([process.execPath, "--cwd=apps/api", "run", "gen:web-api-types"]);

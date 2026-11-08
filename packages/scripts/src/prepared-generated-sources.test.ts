@@ -336,7 +336,9 @@ test("a clean checkout restores every dispatch module with its capability shard"
     expect(outputs).toContain(module);
     expect(outputs).toContain(shard);
     write("artifact/manifest.json", JSON.stringify(manifest));
-    for (const file of outputs) {
+    // The artifact carries every manifest file, generated-directory files
+    // (such as the Tailwind class cache) included.
+    for (const file of Object.keys(manifest.files)) {
       write(
         `artifact/files/${file}`,
         readFileSync(path.join(root, file), "utf-8"),
