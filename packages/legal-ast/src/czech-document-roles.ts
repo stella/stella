@@ -1,7 +1,6 @@
-// parser-output-unchanged: [cz-ns] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
-// parser-output-unchanged: [cz-nss] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
-// parser-output-unchanged: [cz-us] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
-// parser-output-unchanged: [cz-regional] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
+// parser-output-unchanged: [cz-us] only adds the signed-name-with-degrees and copy-certification predicates, which only the Supreme and Supreme Administrative Court readers call.
+// parser-output-unchanged: [cz-regional] only adds the signed-name-with-degrees and copy-certification predicates, which only the Supreme and Supreme Administrative Court readers call.
+// parser-output-unchanged: [cz-uohs] only adds the signed-name-with-degrees and copy-certification predicates, which only the Supreme and Supreme Administrative Court readers call.
 import { collapseSpacedLetters, normalizeUnicode } from "@stll/text-normalize";
 
 import type { Block, ParagraphBlock } from "./document-ast.js";
@@ -125,6 +124,48 @@ const BARE_SIGNATORY_NAME_RE =
 /** Whether a line is a bare personal name, as a judge signs without a title. */
 export const isCzechBareSignatoryName = (text: string): boolean =>
   BARE_SIGNATORY_NAME_RE.test(text.trim());
+
+/** One academic degree printed before a Czech signatory's name. */
+const DEGREE_BEFORE_NAME_RE =
+  /^(?:JUDr|Mgr|doc|prof|PhDr|Ing|Bc|RNDr|MUDr|ThDr|PaedDr)\. ?/u;
+/** One degree printed after the name, with its comma. */
+const DEGREE_AFTER_NAME_RE = /,? ?(?:Ph\. ?D\.|LL\. ?M\.|CSc\.|DrSc\.|MBA)$/u;
+/** Longest line a signed name with its degrees takes. */
+const SIGNATURE_NAME_MAX_CHARS = 80;
+/** More degrees than any signatory carries on one side of a name. */
+const MAX_DEGREES_PER_SIDE = 4;
+
+const withoutDegrees = (name: string): string => {
+  let bare = name;
+  for (let step = 0; step < MAX_DEGREES_PER_SIDE; step += 1) {
+    bare = bare
+      .replace(DEGREE_BEFORE_NAME_RE, "")
+      .replace(DEGREE_AFTER_NAME_RE, "")
+      .trim();
+  }
+  return bare;
+};
+
+/**
+ * A signatory's name as a Czech court prints it under the closing: a
+ * personal name, with or without its academic degrees (`JUDr. Miluše
+ * Došková`, `Mgr. Miroslav Hromada, Ph.D.`), the `v. r.` signature mark, or
+ * a letter-spaced surname (`JUDr. František B a l á k, v.r.`).
+ */
+export const isCzechSignatoryName = (text: string): boolean =>
+  text.trim().length < SIGNATURE_NAME_MAX_CHARS &&
+  isCzechBareSignatoryName(withoutDegrees(normalizeCzechJudgeName(text)));
+
+/**
+ * The court office's certification that a copy matches the decision
+ * (`Za správnost vyhotovení:`), printed under the judges' signatures with
+ * the name of the clerk who made the copy. It is not a judge's signature.
+ */
+const COPY_CERTIFICATION_RE = /^Za správnost vyhotovení(?!\p{L})/iu;
+
+/** Whether a line opens the certification of a decision's copy. */
+export const isCzechCopyCertification = (text: string): boolean =>
+  COPY_CERTIFICATION_RE.test(collapseSpacedLetters(text.trim()));
 
 /** An office printed beside a signed name in Czech public documents. */
 const CZ_PUBLIC_OFFICE_TITLE_RE = /^(?:vice)?guvernér(?:ka)?\s*:?$/iu;

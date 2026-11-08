@@ -25,6 +25,7 @@ import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
   CZ_JUDGE_TITLE_RE as PREDSEDA_RE,
+  isCzechCopyCertification,
   isCzechOpeningFormula,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -688,6 +689,43 @@ const isSectionHeading = (plainText: string): boolean => {
 
 // ── Merge pass ────────────────────────────────────────────
 
+/** Lines a copy's certification takes: its label and the clerk's name. */
+const COPY_CERTIFICATION_MAX_BLOCKS = 2;
+
+/**
+ * Where the office's certification of the copy (`Za správnost vyhotovení:`
+ * and the clerk's name) starts among the closing blocks, or the end of the
+ * document when it carries none.
+ */
+const copyCertificationStart = (blocks: readonly Block[]): number => {
+  const earliest = Math.max(0, blocks.length - COPY_CERTIFICATION_MAX_BLOCKS);
+  for (let index = blocks.length - 1; index >= earliest; index -= 1) {
+    const block = blocks.at(index);
+    if (
+      block?.type === "paragraph" &&
+      isCzechCopyCertification(block.plainText)
+    ) {
+      return index;
+    }
+  }
+  return blocks.length;
+};
+
+/**
+ * The bench recital the ruling follows (`Nejvyšší soud rozhodl v senátě
+ * složeném z … takto:`) introduces it: the lead-in paragraph and the
+ * role-less paragraphs of the same recital before it, back to the title.
+ */
+const markBenchRecital = (blocks: readonly Block[], leadIn: number): void => {
+  for (let index = leadIn; index >= 0; index -= 1) {
+    const block = blocks.at(index);
+    if (block?.type !== "paragraph" || block.role !== undefined) {
+      return;
+    }
+    block.role = "intro";
+  }
+};
+
 const shouldMerge = (prev: Block, next: Block): prev is ParagraphBlock => {
   if (prev.type !== "paragraph") {
     return false;
@@ -932,8 +970,9 @@ const mergeBlocks = (
     merged.push(block);
   }
 
-  // Assign closing/signature roles to tail blocks only
-  for (let i = merged.length - 1; i >= 0; i--) {
+  // Assign closing/signature roles to tail blocks only, above the office's
+  // certification of the copy, which signs nothing.
+  for (let i = copyCertificationStart(merged) - 1; i >= 0; i--) {
     const block = merged.at(i);
     if (!block) {
       continue;
@@ -967,13 +1006,14 @@ const mergeBlocks = (
   const TAKTO_RE = /t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
   let inHolding = false;
 
-  for (const block of merged) {
+  for (const [index, block] of merged.entries()) {
     if (!inHolding) {
       // Enter holding zone when a paragraph or heading
       // ends with "takto" (any spacing variant).
       const text = block.plainText.trim();
       if (TAKTO_RE.test(text)) {
         inHolding = true;
+        markBenchRecital(merged, index);
         continue;
       }
       continue;

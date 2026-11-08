@@ -54,14 +54,19 @@ const readRegional = async (name: string): Promise<DocumentAst> => {
   return document.ast;
 };
 
-const readNs = async (name: string): Promise<DocumentAst> =>
+const readNs = async (name: string, directory = ""): Promise<DocumentAst> =>
   parseNsDecisionHtml({
     documentId: name,
     webUrl: name,
     printUrl: name,
     webHtml: "",
-    printHtml: await gunzipText(`cz-ns-${name}.print.html.gz`),
+    printHtml: await gunzipText(`${directory}cz-ns-${name}.print.html.gz`),
   }).documentAst;
+
+const rolesOf = (ast: DocumentAst, role: string): string[] =>
+  paragraphs(ast)
+    .filter((block) => block.role === role)
+    .map((block) => block.plainText);
 
 const texts = (ast: DocumentAst): string[] =>
   ast.blocks.map((block) => block.plainText);
@@ -274,6 +279,39 @@ describe("structure", () => {
     ]);
   });
 
+  test("NSS: a name with its academic degree signs under the closing", async () => {
+    const ast = await readNss("2-afs-31-2005", "decision-roles/");
+    expect(rolesOf(ast, "closing")).toEqual(["V Brně dne 24. ledna 2006"]);
+    expect(rolesOf(ast, "signature")).toEqual([
+      "JUDr. Miluše Došková",
+      "předsedkyně senátu",
+    ]);
+  });
+
+  test("Nejvyšší soud: the judge signs above the certification of the copy, after a recital that introduces the ruling", async () => {
+    const ast = await readNs("22-cdo-61-2001", "decision-roles/");
+    expect(rolesOf(ast, "closing")).toEqual(["V Brně dne 2. února 2001"]);
+    expect(rolesOf(ast, "signature")).toEqual([
+      "JUDr. František Balák, v.r.",
+      "předseda senátu",
+    ]);
+    // The office certifies the copy; it signs nothing of the decision.
+    expect(
+      paragraphs(ast).find((block) =>
+        block.plainText.startsWith("Za správnost vyhotovení"),
+      )?.role,
+    ).toBeUndefined();
+    expect(rolesOf(ast, "intro")).toEqual([
+      expect.stringMatching(
+        /^Nejvyšší soud České republiky rozhodl v senátě složeném z předsedy JUDr\. Františka Baláka .* takto:$/u,
+      ),
+    ]);
+    expect(rolesOf(ast, "holding")).toEqual([
+      "I. Dovolání se odmítá.",
+      "II. Žádný z účastníků nemá právo na náhradu nákladů dovolacího řízení.",
+    ]);
+  });
+
   test("NSS: a decision set in a layout table reads paragraph by paragraph, with the list's numbers", async () => {
     const ast = await readNss("57-af-17-2023");
     expect(numbersOf(ast.blocks)).toEqual(range(1, 35));
@@ -315,14 +353,13 @@ describe("structure", () => {
           : [],
       ),
     ).toEqual(["25 Cdo 803/2003", "ROZSUDEK"]);
-    // The state and the formula beside the title are the opening's lines.
-    expect(
-      ast.blocks.flatMap((block) =>
-        block.type === "paragraph" && block.role === "intro"
-          ? [block.plainText]
-          : [],
-      ),
-    ).toEqual(["ČESKÁ REPUBLIKA", "JMÉNEM REPUBLIKY"]);
+    // The state and the formula beside the title are the opening's lines,
+    // and the bench recital introduces the ruling after them.
+    expect(rolesOf(ast, "intro")).toEqual([
+      "ČESKÁ REPUBLIKA",
+      "JMÉNEM REPUBLIKY",
+      expect.stringMatching(/^Nejvyšší soud .* takto:$/u),
+    ]);
   });
 });
 
