@@ -173,7 +173,11 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
       );
       if (downloadUrl === null) {
         return Result.err(
-          new HandlerError({ status: 404, message: "Invoice not found" }),
+          new HandlerError({
+            status: 404,
+            code: "not_found",
+            message: "Invoice not found",
+          }),
         );
       }
       return Result.ok({

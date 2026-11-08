@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import oxlintConfig from "../../oxlint.config.ts";
+import { readScopes, ruleIsOff } from "../../scripts/oxlint-config-scopes.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 test("rejects bare line and block disable directives", async () => {
@@ -60,4 +62,17 @@ test("accepts normal prose and enable directives", async () => {
       { plugin: "suppression-hygiene" },
     ),
   ).toEqual([]);
+});
+
+// The plugin sources, tests and fixtures quote directives as data and as
+// documentation, so the rule is off there. Product and tooling code is never
+// exempt: a scope that turns it off for anything outside .oxlint-plugins
+// fails here, so a bare suppression cannot hide behind a widened glob.
+test("only the plugin directory turns the rule off", () => {
+  const widened = readScopes(oxlintConfig).flatMap(({ files, rules }) =>
+    ruleIsOff(rules["suppression-hygiene/require-description"])
+      ? files.filter((glob) => !glob.startsWith(".oxlint-plugins/"))
+      : [],
+  );
+  expect(widened).toEqual([]);
 });

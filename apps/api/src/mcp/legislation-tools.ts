@@ -38,7 +38,6 @@ import {
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { PROVISION_STATUS } from "@/api/lib/legal-search/legislation-provision-vocabulary";
 import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
-import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
@@ -100,7 +99,7 @@ import {
   mapValibotIssues,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
-  searchIndexUnavailableResult,
+  searchRefusalResult,
   toolDataResult,
   toPlainCorpusText,
   toPlainTextSnippet,
@@ -575,8 +574,9 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     legislationPublicReadDb,
     observer,
   );
-  if (isSearchIndexUnavailable(result)) {
-    return searchIndexUnavailableResult(result);
+  const refusal = searchRefusalResult(result);
+  if (refusal !== null) {
+    return refusal;
   }
   if (!isLegislationSearchSuccess(result)) {
     const failure = handlerStatusOf(result);
@@ -611,7 +611,6 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
         resourceName: legislationResourceName(hit.documentId),
         score: hit.score,
         snippet: toPlainTextSnippet(hit.headline),
-        sourceUrl: hit.sourceUrl,
         status: hit.status,
         title: hit.title,
       })),
@@ -797,7 +796,6 @@ const handleReadStatuteTool: TypedMcpToolHandler<
         language: document.language,
         ...pageContext,
         resourceName: legislationResourceName(document.id),
-        sourceUrl: document.sourceUrl,
         status: document.status,
         text: window?.text ?? null,
         title: document.title,

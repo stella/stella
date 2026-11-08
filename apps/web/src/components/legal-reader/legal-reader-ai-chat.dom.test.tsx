@@ -4,9 +4,9 @@ import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/statutes" });
 
@@ -40,7 +40,12 @@ globalThis.fetch = Object.assign(
     }
     // The composer's matter picker: a member with no matters yet.
     if (url.pathname.endsWith("/workspaces/navigation")) {
-      return Response.json({ items: [], nextCursor: null, workspaces: [] });
+      return Response.json({
+        items: [],
+        nextCursor: null,
+        workspaces: [],
+        features: { timeBilling: false },
+      });
     }
     return Response.json({});
   },

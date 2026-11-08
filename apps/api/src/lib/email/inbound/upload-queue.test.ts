@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
@@ -10,6 +11,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   type fileUploadedMail,
+  type retireUploadedMailSource,
   UploadedMailUnavailableError,
 } from "@/api/lib/email/inbound/upload";
 import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
@@ -27,16 +29,9 @@ const scope = {
   entityId: toSafeId<"entity">("entity_1"),
 };
 const file = {
-  entityVersionId: toSafeId<"entityVersion">("version_1"),
-  fieldId: toSafeId<"field">("field_1"),
   sourceFileId: "file_1",
-  sourceSha256Hex: "a".repeat(64),
   storageMimeType: EML_MIME_TYPE,
-  extractionMimeType: EML_MIME_TYPE,
-};
-const source = {
-  ...scope,
-  ...file,
+  mimeType: EML_MIME_TYPE,
 };
 const database = asTestRaw<Parameters<typeof fileUploadedMail>[0]["database"]>(
   {},
@@ -90,61 +85,9 @@ describe("uploaded mail hand-off from the extraction run", () => {
     expect([...jobs.values()]).toEqual([
       expect.objectContaining({
         name: "file-uploaded-mail",
-        data: { ...scope, ...file, mimeType: file.extractionMimeType },
+        data: { ...scope, ...file },
       }),
     ]);
-  });
-
-  test("a job this release queues is filed by a previous-release worker", async () => {
-    const { jobs, queue } = fakeQueue();
-    await enqueueUploadedMailFiling({ file, scope, queue });
-    const queued = [...jobs.values()].at(0)?.data;
-
-    // The previous release's job shape and the fields its worker reads,
-    // copied from that release's upload-enqueue.ts and upload-queue.ts.
-    type PreviousUploadedMailJobData = {
-      organizationId: string;
-      workspaceId: string;
-      entityId: string;
-      sourceFileId: string;
-      storageMimeType: string;
-      mimeType: string;
-    };
-    const previousUploadedMailFormats: Record<string, string> = {
-      [EML_MIME_TYPE]: "eml",
-      [MSG_MIME_TYPE]: "msg",
-    };
-    const isPreviousJob = (
-      data: unknown,
-    ): data is PreviousUploadedMailJobData =>
-      typeof data === "object" &&
-      data !== null &&
-      (
-        [
-          "organizationId",
-          "workspaceId",
-          "entityId",
-          "sourceFileId",
-          "storageMimeType",
-          "mimeType",
-        ] as const
-      ).every((field) => typeof Reflect.get(data, field) === "string");
-    if (!isPreviousJob(queued)) {
-      throw new Error("The queued job lacks a field the previous worker reads");
-    }
-    // The previous worker reads the stored object under these, then files
-    // only an uploaded-mail type; anything else is a terminal not_email skip.
-    expect({
-      sourceFileId: queued.sourceFileId,
-      storageMimeType: queued.storageMimeType,
-    }).toEqual({
-      sourceFileId: file.sourceFileId,
-      storageMimeType: file.storageMimeType,
-    });
-    expect(Object.hasOwn(previousUploadedMailFormats, queued.mimeType)).toBe(
-      true,
-    );
-    expect(queued.mimeType).toBe(file.extractionMimeType);
   });
 });
 
@@ -178,14 +121,61 @@ describe("uploaded mail filing job", () => {
     ).toEqual({ status: "skipped", reason: "no_matter_access" });
   });
 
-  test("an attempt files the stored file under the job's scope", async () => {
+  test.each([EML_MIME_TYPE, MSG_MIME_TYPE, DATA_BOX_MESSAGE_MIME_TYPE])(
+    "a %s attempt files the exact stored generation under the job's scope",
+    async (mimeType) => {
+      const fileMail = mock<typeof fileUploadedMail>(async () => filed());
+      expect(
+        await processUploadedMailJob({
+          data: { ...data, mimeType },
+          database,
+          readFile,
+          fileMail,
+        }),
+      ).toEqual(FILED);
+      expect(fileMail.mock.calls.at(0)?.[0]).toMatchObject({
+        mimeType,
+        sourceFileId: data.sourceFileId,
+        scope,
+      });
+    },
+  );
+
+  test("non-correspondence generations retire metadata without reading or scanning bytes", async () => {
+    const retireMail = mock<typeof retireUploadedMailSource>(async () =>
+      Result.ok({ status: "skipped", reason: "not_email" }),
+    );
+    const read = mock(readFile);
     const fileMail = mock<typeof fileUploadedMail>(async () => filed());
     expect(
-      await processUploadedMailJob({ data, database, readFile, fileMail }),
-    ).toEqual(FILED);
-    expect(fileMail.mock.calls.at(0)?.[0]).toMatchObject({
-      source,
-    });
+      await processUploadedMailJob({
+        data: { ...data, mimeType: "application/pdf" },
+        database,
+        readFile: read,
+        fileMail,
+        retireMail,
+      }),
+    ).toEqual({ status: "skipped", reason: "not_email" });
+    expect(retireMail.mock.calls).toEqual([
+      [{ database, scope, sourceFileId: data.sourceFileId }],
+    ]);
+    expect(read).not.toHaveBeenCalled();
+    expect(fileMail).not.toHaveBeenCalled();
+  });
+
+  test("failed metadata retirement rejects so BullMQ retries without reading bytes", async () => {
+    const read = mock(readFile);
+    expect(
+      await rejectionOf(
+        processUploadedMailJob({
+          data: { ...data, mimeType: "application/pdf" },
+          database,
+          readFile: read,
+          retireMail: async () => unavailable(),
+        }),
+      ),
+    ).toBeInstanceOf(UploadedMailUnavailableError);
+    expect(read).not.toHaveBeenCalled();
   });
 
   test("every failed attempt is observed and only an exhausted job escalates", () => {

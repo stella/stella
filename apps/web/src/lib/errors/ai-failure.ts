@@ -23,6 +23,13 @@ export const AI_FAILURE_ERROR_KEYS = {
   [AI_FAILURE_CODES.deadline_exceeded]: "errors.apiCodes.aiDeadlineExceeded",
   [AI_FAILURE_CODES.loop_detected]: "chat.sendErrorLoopDetected",
   [AI_FAILURE_CODES.empty_completion]: "chat.sendErrorEmptyCompletion",
+  [AI_FAILURE_CODES.local_runner_needs_login]: "chat.localRun.errorNeedsLogin",
+  [AI_FAILURE_CODES.local_runner_limit_reached]:
+    "chat.localRun.errorLimitReached",
+  [AI_FAILURE_CODES.local_runner_unavailable]: "chat.localRun.errorUnavailable",
+  // The same refusal as a turn the API finds too long before it starts.
+  [AI_FAILURE_CODES.local_runner_turn_too_large]:
+    "chat.localRun.refusalTooLarge",
   [AI_FAILURE_CODES.unknown]: "errors.apiCodes.aiUnknown",
   [AI_FAILURE_CODES.role_not_configured]: "capabilityActions.aiMissing",
   [AI_FAILURE_CODES.own_key_required]: "capabilityActions.aiMissing",

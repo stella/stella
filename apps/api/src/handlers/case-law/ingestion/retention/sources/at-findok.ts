@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * The publisher's text of a Findok decision, read from its stored raw.
  *
@@ -8,7 +9,7 @@
  * reader sees as the decision. The headnote XML is a separate document whose
  * sentence the row stores as a text field, not as decision text.
  */
-import * as cheerio from "cheerio";
+import { load } from "@stll/html";
 
 import {
   RETENTION_PROJECTION_FAILURE,
@@ -24,11 +25,11 @@ const DOCUMENT_XML_PART = "document-xml";
 
 /** The body of each embedded XHTML document, in segment order. */
 const embeddedBodies = (xml: string): string[] => {
-  const envelope = cheerio.load(xml, { xml: true });
+  const envelope = load(xml, { xml: true });
   return envelope("Segk > txt")
     .toArray()
     .flatMap((element) => {
-      const xhtml = cheerio.load(envelope(element).text());
+      const xhtml = load(envelope(element).text());
       const body = xhtml("body").first();
       const markup = body.html() ?? "";
       return body.text().trim() === "" ? [] : [markup];

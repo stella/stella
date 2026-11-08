@@ -13,6 +13,7 @@ import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
 import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { dbClock } from "@stll/test-kit/db";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -196,7 +197,7 @@ beforeAll(
   async () => {
     fileUsageDb = await getTestDb();
     await fileUsageDb.insert(organization).values({
-      createdAt: new Date(),
+      createdAt: dbClock.now(),
       id: organizationId,
       name: "Duplicate entity tests",
       slug: `duplicate-entity-${Bun.randomUUIDv7()}`,
@@ -247,7 +248,7 @@ test("reserves a copy destination before an ambiguous S3 failure", async () => {
   const copyOrganizationId = mintAuthProviderId<"organization">();
   const copyWorkspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
   await copyDb.insert(organization).values({
-    createdAt: new Date(),
+    createdAt: dbClock.now(),
     id: copyOrganizationId,
     name: "Ambiguous copy test",
     slug: `ambiguous-copy-${Bun.randomUUIDv7()}`,

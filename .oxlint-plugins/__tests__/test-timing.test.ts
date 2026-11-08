@@ -13,6 +13,20 @@ const lintWith = (rule: string) => async (source: string) =>
 const lint = lintWith("no-real-time-wait");
 
 describe("no-real-time-wait", () => {
+  test("reports scheduler.wait from the timer promises modules", async () => {
+    expect(
+      await lint(
+        [
+          'import { scheduler } from "node:timers/promises";',
+          'import * as timers from "timers/promises";',
+          "await scheduler.wait(5);",
+          "await timers.scheduler.wait(5);",
+          "await scheduler.yield();",
+        ].join("\n"),
+      ),
+    ).toEqual([3, 4]);
+  });
+
   test("reports Bun, timers/promises and shared-helper sleeps", async () => {
     expect(
       await lint(
@@ -386,6 +400,79 @@ describe("no-unreasoned-timeout", () => {
         ].join("\n"),
       ),
     ).toEqual([10, 12]);
+  });
+});
+
+describe("no-file-existence-wait", () => {
+  const lintExistence = lintWith("no-file-existence-wait");
+  const imports = [
+    'import { existsSync } from "node:fs";',
+    'import * as fs from "fs";',
+    'import { waitForExternalState as waitFor } from "@stll/property-testing/external-state";',
+  ];
+
+  test("reports an external-state wait whose read returns existsSync", async () => {
+    expect(
+      await lintExistence(
+        [
+          ...imports,
+          'await waitFor({ description: "a", read: () => existsSync("x") });',
+          'await waitFor({ description: "b", read: () => fs.existsSync("x") });',
+          "await waitFor({",
+          '  description: "c",',
+          "  read() {",
+          '    return existsSync("x");',
+          "  },",
+          "});",
+          'await waitFor({ description: "d", "read": () => existsSync("x") });',
+        ].join("\n"),
+      ),
+    ).toEqual([4, 5, 6, 12]);
+  });
+
+  test("follows logical and conditional values and local read functions", async () => {
+    expect(
+      await lintExistence(
+        [
+          ...imports,
+          'const markerExists = () => existsSync("x");',
+          "function bothExist() {",
+          '  return existsSync("a") && existsSync("b");',
+          "}",
+          'await waitFor({ description: "a", read: () => existsSync("a") && existsSync("b") });',
+          'await waitFor({ description: "b", read: () => existsSync("x") || undefined });',
+          'await waitFor({ description: "c", read: () => (ready ? existsSync("x") : undefined) });',
+          'await waitFor({ description: "d", read: markerExists });',
+          'await waitFor({ description: "e", read: bothExist });',
+          'const read = () => existsSync("x") ?? false;',
+          'await waitFor({ description: "f", read });',
+        ].join("\n"),
+      ),
+    ).toEqual([8, 9, 10, 11, 12, 14]);
+  });
+
+  test("accepts content waits, other predicates and unrelated helpers", async () => {
+    expect(
+      await lintExistence(
+        [
+          ...imports,
+          'import { readFileSync } from "node:fs";',
+          'import { waitForFileContent } from "@stll/property-testing/external-state";',
+          "const existsSyncLocal = (path: string) => path.length > 0;",
+          "const waitForExternalState = (options: unknown) => options;",
+          'await waitFor({ description: "a", read: () => readFileSync("x", "utf-8") === "done" });',
+          'await waitFor({ description: "b", read: () => !existsSync("x") });',
+          'await waitFor({ description: "c", read: () => existsSyncLocal("x") });',
+          'await waitFor({ description: "d", read: () => () => existsSync("x") });',
+          'waitForExternalState({ read: () => existsSync("x") });',
+          'await waitForFileContent({ description: "e", path: "x", parse: () => true });',
+          'await waitFor({ description: "f", read: existsSync });',
+          'await waitFor({ description: "g", ["read"]: () => existsSync("x") });',
+          'await waitFor({ description: "h", read: () => (existsSync("x") ? readFileSync("x", "utf-8") : undefined) });',
+          'await waitFor({ description: "i", read: () => existsSync("x") && readFileSync("x", "utf-8") === "done" });',
+        ].join("\n"),
+      ),
+    ).toEqual([]);
   });
 });
 

@@ -23,6 +23,7 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { fieldsSetTogetherCheck } from "../field-groups";
 import {
   deletionCleanupConstraints,
   deletionCleanupRetryColumns,
@@ -1529,6 +1530,22 @@ export const fields = p.pgTable(
   },
   (table) => [
     ...entityFeatureGateChecks(table),
+    // A claim is its run, batch, deadline and attempt; a cell never holds part of one.
+    fieldsSetTogetherCheck({
+      name: "fields_owner_fields_check",
+      columns: [
+        table.ownerRunId,
+        table.ownerBatchId,
+        table.deadlineAt,
+        table.attempt,
+      ],
+    }),
+    // Only a pending cell is owned. A pending cell may be unowned: version
+    // clones copy it without its claim, and orphan recovery retries it.
+    p.check(
+      "fields_owner_pending_check",
+      sql`${table.ownerRunId} IS NULL OR ${table.content}->>'type' = 'pending'`,
+    ),
     p
       .uniqueIndex("fields_property_id_entity_version_id_key")
       .on(table.propertyId, table.entityVersionId),

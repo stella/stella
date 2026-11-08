@@ -4520,14 +4520,6 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/pl-operative-verbs.test.ts": {
-      "peakMb": 224,
-      "baselineMb": 224,
-      "source": {
-        "runId": "41265299690",
-        "job": "measure-1"
-      }
-    },
     "src/handlers/case-law/ingestion/parsers/pl-sn-ii-cskp.test.ts": {
       "peakMb": 212,
       "baselineMb": 212,
@@ -7622,22 +7614,6 @@
       "source": {
         "runId": "41265299690",
         "job": "measure-1"
-      }
-    },
-    "src/handlers/desktop-time-entries/narrative-model.test.ts": {
-      "peakMb": 272,
-      "baselineMb": 212,
-      "source": {
-        "runId": "41265299690",
-        "job": "measure-2"
-      }
-    },
-    "src/handlers/desktop-time-entries/narrative.test.ts": {
-      "peakMb": 307,
-      "baselineMb": 213,
-      "source": {
-        "runId": "41265299690",
-        "job": "measure-3"
       }
     },
     "src/handlers/desktop-time-entries/routes.test.ts": {

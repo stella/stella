@@ -1,13 +1,15 @@
-// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
 
 import type {
   BlockContent as FolioBlockContent,
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
 } from "@stll/docx-core/model";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 /**
  * Czech Constitutional Court (Ustavni soud) HTML parser.
  *
@@ -65,6 +67,7 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
   CZ_TAKTO,
   CZ_TAKTO_TAIL_RE,
+  isCzechBareSignatoryName,
   isCzechOpeningFormula,
   isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
@@ -99,7 +102,7 @@ import {
   readHardWrap,
 } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import {
-  collapseLetterSpacing,
+  readInlineLetterSpacing,
   withAttestedLetterSpacing,
 } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
@@ -143,7 +146,7 @@ type ParseUsDecisionOutput = {
 export const parseUsDecisionHtml = (
   input: ParseUsDecisionInput,
 ): ParseUsDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const docContent = $(".DocContent");
 
   // Extract metadata from hidden fields
@@ -523,7 +526,7 @@ const reflowUsLines = (
       reading === null ? inlines : mapInlineText(inlines, reading.clean),
     );
   const spelled = (inlines: readonly Inline[]): Inline[] =>
-    mapInlineText(inlines, collapseLetterSpacing);
+    readInlineLetterSpacing(inlines);
 
   const lines: ParsedLine[] = [];
   let paragraph: Inline[] | null = null;
@@ -711,6 +714,15 @@ const DISSENT_HEADING_MAX_CHARS = 120;
  * opens with a date ("Dne 26. 8. 1993 zaslaly stěžovatelky …") is reasoning.
  */
 const CLOSING_MAX_CHARS = 80;
+/**
+ * A bare name under the closing, or under the signature lines that follow
+ * it, signs the decision or a separate opinion: the Court's judges often sign
+ * with no academic title and no "v. r.".
+ */
+const signsUnderClosing = (plainText: string, previous: Block | undefined) =>
+  isCzechBareSignatoryName(plainText) &&
+  previous?.type === "paragraph" &&
+  (previous.role === "closing" || previous.role === "signature");
 /** Longest heading an author continuation can make. */
 const DISSENT_TITLE_MAX_CHARS = 500;
 
@@ -905,6 +917,20 @@ const classifyUsBodyLine = ({
 
   // Signature: judge title line
   if (!courtNumbered && SIGNATURE_RE.test(plainText) && plainText.length < 80) {
+    state.inRuling = false;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "signature",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
+  if (!courtNumbered && signsUnderClosing(plainText, blocks.at(-1))) {
     state.inRuling = false;
     state.blockIndex += 1;
     blocks.push({

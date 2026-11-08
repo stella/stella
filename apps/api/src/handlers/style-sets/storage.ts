@@ -395,6 +395,7 @@ export const replaceStoredStyleSet = async ({
         return Result.err(
           new HandlerError({
             status: 409,
+            code: "style_set_cleanup_pending",
             message: "Previous style set cleanup is still pending",
           }),
         );

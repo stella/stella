@@ -20,6 +20,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -40,7 +41,7 @@ let migratedPolicyExpression: string;
 
 const migrationPath = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20261101221334_report_export_cleanup_intents/migration.sql",
+  "../../../drizzle/20261108083000_report_export_cleanup_intents/migration.sql",
 );
 
 const insertPolicy = getTableConfig(bufferObjectCleanupIntents).policies.find(
@@ -190,10 +191,8 @@ afterAll(async () => {
     .where(eq(bufferObjectCleanupIntents.organizationId, organizationId));
   await testDb.delete(templates).where(eq(templates.id, templateId));
   await testDb.delete(templates).where(eq(templates.id, otherTemplateId));
-  await testDb.delete(organization).where(eq(organization.id, organizationId));
-  await testDb
-    .delete(organization)
-    .where(eq(organization.id, otherOrganizationId));
+  await deleteOrganizationsForTest(testDb, [organizationId]);
+  await deleteOrganizationsForTest(testDb, [otherOrganizationId]);
   await testDb.delete(user).where(eq(user.id, userId));
   await testDb.delete(user).where(eq(user.id, otherUserId));
   await releaseTestDb();

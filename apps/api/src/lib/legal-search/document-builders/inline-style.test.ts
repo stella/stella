@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import {
   inlineStyleDeclaresProperty,
@@ -10,7 +11,7 @@ import {
 } from "./inline-style";
 
 const element = (style?: string) => {
-  const $ = cheerio.load("<span></span>");
+  const $ = load("<span></span>");
   if (style !== undefined) {
     $("span").attr("style", style);
   }
@@ -235,7 +236,7 @@ test("property presence accepts valid declarations rather than substrings", () =
 });
 
 const nested = (html: string) => {
-  const node = cheerio.load(html)("#target").get(0);
+  const node = load(html)("#target").get(0);
   if (node === undefined) {
     throw new Error("Missing fixture target");
   }

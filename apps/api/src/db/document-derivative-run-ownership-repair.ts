@@ -1,6 +1,6 @@
 /**
  * Online repairs behind migration
- * 20261101221834_document_derivative_entity_ownership.
+ * 20261108083500_document_derivative_entity_ownership.
  *
  * The migration keys every review and bilingual run to its document with an
  * `ON DELETE CASCADE` foreign key, NOT VALID. Runs of documents permanently
@@ -143,7 +143,7 @@ const createRunOwnershipRepair = (
   constraint: RunOwnershipConstraint,
   options: RepairRuntimeOptions,
 ): OnlineRepair => ({
-  introducedBy: "20261101221834_document_derivative_entity_ownership",
+  introducedBy: "20261108083500_document_derivative_entity_ownership",
   name: constraint.constraintName,
   readCompletion: async (connection) =>
     await readConstraintCompletion({

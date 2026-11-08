@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -7,10 +8,11 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { dbClock } from "@stll/test-kit/db";
 
 import { session } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -76,6 +78,22 @@ const DOC_MIME_TYPE = "application/msword";
 
 const contentGrantFromUrl = (url: string): string =>
   decodeURIComponent(new URL(url).pathname.split("/").at(-1) ?? "");
+
+/**
+ * The wall clock the handlers stamp grants with, read from the database so
+ * the test holds no ambient clock: floored for a bound taken before a grant is
+ * issued, ceiled for one taken after.
+ */
+const databaseClockMs = async (bound: "before" | "after"): Promise<number> => {
+  const epochMs =
+    bound === "before"
+      ? sql`floor(extract(epoch from clock_timestamp()) * 1000)`
+      : sql`ceil(extract(epoch from clock_timestamp()) * 1000)`;
+  const [row] = await testDb
+    .select({ epochMs: sql<number>`(${epochMs})::float8`.mapWith(Number) })
+    .from(sql`(SELECT 1) AS database_clock`);
+  return row?.epochMs ?? panic("Database clock missing");
+};
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -458,7 +476,7 @@ describe("file URL grants", () => {
     const { download } = await setupDedicatedDownload();
 
     const response = await download();
-    const checkedAt = Date.now();
+    const checkedAt = await databaseClockMs("after");
 
     expect(response).toHaveProperty("presignedUrl");
     if (!("presignedUrl" in response)) {
@@ -494,7 +512,7 @@ describe("file URL grants", () => {
         deliveredMimeType,
       );
 
-      const requestedAt = Date.now();
+      const requestedAt = await databaseClockMs("before");
       const response = await readUrl(seeded.fieldId, purpose);
 
       expect(response).toMatchObject({
@@ -506,7 +524,7 @@ describe("file URL grants", () => {
       }
       const { presignedUrl } = response;
       expect(presignedUrl).toContain("/v1/file-content/fc1.");
-      const checkedAt = Date.now();
+      const checkedAt = await databaseClockMs("after");
       const checked = checkFileContentGrant({
         grant: contentGrantFromUrl(presignedUrl),
         now: checkedAt,
@@ -568,7 +586,7 @@ describe("file URL grants", () => {
     });
     await testDb
       .update(entityVersions)
-      .set({ deletedAt: new Date() })
+      .set({ deletedAt: dbClock.now() })
       .where(eq(entityVersions.id, seeded.entityVersionId));
 
     const redeemed = await readFileContentHandler({

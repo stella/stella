@@ -1,6 +1,10 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 
+import {
+  WORKSPACE_STATUS,
+  workspaceAcceptsWrites,
+} from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -187,7 +191,7 @@ export const lockActiveWorkspaceForBufferIntent = async (
                 .from(workspaces),
           })
         ).rows;
-  if (rows.at(0)?.status !== "active") {
+  if (!workspaceAcceptsWrites(rows.at(0)?.status)) {
     throw new BufferIntentWorkspaceUnavailableError({
       message: "Workspace is not active",
     });
@@ -240,8 +244,8 @@ export const reserveObjectCleanupIntents = async ({
         lockedWorkspaces.length !== uniqueWorkspaceIds.length ||
         lockedWorkspaces.some(({ status }) =>
           workspaceAvailability === OBJECT_INTENT_WORKSPACE_AVAILABILITY.ACTIVE
-            ? status !== "active"
-            : status === "deleting",
+            ? !workspaceAcceptsWrites(status)
+            : status === WORKSPACE_STATUS.deleting,
         )
       ) {
         throw new BufferIntentWorkspaceUnavailableError({

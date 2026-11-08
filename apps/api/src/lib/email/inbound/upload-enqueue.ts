@@ -11,24 +11,16 @@ const JOB_NAME = "file-uploaded-mail";
 const JOB_ATTEMPTS = 6;
 
 /**
- * Names the stored file, not its bytes: the job reads the object again, so the
- * queue holds no copy of the message.
+ * Names the projected file generation, never its bytes. The job rereads
+ * correspondence files; other channels reconcile metadata without object I/O.
  */
 export type UploadedMailJobData = {
   organizationId: string;
   workspaceId: string;
   entityId: string;
-  entityVersionId: string;
-  fieldId: string;
   sourceFileId: string;
-  sourceSha256Hex: string;
   storageMimeType: string;
-  extractionMimeType: string;
-  /**
-   * The extraction type under the name previous-release workers read. Remove
-   * it once no previous-release worker can consume this queue.
-   */
-  mimeType?: string;
+  mimeType: string;
 };
 
 type UploadedMailQueue = RequeueableQueue<UploadedMailJobData>;
@@ -45,12 +37,9 @@ const getQueue = createLazyBullMqQueue<UploadedMailJobData>({
 
 type EnqueueUploadedMailFilingOptions = {
   file: {
-    entityVersionId: SafeId<"entityVersion">;
-    fieldId: SafeId<"field">;
     sourceFileId: string;
-    sourceSha256Hex: string;
     storageMimeType: string;
-    extractionMimeType: string;
+    mimeType: string;
   };
   scope: {
     organizationId: SafeId<"organization">;
@@ -61,9 +50,8 @@ type EnqueueUploadedMailFilingOptions = {
 };
 
 /**
- * Hands a stored email file to the filing job. The job id names the admitted
- * version and file, so a replayed extraction run collapses onto one job while
- * a newer version cannot be mistaken for the queued source.
+ * Reconciles correspondence after every projected file generation. The job id
+ * names the file, so a replayed extraction run collapses onto the one job.
  */
 export const enqueueUploadedMailFiling = async ({
   file,
@@ -71,15 +59,10 @@ export const enqueueUploadedMailFiling = async ({
   queue,
 }: EnqueueUploadedMailFilingOptions): Promise<void> => {
   await requeueDeterministicJob({
-    data: { ...scope, ...file, mimeType: file.extractionMimeType },
-    jobId: createBullMqJobId(
-      JOB_NAME,
-      scope.entityId,
-      file.entityVersionId,
-      file.sourceFileId,
-    ),
+    data: { ...scope, ...file },
+    jobId: createBullMqJobId(JOB_NAME, scope.entityId, file.sourceFileId),
     name: JOB_NAME,
-    // The queue connection opens only when an email file is extracted.
+    // The queue connection opens only when a projected file is handed off.
     queue: queue ?? getQueue(),
   });
 };

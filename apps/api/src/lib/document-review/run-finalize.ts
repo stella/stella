@@ -13,7 +13,8 @@
  * passes have committed; the files-table path calls it after every batch of
  * verdicts, and it simply reports `incomplete` until the last one lands. That
  * is the whole reason this is one function: the carry-over rule must not exist
- * twice.
+ * twice. A caller whose batches can overlap must hold the run's row lock, or
+ * each would count without the other's uncommitted findings.
  *
  * Completion is also where a run's proposed fixes become Folio suggestions —
  * for the worker only, because the files-table path grades many documents at

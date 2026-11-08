@@ -33,6 +33,7 @@ import {
 } from "@/components/workspaces/field-value";
 import { FieldValueSelect } from "@/components/workspaces/field-value-select";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
+import { commitIntFieldDraft } from "@/components/workspaces/int-field-draft.logic";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -88,11 +89,13 @@ export const EditableField = ({
     content?.type === "unsupported" ||
     content?.type === "clip" ||
     // Money and person render, filter, sort and calculate, but have no inline
-    // editor yet; they are not offered by the property composer either
-    // (isCreatableContentType), so a workspace only holds one if the API put
-    // it there.
+    // editor yet: a money cell is filled by an AI column or the API, and a
+    // person only by the API.
     type === "money" ||
-    type === "person"
+    type === "person" ||
+    // A record comes from its data source or AI column, never typed in.
+    type === "record" ||
+    content?.type === "record"
   ) {
     return (
       <FieldValue
@@ -181,7 +184,7 @@ const InlineEditor = ({
   const startWorkflow = useStartWorkflow(workspaceId);
 
   const upsertField = useMutation({
-    mutationFn: async (newContent: EditableFieldContent) => {
+    mutationFn: async (newContent: EditableFieldContent | null) => {
       const response = await api
         .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .post({
@@ -219,7 +222,7 @@ const InlineEditor = ({
     },
   });
 
-  const save = (newContent: EditableFieldContent) => {
+  const save = (newContent: EditableFieldContent | null) => {
     upsertField.mutate(newContent);
   };
 
@@ -266,10 +269,15 @@ const InlineEditor = ({
         currency={content?.type === "int" ? content.currency : null}
         displayVariant={displayVariant}
         onSave={(value, currency) =>
-          save({ type: "int", version: 1, value, currency })
+          // An int has no empty value, so a cleared cell sends null content.
+          save(
+            value === null
+              ? null
+              : { type: "int", version: 1, value, currency },
+          )
         }
         stopPropagation={stopPropagation}
-        value={content?.type === "int" ? content.value : 0}
+        value={content?.type === "int" ? content.value : null}
       />
     );
   }
@@ -359,7 +367,7 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block truncate rounded px-2 py-1 text-sm">
+        <span className="hover:bg-muted block truncate rounded-sm px-2 py-1 text-sm">
           {isEmpty ? (
             <span className="text-muted-foreground">—</span>
           ) : (
@@ -453,7 +461,7 @@ const InlineDateEditor = ({
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block truncate rounded px-2 py-1 text-sm">
+        <span className="hover:bg-muted block truncate rounded-sm px-2 py-1 text-sm">
           <FieldValue
             content={{ type: "date", version: 1, value }}
             property={property}
@@ -549,7 +557,7 @@ const InlineTextEditor = ({
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block truncate rounded px-2 py-1 text-sm">
+        <span className="hover:bg-muted block truncate rounded-sm px-2 py-1 text-sm">
           {value ? (
             <FieldValue
               content={{ type: "text", version: 1, value }}
@@ -612,6 +620,10 @@ const InlineTextEditor = ({
 
 // -- Int inline editor --
 
+type IntEditorState =
+  | { status: "display" }
+  | { status: "editing"; draft: string; invalid: boolean };
+
 const InlineIntEditor = ({
   value,
   currency,
@@ -619,16 +631,18 @@ const InlineIntEditor = ({
   onSave,
   stopPropagation,
 }: {
-  value: number;
+  /** The stored value; `null` is an empty cell, distinct from a stored 0. */
+  value: number | null;
   currency: string | null;
   displayVariant: FieldValueVariant;
-  onSave: (value: number, currency: string | null) => void;
+  /** `null` clears the cell. */
+  onSave: (value: number | null, currency: string | null) => void;
   stopPropagation: boolean;
 }) => {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(String(value));
+  const t = useTranslations();
+  const [state, setState] = useState<IntEditorState>({ status: "display" });
 
-  if (!editing) {
+  if (state.status === "display") {
     return (
       <Button
         className="block w-full min-w-0"
@@ -636,8 +650,11 @@ const InlineIntEditor = ({
           if (stopPropagation) {
             event.stopPropagation();
           }
-          setDraft(String(value));
-          setEditing(true);
+          setState({
+            status: "editing",
+            draft: value === null ? "" : String(value),
+            invalid: false,
+          });
         }}
         onKeyDown={(event) => {
           if (stopPropagation) {
@@ -646,48 +663,69 @@ const InlineIntEditor = ({
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block rounded px-2 py-1 text-sm">
-          <IntFieldValue
-            content={{ type: "int", version: 1, value, currency }}
-            variant={displayVariant}
-          />
+        <span className="hover:bg-muted block rounded-sm px-2 py-1 text-sm">
+          {value === null ? (
+            <span className="text-muted-foreground">—</span>
+          ) : (
+            <IntFieldValue
+              content={{ type: "int", version: 1, value, currency }}
+              variant={displayVariant}
+            />
+          )}
         </span>
       </Button>
     );
   }
 
+  const commit = () => {
+    const result = commitIntFieldDraft(state.draft, value);
+    if (result.kind === "invalid") {
+      setState({ ...state, invalid: true });
+      return;
+    }
+    if (result.kind === "save") {
+      onSave(result.value, currency);
+    }
+    setState({ status: "display" });
+  };
+
   return (
-    <Input
-      autoFocus
-      className="h-8 text-sm"
-      dir="ltr"
-      inputMode="numeric"
-      onBlur={() => {
-        const num = Math.round(Number(draft));
-        if (!Number.isNaN(num) && Number.isFinite(num) && num !== value) {
-          onSave(num, currency);
+    <span className="flex min-w-0 flex-col gap-1">
+      <Input
+        aria-invalid={state.invalid}
+        autoFocus
+        className="h-8 text-sm"
+        dir="ltr"
+        inputMode="numeric"
+        onBlur={commit}
+        onChange={(e) =>
+          setState({ status: "editing", draft: e.target.value, invalid: false })
         }
-        setEditing(false);
-      }}
-      onChange={(e) => setDraft(e.target.value)}
-      onClick={(event) => {
-        if (stopPropagation) {
-          event.stopPropagation();
-        }
-      }}
-      onKeyDown={(e) => {
-        if (stopPropagation) {
-          e.stopPropagation();
-        }
-        if (e.key === "Escape") {
-          setEditing(false);
-        }
-        if (e.key === "Enter") {
-          e.currentTarget.blur();
-        }
-      }}
-      value={draft}
-    />
+        onClick={(event) => {
+          if (stopPropagation) {
+            event.stopPropagation();
+          }
+        }}
+        onKeyDown={(e) => {
+          if (stopPropagation) {
+            e.stopPropagation();
+          }
+          if (e.key === "Escape") {
+            setState({ status: "display" });
+          }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+        }}
+        value={state.draft}
+      />
+      {state.invalid ? (
+        <span className="text-destructive text-xs" role="alert">
+          {t("workspaces.fields.wholeNumberOnly")}
+        </span>
+      ) : null}
+    </span>
   );
 };
 
@@ -807,7 +845,7 @@ const TableFileField = ({
           />
         }
       >
-        <span className="bg-muted grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5">
+        <span className="bg-muted grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded-sm px-1 py-0.5">
           <DocumentIcon
             className="size-3.5 shrink-0"
             fileName={content.fileName}
@@ -831,7 +869,7 @@ const TableFileField = ({
     <Tooltip
       content={content.fileName}
       render={
-        <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start opacity-60" />
+        <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded-sm px-1 py-0.5 text-start opacity-60" />
       }
     >
       <DocumentIcon

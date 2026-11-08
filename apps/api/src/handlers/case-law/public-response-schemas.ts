@@ -38,6 +38,7 @@ import type {
 import type { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/decisions/status";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
+import { CASE_LAW_COVERAGE_PARTS } from "@/api/lib/case-law/coverage-parts";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import {
   populationCountsFreshnessSchema,
@@ -313,6 +314,17 @@ const sourceCompleteness = v.union([
   v.object({ state: v.literal("not-measured-yet") }),
   v.object({ state: v.literal("not-counted-yet") }),
 ]);
+/**
+ * The parts a refresh could not read. A summary stored before the field
+ * existed was only ever stored complete, so its absence reads as none.
+ */
+const unreadParts = v.optional(
+  v.pipe(
+    v.array(v.picklist(CASE_LAW_COVERAGE_PARTS)),
+    v.maxLength(CASE_LAW_COVERAGE_PARTS.length),
+  ),
+  [],
+);
 const countryCoverage = {
   // An enum record keeps the literal union; a mapped array would widen it.
   country: v.enum(
@@ -324,6 +336,7 @@ const countryCoverage = {
   stored,
   addedLastWeek: numberOrNull,
   completeness,
+  unreadParts,
   sources: v.pipe(
     v.array(
       v.object({
@@ -429,6 +442,7 @@ const coverageSnapshotEntries = {
   // Existing stored summaries predate the population fold metadata.
   countsFreshness: v.optional(populationCountsFreshnessSchema),
   generatedAt: boundedString(128),
+  unreadParts,
   provisionProcessing: v.pipe(
     v.array(
       v.object({

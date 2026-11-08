@@ -23,6 +23,10 @@ import {
 } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderDocumentTargetType } from "@stll/api-contract/legal-reader-annotations";
 import type { Block } from "@stll/legal-ast/document-ast";
+import {
+  createReaderTextQuoteLocator,
+  type ReaderTextPiece,
+} from "@stll/legal-ast/reader-text-quote";
 import { createSha256 } from "@stll/sha256/bun";
 
 import { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
@@ -127,7 +131,11 @@ const TARGET_REFUSAL_HINT =
   "Tell the user; they can highlight or comment on it in the reader themselves.";
 
 type TargetAccessResult =
-  | { status: "available"; readBlocks: () => Promise<readonly Block[]> }
+  | {
+      status: "available";
+      loadBlocks: () => Promise<readonly Block[]>;
+      loadTextPieces: () => Promise<readonly ReaderTextPiece[]>;
+    }
   | { status: "refused"; result: InternalToolErrorResult };
 
 /**
@@ -161,7 +169,11 @@ const resolveTargetForAgent = async ({
   }
   switch (access.value.status) {
     case "available":
-      return access.value;
+      return {
+        status: "available",
+        loadBlocks: access.value.readBlocks,
+        loadTextPieces: access.value.readTextPieces,
+      };
     case "not_found":
       return {
         status: "refused",
@@ -214,6 +226,10 @@ const listArgsSchema = nullAsAbsent(
 type ListedMark = v.InferInput<
   typeof LIST_READER_ANNOTATIONS_PROJECTION
 >["annotations"][number];
+
+type ListedPassage = ListedMark["passages"][number];
+
+const NO_PIECES: readonly ReaderTextPiece[] = [];
 
 type ListedMarks = { annotations: readonly ListedMark[] };
 
@@ -298,12 +314,50 @@ const handleListTool: TypedMcpToolHandler<
     );
   }
 
+  // A stored anchor names a position in the text the mark was made on; a
+  // re-parse since can have moved it onto other words. Each passage is
+  // placed by its quote in the text the reader draws marks in now (the
+  // publisher's headnote and abstract as well as the body), or reported
+  // orphaned, never handed back at a position that names other words.
+  const pieces = await Result.tryPromise(async () =>
+    listed.value.items.length === 0 ? NO_PIECES : await target.loadTextPieces(),
+  );
+  if (Result.isError(pieces)) {
+    return internalFailureResult(
+      pieces.error,
+      "mcp.handleListTool.blocks_error",
+    );
+  }
+  const locate = createReaderTextQuoteLocator(pieces.value);
+  const passageOf = (
+    row: (typeof listed.value.items)[number],
+  ): ListedPassage => {
+    const placement = locate(row);
+    switch (placement.status) {
+      case "placed":
+        return {
+          placement: "placed",
+          anchor: placement.blockAnchorId,
+          quote: row.quote,
+        };
+      case "orphaned":
+        return {
+          placement: "orphaned",
+          reason: placement.reason,
+          quote: row.quote,
+        };
+      default:
+        placement satisfies never;
+        return panic("Unhandled reader mark placement");
+    }
+  };
+
   // One entry per mark, as the reader shows it: the rows of a passage over
   // several paragraphs share a group and read as one.
   const marks = new Map<string, ListedMark>();
   for (const row of listed.value.items) {
     const key = row.groupId ?? row.id;
-    const passage = { anchor: row.blockAnchorId, quote: row.quote };
+    const passage = passageOf(row);
     const existing = marks.get(key);
     if (existing !== undefined) {
       existing.passages.push(passage);
@@ -450,7 +504,7 @@ const handleCreateTool: TypedMcpToolHandler<
   if (target.status === "refused") {
     return target.result;
   }
-  const blocks = await Result.tryPromise(target.readBlocks);
+  const blocks = await Result.tryPromise(target.loadBlocks);
   if (Result.isError(blocks)) {
     return internalFailureResult(
       blocks.error,
@@ -484,14 +538,17 @@ const handleCreateTool: TypedMcpToolHandler<
 
   // The id is the primary key, unique across organizations, so the
   // organization is part of it; visibility is hashed as stored, so an omitted
-  // one and "private" name the same mark.
+  // one and "private" name the same mark. It hashes the call as the agent
+  // made it, not where its passages were placed: a re-parse between a call
+  // and its retry moves the positions and their context, and the retry must
+  // still name the mark the first call made.
   const storedVisibility = visibility ?? "private";
   const shared = {
     requestId: createRequestIdFor({
       organizationId: context.organizationId,
       request: {
         mark,
-        spans: located.spans,
+        passages,
         target_id,
         target_type,
         visibility: storedVisibility,
@@ -514,6 +571,9 @@ const handleCreateTool: TypedMcpToolHandler<
       organizationId: context.organizationId,
       placement: PUBLIC_LAW_ANNOTATION_PLACEMENT,
       recordAuditEvent: context.recordAuditEvent,
+      // A retry may find the passages elsewhere after a re-parse; the words
+      // are the request, and the mark keeps its first placement.
+      replayIdentity: "words",
       safeDb: context.safeDb,
       userId: context.userId,
     }),
@@ -691,10 +751,10 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       readOnlyHint: true,
     },
     description:
-      "List the highlights and comments on one case-law decision or one " +
-      "statute version that the user can see: their own, and those " +
-      "colleagues shared. Each mark lists the passages it covers by block " +
-      "anchor and quote, oldest first.",
+      "List visible highlights and comments on a decision or statute version, " +
+      "oldest first. Passages give quoted words and their current block anchor " +
+      "when placed; orphaned passages have quote_not_found or quote_ambiguous. " +
+      "Report orphaned passages by quote, never at an anchor.",
     inputSchema: listArgsSchema,
     access: "read",
     permissions: { type: "all", permissions: { workspace: ["read"] } },

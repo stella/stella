@@ -11,7 +11,7 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -20,7 +20,7 @@ import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS } from "@/api/lib/auth/feature-access/view-eligibility";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  defaultVarcharSchema,
+  displayNameSchema,
   resourceIdSchema,
   withDescription,
 } from "@/api/lib/custom-schema";
@@ -43,6 +43,7 @@ import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repai
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
+import { workspaceCreationCapacity } from "@/api/lib/workspaces/creation-capacity";
 import { nextAvailableMatterName } from "@/api/lib/workspaces/matter-name";
 
 // A request without `clientId` creates a personal matter (initially
@@ -61,8 +62,8 @@ const createWorkspaceBodySchema = v.object({
       v.maxLength(LIMITS.workspaceMembersCount - 1),
     ),
   ),
-  name: withDescription(defaultVarcharSchema, "Matter name"),
-  filePropertyName: defaultVarcharSchema,
+  name: withDescription(displayNameSchema(), "Matter name"),
+  filePropertyName: displayNameSchema(),
   reference: v.optional(v.pipe(v.string(), v.maxLength(64), v.minLength(1))),
   billingReference: v.optional(
     v.nullable(v.pipe(v.string(), v.maxLength(128))),
@@ -89,6 +90,23 @@ export type CreateWorkspaceHandlerProps = {
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: v.InferOutput<typeof createWorkspaceBodySchema>;
+};
+
+/** Index the committed matter without holding the response for it. */
+const flushCreatedWorkspaceSearch = (
+  workspaceId: Parameters<typeof flushWorkspaceSearchRepairs>[0][number],
+) => {
+  detached(
+    async () =>
+      flushWorkspaceSearchRepairs([workspaceId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "createWorkspaceHandler.flushWorkspaceSearchRepairs",
+          ),
+        ),
+      ),
+    "workspaces-create.flush-workspace-search-repairs",
+  );
 };
 
 // Shared matter-creation logic reused by the HTTP handler and the
@@ -151,7 +169,7 @@ export const createWorkspaceHandler = async function* ({
           }),
         ]);
 
-      const activeCount = countResult.at(0)?.total ?? 0;
+      const workspaceCount = countResult.at(0)?.total ?? 0;
 
       if (body.clientId !== undefined && !client) {
         return Result.err(
@@ -182,7 +200,7 @@ export const createWorkspaceHandler = async function* ({
         ]),
       );
 
-      if (activeCount >= LIMITS.workspacesCount) {
+      if (!workspaceCreationCapacity(workspaceCount).canCreate) {
         return Result.err(
           new HandlerError({
             status: 400,
@@ -324,11 +342,7 @@ export const createWorkspaceHandler = async function* ({
     }),
   );
 
-  flushWorkspaceSearchRepairs([txResult.id]).catch(
-    createErrorCapture(
-      handlerErrorContext("createWorkspaceHandler.flushWorkspaceSearchRepairs"),
-    ),
-  );
+  flushCreatedWorkspaceSearch(txResult.id);
 
   return Result.ok({ id: txResult.id });
 };

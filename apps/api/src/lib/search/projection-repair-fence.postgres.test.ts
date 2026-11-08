@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
+import { dbClock } from "@stll/test-kit/db";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -80,7 +81,7 @@ if (!databaseUrl || !runPostgresTests) {
         let oldDrain: Promise<unknown> | undefined;
         try {
           await currentRepair.db.insert(organization).values({
-            createdAt: new Date(),
+            createdAt: dbClock.now(),
             id: organizationId,
             name: "Projection repair fence",
             slug: organizationId,

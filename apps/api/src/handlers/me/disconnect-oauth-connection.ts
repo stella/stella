@@ -24,7 +24,11 @@ const disconnectOAuthConnection = createSafeSessionHandler(
   config,
   async function* (ctx) {
     const disconnected = yield* Result.await(
-      disconnectOAuthConnectionForUser(ctx.user.id, ctx.params.consentId),
+      disconnectOAuthConnectionForUser({
+        consentId: ctx.params.consentId,
+        request: ctx.request,
+        userId: ctx.user.id,
+      }),
     );
 
     if (!disconnected) {

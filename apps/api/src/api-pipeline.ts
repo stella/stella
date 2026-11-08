@@ -1,4 +1,7 @@
-import { REQUEST_ID_HEADER } from "@stll/api-contract";
+import {
+  REQUEST_ID_HEADER,
+  RESOURCE_MUTATION_ID_HEADER,
+} from "@stll/api-contract";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 
 import { env } from "@/api/env";
@@ -114,6 +117,7 @@ const requestIdentity: Middleware = async ({ request, server }, inner) => {
       SESSION_ID_PATTERN.test(rawSessionId)
       ? rawSessionId
       : undefined,
+    request,
   );
   // Both addresses start from the socket peer, read from the socket once.
   const socket = socketPeerOnce(request, server ?? null);
@@ -192,6 +196,7 @@ export const apiPipeline: readonly Middleware[] = [
       SESSION_ID_HEADER,
       TANSTACK_RUN_ID_HEADER,
       CAPABILITY_REQUEST_HEADER,
+      RESOURCE_MUTATION_ID_HEADER,
     ],
     exposedHeaders: CORS_EXPOSED_HEADERS,
     maxAgeSeconds: CORS_PREFLIGHT_MAX_AGE_SECONDS,

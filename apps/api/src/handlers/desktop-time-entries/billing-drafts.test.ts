@@ -1,17 +1,22 @@
 import { Result } from "better-result";
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
 import fc from "fast-check";
+import assert from "node:assert/strict";
 import * as v from "valibot";
 
 import {
   DESKTOP_BILLING_DRAFT_LIMITS,
+  DESKTOP_BILLING_DRAFT_REFUSAL_CODE,
   desktopBillingDraftModelResponseSchema,
   desktopBillingDraftResponseSchema,
   desktopBillingDraftReviewSchema,
+  desktopBillingPlainDraftModelResponseSchema,
 } from "@stll/api-contract/desktop-billing-drafts";
 import type {
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
+  DesktopBillingGuidedDraftResponse,
+  DesktopBillingPlainDraftResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
 import { assertProperty } from "@stll/property-testing";
 import { createTestState } from "@stll/test-state";
@@ -31,16 +36,19 @@ import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
+import { runDispatchCheck } from "@/api/tests/helpers/dispatch-check";
 import { serveForTest, type TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import type { BillingDraftGate } from "./billing-draft-mode";
 import {
   type BillingDraftPrompt,
   createBillingDraftReferenceMap,
   createDesktopBillingDraftEndpoint,
 } from "./billing-drafts";
 import type { loadBillingDraftContext } from "./billing-drafts-context";
+import { admitDraftingWithGateReader } from "./drafting-model";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -77,6 +85,7 @@ const body = createDesktopBillingDraftRequest({
   },
 });
 const context = {
+  mode: "guided" as const,
   matters: [
     {
       matterId: MATTER_ID,
@@ -93,8 +102,8 @@ const context = {
       dateWorked: "2026-10-01",
       durationMinutes: 30,
       narrative: "Reviewed agreement",
-      taskCode: null,
-      activityCode: null,
+      taskCode: "L110",
+      activityCode: "A101",
       activityGroup: "client" as const,
     },
   ],
@@ -111,7 +120,46 @@ const context = {
   promptCachingEnabled: false,
   managedAIResidency: "eu" as const,
 };
-const fixture: DesktopBillingDraftResponse = {
+// No firm guideline file is bound: the context carries no guidelines and no
+// classification of earlier entries at all.
+const plainContext = {
+  mode: "plain" as const,
+  matters: context.matters,
+  earlierEntries: context.earlierEntries.map(
+    ({ id, matterId, dateWorked, durationMinutes, narrative }) => ({
+      id,
+      matterId,
+      dateWorked,
+      durationMinutes,
+      narrative,
+    }),
+  ),
+  preference: context.preference,
+  orgAIConfig: context.orgAIConfig,
+  promptCachingEnabled: context.promptCachingEnabled,
+  managedAIResidency: context.managedAIResidency,
+};
+const plainFixture: DesktopBillingPlainDraftResponse = {
+  mode: "plain",
+  drafts: [
+    {
+      entryId: "entry_1",
+      narrative: "Revize smlouvy",
+      matchedEarlierEntryIds: [EARLIER_ID],
+    },
+  ],
+};
+const asGuided = (value: DesktopBillingDraftResponse) => {
+  if (value.mode !== "guided") {
+    throw new HandlerError({
+      status: 500,
+      message: "Fixture is not a guided result",
+    });
+  }
+  return value;
+};
+const fixture: DesktopBillingGuidedDraftResponse = {
+  mode: "guided",
   drafts: [
     {
       entryId: "entry_1",
@@ -144,7 +192,17 @@ type ExerciseOptions = {
   unknownReference?: boolean;
   copyPromptGuideline?: boolean;
   output?: DesktopBillingDraftResponse;
-  draftContext?: typeof context;
+  draftContext?: typeof context | typeof plainContext;
+  /** What each successive gate read answers; the last one repeats. */
+  gates?: readonly GateRead[];
+  /** The drafting mode the firm binding gives; the context's by default. */
+  bindingMode?: BillingDraftGate["draftingMode"];
+};
+type GateRead = Omit<BillingDraftGate, "draftingMode">;
+const consenting: GateRead = {
+  organizationMode: "enabled",
+  consentAt: new Date("2026-10-01T12:00:00Z"),
+  preference: context.preference,
 };
 const exercise = async ({
   input = body,
@@ -155,9 +213,17 @@ const exercise = async ({
   copyPromptGuideline,
   output = fixture,
   draftContext = context,
+  gates = [consenting],
+  bindingMode = draftContext.mode,
 }: ExerciseOptions = {}) => {
-  const calls: { prompt: string; schema: unknown; region: unknown }[] = [];
+  const calls: {
+    prompt: string;
+    system: string;
+    schema: unknown;
+    region: unknown;
+  }[] = [];
   const receivedBodies: DesktopBillingDraftRequest[] = [];
+  let gateReads = 0;
   const { scopedDb } = createScopedDbMock(
     {},
     {
@@ -177,8 +243,11 @@ const exercise = async ({
   );
   const generate = mock(
     async (options: Parameters<typeof generateTanStackObjectForTask>[0]) => {
+      // As the real generation does, before the request leaves.
+      await runDispatchCheck(options.beforeEachDispatch);
       calls.push({
         prompt: options.prompt ?? "",
+        system: options.system ?? "",
         schema: options.outputSchema,
         region:
           options.dataClass === "customer" ? options.managedAIResidency : null,
@@ -191,11 +260,23 @@ const exercise = async ({
         EARLIER_ID,
         GUIDELINE_ID,
       ]);
+      if (malformedResult) {
+        return { drafts: [], checkedGuidelines: [] };
+      }
       const result = refs.aliasResponse(output);
+      if (result.mode === "plain") {
+        return result;
+      }
       if (copyPromptGuideline) {
         const prompt = asTestRaw<BillingDraftPrompt>(
           JSON.parse(options.prompt ?? "{}"),
         );
+        if (prompt.mode !== "guided") {
+          throw new HandlerError({
+            status: 500,
+            message: "Prompt carries no guidelines",
+          });
+        }
         const guideline = prompt.guidelines.at(0);
         const section = guideline?.sections.at(0);
         if (!guideline || !section) {
@@ -224,9 +305,6 @@ const exercise = async ({
           ...file,
           fileId: "unknown-reference",
         }));
-      }
-      if (malformedResult) {
-        return { drafts: [], checkedGuidelines: [] };
       }
       return result;
     },
@@ -265,6 +343,17 @@ const exercise = async ({
         scopedDb,
       });
     },
+    admitDrafting: async (account) =>
+      await admitDraftingWithGateReader({
+        ...account,
+        loadGate: async () => {
+          const gate = gates.at(Math.min(gateReads, gates.length - 1));
+          gateReads += 1;
+          return await Promise.resolve(
+            Result.ok({ ...(gate ?? consenting), draftingMode: bindingMode }),
+          );
+        },
+      }),
     loadContext: asTestRaw<typeof loadBillingDraftContext>(
       async ({
         body: requestBody,
@@ -300,7 +389,13 @@ const exercise = async ({
       body: JSON.stringify(input),
     }),
   );
-  return { response, calls, receivedBodies, generate };
+  return {
+    response,
+    calls,
+    receivedBodies,
+    generate,
+    gateReads: () => gateReads,
+  };
 };
 
 test("one structured request uses selected evidence, region and opaque references", async () => {
@@ -323,6 +418,175 @@ test("one structured request uses selected evidence, region and opaque reference
   expect(calls.at(0)?.prompt).toContain("Agreement");
   expect(calls.at(0)?.prompt).not.toContain(MATTER_ID);
   expect(calls.at(0)?.prompt).not.toContain("timeline");
+});
+
+test("without guideline files a consenting user gets plain descriptions with no billing fields", async () => {
+  const { response, calls } = await exercise({
+    draftContext: plainContext,
+    output: plainFixture,
+  });
+  expect(response.status).toBe(200);
+  const review: unknown = await response.json();
+  expect(review).toEqual({
+    result: plainFixture,
+    earlierEntries: [
+      {
+        id: EARLIER_ID,
+        dateWorked: "2026-10-01",
+        durationMinutes: 30,
+        narrative: "Reviewed agreement",
+      },
+    ],
+  });
+  const { result } = v.parse(desktopBillingDraftReviewSchema, review);
+  expect(result.mode).toBe("plain");
+  expect(result).not.toHaveProperty("checkedGuidelines");
+  for (const absent of ["classification", "flags", "operations"]) {
+    expect(result.drafts.at(0)).not.toHaveProperty(absent);
+  }
+  expect(calls).toHaveLength(1);
+  expect(calls.at(0)?.schema).toBe(desktopBillingPlainDraftModelResponseSchema);
+  const prompt = asTestRaw<BillingDraftPrompt>(
+    JSON.parse(calls.at(0)?.prompt ?? "{}"),
+  );
+  expect(prompt.mode).toBe("plain");
+  for (const absent of ["guidelines", "activityGroups"]) {
+    expect(prompt).not.toHaveProperty(absent);
+  }
+  expect(prompt.matters.at(0)).not.toHaveProperty("ledesEnabled");
+  // No LEDES setting, code or classification reaches the model in plain
+  // mode, neither in the instructions nor in the earlier entries.
+  for (const absent of ["taskCode", "activityCode", "activityGroup"]) {
+    expect(prompt.earlierEntries.at(0)).not.toHaveProperty(absent);
+  }
+  for (const code of ["L110", "A101", "ledes"]) {
+    expect(calls.at(0)?.prompt).not.toContain(code);
+  }
+  expect(calls.at(0)?.system).not.toMatch(/ledes|utbms|task\/activity/iu);
+});
+
+test("guided mode still hands the model each earlier entry's codes", async () => {
+  const { response, calls } = await exercise();
+  expect(response.status).toBe(200);
+  const prompt = asTestRaw<BillingDraftPrompt>(
+    JSON.parse(calls.at(0)?.prompt ?? "{}"),
+  );
+  assert.ok(prompt.mode === "guided");
+  expect(prompt.earlierEntries.at(0)).toMatchObject({
+    taskCode: "L110",
+    activityCode: "A101",
+  });
+  expect(calls.at(0)?.system).toContain("UTBMS");
+});
+
+test("the organization's off switch stops plain and guided drafting before context or model", async () => {
+  for (const draftContext of [context, plainContext]) {
+    const { response, calls, receivedBodies } = await exercise({
+      draftContext,
+      gates: [{ ...consenting, organizationMode: "disabled" }],
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.organizationOff,
+    });
+    expect(receivedBodies).toHaveLength(0);
+    expect(calls).toHaveLength(0);
+  }
+});
+
+test("drafting without personal consent is refused before context or model", async () => {
+  const { response, calls, receivedBodies } = await exercise({
+    draftContext: plainContext,
+    gates: [{ ...consenting, consentAt: null }],
+  });
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({
+    code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.consentRequired,
+  });
+  expect(receivedBodies).toHaveLength(0);
+  expect(calls).toHaveLength(0);
+});
+
+test("a consent withdrawn or a switch turned off while the context loads stops the model call", async () => {
+  for (const [later, code] of [
+    [
+      { ...consenting, consentAt: null },
+      DESKTOP_BILLING_DRAFT_REFUSAL_CODE.consentRequired,
+    ],
+    [
+      { ...consenting, organizationMode: "disabled" },
+      DESKTOP_BILLING_DRAFT_REFUSAL_CODE.organizationOff,
+    ],
+  ] as const) {
+    const { response, calls, receivedBodies, gateReads } = await exercise({
+      draftContext: plainContext,
+      output: plainFixture,
+      gates: [consenting, later],
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code });
+    // The context was read under the first answer; the model never ran.
+    expect(receivedBodies).toHaveLength(1);
+    expect(gateReads()).toBe(2);
+    expect(calls).toHaveLength(0);
+  }
+});
+
+test("a consenting request reads the gate again right before the model call", async () => {
+  const { response, calls, gateReads } = await exercise({
+    draftContext: plainContext,
+    output: plainFixture,
+  });
+  expect(response.status).toBe(200);
+  expect(gateReads()).toBe(2);
+  expect(calls).toHaveLength(1);
+});
+
+test("a firm guideline file bound after the context loaded refuses the request with 409", async () => {
+  const { response, calls } = await exercise({
+    draftContext: plainContext,
+    output: plainFixture,
+    bindingMode: "guided",
+  });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({
+    code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.modeChanged,
+  });
+  expect(calls).toHaveLength(0);
+});
+
+test("plain mode refuses a model answer that carries billing fields", async () => {
+  const { response, calls } = await exercise({
+    draftContext: plainContext,
+    output: fixture,
+  });
+  expect(calls).toHaveLength(1);
+  expect(response.status).toBe(502);
+});
+
+test("a previous result from the other drafting mode is refused before generation", async () => {
+  for (const [draftContext, previousResult] of [
+    [plainContext, fixture],
+    [context, plainFixture],
+  ] as const) {
+    const { response, calls } = await exercise({
+      draftContext,
+      input: { ...body, steer: "Shorter", previousResult },
+    });
+    expect(response.status).toBe(409);
+    expect(calls).toHaveLength(0);
+  }
+});
+
+test("a plain previous result steers a plain draft", async () => {
+  const { response, calls } = await exercise({
+    draftContext: plainContext,
+    output: plainFixture,
+    input: { ...body, steer: "Shorter", previousResult: plainFixture },
+  });
+  expect(response.status).toBe(200);
+  expect(calls).toHaveLength(1);
+  expect(calls.at(0)?.prompt).toContain('"previousResult"');
 });
 
 test("billing draft endpoint canonicalizes uppercase matter UUIDs before loading context", async () => {
@@ -566,11 +830,13 @@ test("entry identifiers cannot rewrite guideline names, sections or discriminato
   const prompt = asTestRaw<BillingDraftPrompt>(
     JSON.parse(calls.at(0)?.prompt ?? "{}"),
   );
+  assert.ok(prompt.mode === "guided");
   expect(prompt.guidelines.at(0)).toMatchObject({
     fileName: "references/billing.md",
     sections: ["Narratives"],
   });
-  expect(prompt.previousResult?.drafts.at(0)?.classification).toEqual({
+  assert.ok(prompt.previousResult?.mode === "guided");
+  expect(prompt.previousResult.drafts.at(0)?.classification).toEqual({
     type: "activity_group",
     activityGroup: "client",
   });
@@ -587,7 +853,7 @@ test("opaque references remain UUID-compatible, collision-free and confined to r
     GUIDELINE_ID,
     collision,
   ]);
-  const modelResult = refs.aliasResponse(fixture);
+  const modelResult = asGuided(refs.aliasResponse(fixture));
   const draft = modelResult.drafts.at(0);
   if (!draft) {
     throw new HandlerError({ status: 500, message: "Fixture has no draft" });
@@ -607,7 +873,7 @@ test("opaque references remain UUID-compatible, collision-free and confined to r
       billable: true,
     },
   ];
-  const restored = refs.restore(modelResult).unwrap();
+  const restored = asGuided(refs.restore(modelResult).unwrap());
   expect(restored.drafts.at(0)?.narrative).toBe(targetAlias);
   expect(restored.drafts.at(0)?.operations.at(0)).toEqual({
     type: "move",
@@ -649,20 +915,25 @@ test("move proposals use the authorized target's canonical name", async () => {
     },
     output: {
       ...fixture,
-      drafts: fixture.drafts.map((draft) => ({
-        ...draft,
-        operations: [
-          {
-            type: "move",
-            targetMatterId: targetId,
-            targetMatterName: "Model-supplied label",
-            durationMinutes: 15,
-            narrative: "Reviewed agreement",
-            classification: { type: "activity_group", activityGroup: "client" },
-            billable: true,
-          },
-        ],
-      })),
+      drafts: fixture.drafts.map(
+        (draft): DesktopBillingGuidedDraftResponse["drafts"][number] => ({
+          ...draft,
+          operations: [
+            {
+              type: "move",
+              targetMatterId: targetId,
+              targetMatterName: "Model-supplied label",
+              durationMinutes: 15,
+              narrative: "Reviewed agreement",
+              classification: {
+                type: "activity_group",
+                activityGroup: "client",
+              },
+              billable: true,
+            },
+          ],
+        }),
+      ),
     },
   });
   expect(response.status).toBe(200);
@@ -731,8 +1002,9 @@ test("billing reference mapping preserves every colliding text field", () => {
           targetMatterName: text,
           ...part,
         },
-      ] satisfies DesktopBillingDraftResponse["drafts"][number]["operations"];
+      ] satisfies DesktopBillingGuidedDraftResponse["drafts"][number]["operations"];
       const output = {
+        mode: "guided",
         checkedGuidelines: [{ fileId: GUIDELINE_ID, fileName: text }],
         drafts: [
           {
@@ -754,8 +1026,9 @@ test("billing reference mapping preserves every colliding text field", () => {
             operations,
           },
         ],
-      } satisfies DesktopBillingDraftResponse;
+      } satisfies DesktopBillingGuidedDraftResponse;
       const prompt = {
+        mode: "guided" as const,
         entries: body.entries.map((entry) => ({
           ...entry,
           appNames: [text],
@@ -829,6 +1102,7 @@ test("billing reference mapping preserves every colliding text field", () => {
       });
       expect(refs.restore(aliased).unwrap()).toEqual(output);
       const modelPrompt = refs.aliasPrompt(prompt);
+      assert.ok(modelPrompt.mode === "guided");
       expect(JSON.parse(refs.serializePrompt(prompt))).toEqual(modelPrompt);
       expect(modelPrompt).toMatchObject({
         steer: text,

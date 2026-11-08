@@ -1,3 +1,4 @@
+// parser-output-unchanged: [sk-us] only adds isSkOpeningFormula, skTitleFormulaStart and isSkPortalMetadataRow, which only the Slovak courts' PDF reader calls; this source's lines are read as before.
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { caseLawSectionHeading } from "./case-law-heading";
@@ -25,6 +26,8 @@ import { caseLawSectionHeading } from "./case-law-heading";
  * with its spacing removed, so the vocabulary carries none either.
  */
 const DECISION_TITLES = new Set([
+  // The Constitutional Court's ruling on the merits.
+  "nález",
   "uznesenie",
   "rozsudok",
   "rozsudokbezodôvodnenia",
@@ -54,6 +57,48 @@ const normalized = (text: string): string =>
 
 export const isSkDecisionTitle = (text: string): boolean =>
   DECISION_TITLES.has(normalized(text));
+
+/**
+ * The formula a court decides under, printed with the title in the same
+ * type (`ROZSUDOK` / `V MENE SLOVENSKEJ REPUBLIKY`). It is the court's
+ * words, not its title, so it is never part of the `decision-title`.
+ */
+const OPENING_FORMULAE: ReadonlySet<string> = new Set([
+  "vmeneslovenskejrepubliky",
+  "vmenerepubliky",
+]);
+
+export const isSkOpeningFormula = (text: string): boolean =>
+  OPENING_FORMULAE.has(normalized(text));
+
+/**
+ * A row of the box the court portal prints at the head of every decision
+ * file (`Súd: …`, `Spisová značka: …`, `ECLI: …`): the record's metadata
+ * repeated, not the court's words, so never body text.
+ */
+const PORTAL_METADATA_ROW_RE =
+  /^(?:Súd|Spisová značka|Identifikačné číslo súdneho spisu|Dátum vydania rozhodnutia|Meno a priezvisko sudcu, VSÚ|ECLI):/u;
+
+export const isSkPortalMetadataRow = (text: string): boolean =>
+  PORTAL_METADATA_ROW_RE.test(text.trim());
+
+/**
+ * A title line run on into the formula, as the court sets them in one type
+ * (`ROZSUDOK V MENE` / `SLOVENSKEJ REPUBLIKY`): the offset in `text` where
+ * the formula's first word begins, or nothing when the line is not that run.
+ */
+export const skTitleFormulaStart = (text: string): number | undefined => {
+  const starts = [...text.matchAll(/\S+/gu)].map((word) => word.index);
+  for (const start of starts.slice(1)) {
+    if (
+      isSkDecisionTitle(text.slice(0, start)) &&
+      isSkOpeningFormula(text.slice(start))
+    ) {
+      return start;
+    }
+  }
+  return undefined;
+};
 
 export const isSkHoldingMarker = (text: string): boolean => {
   if (text.trim().length > MARKER_LINE_MAX_CHARS) {

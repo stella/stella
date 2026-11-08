@@ -14,6 +14,10 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
+import {
+  invoicePaymentState,
+  paidAmountOf,
+} from "@/api/lib/billing/invoice-payment-amounts";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
@@ -71,6 +75,34 @@ const invoiceRenderRejection = ({
     }),
     infrastructureFailure ? "invoice_renderer_failed" : "conflict",
   );
+};
+
+/** A loaded invoice that cannot be rendered names the missing reference. */
+const exportRefusal = (loaded: {
+  invoice: { sellerProfileId: string | null; documentType: string };
+  seller: unknown;
+  originalNumber: string | null;
+}): HandlerError | null => {
+  if (loaded.invoice.sellerProfileId !== null && loaded.seller === null) {
+    return new HandlerError({
+      status: 409,
+      code: "invoice_seller_profile_unavailable",
+      message: "Invoice seller profile is unavailable",
+      hint: "Select an available seller profile before exporting the invoice.",
+    });
+  }
+  if (
+    loaded.invoice.documentType === "credit_note" &&
+    loaded.originalNumber === null
+  ) {
+    return new HandlerError({
+      status: 409,
+      code: "credit_note_original_unavailable",
+      message: "Original invoice number is unavailable",
+      hint: "The credit note must reference an issued invoice in this matter.",
+    });
+  }
+  return null;
 };
 
 /** Hold the requester's matter access for the rest of the download write. */
@@ -177,29 +209,16 @@ export const createInvoicePdfExport = (
       );
       if (!loaded) {
         return Result.err(
-          new HandlerError({ status: 404, message: "Invoice not found" }),
-        );
-      }
-      if (loaded.invoice.sellerProfileId !== null && loaded.seller === null) {
-        return Result.err(
           new HandlerError({
-            status: 409,
-            message: "Invoice seller profile is unavailable",
-            hint: "Select an available seller profile before exporting the invoice.",
+            status: 404,
+            code: "not_found",
+            message: "Invoice not found",
           }),
         );
       }
-      if (
-        loaded.invoice.documentType === "credit_note" &&
-        loaded.originalNumber === null
-      ) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "Original invoice number is unavailable",
-            hint: "The credit note must reference an issued invoice in this matter.",
-          }),
-        );
+      const refusal = exportRefusal(loaded);
+      if (refusal !== null) {
+        return Result.err(refusal);
       }
       const amounts = readInvoiceDocumentLines(loaded.invoice);
       const outcome = yield* Result.await(
@@ -238,6 +257,15 @@ export const createInvoicePdfExport = (
                   }),
                 },
                 totals: amounts.totals,
+                // The document's own gross, not the stored total: a legacy
+                // invoice (no stored lines) prints entries its stored total
+                // may not count, and the payment it asks for must match.
+                settlement: invoicePaymentState({
+                  documentType: loaded.invoice.documentType,
+                  status: loaded.invoice.status,
+                  totalAmount: amounts.totals.grossAmountMinor,
+                  paidAmount: paidAmountOf(loaded.invoice.payments),
+                }),
               },
             }),
           catch: invoiceRenderError,
@@ -304,7 +332,11 @@ export const createInvoicePdfExport = (
       );
       if (downloadUrl === null) {
         return Result.err(
-          new HandlerError({ status: 404, message: "Invoice not found" }),
+          new HandlerError({
+            status: 404,
+            code: "not_found",
+            message: "Invoice not found",
+          }),
         );
       }
       return Result.ok({

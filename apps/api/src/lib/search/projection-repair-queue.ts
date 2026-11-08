@@ -14,6 +14,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { errorTag } from "@/api/lib/errors/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
@@ -87,6 +88,7 @@ export type SearchProjectionRepairOutcome = {
 export type SearchProjectionRepairClaim = {
   [Kind in SearchProjectionKind]: {
     kind: Kind;
+    organizationId: SafeId<"organization">;
     revision: string;
     sourceId: string;
   };
@@ -108,19 +110,16 @@ export type SearchProjectionRepairDeps = {
   };
 };
 
-/** Marks one keyset page of the matters a contact's text reaches. */
+/**
+ * Marks one keyset page of the matters a contact's text reaches. It reads
+ * only matter rows and links, never the contact itself.
+ */
 const markContactWorkspacePage = async (
   tx: Transaction,
-  contactId: SafeId<"contact">,
+  contact: { id: SafeId<"contact">; organizationId: SafeId<"organization"> },
   after: SafeId<"workspace"> | null,
 ): Promise<SafeId<"workspace">[]> => {
-  const contact = await tx.query.contacts.findFirst({
-    where: { id: { eq: contactId } },
-    columns: { organizationId: true },
-  });
-  if (!contact) {
-    return [];
-  }
+  const contactId = contact.id;
   const rows = await tx
     .select({ id: workspaces.id })
     .from(workspaces)
@@ -147,7 +146,7 @@ const markContactWorkspacePage = async (
 };
 
 const enqueueAndFlushContactWorkspaces = async (
-  contactId: SafeId<"contact">,
+  contact: { id: SafeId<"contact">; organizationId: SafeId<"organization"> },
   database: SearchProjectionRepairDatabase,
 ): Promise<void> => {
   let after: SafeId<"workspace"> | null = null;
@@ -157,7 +156,7 @@ const enqueueAndFlushContactWorkspaces = async (
     const workspaceIds = await withAggregateTransaction(
       database,
       async (tx): Promise<SafeId<"workspace">[]> =>
-        await markContactWorkspacePage(tx, contactId, pageAfter),
+        await markContactWorkspacePage(tx, contact, pageAfter),
     );
     if (workspaceIds.length === 0) {
       return;
@@ -184,9 +183,14 @@ const repairContactProjection = async (
   claim: SearchProjectionRepairClaimOf<"contact">,
   database: SearchProjectionRepairDatabase,
 ): Promise<void> => {
-  await repairContactSearchDocument(claim, database);
+  const { organizationId } = claim;
+  await withOwnerOrganizationScope(
+    database,
+    organizationId,
+    async (tx) => await repairContactSearchDocument(claim, tx),
+  );
   await enqueueAndFlushContactWorkspaces(
-    toSafeId<"contact">(claim.sourceId),
+    { id: toSafeId<"contact">(claim.sourceId), organizationId },
     database,
   );
 };
@@ -194,6 +198,8 @@ const repairContactProjection = async (
 /**
  * Claims, settlements and every projection rebuild bound to one connection,
  * so no part of a drain or a flush reaches for a connection of its own.
+ * Contact and matter projections read contacts, which the owner connection
+ * reaches only inside the organization the queued source belongs to.
  */
 export const createSearchProjectionRepairDeps = (
   database: SearchProjectionRepairDatabase,
@@ -202,8 +208,14 @@ export const createSearchProjectionRepairDeps = (
   repair: {
     contact: async (claim) => await repairContactProjection(claim, database),
     entity: async (claim) => await repairSearchDocument(claim, { database }),
-    workspace: async (claim) =>
-      await repairWorkspaceSearchDocument(claim, database),
+    workspace: async (claim) => {
+      const { organizationId } = claim;
+      await withOwnerOrganizationScope(
+        database,
+        organizationId,
+        async (tx) => await repairWorkspaceSearchDocument(claim, tx),
+      );
+    },
   },
 });
 
@@ -316,12 +328,14 @@ export const enqueueWorkspaceSearchRepairs = async (
 
 const claimedColumns = {
   kind: searchProjectionRepairQueue.kind,
+  organizationId: searchProjectionRepairQueue.organizationId,
   revision: searchProjectionRepairQueue.revision,
   sourceId: searchProjectionRepairQueue.sourceId,
 };
 
 type ClaimedRepairRow = {
   kind: SearchProjectionKind;
+  organizationId: SafeId<"organization">;
   revision: string;
   sourceId: string;
 };
@@ -331,18 +345,21 @@ const claimedRepairFromRow = (row: ClaimedRepairRow): ClaimedRepair => {
     case SEARCH_PROJECTION_KIND.contact:
       return {
         kind: SEARCH_PROJECTION_KIND.contact,
+        organizationId: row.organizationId,
         revision: row.revision,
         sourceId: row.sourceId,
       };
     case SEARCH_PROJECTION_KIND.entity:
       return {
         kind: SEARCH_PROJECTION_KIND.entity,
+        organizationId: row.organizationId,
         revision: row.revision,
         sourceId: row.sourceId,
       };
     case SEARCH_PROJECTION_KIND.workspace:
       return {
         kind: SEARCH_PROJECTION_KIND.workspace,
+        organizationId: row.organizationId,
         revision: row.revision,
         sourceId: row.sourceId,
       };

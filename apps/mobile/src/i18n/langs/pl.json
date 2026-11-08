@@ -34,6 +34,14 @@
     "composerPlaceholder": "Zapytaj stellę",
     "send": "Wyślij",
     "stop": "Zatrzymaj",
+    "dictate": "Dyktuj",
+    "dictationCancel": "Anuluj dyktowanie",
+    "dictationFinish": "Zakończ dyktowanie",
+    "dictationListening": "Słucham… {elapsed} z {limit}",
+    "dictationTranscribing": "Transkrypcja…",
+    "dictationDenied": "Dyktowanie wymaga mikrofonu. Zezwól na nie dla stella w Ustawieniach.",
+    "dictationFailed": "Nie udało się przepisać nagrania. Spróbuj ponownie.",
+    "dictationSilent": "Nie usłyszano mowy.",
     "sendFailed": "Nie udało się wysłać wiadomości. Spróbuj ponownie.",
     "answerWorking": "Pracuję…",
     "answerStopped": "Zatrzymano.",
@@ -174,6 +182,20 @@
       "system": "Wygląd: automatyczny",
       "light": "Wygląd: jasny",
       "dark": "Wygląd: ciemny"
+    },
+    "edit": {
+      "saved": "Zapisano",
+      "saving": "Zapisywanie…",
+      "notSaved": "Jeszcze nie zapisano",
+      "done": "Gotowe",
+      "openFailed": "Tego dokumentu nie można teraz edytować",
+      "resumed": "Masz niedokończoną edycję tego dokumentu, więc jest ona kontynuowana. To, co przed chwilą wpisano, nie zostało zachowane.",
+      "newerVersion": "W międzyczasie zapisano nowszą wersję tego dokumentu, więc edycja jest kontynuowana od niej. To, co przed chwilą wpisano, nie zostało zachowane.",
+      "takenOver": "Ktoś inny edytuje teraz ten dokument. Zmiany od ostatniego zapisu nie zostały zachowane.",
+      "finishFailed": "Zmiany są zapisane, ale nie powstała z nich jeszcze nowa wersja. Stuknij ponownie Gotowe albo wyjdź: następna edycja będzie je kontynuować.",
+      "notStored": "Nie udało się zapisać ostatnich zmian. Zostań, aby spróbować ponownie, albo wyjdź bez nich.",
+      "stay": "Zostań",
+      "leave": "Wyjdź"
     }
   },
   "signIn": {
@@ -203,7 +225,10 @@
     "signOut": "Wyloguj się",
     "deleteAccount": "Usuń konto",
     "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy.",
-    "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie."
+    "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie.",
+    "lockScreenTitle": "Ekran blokady",
+    "timerDetails": "Szczegóły licznika",
+    "timerDetailsHint": "Gdy licznik zmieni się na innym urządzeniu, usługa powiadomień Apple przekazuje jego opis i sprawę na ekran blokady. Po wyłączeniu widać tylko czas, dopóki nie otworzysz aplikacji."
   },
   "header": {
     "search": "Szukaj"
@@ -217,14 +242,11 @@
     "headnote": "Teza",
     "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
     "openSource": "Otwórz źródło oryginalne",
-    "openFailed": "Nie udało się otworzyć linku.",
     "loadFailed": "Nie udało się wczytać orzecznictwa.",
     "share": "Udostępnij"
   },
   "more": {
-    "soon": "Wkrótce",
-    "timers": "Stopery",
-    "voiceInput": "Wprowadzanie głosowe"
+    "timers": "Stopery"
   },
   "writes": {
     "consentNeeded": "Aby wprowadzać zmiany z aplikacji, stella potrzebuje Twojej zgody. Zaloguj się ponownie, aby jej udzielić.",
@@ -245,12 +267,6 @@
     "newTimer": "Nowy licznik",
     "description": "Nad czym pracujesz?",
     "matterTitle": "Sprawa",
-    "noMatter": "Bez sprawy",
-    "noDescription": "Bez opisu",
-    "running": "Działa",
-    "paused": "Wstrzymany",
-    "pause": "Wstrzymaj",
-    "resume": "Wznów",
     "save": "Zapisz",
     "discard": "Odrzuć",
     "emptyTitle": "Brak liczników",
@@ -259,8 +275,7 @@
     "retry": "Spróbuj ponownie",
     "unavailable": "Rejestrowanie czasu nie jest włączone w Twojej organizacji.",
     "startFailed": "Nie udało się uruchomić licznika. Spróbuj ponownie.",
-    "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie.",
-    "more": "{count, plural, one {i # inny stoper} few {i # inne stopery} other {i # innych stoperów}}"
+    "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie."
   },
   "scan": {
     "title": "Zeskanuj dokument",
@@ -330,5 +345,11 @@
   "pane": {
     "showList": "Pokaż listę",
     "hideList": "Ukryj listę"
+  },
+  "link": {
+    "open": "Otwórz",
+    "share": "Udostępnij",
+    "cancel": "Anuluj",
+    "openFailed": "Nie udało się otworzyć linku."
   }
 }

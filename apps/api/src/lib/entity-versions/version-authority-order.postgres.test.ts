@@ -10,6 +10,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -65,7 +67,7 @@ describe.skipIf(!runPostgresTests)("delayed version authority", () => {
             id: organizationId,
             name: "Version authority",
             slug: organizationId,
-            createdAt: new Date(),
+            createdAt: dbClock.now(),
           });
           await setup.db.insert(user).values({
             id: userId,
@@ -77,7 +79,7 @@ describe.skipIf(!runPostgresTests)("delayed version authority", () => {
             organizationId,
             userId,
             role: "member",
-            createdAt: new Date(),
+            createdAt: dbClock.now(),
           });
           await setup.db.insert(workspaces).values({
             id: workspaceId,

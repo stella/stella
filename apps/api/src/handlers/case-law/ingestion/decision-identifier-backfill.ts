@@ -536,26 +536,34 @@ const projectDecisionPage = async (
   });
   let repairs: DecisionIdentifierRepairDiagnostic | undefined;
   if (projections.length > 0) {
-    const expected = sql.join(
+    // One jsonb parameter each rather than VALUES lists. The pool keeps every
+    // prepared statement for the life of its connection, and a page's identifier
+    // count varies, so VALUES would leave a large plan on the connection for each
+    // count it ever saw. These statements keep one text whatever the page holds.
+    const expected = JSON.stringify(
       projections.flatMap(({ country, decisionId, identifiers }) =>
-        identifiers.map(
-          (identifier) =>
-            sql`(${decisionId}::uuid, ${identifier.type}::varchar, ${identifier.value}::varchar, ${normalizeDecisionIdentifierIn(country, identifier)}::varchar)`,
-        ),
+        identifiers.map((identifier) => ({
+          decision_id: decisionId,
+          type: identifier.type,
+          value: identifier.value,
+          normalized_value: normalizeDecisionIdentifierIn(country, identifier),
+        })),
       ),
-      sql`, `,
     );
-    const page = sql.join(
-      projections.map(({ decisionId }) => sql`(${decisionId}::uuid)`),
-      sql`, `,
+    const page = JSON.stringify(
+      projections.map(({ decisionId }) => ({ decision_id: decisionId })),
     );
 
     // Graph acquisition precedes the decision page at the transaction owner.
     // NO KEY UPDATE remains compatible with resolver KEY SHARE checks.
     const rewritten = await tx.execute(sql`
-    WITH expected(decision_id, type, value, normalized_value) AS (
-      VALUES ${expected}
-    ), page(decision_id) AS (VALUES ${page}),
+    WITH expected AS (
+      SELECT * FROM jsonb_to_recordset(${expected}::text::jsonb) AS row(
+        decision_id uuid, type varchar, value varchar, normalized_value varchar
+      )
+    ), page AS (
+      SELECT * FROM jsonb_to_recordset(${page}::text::jsonb) AS row(decision_id uuid)
+    ),
     deleted AS (
       DELETE FROM case_law_decision_identifiers stored USING page
       WHERE stored.decision_id = page.decision_id
@@ -576,11 +584,27 @@ const projectDecisionPage = async (
       ON CONFLICT ON CONSTRAINT case_law_decision_identifiers_pk DO UPDATE
       SET value = EXCLUDED.value
       WHERE case_law_decision_identifiers.value IS DISTINCT FROM EXCLUDED.value
-      RETURNING decision_id, type, normalized_value
+      RETURNING decision_id, type, normalized_value, (xmax = 0) AS added
     ), changed_identifiers AS (
       SELECT decision_id, type, normalized_value FROM deleted
       UNION
       SELECT decision_id, type, normalized_value FROM inserted
+    ), moved_identities AS (
+      -- Who answers a citation changes only with an identity. A new spelling
+      -- of a stored identity changes nobody's answer, and neither does
+      -- recording the docket the decision already answers under through its
+      -- citation key. Reopening for those would discard links that still hold.
+      SELECT moved.type, moved.normalized_value
+      FROM (
+        SELECT decision_id, type, normalized_value FROM deleted
+        UNION
+        SELECT decision_id, type, normalized_value FROM inserted WHERE added
+      ) moved
+      JOIN case_law_decisions holder ON holder.id = moved.decision_id
+      WHERE NOT (
+        moved.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
+        AND holder.citation_key IS NOT DISTINCT FROM moved.normalized_value
+      )
     ), reopened AS (
       UPDATE case_law_citations citation
       SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
@@ -588,7 +612,7 @@ const projectDecisionPage = async (
           resolution_attempted_at = NULL
       WHERE ${settledCitationSql(sql.raw("citation.resolution_status"))}
         AND EXISTS (
-          SELECT 1 FROM changed_identifiers changed
+          SELECT 1 FROM moved_identities changed
           WHERE changed.type = ${effectiveCitationIdentifierTypeSql(
             sql.raw("citation.identifier_type"),
           )}
@@ -689,7 +713,7 @@ const projectCitationPage = async (
       citationsScanned: checkpoint.citationsScanned,
     };
   }
-  const projected = sql.join(
+  const projected = JSON.stringify(
     rows.map((row) => {
       const { type, normalizedValue } = citationProjection(row);
       const checked = assertCitationStorageField(
@@ -699,12 +723,15 @@ const projectCitationPage = async (
       if (checked.isErr()) {
         abortTransaction(checked.error);
       }
-      return sql`(${row.id}::uuid, ${type}::varchar, ${checked.value}::varchar)`;
+      return { id: row.id, type, normalized_value: checked.value };
     }),
-    sql`, `,
   );
   await tx.execute(sql`
-    WITH projected(id, type, normalized_value) AS (VALUES ${projected})
+    WITH projected AS (
+      SELECT * FROM jsonb_to_recordset(${projected}::text::jsonb) AS row(
+        id uuid, type varchar, normalized_value varchar
+      )
+    )
     UPDATE case_law_citations citation
     SET identifier_type = projected.type,
         normalized_identifier_value = projected.normalized_value,

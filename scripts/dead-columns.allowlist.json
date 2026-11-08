@@ -1,10 +1,5 @@
 [
   {
-    "table": "organization_settings",
-    "column": "documentStampEnabled",
-    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
-  },
-  {
     "table": "corpus_index_projection_revisions",
     "column": "transactionId",
     "reason": "not app-code dead: populated only by migration-owned triggers (apps/api/drizzle/20260901060000_concurrent_corpus_projection_revision_fence/migration.sql) for ON CONFLICT dedup; app code only ever selects `revision`. Migrations are excluded by design, so this column is invisible to the check even though it is live."

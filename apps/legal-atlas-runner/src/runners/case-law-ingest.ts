@@ -49,6 +49,7 @@ import {
   getAdapter,
   listAdapters,
   listDeferredDocumentDrains,
+  startDocumentFetchBudget,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
@@ -73,7 +74,6 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
-  DOCUMENT_FETCH_BUDGET_MS,
   hasPendingDeferredDocuments,
   scopedPendingDocumentTierLoaders,
 } from "@/api/lib/legal-search/sk-document-backfill";
@@ -1464,7 +1464,7 @@ export const runCaseLawIngest = async (
                     onDocumentObservation,
                     decisionId: decision.id,
                     scopedDb: backfillDb,
-                    signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
+                    signal: startDocumentFetchBudget(),
                   }),
               ),
             isDraining,

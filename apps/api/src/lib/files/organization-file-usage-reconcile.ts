@@ -22,8 +22,8 @@ import {
   withAggregateParentBatch,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { recordOrganizationFileMismatchTransitions } from "@/api/lib/db/file-object-transitions";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
-import { recordOrganizationFileMismatchTransitions } from "@/api/lib/db/transitions";
 import {
   commitOrganizationFilesBytes,
   FILE_RESERVATION_ABANDON_DELAY_MS,

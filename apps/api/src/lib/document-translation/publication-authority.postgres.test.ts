@@ -9,6 +9,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, setDefaultTimeout, spyOn, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
 import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -152,11 +153,21 @@ describe.skipIf(!runPostgresTests)("document translation publication", () => {
             id: organizationId,
             name: "Translation publication",
             slug: organizationId,
-            createdAt: new Date(),
+            createdAt: dbClock.now(),
           });
+          const [databaseClock] = await db
+            .select({
+              epochMs:
+                sql<number>`(extract(epoch from now()) * 1000)::float8`.mapWith(
+                  Number,
+                ),
+            })
+            .from(sql`(SELECT 1) AS database_clock`);
           await recordNewOrganizationAccessState(db, {
             organizationId,
-            now: new Date(),
+            now: new Date(
+              databaseClock?.epochMs ?? panic("Database clock missing"),
+            ),
           });
           await db.insert(user).values({
             id: userId,
@@ -168,7 +179,7 @@ describe.skipIf(!runPostgresTests)("document translation publication", () => {
             organizationId,
             userId,
             role: "member",
-            createdAt: new Date(),
+            createdAt: dbClock.now(),
           });
           await db.insert(workspaces).values({
             id: workspaceId,

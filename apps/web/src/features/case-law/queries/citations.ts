@@ -20,6 +20,11 @@ const decisionCitationKeys = {
     decisionId,
     direction,
   ],
+  inText: (decisionId: string) => [
+    ...decisionCitationKeys.all,
+    decisionId,
+    "in-text",
+  ],
   summary: (decisionId: string) => [
     ...decisionCitationKeys.all,
     decisionId,
@@ -57,6 +62,32 @@ export const decisionCitationsInfiniteOptions = (
       );
 
       return data;
+    },
+    initialPageParam: nullableStringCursorSeed(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+/**
+ * Every citation a decision's text makes, for linking that text. The kind of
+ * a citation decides what it counts for, never whether the reader links it.
+ */
+export const decisionInTextCitationsInfiniteOptions = (decisionId: string) =>
+  infiniteQueryOptions({
+    queryKey: decisionCitationKeys.inText(decisionId),
+    queryFn: async ({ pageParam, signal }) => {
+      const response = await api.case
+        .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
+        .citations.get({
+          query: {
+            direction: "outgoing",
+            kinds: "all",
+            ...(pageParam !== null && { cursor: pageParam }),
+          },
+          fetch: { signal },
+        });
+
+      return unwrapPublicLawResponse(response, "listPublicDecisionCitations");
     },
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,

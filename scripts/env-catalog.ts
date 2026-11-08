@@ -8,6 +8,7 @@ import {
 import { envDocumentProcessingWorkerServerSchema } from "../apps/api/src/env-document-processing-worker-schema";
 import { euCompletionTickServerSchema } from "../apps/api/src/env-eu-completion";
 import { envOnlineIndexServerSchema } from "../apps/api/src/env-online-index";
+import { parsedInputStateBackfillServerSchema } from "../apps/api/src/env-parsed-input-state-backfill";
 import { replayTickServerSchema } from "../apps/api/src/env-replay";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
 import { rateLimitBudgetEnvSchema } from "../apps/api/src/lib/rate-limit/budget-config-schema";
@@ -117,6 +118,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
+  "CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH",
   "CASE_LAW_EU_COMPLETION_ENABLED",
   "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
   "CASE_LAW_EU_COMPLETION_MODE",
@@ -306,6 +308,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
   VITE_API_URL: "http://localhost:3001",
   VITE_BROWSER_API_URL: "http://localhost:3000/api",
   VITE_COLLAB_URL: "ws://localhost:3002",
+  VITE_DOCUMENTS_BUCKET: "stella",
+  VITE_DOCUMENTS_ENDPOINT: "http://localhost:9000",
   VITE_POSTHOG_KEY: "phc_",
   VITE_POSTHOG_HOST: "https://eu.i.posthog.com",
   VITE_POSTHOG_UI_HOST: "https://eu.posthog.com",
@@ -351,6 +355,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum document verification starts per organization per Europe/Prague day (1–1000; default 20).",
   CASE_LAW_DERIVED_AI:
     'Model calls for case-law derived layers: "on" generates a missing decision analysis when a reader opens it and refreshes its significance from the citation graph; "off" (the default) serves stored analyses only, so local, seeded and CI stacks never reach a model by serving a decision.',
+  CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
+    "Stop the parsed-input-state backfill before the next database effect.",
   CASE_LAW_EU_COMPLETION_ENABLED:
     "Enable bounded EU case-law completion. Defaults to false.",
   CASE_LAW_EU_COMPLETION_KILL_SWITCH:
@@ -682,6 +688,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   USE_MOCK_AI:
     'Return canned AI responses in local development and tests. An organization\'s own AI key still answers for real; "force" mocks those requests too. Deployed runtimes reject this setting.',
   VITE_API_URL: "API base URL used by the SPA for Eden treaty requests.",
+  VITE_DOCUMENTS_BUCKET: "S3 bucket used for browser document transfers.",
+  VITE_DOCUMENTS_ENDPOINT:
+    "S3 or S3-compatible endpoint used for browser document transfers.",
   VITE_BROWSER_API_URL:
     "Same-origin browser API mount. Must be the exact /api path on VITE_PUBLIC_APP_URL; unset uses VITE_API_URL.",
   VITE_AUTH_GOOGLE:
@@ -759,6 +768,7 @@ type EnvCatalogName =
   | keyof typeof envApiServerSchema
   | keyof typeof envCollabServerSchema
   | keyof typeof replayTickServerSchema
+  | keyof typeof parsedInputStateBackfillServerSchema
   | keyof typeof euCompletionTickServerSchema
   | keyof typeof envWebClientSchema;
 
@@ -819,6 +829,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DERIVED_AI: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
+    ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_DISABLED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
@@ -1074,6 +1086,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_BROWSER_API_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_COLLAB_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_BRIDGE_PORT: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_DOCUMENTS_BUCKET: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_DOCUMENTS_ENDPOINT: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_RELEASES_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
@@ -1139,6 +1153,8 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "TRANSACTIONAL_EMAIL_FROM",
   "USE_MOCK_AI",
   "VITE_API_URL",
+  "VITE_DOCUMENTS_BUCKET",
+  "VITE_DOCUMENTS_ENDPOINT",
   "VITE_POSTHOG_KEY",
   "VITE_PUBLIC_APP_URL",
 ]);
@@ -1298,6 +1314,10 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
 export const ENV_CATALOG = [
   ...createCatalogEntries({
     owner: ENV_OWNER.apiBase,
+    schema: parsedInputStateBackfillServerSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
     schema: euCompletionTickServerSchema,
   }),
   ...createCatalogEntries({
@@ -1336,6 +1356,7 @@ export const ENV_CATALOG = [
 ];
 
 export const API_ENV_SCHEMA = {
+  ...parsedInputStateBackfillServerSchema,
   ...euCompletionTickServerSchema,
   ...replayTickServerSchema,
   ...envBaseServerSchema,
@@ -1391,6 +1412,10 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_PGLITE_SNAPSHOT_CACHE_DIR",
   "STELLA_SEED_EMAIL_WORKSPACE_ID",
   "STELLA_SERVER_URL",
+  // Bun.build defines it in the compiled agent sidecar;
+  // packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_SIDECAR_VERSION",
+  "STELLA_TIMING",
   "STELLA_WEB_PORT",
   "XDG_CACHE_HOME",
   "XDG_CONFIG_HOME",
@@ -1460,6 +1485,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  "STELLA_RUN_SHARED_POSTGRES_TESTS",
+
   // Dated guard-rollout healing requests full scope before removing the temporary scope.
   "STELLA_GUARD_SCOPE",
   // Release-only secret: the short-lived federated Chrome Web Store access token.
@@ -1471,6 +1498,17 @@ export const TOOLING_ENV_KEYS = new Set([
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
+  // The fake harness CLIs log how they started and what they receive to the
+  // file their tests name; the fake Codex app server also logs its CODEX_HOME.
+  "FAKE_HARNESS_LOG",
+  "CODEX_HOME",
+  // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
+  "FAKE_SKILL_PATH",
+  // The desktop's stand-in harness holder (a re-run of its own test binary)
+  // takes its folder, socket and log file from the test that starts it.
+  "STAND_IN_DIR",
+  "STAND_IN_ENDPOINT",
+  "FAKE_SIDECAR_LOG",
   // Invocation-local handoff values are removed before test/native entry points run.
   "STELLA_TEST_PROCESS_STARTUP_GATE",
   "STELLA_TEST_NATIVE_COMMAND",
@@ -1524,6 +1562,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "POSTGRES_IMAGE",
   "REDIS_IMAGE",
   // The merge group's base revision.
+  "BRIDGE_BASE_SHA",
   "MERGE_GROUP_BASE_SHA",
   // The scan engine drift check builds into a scratch directory and compares it.
   "SCAN_ENGINE_WASM_OUT_DIR",
@@ -1551,9 +1590,17 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // gh-dispatch-workflow.sh reads gh-retry.sh's final HTTP status from here.
+  "GH_RETRY_STATUS_FILE",
+  // gh-dispatch-workflow.sh bounds for watching an unconfirmed dispatch.
+  "GH_DISPATCH_SETTLE_SECONDS",
+  "GH_DISPATCH_POLL_SECONDS",
   // The release resolve job exports the network retry helper's path, staged
   // from the workflow's own revision, for its git fetches.
   "NETWORK_RETRY_SCRIPT",
+  // The promote names the repository whose deployment names the deploy
+  // contract check reads (scripts/check-deploy-env-contract.ts).
+  "DEPLOY_ENV_CONTRACT_INFRA_REPOSITORY",
   // The release rehearsal workflow provides its deployment-repository target.
   "STAGING_DEPLOY_REPOSITORY",
   // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):
@@ -1620,7 +1667,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_TEST_DURATIONS_HASH",
   // Optional main-measured weights path; content identity is keyed separately.
   "API_TEST_DURATIONS_FILE",
-  "API_TEST_FILES",
+  "API_TEST_FILES_ENCODED",
   "API_TEST_RUNNER_DEADLINE_MS",
   "API_TEST_SHARD_COUNT",
   "API_TEST_TIMINGS_DIR",
@@ -1769,9 +1816,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_BASE_DATABASE_URL",
   "REHEARSAL_BASE_IMAGE_REPOSITORY",
   "REHEARSAL_BASE_REF",
+  "REHEARSAL_CI_TOOLING",
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
+  // Disposable subprocess state and failure selection in rehearsal tests.
+  "REHEARSAL_TEST_STATE",
+  "REHEARSAL_TEST_FAILURE",
   "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
   "PRODUCTION_WEB_IMAGE_DIGEST",
@@ -1832,6 +1883,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_DOCKER_KEEPER_LABEL",
   "STELLA_INFRA_OFFSET",
+  // Prevents recursive spawning of native file-mode test subprocesses.
+  "STELLA_LOCAL_FILE_CHILD",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   // Development render census: verify React Refresh with isolated temporary modules.
@@ -1841,6 +1894,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_RUN_QUERY_PERF_TESTS",
   "STELLA_RUN_VALKEY_TESTS",
   "STELLA_SEED_ID_NAMESPACE",
+  "STELLA_SEED_LOCALE",
   "STELLA_SEED_ORG_ID",
   "STELLA_SEED_USER_ID",
   "STELLA_TEST_LATEST_TAG",
@@ -1886,7 +1940,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODE_CHECK_MEMORY_BYTES",
   // CI installer budget selected from restored package-cache contents.
   "CI_INSTALL_CACHE_RESTORED",
-  "CI_POSTGRES_TEST_SELECTION",
+  "CI_POSTGRES_TEST_SELECTION_ENCODED",
   "CI_POSTGRES_TEST_SHARD",
   "POSTGRES_TEST_DURATIONS_FILE",
   "POSTGRES_JUNIT_FILE",
@@ -1959,6 +2013,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "PATH",
   "RAILWAY_GIT_COMMIT_SHA",
   "STELLA_LOCAL_DEV",
+  // Tauri sets it for a desktop build's beforeBuildCommand.
+  "TAURI_ENV_TARGET_TRIPLE",
   "TMPDIR",
   "TZ",
 ]);

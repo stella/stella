@@ -66,6 +66,7 @@ import {
   sharepointConnections,
   sharepointOAuthState,
   taskAssignees,
+  timerActivityDevices,
   userFiles,
   WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
@@ -1451,10 +1452,12 @@ export const deleteSearchHistory = async (
 
 const DELETE_PUSH_DEVICES_TABLES = [
   pushDevices,
+  timerActivityDevices,
 ] as const satisfies readonly PgTable[];
 
 /**
- * 15. Mobile push devices, in every organization. A device token is personal
+ * 15. Mobile push devices and the phones that show the person's timer, in
+ * every organization. A device token is personal
  * data with no history value, and the user row is soft-deleted, so the
  * `user_id` cascade never fires.
  */
@@ -1464,6 +1467,10 @@ export const deletePushDevices = async (
 ): Promise<void> => {
   // audit: skip - the account deletion request records this erasure
   await tx.delete(pushDevices).where(eq(pushDevices.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(timerActivityDevices)
+    .where(eq(timerActivityDevices.userId, currentUserId));
 };
 
 export type RecordAccountDeletionRequestParams = {

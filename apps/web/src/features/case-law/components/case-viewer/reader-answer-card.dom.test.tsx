@@ -8,19 +8,23 @@ import type {
   ReaderAnswerCitation,
 } from "@stll/api-contract/reader-answers";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { MarginItem } from "@/components/legal-reader/margin-notes";
 import type { AnchoredNote } from "@/components/legal-reader/margin-notes.logic";
 import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
 const { cleanup, render, renderHook, fireEvent, act, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
 const { ReaderAnswerCard } = await import("./reader-answer-card");
+// Load the real lazy renderer before assertions use its parsed Markdown.
+await import("@/components/ai-elements/message-response");
 const { CopyActionButton } = await import("@/components/copy-action-button");
 const { resolveReaderAnswerCitation } =
   await import("./reader-answer-citation.logic");
@@ -200,7 +204,9 @@ const mount = (
       timeZone="UTC"
     >
       <FormattingProvider locale={locale} timeZone="UTC">
-        <ReaderAnswerCard {...updated} />
+        <WebReaderPresentationProvider>
+          <ReaderAnswerCard {...updated} />
+        </WebReaderPresentationProvider>
       </FormattingProvider>
     </IntlProvider>
   );
@@ -218,17 +224,17 @@ test("citations preserve both decision and paragraph identity and each action ca
     expect(container.querySelector("p")?.textContent).toBe("An explanation."),
   );
   fireEvent.click(getByRole("button", { name: "Paragraph 5" }));
-  const decisionChip = getByRole("button", {
+  const decisionChip = getByRole("link", {
     name: "Synthetic Supreme Court, SYN 12/2026, Jan 12, 2026, paragraph 6",
   });
   expect(decisionChip.getAttribute("href")).toBe(
     `${citedDecision.readerUrl}#p-6`,
   );
   await act(async () => {
-    fireEvent.click(decisionChip);
+    fireEvent.focus(decisionChip);
   });
   fireEvent.click(
-    await findByRole("link", { name: messages.common.openInStella }),
+    await findByRole("button", { name: messages.common.openInSidePanel }),
   );
   const message = answer.messages.at(0);
   if (message === undefined) {

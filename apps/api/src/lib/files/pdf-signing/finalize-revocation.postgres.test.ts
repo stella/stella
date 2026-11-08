@@ -13,6 +13,7 @@ import { and, eq, sql } from "drizzle-orm";
 import crypto from "node:crypto";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { dbClock } from "@stll/test-kit/db";
 import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -130,11 +131,21 @@ describe.skipIf(!runPostgresTests)("pdf signing finalize authority", () => {
               id: organizationId,
               name: "Signing authority",
               slug: organizationId,
-              createdAt: new Date(),
+              createdAt: dbClock.now(),
             });
+            const [databaseClock] = await setup.db
+              .select({
+                epochMs:
+                  sql<number>`(extract(epoch from now()) * 1000)::float8`.mapWith(
+                    Number,
+                  ),
+              })
+              .from(sql`(SELECT 1) AS database_clock`);
+            const databaseNow =
+              databaseClock?.epochMs ?? panic("Database clock missing");
             await recordNewOrganizationAccessState(setup.db, {
               organizationId,
-              now: new Date(),
+              now: new Date(databaseNow),
             });
             await setup.db.insert(user).values({
               id: userId,
@@ -146,7 +157,7 @@ describe.skipIf(!runPostgresTests)("pdf signing finalize authority", () => {
               organizationId,
               userId,
               role: "member",
-              createdAt: new Date(),
+              createdAt: dbClock.now(),
             });
             await setup.db.insert(workspaces).values({
               id: workspaceId,
@@ -219,7 +230,7 @@ describe.skipIf(!runPostgresTests)("pdf signing finalize authority", () => {
 
             // Phase 1 as the certificate handler runs it, then the desktop's
             // signature, stored on an exchange whose first attempt is claimed.
-            const signingTime = new Date(Date.now() - MINUTE_MS);
+            const signingTime = new Date(databaseNow - MINUTE_MS);
             const { der, privateKey } = await createSelfSignedCertificate({
               keyPool,
               notBefore: new Date(signingTime.getTime() - 60 * MINUTE_MS),
@@ -252,7 +263,7 @@ describe.skipIf(!runPostgresTests)("pdf signing finalize authority", () => {
               digestHex,
             );
             const sessionToken = createPdfSigningToken({ userId: null });
-            const expiresAt = new Date(Date.now() + 10 * MINUTE_MS);
+            const expiresAt = dbClock.fromNow(10 * MINUTE_MS);
             // Signing sessions are tenant rows: seed and read them in scope.
             const sessionScope = createScopedDb(
               markRlsDatabase(setup.db),
@@ -273,7 +284,7 @@ describe.skipIf(!runPostgresTests)("pdf signing finalize authority", () => {
                     createPdfSigningToken({ userId: null }),
                   ),
                   handoffExpiresAt: expiresAt,
-                  handoffConsumedAt: new Date(),
+                  handoffConsumedAt: dbClock.now(),
                   sessionTokenHash: hashPdfSigningToken(sessionToken),
                   tokenExpiresAt: expiresAt,
                   digestHex,

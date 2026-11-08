@@ -7,6 +7,8 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { timerNotFound, timerParams } from "@/api/lib/billing/time-timers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
+import { scheduleTimerActivityUpdates } from "@/api/lib/push/timer-activity-queue";
+import type { TimerOwnerChange } from "@/api/lib/push/timer-activity-queue";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 import { finalizeTimer } from "../finalize";
@@ -50,6 +52,8 @@ const stopMemberTimer = createSafeRootHandler(
         }),
       );
     }
+    // The member whose timer this is, whose Lock Screen follows the stop.
+    let stopped: TimerOwnerChange | undefined;
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
         const organizationId = session.activeOrganizationId;
@@ -79,9 +83,10 @@ const stopMemberTimer = createSafeRootHandler(
         if (!ownerId) {
           return Result.err(timerNotFound("admin"));
         }
+        stopped = { organizationId, userId: brandPersistedUserId(ownerId) };
         return finalizeTimer({
           tx,
-          owner: { organizationId, userId: brandPersistedUserId(ownerId) },
+          owner: stopped,
           id: params.id,
           memberRole,
           recordAuditEvent,
@@ -93,6 +98,9 @@ const stopMemberTimer = createSafeRootHandler(
         });
       }),
     );
+    if (outcome.isOk() && stopped !== undefined) {
+      scheduleTimerActivityUpdates([stopped]);
+    }
     return Result.ok(yield* outcome);
   },
 );

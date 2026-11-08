@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const ruleOptions = {
-  owner: "apps/api/src/lib/db/transitions.ts",
+  owners: [
+    "apps/api/src/lib/db/transitions.ts",
+    "apps/api/src/lib/db/file-object-transitions.ts",
+  ],
   columns: {
     flowRuns: ["status"],
     requestJobs: ["state", "phase"],
@@ -50,14 +53,17 @@ describe.serial("lifecycle write ownership", () => {
       }),
     ).toEqual([3, 4, 7, 8, 9, 12]);
   });
-  test("the owner can implement lifecycle writes", async () => {
-    expect(
-      await lintSingleRule("no-direct-status-set", writerSource, {
-        ruleOptions,
-        sourcePath: ruleOptions.owner,
-      }),
-    ).toEqual([]);
-  });
+  test.each(ruleOptions.owners)(
+    "the owner %s can implement lifecycle writes",
+    async (owner) => {
+      expect(
+        await lintSingleRule("no-direct-status-set", writerSource, {
+          ruleOptions,
+          sourcePath: owner,
+        }),
+      ).toEqual([]);
+    },
+  );
   test("auth-schema tables and computed literal keys use the same guard", async () => {
     const authSource = [
       'import { invitation } from "@/api/db/auth-schema";',

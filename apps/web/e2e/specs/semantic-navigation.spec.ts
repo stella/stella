@@ -1,10 +1,30 @@
 import type { Locator, Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import * as v from "valibot";
 
 import { apiDelete, apiPut } from "../helpers/api";
 import { seedSidebarState } from "../helpers/sidebar-state";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
+
+// A padding point stays inside a cell when its column reflows before the click.
+const CELL_SPACE_INSET = 4;
+
+const cellSpacePoint = async (cell: Locator) =>
+  await cell.evaluate((element, inset) => {
+    const bounds = element.getBoundingClientRect();
+    const x = inset;
+    const y = inset;
+    const target = document.elementFromPoint(bounds.left + x, bounds.top + y);
+    if (target === null) {
+      return { x, y, hit: "outside-viewport" };
+    }
+    return {
+      x,
+      y,
+      hit: target.closest("a") === null ? "cell-space" : "link",
+    };
+  }, CELL_SPACE_INSET);
 
 const semanticStructure = async (page: Page) =>
   await page.evaluate(() => ({
@@ -281,18 +301,19 @@ for (const email of [null, "a@example.test"]) {
     page,
     request,
   }, testInfo) => {
-    const contactId = randomUUID();
-    const displayName = `Contact click ${contactId.slice(0, 8)}`;
-    await apiPut(request, "/contacts", {
-      id: contactId,
-      type: "person",
-      displayName,
-      ...(email === null
-        ? {}
-        : {
-            emails: [{ type: "work", address: email, isPrimary: true }],
-          }),
-    });
+    const displayName = `Contact click ${randomUUID().slice(0, 8)}`;
+    const { id: contactId } = v.parse(
+      v.object({ id: v.string() }),
+      await apiPut(request, "/contacts", {
+        type: "person",
+        displayName,
+        ...(email === null
+          ? {}
+          : {
+              emails: [{ type: "work", address: email, isPrimary: true }],
+            }),
+      }),
+    );
     try {
       await page.context().addCookies((await request.storageState()).cookies);
       await page.setViewportSize({ width: 1440, height: 900 });
@@ -349,3 +370,42 @@ for (const email of [null, "a@example.test"]) {
     }
   });
 }
+
+test.describe("cell-space coordinates", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const width of [80, 160, 280]) {
+    test(`stay inside a cell after its table shrinks to ${width}px`, async ({
+      page,
+    }) => {
+      await page.setContent(`
+        <table style="table-layout:fixed;width:600px;border-collapse:collapse">
+          <tr><td id="email" style="padding:10px;height:24px"></td><td>Phone</td></tr>
+        </table>
+      `);
+      const cell = page.locator("#email");
+      const point = await cellSpacePoint(cell);
+      await page.getByRole("table").evaluate((table, resizedWidth) => {
+        table.setAttribute(
+          "style",
+          `table-layout:fixed;width:${resizedWidth}px;border-collapse:collapse`,
+        );
+      }, width);
+      const bounds = await cell.boundingBox();
+      expect(point.x).toBeGreaterThan(0);
+      expect(bounds?.width).toBeGreaterThan(point.x);
+      expect(point.y).toBeGreaterThan(0);
+      expect(bounds?.height).toBeGreaterThan(point.y);
+      expect(point.hit).toBe("cell-space");
+      await cell.evaluate((element) => {
+        if (element instanceof HTMLTableCellElement) {
+          element.addEventListener("click", () => {
+            element.dataset["clicked"] = "true";
+          });
+        }
+      });
+      await cell.click({ position: { x: point.x, y: point.y } });
+      await expect(cell).toHaveAttribute("data-clicked", "true");
+    });
+  }
+});

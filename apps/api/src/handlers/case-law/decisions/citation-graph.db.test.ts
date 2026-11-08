@@ -19,6 +19,7 @@ import {
   CITATION_SUMMARY_SCAN_LIMIT,
   CITATION_TIMELINE_MAX_YEARS,
   listDecisionCitationsHandler,
+  listDecisionCitationsQuerySchema,
   listLeadingCitationsHandler,
   listTopCitingDecisionsHandler,
   summarizeDecisionCitationsHandler,
@@ -511,6 +512,46 @@ test("outgoing keeps unresolved text, drops restricted and procedural rows", asy
     mixed: 0,
     unclassified: 1,
   });
+});
+
+test("the reader's text links keep the case's own history, linked to what it cites", async () => {
+  const page = await withSubject(
+    subjectId,
+    async (subject) =>
+      await listDecisionCitationsHandler({
+        subject,
+        query: { direction: "outgoing", kinds: "all" },
+      }),
+  );
+  if (!("items" in page)) {
+    throw new Error("Expected a citation page");
+  }
+
+  const procedural = page.items.find(
+    (item) => item.citationText === "procedural-outgoing",
+  );
+  expect(procedural?.decision?.id).toBe(openRelatedId);
+  expect(page.items.map((item) => item.citationText)).toEqual(
+    expect.arrayContaining(["outgoing-resolved", "outgoing-unresolved"]),
+  );
+  expect(
+    page.items.some((item) => item.citationText === "outgoing-restricted"),
+  ).toBe(false);
+});
+
+test("every kind is listed only for the citations a decision makes", () => {
+  expect(
+    v.safeParse(listDecisionCitationsQuerySchema, {
+      direction: "incoming",
+      kinds: "all",
+    }).success,
+  ).toBe(false);
+  expect(
+    v.safeParse(listDecisionCitationsQuerySchema, {
+      direction: "outgoing",
+      kinds: "all",
+    }).success,
+  ).toBe(true);
 });
 
 test("citation pages reject malformed cursors", async () => {

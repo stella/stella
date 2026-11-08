@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
@@ -33,7 +33,6 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
-import { Switch } from "@stll/ui/switch";
 
 import type { DesktopMessages } from "../i18n/index";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -41,6 +40,7 @@ import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
+  failureReason,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import { calendarDate, shiftDate } from "./activity-logic";
@@ -59,6 +59,7 @@ import type {
 import { CaptureDetailsControl } from "./ActivityCaptureDetails";
 import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
+import { useBillingDraftSettings } from "./billing-draft-settings";
 
 type ActivitySettingsView =
   | { type: "loading" }
@@ -84,7 +85,6 @@ type ActivitySettingsCommand =
   | "activity_remove_app_exclusion"
   | "activity_set_app_detail_capture"
   | "activity_set_detect_calls"
-  | "activity_set_narrative_assist"
   | "activity_set_retention";
 
 type RunCommand = (
@@ -136,18 +136,20 @@ function reportSettingsError(
     "activityRead" | "activitySubscribe" | "activityUpdate"],
   code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[
     "eventSubscriptionFailed" | "invalidResponse" | "invokeFailed"],
+  rejection?: unknown,
 ) {
   // Fixed codes only: nothing about what was recorded leaves the window.
   reportDesktopError({
     code,
     operation,
+    ...(rejection === undefined ? {} : { reason: failureReason(rejection) }),
     window: DESKTOP_TELEMETRY_WINDOWS.main,
   });
 }
 
 function useActivitySettings(
   date: string | null,
-  onReadError: (message: string) => void,
+  setError: Dispatch<SetStateAction<string | null>>,
 ) {
   const t = useTranslations("activity");
   const [view, setView] = useState<ActivitySettingsView>({ type: "loading" });
@@ -159,12 +161,17 @@ function useActivitySettings(
     const fail = (
       code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[
         "invalidResponse" | "invokeFailed"],
+      rejection?: unknown,
     ) => {
-      reportSettingsError(DESKTOP_TELEMETRY_OPERATIONS.activityRead, code);
+      reportSettingsError(
+        DESKTOP_TELEMETRY_OPERATIONS.activityRead,
+        code,
+        rejection,
+      );
       setView((previousView) =>
         previousView.type === "ready" ? previousView : { type: "failed" },
       );
-      onReadError(errorRead);
+      setError(errorRead);
     };
     const read = () => {
       requestId.current += 1;
@@ -179,13 +186,15 @@ function useActivitySettings(
             return undefined;
           }
           setView({ settings: value, type: "ready" });
+          // Only the read's own error: a failed change still needs saying.
+          setError((shown) => (shown === errorRead ? null : shown));
           return undefined;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (disposed || current !== requestId.current) {
             return;
           }
-          fail(DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed);
+          fail(DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed, error);
         });
     };
     read();
@@ -204,7 +213,7 @@ function useActivitySettings(
       disposed = true;
       stopListening();
     };
-  }, [date, errorRead, onReadError]);
+  }, [date, errorRead, setError]);
 
   return view;
 }
@@ -239,26 +248,7 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
           {t("detectCallsDescription")}
         </p>
       </div>
-      <div className="flex flex-col gap-2">
-        <Label
-          className="items-start gap-2"
-          htmlFor="activity-narrative-assist"
-        >
-          <Switch
-            checked={settings.narrativeAssist === "always"}
-            id="activity-narrative-assist"
-            onCheckedChange={(always) =>
-              onCommand("activity_set_narrative_assist", {
-                assist: always ? "always" : "ask",
-              })
-            }
-          />
-          <span>{t("narrativeAssistAlways")}</span>
-        </Label>
-        <p className="text-muted-foreground text-xs">
-          {t("narrativeAssistDescription")}
-        </p>
-      </div>
+      <BillingDraftConsentSettings />
       <CaptureDetailsControl onCommand={onCommand} settings={settings} />
       {settings.appNameOnlyApps.length > 0 ? (
         <div className="flex flex-col gap-2">
@@ -877,6 +867,7 @@ export const ActivitySettingsPane = () => {
         reportSettingsError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          error,
         );
         const failure = deletionFailure(error);
         switch (failure) {
@@ -1012,6 +1003,74 @@ export const ActivitySettingsPane = () => {
         settings={settings}
       />
       {dialogView}
+    </div>
+  );
+};
+
+/**
+ * Consent to stella AI drafts, kept on the server. Withdrawing stays possible
+ * whenever consent exists, even where the firm has drafting off; it applies
+ * in this window at once and is sent again until the server confirms it.
+ */
+const BillingDraftConsentSettings = () => {
+  const t = useTranslations("activity");
+  const { settings, setConsent, setPreference } = useBillingDraftSettings(true);
+  if (settings.type === "loading" || settings.type === "unavailable") {
+    return null;
+  }
+  if (settings.type === "failed") {
+    return (
+      <p className="text-muted-foreground text-xs">
+        {t("billingDraftsUnavailable")}
+      </p>
+    );
+  }
+  const { consent } = settings;
+  const withdrawable =
+    consent === "granted" || consent === "pending-withdrawal";
+  if (!withdrawable && settings.mode === "off") {
+    return null;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm">{t("billingDraftsTitle")}</span>
+      <p className="text-muted-foreground text-xs">
+        {withdrawable ? t("billingDraftsGranted") : t("billingDraftsRevoked")}
+      </p>
+      {consent === "pending-withdrawal" ? (
+        <p className="text-muted-foreground text-xs" role="status">
+          {t("billingDraftsWithdrawPending")}
+        </p>
+      ) : null}
+      {settings.preference === null ? null : (
+        <div className="flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs">
+            {t("billingDraftsPreference")}
+          </span>
+          <bdi className="text-sm text-pretty">{settings.preference}</bdi>
+          <Button
+            className="self-start"
+            onClick={() => {
+              void setPreference(null);
+            }}
+            size="xs"
+            variant="ghost"
+          >
+            {t("billingDraftsForgetPreference")}
+          </Button>
+        </div>
+      )}
+      {consent === "granted" ? (
+        <Button
+          className="self-start"
+          onClick={() => {
+            void setConsent("revoked");
+          }}
+          variant="outline"
+        >
+          {t("billingDraftsWithdraw")}
+        </Button>
+      ) : null}
     </div>
   );
 };

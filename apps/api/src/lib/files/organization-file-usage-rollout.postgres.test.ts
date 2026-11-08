@@ -10,6 +10,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   organizationFileObjects,
@@ -72,11 +74,21 @@ describe.skipIf(!runPostgresTests)("file accounting during a rollout", () => {
               id: organizationId,
               name: "File accounting rollout",
               slug: organizationId,
-              createdAt: new Date(),
+              createdAt: dbClock.now(),
             });
+            const [databaseClock] = await setup.db
+              .select({
+                epochMs:
+                  sql<number>`(extract(epoch from now()) * 1000)::float8`.mapWith(
+                    Number,
+                  ),
+              })
+              .from(sql`(SELECT 1) AS database_clock`);
             await recordNewOrganizationAccessState(setup.db, {
               organizationId,
-              now: new Date(),
+              now: new Date(
+                databaseClock?.epochMs ?? panic("Database clock missing"),
+              ),
             });
             await setup.db.insert(user).values({
               id: userId,
@@ -88,7 +100,7 @@ describe.skipIf(!runPostgresTests)("file accounting during a rollout", () => {
               organizationId,
               userId,
               role: "owner",
-              createdAt: new Date(),
+              createdAt: dbClock.now(),
             });
             await setup.db.insert(usagePolicies).values({
               id: policyId,
@@ -103,8 +115,8 @@ describe.skipIf(!runPostgresTests)("file accounting during a rollout", () => {
               usagePolicyId: policyId,
               status: "active",
               seats: 1,
-              currentPeriodStart: new Date(Date.now() - 60_000),
-              currentPeriodEnd: new Date(Date.now() + 3_600_000),
+              currentPeriodStart: dbClock.ago(60_000),
+              currentPeriodEnd: dbClock.fromNow(3_600_000),
               source: "manual",
             });
             await setup.db.insert(usageSeatAssignments).values({
@@ -156,7 +168,7 @@ describe.skipIf(!runPostgresTests)("file accounting during a rollout", () => {
                 .set({
                   committedBytes: counter.committedBytes + LEGACY_BYTES,
                   reservedBytes: counter.reservedBytes,
-                  updatedAt: new Date(),
+                  updatedAt: dbClock.now(),
                 })
                 .where(
                   eq(organizationFileUsage.organizationId, organizationId),

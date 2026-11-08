@@ -35,7 +35,7 @@ import {
   claimFileComparisonInputTransitions,
   releaseFileComparisonInputTransitions,
   settleFileComparisonInputTransitions,
-} from "@/api/lib/db/transitions";
+} from "@/api/lib/db/file-object-transitions";
 import { resolveDocxEditAuthorName } from "@/api/lib/entity-versions/resolve-docx-edit-author-name";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -215,6 +215,7 @@ const settleInputs = async ({
       : Result.err(
           new HandlerError({
             status: 409,
+            code: "file_comparison_input_released",
             message: "Comparison input claim is no longer held",
           }),
         );
@@ -634,6 +635,7 @@ const claimInputRows = async ({
       return Result.err(
         new HandlerError({
           status: 404,
+          code: "not_found",
           message: "Comparison input pair is unavailable",
         }),
       );

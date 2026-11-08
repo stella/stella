@@ -12,18 +12,22 @@ import roleCensus from "./role-privilege-census.json" with { type: "json" };
 const ROW_LOCK_CLAUSE = /\bFOR (?:UPDATE|NO KEY UPDATE|SHARE|KEY SHARE)\b/u;
 const LOCKED_TABLE = /\bFROM "public"\."(?<table>[^"]+)"/u;
 
-const applicationPrivileges = new Set(
-  roleCensus.find(({ role }) => role === stella.name)?.privileges,
-);
+// The census lists a role's privileges only beyond PUBLIC's, so the role can
+// also use whatever PUBLIC holds.
+const applicationPrivileges = new Set([
+  ...(roleCensus.roles.find(({ role }) => role === stella.name)?.privileges ??
+    []),
+  ...roleCensus.public,
+]);
 
-// Row-locking clauses need UPDATE on the table or on at least one column.
+// Row-locking clauses need UPDATE on the table or on at least one column,
+// as PostgreSQL resolves it for the role (`EFFECTIVE`).
 const applicationCanLock = (table: string) =>
-  applicationPrivileges.has(`table:public.${table}:UPDATE:GRANTABLE:false`) ||
-  applicationPrivileges.has(`table:public.${table}:UPDATE:GRANTABLE:true`) ||
+  applicationPrivileges.has(`table:public.${table}:UPDATE:EFFECTIVE`) ||
   [...applicationPrivileges].some(
     (privilege) =>
       privilege.startsWith(`column:public.${table}.`) &&
-      privilege.includes(":UPDATE:GRANTABLE:"),
+      privilege.endsWith(":UPDATE:EFFECTIVE"),
   );
 
 /** Every physical shape a registered aggregate locks, one acquisition each. */
