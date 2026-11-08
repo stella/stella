@@ -96,6 +96,10 @@ import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
 import { chatFetchClient, chatResponseError } from "./chat-fetch";
 import {
+  localRunLimitResetsAtFromThrown,
+  withLocalRunLimitResetsAt,
+} from "./chat-local-run-limit";
+import {
   isClassifiedRunError,
   observeChatProviderDiagnostic,
 } from "./chat-provider-diagnostic";
@@ -353,6 +357,8 @@ const keepsShownChatError = (shown: Error | undefined, next: Error): boolean =>
     findChatRequestError(next) === undefined) ||
   (providerDiagnosticFromThrown(shown) !== undefined &&
     providerDiagnosticFromThrown(next) === undefined) ||
+  (localRunLimitResetsAtFromThrown(shown) !== null &&
+    localRunLimitResetsAtFromThrown(next) === null) ||
   (shown !== undefined &&
     isClassifiedRunError(shown) &&
     !isClassifiedRunError(next));
@@ -526,11 +532,16 @@ export const createChatRuntime = ({
   };
 
   let providerDiagnostic: ProviderDiagnostic | undefined;
-  const captureRuntimeError = (error: unknown): Error => {
-    const normalized = withProviderDiagnostic(
-      toError(error),
-      providerDiagnostic,
+  /** When the usage limit of the harness that ran the turn resets. */
+  let localRunLimitResetsAt: string | null = null;
+  /** The run error's own details, which the SDK's error drops. */
+  const withRunErrorDetails = (error: Error) =>
+    withLocalRunLimitResetsAt(
+      withProviderDiagnostic(error, providerDiagnostic),
+      localRunLimitResetsAt,
     );
+  const captureRuntimeError = (error: unknown): Error => {
+    const normalized = withRunErrorDetails(toError(error));
     // Interrupt submission reports the same transport failure again after
     // the SDK has reduced it to a generic interrupt error. Keep its typed cause.
     if (
@@ -767,6 +778,7 @@ export const createChatRuntime = ({
         return panic("Stella chat connection received model messages");
       }
       providerDiagnostic = undefined;
+      localRunLimitResetsAt = null;
       if (!isBrowserExtensionBridgeMounted()) {
         getAnalytics().captureError(
           new BrowserBridgeUnmountedError({
@@ -827,6 +839,9 @@ export const createChatRuntime = ({
           },
           onDiagnostic: (diagnostic) => {
             providerDiagnostic = diagnostic;
+          },
+          onLocalRunLimit: (resetsAt) => {
+            localRunLimitResetsAt = resetsAt;
           },
         },
       );
@@ -930,10 +945,7 @@ export const createChatRuntime = ({
       ) {
         activeToolResultOperation.rejection = error;
       }
-      const normalized = withProviderDiagnostic(
-        normalizeChatStreamError(error),
-        providerDiagnostic,
-      );
+      const normalized = withRunErrorDetails(normalizeChatStreamError(error));
       if (keepsShownChatError(snapshot.error, normalized)) {
         return;
       }
@@ -950,10 +962,7 @@ export const createChatRuntime = ({
       }
       if (
         error !== undefined &&
-        keepsShownChatError(
-          snapshot.error,
-          withProviderDiagnostic(error, providerDiagnostic),
-        )
+        keepsShownChatError(snapshot.error, withRunErrorDetails(error))
       ) {
         return;
       }
@@ -962,10 +971,7 @@ export const createChatRuntime = ({
         (!isStoppedTurn() && !isSettledTurnRefusal(error))
       ) {
         setSnapshot({
-          error:
-            error === undefined
-              ? undefined
-              : withProviderDiagnostic(error, providerDiagnostic),
+          error: error === undefined ? undefined : withRunErrorDetails(error),
         });
       }
     },

@@ -334,8 +334,10 @@ mod tests {
 
   impl Drop for Dropped {
     fn drop(&mut self) {
-      if let Some(sender) = self.0.take() {
-        let _ = sender.send(());
+      if let Some(sender) = self.0.take()
+        && sender.send(()).is_err()
+      {
+        tracing::debug!("dropped install signal had no waiter");
       }
     }
   }

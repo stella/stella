@@ -152,6 +152,7 @@
     "emailPlaceholder": "você@exemplo.com",
     "error": {
       "generic": "Algo deu errado ao fazer seu login. Tente novamente.",
+      "providerUnavailable": "O provedor de login não está respondendo agora. Tente novamente em um minuto.",
       "title": "Não foi possível fazer seu login"
     },
     "handoffAccount": "Continuar como <account>{email}</account> em <organization>{organizationName}</organization>?",
@@ -635,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "O valor por hora não pode ser negativo",
     "hours": "Horas",
+    "invalidNumberFormat": "Verifique o formato do número",
     "invoiceComposer": {
       "addSellerProfile": "Adicione um perfil de vendedor nas configurações de faturamento",
       "billedHours": "Horas faturadas",
@@ -1583,6 +1585,8 @@
       "full": "{percent}% cheio",
       "instructions": "Instruções do sistema",
       "percent": "{percent}%",
+      "reported": "Conforme informado pelo agente de programação do seu computador após a última resposta. O agente gerencia o próprio contexto.",
+      "reportedTokens": "{used} de {total} tokens",
       "summary": "Resumo das mensagens mais antigas",
       "summaryWithCount": "Resumo de {count} mensagens mais antigas",
       "title": "Contexto da conversa",
@@ -1686,6 +1690,7 @@
     "localRun": {
       "cloud": "Nuvem da stella",
       "errorLimitReached": "O agente de programação do seu computador atingiu o limite de uso. Tente de novo quando o limite for renovado.",
+      "errorLimitResetsAt": "O agente de programação do seu computador atingiu o limite de uso. Você poderá tentar novamente a partir de {time}.",
       "errorNeedsLogin": "O agente de programação do seu computador precisa que você entre novamente. Entre pelo stella desktop e tente de novo.",
       "errorUnavailable": "Seu computador parou de processar esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
       "filesNotShared": "Os arquivos que não puderam ser compartilhados continuam no seu computador: {fileNames}",

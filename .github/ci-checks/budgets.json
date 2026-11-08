@@ -948,6 +948,13 @@
       "p99Seconds": 6,
       "peakRssMiB": 66
     },
+    "Run fork contributor commands": {
+      "minutes": 20,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0,
+      "peakRssMiB": 4096
+    },
     "Typecheck cache contract": {
       "minutes": 5,
       "samples": 17,

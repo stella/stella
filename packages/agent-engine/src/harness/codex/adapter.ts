@@ -17,6 +17,7 @@ import {
   type HarnessTurnInput,
 } from "../adapter";
 import { packageCacheEnvironment } from "../package-cache";
+import { redactingSkillPaths } from "../skill-redaction";
 import { buildTurnPrompt } from "../transcript-handoff";
 import { settlesWithin } from "../turn-lifecycle";
 import {
@@ -156,23 +157,21 @@ const connect = async ({
   handlers,
   environment,
 }: ConnectOptions): Promise<Result<Connection, ConnectFailure>> => {
-  const started = Result.try(() =>
-    startAppServer({
-      launch: options.launch,
-      detached: createDetached(options.onBackgroundError),
-      deadlines: {
-        requestMs: options.requestTimeoutMs,
-        terminateMs: options.gracePeriodMs,
-      },
-      cwd,
-      env: {
-        ...options.environment,
-        ...environment,
-        CODEX_HOME: options.codexHome,
-      },
-      handlers,
-    }),
-  );
+  const started = startAppServer({
+    launch: options.launch,
+    detached: createDetached(options.onBackgroundError),
+    deadlines: {
+      requestMs: options.requestTimeoutMs,
+      terminateMs: options.gracePeriodMs,
+    },
+    cwd,
+    env: {
+      ...options.environment,
+      ...environment,
+      CODEX_HOME: options.codexHome,
+    },
+    handlers,
+  });
   if (Result.isError(started)) {
     return Result.err({
       reason: "harness_unavailable",
@@ -451,7 +450,12 @@ const startTurn = async (
     startedAt: parsed.output.turn.startedAt ?? null,
     continuation,
   });
-  return Result.ok(session.turn());
+  return Result.ok(
+    redactingSkillPaths(session.turn(), {
+      folders: input.skillFolders,
+      plugin: null,
+    }),
+  );
 };
 
 export const createCodexHarnessAdapter = (

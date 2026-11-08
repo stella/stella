@@ -112,14 +112,30 @@ const assistant = (
   id: string,
   content: readonly object[],
   extra: object = {},
+  message: object = {},
 ): FakeStep => ({
   emit: {
     type: "assistant",
-    message: { id, role: "assistant", content, stop_reason: null },
+    message: { id, role: "assistant", content, stop_reason: null, ...message },
     parent_tool_use_id: null,
     session_id: "s",
     uuid: `${id}-uuid`,
     ...extra,
+  },
+});
+
+/** The model the fake answers with, and the context window it reports. */
+const FAKE_CLAUDE_MODEL = "claude-sonnet-4-5-20250929";
+export const FAKE_CLAUDE_CONTEXT_WINDOW = 200_000;
+
+/** What one request of the fake read and wrote. */
+const requestUsage = (cacheRead: number, output: number) => ({
+  model: FAKE_CLAUDE_MODEL,
+  usage: {
+    input_tokens: 4,
+    cache_creation_input_tokens: 600,
+    cache_read_input_tokens: cacheRead,
+    output_tokens: output,
   },
 });
 
@@ -223,6 +239,8 @@ export const FAKE_ESCAPE_COMMAND = "touch ~/.config/example-tool/settings.json";
 /** What the CLI writes when the sandbox it was told to require cannot start. */
 export const FAKE_SANDBOX_REFUSAL =
   "Sandbox required but unavailable: sandbox-exec is missing. Set sandbox.failIfUnavailable=false to allow unsandboxed execution.";
+
+const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
 
 const FAKE_SCENARIOS = {
   /**
@@ -350,12 +368,24 @@ const FAKE_SCENARIOS = {
       index: 0,
       delta: { type: "thinking_delta", thinking: "Searching" },
     }),
-    assistant("msg-1", [
-      { type: "thinking", thinking: "Searching the matter.", signature: "sig" },
-    ]),
-    assistant("msg-1", [
-      toolUse(FAKE_MCP_CALL.id, FAKE_MCP_CALL.name, FAKE_MCP_CALL.input),
-    ]),
+    assistant(
+      "msg-1",
+      [
+        {
+          type: "thinking",
+          thinking: "Searching the matter.",
+          signature: "sig",
+        },
+      ],
+      {},
+      requestUsage(9000, 50),
+    ),
+    assistant(
+      "msg-1",
+      [toolUse(FAKE_MCP_CALL.id, FAKE_MCP_CALL.name, FAKE_MCP_CALL.input)],
+      {},
+      requestUsage(9000, 50),
+    ),
     toolResult(FAKE_MCP_CALL.id, [{ type: "text", text: "2 results" }]),
     assistant("msg-2", [toolUse("call-cmd", "Bash", { command: "ls" })]),
     toolResult("call-cmd", "notes.md\n"),
@@ -375,9 +405,43 @@ const FAKE_SCENARIOS = {
       index: 0,
       delta: { type: "text_delta", text: " two" },
     }),
-    assistant("msg-3", [{ type: "text", text: "Found two leases." }]),
+    assistant(
+      "msg-3",
+      [{ type: "text", text: "Found two leases." }],
+      {},
+      requestUsage(10_000, 40),
+    ),
     stream({ type: "content_block_stop", index: 0 }),
     stream({ type: "message_stop" }),
+    result({
+      // A smaller model the CLI used on the side reports its own window.
+      modelUsage: {
+        "claude-haiku-4-5": { inputTokens: 300, contextWindow: 100_000 },
+        [FAKE_CLAUDE_MODEL]: {
+          inputTokens: 4,
+          cacheReadInputTokens: 19_000,
+          contextWindow: FAKE_CLAUDE_CONTEXT_WINDOW,
+        },
+      },
+    }),
+  ],
+  /** A read and a command on the skill folder `FAKE_SKILL_PATH` names. */
+  reads_skill: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-read", "Read", {
+        file_path: `${FAKE_SKILL_PATH}/SKILL.md`,
+      }),
+    ]),
+    toolResult("call-read", "Licensed commentary."),
+    assistant("msg-2", [
+      toolUse("call-cmd", "Bash", {
+        command: `bun ${FAKE_SKILL_PATH}/scripts/run.ts`,
+      }),
+    ]),
+    toolResult("call-cmd", "Licensed output."),
+    assistant("msg-3", [toolUse("call-ls", "Bash", { command: "ls" })]),
+    toolResult("call-ls", "notes.md\n"),
     result(),
   ],
   approvals: [

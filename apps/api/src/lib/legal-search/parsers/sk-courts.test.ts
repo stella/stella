@@ -725,11 +725,11 @@ describe("paragraphs across the PDF's line wraps", () => {
   test("numbered points, the closing formula and the signature stay apart", () => {
     const texts = blocksOf(RESOLUTION).map((block) => block.plainText);
     expect(texts.slice(-8)).toEqual([
-      "o d ô v o d n e n i e :",
+      "odôvodnenie:",
       "1. Na základe poverenia na vykonanie exekúcie, ktoré súd vydal dňa 22. 10. 2003, začal súdny exekútor exekúciu na vymoženie pohľadávky oprávneného.",
       "2. Povinný podal návrh na zastavenie exekúcie, ktorý odôvodnil tým, že jeho pohľadávka zanikla zaplatením ešte pred začatím exekúcie, čo preukázal v bode 22.",
       "3. Súd návrhu vyhovel, lebo pohľadávka bola zaplatená, a exekúciu zastavil.",
-      "P o u č e n i e :",
+      "Poučenie:",
       "Proti tomuto uzneseniu je prípustné odvolanie do pätnástich dní odo dňa jeho doručenia na súd, ktorý rozhodnutie vydal.",
       "V Meste dňa 1. februára 2004",
       "JUDr. Ivana Vzorová sudkyňa",

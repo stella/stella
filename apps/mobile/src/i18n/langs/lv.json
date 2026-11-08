@@ -242,7 +242,6 @@
     "headnote": "Kopsavilkums",
     "textUnavailable": "Šim nolēmumam teksts nav pieejams",
     "openSource": "Atvērt sākotnējo avotu",
-    "openFailed": "Saiti neizdevās atvērt.",
     "loadFailed": "Tiesu praksi neizdevās ielādēt.",
     "share": "Kopīgot"
   },
@@ -268,8 +267,6 @@
     "newTimer": "Jauns taimeris",
     "description": "Pie kā strādājat?",
     "matterTitle": "Lieta",
-    "pause": "Apturēt",
-    "resume": "Turpināt",
     "save": "Saglabāt",
     "discard": "Atmest",
     "emptyTitle": "Nav taimeru",
@@ -348,5 +345,11 @@
   "pane": {
     "showList": "Rādīt sarakstu",
     "hideList": "Paslēpt sarakstu"
+  },
+  "link": {
+    "open": "Atvērt",
+    "share": "Kopīgot",
+    "cancel": "Atcelt",
+    "openFailed": "Saiti neizdevās atvērt."
   }
 }

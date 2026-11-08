@@ -18,6 +18,7 @@ const device = (
   locale: "cs",
   startToken: START_TOKEN,
   starting: false,
+  actions: true,
   ...overrides,
 });
 
@@ -59,6 +60,9 @@ describe("a Lock Screen update", () => {
       },
     });
     expect(propsOf(push)).toEqual({
+      actionLabel: "Pozastavit",
+      actionTarget: "stella-timer:pause:t1",
+      actions: true,
       clock: "0:15:00",
       countingFromMs: NOW - 900_000,
       detail: "Novák v. Svoboda",

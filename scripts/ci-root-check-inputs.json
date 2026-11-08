@@ -467,6 +467,7 @@
       "@stll/portable-path",
       "apps/api/src/db-components.ts",
       "apps/api/src/deploy-env-contract.ts",
+      "apps/api/src/bullmq-queue-hosts.ts",
       "scripts/**",
       ".github/workflows/**",
       ".github/actions/setup-playwright/**",
@@ -612,6 +613,20 @@
       "scripts/**"
     ],
     "Test local workflow verification": [".github/workflows/**", "scripts/**"],
+    "Run fork contributor commands": [
+      ".github/workflows/autofix.yml",
+      ".gitmodules",
+      "bun.lock",
+      "package.json",
+      "scripts/autofix-*",
+      "scripts/canonical-base.sh",
+      "scripts/check-tauri-package-alignment.ts",
+      "scripts/fix-tauri-package-alignment.ts",
+      "scripts/fork-contributor-commands.sh",
+      "scripts/generated-conflicts*.ts",
+      "scripts/verify*",
+      "scripts/workflow-steps.ts"
+    ],
     "Typecheck cache contract": [
       ".github/workflows/ci.yml",
       "turbo.json",

@@ -8,11 +8,11 @@
     "name": "redis"
   },
   {
-    "source": "docker.io/valkey/valkey:9.1.2-alpine@sha256:48332870af354a799964c0012ae1194a0bf2bf894eb508f945810596dc2d8d11",
+    "source": "docker.io/valkey/valkey:9.1.3-alpine@sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b",
     "name": "valkey"
   },
   {
-    "source": "docker.io/quickwit/quickwit:0.9.2@sha256:1c249c579063830be4666523c4d95289683f98c5a584de8e67a8be3361fe1f72",
+    "source": "docker.io/quickwit/quickwit:0.9.3@sha256:7c3f5061ea7c00921205c295833f152871d057ec1a9e4c9b1d36131dacc420bd",
     "name": "quickwit"
   },
   {
@@ -20,11 +20,11 @@
     "name": "rustfs"
   },
   {
-    "source": "docker.io/amazon/aws-cli:2.38.2@sha256:5d39fd52f236ed01c5c25fba66c9aebcfc6cbb88e7bb1b727c5fe1f150540597",
+    "source": "docker.io/amazon/aws-cli:2.39.3@sha256:d557b3524475d70dd3104cf44d96568ee3188897b73a6ece2b37aa50e1af362f",
     "name": "aws-cli"
   },
   {
-    "source": "docker.io/gotenberg/gotenberg:8.38.1@sha256:aa552cc115db488e0f0bcb07446aac13071ad51505b642c84bb894500907b42b",
+    "source": "docker.io/gotenberg/gotenberg:8.39.0@sha256:13672f317b443c793e972b1bd2155ec62a3e7b6891b411e8196442cc053ee5f5",
     "name": "gotenberg"
   },
   {
@@ -40,7 +40,7 @@
     "name": "playwright"
   },
   {
-    "source": "docker.io/library/node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20",
+    "source": "docker.io/library/node:24.22.1-bookworm-slim@sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9cbd605c",
     "name": "node-24-bookworm"
   },
   {

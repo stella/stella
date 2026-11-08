@@ -5,5 +5,7 @@
   "noMatter": "Bez sprawy",
   "noDescription": "Bez opisu",
   "more": "{count, plural, one {i # inny stoper} few {i # inne stopery} other {i # innych stoperów}}",
-  "startedElsewhere": "Na innym urządzeniu uruchomiono licznik czasu"
+  "startedElsewhere": "Na innym urządzeniu uruchomiono licznik czasu",
+  "pause": "Wstrzymaj",
+  "resume": "Wznów"
 }

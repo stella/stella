@@ -242,7 +242,6 @@
     "headnote": "Sommaire",
     "textUnavailable": "Aucun texte n'est disponible pour cette décision",
     "openSource": "Ouvrir la source d’origine",
-    "openFailed": "Le lien n’a pas pu être ouvert.",
     "loadFailed": "Impossible de charger la jurisprudence.",
     "share": "Partager"
   },
@@ -268,8 +267,6 @@
     "newTimer": "Nouveau minuteur",
     "description": "Sur quoi travaillez-vous ?",
     "matterTitle": "Dossier",
-    "pause": "Mettre en pause",
-    "resume": "Reprendre",
     "save": "Enregistrer",
     "discard": "Abandonner",
     "emptyTitle": "Aucun minuteur",
@@ -348,5 +345,11 @@
   "pane": {
     "showList": "Afficher la liste",
     "hideList": "Masquer la liste"
+  },
+  "link": {
+    "open": "Ouvrir",
+    "share": "Partager",
+    "cancel": "Annuler",
+    "openFailed": "Le lien n’a pas pu être ouvert."
   }
 }

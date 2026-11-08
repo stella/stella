@@ -1,5 +1,15 @@
 import { panic } from "better-result";
-import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  lte,
+  sql,
+} from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias, unionAll } from "drizzle-orm/pg-core";
 import * as v from "valibot";
@@ -646,6 +656,8 @@ export const decisionCitationPageQuery = ({
     .limit(limit + 1)
     .as("citation_graph_candidates");
   const relatedDecision = relatedDecisionLookup(tx, candidates.relatedId);
+  // Every lookup row carries its id, so joining on it matches the same rows
+  // as `true` and proves `decision` matched whenever its id is not NULL.
   return tx
     .select({
       id: candidates.id,
@@ -681,7 +693,7 @@ export const decisionCitationPageQuery = ({
       },
     })
     .from(candidates)
-    .leftJoinLateral(relatedDecision, sql`true`)
+    .leftJoinLateral(relatedDecision, isNotNull(relatedDecision.id))
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .orderBy(asc(candidates.id))
     .limit(limit + 1);
