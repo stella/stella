@@ -1695,6 +1695,7 @@
       "errorUnavailable": "Váš počítač prestal túto odpoveď spracúvať. Overte, že je stella desktop spustený a pripojený, a skúste to znova.",
       "filesNotShared": "Súbory, ktoré sa nepodarilo zdieľať, zostávajú vo vašom počítači: {fileNames}",
       "onThisComputer": "{harness} v tomto počítači",
+      "permissionAboveLimit": "Vaša organizácia to nepovoľuje",
       "permissionAskDescription": "Súbory v priečinku chatu upravuje sám; na všetko ostatné sa opýta.",
       "permissionAutoDescription": "Čo považuje za bezpečné, urobí sám; na zvyšok sa opýta.",
       "permissionFullAuto": "Plne automaticky",
@@ -1706,6 +1707,7 @@
       "refusalHarnessUnavailable": "Programovací agent vo vašom počítači teraz túto požiadavku nemôže prevziať. Skontrolujte ho v stella desktop.",
       "refusalModelUnavailable": "Programovací agent vo vašom počítači už tento model neponúka. Vyberte iný v ponuke Spustiť na.",
       "refusalNoComputer": "Žiadny z vašich počítačov nie je pripojený. Otvorte stella desktop a odošlite správu znova.",
+      "refusalPermissionAboveLimit": "Vaša organizácia tieto oprávnenia programovaciemu agentovi vo vašom počítači nepovoľuje. Vyberte inú možnosť v ponuke Oprávnenia.",
       "refusalPermissionUnavailable": "Programovací agent vo vašom počítači s týmito oprávneniami bežať nemôže. Vyberte inú možnosť v ponuke Oprávnenia.",
       "refusalTooLarge": "Táto konverzácia je príliš dlhá na odovzdanie do vášho počítača. Na spustenie tam začnite nový chat.",
       "refusalUnavailable": "Spúšťanie chatov vo vašom počítači nie je pre váš účet dostupné.",
@@ -5637,6 +5639,11 @@
         "labelAria": "Názov typu dokumentu",
         "reorder": "Zmeniť poradie typu dokumentu",
         "title": "Typy dokumentov"
+      },
+      "localRuns": {
+        "description": "Najviac, čo smie programovací agent urobiť bez pýtania, keď spúšťa chat v počítači člena. Nižší limit platí od ďalšej správy každého člena; beh, ktorý už prebieha, si svoje oprávnenia ponechá.",
+        "title": "Programovací agenti v počítačoch členov",
+        "updated": "Oprávnenia programovacích agentov boli aktualizované"
       },
       "matterNumbering": "Číslovanie spisov",
       "matterNumberingDescription": "Nakonfigurujte, ako sa generujú referenčné čísla nových spisov",
