@@ -831,7 +831,7 @@ const presentedTool = (name: string, serverName: string): string | null => {
 const createRunApps = (context: LocalRunContext, runnerRunId: string) => {
   const reported = new Map<string, ReportedAppCall>();
   let minted = 0;
-  return {
+  const apps = {
     observe: (chunk: PublicStreamChunk) => {
       if (chunk.type === EventType.TOOL_CALL_START) {
         const toolName = presentedTool(
@@ -899,6 +899,18 @@ const createRunApps = (context: LocalRunContext, runnerRunId: string) => {
         value: part.value,
         timestamp: nowMs(),
       };
+    },
+  };
+  return {
+    /**
+     * The chunk as read, followed by the app its call shows, if any.
+     *
+     * @yields The chunk, then the app part minted for its call.
+     */
+    async *carry(chunk: PublicStreamChunk): AsyncGenerator<PublicStreamChunk> {
+      apps.observe(chunk);
+      yield chunk;
+      yield* apps.after(chunk);
     },
   };
 };
@@ -1045,9 +1057,7 @@ async function* readRunChunks({
             }
             yield* start();
             if (chunk.type !== EventType.RUN_FINISHED) {
-              runApps.observe(chunk);
-              yield chunk;
-              yield* runApps.after(chunk);
+              yield* runApps.carry(chunk);
               continue;
             }
             if (chunk.outcome?.type === "interrupt") {
