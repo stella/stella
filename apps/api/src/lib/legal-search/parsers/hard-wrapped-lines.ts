@@ -1,3 +1,10 @@
+// parser-output-unchanged: [cz-nss] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
+// parser-output-unchanged: [cz-uohs] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
+// parser-output-unchanged: [pl-kio] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
+// parser-output-unchanged: [pl-kis] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
+// parser-output-unchanged: [pl-sn] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
+// parser-output-unchanged: [pl-uokik] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
+// parser-output-unchanged: [sk-courts] only the typewriter reflow changed; this parser reads positioned lines, never a typescript.
 import { panic } from "better-result";
 
 import {
