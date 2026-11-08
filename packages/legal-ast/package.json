@@ -131,6 +131,14 @@
       "types": "./src/printed-paragraph-labels.ts",
       "import": "./src/printed-paragraph-labels.ts"
     },
+    "./polish-document-roles": {
+      "types": "./src/polish-document-roles.ts",
+      "import": "./src/polish-document-roles.ts"
+    },
+    "./decision-role-grammar": {
+      "types": "./src/decision-role-grammar.ts",
+      "import": "./src/decision-role-grammar.ts"
+    },
     "./provision-preview": {
       "types": "./src/provision-preview.ts",
       "import": "./src/provision-preview.ts"

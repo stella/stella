@@ -41,6 +41,7 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
   CZ_TAKTO,
   CZ_TAKTO_TAIL_RE,
+  isCzechBareSignatoryName,
   isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -72,6 +73,7 @@ import {
 import {
   type OpinionHeadingKind,
   separateOpinionHeading,
+  separateOpinionHeadingEndsAsSentence,
 } from "@/api/lib/legal-search/parsers/separate-opinion-heading";
 
 import {
@@ -940,12 +942,13 @@ const SEPARATE_OPINION_HEADING_MAX_CHARS = 300;
 /**
  * The heading of a separate opinion printed after the decision. A title, so
  * it does not end the way a sentence reporting the opinions does
- * ("Odlišná stanoviska k rozsudku … uplatnili soudci …").
+ * ("Odlišná stanoviska k rozsudku … uplatnili soudci …."); it may end on the
+ * docket it names ("… č. j. 7 As 155/2015 – 160.").
  */
 const separateOpinionHeadingKind = (
   plainText: string,
 ): OpinionHeadingKind | undefined =>
-  plainText.endsWith(".")
+  separateOpinionHeadingEndsAsSentence(plainText)
     ? undefined
     : separateOpinionHeading(plainText, SEPARATE_OPINION_HEADING_MAX_CHARS)
         ?.kind;
@@ -987,6 +990,34 @@ const PHASE_PARAGRAPH_ROLE = {
  * or just "City + date" pattern.
  */
 // ── Block classification ───────────────────────────────────
+
+type NamesSignatoryOptions = {
+  centered: boolean;
+  plainText: string;
+  phase: DocumentPhase;
+  previous: Block | undefined;
+};
+
+/**
+ * Whether a short line can be the name a judge signs above the office: set
+ * centred like the signature, or a bare name directly under the closing,
+ * however the editor indented it. The closing ends the instruction, so a
+ * name under it is no longer part of the instruction.
+ */
+const namesSignatory = ({
+  centered,
+  plainText,
+  phase,
+  previous,
+}: NamesSignatoryOptions): boolean => {
+  const underClosing =
+    previous?.type === "paragraph" && previous.role === "closing";
+  return (
+    (centered || (underClosing && isCzechBareSignatoryName(plainText))) &&
+    plainText.length < 60 &&
+    (phase !== DOCUMENT_PHASE.INSTRUCTION || underClosing)
+  );
+};
 
 const makeAnchorId = (prefix: string, index: number): string =>
   `${prefix}-${index}`;
@@ -1419,13 +1450,14 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
-    // Judge name: short centered text right before signature
-    // (check next chunk for signature pattern)
+    // Judge name: short text right before the signature line.
     if (
-      centered &&
-      plainText.length < 60 &&
-      phase !== DOCUMENT_PHASE.INSTRUCTION &&
-      chunks.indexOf(chunk) < chunks.length - 1
+      namesSignatory({
+        centered,
+        plainText,
+        phase,
+        previous: blocks.at(-1),
+      })
     ) {
       const nextChunk = chunks[chunks.indexOf(chunk) + 1];
       if (nextChunk && SIGNATURE_RE.test(nextChunk.plainText)) {

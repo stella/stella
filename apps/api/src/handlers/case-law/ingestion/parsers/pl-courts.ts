@@ -54,6 +54,17 @@ import type {
   TableCell,
 } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import {
+  isPlClosingLine,
+  isPlHoldingHeading,
+  isPlNumberedReasonsHeading,
+  isPlOpeningRecital,
+  isPlReasonsHeading,
+  isPlSignatureBlank,
+  isPlSignatureLine,
+  opensWithPlSignatureTitle,
+  startsWithPlOperativeVerb,
+} from "@stll/legal-ast/polish-document-roles";
 import { collapseLetterSpacing } from "@stll/text-normalize";
 
 import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
@@ -67,10 +78,6 @@ import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
 import { readCommonCourtInlines } from "./pl-common-court-inlines";
-import {
-  isPlHoldingHeading,
-  startsWithPlOperativeVerb,
-} from "./pl-operative-verbs";
 import {
   appendTextInline,
   inlinesToPlainText,
@@ -167,19 +174,9 @@ const DECISION_TITLES: ReadonlySet<string> = new Set(
   ),
 );
 const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt[:\s]/iu;
-const REASONS_HEADING_RE = /^uzasadnienie\b/iu;
-// The editor numbers the reasons on from the operative points when they
-// share one outline ("V. UZASADNIENIE" after point IV).
-const NUMBERED_REASONS_HEADING_RE = /^[IVXLC]+\s*[.)]\s*uzasadnienie$/iu;
 const DECISION_ITEM_PREFIX_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
 const AUTHORITY_DECISION_TITLE_RE = /^decyzja\s+nr\b/iu;
 const COMPOSITION_LINE_RE = /\bw składzie\s*:/iu;
-const OPENING_RECITAL_RE =
-  /^(?:po rozpoznaniu|po rozpatrzeniu|na posiedzeniu|na rozprawie|w sprawie)\b/iu;
-const CLOSING_RE =
-  /^[A-ZĄĆĘŁŃÓŚŹŻ][\p{L} .-]+,\s+dnia\s+\d{1,2}\s+\p{L}+\s+\d{4}\s*r?\.?$/u;
-const SIGNATURE_RE =
-  /^(?:SSA|SSA del\.|SSO|SSR|sędzia|Sędzia|Przewodniczący|Przewodnicząca|Prezes|sprawozdawca)\b/u;
 const PANEL_MEMBER_RE = /^(?:SSN|SSA|SSO|SSR)\b|\(ławnik[^)]*\)$/iu;
 const CLERK_MARK_RE = /^\[(?:\p{L}{2,3}|\p{L}\.(?:\p{L}\.?){1,3})\]$/u;
 const CLERK_INITIALS_RE = /^(?:\p{Lu}\.){1,4}$/u;
@@ -651,6 +648,16 @@ const orderedListMarker = (
   return marker ?? undefined;
 };
 
+/** The blank a signing label leaves for the signature, under that label. */
+const signsBlank = (state: ParserState, plainText: string): boolean => {
+  const previous = state.blocks.at(-1);
+  return (
+    isPlSignatureBlank(plainText) &&
+    previous?.type === "paragraph" &&
+    previous.role === "signature"
+  );
+};
+
 const inferParagraphRole = (
   state: ParserState,
   plainText: string,
@@ -697,15 +704,22 @@ const inferParagraphRole = (
 
   switch (state.section) {
     case "reasoning":
-      if (CLOSING_RE.test(plainText)) {
+      if (isPlClosingLine(plainText)) {
         return "closing";
       }
-      if (plainText.length <= 120 && SIGNATURE_RE.test(plainText)) {
+      if (
+        isPlSignatureLine(plainText) ||
+        opensWithPlSignatureTitle(plainText) ||
+        signsBlank(state, plainText)
+      ) {
         return "signature";
       }
       return "argumentation";
     case "holding":
-      return "holding";
+      // The bench signs under its ruling: the operative part is over.
+      return isPlSignatureLine(plainText) || signsBlank(state, plainText)
+        ? "signature"
+        : "holding";
     case "preamble":
     case "composition":
     case "recital":
@@ -746,7 +760,7 @@ const classifyParagraph = (
     return role;
   }
   if (state.section === "preamble" || state.section === "composition") {
-    if (OPENING_RECITAL_RE.test(plainText)) {
+    if (isPlOpeningRecital(plainText)) {
       state.section = "recital";
     } else if (COMPOSITION_LINE_RE.test(plainText)) {
       state.section = "composition";
@@ -772,7 +786,7 @@ const handleHeadingText = (
   }
 
   if (
-    REASONS_HEADING_RE.test(plainText) &&
+    isPlReasonsHeading(plainText) &&
     !state.sawDecisionTitle &&
     state.fallbackDecisionTitle !== undefined &&
     state.fallbackDecisionTitle !== POLISH_DECISION_TITLE_MAP.uzasadnienie
@@ -789,13 +803,13 @@ const handleHeadingText = (
       state.decisionTitle?.trim().toLocaleUpperCase("pl-PL") ===
         normalizedPlainText
     ) {
-      if (REASONS_HEADING_RE.test(plainText)) {
+      if (isPlReasonsHeading(plainText)) {
         state.section = "reasoning";
       }
       return true;
     }
 
-    if (REASONS_HEADING_RE.test(plainText) && state.sawDecisionTitle) {
+    if (isPlReasonsHeading(plainText) && state.sawDecisionTitle) {
       pushHeading(state, 2, plainText, "section-heading", inlines);
       state.section = "reasoning";
       return true;
@@ -804,16 +818,16 @@ const handleHeadingText = (
     pushHeading(state, 1, plainText, "decision-title", inlines);
     state.sawDecisionTitle = true;
     state.decisionTitle = plainText;
-    if (REASONS_HEADING_RE.test(plainText)) {
+    if (isPlReasonsHeading(plainText)) {
       state.section = "reasoning";
     }
     return true;
   }
 
   if (
-    REASONS_HEADING_RE.test(plainText) ||
+    isPlReasonsHeading(plainText) ||
     (state.markup === PL_DECISION_MARKUP.COMMON_COURT &&
-      NUMBERED_REASONS_HEADING_RE.test(plainText))
+      isPlNumberedReasonsHeading(plainText))
   ) {
     pushHeading(state, 2, plainText, "section-heading", inlines);
     state.section = "reasoning";
@@ -1127,6 +1141,16 @@ const parseNode = (
     const inlines = walkInlines($, $node, state);
     const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
     if (!plainText) {
+      return;
+    }
+
+    // A layout that sets the signing label apart as a heading still signs:
+    // it is the bench's line under the ruling, not a part of the decision.
+    if (
+      (state.section === "holding" || state.section === "reasoning") &&
+      isPlSignatureLine(plainText)
+    ) {
+      pushParagraph(state, plainText, inlines, "signature");
       return;
     }
 
