@@ -1,33 +1,14 @@
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '30s';--> statement-breakpoint
 
--- Keep the pre-column-removal compatibility paths on the same complete
--- tombstone invariant. Old tasks may still perform these updates while the
--- new API and bounded v3 repair roll out.
--- Only clearing the parsed payload signals a legacy redaction: ingestion
--- routinely clears inline source_raw when it moves the raw source to object
--- storage, including on rows that never held a parsed payload.
+-- Every redaction writer sets redacted_at itself; a payload cleared without it
+-- is a withdrawal or an empty settle and keeps the row. The guard against
+-- restoring a historically redacted payload now also covers inline source_raw.
 CREATE OR REPLACE FUNCTION fence_legacy_case_law_redaction()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
 BEGIN
-  IF NEW.redacted_at IS NULL
-    AND NEW.fulltext IS NULL
-    AND NEW.sections IS NULL
-    AND NEW.document_ast IS NULL
-    AND NEW.content_hash IS NULL
-    AND (
-      OLD.fulltext IS NOT NULL
-      OR OLD.sections IS NOT NULL
-      OR OLD.document_ast IS NOT NULL
-      OR OLD.content_hash IS NOT NULL
-    )
-  THEN
-    NEW.source_raw := NULL;
-    NEW.redacted_at := clock_timestamp();
-  END IF;
-
   IF NEW.redacted_at IS NULL
     AND (
       NEW.fulltext IS NOT NULL

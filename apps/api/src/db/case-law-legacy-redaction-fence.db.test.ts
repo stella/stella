@@ -76,7 +76,7 @@ test("moving inline raw source to object storage does not redact a row without a
   expect(await readRedaction(id)).toEqual({ redacted: false, sourceRaw: null });
 });
 
-test("a legacy payload clear redacts the row and erases its inline raw source", async () => {
+test("clearing a parsed payload without a redaction keeps the row unredacted", async () => {
   const id = await insertDecision({
     fulltext: "Odůvodnění.",
     contentHash: CONTENT_HASH,
@@ -88,5 +88,9 @@ test("a legacy payload clear redacts the row and erases its inline raw source", 
     .set({ fulltext: null, contentHash: null })
     .where(eq(caseLawDecisions.id, id));
 
-  expect(await readRedaction(id)).toEqual({ redacted: true, sourceRaw: null });
+  // A withdrawal clears the payload; only a redaction writer sets redacted_at.
+  expect(await readRedaction(id)).toEqual({
+    redacted: false,
+    sourceRaw: "<html>decision</html>",
+  });
 });
