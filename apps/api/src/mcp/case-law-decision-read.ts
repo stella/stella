@@ -1,4 +1,5 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
+import * as v from "valibot";
 /**
  * The pieces of `read_case_law_decision`'s answer that are pure functions of
  * a read: page arithmetic, the text version, the compact metadata block, the
@@ -16,6 +17,7 @@ import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/c
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationTreatment } from "@/api/lib/case-law/citation-vocabulary";
+import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
 import {
   queryWordsAbsentWarning,
   queryWordsApartWarning,
@@ -429,6 +431,148 @@ export const decisionParagraphs = ({
 /** Matched paragraphs one call returns; `hitCount` says how many there were. */
 export const QUERY_HIT_LIMIT = 20;
 
+export const DECISION_QUERY_SECTIONS = ["court_reasoning"] as const;
+export type DecisionQuerySection = (typeof DECISION_QUERY_SECTIONS)[number];
+
+/**
+ * Headings that open a court's own assessment, folded, by language.
+ *
+ * Wording, because no source marks the assessment structurally: the AST's
+ * `argumentation` role covers a whole reasons section, recitals of the
+ * parties' submissions included. A decision without such a heading (most
+ * Czech Supreme Court decisions print one undivided "Odůvodnění") has no
+ * boundary to find, and the answer says so rather than guessing one.
+ */
+const COURT_ASSESSMENT_HEADINGS = new Map<string, readonly RegExp[]>([
+  [
+    "cs",
+    [
+      /\bposouzeni\b/u,
+      /\bvlastni hodnoceni\b/u,
+      /\bduvodnost\b/u,
+      /\bk predbeznym otazkam\b/u,
+      /\bk prejudicialnim otazkam\b/u,
+    ],
+  ],
+  ["sk", [/\bposudenie\b/u, /\bk prejudicialnym otazkam\b/u]],
+  [
+    "en",
+    [
+      /\bconsideration of the questions?\b/u,
+      /\bfindings of the court\b/u,
+      /\bthe court.s (?:assessment|findings)\b/u,
+    ],
+  ],
+]);
+
+type CourtReasoningBoundary =
+  | { type: "found"; index: number; heading: string }
+  | {
+      type: "not_found";
+      reason: "no_assessment_heading" | "language_unsupported";
+    };
+
+const courtReasoningBoundary = ({
+  language,
+  paragraphs,
+}: {
+  language: string;
+  paragraphs: readonly DecisionParagraph[];
+}): CourtReasoningBoundary => {
+  const primary = normalizePublicDecisionLanguage(language)?.split("-").at(0);
+  const headings =
+    primary === undefined ? undefined : COURT_ASSESSMENT_HEADINGS.get(primary);
+  if (headings === undefined) {
+    return { type: "not_found", reason: "language_unsupported" };
+  }
+  for (const [index, { headingPath }] of paragraphs.entries()) {
+    const heading = headingPath.find((title) => {
+      const folded = fold(title);
+      return headings.some((pattern) => pattern.test(folded));
+    });
+    if (heading !== undefined) {
+      return { type: "found", index, heading };
+    }
+  }
+  return { type: "not_found", reason: "no_assessment_heading" };
+};
+
+/** What restricting a query to a section did. */
+export type DecisionQuerySectionReport =
+  | {
+      status: "found";
+      /** The heading the restriction starts under, verbatim. */
+      heading: string;
+      /** 1-based position of the first paragraph under it. */
+      position: number;
+      /** Matches before the boundary, which this answer leaves out. */
+      hitsBefore: number;
+    }
+  | {
+      status: "not_found";
+      reason: "no_assessment_heading" | "language_unsupported";
+    };
+
+const QUERY_CURSOR_BINDING_CHARS = 12;
+
+const queryCursorSchema = v.tuple([
+  v.pipe(v.number(), v.integer()),
+  v.string(),
+  v.string(),
+]);
+
+const queryCursorBinding = (
+  query: string,
+  section: DecisionQuerySection | undefined,
+): string =>
+  createSha256()
+    .update(JSON.stringify([query, section ?? null]))
+    .digest("base64url")
+    .slice(0, QUERY_CURSOR_BINDING_CHARS);
+
+type DecisionQueryCursorScope = {
+  query: string;
+  section: DecisionQuerySection | undefined;
+};
+
+/** Continues after paragraph `after`, for the same query and section only. */
+export const encodeDecisionQueryCursor = ({
+  after,
+  query,
+  section,
+  textVersion,
+}: DecisionQueryCursorScope & {
+  after: number;
+  textVersion: string;
+}): string =>
+  Buffer.from(
+    JSON.stringify([after, textVersion, queryCursorBinding(query, section)]),
+  ).toString("base64url");
+
+export const decodeDecisionQueryCursor = ({
+  cursor,
+  query,
+  section,
+}: DecisionQueryCursorScope & { cursor: string }): {
+  after: number;
+  textVersion: string;
+} | null => {
+  const raw = Result.try((): unknown =>
+    JSON.parse(Buffer.from(cursor, "base64url").toString()),
+  );
+  if (Result.isError(raw)) {
+    return null;
+  }
+  const parsed = v.safeParse(queryCursorSchema, raw.value);
+  if (!parsed.success) {
+    return null;
+  }
+  const [after, textVersion, binding] = parsed.output;
+  return binding === queryCursorBinding(query, section)
+    ? { after, textVersion }
+    : null;
+};
+
 const fold = (term: string): string =>
   stripUnicodeMarks(term, {
     form: "NFD",
@@ -507,18 +651,26 @@ const queryMissWarning = ({
  * paragraph at all, with a warning naming the words.
  */
 export const paragraphsMatching = ({
+  after = 0,
   budget,
   language,
   paragraphs,
   query,
+  section,
 }: {
+  /** Resume past this 1-based position; a cursor's half of the query. */
+  after?: number;
   budget: number;
   language: string;
   paragraphs: readonly DecisionParagraph[];
   query: string;
+  section?: DecisionQuerySection | undefined;
 }): {
   hitCount: number;
+  /** Position to resume after, while matches remain past this answer. */
+  nextAfter: number | null;
   paragraphs: QueryParagraph[];
+  section: DecisionQuerySectionReport | null;
   truncated: boolean;
   warning: DecisionQueryWarning | null;
 } => {
@@ -537,17 +689,41 @@ export const paragraphsMatching = ({
   const termSets = paragraphs.map(
     (paragraph) => new Set(corpusTokens(paragraph.text).map(termOf)),
   );
-  const hits = termSets.flatMap((terms, index) =>
+  const allHits = termSets.flatMap((terms, index) =>
     wanted.every((term) => terms.has(term)) ? [index] : [],
   );
-  if (hits.length === 0) {
+  const boundary =
+    section === undefined
+      ? null
+      : courtReasoningBoundary({ language, paragraphs });
+  const floor = boundary?.type === "found" ? boundary.index : 0;
+  const scopedHits = allHits.filter((index) => index >= floor);
+  let sectionReport: DecisionQuerySectionReport | null = null;
+  if (boundary?.type === "found") {
+    sectionReport = {
+      status: "found",
+      heading: boundary.heading,
+      position: boundary.index + 1,
+      hitsBefore: allHits.length - scopedHits.length,
+    };
+  } else if (boundary !== null) {
+    sectionReport = { status: "not_found", reason: boundary.reason };
+  }
+  if (scopedHits.length === 0) {
     return {
       hitCount: 0,
+      nextAfter: null,
       paragraphs: [],
+      section: sectionReport,
       truncated: false,
-      warning: queryMissWarning({ language, spellings, termSets }),
+      warning: queryMissWarning({
+        language,
+        spellings,
+        termSets: termSets.slice(floor),
+      }),
     };
   }
+  const hits = scopedHits.filter((index) => index + 1 > after);
 
   // Each chosen paragraph and how much of it travels. Only the first match
   // may be cut, to the budget, on a whole code point; everything after it
@@ -580,14 +756,20 @@ export const paragraphsMatching = ({
       break;
     }
     for (const neighbour of [hit - 1, hit + 1]) {
-      if (neighbour >= 0 && neighbour < paragraphs.length) {
+      if (neighbour >= floor && neighbour < paragraphs.length) {
         take(neighbour);
       }
     }
   }
-  const hitSet = new Set(hits);
+  const hitSet = new Set(scopedHits);
+  const lastReturned = hits.findLast((index) => chosen.has(index));
   return {
-    hitCount: hits.length,
+    hitCount: scopedHits.length,
+    nextAfter:
+      lastReturned !== undefined && hits.some((index) => index > lastReturned)
+        ? lastReturned + 1
+        : null,
+    section: sectionReport,
     paragraphs: [...chosen]
       .toSorted(([left], [right]) => left - right)
       .map(([index, length]) => {

@@ -108,6 +108,7 @@ import {
   SEARCH_CASE_LAW_PROJECTION,
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import {
   type ExtractedContentSourceProvenance,
@@ -164,14 +165,18 @@ import {
 import {
   citationSummaryOutput,
   compactDecisionMetadata,
+  DECISION_QUERY_SECTIONS,
   decisionParagraphs,
   decisionTextAllowances,
   decisionTextVersion,
+  decodeDecisionQueryCursor,
+  encodeDecisionQueryCursor,
   pageOfOffset,
   paragraphsMatching,
   textPageSpan,
   textPageStarts,
 } from "@/api/mcp/case-law-decision-read";
+import type { DecisionQuerySection } from "@/api/mcp/case-law-decision-read";
 import {
   CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS,
   MANY_REQUIRED_TERMS_THRESHOLD,
@@ -802,6 +807,21 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         ),
       ),
     ),
+    cursor: v.optional(
+      paginationCursorSchema({
+        maxChars: LIMITS.caseLawDecisionQueryCursorMaxLength,
+        description:
+          "matches.nextCursor from a previous query, to read the next matches. Pass it with the same query and section and one decision id.",
+      }),
+    ),
+    section: v.optional(
+      v.pipe(
+        v.picklist(DECISION_QUERY_SECTIONS),
+        v.description(
+          "With query, court_reasoning keeps matches from the first heading that opens the court's own assessment, reported in matches.section. Headings are recognised by wording in Czech, Slovak and English; where none is found (usual for Czech Supreme Court decisions) status is not_found and all matches are returned.",
+        ),
+      ),
+    ),
     include: v.optional(
       v.pipe(
         v.array(v.picklist(DECISION_READ_INCLUDE)),
@@ -1011,7 +1031,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as " +
       "text_version; versionChanged flags changed text. " +
       `\`full: true\` returns whole text up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} chars. ` +
-      "`query` returns matches, neighbours and deep links. Page 1 adds " +
+      "`query` returns matches, neighbours and deep links; matches.nextCursor continues them. Page 1 adds " +
       "reader/publisher URL, metadata, textFields and citation summaries (top " +
       `citers may be bounded by ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges). ` +
       "Use read_case_law_citations for all citations. One id adds an outline. " +
@@ -3140,7 +3160,13 @@ const nonDocketReference = ({
 type DecisionTextPosition =
   | { type: "page"; page: number }
   /** A `query` call: matching paragraphs replace the window. */
-  | { type: "query"; query: string };
+  | {
+      type: "query";
+      query: string;
+      section: DecisionQuerySection | undefined;
+      /** Past this 1-based position; 0 unless a cursor continues the query. */
+      after: number;
+    };
 
 type DecisionItemOptions = {
   decisionId: string;
@@ -3260,10 +3286,12 @@ const decisionTextPart = ({
   };
   if (position.type === "query") {
     const found = paragraphsMatching({
+      after: position.after,
       budget: windowChars,
       language,
       paragraphs: decisionParagraphs({ located, text }),
       query: position.query,
+      section: position.section,
     });
     return {
       charCount: text.length,
@@ -3279,6 +3307,17 @@ const decisionTextPart = ({
           ...decisionBlockDeepLink({ url, ...paragraph }),
         })),
         ...(found.truncated ? { truncated: true as const } : {}),
+        ...(found.nextAfter === null
+          ? {}
+          : {
+              nextCursor: encodeDecisionQueryCursor({
+                after: found.nextAfter,
+                query: position.query,
+                section: position.section,
+                textVersion: version,
+              }),
+            }),
+        ...(found.section === null ? {} : { section: found.section }),
         ...(found.warning === null
           ? {}
           : {
@@ -3617,6 +3656,8 @@ const decisionReadArgumentRefusal = ({
   max_chars: maxChars,
   page,
   query,
+  cursor,
+  section,
   text_version: seenTextVersion,
 }: DecisionReadArgs) => {
   if (full === true && maxChars !== undefined) {
@@ -3635,7 +3676,30 @@ const decisionReadArgumentRefusal = ({
     );
   }
   if (query === undefined) {
+    if (cursor !== undefined || section !== undefined) {
+      return decisionReadArgumentError(
+        cursor === undefined ? "section" : "cursor",
+        "cursor and section apply to a query.",
+        "Pass query, or drop cursor and section to read pages.",
+      );
+    }
     return null;
+  }
+  if (cursor !== undefined) {
+    if (decisionIds.length > 1) {
+      return decisionReadArgumentError(
+        "cursor",
+        `A query cursor continues one decision; the call carries ${String(decisionIds.length)} decision ids.`,
+        "Pass cursor with the one decision id it came from.",
+      );
+    }
+    if (decodeDecisionQueryCursor({ cursor, query, section }) === null) {
+      return decisionReadArgumentError(
+        "cursor",
+        "This cursor is unreadable or belongs to another query.",
+        "Pass the matches.nextCursor of this query unchanged, with the same section, or drop cursor to start over.",
+      );
+    }
   }
   if (page !== undefined || full === true) {
     return decisionReadArgumentError(
@@ -3656,12 +3720,20 @@ const decisionReadArgumentRefusal = ({
 
 /** Where each entry's text starts: a query replaces the page. */
 const decisionTextPositionOf = ({
+  cursor,
   page,
   query,
-}: DecisionReadArgs): DecisionTextPosition =>
-  query === undefined
-    ? { type: "page", page: page ?? LIMITS.caseLawDecisionFirstPage }
-    : { type: "query", query };
+  section,
+}: DecisionReadArgs): DecisionTextPosition => {
+  if (query === undefined) {
+    return { type: "page", page: page ?? LIMITS.caseLawDecisionFirstPage };
+  }
+  const resumed =
+    cursor === undefined
+      ? null
+      : decodeDecisionQueryCursor({ cursor, query, section });
+  return { type: "query", query, section, after: resumed?.after ?? 0 };
+};
 
 const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>
@@ -3684,6 +3756,17 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   }
   const position = decisionTextPositionOf(parsed.output);
   const includedFields = decisionIncludedFields({ include, position });
+  // A cursor carries the version it was issued against, so a text that
+  // changed between its pages is marked without the caller passing it.
+  const cursorTextVersion =
+    parsed.output.cursor === undefined || position.type !== "query"
+      ? undefined
+      : decodeDecisionQueryCursor({
+          cursor: parsed.output.cursor,
+          query: position.query,
+          section: position.section,
+        })?.textVersion;
+  const seenVersion = seenTextVersion ?? cursorTextVersion;
 
   // The same gate the public route applies, in the same shape: a
   // restricted decision does not exist for any caller, and the read that
@@ -3883,7 +3966,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
               documentHydration: onDemand.type,
               position,
               includedFields,
-              seenTextVersion,
+              seenTextVersion: seenVersion,
             }),
       ),
     }),

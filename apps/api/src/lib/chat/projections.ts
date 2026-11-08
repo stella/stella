@@ -1813,6 +1813,31 @@ const caseLawDecisionProjection = v.strictObject({
         }),
       ),
       truncated: v.optional(v.literal(true)),
+      nextCursor: v.optional(
+        v.pipe(
+          v.string(),
+          v.description(
+            "Pass as cursor with the same query and section to read the next matches.",
+          ),
+        ),
+      ),
+      section: v.optional(
+        v.variant("status", [
+          v.strictObject({
+            status: v.literal("found"),
+            heading: v.string(),
+            position: v.number(),
+            hitsBefore: v.number(),
+          }),
+          v.strictObject({
+            status: v.literal("not_found"),
+            reason: v.picklist([
+              "no_assessment_heading",
+              "language_unsupported",
+            ]),
+          }),
+        ]),
+      ),
       // Only on an empty answer: which words matched nothing, and the next call.
       warnings: v.optional(
         v.array(
