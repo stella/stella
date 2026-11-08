@@ -14,10 +14,10 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import {
-  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
-  chatLocalRunLimitSchema,
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
   chatLocalRunContextSchema,
+  chatLocalRunLimitSchema,
 } from "@stll/api-contract/chat-run-target";
 import { assertProperty } from "@stll/property-testing";
 
@@ -485,6 +485,8 @@ describe("local harness chunks", () => {
     const unknown = await limited(null);
     expect(
       unknown?.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+    ).toBeUndefined();
+  });
 
   test("a finished turn reports the context the harness measured, and only a measured one", async () => {
     const finished = async (context: HarnessUsage["context"]) =>

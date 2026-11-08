@@ -44,8 +44,10 @@ import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
-import { CHAT_LOCAL_RUN_LIMIT_METADATA_KEY } from "@stll/api-contract/chat-run-target";
-import { CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+} from "@stll/api-contract/chat-run-target";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
   type VisualPreviewOutput,
@@ -7212,6 +7214,7 @@ test("a local run's usage limit reset is streamed, stored and reloaded, and only
     type: "failed",
     error: "local_runner_unavailable",
   });
+});
 
 test("a local turn's context report is stored with its answer and reloaded, and a malformed one is not", async () => {
   const finishedWith = async (reported: unknown) => {
