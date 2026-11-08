@@ -1189,11 +1189,12 @@ const loadSearchHitContent = async ({
     // The hit was gated when it was found; the text is read under the same
     // published and redistributable gate, so a decision withdrawn since then
     // contributes nothing.
-    const searchableText = await scopedDb((tx) =>
-      readPublicCaseLawSearchText(
-        tx,
-        brandPersistedCaseLawDecisionId(hit.decisionId),
-      ),
+    const searchableText = await scopedDb(
+      async (tx) =>
+        await readPublicCaseLawSearchText(
+          tx,
+          brandPersistedCaseLawDecisionId(hit.decisionId),
+        ),
     );
     return compactContent(searchableText);
   }
