@@ -196,6 +196,18 @@ export type PinnedPlaybook = {
   };
 };
 
+/** A pin as a stored run carries it. Runs stored before the snapshot carried
+ *  the scope have no `scope` key, so a reader treats a missing scope as
+ *  `null`; every pin written since sets it. */
+export type StoredPinnedPlaybook = Omit<
+  PinnedPlaybook,
+  "definitionSnapshot"
+> & {
+  definitionSnapshot: Omit<PinnedPlaybook["definitionSnapshot"], "scope"> & {
+    scope?: PlaybookScope | null;
+  };
+};
+
 /** One reference document pinned to the exact version it was read from. */
 export type PinnedReference = {
   /** The matter the reference lives in; not necessarily the run's own. */
@@ -221,7 +233,7 @@ export type PinnedReference = {
  * two places and force every reader to branch on it.
  */
 export type DocumentReviewRunBasis = {
-  playbook: PinnedPlaybook;
+  playbook: StoredPinnedPlaybook;
   references: PinnedReference[];
   perspective: ReviewPerspective;
 };

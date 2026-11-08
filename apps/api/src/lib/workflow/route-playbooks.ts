@@ -2,18 +2,22 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { documentTypes, fields } from "@/api/db/schema";
+import {
+  documentTypes,
+  fields,
+  playbookDefinitionVersions,
+} from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { loadLatestApprovedVersions } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
-import { resolvePlaybookPin } from "@/api/lib/document-review/resolve-playbook-pin";
-import type { PlaybookVersionForPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import {
   PLAYBOOK_RUN_START_OUTCOME,
   playbookRunStartOutcome,
 } from "@/api/lib/document-review/playbook-run-start";
+import { resolvePlaybookPin } from "@/api/lib/document-review/resolve-playbook-pin";
+import type { PlaybookVersionForPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
@@ -24,6 +28,7 @@ import type {
   PlaybookScope,
   PlaybookTrigger,
 } from "@/api/lib/workflow/playbook-positions";
+import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 
 // One shared routing seam. `resolveApplicablePlaybooks` narrows a set of org
@@ -276,25 +281,43 @@ export const routeClassifiedDocuments = async ({
     // `positions` JSONB for manual playbooks that would be discarded anyway.
     // (`scope->>'trigger'` is NULL for a null scope or an absent trigger, so a
     // manual/legacy playbook is excluded — matching `playbookTrigger`'s default.)
+    // A playbook routes on its pinned scope, so the candidates also include
+    // every playbook with an approved snapshot on `onClassified`: its live
+    // trigger may have been edited away since. The pinned check below decides.
+    const approvedOnClassified = await tx
+      .selectDistinct({
+        id: playbookDefinitionVersions.playbookDefinitionId,
+      })
+      .from(playbookDefinitionVersions)
+      .where(
+        and(
+          eq(playbookDefinitionVersions.organizationId, organizationId),
+          eq(
+            playbookDefinitionVersions.source,
+            PLAYBOOK_VERSION_SOURCE.APPROVAL,
+          ),
+          sql`${playbookDefinitionVersions.scope}->>'trigger' = 'onClassified'`,
+        ),
+      )
+      .limit(LIMITS.playbookDefinitionsCount);
     const routable = await tx.query.playbookDefinitions.findMany({
       where: {
         organizationId: { eq: organizationId },
-        RAW: (table) => sql`${table.scope}->>'trigger' = 'onClassified'`,
+        OR: [
+          { RAW: (table) => sql`${table.scope}->>'trigger' = 'onClassified'` },
+          ...(approvedOnClassified.length === 0
+            ? []
+            : [{ id: { in: approvedOnClassified.map((row) => row.id) } }]),
+        ],
       },
       columns: { id: true, name: true, positions: true, scope: true },
       limit: LIMITS.playbookDefinitionsCount,
     });
 
-    // Defense in depth: the SQL predicate already excludes non-`onClassified`
-    // playbooks; re-checking the returned rows keeps the invariant enforced in
-    // app code too, and is cheap over the already-narrowed set.
-    //
-    // The check runs on the pinned scope, not the live one: a trigger edited
-    // after approval takes effect only once the playbook is approved again.
-    // (The SQL predicate above still reads the live trigger, so a playbook
-    // whose live trigger was edited away from `onClassified` is not fetched
-    // at all; that errs toward not routing, never toward routing on an
-    // unapproved scope.)
+    // The SQL predicate narrows to candidates; this check decides, on the
+    // pinned scope rather than the live one: a trigger edited after approval
+    // takes effect only once the playbook is approved again, in either
+    // direction.
     const approvedVersions = await loadLatestApprovedVersions({
       tx,
       organizationId,

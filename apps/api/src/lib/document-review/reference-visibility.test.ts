@@ -198,7 +198,7 @@ describe("basisForReader", () => {
       definitionSnapshot: {
         name: basis.playbook.definitionSnapshot.name,
         positions: { version: 3, items: [{ ...pinned, ...prose }] },
-        scope: basis.playbook.definitionSnapshot.scope,
+        scope: basis.playbook.definitionSnapshot.scope ?? null,
       },
     },
     references: basis.references,
@@ -243,19 +243,23 @@ describe("basisForReader", () => {
     // actually comes back). The reader contract is `PlaybookScope | null`:
     // the missing key must surface as a present null, not as an absent key
     // a client reads as undefined.
-    const legacy = JSON.parse(
-      JSON.stringify(withProse),
-    ) as DocumentReviewRunBasis;
-    const snapshot: Record<string, unknown> =
-      legacy.playbook.definitionSnapshot;
-    delete snapshot["scope"];
+    const legacy: DocumentReviewRunBasis = {
+      ...withProse,
+      playbook: {
+        ...withProse.playbook,
+        definitionSnapshot: {
+          name: withProse.playbook.definitionSnapshot.name,
+          positions: withProse.playbook.definitionSnapshot.positions,
+        },
+      },
+    };
     expect("scope" in legacy.playbook.definitionSnapshot).toBe(false);
 
     const shown = basisForReader(legacy, new Set());
     expect(shown.playbook.definitionSnapshot.scope).toBeNull();
-    expect(
-      JSON.parse(JSON.stringify(shown)).playbook.definitionSnapshot,
-    ).toHaveProperty("scope", null);
+    expect(Object.hasOwn(shown.playbook.definitionSnapshot, "scope")).toBe(
+      true,
+    );
   });
 });
 

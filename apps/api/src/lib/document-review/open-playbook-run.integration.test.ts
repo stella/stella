@@ -322,6 +322,7 @@ describe("opening a run over a matter with an NDA and a lease document", () => {
         ),
       );
     // Both the ASK column and its verdict column carry the gate.
+    expect(opened.materializedPropertyIds).toHaveLength(2);
     expect(gates.map((gate) => gate.propertyId).toSorted()).toEqual(
       [...opened.materializedPropertyIds].toSorted(),
     );

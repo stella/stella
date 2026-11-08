@@ -36,13 +36,13 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
 import type {
   PlaybookPositions,
   Position,
 } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 import { routeClassifiedDocuments } from "@/api/lib/workflow/route-playbooks";
-import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -87,6 +87,12 @@ const positions: PlaybookPositions = { version: 3, items: [gradedPosition] };
 
 const classifierId = createSafeId<"property">();
 const definitionId = createSafeId<"playbookDefinition">();
+// Approved to route on classification; the live trigger was then edited to
+// manual. The approval still routes it.
+const triggerEditedAwayId = createSafeId<"playbookDefinition">();
+// Approved as manual; the live trigger was then edited to route on
+// classification. The edit has no effect until the playbook is approved again.
+const triggerEditedOnId = createSafeId<"playbookDefinition">();
 
 const workflowStarts: { propertyIds: SafeId<"property">[] }[] = [];
 
@@ -161,6 +167,47 @@ beforeAll(async () => {
     createdBy: ids.userA1,
   });
 
+  await db.insert(playbookDefinitions).values([
+    {
+      id: triggerEditedAwayId,
+      organizationId: ids.orgA,
+      name: "NDA review, trigger edited to manual",
+      positions,
+      scope: { documentTypeKey: "nda", trigger: "manual" },
+    },
+    {
+      id: triggerEditedOnId,
+      organizationId: ids.orgA,
+      name: "NDA review, trigger edited to classification",
+      positions,
+      scope: { documentTypeKey: "nda", trigger: "onClassified" },
+    },
+  ]);
+  await db.insert(playbookDefinitionVersions).values([
+    {
+      id: createSafeId<"playbookDefinitionVersion">(),
+      organizationId: ids.orgA,
+      playbookDefinitionId: triggerEditedAwayId,
+      version: 1,
+      source: PLAYBOOK_VERSION_SOURCE.APPROVAL,
+      name: "NDA review, trigger edited to manual",
+      positions,
+      scope: { documentTypeKey: "nda", trigger: "onClassified" },
+      createdBy: ids.userA1,
+    },
+    {
+      id: createSafeId<"playbookDefinitionVersion">(),
+      organizationId: ids.orgA,
+      playbookDefinitionId: triggerEditedOnId,
+      version: 1,
+      source: PLAYBOOK_VERSION_SOURCE.APPROVAL,
+      name: "NDA review, trigger edited to classification",
+      positions,
+      scope: { documentTypeKey: "nda", trigger: "manual" },
+      createdBy: ids.userA1,
+    },
+  ]);
+
   const scopedDb: ScopedDb = async (fn) => {
     const result = await createSafeDb(
       db,
@@ -197,10 +244,11 @@ describe("classification routing on the approved scope", () => {
       .select({ id: properties.id })
       .from(properties)
       .where(eq(properties.playbookDefinitionId, definitionId));
-    expect(materialized.map((row) => row.id).toSorted()).toEqual(
-      [...(workflowStarts.at(0)?.propertyIds ?? [])].toSorted(),
-    );
     expect(materialized).toHaveLength(2);
+    const started = workflowStarts.at(0)?.propertyIds ?? [];
+    for (const row of materialized) {
+      expect(started).toContain(row.id);
+    }
 
     const runs = await db
       .select({ entityId: documentReviewRuns.entityId })
@@ -213,10 +261,12 @@ describe("classification routing on the approved scope", () => {
     const gates = await db
       .select({ condition: propertyDependencies.condition })
       .from(propertyDependencies)
+      .innerJoin(properties, eq(properties.id, propertyDependencies.propertyId))
       .where(
         and(
           eq(propertyDependencies.workspaceId, ids.wsA1),
           eq(propertyDependencies.dependsOnPropertyId, classifierId),
+          eq(properties.playbookDefinitionId, definitionId),
         ),
       );
     expect(gates).toHaveLength(2);
@@ -228,5 +278,30 @@ describe("classification routing on the approved scope", () => {
         right: { type: "literal", value: "NDA" },
       });
     }
+  });
+
+  test("routes a playbook whose trigger was edited away after approval", async () => {
+    const materialized = await db
+      .select({ id: properties.id })
+      .from(properties)
+      .where(eq(properties.playbookDefinitionId, triggerEditedAwayId));
+    expect(materialized).toHaveLength(2);
+    const started = workflowStarts.at(0)?.propertyIds ?? [];
+    for (const row of materialized) {
+      expect(started).toContain(row.id);
+    }
+  });
+
+  test("does not route a playbook whose trigger was edited on after approval", async () => {
+    const materialized = await db
+      .select({ id: properties.id })
+      .from(properties)
+      .where(eq(properties.playbookDefinitionId, triggerEditedOnId));
+    expect(materialized).toEqual([]);
+    const runs = await db
+      .select({ id: documentReviewRuns.id })
+      .from(documentReviewRuns)
+      .where(eq(documentReviewRuns.playbookDefinitionId, triggerEditedOnId));
+    expect(runs).toEqual([]);
   });
 });

@@ -50,7 +50,8 @@ const ephemeralPlaybook: PinnedPlaybook = {
   },
 };
 
-const basis: DocumentReviewRunBasis = {
+// A basis written since the pin carried its scope, which the reader shape needs.
+const basis: DocumentReviewRunBasis & { playbook: PinnedPlaybook } = {
   playbook: ephemeralPlaybook,
   references: [reference("Precedent SPA", PRECEDENT_FIELD)],
   perspective: { type: "party", role: "Buyer", name: null },
