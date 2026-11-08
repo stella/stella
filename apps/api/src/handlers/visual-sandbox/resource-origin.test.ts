@@ -131,6 +131,16 @@ describe("stella app resource persistence", () => {
       toolName: "search_case_law",
     });
     expect(Result.isError(large)).toBe(true);
+    const loop: Record<string, unknown> = {};
+    loop["self"] = loop;
+    for (const structuredContent of [loop, { count: 1n }]) {
+      const unserializable = origin.issueMcpApp({
+        call: { input: {}, result: { structuredContent } },
+        toolCallId: "app-call-unserializable",
+        toolName: "search_case_law",
+      });
+      expect(Result.isError(unserializable)).toBe(true);
+    }
   });
 
   test("reloads the stored part exactly as it was shown", () => {

@@ -119,16 +119,18 @@ export const buildStellaMcpAppPart = ({
   toolName: string;
   uri: string;
 }): Result<StellaMcpAppPart, string> => {
+  const text = Result.try(() =>
+    JSON.stringify({
+      input: call.input,
+      result: { structuredContent: call.result.structuredContent },
+    }),
+  );
+  if (Result.isError(text) || typeof text.value !== "string") {
+    return Result.err("The presented call is not serializable JSON");
+  }
   const candidate = {
     type: "ui-resource",
-    resource: {
-      uri,
-      mimeType: STELLA_MCP_APP_MIME_TYPE,
-      text: JSON.stringify({
-        input: call.input,
-        result: { structuredContent: call.result.structuredContent },
-      }),
-    },
+    resource: { uri, mimeType: STELLA_MCP_APP_MIME_TYPE, text: text.value },
     toolCallId,
     toolName,
   } as const;
