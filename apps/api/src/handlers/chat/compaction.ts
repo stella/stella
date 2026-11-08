@@ -2,6 +2,7 @@ import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
 import { classifyFailure, readFailureBrand } from "@stll/errors";
 
 import {
@@ -143,6 +144,12 @@ export type ThreadContextUsage = {
     attachmentTokens: number;
     conversationTokens: number;
   };
+  /**
+   * For a thread whose turns run on the member's computer: how full the
+   * harness's context was after the latest answer, against its window, as
+   * the harness reported both. The composer shows it instead of the estimate.
+   */
+  reported?: ChatLocalRunContext;
 };
 
 type ComputeThreadContextUsageOptions = {

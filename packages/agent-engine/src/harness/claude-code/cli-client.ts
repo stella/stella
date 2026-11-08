@@ -5,6 +5,7 @@ import {
   type HarnessProcessDeadlines,
   startHarnessProcess,
 } from "../harness-process";
+import type { HarnessSpawnError } from "../process-tree";
 import type { Detached, HarnessExit } from "../turn-lifecycle";
 import {
   ClaudeOutputEnvelopeSchema,
@@ -82,7 +83,7 @@ export const startClaudeCli = ({
   cwd,
   env,
   handlers,
-}: StartClaudeCliOptions): ClaudeCliClient => {
+}: StartClaudeCliOptions): Result<ClaudeCliClient, HarnessSpawnError> => {
   const state = { nextId: 1 };
 
   const settleResponse = (raw: unknown) => {
@@ -145,7 +146,7 @@ export const startClaudeCli = ({
     }
   };
 
-  const cli = startHarnessProcess<string, ClaudeCliRequestError>({
+  const started = startHarnessProcess<string, ClaudeCliRequestError>({
     command: [launch.executable, ...launch.args, ...args],
     cwd,
     env,
@@ -158,8 +159,12 @@ export const startClaudeCli = ({
     violation: handlers.violation,
     exit: handlers.exit,
   });
+  if (Result.isError(started)) {
+    return started;
+  }
+  const cli = started.value;
 
-  return {
+  return Result.ok({
     request: async (subtype, fields = {}) => {
       const requestId = `stella-${String(state.nextId)}`;
       state.nextId += 1;
@@ -185,5 +190,5 @@ export const startClaudeCli = ({
     exited: cli.exited,
     closeInput: cli.closeInput,
     kill: cli.kill,
-  };
+  });
 };

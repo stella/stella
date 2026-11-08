@@ -348,6 +348,8 @@ const startRun = (
     runId,
     threadId: "thread-1",
     attachments: [],
+    skillFolders: [],
+    toolPath: [],
     ...launch,
     configDir,
     launch: PLAIN_LAUNCH,
@@ -1241,6 +1243,8 @@ describe("harness holder over its socket", () => {
       instructions: "Use the stella MCP server.",
       messages: [{ role: "user", content: "Find the lease decision." }],
       attachments: [],
+      skillFolders: [],
+      toolPath: [],
       harnessSessionId: null,
       policy: { network: "open", fs: "workspace", approvals: "ask" },
       mcp: {
@@ -1326,6 +1330,8 @@ describe("harness holder over its socket", () => {
         instructions: "Use the stella MCP server.",
         messages: [{ role: "user", content: "Write the report." }],
         attachments: [],
+        skillFolders: [],
+        toolPath: [],
         harnessSessionId: null,
         policy: { network: "open", fs: "workspace", approvals: "ask" },
         mcp: {

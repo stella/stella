@@ -1,3 +1,7 @@
+// parser-output-unchanged: [cz-ns] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
+// parser-output-unchanged: [cz-nss] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
+// parser-output-unchanged: [cz-us] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
+// parser-output-unchanged: [cz-regional] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
 import { collapseSpacedLetters, normalizeUnicode } from "@stll/text-normalize";
 
 import type { Block, ParagraphBlock } from "./document-ast.js";
@@ -11,13 +15,16 @@ export const CZ_JUDGE_NAME_RE =
   /^(?:JUDr\.|Mgr\.|doc\.|prof\.|PhDr\.|Ing\.|Bc\.|RNDr\.|MUDr\.)\s+/u;
 
 /**
- * Court signature marker, matched as whole words on a short line. Declined
- * forms (`samosoudcem`, `předsedy senátu`) belong to running text such as
- * "rozhodl samosoudcem Mgr. …" and never sign a decision. Shared because every
- * Czech court adapter and the statute reader assign the same AST role.
+ * Court signature marker, matched as whole words on a short line: the office
+ * a judge signs under (`předseda senátu`, `předseda rozšířeného senátu`,
+ * `člen rozšířeného senátu`, `předseda Ústavního soudu`) or the `v. r.` mark.
+ * Declined forms (`samosoudcem`, `předsedy senátu`) belong to running text
+ * such as "rozhodl samosoudcem Mgr. …" and never sign a decision. Shared
+ * because every Czech court adapter and the statute reader assign the same
+ * AST role.
  */
 export const CZ_JUDGE_TITLE_RE =
-  /^(?=[^]{0,79}$)[^]*?(?<![\p{L}\p{N}])(?:(?:předseda|předsedkyně)\s+senátu:?|samosoudce|samosoudkyně|soud(?:ce|kyně)\s+zpravodaj|v\.\s*r\.\s*$)(?![\p{L}\p{N}])/iu;
+  /^(?=[^]{0,79}$)[^]*?(?<![\p{L}\p{N}])(?:(?:místo)?(?:předseda|předsedkyně)\s+(?:(?:rozšířeného|velkého)\s+)?senátu:?|(?:místo)?(?:předseda|předsedkyně)\s+(?:Ústavního|Nejvyššího(?:\s+správního)?)\s+soudu|(?:člen|členka)\s+(?:rozšířeného|velkého)\s+senátu|samosoudce|samosoudkyně|soud(?:ce|kyně)\s+zpravodaj|v\.\s*r\.\s*$)(?![\p{L}\p{N}])/iu;
 
 const compactUpper = (text: string): string =>
   normalizeUnicode(text, "NFKC")
@@ -38,6 +45,36 @@ const OPENING_FORMULAE: ReadonlySet<string> = new Set([
 
 export const isCzechOpeningFormula = (text: string): boolean =>
   OPENING_FORMULAE.has(compactUpper(text));
+
+/** The heading the reasons open under, whatever its spacing. */
+const REASONS_HEADINGS: ReadonlySet<string> = new Set([
+  "ODŮVODNĚNÍ",
+  "ODŮVODNĚNÍ:",
+]);
+
+/** Whether a line is the heading of the reasons (`O d ů v o d n ě n í :`). */
+export const isCzechReasonsHeading = (text: string): boolean =>
+  REASONS_HEADINGS.has(compactUpper(text));
+
+/** The heading the instruction on remedies opens under. */
+const INSTRUCTION_HEADINGS: ReadonlySet<string> = new Set([
+  "POUČENÍ",
+  "POUČENÍ:",
+]);
+
+/** Whether a line is the heading of the instruction (`P o u č e n í :`). */
+export const isCzechInstructionHeading = (text: string): boolean =>
+  INSTRUCTION_HEADINGS.has(compactUpper(text));
+
+/**
+ * Whether a line is an authority's decision title: the decision word alone
+ * or with its issuer (`ROZHODNUTÍ`, `ROZHODNUTÍ PŘEDSEDY ÚŘADU …`), never the
+ * lead-in `ROZHODNUTÍ:`.
+ */
+export const isCzechAuthorityDecisionTitle = (text: string): boolean => {
+  const line = text.replaceAll(/\s+/gu, " ").trim();
+  return /^ROZHODNUTÍ(?: \p{Lu}[\p{Lu} ]*)?$/u.test(line);
+};
 
 /** The lead-in to the operative part, alone on its line. */
 const TAKTO_LINE_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
@@ -75,15 +112,34 @@ export const normalizeCzechJudgeName = (printed: string): string =>
     .replace(JUDGE_SIGNATURE_SUFFIX_RE, "")
     .trim();
 
+/**
+ * A personal name and nothing else: two to four capitalised words, each
+ * possibly double-barrelled ("Jan Novák", "Petra Svobodová-Dvořáková").
+ * Judges often sign with no academic title and no "v. r.", so the name signs
+ * only where it stands: under the closing, or beside the office it is signed
+ * under.
+ */
+const BARE_SIGNATORY_NAME_RE =
+  /^\p{Lu}\p{Ll}+(?:-\p{Lu}\p{Ll}+)?(?:\s+\p{Lu}\p{Ll}+(?:-\p{Lu}\p{Ll}+)?){1,3}$/u;
+
+/** Whether a line is a bare personal name, as a judge signs without a title. */
+export const isCzechBareSignatoryName = (text: string): boolean =>
+  BARE_SIGNATORY_NAME_RE.test(text.trim());
+
 /** An office printed beside a signed name in Czech public documents. */
 const CZ_PUBLIC_OFFICE_TITLE_RE = /^(?:vice)?guvernér(?:ka)?\s*:?$/iu;
 const SIGNATURE_LINE_MAX_CHARS = 80;
 
+/** Whether a line signs a decision under the office a judge holds. */
+export const isCzechSignatureLine = (text: string): boolean => {
+  const line = text.trim();
+  return line.length < SIGNATURE_LINE_MAX_CHARS && CZ_JUDGE_TITLE_RE.test(line);
+};
+
 const isSignatureSeed = (block: Block | undefined): boolean =>
   block !== undefined &&
   (block.type === "heading" || block.type === "paragraph") &&
-  block.plainText.trim().length < SIGNATURE_LINE_MAX_CHARS &&
-  CZ_JUDGE_TITLE_RE.test(block.plainText.trim());
+  isCzechSignatureLine(block.plainText);
 
 const isSignatureCompanion = (block: Block | undefined): boolean =>
   block !== undefined &&
@@ -136,4 +192,69 @@ export const withInferredCzechSignatureRoles = (
   return blocks.map((block, index) =>
     signatureIndexes.has(index) ? asSignatureParagraph(block) : block,
   );
+};
+
+/**
+ * The lead-in an authority's operative part opens after: the sentence that
+ * ends `rozhodl takto:`, a bare `rozhodl:`, or the decision word on its own
+ * line (`ROZHODNUTÍ:`) after `vydává … toto`.
+ */
+const RULED_TAIL_RE = /(?:^|[\s,])rozhodl[ao]?\s?:$/iu;
+const DECISION_WORD_LEAD_IN = "ROZHODNUTÍ:";
+
+/** Whether a line is the lead-in the operative part follows. */
+export const isCzechRulingLeadIn = (text: string): boolean => {
+  const line = collapseSpacedLetters(text).replaceAll(/\s+/gu, " ").trim();
+  return (
+    isCzechTaktoLine(line) ||
+    CZ_TAKTO_TAIL_RE.test(line) ||
+    RULED_TAIL_RE.test(line) ||
+    compactUpper(line) === DECISION_WORD_LEAD_IN
+  );
+};
+
+/**
+ * The office an authority's head signs under (`předseda Úřadu …`,
+ * `I. místopředseda Úřadu`, `… místopředsedkyně`), on a short line.
+ */
+const CZ_AUTHORITY_OFFICE_RE =
+  /(?:^|\s)(?:místo)?(?:předseda|předsedkyně)(?:\sÚřadu(?:\spro\sochranu\shospodářské\ssoutěže)?)?$/u;
+
+/** Longest line an authority's signature runs to: titles, name and office. */
+const AUTHORITY_SIGNATURE_MAX_CHARS = 120;
+
+/** Whether a short line signs an authority's decision under its office. */
+export const isCzechAuthoritySignatureLine = (text: string): boolean => {
+  const line = text.replaceAll(/\s+/gu, " ").trim();
+  return (
+    line.length < AUTHORITY_SIGNATURE_MAX_CHARS &&
+    CZ_AUTHORITY_OFFICE_RE.test(line)
+  );
+};
+
+/**
+ * The roles of an authority's decision up to its reasons, read from the
+ * decision's own parts: the head matter (letterhead, title, the sentence
+ * naming the proceedings) up to and with the lead-in is `intro`, the
+ * operative part after it is `holding`, and from the reasons heading on
+ * nothing is read. Nothing is returned when the decision prints no lead-in
+ * or no reasons heading, so a caller keeps its own reading.
+ */
+export const czechAuthorityHeadRoles = (
+  texts: readonly string[],
+): ("intro" | "holding" | undefined)[] | undefined => {
+  const reasons = texts.findIndex(isCzechReasonsHeading);
+  if (reasons === -1) {
+    return undefined;
+  }
+  const leadIn = texts.slice(0, reasons).findIndex(isCzechRulingLeadIn);
+  if (leadIn === -1) {
+    return undefined;
+  }
+  return texts.map((_, index) => {
+    if (index <= leadIn) {
+      return "intro";
+    }
+    return index < reasons ? "holding" : undefined;
+  });
 };

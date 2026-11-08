@@ -40,6 +40,7 @@ import type {
   AllHandlerOutputsTyped,
   AssertTrue,
   HandlerOutputsMatchByName,
+  InternalToolResult,
   McpToolHandler,
   McpToolResponse,
   TypedHandlerDataByName,
@@ -262,15 +263,140 @@ const withChatInputNotes = (
     : { ...payload, [CHAT_INPUT_NOTES_KEY]: safe };
 };
 
+/** What running one registry read answered, before any surface shaped it. */
+export type RegistryReadOutcome =
+  /** Refused before the handler ran: the tool is off or the caller may not. */
+  | { type: "refused"; error: ChatToolError }
+  /**
+   * The read's own answer after egress, a validation refusal included, as
+   * the MCP server would serialize it.
+   */
+  | { type: "answered"; result: InternalToolResult; notes: readonly string[] };
+
+type ExecuteRegistryReadProps = {
+  toolName: RegistryReadToolName;
+  /** Raw arguments: real ids, never chat refs. */
+  args: Record<string, unknown>;
+  context: McpRequestResources;
+  handler?: McpToolHandler | undefined;
+  scopeArgs?: RunRegistryReadToolProps["scopeArgs"];
+};
+
+/**
+ * Run one read-only MCP registry tool the way the MCP server does: deploy
+ * feature gates, boundary normalization, the caller's authority, the handler,
+ * egress in DEFAULT mode. Chat projects the answer for the model; an app's
+ * host hands it back to the app as the server would.
+ */
+export const executeRegistryRead = async ({
+  toolName,
+  args,
+  context,
+  handler,
+  scopeArgs,
+}: ExecuteRegistryReadProps): Promise<RegistryReadOutcome> => {
+  const staticDefinition =
+    getStaticMcpToolDefinition(toolName) ??
+    panic(`Read tool ${toolName} is missing from the static registry`);
+  if (
+    !isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: staticDefinition.name,
+      featureId: staticDefinition.featureId,
+    })
+  ) {
+    return {
+      type: "refused",
+      error: new ChatToolError({
+        kind: "unavailable",
+        message: "Tool is unavailable.",
+      }),
+    };
+  }
+  if (!isMcpToolFeatureEnabled(staticDefinition.feature)) {
+    return {
+      type: "refused",
+      error: new ChatToolError({
+        kind: "unavailable",
+        message: "This feature is not enabled on this deployment.",
+      }),
+    };
+  }
+
+  const normalized = normalizeObjectInputAtBoundary({
+    access: staticDefinition.access,
+    schema: staticDefinition.inputSchema,
+    value: args,
+  });
+  if (!normalized.ok) {
+    return {
+      type: "answered",
+      result: agentInputValidationError({
+        failure: normalized,
+        subject: `${toolName} arguments`,
+      }),
+      notes: [],
+    };
+  }
+  const scoped =
+    scopeArgs === undefined
+      ? Result.ok(normalized.value)
+      : await scopeArgs(normalized.value);
+  if (Result.isError(scoped)) {
+    return { type: "refused", error: scoped.error };
+  }
+  const authorization = authorizeMcpToolContext({
+    context,
+    dataAccess: context,
+    definition: staticDefinition,
+    input: scoped.value,
+    toolName,
+  });
+  if (!authorization.authorized) {
+    return {
+      type: "refused",
+      error: new ChatToolError({
+        kind: "unavailable",
+        message: authorization.refusal.message,
+      }),
+    };
+  }
+  const authorizedContext = authorization.context;
+
+  const response =
+    handler === undefined
+      ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
+          args: scoped.value,
+          context: authorizedContext,
+        })
+      : await runInjectedHandler({
+          args: scoped.value,
+          context: authorizedContext,
+          toolName,
+          handler,
+        });
+  const finished = await finalizeToolEgress({
+    context: authorizedContext,
+    mode: "default",
+    response,
+  });
+  return { type: "answered", result: finished, notes: normalized.notes };
+};
+
+export const isRegistryReadToolName = (
+  name: string,
+): name is RegistryReadToolName =>
+  Object.hasOwn(REGISTRY_READ_TOOL_HANDLERS, name);
+
 /**
  * Run one read-only MCP registry tool as a chat tool.
  *
- * 1. Refuse a tool the ref-field map keeps off the chat surface, or one whose
- *    deploy feature flag is off (feature gating still applies to chat; OAuth
- *    scope gating does not, see `buildMcpContextFromChat`).
+ * 1. Refuse a tool the ref-field map keeps off the chat surface.
  * 2. Dehydrate ref args to real UUIDs.
- * 3. Run the handler and finalize its egress in DEFAULT mode (chat is not the
- *    anonymized surface).
+ * 3. Run the read as the MCP server does (`executeRegistryRead`): feature
+ *    gating (OAuth scope gating does not apply, see
+ *    `buildMcpContextFromChat`), normalization, authority, egress.
  * 4. Project a typed error into a `ChatToolError`; otherwise project the typed
  *    payload for chat in a single schema-driven pass
  *    (`projectForChat`: strict parse, strip, ref hydration, UUID invariant).
@@ -294,95 +420,22 @@ export const runRegistryReadTool = async ({
   }
   const entry = READ_TOOL_REF_FIELD_MAP[toolName];
 
-  const staticDefinition =
-    getStaticMcpToolDefinition(toolName) ??
-    panic(`Read tool ${toolName} is missing from the static registry`);
-  if (
-    !isMcpDescriptorFeatureEnabled({
-      context,
-      kind: "tools",
-      id: staticDefinition.name,
-      featureId: staticDefinition.featureId,
-    })
-  ) {
-    return Result.err(
-      new ChatToolError({
-        kind: "unavailable",
-        message: "Tool is unavailable.",
-      }),
-    );
-  }
-  if (!isMcpToolFeatureEnabled(staticDefinition.feature)) {
-    return Result.err(
-      new ChatToolError({
-        kind: "unavailable",
-        message: "This feature is not enabled on this deployment.",
-      }),
-    );
-  }
-
   const dehydrated = dehydrateInputRefs({ args, refRegistry, toolName });
   if (Result.isError(dehydrated)) {
     return Result.err(dehydrated.error);
   }
 
-  const normalized = normalizeObjectInputAtBoundary({
-    access: staticDefinition.access,
-    schema: staticDefinition.inputSchema,
-    value: dehydrated.value.args,
-  });
-  if (!normalized.ok) {
-    return Result.err(
-      toRegistryChatToolError(
-        agentInputValidationError({
-          failure: normalized,
-          subject: `${toolName} arguments`,
-        }).error,
-      ),
-    );
-  }
-  const scoped =
-    scopeArgs === undefined
-      ? Result.ok(normalized.value)
-      : await scopeArgs(normalized.value);
-  if (Result.isError(scoped)) {
-    return Result.err(scoped.error);
-  }
-  const authorization = authorizeMcpToolContext({
-    context,
-    dataAccess: context,
-    definition: staticDefinition,
-    input: scoped.value,
+  const outcome = await executeRegistryRead({
     toolName,
+    args: dehydrated.value.args,
+    context,
+    handler,
+    scopeArgs,
   });
-  if (!authorization.authorized) {
-    return Result.err(
-      new ChatToolError({
-        kind: "unavailable",
-        message: authorization.refusal.message,
-      }),
-    );
+  if (outcome.type === "refused") {
+    return Result.err(outcome.error);
   }
-  const authorizedContext = authorization.context;
-
-  const response =
-    handler === undefined
-      ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
-          args: scoped.value,
-          context: authorizedContext,
-        })
-      : await runInjectedHandler({
-          args: scoped.value,
-          context: authorizedContext,
-          toolName,
-          handler,
-        });
-  const finished = await finalizeToolEgress({
-    context: authorizedContext,
-    mode: "default",
-    response,
-  });
-
+  const finished = outcome.result;
   if (finished.status === "error") {
     return Result.err(toRegistryChatToolError(finished.error));
   }
@@ -401,5 +454,5 @@ export const runRegistryReadTool = async ({
   });
   return Result.isError(projected)
     ? projected
-    : Result.ok(withChatInputNotes(projected.value, normalized.notes));
+    : Result.ok(withChatInputNotes(projected.value, outcome.notes));
 };

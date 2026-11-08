@@ -1,3 +1,6 @@
+import { panic } from "better-result";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import path from "node:path";
 import * as v from "valibot";
 
 import { PACKAGE_CACHE_FOLDERS } from "../src/harness/package-cache";
@@ -34,6 +37,13 @@ type FakeStep =
   | { awaitResponse: true }
   /** Survive SIGTERM, as a server that ignores it would. */
   | { ignoreTerm: true }
+  /**
+   * Start a long-lived process, as an agent's command does, and log its pid.
+   * `in: "own_group"` starts it in a process group of its own, as Codex runs
+   * commands; `in: "orphan"` starts it in the background of a shell that
+   * exits at once, as `command &` does.
+   */
+  | { spawn: readonly string[]; in?: "own_group" | "orphan" }
   | { raw: string }
   | { sleep: number }
   | { exit: number };
@@ -205,6 +215,32 @@ const commandApproval = (reason: string | null): FakeStep[] => [
   completed(),
 ];
 
+/** The context window the fake reports, as Codex does with its token usage. */
+export const FAKE_CONTEXT_WINDOW = 258_400;
+
+/** One request's counts as Codex reports them, totals included. */
+const usageBreakdown = (counts: {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+}) => ({
+  ...counts,
+  totalTokens: counts.inputTokens + counts.outputTokens,
+  cacheWriteInputTokens: 0,
+});
+
+const tokenUsage = (usage: {
+  last: object;
+  total: object;
+  modelContextWindow: number | null;
+}): FakeStep => ({
+  notify: "thread/tokenUsage/updated",
+  params: { threadId: FAKE_THREAD_ID, turnId: FAKE_TURN_ID, tokenUsage: usage },
+});
+
+const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
+
 const FAKE_SCENARIOS = {
   /**
    * The shared stella tool calls through the stella MCP binding, step by
@@ -323,6 +359,22 @@ const FAKE_SCENARIOS = {
         exitCode: 0,
       }),
     ),
+    // The turn's first model request; the answer below is its second.
+    tokenUsage({
+      last: usageBreakdown({
+        inputTokens: 50,
+        cachedInputTokens: 0,
+        outputTokens: 10,
+        reasoningOutputTokens: 0,
+      }),
+      total: usageBreakdown({
+        inputTokens: 50,
+        cachedInputTokens: 0,
+        outputTokens: 10,
+        reasoningOutputTokens: 0,
+      }),
+      modelContextWindow: FAKE_CONTEXT_WINDOW,
+    }),
     {
       notify: "item/agentMessage/delta",
       params: {
@@ -333,23 +385,21 @@ const FAKE_SCENARIOS = {
       },
     },
     item("completed", agentMessage("m-1", "Found two leases.")),
-    {
-      notify: "thread/tokenUsage/updated",
-      params: {
-        threadId: FAKE_THREAD_ID,
-        turnId: FAKE_TURN_ID,
-        tokenUsage: {
-          last: {
-            totalTokens: 150,
-            inputTokens: 120,
-            cachedInputTokens: 20,
-            cacheWriteInputTokens: 0,
-            outputTokens: 30,
-            reasoningOutputTokens: 5,
-          },
-        },
-      },
-    },
+    tokenUsage({
+      last: usageBreakdown({
+        inputTokens: 120,
+        cachedInputTokens: 20,
+        outputTokens: 30,
+        reasoningOutputTokens: 5,
+      }),
+      total: usageBreakdown({
+        inputTokens: 170,
+        cachedInputTokens: 20,
+        outputTokens: 40,
+        reasoningOutputTokens: 5,
+      }),
+      modelContextWindow: FAKE_CONTEXT_WINDOW,
+    }),
     completed(),
   ],
   approval: commandApproval("Deletes a file"),
@@ -445,6 +495,18 @@ const FAKE_SCENARIOS = {
     { notify: "fake/ready", params: {} },
     { sleep: 60_000 },
   ],
+  /**
+   * Leaves processes running the ways an agent's commands do, says when they
+   * are up, and waits for its client.
+   */
+  leaves_processes: [
+    { spawn: ["/bin/sleep", "600"] },
+    { spawn: ["/bin/sleep", "600"], in: "own_group" },
+    { spawn: ["/bin/sleep", "600"], in: "orphan" },
+    // Signals a process ignores stay ignored across exec.
+    { spawn: ["/bin/sh", "-c", "trap '' TERM; exec /bin/sleep 600"] },
+    { notify: "fake/ready", params: {} },
+  ],
   async_question: [
     ...freshTurn(),
     item(
@@ -472,6 +534,37 @@ const FAKE_SCENARIOS = {
     item("started", command("call-long", "inProgress")),
     { expect: "turn/interrupt", result: {} },
     completed("interrupted"),
+  ],
+  /** A read and a command on the skill folder `FAKE_SKILL_PATH` names. */
+  reads_skill: [
+    ...freshTurn(),
+    item("started", {
+      ...command("call-read", "inProgress"),
+      command: `cat ${FAKE_SKILL_PATH}/SKILL.md`,
+    }),
+    item("completed", {
+      ...command("call-read", "completed", {
+        aggregatedOutput: "Licensed commentary.\n",
+        exitCode: 0,
+      }),
+      command: `cat ${FAKE_SKILL_PATH}/SKILL.md`,
+    }),
+    item("started", command("call-cmd", "inProgress")),
+    item(
+      "completed",
+      command("call-cmd", "completed", {
+        aggregatedOutput: "notes.md\n",
+        exitCode: 0,
+      }),
+    ),
+    completed(),
+  ],
+  skills_refused: [
+    ...handshake(),
+    {
+      expect: "skills/list",
+      error: { code: -32_600, message: "skills are unavailable" },
+    },
   ],
   resume_missing: [
     ...handshake(),
@@ -723,6 +816,106 @@ const IncomingSchema = v.looseObject({
   method: v.optional(v.string()),
 });
 
+/** Start `argv` the way `placement` says; its pid. */
+const spawnLongLived = async (
+  argv: readonly string[],
+  placement: "own_group" | "orphan" | undefined,
+) => {
+  const quiet = {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  } as const;
+  switch (placement) {
+    case undefined:
+      return Bun.spawn([...argv], quiet).pid;
+    case "own_group":
+      return Bun.spawn(
+        ["perl", "-e", "setpgrp(0, 0); exec @ARGV", ...argv],
+        quiet,
+      ).pid;
+    case "orphan": {
+      const shell = Bun.spawn(
+        [
+          "/bin/sh",
+          "-c",
+          '"$@" </dev/null >/dev/null 2>&1 & echo "$!"',
+          "orphan",
+          ...argv,
+        ],
+        { stdin: "ignore", stdout: "pipe", stderr: "ignore" },
+      );
+      const pid = Number((await new Response(shell.stdout).text()).trim());
+      await shell.exited;
+      return pid;
+    }
+    default:
+      placement satisfies never;
+      return panic("Unknown spawn placement");
+  }
+};
+
+const SkillsParamsSchema = v.looseObject({
+  extraRoots: v.optional(v.array(v.string())),
+  cwds: v.optional(v.array(v.string())),
+});
+
+/** Every `SKILL.md` under a root, however deep and through any link. */
+const skillFilesUnder = (root: string, depth = 0): string[] =>
+  // A link to a file is followed like Codex follows it, but holds no folder.
+  depth > 8 || !existsSync(root) || !statSync(root).isDirectory()
+    ? []
+    : readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+        const entryPath = path.join(root, entry.name);
+        if (entry.name === "SKILL.md") {
+          return [entryPath];
+        }
+        return entry.isDirectory() || entry.isSymbolicLink()
+          ? skillFilesUnder(entryPath, depth + 1)
+          : [];
+      });
+
+const FAKE_SYSTEM_SKILL = "/fake-home/skills/.system/imagegen/SKILL.md";
+
+/**
+ * Skill discovery as Codex does it, on the real filesystem: its own skills, the
+ * roots this process was given, the member's own `~/.agents/skills`, and
+ * whatever the working directory holds in its `.agents/skills`.
+ */
+const skillDiscovery = () => {
+  const roots: string[] = [];
+  const home = process.env["HOME"];
+  return {
+    answer: (method: string | undefined, params: unknown): object | null => {
+      const parsed = v.parse(SkillsParamsSchema, params ?? {});
+      if (method === "skills/extraRoots/set") {
+        roots.splice(0, roots.length, ...(parsed.extraRoots ?? []));
+        return {};
+      }
+      if (method !== "skills/list") {
+        return null;
+      }
+      const user = [
+        ...roots,
+        ...(home === undefined ? [] : [path.join(home, ".agents", "skills")]),
+      ].flatMap((root) => skillFilesUnder(root));
+      return {
+        data: (parsed.cwds ?? []).map((cwd) => ({
+          cwd,
+          errors: [],
+          skills: [
+            { path: FAKE_SYSTEM_SKILL, scope: "system" },
+            ...user.map((file) => ({ path: file, scope: "user" })),
+            ...skillFilesUnder(path.join(cwd, ".agents", "skills")).map(
+              (file) => ({ path: file, scope: "repo" }),
+            ),
+          ],
+        })),
+      };
+    },
+  };
+};
+
 const run = async (
   steps: readonly FakeStep[],
   log: (entry: object) => void,
@@ -739,10 +932,26 @@ const run = async (
     log,
   });
 
+  const skills = skillDiscovery();
+  /** The next request a step scripts; skill discovery answers the rest. */
+  const nextRequest = async (expected: string) => {
+    for (;;) {
+      // await-in-loop: one request at a time, in the order they arrived.
+      const message = await take("requests");
+      const answer =
+        message === null || message.method === expected
+          ? null
+          : skills.answer(message.method, message["params"]);
+      if (answer === null) {
+        return message;
+      }
+      write({ id: message?.id, result: answer });
+    }
+  };
   let serverRequestId = 1000;
   for (const step of steps) {
     if ("expect" in step) {
-      const message = await take("requests");
+      const message = await nextRequest(step.expect);
       if (message === null) {
         return;
       }
@@ -775,6 +984,8 @@ const run = async (
       process.on("SIGTERM", () => {
         log({ ignored: "SIGTERM" });
       });
+    } else if ("spawn" in step) {
+      log({ spawned: await spawnLongLived(step.spawn, step.in) });
     } else if ("raw" in step) {
       process.stdout.write(`${step.raw}\n`);
     } else if ("sleep" in step) {
@@ -797,6 +1008,7 @@ if (import.meta.main) {
       pid: process.pid,
       /** What follows the scenario: the launch's own arguments. */
       args: process.argv.slice(3),
+      path: process.env["PATH"],
       /** Where the turn points package managers' caches. */
       packageCache: Object.fromEntries(
         Object.entries(process.env).filter(([name]) =>

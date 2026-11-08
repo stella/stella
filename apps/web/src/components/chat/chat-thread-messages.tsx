@@ -154,6 +154,7 @@ import {
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
+import { localRunLimitResetsAtFromThrown } from "@/features/chat/chat-local-run-limit";
 import {
   CHAT_REQUEST_ERROR_TRANSLATION_KEYS,
   type ChatRequestError,
@@ -180,6 +181,7 @@ import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -461,14 +463,7 @@ export const ChatThreadMessages = ({
             threadRef={messageActionsThreadRef(message, threadRef)}
           >
             <MessageContent
-              className={cn(
-                message.parts.some(
-                  (part) =>
-                    part.type === "ui-resource" &&
-                    uiResourceRenderer(part.resource.mimeType) ===
-                      "generated-visual",
-                ) && "w-full",
-              )}
+              className={cn(showsFullWidthResource(message) && "w-full")}
             >
               <MessageBodyRender
                 render={() => {
@@ -1009,6 +1004,17 @@ const normalizeUserMessageTextForDisplay = (text: string) => {
   return result;
 };
 
+/** Rendered apps that lay out across the whole message column. */
+const FULL_WIDTH_RENDERERS: ReadonlySet<ReturnType<typeof uiResourceRenderer>> =
+  new Set(["generated-visual", "stella-app"]);
+
+const showsFullWidthResource = (message: ChatUIMessage) =>
+  message.parts.some(
+    (part) =>
+      part.type === "ui-resource" &&
+      FULL_WIDTH_RENDERERS.has(uiResourceRenderer(part.resource.mimeType)),
+  );
+
 const IMAGE_MEDIA_TYPES = Object.freeze([
   "image/png",
   "image/jpeg",
@@ -1217,6 +1223,18 @@ const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   return "chat.sendError";
 };
 
+/**
+ * A local run's usage limit with the time the harness said it resets, in the
+ * member's own locale and time zone.
+ */
+const LocalRunLimitResetMessage = ({ resetsAt }: { resetsAt: string }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return t("chat.localRun.errorLimitResetsAt", {
+    time: format.dateTime(new Date(resetsAt), MEDIUM_DATE_SHORT_TIME_FORMAT),
+  });
+};
+
 export const ChatErrorMessage = ({
   error,
   isGenerating,
@@ -1250,6 +1268,10 @@ export const ChatErrorMessage = ({
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
   }
+  const limitResetsAt =
+    aiErrorKindFromMessage(error.message) === "local_runner_limit_reached"
+      ? localRunLimitResetsAtFromThrown(error)
+      : null;
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1274,7 +1296,13 @@ export const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        <p className="text-sm">{errorMessage}</p>
+        <p className="text-sm">
+          {limitResetsAt === null ? (
+            errorMessage
+          ) : (
+            <LocalRunLimitResetMessage resetsAt={limitResetsAt} />
+          )}
+        </p>
         <ProviderSetupGuidanceNotice code={setupCode} />
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (

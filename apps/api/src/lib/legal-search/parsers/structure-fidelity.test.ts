@@ -119,3 +119,177 @@ test("a sentence kept in one paragraph has no sentence-cut finding", () => {
 
   expect(findings).toEqual([]);
 });
+
+type RoledBlock = readonly [ParagraphBlock["role"] | "heading", string];
+
+const roled = (blocks: readonly RoledBlock[]): Block[] =>
+  blocks.map(([role, text], index) =>
+    role === "heading"
+      ? {
+          id: `b${String(index)}`,
+          anchorId: `h-${String(index)}`,
+          type: "heading",
+          level: 2,
+          role: "section-heading",
+          inlines: [{ type: "text", text }],
+          plainText: text,
+        }
+      : {
+          id: `b${String(index)}`,
+          anchorId: `p-${String(index)}`,
+          type: "paragraph",
+          ...(role === undefined ? {} : { role }),
+          inlines: [{ type: "text", text }],
+          plainText: text,
+        },
+  );
+
+const roleFindings = (
+  blocks: readonly RoledBlock[],
+  language: string | undefined,
+): string[] =>
+  structureFidelityIn(roled(blocks), language)
+    .filter(
+      ({ rule }) =>
+        rule === STRUCTURE_FIDELITY_RULES.SIGNATURE_AS_HOLDING ||
+        rule === STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_REASONS ||
+        rule === STRUCTURE_FIDELITY_RULES.RECITAL_AS_HOLDING ||
+        rule === STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING,
+    )
+    .map(({ rule, anchorId }) => `${rule} ${anchorId}`);
+
+test("a bench signing under its ruling is not the ruling", () => {
+  expect(
+    roleFindings(
+      [
+        ["holding", "1. zasądza od pozwanego na rzecz powoda kwotę 100 zł;"],
+        ["holding", "SSO Katarzyna Banko"],
+        ["holding", "Przewodniczący:…………………………"],
+      ],
+      "pl",
+    ),
+  ).toEqual(["signature-as-holding p-1", "signature-as-holding p-2"]);
+  expect(
+    roleFindings(
+      [
+        ["holding", "I. Kasační stížnost se zamítá."],
+        ["holding", "předseda rozšířeného senátu"],
+      ],
+      "cs",
+    ),
+  ).toEqual(["signature-as-holding p-1"]);
+});
+
+test("nothing after the reasons heading is the ruling, however it is spaced", () => {
+  expect(
+    roleFindings(
+      [
+        ["holding", "1. Uwzględnia odwołanie."],
+        ["holding", "U z a s a d n i e n i e"],
+        ["holding", "Zamawiający prowadzi postępowanie."],
+        ["argumentation", "Izba zważyła, co następuje."],
+      ],
+      "pl",
+    ),
+  ).toEqual(["holding-after-reasons p-2"]);
+  expect(
+    roleFindings(
+      [
+        ["holding", "I. Kasační stížnost se zamítá."],
+        ["heading", "Odůvodnění:"],
+        ["holding", "Žalobce podal žalobu."],
+      ],
+      "cs",
+    ),
+  ).toEqual(["holding-after-reasons p-2"]);
+});
+
+test("a language without a role grammar is read for printed-page shapes only", () => {
+  expect(
+    roleFindings(
+      [
+        ["holding", "SSO Katarzyna Banko"],
+        ["heading", "Uzasadnienie"],
+        ["holding", "Zamawiający prowadzi postępowanie."],
+      ],
+      undefined,
+    ),
+  ).toEqual([]);
+  expect(
+    roleFindings(
+      [
+        ["holding", "1. zasądza od pozwanego kwotę 100 zł;"],
+        ["holding", "2. oddala powództwo w pozostałym zakresie."],
+        ["signature", "SSO Katarzyna Banko"],
+        ["heading", "Uzasadnienie"],
+        ["argumentation", "Powód domagał się zasądzenia."],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+});
+
+test("the recital before the first line that rules is not the ruling", () => {
+  expect(
+    roleFindings(
+      [
+        ["intro", "po rozpoznaniu w sprawie przeciwko skazanemu D. P."],
+        ["holding", "zażalenia wniesionego przez Prokuratora Rejonowego"],
+        ["holding", "na podstawie art. 437 § 2 kpk"],
+        ["heading", "p o s t a n a w i a"],
+        ["holding", "uchylić zaskarżone postanowienie"],
+        ["holding", "na podstawie art. 438 kpk"],
+      ],
+      "pl",
+    ),
+  ).toEqual(["recital-as-holding p-2"]);
+  expect(
+    roleFindings(
+      [
+        [
+          "intro",
+          "Na podstawie art. 104 § 1 Kodeksu postępowania administracyjnego,",
+        ],
+        ["holding", "na podstawie art. 4 ust. 2 umorzyć postępowanie"],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+});
+
+test("a decision that opens a ruling before its reasons holds it", () => {
+  expect(
+    roleFindings(
+      [
+        ["intro", "po rozpoznaniu sprawy ze skargi zamawiającego"],
+        ["intro", "I. oddala skargę,"],
+        ["heading", "Uzasadnienie"],
+        ["argumentation", "Zamawiający oddala protest."],
+      ],
+      "pl",
+    ),
+  ).toEqual(["ruling-without-holding p-1"]);
+  expect(
+    roleFindings(
+      [
+        ["intro", "po rozpoznaniu sprawy ze skargi zamawiającego"],
+        ["holding", "I. oddala skargę,"],
+        ["heading", "Uzasadnienie"],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+  // An operative verb in the reasons opens no ruling of the decision's own.
+  expect(
+    roleFindings(
+      [
+        ["heading", "Uzasadnienie"],
+        [
+          "argumentation",
+          "1. oddala apelację, jak orzekł sąd pierwszej instancji",
+        ],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+});
