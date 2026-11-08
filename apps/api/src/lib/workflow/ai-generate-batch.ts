@@ -52,6 +52,7 @@ import {
   fitFilesToRequestBudget,
   logRequestFit,
   requestBudgetBytesForTask,
+  textBytes,
 } from "@/api/lib/workflow/request-budget";
 import type { RequestFit } from "@/api/lib/workflow/request-budget";
 import { getWorkflowBatchAITimeoutMs } from "@/api/lib/workflow/run-logic";
@@ -304,13 +305,16 @@ export const generateWorkflowData = async ({
     WorkflowIntegrationError | DocumentTooLargeError
   >
 > => {
+  const textInputsMessage =
+    textInputs.length > 0 ? buildTextInputsMessage(textInputs) : null;
   const fit = fitFilesToRequestBudget({
     files,
-    budgetBytes: requestBudgetBytesForTask("pdf", orgAIConfig, {
-      dataClass: "customer",
-      organizationId,
-      modelTier: admission.modelTier,
-    }),
+    budgetBytes:
+      requestBudgetBytesForTask("pdf", orgAIConfig, {
+        dataClass: "customer",
+        organizationId,
+        modelTier: admission.modelTier,
+      }) - (textInputsMessage === null ? 0 : textBytes(textInputsMessage)),
   });
   if (Result.isError(fit)) {
     return Result.err(fit.error);
@@ -361,11 +365,8 @@ export const generateWorkflowData = async ({
     });
   }
 
-  if (textInputs.length > 0) {
-    messageContent.push({
-      type: "text",
-      content: buildTextInputsMessage(textInputs),
-    });
+  if (textInputsMessage !== null) {
+    messageContent.push({ type: "text", content: textInputsMessage });
   }
 
   if (linkedSkillsMessage !== null) {

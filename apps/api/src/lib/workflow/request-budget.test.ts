@@ -204,7 +204,7 @@ describe("fitting documents to a request budget", () => {
     );
   });
 
-  test("a cut block keeps its start and end around a counted marker", () => {
+  test("a cut block keeps its start and end around a marker with no digits", () => {
     const text = `${"start ".repeat(4000)}${"middle ".repeat(4000)}provided that notice is given.`;
     const fit = fitDocxFilesToRequestBudget({
       files: [docx(0, ["Short clause.", text])],
@@ -224,9 +224,8 @@ describe("fitting documents to a request budget", () => {
     expect(cutBlock?.text.endsWith("provided that notice is given.")).toBe(
       true,
     );
-    expect(cutBlock?.text).toContain(
-      `[… ${String(charactersWithheld)} characters withheld …]`,
-    );
+    expect(cutBlock?.text).toContain("[… text withheld …]");
+    expect(cutBlock?.text).not.toMatch(/\d/u);
     expect(passagesCut).toBe(1);
     expect(charactersTotal).toBe(text.length + "Short clause.".length);
     expect(charactersWithheld).toBeGreaterThan(0);

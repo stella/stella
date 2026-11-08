@@ -289,7 +289,13 @@ describe("validateAIOutput — money answers", () => {
 });
 
 describe("isEmptyFieldContent", () => {
-  test("an empty select, multi-select or date states no value", () => {
+  test("blank text, or an empty select, multi-select or date, states no value", () => {
+    expect(isEmptyFieldContent({ version: 1, type: "text", value: "" })).toBe(
+      true,
+    );
+    expect(
+      isEmptyFieldContent({ version: 1, type: "text", value: " \n" }),
+    ).toBe(true);
     expect(
       isEmptyFieldContent({ version: 1, type: "single-select", value: null }),
     ).toBe(true);
@@ -311,8 +317,8 @@ describe("isEmptyFieldContent", () => {
     expect(
       isEmptyFieldContent({ version: 1, type: "date", value: "2026-11-08" }),
     ).toBe(false);
-    expect(isEmptyFieldContent({ version: 1, type: "text", value: "" })).toBe(
-      false,
-    );
+    expect(
+      isEmptyFieldContent({ version: 1, type: "text", value: "Czech law" }),
+    ).toBe(false);
   });
 });

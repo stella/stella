@@ -22,7 +22,8 @@ import type {
 // and text that tokenizes worse than the densest script.
 const CONTEXT_WINDOW_USABLE_SHARE = 0.9;
 const RESERVED_OUTPUT_TOKENS = 16_000;
-// Prompts, skills, text inputs and the output schema of one request.
+// Prompts, skills and the output schema of one request. Text inputs vary too
+// much to reserve for, so a caller subtracts their real size from the budget.
 const RESERVED_PROMPT_TOKENS = 16_000;
 // A PDF reaches the provider whole, as text plus a page image, and cannot be
 // cut. This is the low end of what providers publish per page.
@@ -31,14 +32,9 @@ const PDF_PAGE_TOKEN_ESTIMATE = 1500;
  *  mostly did not read, so the request is refused instead. */
 const MAX_WITHHELD_TEXT_SHARE = 0.5;
 
-const withheldMarker = (characters: number): string =>
-  `[… ${String(characters)} characters withheld …]`;
-
-/** A marker of any real length fits this, so a cut can be sized before its
- *  count is known. */
-const MARKER_RESERVE_BYTES = Buffer.byteLength(
-  withheldMarker(Number.MAX_SAFE_INTEGER),
-);
+// No digits: System One reads cut text and takes numbers from it as answers.
+const WITHHELD_MARKER = "[… text withheld …]";
+const MARKER_RESERVE_BYTES = Buffer.byteLength(WITHHELD_MARKER);
 // Below this a trimmed passage would be little more than its marker.
 const MIN_CAP_BYTES = MARKER_RESERVE_BYTES * 4;
 
@@ -70,7 +66,7 @@ const codePointBytes = (codePoint: number): number => {
   return codePoint <= LAST_THREE_BYTE_CODE_POINT ? 3 : 4;
 };
 
-const textBytes = (text: string): number => {
+export const textBytes = (text: string): number => {
   let bytes = 0;
   for (const character of text) {
     bytes += codePointBytes(character.codePointAt(0) ?? 0);
@@ -116,7 +112,7 @@ const textCutAtCap =
     tally.charactersWithheld += withheld;
     return [
       characters.slice(0, head).join(""),
-      withheldMarker(withheld),
+      WITHHELD_MARKER,
       characters.slice(characters.length - tail).join(""),
     ].join("");
   };

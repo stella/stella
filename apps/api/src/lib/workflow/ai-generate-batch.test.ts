@@ -15,6 +15,7 @@ import {
 } from "@/api/lib/workflow/ai-generate-batch";
 import { buildJustificationFilenames } from "@/api/lib/workflow/generate-batch";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
+import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import { requestBudgetBytesForTask } from "@/api/lib/workflow/request-budget";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
@@ -165,7 +166,10 @@ describe("a request over its model's budget", () => {
       modelTier: testModelAdmission(organizationId).modelTier,
     });
 
-  const generate = async (file: PreparedDocxFile) => {
+  const generate = async (
+    file: PreparedDocxFile,
+    textInputs: TextInput[] = [],
+  ) => {
     const sentRequests: unknown[] = [];
     const record = (request: unknown) => {
       sentRequests.push(request);
@@ -180,7 +184,7 @@ describe("a request over its model's budget", () => {
       files: [file],
       properties: [property],
       filenames: buildJustificationFilenames([file]),
-      textInputs: [],
+      textInputs,
       linkedSkillsMessage: null,
       abortSignal: new AbortController().signal,
       entityVersionId: "entity-version-1",
@@ -210,9 +214,21 @@ describe("a request over its model's budget", () => {
     const { sentRequests } = await generate(file);
     const sent = JSON.stringify(sentRequests.at(0));
 
-    expect(sent).toContain("characters withheld");
+    expect(sent).toContain("c[… text withheld …]c");
     expect(sent).toContain("seq-0");
     expect(sent).not.toContain("c".repeat(budget));
+  });
+
+  test("leaves room for the answers of earlier columns", async () => {
+    const text = "c".repeat(taskBudget() - 1000);
+    const file = docxWithBlocks([text]);
+    const textInputs = [{ propertyId: property.id, value: "a".repeat(10_000) }];
+
+    const whole = await generate(file);
+    const beside = await generate(file, textInputs);
+
+    expect(JSON.stringify(whole.sentRequests.at(0))).toContain(text);
+    expect(JSON.stringify(beside.sentRequests.at(0))).not.toContain(text);
   });
 
   test("refuses with a typed error, with no model call", async () => {

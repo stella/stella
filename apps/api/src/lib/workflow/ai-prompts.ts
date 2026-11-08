@@ -47,7 +47,7 @@ export const WORKFLOW_SYSTEM_PROMPT =
   "showing the tag syntax.";
 
 const WITHHELD_TEXT_INSTRUCTION =
-  "A marker such as [… 1200 characters withheld …] means that part of the " +
+  "The marker [… text withheld …] means that part of the " +
   "document was left out for length. Say nothing about what the withheld " +
   "text contains or omits.";
 

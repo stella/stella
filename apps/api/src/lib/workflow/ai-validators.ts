@@ -297,7 +297,8 @@ type ValidatedFieldContent = Extract<
   { type: "text" | "single-select" | "multi-select" | "date" | "int" | "money" }
 >;
 
-/** Content that states no value: an empty select, multi-select or date. */
+/** Content that states no value: blank text, or an empty select, multi-select
+ *  or date. */
 export const isEmptyFieldContent = (
   content: ValidatedFieldContent,
 ): boolean => {
@@ -308,6 +309,7 @@ export const isEmptyFieldContent = (
     case "multi-select":
       return content.value.length === 0;
     case "text":
+      return content.value.trim().length === 0;
     case "int":
     case "money":
       return false;

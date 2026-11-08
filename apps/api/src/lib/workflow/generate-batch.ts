@@ -399,8 +399,8 @@ export const generateBatch = async (
       });
 
       const content = fieldContentFromValidated(validated);
-      // In a cut document an empty select or date says no more than an empty
-      // text answer does: the value may sit in the text the model never read.
+      // In a cut document an empty answer says nothing about the document: the
+      // value may sit in the text the model never read.
       if (
         content === null ||
         (generation.fit.type === "cut" && isEmptyFieldContent(content))
