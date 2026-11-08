@@ -497,7 +497,6 @@ export const FAILURE_TAGS = [
   "UnsupportedOAuthScopesError",
   "UploadAppError",
   "UploadFinalizeError",
-  "UploadedMailSourceUnresolvedError",
   "UploadedMailUnavailableError",
   "UsCitationBundleOverflowError",
   "UsCitationOccurrenceOverflowError",
