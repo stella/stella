@@ -40,7 +40,10 @@ export type BrowserSuitePrPath =
   | { kind: "production-selection" }
   | {
       kind: "scope";
-      output: "desktop_browser_required" | "e2e_landing_required";
+      output:
+        | "desktop_browser_required"
+        | "e2e_landing_required"
+        | "route_smoke_required";
     }
   | { kind: "armed-proof" };
 
@@ -115,6 +118,14 @@ export const BROWSER_SUITES = [
     script: "test:e2e",
     filters: ["route-smoke.spec.ts"],
     pr: { kind: "production-selection" },
+  },
+  {
+    id: "phone-layout",
+    job: "route-smoke",
+    package: "@stll/web",
+    script: "test:e2e:phone",
+    // The route-smoke job runs the whole phone suite after its route walk.
+    pr: { kind: "scope", output: "route_smoke_required" },
   },
   {
     id: "production",
