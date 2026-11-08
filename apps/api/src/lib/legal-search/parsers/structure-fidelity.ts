@@ -62,6 +62,16 @@ export const STRUCTURE_FIDELITY_RULES = {
    * a parser that did not see the heading read the reasons as the ruling.
    */
   HOLDING_AFTER_REASONS: "holding-after-reasons",
+  /**
+   * The recital or the legal basis before the ruling, read as the ruling:
+   * the parser opened the operative part before its first operative line.
+   */
+  RECITAL_AS_HOLDING: "recital-as-holding",
+  /**
+   * A decision that opens a ruling before its reasons and holds no holding
+   * block: the parser read the ruling as head matter or as reasons.
+   */
+  RULING_WITHOUT_HOLDING: "ruling-without-holding",
 } as const;
 
 type StructureFidelityRule =
@@ -167,6 +177,12 @@ const excerptOf = (text: string): string => text.slice(0, EXCERPT_CHARS);
 type RoleReading = {
   grammar: DecisionRoleGrammar | undefined;
   reasoned: boolean;
+  /** Whether a line that rules has been read: the head matter is over. */
+  ruled: boolean;
+  /** The first block before the reasons that opens a ruling. */
+  rulingOpening: Block | undefined;
+  /** Whether any paragraph is the decision's holding. */
+  held: boolean;
 };
 
 /** Whether a block opens the reasons, by the language's grammar. */
@@ -180,14 +196,33 @@ const opensReasons = (
 
 /** The role rules a holding paragraph breaks, by the language's grammar. */
 const holdingRoleRules = (
-  { grammar, reasoned }: RoleReading,
+  { grammar, reasoned, ruled }: RoleReading,
   text: string,
 ): StructureFidelityRule[] => [
   ...(reasoned ? [STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_REASONS] : []),
   ...(grammar?.isSignatureLine?.(text) === true
     ? [STRUCTURE_FIDELITY_RULES.SIGNATURE_AS_HOLDING]
     : []),
+  ...(!ruled && grammar?.isRecitalLine?.(text) === true
+    ? [STRUCTURE_FIDELITY_RULES.RECITAL_AS_HOLDING]
+    : []),
 ];
+
+/** Whether a block opens a ruling, by the language's grammar. */
+const opensRuling = (
+  grammar: DecisionRoleGrammar | undefined,
+  block: Block,
+): boolean =>
+  (block.type === "heading" || block.type === "paragraph") &&
+  grammar?.opensRuling?.(block.plainText) === true;
+
+/** Whether a block rules, by the language's grammar. */
+const rules = (
+  grammar: DecisionRoleGrammar | undefined,
+  block: Block,
+): boolean =>
+  (block.type === "heading" || block.type === "paragraph") &&
+  grammar?.isOperativeLine?.(block.plainText) === true;
 
 /**
  * Every printed-page structure the blocks carry, in document order, and
@@ -202,9 +237,20 @@ export const structureFidelityIn = (
   const reading: RoleReading = {
     grammar: decisionRoleGrammarOf(language),
     reasoned: false,
+    ruled: false,
+    rulingOpening: undefined,
+    held: false,
   };
   for (const [index, block] of blocks.entries()) {
     const opens = opensReasons(reading.grammar, block);
+    reading.ruled ||= rules(reading.grammar, block);
+    if (
+      reading.rulingOpening === undefined &&
+      !reading.reasoned &&
+      opensRuling(reading.grammar, block)
+    ) {
+      reading.rulingOpening = block;
+    }
     if (block.type !== "paragraph") {
       reading.reasoned ||= opens;
       continue;
@@ -223,6 +269,7 @@ export const structureFidelityIn = (
       finding(STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_SIGNATURE);
     }
     if (block.role === "holding") {
+      reading.held = true;
       for (const rule of holdingRoleRules(reading, text)) {
         finding(rule);
       }
@@ -249,6 +296,14 @@ export const structureFidelityIn = (
       );
     }
     reading.reasoned ||= opens;
+  }
+  const opening = reading.rulingOpening;
+  if (opening !== undefined && !reading.held) {
+    findings.push({
+      rule: STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING,
+      anchorId: opening.anchorId,
+      excerpt: excerptOf(opening.plainText.trim()),
+    });
   }
   return findings;
 };

@@ -10366,9 +10366,11 @@
         "blockTypeCounts": {
           "heading": 12,
           "paragraph-case-number": 1,
-          "paragraph-holding": 10,
-          "paragraph": 233,
-          "paragraph-quote": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 8,
+          "paragraph-argumentation": 226,
+          "paragraph-quote": 7,
+          "paragraph": 7
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -10397,9 +10399,11 @@
         "blockTypeCounts": {
           "heading": 12,
           "paragraph-case-number": 1,
-          "paragraph-holding": 10,
-          "paragraph": 232,
-          "paragraph-quote": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 8,
+          "paragraph-argumentation": 225,
+          "paragraph-quote": 7,
+          "paragraph": 7
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -10434,9 +10438,11 @@
         "blockTypeCounts": {
           "heading": 12,
           "paragraph-case-number": 1,
-          "paragraph-holding": 10,
-          "paragraph": 234,
-          "paragraph-quote": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 8,
+          "paragraph-argumentation": 227,
+          "paragraph-quote": 7,
+          "paragraph": 7
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -10465,9 +10471,11 @@
         "blockTypeCounts": {
           "heading": 12,
           "paragraph-case-number": 1,
-          "paragraph-holding": 10,
-          "paragraph": 233,
-          "paragraph-quote": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 8,
+          "paragraph-argumentation": 226,
+          "paragraph-quote": 7,
+          "paragraph": 7
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -10496,9 +10504,11 @@
         "blockTypeCounts": {
           "heading": 12,
           "paragraph-case-number": 1,
-          "paragraph-holding": 10,
-          "paragraph": 233,
-          "paragraph-quote": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 8,
+          "paragraph-argumentation": 226,
+          "paragraph-quote": 7,
+          "paragraph": 7
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -10527,9 +10537,11 @@
         "blockTypeCounts": {
           "heading": 12,
           "paragraph-case-number": 1,
-          "paragraph-holding": 10,
-          "paragraph": 232,
-          "paragraph-quote": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 8,
+          "paragraph-argumentation": 226,
+          "paragraph-quote": 7,
+          "paragraph": 6
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -10558,9 +10570,11 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 11,
-          "paragraph": 90,
-          "paragraph-quote": 4
+          "paragraph-intro": 2,
+          "paragraph-holding": 9,
+          "paragraph-argumentation": 86,
+          "paragraph-quote": 4,
+          "paragraph": 4
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10589,9 +10603,11 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 11,
-          "paragraph": 89,
-          "paragraph-quote": 4
+          "paragraph-intro": 2,
+          "paragraph-holding": 9,
+          "paragraph-argumentation": 85,
+          "paragraph-quote": 4,
+          "paragraph": 4
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10626,9 +10642,11 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 11,
-          "paragraph": 91,
-          "paragraph-quote": 4
+          "paragraph-intro": 2,
+          "paragraph-holding": 9,
+          "paragraph-argumentation": 87,
+          "paragraph-quote": 4,
+          "paragraph": 4
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10657,9 +10675,11 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 11,
-          "paragraph": 90,
-          "paragraph-quote": 4
+          "paragraph-intro": 2,
+          "paragraph-holding": 9,
+          "paragraph-argumentation": 86,
+          "paragraph-quote": 4,
+          "paragraph": 4
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10688,9 +10708,11 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 11,
-          "paragraph": 90,
-          "paragraph-quote": 4
+          "paragraph-intro": 2,
+          "paragraph-holding": 9,
+          "paragraph-argumentation": 86,
+          "paragraph-quote": 4,
+          "paragraph": 4
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10719,9 +10741,11 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 11,
-          "paragraph": 89,
-          "paragraph-quote": 4
+          "paragraph-intro": 2,
+          "paragraph-holding": 9,
+          "paragraph-argumentation": 86,
+          "paragraph-quote": 4,
+          "paragraph": 3
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10750,8 +10774,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 6
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 6
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10780,8 +10805,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 5
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 5
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10816,8 +10842,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 7
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10846,8 +10873,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 6
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 6
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10876,8 +10904,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 6
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 6
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10906,8 +10935,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 41
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 41
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10936,8 +10966,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 40
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 40
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10972,8 +11003,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 42
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 42
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -11002,8 +11034,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 41
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 41
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -11032,8 +11065,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 41
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 41
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
