@@ -9,6 +9,8 @@ import {
   type HarnessAdapter,
   type HarnessAuth,
   type HarnessCapability,
+  type HarnessInputFile,
+  type HarnessInputFileType,
   type HarnessModel,
   type HarnessProbe,
   HarnessProbeError,
@@ -101,16 +103,40 @@ const MAX_MODEL_PAGES = 20;
 /** `<client name>/<version> (<platform>) ...`, as `initialize` reports it. */
 const USER_AGENT_VERSION = /^[^/\s]+\/(\S+)/u;
 
-/**
- * What this adapter does with Codex. Image input stays off until turns send
- * attachments: the prompt is text only.
- */
+/** What this adapter does with Codex. */
 const CODEX_CAPABILITIES = {
   approvals: true,
   interrupt: true,
   resume: true,
-  image_input: false,
+  // The turn's images open `turn/start` as image items.
+  image_input: true,
 } as const satisfies Record<HarnessCapability, boolean>;
+
+/** Codex takes images as input; a PDF stays a path the agent opens. */
+const CODEX_INPUT_FILE_TYPES = [
+  "image",
+] as const satisfies readonly HarnessInputFileType[];
+
+/** A `turn/start` input item, as the app-server's `UserInput` defines it. */
+type TurnInputItem =
+  | { type: "text"; text: string; text_elements: [] }
+  | { type: "image"; url: string };
+
+/**
+ * The turn's input: images first, then the text, which still names each
+ * image's copy so the agent can open it.
+ */
+const turnInputItems = (
+  files: readonly HarnessInputFile[],
+  text: string,
+): TurnInputItem[] => [
+  ...files.flatMap((file): TurnInputItem[] =>
+    file.type === "image"
+      ? [{ type: "image", url: `data:${file.mediaType};base64,${file.base64}` }]
+      : [],
+  ),
+  { type: "text", text, text_elements: [] },
+];
 
 const capabilities = (): HarnessCapability[] =>
   Object.entries(CODEX_CAPABILITIES).flatMap(([capability, supported]) =>
@@ -285,6 +311,24 @@ const listModels = async (
   return models;
 };
 
+/**
+ * The turn's input files, if the model lists images as input. A model that
+ * does not, or a listing that fails, keeps them the paths the prompt names.
+ */
+const filesTheModelReads = async (
+  client: AppServerClient,
+  input: HarnessTurnInput,
+): Promise<readonly HarnessInputFile[]> => {
+  if (!input.inputFiles.some(({ type }) => type === "image")) {
+    return [];
+  }
+  const models = await listModels(client);
+  const model = models?.find(({ id }) => id === input.model);
+  return model?.inputModalities.includes("image") === true
+    ? input.inputFiles
+    : [];
+};
+
 const close = async (client: AppServerClient, gracePeriodMs: number) => {
   client.closeInput();
   if (!(await settlesWithin(client.exited, gracePeriodMs))) {
@@ -424,6 +468,7 @@ const startTurn = async (
     return fail(opened.error);
   }
   const { threadId, continuation } = opened.value;
+  const files = await filesTheModelReads(client, input);
   const prompt =
     continuation.type === "resumed"
       ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
@@ -433,7 +478,7 @@ const startTurn = async (
   }
   const started = await client.request("turn/start", {
     threadId,
-    input: [{ type: "text", text: prompt.value, text_elements: [] }],
+    input: turnInputItems(files, prompt.value),
   });
   const parsed = Result.isOk(started)
     ? v.safeParse(TurnStartResponseSchema, started.value)
@@ -468,6 +513,7 @@ export const createCodexHarnessAdapter = (
   validateOptions(options);
   return {
     harness: "codex",
+    inputFileTypes: CODEX_INPUT_FILE_TYPES,
     probe: async () => probe(options),
     startTurn: async (input) => startTurn(options, input),
   };
