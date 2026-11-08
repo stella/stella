@@ -13,6 +13,7 @@ import type {
 } from "../adapter";
 import {
   type HarnessApprovalOption,
+  harnessContextUsage,
   type HarnessContinuation,
   type HarnessEvent,
   type HarnessQuestion,
@@ -137,6 +138,7 @@ const ZERO_USAGE: HarnessUsage = {
   cachedInputTokens: 0,
   outputTokens: 0,
   reasoningOutputTokens: 0,
+  context: null,
 };
 
 /**
@@ -549,8 +551,9 @@ export class CodexTurnSession {
     if (parsed === null || parsed.turnId !== this.turnId) {
       return;
     }
-    // `last` is one model request; a turn makes several.
-    const { last } = parsed.tokenUsage;
+    // `last` is one model request; a turn makes several. The context is the
+    // last request's prompt and answer, which the next request carries.
+    const { last, modelContextWindow } = parsed.tokenUsage;
     const total = this.usage ?? ZERO_USAGE;
     this.usage = {
       inputTokens: total.inputTokens + last.inputTokens,
@@ -558,6 +561,10 @@ export class CodexTurnSession {
       outputTokens: total.outputTokens + last.outputTokens,
       reasoningOutputTokens:
         total.reasoningOutputTokens + last.reasoningOutputTokens,
+      context: harnessContextUsage(
+        last.inputTokens + last.outputTokens,
+        modelContextWindow,
+      ),
     };
   }
 

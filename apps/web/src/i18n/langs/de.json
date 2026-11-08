@@ -636,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Der Stundensatz darf nicht negativ sein",
     "hours": "Stunden",
+    "invalidNumberFormat": "Überprüfen Sie das Zahlenformat",
     "invoiceComposer": {
       "addSellerProfile": "Legen Sie in den Abrechnungseinstellungen ein Verkäuferprofil an",
       "billedHours": "Abgerechnete Stunden",
@@ -1584,6 +1585,8 @@
       "full": "{percent} % voll",
       "instructions": "Systemanweisungen",
       "percent": "{percent} %",
+      "reported": "So hat es der Coding-Agent auf Ihrem Computer nach seiner letzten Antwort gemeldet. Der Agent verwaltet seinen Kontext selbst.",
+      "reportedTokens": "{used} / {total} Tokens",
       "summary": "Zusammenfassung älterer Nachrichten",
       "summaryWithCount": "Zusammenfassung von {count} älteren Nachrichten",
       "title": "Kontext der Unterhaltung",
@@ -1687,6 +1690,7 @@
     "localRun": {
       "cloud": "stella-Cloud",
       "errorLimitReached": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Versuchen Sie es erneut, sobald das Limit zurückgesetzt ist.",
+      "errorLimitResetsAt": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Sie können es ab {time} erneut versuchen.",
       "errorNeedsLogin": "Der Coding-Agent auf Ihrem Computer verlangt eine erneute Anmeldung. Melden Sie sich über stella desktop an und versuchen Sie es dann erneut.",
       "errorUnavailable": "Ihr Computer hat die Bearbeitung dieser Antwort beendet. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
       "filesNotShared": "Dateien, die nicht geteilt werden konnten, bleiben auf Ihrem Computer: {fileNames}",

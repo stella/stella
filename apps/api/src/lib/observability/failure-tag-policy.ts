@@ -157,6 +157,7 @@ export const TAGGED_FAILURE_REASON = {
   CzUsRosterListingError: "tagged_failure",
   CzUsRosterParseError: "tagged_failure",
   DataBoxMessageParseError: "tagged_failure",
+  DataSourceUnavailableError: "tagged_failure",
   DataUrlError: "tagged_failure",
   DatabaseCensusError: "tagged_failure",
   DatabaseError: "tagged_failure",

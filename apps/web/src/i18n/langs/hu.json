@@ -636,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Az óradíj nem lehet negatív",
     "hours": "Órák",
+    "invalidNumberFormat": "Ellenőrizze a számformátumot",
     "invoiceComposer": {
       "addSellerProfile": "Hozzon létre eladói profilt a számlázási beállításokban",
       "billedHours": "Számlázott órák",
@@ -1584,6 +1585,8 @@
       "full": "{percent}% megtelt",
       "instructions": "Rendszerutasítások",
       "percent": "{percent}%",
+      "reported": "Ahogy a számítógépén futó kódoló ügynök a legutóbbi válasza után jelentette. Az ügynök maga kezeli a kontextusát.",
+      "reportedTokens": "{used} / {total} token",
       "summary": "Korábbi üzenetek összefoglalója",
       "summaryWithCount": "{count} korábbi üzenet összefoglalója",
       "title": "Beszélgetés kontextusa",
@@ -1687,6 +1690,7 @@
     "localRun": {
       "cloud": "stella-felhő",
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
+      "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
       "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
       "errorUnavailable": "A számítógépe leállította ennek a válasznak a feldolgozását. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
       "filesNotShared": "A meg nem osztható fájlok a számítógépén maradnak: {fileNames}",

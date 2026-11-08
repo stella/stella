@@ -636,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Hodinová sazba nesmí být záporná",
     "hours": "Hodiny",
+    "invalidNumberFormat": "Zkontrolujte formát čísla",
     "invoiceComposer": {
       "addSellerProfile": "Přidejte profil dodavatele v nastavení fakturace",
       "billedHours": "Účtované hodiny",
@@ -1584,6 +1585,8 @@
       "full": "{percent} % zaplněno",
       "instructions": "Systémové pokyny",
       "percent": "{percent} %",
+      "reported": "Podle údajů programovacího agenta ve vašem počítači po jeho poslední odpovědi. Agent si kontext spravuje sám.",
+      "reportedTokens": "{used} / {total} tokenů",
       "summary": "Shrnutí starších zpráv",
       "summaryWithCount": "Shrnutí {count} starších zpráv",
       "title": "Kontext konverzace",
@@ -1687,6 +1690,7 @@
     "localRun": {
       "cloud": "Cloud stella",
       "errorLimitReached": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Zkuste to znovu, až se limit obnoví.",
+      "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",
       "errorNeedsLogin": "Programovací agent ve vašem počítači vyžaduje nové přihlášení. Přihlaste se přes stella desktop a zkuste to znovu.",
       "errorUnavailable": "Váš počítač přestal tuto odpověď zpracovávat. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
       "filesNotShared": "Soubory, které se nepodařilo sdílet, zůstávají ve vašem počítači: {fileNames}",
