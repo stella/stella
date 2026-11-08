@@ -56,6 +56,7 @@ const bundleApp = (directory: string) => {
 
 const readChatMcpAppBundle = createSafeRootHandler(
   config,
+  // oxlint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture; the bundle is in memory.
   async function* ({ params, set }) {
     const app = yield* bundleApp(params.app);
     set.headers["X-Content-Type-Options"] = "nosniff";
