@@ -12,30 +12,25 @@ import {
   deviceSessionStore,
   openDeviceAuthSession,
 } from "@/connection/platform";
-import { restoredSource, sourceFor } from "@/connection/restored-session";
+import {
+  createDeviceSessionEnd,
+  restoredSource,
+  revokeSession,
+  sourceFor,
+} from "@/connection/restored-session";
 import { isCurrentSessionSource } from "@/connection/session";
 import type {
   AccessTokenSource,
   SessionGeneration,
-  StoredSession,
 } from "@/connection/session";
 import { keepSignIn, signOutSession } from "@/connection/session-actions";
-import {
-  type BeforeSessionEnd,
-  createSessionEndBoundary,
-} from "@/connection/session-end";
+import type { BeforeSessionEnd } from "@/connection/session-end";
 import { signIn as signInToServer } from "@/connection/sign-in";
 import type { SignInError } from "@/connection/sign-in";
-import { revokeRefreshToken } from "@/connection/tokens";
 import { APP_VARIANT, PUSH_NOTIFICATIONS } from "@/env";
-import { deviceAccountStore } from "@/native/account-store";
 import { currentPushDevice } from "@/native/push-device";
-import {
-  forgetTimerActivityDevice,
-  stopTimerActivityUpdates,
-} from "@/native/timer-activity-device";
+import { stopTimerActivityUpdates } from "@/native/timer-activity-device";
 import { unregisterPushDevice } from "@/state/push-devices";
-import { forgetRecentSearches } from "@/state/recent-searches";
 
 export type SessionState =
   | {
@@ -84,18 +79,6 @@ const stopPushNotifications = async (source: AccessTokenSource) => {
   }
 };
 
-/** Gives a grant back to the server. Best effort: an unrevoked grant expires unused. */
-const revokeSession = async (session: StoredSession) => {
-  (
-    await revokeRefreshToken({
-      clientId: session.clientId,
-      fetch,
-      refreshToken: session.refreshToken,
-      revocationEndpoint: session.revocationEndpoint,
-    })
-  ).unwrapOr(undefined);
-};
-
 export const SessionProvider = ({ children }: React.PropsWithChildren) => {
   const restored = use(restoredSource);
   const [state, setState] = useState<SessionState>(() =>
@@ -103,13 +86,7 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       ? { status: "signed-in", source: restored }
       : { status: "signed-out", ended: false },
   );
-  const [boundary] = useState(() => {
-    const created = createSessionEndBoundary();
-    // What the app keeps on the device for the account goes with its session.
-    created.register(forgetRecentSearches(deviceAccountStore));
-    created.register(forgetTimerActivityDevice);
-    return created;
-  });
+  const [boundary] = useState(createDeviceSessionEnd);
   // Several requests can find the same session refused at once; its
   // handlers run for the first only.
   const [ending] = useState(() => new WeakSet<AccessTokenSource>());
