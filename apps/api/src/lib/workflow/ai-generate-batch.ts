@@ -154,7 +154,7 @@ type SystemOnePhaseOptions = {
   usageMetering: AIUsageMetering | undefined;
   orgAIConfig: OrgAIConfig | null | undefined;
   properties: AIBatchProperty[];
-  files: PreparedInputFile[];
+  files: readonly PreparedInputFile[];
   textInputs: TextInput[];
   abortSignal: AbortSignal;
   onPartialAnswer:
