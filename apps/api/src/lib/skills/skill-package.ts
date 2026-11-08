@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
-import type JSZip from "jszip";
 
+import type { ZipEntry } from "@stll/docx-core/zip";
 import {
   isAllowedResourcePath,
   isSkillResourceFolder,
@@ -468,7 +468,7 @@ const parseMarkdownSkillPackageBytes = (
 };
 
 type ZipPackageEntry = {
-  file: JSZip.JSZipObject;
+  file: ZipEntry;
   path: string;
 };
 
@@ -526,17 +526,17 @@ const parseZipSkillPackage = async (
   buffer: ArrayBuffer,
 ): Promise<Result<ImportedSkillPackage, HandlerError>> => {
   const zip = await loadDocx(buffer, SKILL_ARCHIVE_OPTIONS);
-  const entries = Object.values(zip.files);
+  const entries = zip.entries();
   if (entries.length > LIMITS.agentSkillArchiveFilesMax) {
     return rejectSkillPackage("Skill pack has too many files");
   }
 
   const packageEntries: ZipPackageEntry[] = [];
   for (const file of entries) {
-    if (file.dir || file.name.startsWith("__MACOSX/")) {
+    if (file.path.startsWith("__MACOSX/")) {
       continue;
     }
-    const normalizedPath = normalizePackageFilePath(file.name);
+    const normalizedPath = normalizePackageFilePath(file.path);
     if (!normalizedPath) {
       continue;
     }
@@ -565,17 +565,14 @@ const parseZipSkillPackage = async (
       continue;
     }
 
-    const declaredSize = zipUncompressedSize(file);
-    if (declaredSize !== null) {
-      const declaredLimit = checkZipUncompressedLimit(
-        totalUncompressedBytes + declaredSize,
-      );
-      if (declaredLimit.isErr()) {
-        return Result.err(declaredLimit.error);
-      }
+    const declaredLimit = checkZipUncompressedLimit(
+      totalUncompressedBytes + file.size,
+    );
+    if (declaredLimit.isErr()) {
+      return Result.err(declaredLimit.error);
     }
 
-    const bytes = await file.async("uint8array");
+    const bytes = await file.bytes();
     totalUncompressedBytes += bytes.byteLength;
     const inflatedLimit = checkZipUncompressedLimit(totalUncompressedBytes);
     if (inflatedLimit.isErr()) {
@@ -2241,25 +2238,6 @@ const decodeUtf8 = (
 
 const encodedSize = (value: string): number =>
   UTF8_ENCODER.encode(value).byteLength;
-
-const zipUncompressedSize = (file: JSZip.JSZipObject): number | null => {
-  // JSZip has no public declared-size API; this is only a preflight before the
-  // authoritative post-decompression byte count.
-  const candidate: unknown = file;
-  if (!isRecord(candidate)) {
-    return null;
-  }
-
-  const metadata = candidate["_data"];
-  if (!isRecord(metadata)) {
-    return null;
-  }
-
-  const size = metadata["uncompressedSize"];
-  return typeof size === "number" && Number.isFinite(size) && size >= 0
-    ? size
-    : null;
-};
 
 const toHandlerError = (cause: unknown): HandlerError =>
   HandlerError.is(cause)

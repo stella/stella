@@ -208,8 +208,16 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "database_backfill_states",
   "case_law_sitemap_changes",
   "case_law_sitemap_drain_progress",
+  // Ranking-signal changes: owner-run triggers enqueue, the ingestion role's
+  // projection drain consumes; request code never reads them.
+  "case_law_ranking_signal_changes",
   "case_law_sitemap_refresh_cursor",
   "case_law_sitemap_shard_counts",
+  // Coverage populations: owner-maintained, read only by the public-law reader.
+  "case_law_population_counts",
+  "case_law_population_deltas",
+  "case_law_population_projections",
+  "case_law_population_seed_state",
   // Removal generations are owner/ingestion-only, beside shard staging counts.
   "case_law_sitemap_country_generations",
   "case_law_replay_batches",
@@ -223,6 +231,8 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "eu_completion_controls",
   "action_cost_records",
   "action_cost_calls",
+  // Provider erasure intents belong to the scheduler, never request roles.
+  "hosted_customer_erasures",
   // Chat content repair receipts: forced owner-only RLS; the owner-run
   // backfill and deploy repair write them, request roles never see them.
   "chat_content_v3_backfill_receipts",
@@ -241,11 +251,18 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "agent_delegation",
   "agent_assertion_replay",
   "desktop_device_proof_replays",
+  // Desktop runner sockets, runs, commands and events: the gateway serves
+  // sockets and sweeps leases across organizations on the owner connection.
+  "desktop_runners",
+  "desktop_runner_runs",
+  "desktop_runner_commands",
+  "desktop_runner_events",
   // Better Auth OAuth control-plane state. Request-role access would expose
   // resource policy or let tenant traffic change token authorization rules.
   "oauth_resource",
   "oauth_client_resource",
   "oauth_client_assertion",
+  "oauth_grant_revocations",
   "mcp_web_handoff",
   "service_oauth_clients",
   // Machine API keys: credential digests plus the permission set each key

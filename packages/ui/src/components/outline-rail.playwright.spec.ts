@@ -15,10 +15,12 @@ test.use({
 const openFixture = async (
   page: Page,
   presentation: "panel" | "rail" | "popover",
+  { people = false }: { people?: boolean } = {},
 ) => {
-  await page.goto(`${fixturePath}?presentation=${presentation}`, {
-    waitUntil: "domcontentloaded",
-  });
+  await page.goto(
+    `${fixturePath}?presentation=${presentation}${people ? "&people=true" : ""}`,
+    { waitUntil: "domcontentloaded" },
+  );
   await expect
     .poll(
       async () =>
@@ -174,6 +176,43 @@ test("narrow viewport keeps the native panel visible and within its host", async
   const hostBox = await readBox(host);
   expect(panelBox.x).toBeGreaterThanOrEqual(hostBox.x);
   expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(VIEWPORT.width);
+});
+
+test("a tick with people draws no face until it is asked", async ({ page }) => {
+  await openFixture(page, "rail", { people: true });
+  const tick = page.getByRole("button", { name: /Dissenting opinion/u });
+  await expect(tick).toHaveText("");
+  expect((await readBox(tick)).height).toBeLessThanOrEqual(4);
+  const card = page.locator('[data-slot="tooltip-popup"]');
+  await expect(card).toHaveCount(0);
+
+  // A 2px tick still has to be a target a pointer can stop on.
+  const box = await readBox(tick);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 8);
+
+  await expect(card).toBeVisible();
+  for (const name of [
+    "Nováková Jana",
+    "Dvořák Petr",
+    "Malá Eva",
+    "Černý Jiří",
+    "Dissenting opinion",
+    "Portrait source: Court",
+  ]) {
+    await expect(card).toContainText(name);
+  }
+});
+
+test("a tick with people opens its card on keyboard focus", async ({
+  page,
+}) => {
+  await openFixture(page, "rail", { people: true });
+  const tick = page.getByRole("button", { name: /Dissenting opinion/u });
+  await page.keyboard.press("Tab");
+  await tick.focus();
+  await expect(page.locator('[data-slot="tooltip-popup"]')).toContainText(
+    "Černý Jiří",
+  );
 });
 
 test("rail fills the host below its host-owned toggle", async ({ page }) => {

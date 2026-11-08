@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import type { CalculationKind } from "@stll/calculations";
 import { CALCULATION_KINDS } from "@stll/calculations";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { CalculationSelection } from "./calculation-selection";
 import { applyCalculationSelection } from "./calculation-selection";
@@ -67,7 +67,8 @@ const selectionsArb: fc.Arbitrary<CalculationSelection[]> = fc
 
 describe("selection order invariants", () => {
   test("changing a reduction never reorders the row", () => {
-    fc.assert(
+    assertProperty(
+      "changing a reduction never reorders the row",
       fc.property(
         selectionsArb,
         idArb,
@@ -94,12 +95,13 @@ describe("selection order invariants", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("a property appears at most once, whatever is chosen", () => {
-    fc.assert(
+    assertProperty(
+      "a property appears at most once, whatever is chosen",
       fc.property(
         selectionsArb,
         idArb,
@@ -115,7 +117,7 @@ describe("selection order invariants", () => {
           expect(new Set(ids).size).toBe(ids.length);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 

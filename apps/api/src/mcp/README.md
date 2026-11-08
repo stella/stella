@@ -357,9 +357,15 @@ observations of those versions, not protocol guarantees:
 | instructions       | once, in the first user message | prefixed to every tool description                    | once, in the tool-search description |
 | call result        | `structuredContent` JSON only   | the script receives `content` and `structuredContent` | `structuredContent` JSON only        |
 
-Claude Code sends every tool upfront or, when the definitions are large, only
-the names (and instructions) and loads a definition when a tool is searched
-for. Codex always defers MCP tools behind discovery.
+Claude Code 2.1.283 sent every tool upfront or, when the definitions were
+large, only the names (and instructions) and loaded a definition when a tool
+was searched for. Claude Code 2.1.309 defers every MCP tool behind its tool
+search by default, whatever the size: its context usage report lists each
+stella tool as not loaded until the model searches for it. A tool whose
+`tools/list` entry carries `_meta: {"anthropic/alwaysLoad": true}` is loaded
+upfront; `false` keeps it deferred. The OpenAI-compatible `search` and `fetch`
+carry `true` (`COMPAT_PAIR_HOST_META` in `compat-shared.ts`) and every other
+tool stays deferred. Codex always defers MCP tools behind discovery.
 
 `scripts/mcp-surface-token-calibration.ts` measures the chars-per-token ratios
 behind the estimates with the Anthropic count_tokens endpoint; it needs

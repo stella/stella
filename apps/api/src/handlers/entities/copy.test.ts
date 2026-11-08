@@ -1363,6 +1363,13 @@ describe("copy-to-workspace", () => {
       },
       $count: async () => 0,
       select: (selection: unknown) => {
+        // The cell companions a move carries: none in this source.
+        if (
+          isRecord(selection) &&
+          ("metadata" in selection || "fileFieldIds" in selection)
+        ) {
+          return { from: () => ({ where: async () => [] }) };
+        }
         if (
           isRecord(selection) &&
           ("entityId" in selection || "entityVersionId" in selection)
@@ -1402,11 +1409,10 @@ describe("copy-to-workspace", () => {
             },
           };
         }
-        selectCallCount += 1;
-
         return {
-          from: (table: unknown) =>
-            table === entityVersions
+          from: (table: unknown) => {
+            selectCallCount += 1;
+            return table === entityVersions
               ? {
                   // The code carry reads the source rows FOR UPDATE.
                   where: () => ({
@@ -1430,7 +1436,8 @@ describe("copy-to-workspace", () => {
                     }
                     throw new Error("unexpected lookup");
                   },
-                },
+                };
+          },
         };
       },
       insert: (table: unknown) => ({

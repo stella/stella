@@ -1,0 +1,18 @@
+{
+  "id": "no-raw-workspace-status",
+  "rules": ["no-raw-workspace-status/no-raw-workspace-status"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-14T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-raw-workspace-status/no-raw-workspace-status",
+    "."
+  ]
+}

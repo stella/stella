@@ -28,6 +28,7 @@ export const AUDIT_RESOURCE_TYPE = {
   ANNOUNCEMENT: "announcement",
   BILLING_CODE: "billing_code",
   CASE_LAW_MATTER_LINK: "case_law_matter_link",
+  LEGISLATION_MATTER_LINK: "legislation_matter_link",
   CASE_LAW_DECISION_ANNOTATION: "case_law_decision_annotation",
   CASE_LAW_READER_ANSWER: "case_law_reader_answer",
   CASE_LAW_RESEARCH_COLUMN: "case_law_research_column",
@@ -107,6 +108,28 @@ export type AuditResourceType =
 
 export type AuditResourceKind = AuditResourceType;
 
+/**
+ * Kinds with a canonical user-facing name. Only these can read as "not
+ * available": every other kind has no name to lose, so its label alone
+ * identifies it.
+ */
+export const AUDIT_NAMED_RESOURCE_KINDS = [
+  AUDIT_RESOURCE_TYPE.CONTACT,
+  AUDIT_RESOURCE_TYPE.ENTITY,
+  AUDIT_RESOURCE_TYPE.INVOICE,
+  AUDIT_RESOURCE_TYPE.TEMPLATE,
+  AUDIT_RESOURCE_TYPE.USER_FILE,
+  AUDIT_RESOURCE_TYPE.WORKSPACE,
+] as const;
+
+export type AuditNamedResourceKind =
+  (typeof AUDIT_NAMED_RESOURCE_KINDS)[number];
+
+export const isAuditNamedResourceKind = (
+  kind: string,
+): kind is AuditNamedResourceKind =>
+  AUDIT_NAMED_RESOURCE_KINDS.some((named) => named === kind);
+
 export type AuditResource =
   | {
       kind: AuditResourceKind;
@@ -127,3 +150,16 @@ export const AUDIT_CHANGES_STATUS = {
   featureUnavailable: "feature_unavailable",
   unrecognizedResource: "unrecognized_resource",
 } as const;
+
+/**
+ * Who performed the audited change. People covers members and the agents
+ * acting for them; automations are the background services that write under a
+ * `system:` actor.
+ */
+export const AUDIT_PERFORMER_FILTER = {
+  people: "people",
+  automations: "automations",
+} as const;
+
+export type AuditPerformerFilter =
+  (typeof AUDIT_PERFORMER_FILTER)[keyof typeof AUDIT_PERFORMER_FILTER];

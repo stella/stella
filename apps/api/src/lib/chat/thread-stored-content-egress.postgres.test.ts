@@ -41,6 +41,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -179,9 +180,7 @@ const removeEgressFixture = async (db: GatedTestDb, fixture: EgressFixture) => {
   await db
     .delete(chatThreads)
     .where(eq(chatThreads.organizationId, fixture.organizationId));
-  await db
-    .delete(organization)
-    .where(eq(organization.id, fixture.organizationId));
+  await deleteOrganizationsForTest(db, [fixture.organizationId]);
   await db.delete(user).where(eq(user.id, fixture.userId));
   await db.delete(user).where(eq(user.id, fixture.ownerId));
 };

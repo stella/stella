@@ -10,6 +10,7 @@ import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import { canAcceptChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnRefusal } from "@/api/handlers/chat/chat-turn-persistence";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type AuthorizeChatUserMessageEditArgs = {
@@ -100,34 +101,37 @@ export const authorizeChatUserMessageEdit = async ({
 }: AuthorizeChatUserMessageEditArgs): Promise<
   Result<void, ChatUserMessageEditRefusal | SafeDbError>
 > => {
-  const standing = await safeDb(async (tx): Promise<EditStanding> => {
-    const target = await tx
-      .select({ role: chatMessages.role })
-      .from(chatMessages)
-      .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
-      .where(
-        and(
-          eq(chatMessages.id, targetMessageId),
-          eq(chatMessages.threadId, threadId),
-          eq(chatThreads.id, threadId),
-          eq(chatThreads.organizationId, organizationId),
-          eq(chatThreads.userId, userId),
-        ),
-      )
-      .limit(1);
-    const role = target.at(0)?.role;
-    if (role === undefined) {
-      return "missing";
-    }
-    if (role !== "user") {
-      return "not-user-message";
-    }
-    // The same check a new message passes under the thread lock: a running
-    // turn whose owner is gone ends here, a live one refuses the edit.
-    return (await canAcceptChatTurnOnTx({ threadId, tx }))
-      ? "editable"
-      : "running";
-  });
+  const standing = await withChatRunPings(
+    async (pings) =>
+      await safeDb(async (tx): Promise<EditStanding> => {
+        const target = await tx
+          .select({ role: chatMessages.role })
+          .from(chatMessages)
+          .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
+          .where(
+            and(
+              eq(chatMessages.id, targetMessageId),
+              eq(chatMessages.threadId, threadId),
+              eq(chatThreads.id, threadId),
+              eq(chatThreads.organizationId, organizationId),
+              eq(chatThreads.userId, userId),
+            ),
+          )
+          .limit(1);
+        const role = target.at(0)?.role;
+        if (role === undefined) {
+          return "missing";
+        }
+        if (role !== "user") {
+          return "not-user-message";
+        }
+        // The same check a new message passes under the thread lock: a running
+        // turn whose owner is gone ends here, a live one refuses the edit.
+        return (await canAcceptChatTurnOnTx({ pings, threadId, tx }))
+          ? "editable"
+          : "running";
+      }),
+  );
   if (Result.isError(standing)) {
     return Result.err(standing.error);
   }

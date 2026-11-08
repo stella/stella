@@ -130,16 +130,18 @@ export const InspectorTabHeader = ({
       className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3"
       data-slot="inspector-panel-header"
     >
-      {/* Only the label clips: the field's focus ring is drawn outside it. */}
+      {/* Only the label clips: the field's focus ring is drawn outside it.
+          On a phone the box itself starts a little early, so the back
+          button sits optically flush with the edge and is not clipped. */}
       <div
         className={cn(
-          "flex min-w-0 items-center gap-2",
+          "flex min-w-0 items-center gap-2 max-md:-ms-1",
           !renaming && "overflow-hidden",
         )}
       >
         <Button
           aria-label={tCommon("back")}
-          className="-ms-1 md:hidden"
+          className="md:hidden"
           onClick={() => setMinimized(true)}
           size="icon-sm"
           title={tCommon("back")}
@@ -230,12 +232,14 @@ export const MatterOriginLink = ({
   color,
   onClick,
 }: MatterOriginLinkProps) => (
-  <button
-    className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs inline-flex max-w-[220px] items-center gap-1 truncate rounded-md px-1.5 py-0.5"
+  <Button
+    className="flex max-w-[220px] min-w-0 shrink"
     onClick={onClick}
-    type="button"
+    variant="plain"
   >
-    <MatterIcon className="size-3 shrink-0" matter={{ id, color }} />
-    <span className="truncate">{name}</span>
-  </button>
+    <span className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5">
+      <MatterIcon className="size-3 shrink-0" matter={{ id, color }} />
+      <span className="truncate">{name}</span>
+    </span>
+  </Button>
 );

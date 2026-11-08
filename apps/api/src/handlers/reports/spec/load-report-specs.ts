@@ -197,14 +197,14 @@ export const parseS3SpecPrefix = (
   value: string,
 ): Result<S3SpecPrefix, ConfigurationError> => {
   const groups = S3_PREFIX_PATTERN.exec(value)?.groups;
-  if (groups?.["bucket"] === undefined || groups["prefix"] === undefined) {
-    return Result.err(
-      new ConfigurationError({
-        message: `REPORT_SPECS_S3_PREFIX must look like s3://bucket/prefix/ (got ${value}).`,
-      }),
-    );
+  if (groups?.["bucket"] !== undefined && groups["prefix"] !== undefined) {
+    return Result.ok({ bucket: groups["bucket"], prefix: groups["prefix"] });
   }
-  return Result.ok({ bucket: groups["bucket"], prefix: groups["prefix"] });
+  return Result.err(
+    new ConfigurationError({
+      message: `REPORT_SPECS_S3_PREFIX must look like s3://bucket/prefix/ (got ${value}).`,
+    }),
+  );
 };
 
 /** The two object-store operations the loader needs; production binds them to

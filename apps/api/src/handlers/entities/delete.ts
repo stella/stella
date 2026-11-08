@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
@@ -13,7 +15,11 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -85,7 +91,7 @@ export const deleteEntitiesHandler = async function* ({
         .where(eq(workspaces.id, workspaceId))
         .limit(1)
         .for("update");
-      if (workspaceRows.at(0)?.status !== "active") {
+      if (!workspaceAcceptsWrites(workspaceRows.at(0)?.status)) {
         return {
           status: "rejected" as const,
           error: new HandlerError({
@@ -338,13 +344,17 @@ export const deleteEntitiesHandler = async function* ({
   // Explicit removal for non-PG providers (CASCADE handles PG)
   const provider = getSearchMaintenance();
   for (const entity of deletedEntities) {
-    provider
-      .removeEntity({ entityId: entity.id, workspaceId })
-      .catch(
-        createErrorCapture(
-          handlerErrorContext("deleteEntitiesHandler.rejection"),
-        ),
-      );
+    detached(
+      async () =>
+        provider
+          .removeEntity({ entityId: entity.id, workspaceId })
+          .catch(
+            createErrorCapture(
+              handlerErrorContext("deleteEntitiesHandler.rejection"),
+            ),
+          ),
+      "entities-delete.remove-entity",
+    );
   }
 
   return Result.ok({});

@@ -246,6 +246,7 @@
     "templates.saveFailed",
     "templates.studio.conditionSourceRule",
     "templates.studio.insertFormatDefault",
+    "templates.studio.namePlaceholder",
     "templates.studio.slashEmpty",
     "templates.tags",
     "translate.settings.apiKeyLabel",
@@ -262,6 +263,7 @@
     "workspaces.overview.activity.actorActions.created",
     "workspaces.overview.activity.actorActions.deleted",
     "workspaces.overview.activity.actorActions.updated",
+    "workspaces.overview.activity.fields.name",
     "workspaces.overview.activity.fields.property",
     "workspaces.parties.partyRoles.expert_witness",
     "workspaces.parties.partyRoles.other",
@@ -316,9 +318,6 @@
     ],
     "auth.emailPlaceholder": [
       "ar"
-    ],
-    "avt.claimDetail.sourceCount": [
-      "fr"
     ],
     "avt.verification.documentView.original": [
       "de",
@@ -559,9 +558,6 @@
     "inspector.metadata.documentProperties.keys.slides": [
       "pt-BR"
     ],
-    "inspector.review.passagesCount": [
-      "fr"
-    ],
     "inspector.review.passagesToggle": [
       "fr"
     ],
@@ -683,6 +679,9 @@
       "sk"
     ],
     "navigation.contacts": [
+      "fr"
+    ],
+    "navigation.knowledge": [
       "fr"
     ],
     "navigation.shortcutCategories.navigation": [
@@ -812,9 +811,6 @@
       "pl",
       "pt-BR"
     ],
-    "templates.conditionCount": [
-      "fr"
-    ],
     "templates.conditionDecidedNo": [
       "es"
     ],
@@ -915,6 +911,13 @@
     "workspaces.lead": [
       "de"
     ],
+    "workspaces.overview.activity.fields.status": [
+      "pl",
+      "pt-BR"
+    ],
+    "workspaces.overview.activity.fields.type": [
+      "fr"
+    ],
     "workspaces.overview.activity.targets.folder": [
       "pl"
     ],
@@ -935,6 +938,9 @@
     ],
     "workspaces.parties.personalLabel": [
       "es"
+    ],
+    "workspaces.pdf.evidence": [
+      "fr"
     ],
     "workspaces.pdf.selection.pageLocator": [
       "es",
@@ -1123,7 +1129,6 @@
     "workspaces.deleteSelectedRowsDescription",
     "workspaces.deleteSelection",
     "workspaces.exportToCsv",
-    "workspaces.fields.formatNotSupported",
     "workspaces.files.desktopEdit.forceRelease",
     "workspaces.files.desktopEdit.opening",
     "workspaces.files.desktopEdit.takeoverNoResponse",

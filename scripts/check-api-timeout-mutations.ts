@@ -28,7 +28,6 @@ const MIGRATION_OWNERS = new Set([
   `${API_SOURCE}db/online-index-gate.ts`,
   `${API_SOURCE}db/online-ddl.ts`,
   `${API_SOURCE}db/corpus-schema-lane.ts`,
-  `${API_SOURCE}db/corpus-projection-delete-receipt-repair.ts`,
   `${API_SOURCE}db/better-auth-oauth-resource-repair.ts`,
   `${API_SOURCE}db/decision-date-ceiling-repair.ts`,
   `${API_SOURCE}db/chat-content-v3-backfill.ts`,

@@ -16,6 +16,7 @@ import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
 } from "@stll/api-contract/chat-docx-suggestions";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
@@ -232,7 +233,7 @@ const buildChatToolsForScenario = ({
       webSearchProvider: inertWebSearchProvider,
     },
     workspaceId,
-    workspaceStatusById: new Map([[workspaceId, "active"]]),
+    workspaceStatusById: new Map([[workspaceId, WORKSPACE_STATUS.active]]),
   });
 };
 

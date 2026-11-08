@@ -995,6 +995,10 @@ type EnvApiInvariantInput = InboundMailReceivingInput &
     APNS_KEY_ID?: string | undefined;
     APNS_TEAM_ID?: string | undefined;
     APNS_PRIVATE_KEY?: string | undefined;
+    DEPLOY_ENVIRONMENT?: v.InferOutput<
+      typeof envApiServerSchema.DEPLOY_ENVIRONMENT
+    >;
+    SMOKE_SESSION_SECRET?: string | undefined;
     AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
     FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
     MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
@@ -1193,6 +1197,20 @@ const reviewAccountInvariantViolation = ({
     ? null
     : "APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID must be set together.";
 
+type SmokeSessionInvariantInput = Pick<
+  EnvApiInvariantInput,
+  "DEPLOY_ENVIRONMENT" | "SMOKE_SESSION_SECRET"
+>;
+
+/** The synthetic-monitoring session route serves non-production deployments only. */
+const smokeSessionInvariantViolation = ({
+  DEPLOY_ENVIRONMENT,
+  SMOKE_SESSION_SECRET,
+}: SmokeSessionInvariantInput): string | null =>
+  DEPLOY_ENVIRONMENT === "production" && SMOKE_SESSION_SECRET !== undefined
+    ? "SMOKE_SESSION_SECRET is for non-production deployments; unset it when DEPLOY_ENVIRONMENT=production."
+    : null;
+
 // Feature-owned invariants, kept out of the top-level check's branch budget.
 const delegatedInvariantViolation = (
   input: ManagedProviderCheckInvariantInput &
@@ -1202,8 +1220,13 @@ const delegatedInvariantViolation = (
     ReviewAccountInvariantInput &
     AppleSignInInput &
     ApnsInvariantInput &
+    SmokeSessionInvariantInput &
     Pick<EnvApiInvariantInput, "runtimeMode">,
 ): string | null => {
+  const smokeSessionViolation = smokeSessionInvariantViolation(input);
+  if (smokeSessionViolation !== null) {
+    return smokeSessionViolation;
+  }
   const reviewAccountViolation = reviewAccountInvariantViolation(input);
   if (reviewAccountViolation !== null) {
     return reviewAccountViolation;
@@ -1233,6 +1256,8 @@ const delegatedInvariantViolation = (
 };
 
 export const envApiInvariantViolation = ({
+  DEPLOY_ENVIRONMENT,
+  SMOKE_SESSION_SECRET,
   APP_REVIEW_ACCOUNT_EMAIL,
   APP_REVIEW_ORGANIZATION_ID,
   APNS_KEY_ID,
@@ -1301,6 +1326,8 @@ export const envApiInvariantViolation = ({
     return "FEATURE_CONFIGURED_ACCESS requires FEATURE_ORG_ACCESS_STATE, FEATURE_ORG_SERVICE_BUDGETS, FEATURE_USAGE and PAYMENT_RETRY_WINDOW_MS.";
   }
   const delegatedViolation = delegatedInvariantViolation({
+    DEPLOY_ENVIRONMENT,
+    SMOKE_SESSION_SECRET,
     APP_REVIEW_ACCOUNT_EMAIL,
     APP_REVIEW_ORGANIZATION_ID,
     APNS_KEY_ID,

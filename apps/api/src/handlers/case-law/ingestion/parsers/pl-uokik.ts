@@ -4,10 +4,12 @@
  *
  * decyzje.uokik.gov.pl files each decision as a PDF attachment and nothing
  * richer: the register's own page for a decision is a table of its metadata
- * with a link to the file. The text layer is read the way the Supreme Court's
- * PDFs are (indent and blank lines for paragraphs, the font for bold), into
+ * with a link to the file. The text layer is read with the shared Polish PDF
+ * reader's letterhead reading (the office's footer and page numbers dropped,
+ * superscripts set back into their line, footnotes read out of the text,
+ * paragraphs told by indent, spacing and numbering, the font for bold) into
  * the markup the Polish decision parser reads, so there is one Polish parser
- * and this is not a second one.
+ * and this is not a second one. The footnotes follow the body as note blocks.
  */
 
 // parser-output-unchanged: [pl-uokik] @stll/time now resolves to the published 0.4.1 release with the same exports as the removed workspace copy.
@@ -17,17 +19,60 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { parsePlainDate } from "@stll/time";
 
 import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
-  assemblePlSnParagraphs,
-  extractPlSnLines,
-  PL_PDF_PARAGRAPH_START,
-  plSnParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
-import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  assemblePdfParagraphs,
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+  pdfNotesOf,
+  pdfParagraphsToHtml,
+  pdfRunInlines,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import type {
+  PdfBodyAndNotes,
+  PdfFootnoteReference,
+  PdfLine,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_UOKIK_SOURCE_SYSTEM = "decyzje.uokik.gov.pl";
+
+const qualifyFileFootnotes = (line: PdfLine, file: number): PdfLine => {
+  if (line.type === "blank" || file === 0) {
+    return line;
+  }
+  const qualify = (reference: PdfFootnoteReference) => ({
+    ...reference,
+    noteId: `${reference.noteId}-file-${String(file + 1)}`,
+  });
+  return {
+    ...line,
+    runs: line.runs.map((run) =>
+      run.footnoteReference === undefined
+        ? run
+        : { ...run, footnoteReference: qualify(run.footnoteReference) },
+    ),
+    ...(line.footnote === undefined
+      ? {}
+      : { footnote: qualify(line.footnote) }),
+  };
+};
+
+/**
+ * `Ŝ` stands for `ż` in the text layer of documents typeset with a common
+ * Polish font encoding (`NajwyŜszy`, `moŜe`); Polish writes no `Ŝ`, so every
+ * line, body, note and ruling header alike, reads as what the page prints.
+ */
+const asPrinted = (line: PdfLine): PdfLine =>
+  line.type === "blank"
+    ? line
+    : {
+        ...line,
+        runs: line.runs.map((run) => ({
+          ...run,
+          text: run.text.replaceAll("Ŝ", "ż"),
+        })),
+      };
 
 export type ParsePlUokikDocumentInput = {
   /** Every decision file the record attaches, in the order it lists them. */
@@ -48,27 +93,72 @@ export type ParsePlUokikDocumentOutput = {
 };
 
 /**
- * The lines of every file, one after the other. A blank line between two
- * files ends the last paragraph of the first, so no paragraph spans them.
+ * The body lines and the footnotes of every file, one file after the other.
+ * A blank line between two files ends the last paragraph of the first, so
+ * no paragraph spans them; a note keeps its own number in every file.
  */
-export const plUokikDocumentLines = async (
+const plUokikDocumentContent = async (
   pdfs: readonly Uint8Array[],
-): Promise<PlSnLine[]> => {
-  const lines: PlSnLine[] = [];
-  for (const pdf of pdfs) {
-    if (lines.length > 0) {
-      lines.push({ type: "blank" });
+): Promise<PdfBodyAndNotes> => {
+  const body: PdfLine[] = [];
+  const notes: PdfLine[] = [];
+  for (const [file, pdf] of pdfs.entries()) {
+    if (body.length > 0) {
+      body.push({ type: "blank" });
     }
-    // The office numbers its paragraphs with a hanging indent.
-    lines.push(
-      ...(await extractPlSnLines(
-        pdf,
-        PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
-      )),
+    // The office sets each decision on letterhead and numbers its paragraphs
+    // with a hanging indent.
+    const content = await extractPdfBodyAndNotes(
+      pdf,
+      PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+    );
+    body.push(
+      ...content.body.map((line) =>
+        qualifyFileFootnotes(asPrinted(line), file),
+      ),
+    );
+    notes.push(
+      ...content.notes.map((line) =>
+        qualifyFileFootnotes(asPrinted(line), file),
+      ),
     );
   }
-  return lines;
+  return { body, notes };
 };
+
+/** The body lines of every file, as `plUokikDocumentContent` reads them. */
+export const plUokikDocumentLines = async (
+  pdfs: readonly Uint8Array[],
+): Promise<PdfLine[]> => (await plUokikDocumentContent(pdfs)).body;
+
+const noteTextOf = (lines: readonly PdfLine[]): string =>
+  assemblePdfParagraphs(lines)
+    .flat()
+    .map(({ text }) => text)
+    .join("")
+    .replace(/\s+/gu, " ")
+    .trim();
+
+/**
+ * One paragraph block per footnote, in the order the notes are printed. The
+ * note's number is its label, not the first word of its text.
+ */
+const noteBlocksOf = (notes: readonly PdfLine[]) =>
+  pdfNotesOf(notes).flatMap(({ label, noteId, lines }) => {
+    const runs = assemblePdfParagraphs(lines).flat();
+    const plainText = noteTextOf(lines);
+    return plainText.length === 0
+      ? []
+      : [
+          {
+            anchorId: noteId,
+            type: "paragraph" as const,
+            note: { type: "footnote" as const, label, noteId },
+            inlines: pdfRunInlines(runs),
+            plainText,
+          },
+        ];
+  });
 
 /**
  * The decision's document, or null where its files hold no text layer: a
@@ -77,13 +167,13 @@ export const plUokikDocumentLines = async (
 export const parsePlUokikDocument = async (
   input: ParsePlUokikDocumentInput,
 ): Promise<ParsePlUokikDocumentOutput | null> => {
-  const paragraphs = assemblePlSnParagraphs(
-    await plUokikDocumentLines(input.pdfs),
-  );
+  const { body, notes } = await plUokikDocumentContent(input.pdfs);
+  const paragraphs = assemblePdfParagraphs(body);
   if (paragraphs.length === 0) {
     return null;
   }
-  return parsePlDecisionContent({
+  const noteBlocks = noteBlocksOf(notes);
+  const parsed = parsePlDecisionContent({
     caseNumber: input.caseNumber,
     // Poland issues no ECLI, and an authority's decision carries none.
     ecli: undefined,
@@ -92,12 +182,33 @@ export const parsePlUokikDocument = async (
     decisionType: input.decisionType,
     sourceUrl: input.sourceUrl,
     documentUrl: input.documentUrl ?? "",
-    content: plSnParagraphsToHtml(paragraphs),
+    content: pdfParagraphsToHtml(paragraphs),
+    superscripts: true,
+    boldSubheadings: true,
+    footnoteIds: noteBlocks.map(({ note }) => note.noteId),
     keywords: input.keywords,
     statutes: [],
     documentId: input.documentId,
     sourceSystem: PL_UOKIK_SOURCE_SYSTEM,
   });
+  const attachedNotes = noteBlocks.map((block, index) => ({
+    ...block,
+    id: `b${String(parsed.documentAst.blocks.length + index + 1)}`,
+  }));
+  const output =
+    noteBlocks.length === 0
+      ? parsed
+      : {
+          documentAst: {
+            ...parsed.documentAst,
+            blocks: [...parsed.documentAst.blocks, ...attachedNotes],
+          },
+          fulltext: [
+            parsed.fulltext,
+            ...noteBlocks.map(({ plainText }) => plainText),
+          ].join("\n\n"),
+        };
+  return output;
 };
 
 // ── Court rulings the register attaches ──────────────────
@@ -183,13 +294,6 @@ const KNOWN_COURTS: readonly string[] = [
   ...new Set([...Object.values(PL_NCOURT_COURT_NAMES), SUPREME_COURT]),
 ].toSorted((left, right) => right.length - left.length);
 
-/**
- * `Ŝ` stands for `ż` in the text layer of documents typeset with a common
- * Polish font encoding (`NajwyŜszy`, `nałoŜenie`); read as what it prints.
- */
-const decodePrintedLetters = (text: string): string =>
-  text.replaceAll("Ŝ", "ż");
-
 const collapse = (text: string): string => text.replace(/\s+/gu, " ").trim();
 
 const dayOf = (line: string): string | undefined => {
@@ -237,7 +341,7 @@ const trimEdges = (text: string): string => {
 
 /** The first court the text names, where its name is one the index knows. */
 const courtOf = (text: string): CourtRead | undefined => {
-  const region = collapse(decodePrintedLetters(text));
+  const region = collapse(text);
   const start = region.indexOf("Sąd ");
   if (start === -1) {
     return undefined;
@@ -261,7 +365,7 @@ const courtOf = (text: string): CourtRead | undefined => {
   };
 };
 
-const lineTexts = (lines: readonly PlSnLine[]): string[] =>
+const lineTexts = (lines: readonly PdfLine[]): string[] =>
   lines
     .flatMap((line) =>
       line.type === "text"
@@ -278,7 +382,7 @@ const lineTexts = (lines: readonly PlSnLine[]): string[] =>
  * is never taken for its own.
  */
 export const readPlUokikRulingHeader = (
-  lines: readonly PlSnLine[],
+  lines: readonly PdfLine[],
 ): PlUokikRulingHeaderRead => {
   const text = lineTexts(lines).slice(0, HEADER_LINES);
   if (text.length === 0) {

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { SourceFile } from "tsrs/unstable/ast";
+import type { SourceFile } from "tsrs/ast";
 
 import { scanQueryCacheTypes } from "./query-cache-types";
 import { createProgram } from "./typescript-program";

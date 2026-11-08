@@ -1,14 +1,14 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import { workspaces } from "@/api/db/schema";
+import { groupSuggestionDays } from "@/api/handlers/time-entries/me/suggestions/group-days";
 import {
   resolveSuggestionBillingDefaults,
   suggestionBillingLookupKey,
 } from "@/api/handlers/time-entries/suggestions/billing-default";
 import {
-  type LoadedSuggestionScope,
   loadTimeSuggestionRange,
   serializeSuggestion,
 } from "@/api/handlers/time-entries/suggestions/load";
@@ -47,41 +47,6 @@ const config = {
     timezoneId: timeSuggestionTimezoneSchema,
   }),
 } satisfies HandlerConfig;
-
-type MatterLabel = { id: SafeId<"workspace">; name: string; reference: string };
-
-type SerializedSuggestion = ReturnType<typeof serializeSuggestion>;
-
-type SuggestionDay = {
-  date: string;
-  matters: {
-    matter: MatterLabel;
-    activeMinutes: number;
-    items: SerializedSuggestion[];
-  }[];
-};
-
-const groupByDay = (
-  scopes: readonly LoadedSuggestionScope[],
-  matterFor: (workspaceId: SafeId<"workspace">) => MatterLabel,
-  serialize: (scope: LoadedSuggestionScope) => SerializedSuggestion[],
-) => {
-  const days: SuggestionDay[] = [];
-  for (const scope of scopes) {
-    const items = serialize(scope);
-    let day = days.at(-1);
-    if (day?.date !== scope.date) {
-      day = { date: scope.date, matters: [] };
-      days.push(day);
-    }
-    day.matters.push({
-      matter: matterFor(scope.workspaceId),
-      activeMinutes: items.reduce((sum, item) => sum + item.durationMinutes, 0),
-      items,
-    });
-  }
-  return days;
-};
 
 const listMySuggestionRange = createSafeRootHandler(
   config,
@@ -142,11 +107,9 @@ const listMySuggestionRange = createSafeRootHandler(
     return Result.ok({
       startDate: query.startDate,
       endDate: query.endDate,
-      days: groupByDay(
+      days: groupSuggestionDays(
         pending,
-        (workspaceId: SafeId<"workspace">) =>
-          matterById.get(workspaceId) ??
-          panic("Suggested matter is missing from the authorized matters"),
+        (workspaceId: SafeId<"workspace">) => matterById.get(workspaceId),
         (scope) => {
           const billable =
             billingDefaults.get(

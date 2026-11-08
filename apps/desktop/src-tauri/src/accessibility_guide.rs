@@ -133,7 +133,10 @@ mod macos {
         return;
       };
       if current_status(&app) == GuideStatus::Allowed {
-        let _ = app.emit_to(GUIDE_WINDOW_LABEL, CHANGED_EVENT, ());
+        crate::logging::best_effort(
+          app.emit_to(GUIDE_WINDOW_LABEL, CHANGED_EVENT, ()),
+          "emit accessibility guide change",
+        );
         tokio::time::sleep(ALLOWED_LINGER).await;
         close(&app);
         return;
@@ -170,10 +173,16 @@ mod macos {
       .ok()
       .flatten()
       .map(|area| area.y + area.height);
-      let _ = window.set_size(LogicalSize::new(WIDTH, HEIGHT));
-      let _ = window.set_position(docked_position(settings, screen_bottom));
+      crate::logging::best_effort(
+        window.set_size(LogicalSize::new(WIDTH, HEIGHT)),
+        "resize accessibility guide",
+      );
+      crate::logging::best_effort(
+        window.set_position(docked_position(settings, screen_bottom)),
+        "position accessibility guide",
+      );
       if !window.is_visible().unwrap_or(false) {
-        let _ = window.show();
+        crate::logging::best_effort(window.show(), "show accessibility guide");
       }
     }
   }

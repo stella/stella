@@ -13,6 +13,7 @@
 import { Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyJsonWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import type {
   GithubSafeText,
@@ -70,7 +71,7 @@ export const githubWrite = async (
     try: async () =>
       await fetchWithTimeout(`${GITHUB_API_BASE}/${write.path}`, {
         method: write.method,
-        timeout: { type: "idle", ms: GITHUB_REQUEST_TIMEOUT_MS },
+        timeout: { type: "headers", ms: GITHUB_REQUEST_TIMEOUT_MS },
         headers: {
           accept: "application/vnd.github+json",
           authorization: `Bearer ${write.token}`,
@@ -95,7 +96,10 @@ export const githubWrite = async (
     );
   }
   return await Result.tryPromise({
-    try: async (): Promise<unknown> => await response.value.json(),
+    try: async (): Promise<unknown> =>
+      await readBodyJsonWithIdleDeadline(response.value, {
+        idleMs: GITHUB_REQUEST_TIMEOUT_MS,
+      }),
     catch: (cause) =>
       new GithubWriteError({
         message: "GitHub returned an unreadable body",

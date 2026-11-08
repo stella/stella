@@ -69,6 +69,7 @@ import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import {
   legalListActivityOptions,
   legalListCandidatesOptions,
@@ -283,6 +284,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   const itemsView = queryView(items);
   const itemsData = itemsView.type === "items" ? itemsView.items : undefined;
   const properties = useQuery(propertiesOptions(workspaceId));
+  const propertyName = usePropertyDisplayName();
   const propertiesView = queryView(properties, { isEmpty: () => false });
   const propertiesData =
     propertiesView.type === "items" ? propertiesView.items : undefined;
@@ -565,7 +567,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                     )
                     .map((property) => (
                       <SelectItem key={property.id} value={property.id}>
-                        {property.name}
+                        {propertyName(property)}
                       </SelectItem>
                     ))}
                 </SelectPopup>

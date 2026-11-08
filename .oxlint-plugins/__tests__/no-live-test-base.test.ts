@@ -83,23 +83,15 @@ test("allows fixture repositories and pinned reads without exemptions", async ()
   ).toEqual([]);
 });
 
-for (const { name, now, changedLines, diagnostics } of [
+for (const { name, changedLines, diagnostics } of [
   {
     name: "unchanged during rollout",
-    now: "2026-10-30",
     changedLines: [],
     diagnostics: [],
   },
   {
     name: "changed within a multiline call",
-    now: "2026-10-30",
     changedLines: [3],
-    diagnostics: [1],
-  },
-  {
-    name: "unchanged after expiry",
-    now: "2026-11-06",
-    changedLines: [],
     diagnostics: [1],
   },
 ]) {
@@ -125,7 +117,7 @@ import { guardEnforcesLine } from ${JSON.stringify(scope)};
 import { repoRelativePath } from ${JSON.stringify(portablePath)};
 export default createTestBasePlugin((options) => guardEnforcesLine({
   ...options,
-  now: new Date(${JSON.stringify(now)}),
+  rollouts: [{ id: "test-base-revision", type: "changed-lines", expiresAt: "2026-10-20T00:00:00.000Z", check: ["bun", "check"] }],
   changedLines: new Map([[repoRelativePath(${JSON.stringify(repository)}, options.file), new Set(${JSON.stringify(changedLines)})]]),
 }));`,
     );

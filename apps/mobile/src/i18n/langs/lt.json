@@ -34,6 +34,14 @@
     "composerPlaceholder": "Klauskite stellos",
     "send": "Siųsti",
     "stop": "Sustabdyti",
+    "dictate": "Diktuoti",
+    "dictationCancel": "Atšaukti diktavimą",
+    "dictationFinish": "Baigti diktuoti",
+    "dictationListening": "Klausausi… {elapsed} iš {limit}",
+    "dictationTranscribing": "Transkribuojama…",
+    "dictationDenied": "Diktavimui reikia mikrofono. Leiskite jį stella programai nustatymuose.",
+    "dictationFailed": "Įrašo nepavyko transkribuoti. Bandykite dar kartą.",
+    "dictationSilent": "Kalbos negirdėti.",
     "sendFailed": "Žinutės išsiųsti nepavyko. Bandykite dar kartą.",
     "answerWorking": "Dirbu…",
     "answerStopped": "Sustabdyta.",
@@ -165,7 +173,30 @@
     "preview": "Atidaryti peržiūrą",
     "previewDescription": "Šis failas atidaromas sistemos peržiūroje.",
     "unrendered": "Šio dokumento čia parodyti negalima, bet sistemos peržiūra gali jį atidaryti.",
-    "details": "Išsami informacija"
+    "details": "Išsami informacija",
+    "zoomOut": "Mažinti",
+    "zoomIn": "Didinti",
+    "zoomFit": "Pritaikyti pločiui",
+    "fit": "Plotis",
+    "appearance": {
+      "system": "Išvaizda: automatinė",
+      "light": "Išvaizda: šviesi",
+      "dark": "Išvaizda: tamsi"
+    },
+    "edit": {
+      "saved": "Išsaugota",
+      "saving": "Saugoma…",
+      "notSaved": "Dar neišsaugota",
+      "done": "Atlikta",
+      "openFailed": "Šio dokumento dabar negalima redaguoti",
+      "resumed": "Šio dokumento redagavimas nebaigtas, todėl tęsiamas nuo ten. Tai, ką ką tik įvedėte, nebuvo išsaugota.",
+      "newerVersion": "Tuo metu buvo išsaugota naujesnė šio dokumento versija, todėl redagavimas tęsiamas nuo jos. Tai, ką ką tik įvedėte, nebuvo išsaugota.",
+      "takenOver": "Šį dokumentą dabar redaguoja kažkas kitas. Jūsų pakeitimai po paskutinio išsaugojimo nebuvo išlaikyti.",
+      "finishFailed": "Jūsų pakeitimai išsaugoti, bet iš jų dar nesukurta nauja versija. Dar kartą bakstelėkite Atlikta arba išeikite: kitas redagavimas tęsis nuo jų.",
+      "notStored": "Paskutinių pakeitimų išsaugoti nepavyko. Likite ir bandykite dar kartą arba išeikite be jų.",
+      "stay": "Likti",
+      "leave": "Išeiti"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -193,7 +224,11 @@
     "server": "Serveris",
     "signOut": "Atsijungti",
     "deleteAccount": "Ištrinti paskyrą",
-    "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų."
+    "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų.",
+    "signOutFailed": "Nepavyko atsijungti. Bandykite dar kartą.",
+    "lockScreenTitle": "Užrakinimo ekranas",
+    "timerDetails": "Laikmačio informacija",
+    "timerDetailsHint": "Kai laikmatis pasikeičia kitame įrenginyje, „Apple“ pranešimų paslauga perduoda jo aprašymą ir bylą į užrakinimo ekraną. Išjungus rodomas tik laikas, kol atidarysite programėlę."
   },
   "header": {
     "search": "Ieškoti"
@@ -207,14 +242,11 @@
     "headnote": "Santrauka",
     "textUnavailable": "Šiam sprendimui teksto nėra",
     "openSource": "Atverti pirminį šaltinį",
-    "openFailed": "Nepavyko atidaryti nuorodos.",
     "loadFailed": "Nepavyko įkelti teismų praktikos.",
     "share": "Bendrinti"
   },
   "more": {
-    "soon": "Netrukus",
-    "timers": "Laikmačiai",
-    "voiceInput": "Balso įvestis"
+    "timers": "Laikmačiai"
   },
   "writes": {
     "consentNeeded": "Kad galėtumėte keisti duomenis programėlėje, stella reikia jūsų leidimo. Prisijunkite iš naujo, kad jį suteiktumėte.",
@@ -235,12 +267,6 @@
     "newTimer": "Naujas laikmatis",
     "description": "Prie ko dirbate?",
     "matterTitle": "Byla",
-    "noMatter": "Be bylos",
-    "noDescription": "Be aprašymo",
-    "running": "Veikia",
-    "paused": "Pristabdytas",
-    "pause": "Pristabdyti",
-    "resume": "Tęsti",
     "save": "Išsaugoti",
     "discard": "Atmesti",
     "emptyTitle": "Laikmačių nėra",
@@ -249,8 +275,7 @@
     "retry": "Bandyti dar kartą",
     "unavailable": "Jūsų organizacijoje laiko apskaita neįjungta.",
     "startFailed": "Nepavyko paleisti laikmačio. Bandykite dar kartą.",
-    "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą.",
-    "more": "{count, plural, one {dar # laikmatis} few {dar # laikmačiai} other {dar # laikmačių}}"
+    "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą."
   },
   "scan": {
     "title": "Nuskenuoti dokumentą",
@@ -294,8 +319,37 @@
     "placeholder": "Ieškokite bylų ir pokalbių arba paleiskite komandą",
     "noResults": "Niekas neatitinka „{query}“"
   },
+  "search": {
+    "placeholder": "Ieškoti stella",
+    "clear": "Išvalyti paiešką",
+    "cancel": "Atšaukti",
+    "recent": "Naujausios paieškos",
+    "clearRecent": "Išvalyti",
+    "hint": "Ieškokite bylose, dokumentuose, užduotyse, pokalbiuose ir teismų praktikoje.",
+    "filters": "Filtrai",
+    "noResultsTitle": "Rezultatų nėra",
+    "noResults": "Niekas neatitinka „{query}“. Pabandykite kitus žodžius arba pašalinkite filtrą.",
+    "loadFailed": "Paieškos atlikti nepavyko.",
+    "retry": "Bandyti dar kartą",
+    "type": {
+      "document": "Dokumentai",
+      "matter": "Bylos",
+      "task": "Užduotys",
+      "caseLaw": "Teismų praktika",
+      "chat": "Pokalbiai",
+      "folder": "Aplankai",
+      "message": "El. laiškai",
+      "link": "Nuorodos"
+    }
+  },
   "pane": {
     "showList": "Rodyti sąrašą",
     "hideList": "Slėpti sąrašą"
+  },
+  "link": {
+    "open": "Atidaryti",
+    "share": "Bendrinti",
+    "cancel": "Atšaukti",
+    "openFailed": "Nepavyko atidaryti nuorodos."
   }
 }

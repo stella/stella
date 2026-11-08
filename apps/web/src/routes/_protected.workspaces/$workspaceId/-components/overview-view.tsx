@@ -8,6 +8,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -36,7 +37,6 @@ import {
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { UNKNOWN_AUTHOR_LABEL } from "@stll/ui/review-author-avatar";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { stellaToast } from "@stll/ui/toast";
 import {
   Tooltip as TooltipRoot,
   TooltipPopup,
@@ -53,6 +53,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
+import { notifyTaskCompletion } from "@/components/workspaces/tasks/task-completion-toast";
 import type { TaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
 import {
   isTaskStatus,
@@ -71,10 +72,9 @@ import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
-import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { queryView } from "@/lib/query-view.logic";
 import { routeQueryOptions } from "@/lib/react-query";
 import {
@@ -82,11 +82,12 @@ import {
   WEEKDAY_INITIAL_FORMAT,
 } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
+import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";
-import { taskKeys } from "@/lib/workspaces/queries/tasks";
+import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
 import {
   timeEntrySummaryOptions,
   timeEntryTeamSummaryOptions,
@@ -94,6 +95,8 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
 
+import { resolveNextDeadline } from "./overview-next-deadline.logic";
+import type { NextDeadline } from "./overview-next-deadline.logic";
 import { OverviewTimeRead, OverviewTimeTrend } from "./overview-time-read";
 
 type OverviewViewProps = {
@@ -161,7 +164,6 @@ const formatHours = (hours: number) =>
 // ── Main component ───────────────────────────────────────
 
 export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
-  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const workflowsEnabled = useWorkflowsPreviewEnabled();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
@@ -214,42 +216,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     [views],
   );
 
+  const createTask = useCreateTask();
   const createTaskOnce = useSingleFlight();
-  const handleCreateTask = useCallback(
-    async () =>
-      await createTaskOnce.run(async () => {
-        const { data: taskData, error: taskError } = await idempotentSubmit.run(
-          {
-            operation: JSON.stringify([
-              "api.tasks({workspaceId})",
-              { workspaceId },
-            ]),
-            body: { name: t("tasks.untitled") },
-            send: async (creationPayload) =>
-              api.tasks({ workspaceId }).put(creationPayload),
-          },
-        );
-        const entityId = taskData?.entityId;
-        if (taskError || !entityId) {
-          notifyUserError(
-            taskError ? toAPIError(taskError) : undefined,
-            t("errors.actionFailed"),
-          );
-          return;
-        }
-        stellaToast.add({ title: t("success.taskCreated"), type: "success" });
-        detached(
-          queryClient.invalidateQueries({
-            queryKey: workspacesKeys.overview(workspaceId),
-          }),
-          "overview-view.invalidate",
-        );
-        useInspectorTabsStore
-          .getState()
-          .openTask({ taskId: entityId, workspaceId, isNew: true });
-      }),
-    [workspaceId, t, queryClient, idempotentSubmit, createTaskOnce],
-  );
+  const handleCreateTask = async () =>
+    createTaskOnce.runSettled((onSettled) => {
+      createTask.mutate(workspaceId, { onSettled });
+    });
 
   const updateTaskStatus = useMutation({
     mutationFn: async ({
@@ -284,6 +256,33 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
+
+  // The menu keeps the status it opened with, so the status to go back to is
+  // read when the change is made. The returned promise, not a per-call
+  // `onSuccess`, so the toast survives a closed menu. A failure is reported by
+  // the mutation's own `onError`.
+  const handleMenuStatusChange = (taskId: string, status: TaskStatus) => {
+    const { queryKey } = taskDetailOptions(workspaceId, taskId);
+    const read = () => queryClient.getQueryData(queryKey)?.status;
+    const stored = read();
+    const previous = isTaskStatus(stored) ? stored : currentMenuTaskStatus;
+    const previousKnown = !updateTaskStatus.isPending;
+    const saveStatus = async () => {
+      const saved = await Result.tryPromise(
+        async () => await updateTaskStatus.mutateAsync({ taskId, status }),
+      );
+      if (Result.isOk(saved)) {
+        notifyTaskCompletion({
+          currentStatus: read,
+          next: status,
+          previous: previousKnown ? previous : null,
+          restore: (restored) =>
+            updateTaskStatus.mutate({ taskId, status: restored }),
+        });
+      }
+    };
+    detached(saveStatus(), "overview-view.status");
+  };
 
   const handleTaskContextMenu = useCallback(
     (task: UpcomingTaskContext) => (e: React.MouseEvent) => {
@@ -441,9 +440,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 
-  // The agenda is already ordered with dated tasks before undated tasks.
-  const nextDeadlineTask = tasks.find((task) => task.dueDate !== null);
-
   return (
     <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-4 tabular-nums sm:p-6">
       <OverviewQueryFeedback
@@ -486,30 +482,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           }}
           value={getFormatter().number(data.taskCount)}
         />
-        <StatCard
-          icon={<CalendarClockIcon className="size-4" />}
-          label="workspaces.overview.nextDeadline"
-          onClick={() => {
-            const task = nextDeadlineTask;
-            if (task) {
-              useInspectorTabsStore.getState().openTask({
-                taskId: task.entityId,
-                workspaceId,
-                label: task.name,
-              });
-            }
-          }}
-          sublabel={nextDeadlineTask?.name}
-          value={(() => {
-            const date = nextDeadlineTask?.dueDate;
-            if (!date) {
-              return "—";
-            }
-            return getFormatter().dateTime(toDateTimeEpoch(date), {
-              ...DAY_AND_MONTH_FORMAT,
-              timeZone: "UTC",
-            });
-          })()}
+        <NextDeadlineCard
+          deadline={resolveNextDeadline(tasks, today)}
+          workspaceId={workspaceId}
         />
         {timeBillingEnabled && (
           <StatCard
@@ -751,10 +726,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                 if (task === null) {
                                   return;
                                 }
-                                updateTaskStatus.mutate({
-                                  taskId: task.entityId,
-                                  status,
-                                });
+                                handleMenuStatusChange(task.entityId, status);
                               }}
                               value={status}
                             >
@@ -1062,6 +1034,53 @@ const OverviewSectionHeader = ({
     </Button>
   </div>
 );
+
+type NextDeadlineCardProps = {
+  deadline: NextDeadline<{ entityId: string; name: string }>;
+  workspaceId: string;
+};
+
+const NextDeadlineCard = ({ deadline, workspaceId }: NextDeadlineCardProps) => {
+  const t = useTranslations();
+  const icon = <CalendarClockIcon className="size-4" />;
+  if (deadline.type === "none") {
+    return (
+      <StatCard
+        icon={icon}
+        label="workspaces.overview.nextDeadline"
+        value="—"
+      />
+    );
+  }
+  const { task } = deadline;
+  const date = getFormatter().dateTime(toDateTimeEpoch(deadline.dueDate), {
+    ...DAY_AND_MONTH_FORMAT,
+    timeZone: "UTC",
+  });
+  return (
+    <StatCard
+      icon={icon}
+      label="workspaces.overview.nextDeadline"
+      onClick={() =>
+        useInspectorTabsStore.getState().openTask({
+          taskId: task.entityId,
+          workspaceId,
+          label: task.name,
+        })
+      }
+      sublabel={task.name}
+      value={
+        deadline.type === "overdue" ? (
+          <span className="text-destructive">
+            {t("tasks.overdue")} · {date}
+          </span>
+        ) : (
+          date
+        )
+      }
+    />
+  );
+};
 
 type StatCardProps = {
   icon: React.ReactNode;

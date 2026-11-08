@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Decision } from "./case-law";
-import { decisionPage, isWebUrl } from "./decision-page";
+import { decisionPage } from "./decision-page";
 
 const LABELS = {
   headnote: "Headnote",
@@ -130,12 +130,4 @@ describe("decisionPage", () => {
       [" and statute", null],
     ]);
   });
-});
-
-test("isWebUrl accepts http(s) addresses alone", () => {
-  expect(isWebUrl(" HTTPS://usoud.cz ")).toBe(true);
-  expect(isWebUrl("http://usoud.cz")).toBe(true);
-  expect(isWebUrl("mailto:a@usoud.cz")).toBe(false);
-  expect(isWebUrl("ftp://usoud.cz")).toBe(false);
-  expect(isWebUrl("https://")).toBe(false);
 });

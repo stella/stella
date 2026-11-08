@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
@@ -78,9 +79,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -1341,8 +1342,9 @@ const assembleAuthorityDecision = ({
   const decisionDate = dayOf(row.time);
   const sourceUrl = documentPageUrl(urn);
   const resource = body?.resource ?? plUodoBodyResourceOf(row);
+  // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
   const documentUrl =
-    resource?.ref === undefined ? undefined : bodyPdfUrl(urn, resource.ref);
+    resource?.ref !== undefined ? bodyPdfUrl(urn, resource.ref) : undefined;
 
   // A parse failure is not the decision's failure: the body is stored
   // verbatim below, so its text is recoverable by re-parsing what was kept.
@@ -1863,11 +1865,15 @@ const metadataField = (key: string): SourceFieldDisposition => ({
   target: { type: "metadata", key },
 });
 
+type PlUodoPublisherRecord = Readonly<
+  Record<PlUodoSourceField | keyof PlUodoRow, unknown>
+>;
+
 const PL_UODO_SOURCE_FIELDS = {
-  type: excludedSourceField(
+  type: legacyExcludedSourceField(
     "the record format's own name; every record the search returns carries the same value",
   ),
-  version: excludedSourceField(
+  version: legacyExcludedSourceField(
     "the version of the record format, not a fact about the document",
   ),
   id: metadataField("portalEventId"),
@@ -1944,7 +1950,10 @@ const PL_UODO_SOURCE_FIELDS = {
   "resources{}.size": metadataField("resources"),
   "resources{}.checksum": metadataField("resources"),
   body: { disposition: "stored", target: { type: "document" } },
-} as const satisfies Record<PlUodoSourceField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof PlUodoPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** The structures inside a record whose own keys the inventory names. */
 const NESTED_OBJECTS = ["publication", "publicator"] as const;
