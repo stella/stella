@@ -800,12 +800,12 @@ test("read-only branches reject worker fallback", async () => {
   expect(patch).toContain(
     "if (CACHE_READ_ONLY) throw this.remember(cssPath, readOnlyCacheError",
   );
-  expect(patch).toContain(
-    "if (CACHE_READ_ONLY) throw readOnlyCacheError(`missing declaration answer",
-  );
-  expect(patch).toContain(
-    'if (CACHE_COLLECT_FILE !== "") return collectDeclarationQuestions(cssPath, pending);',
-  );
+  // A read-only pass collects a missing declaration answer when asked to and
+  // otherwise fails, in both builds: oxlint loads the plugin through its
+  // require entry, and the generator imports the ES module.
+  const collectOrFail =
+    '+\t\tif (CACHE_COLLECT_FILE !== "") return collectDeclarationQuestions(cssPath, pending);\n+\t\tthrow readOnlyCacheError(`missing declaration answer';
+  expect(patch.split(collectOrFail).length - 1).toBe(2);
 });
 
 // Generation stalled only in the one lint pass that started Tailwind workers
