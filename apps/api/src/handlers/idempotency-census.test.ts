@@ -661,11 +661,11 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
-  "POST /v1/organization-settings/practice-jurisdictions": {
+  "POST /v1/organization-settings/local-runs": {
     type: "non-replay",
     reason: "current-state",
   },
-  "POST /v1/organization-settings/local-runs": {
+  "POST /v1/organization-settings/practice-jurisdictions": {
     type: "non-replay",
     reason: "current-state",
   },

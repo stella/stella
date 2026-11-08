@@ -7,6 +7,7 @@ import { DESKTOP_RUNNER_APPROVAL_MODES } from "@stll/api-contract/desktop-runner
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { updateLocalRunApprovalCeiling } from "@/api/lib/chat/local-run-approval-ceiling";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -25,7 +26,7 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-export default createSafeRootHandler(
+const updateLocalRunApprovalCeilingRoute = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, body, recordAuditEvent }) {
     const outcome = yield* Result.await(
@@ -56,3 +57,11 @@ export default createSafeRootHandler(
     }
   },
 );
+
+declareAggregateMutation(updateLocalRunApprovalCeilingRoute, {
+  type: "independent",
+  reason:
+    "One column of the organization's settings row, written only while it still holds the value read; a concurrent save fails instead of overwriting it.",
+});
+
+export default updateLocalRunApprovalCeilingRoute;

@@ -23,6 +23,7 @@ import { localRunnersOptions } from "@/features/chat/queries";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { queryView } from "@/lib/query-view.logic";
@@ -63,11 +64,16 @@ export const LocalRunApprovalCeilingCard = () => {
       type: "handler",
       handlerId: "LocalRunApprovalCeilingCard.mutation.useSettingsMutation",
     },
+    // An agent must not raise its own limit, so this write has no capability.
     mutationFn: async (maxApprovals: DesktopRunnerApprovalMode) =>
-      unwrapApiResponse(
-        await api["organization-settings"]["local-runs"].post({
-          maxApprovals,
-        }),
+      await invokeAppOnlyWrite(
+        "organization-settings.local-runs.update",
+        async () =>
+          unwrapApiResponse(
+            await api["organization-settings"]["local-runs"].post({
+              maxApprovals,
+            }),
+          ),
       ),
     invalidate: organizationSettingsKeys.all,
     onSuccess: () => {
