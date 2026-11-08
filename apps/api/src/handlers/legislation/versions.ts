@@ -167,10 +167,9 @@ export const listStatuteVersionsHandler = async ({
         documentUrl: legislationDocuments.documentUrl,
         changeSummary: legislationDocuments.changeSummary,
         payloadRevision: legislationDocuments.payloadRevision,
-        base: {
-          documentId: predecessor.id,
-          payloadRevision: predecessor.payloadRevision,
-        },
+        // Flat: a lateral join on `true` has no key Drizzle could test.
+        baseDocumentId: predecessor.id,
+        basePayloadRevision: predecessor.payloadRevision,
       })
       .from(legislationDocuments)
       .leftJoinLateral(predecessor, sql`true`)
@@ -228,26 +227,39 @@ export const listStatuteVersionsHandler = async ({
     }
     return {
       type: "found",
-      rows: page.map(({ changeSummary, payloadRevision, base, ...row }) =>
-        projectStatuteVersion({
-          ...row,
-          isDefault: row.id === defaultId,
-          // Counts computed from the wording the row holds now, or none.
-          changes: servedStatuteVersionChanges({
-            stored: changeSummary,
-            payloadRevision,
-            base,
+      rows: page.map(
+        ({
+          changeSummary,
+          payloadRevision,
+          baseDocumentId,
+          basePayloadRevision,
+          ...row
+        }) =>
+          projectStatuteVersion({
+            ...row,
+            isDefault: row.id === defaultId,
+            // Counts computed from the wording the row holds now, or none.
+            changes: servedStatuteVersionChanges({
+              stored: changeSummary,
+              payloadRevision,
+              base:
+                baseDocumentId === null || basePayloadRevision === null
+                  ? null
+                  : {
+                      documentId: baseDocumentId,
+                      payloadRevision: basePayloadRevision,
+                    },
+            }),
+            // The actor comes from an explicit publisher relation; multiple acts
+            // starting on one day remain separate effects in that day's wording.
+            amendedBy: projectStatuteAmendments({
+              snapshot,
+              page: {
+                ...amendments,
+                items: amendmentsFor(row.id),
+              },
+            }),
           }),
-          // The actor comes from an explicit publisher relation; multiple acts
-          // starting on one day remain separate effects in that day's wording.
-          amendedBy: projectStatuteAmendments({
-            snapshot,
-            page: {
-              ...amendments,
-              items: amendmentsFor(row.id),
-            },
-          }),
-        }),
       ),
     } as const;
   });
