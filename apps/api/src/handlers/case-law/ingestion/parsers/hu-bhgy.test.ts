@@ -1274,6 +1274,45 @@ describe("anonymisation", () => {
         : [];
     expect(marked).toEqual(["alperes neve"]);
   });
+
+  // Text a Miskolc first-instance judgment prints about its parties: the
+  // number after "felperes" is an amount or a year, and "nevezett" is a word.
+  test.each([
+    "Felperes 5.300.000.-forint vételárat fizetett",
+    "a felperes 925.-Ft/db áron vásárolta",
+    "a felperes 2007.évi adókötelezettsége",
+    "a felperes nevezett Rt. ügyvezetője",
+    "Gyanúsított 1.000 forintot",
+  ])("the court's own text about a party stays text: %s", (text) => {
+    const [, block] = parse([{ text: "A Kúria" }, { text }]).documentAst.blocks;
+    const marked =
+      block?.type === "paragraph"
+        ? block.inlines.flatMap((inline) =>
+            inline.type === "text" && inline.anonymized === true
+              ? [inline.text]
+              : [],
+          )
+        : [];
+    expect(marked).toEqual([]);
+  });
+
+  test.each([
+    ["Terhelt1 vallomása", "Terhelt1"],
+    ["Gyanúsított 1. tagadta", "Gyanúsított 1."],
+    ["a név12-nek kézbesített", "név12"],
+    ["felperes neve (címe) ellen", "felperes neve"],
+  ])("a placeholder is still marked: %s", (text, placeholder) => {
+    const [, block] = parse([{ text: "A Kúria" }, { text }]).documentAst.blocks;
+    const marked =
+      block?.type === "paragraph"
+        ? block.inlines.flatMap((inline) =>
+            inline.type === "text" && inline.anonymized === true
+              ? [inline.text]
+              : [],
+          )
+        : [];
+    expect(marked).toEqual([placeholder]);
+  });
 });
 
 // ── End to end, one decision per era ─────────────────────
