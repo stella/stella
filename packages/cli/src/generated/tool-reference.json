@@ -37,7 +37,7 @@
   {
     "access": "destructive",
     "command": ["matter", "remove-member"],
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",
     "name": "remove_matter_member",
     "title": "Remove matter member"
   },
@@ -86,7 +86,7 @@
   {
     "access": "read",
     "command": ["case-law", "resolve"],
-    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives identity, not text: read_case_law_decision reads it. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
     "name": "resolve_case_law_decision",
     "title": "Resolve a case-law citation"
   },
@@ -217,6 +217,13 @@
     "title": "Update organization settings"
   },
   {
+    "access": "write",
+    "command": ["organization", "create"],
+    "description": "Create an owned organization after human approval (confirm:true). Lifetime cap: 3 evaluations; deletion never resets it. organization_evaluation_limit_reached: no evaluations left. Existing paid organizations keep access. Next: stella auth login; select the new organization.",
+    "name": "create_organization",
+    "title": "Create organization"
+  },
+  {
     "access": "read",
     "command": ["legislation", "search"],
     "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). `as_of` searches text in force on that date; omit it to include historical wording. No facets are returned and `total` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its `eli` to read_statute for the text, the outline of anchors and the consolidated versions. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
@@ -261,7 +268,7 @@
   {
     "access": "read",
     "command": ["template", "list"],
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); use a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, its named conditions and formula fields. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. `arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
+    "description": "List the organization's document templates (NDAs, powers of attorney, leases), or pass template_id for one template's full field configuration, named conditions and formula fields. Listing returns each template's id, name, field count, tags and usage guidance: use one whose whenToUse matches the request; skip any whose whenNotToUse applies. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. `arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
     "name": "list_templates",
     "title": "List templates"
   },
@@ -373,7 +380,7 @@
   {
     "access": "read",
     "command": ["annotation", "list"],
-    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "description": "List visible highlights and comments on a decision or statute version, oldest first. Passages give quoted words and their current block anchor when placed; orphaned passages have quote_not_found or quote_ambiguous. Report orphaned passages by quote, never at an anchor.",
     "name": "list_reader_annotations",
     "title": "List reader annotations"
   },
@@ -443,7 +450,7 @@
   {
     "access": "read",
     "command": ["audit-log", "list"],
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail (null unless changesStatus is \"visible\"). Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \"visible\". Requires audit-log access.",
     "name": "list_audit_log",
     "title": "List audit log"
   },
@@ -520,7 +527,7 @@
   {
     "access": "read",
     "command": ["capability", "audit-logs", "list"],
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail (null unless changesStatus is \"visible\"). Filter by matterId, action, resourceType (with optional resourceId), userId, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail (null unless changesStatus is \"visible\"). Filter by matterId, action, resourceType (with optional resourceId), userId, performer (people or automations), and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
     "name": "capability:audit-logs.list",
     "title": "audit-logs.list"
   },
@@ -826,6 +833,13 @@
     "title": "client-invoices.prefill"
   },
   {
+    "access": "destructive",
+    "command": ["capability", "contacts", "bulk-delete"],
+    "description": "Permanently delete up to 500 contacts from the organization address book in one transaction. Contacts used as matter clients are skipped.",
+    "name": "capability:contacts.bulk.delete",
+    "title": "contacts.bulk.delete"
+  },
+  {
     "access": "read",
     "command": ["capability", "contacts", "business-registries-check"],
     "description": "Screen a company or person against an official source, such as the Czech insolvency or VAT register, or against every sanctions list. A register check returns one outcome: clear (the source answered and holds nothing adverse), found (with the adverse records), not-registered (the source holds no record of the subject), unavailable (the source could not answer; never read this as clear), or not-covered (the source cannot answer for this subject type). The sanctions check returns one outcome per list (clear, possible-match, incomplete or unavailable) with the edition screened, and is clear only when every list was fully screened and clear. Incomplete means only a bounded subset of the list was screened and nothing matched; it is not a clearance.",
@@ -842,7 +856,7 @@
   {
     "access": "write",
     "command": ["capability", "contacts", "create"],
-    "description": "Create an organization address-book contact. Supply id, type (person or organization) and displayName; other fields are optional. Refuses the contact limit, attorney IDs outside this organization, and an external source/id already used by another contact.",
+    "description": "Create an organization address-book contact. Supply type (person or organization) and displayName; other fields are optional. Refuses the contact limit, attorney IDs outside this organization, and an external source/id already used by another contact.",
     "name": "capability:contacts.create",
     "title": "contacts.create"
   },
@@ -1059,7 +1073,7 @@
   {
     "access": "read",
     "command": ["capability", "entities", "files-list"],
-    "description": "List every document in a matter that has an uploaded file, oldest first with cursor pagination, each with its entity id, name, parent folder, file field id, file name, and media type. Documents without a file, and folders and tasks, are left out; use entities.list for the full table with column values.",
+    "description": "List every document in a matter that has an uploaded file, oldest first with cursor pagination, each with its entity id, name, parent folder, file field id, file name, and media type. search narrows the list to documents whose file name or name contains the text. Documents without a file, and folders and tasks, are left out; use entities.list for the full table with column values.",
     "name": "capability:entities.files.list",
     "title": "entities.files.list"
   },
@@ -1283,7 +1297,7 @@
   {
     "access": "write",
     "command": ["capability", "fields", "cell-metadata-update"],
-    "description": "Set the manual flags and lock state of one cell, meaning one document's value for one property. manualFlags is merged against baseManualFlags rather than overwritten, so flags added or removed by someone else since you read the cell survive; when no flags remain and the cell is not locked, the metadata row is deleted. Use fields.upsert to change the cell's value itself, and fields.column-flag.update to flag a whole column at once.",
+    "description": "Set the manual flags and lock state of one cell, meaning one document's value for one property. manualFlags is merged against baseManualFlags rather than overwritten, so flags added or removed by someone else since you read the cell survive; when no flags remain and the cell is not locked, the metadata row is deleted. overrideReason sets or clears why a person replaced the value a run produced; it is refused on a cell that holds no such replacement. Use fields.upsert to change the cell's value itself, and fields.column-flag.update to flag a whole column at once.",
     "name": "capability:fields.cell-metadata.update",
     "title": "fields.cell-metadata.update"
   },
@@ -1304,7 +1318,7 @@
   {
     "access": "write",
     "command": ["capability", "fields", "upsert"],
-    "description": "Set a document's value for a property (a cell in the matter's table). Pass the document entityId, the propertyId (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell.",
+    "description": "Set a document's value for a property (a cell in the matter's table). Pass the document entityId, the propertyId (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell, as does null content.",
     "name": "capability:fields.upsert",
     "title": "fields.upsert"
   },
@@ -1479,14 +1493,14 @@
   {
     "access": "read",
     "command": ["capability", "invoices", "prefill"],
-    "description": "Prepare a new invoice for a matter without creating it: the matter's approved, billable, not-yet-invoiced time entries (with timekeeper names) and approved billable expenses, oldest first (a matter with more than 500 of either is refused); the proposed currency, issue date (today in the organization's zone) and payment term; the default seller profile (or sellerProfileId); the buyer copied from the matter's client; the VAT treatment and rate the lines would get, each with where it came from; and the organization's VAT rate periods, since billing fewer items can move the supply date into another rate. Pass the chosen ids to invoices.create, which applies the same prefill.",
+    "description": "Prepare a new invoice for a matter without creating it: the matter's approved, billable, not-yet-invoiced time entries (with timekeeper names) and approved billable expenses, oldest first (a matter with more than 500 of either is refused); the proposed currency, issue date (today in the organization's zone) and payment term; the default seller profile (or sellerProfileId); the buyer copied from the matter's client; the VAT treatment and rate the lines would get, each with where it came from; and the organization's VAT rate periods, since billing fewer items can move the supply date into another rate; plus issueBlockers, what would stop invoices.transition from finalizing the new invoice (invoice_seller_profile_missing, invoice_number_series_missing; empty when it can be issued). Pass the chosen ids to invoices.create, which applies the same prefill.",
     "name": "capability:invoices.prefill",
     "title": "invoices.prefill"
   },
   {
     "access": "write",
     "command": ["capability", "invoices", "transition"],
-    "description": "Move an invoice through finalize, send, void, or revert_to_draft; recording payments that reach its total marks it paid. Finalize assigns an omitted number from the document type's default series, using the issue date; configure a default number series first. Manual numbers and numbers kept after reverting to draft are preserved. A credit note must reference an eligible original and cannot exceed its total. Voiding releases attached entries; it and reverting are refused while unvoided payments remain. Finalizing a VAT invoice in a currency other than its seller country's VAT currency (EUR for Slovakia, CZK for Czechia, PLN for Poland) records the official exchange rate for its tax point and states the VAT in that currency; it is refused when the rate cannot be resolved.",
+    "description": "Move an invoice through finalize, send, void, or revert_to_draft; recording payments that reach its total marks it paid. Finalize requires a seller profile on the invoice and assigns an omitted number from the document type's default series, using the issue date; without either it is refused with invoice_seller_profile_missing or invoice_number_series_missing, which invoices.prefill reports in advance as issueBlockers. Manual numbers and numbers kept after reverting to draft are preserved. A credit note must reference an eligible original and cannot exceed its total. Voiding releases attached entries; it and reverting are refused while unvoided payments remain. Finalizing a VAT invoice in a currency other than its seller country's VAT currency (EUR for Slovakia, CZK for Czechia, PLN for Poland) records the official exchange rate for its tax point and states the VAT in that currency; it is refused when the rate cannot be resolved.",
     "name": "capability:invoices.transition",
     "title": "invoices.transition"
   },
@@ -1573,6 +1587,34 @@
     "description": "Read one legislation document from the stella corpus by id: its ELI, title, country, language, document type, status, effective and version-validity dates, source links, and parsed structure. Full text is returned only when the parsed structure is missing or unusable, and is null otherwise. Only documents from sources cleared for redistribution are returned; anything else reads as not found.",
     "name": "capability:legislation.get",
     "title": "legislation.get"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "legislation", "matter-links-batch-create"],
+    "description": "Link a selection of statute provisions and their exact applied consolidations to the current matter in one transaction. The idempotent response partitions every request into linked, existing, or rejected with a typed reason.",
+    "name": "capability:legislation.matter-links.batch.create",
+    "title": "legislation.matter-links.batch.create"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "legislation", "matter-links-create"],
+    "description": "Link one statute provision and the exact applied consolidation to the current matter. Pass the statute identifier, provision identifier, version date and jurisdiction returned by the legislation tools. Repeating the same link returns the existing row unchanged.",
+    "name": "capability:legislation.matter-links.create",
+    "title": "legislation.matter-links.create"
+  },
+  {
+    "access": "destructive",
+    "command": ["capability", "legislation", "matter-links-delete"],
+    "description": "Unlink one statute provision from a matter without changing the legislation corpus.",
+    "name": "capability:legislation.matter-links.delete",
+    "title": "legislation.matter-links.delete"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "legislation", "matter-links-list"],
+    "description": "List statute provisions linked to the current matter, newest first, including the statute title, jurisdiction and exact applied version date. Returns the complete set up to the per-matter link cap.",
+    "name": "capability:legislation.matter-links.list",
+    "title": "legislation.matter-links.list"
   },
   {
     "access": "read",
@@ -1890,14 +1932,14 @@
   {
     "access": "read",
     "command": ["capability", "matters", "correspondence-get"],
-    "description": "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the email file sourceEntityId in the matter; its headers are as stated in that file and are not verified.",
+    "description": "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox, the files of the message as attachments, and in dataBoxContacts the organization contacts whose data boxes list the sender or recipient box ID (null on email).",
     "name": "capability:matters.correspondence.get",
     "title": "matters.correspondence.get"
   },
   {
     "access": "read",
     "command": ["capability", "matters", "correspondence-list"],
-    "description": "List correspondence filed in a matter, newest received first. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the email file sourceEntityId in the matter; its headers are as stated in that file and are not verified.",
+    "description": "List correspondence filed in a matter, newest received first; filter by channel (email or data_box). When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox (message ID, sender and recipient box IDs, names and reference numbers, delivery and acceptance times); its from and to addresses are box IDs and its subject is the message annotation.",
     "name": "capability:matters.correspondence.list",
     "title": "matters.correspondence.list"
   },
@@ -1981,7 +2023,7 @@
   {
     "access": "write",
     "command": ["capability", "matters", "update"],
-    "description": "Change a matter: its name, client, reference, billing reference, colour, or lead (who must already be a member of it). Only the fields you pass are written. clientId attaches a client to a personal matter or replaces the client of a client matter; members are managed separately. Pass expectedClientId (null for a personal matter) to change the client only if its current assignment still matches; otherwise returns version_conflict.",
+    "description": "Change a matter: its name, client, reference, billing reference, the language its billing narratives are written in, colour, or lead (who must already be a member of it). Only the fields you pass are written. clientId attaches a client to a personal matter or replaces the client of a client matter; members are managed separately. Pass expectedClientId (null for a personal matter) to change the client only if its current assignment still matches; otherwise returns version_conflict.",
     "name": "capability:matters.update",
     "title": "matters.update"
   },
@@ -2127,6 +2169,20 @@
     "title": "organization-settings.anonymization-blacklist.update"
   },
   {
+    "access": "read",
+    "command": ["capability", "organization-settings", "billing-drafts-get"],
+    "description": "Read the organization's AI billing draft mode and guideline files, plus a client's billing format when clientId is supplied. Pass updatedAt unchanged as expectedUpdatedAt to organization-settings.billing-drafts.update.",
+    "name": "capability:organization-settings.billing-drafts.get",
+    "title": "organization-settings.billing-drafts.get"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "organization-settings", "billing-drafts-update"],
+    "description": "Update only the supplied AI billing draft settings. Send expectedUpdatedAt unchanged from organization-settings.billing-drafts.get; a stale value is refused. Mode applies to the organization. ResourceIds replace the firm guideline when clientId is omitted, or that client's guideline set when supplied. TimeBillingFormat requires clientId. Omitted fields stay unchanged.",
+    "name": "capability:organization-settings.billing-drafts.update",
+    "title": "organization-settings.billing-drafts.update"
+  },
+  {
     "access": "write",
     "command": [
       "capability",
@@ -2180,6 +2236,39 @@
     "description": "Remove one matter from a shared mailbox sender's filing scope.",
     "name": "capability:organization-settings.correspondence.allowed-senders.scope.remove",
     "title": "organization-settings.correspondence.allowed-senders.scope.remove"
+  },
+  {
+    "access": "write",
+    "command": [
+      "capability",
+      "organization-settings",
+      "correspondence-data-boxes-create"
+    ],
+    "description": "Add one of the organization's own data-box IDs (at most 20; stored lowercase). Filed data-box messages derive their direction from this inventory on every read: organization sender is outgoing, organization recipient incoming, otherwise incoming with directionBasis unknown. Adding an existing ID leaves the inventory unchanged.",
+    "name": "capability:organization-settings.correspondence.data-boxes.create",
+    "title": "organization-settings.correspondence.data-boxes.create"
+  },
+  {
+    "access": "destructive",
+    "command": [
+      "capability",
+      "organization-settings",
+      "correspondence-data-boxes-delete"
+    ],
+    "description": "Remove one of the organization's own data-box IDs. Filed data-box messages derive their direction from the current inventory on every read. Removing an ID not listed leaves the inventory unchanged.",
+    "name": "capability:organization-settings.correspondence.data-boxes.delete",
+    "title": "organization-settings.correspondence.data-boxes.delete"
+  },
+  {
+    "access": "read",
+    "command": [
+      "capability",
+      "organization-settings",
+      "correspondence-data-boxes-get"
+    ],
+    "description": "Read the organization's own data-box IDs (seven lowercase letters or digits). A filed data-box message sent from one of them is outgoing, one sent to them incoming; any other is incoming with directionBasis unknown.",
+    "name": "capability:organization-settings.correspondence.data-boxes.get",
+    "title": "organization-settings.correspondence.data-boxes.get"
   },
   {
     "access": "read",
@@ -2245,6 +2334,13 @@
     "description": "Change the organization's general settings: document processing mode, matter-number pattern, padding, whether titles show that number, prompt caching, memory extraction, time policy, and time zone. Only the fields you pass are written and the matter-number pattern is validated against its padding first. Turning document processing off is refused while an automatic run is still going. Practice jurisdictions are set through organization-settings.practice-jurisdictions.update.",
     "name": "capability:organization-settings.update",
     "title": "organization-settings.update"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "organizations", "create"],
+    "description": "Create an organization that you will own after human approval. Evaluation periods are limited to 3 per account for its lifetime; organization_evaluation_limit_reached refuses further trials, including after deletion. Existing paid organizations keep their access. Requires stella:organization_create account consent for OAuth callers. Omit slug to generate an opaque organization address. Explicit slug conflicts return organization_slug_conflict; restricted accounts return account_access_unavailable. Send Idempotency-Key to safely replay a creation. The current organization stays active. Run stella auth login and select the returned organization before acting in it.",
+    "name": "capability:organizations.create",
+    "title": "organizations.create"
   },
   {
     "access": "write",
@@ -2361,7 +2457,7 @@
   {
     "access": "write",
     "command": ["capability", "properties", "create"],
-    "description": "Add one property (a column) to a matter: its name, value type, and either an AI prompt tool, optionally depending on other columns, or a manual-input tool. An AI column is created stale, so its values are produced by the next run rather than immediately. Refused when the matter is at its property limit, when a dependency is not a property of this matter, or when the matter already has a document-type classifier column.",
+    "description": "Add one property (a column) to a matter: its name, value type, and either an AI prompt tool, optionally depending on other columns, or a manual-input tool. A money column takes manual input unless toolType is ai-model, when the model reads the amount and the currency the source states, falling back to the column's currency. An AI column is created stale, so its values are produced by the next run rather than immediately. Refused when the matter is at its property limit, when a dependency is not a property of this matter, or when the matter already has a document-type classifier column.",
     "name": "capability:properties.create",
     "title": "properties.create"
   },
@@ -2424,14 +2520,14 @@
   {
     "access": "write",
     "command": ["capability", "rates", "create"],
-    "description": "Create a rate table, a named set of hourly rates in a single currency, in a matter. Pass isDefault to make it the matter's default, which clears the flag on the previous default; matters have a fixed cap on how many rate tables they may hold. Add the rates themselves with rates.entries.create.",
+    "description": "Create a rate table, a named set of hourly rates in a single currency, in a matter. Rates apply only from the matter's default table. Pass isDefault to make it the default, which clears the flag on the previous default; a table created while the matter has no default becomes the default. Matters have a fixed cap on how many rate tables they may hold. Add the rates themselves with rates.entries.create.",
     "name": "capability:rates.create",
     "title": "rates.create"
   },
   {
     "access": "destructive",
     "command": ["capability", "rates", "delete"],
-    "description": "Permanently delete one rate table from a matter and, with it, every per-user rate line it holds. The matter's default rate table is refused until another table is made the default; time entries already recorded keep the rate they were billed at.",
+    "description": "Permanently delete one rate table from a matter and, with it, every per-user rate line it holds. While the matter has other tables, its default table is refused until another table is made the default; the matter's last table can always be deleted. Time entries already recorded keep the rate they were billed at.",
     "name": "capability:rates.delete",
     "title": "rates.delete"
   },
@@ -2567,6 +2663,13 @@
     "description": "List your own search history in the active organization, most recently used first: law searches you ran and the decisions and statutes you opened. Each entry is private to you; nobody else in the organization can read it. Pass `kind` to list one kind, `country` to list one jurisdiction's entries, and `cursor` from `nextCursor` for older entries. Delete an entry with `search-history.delete`, or all of it with `search-history.clear`; pass the returned `scope.organizationId` as `expectedOrganizationId` and `scope.userId` as `expectedUserId` on either mutation.",
     "name": "capability:search-history.list",
     "title": "search-history.list"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "search", "results-list"],
+    "description": "Search the active organization across the matters you can open, by text and filters: matters, result types, editors, file types and an update date range. A search needs a query or at least one filter besides matters. Pass `cursor` from `nextCursor` for the next page. Assistant chat results need the `stella:chat` scope.",
+    "name": "capability:search.results.list",
+    "title": "search.results.list"
   },
   {
     "access": "write",
@@ -3414,6 +3517,13 @@
     "description": "Set a current member's daily time target in the active organization. Only organization owners and admins may set another member's target. Pass minutes from 1 to 1440, or null to clear it.",
     "name": "capability:time-entries.members.daily-target.update",
     "title": "time-entries.members.daily-target.update"
+  },
+  {
+    "access": "read",
+    "command": ["capability", "time-entries", "report-get"],
+    "description": "Report recorded time by member, matter or client and calendar bucket, with the preceding equal-length period. Reads time entries only. Monetary values are minor currency units and require rate read permission. Ranges contain at most 366 days; reduce the range if the aggregate exceeds 20000 buckets.",
+    "name": "capability:time-entries.report.get",
+    "title": "time-entries.report.get"
   },
   {
     "access": "write",
