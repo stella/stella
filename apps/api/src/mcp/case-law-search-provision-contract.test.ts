@@ -21,7 +21,7 @@ const provisionDescription = (): string => {
   const schema = DEFAULT_MCP_TOOL_DEFINITIONS.find(
     ({ name }) => name === "search_case_law",
   )?.inputSchema;
-  const properties = isRecord(schema) ? schema["properties"] : undefined;
+  const properties = isRecord(schema) ? schema.properties : undefined;
   const provision = isRecord(properties) ? properties["provision"] : undefined;
   const description = isRecord(provision)
     ? provision["description"]
