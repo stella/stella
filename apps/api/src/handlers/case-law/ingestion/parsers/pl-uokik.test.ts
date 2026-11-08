@@ -531,6 +531,35 @@ describe("a UOKiK decision's title and ruling", () => {
   });
 });
 
+/** A 2009 decision whose recital runs on into the ruling, recorded for its roles. */
+const RWA_26_2009 = new URL(
+  "__fixtures__/decision-roles/pl-uokik-rwa-26-2009.pdf",
+  import.meta.url,
+);
+
+describe("a UOKiK decision whose recital runs on into its ruling", () => {
+  test("RWA-26/2009: the legal basis and the recital introduce the ruling, which opens at its verb", async () => {
+    const { blocks } = await parsedOf(RWA_26_2009);
+    const opening = bodyOf(blocks)
+      .filter((block) => block.type === "paragraph")
+      .slice(7, 12)
+      .map((block) => `${block.role ?? "-"} ${block.plainText.slice(0, 30)}`);
+
+    expect(opening).toEqual([
+      "intro I. Na podstawie art. 27 ust. 2",
+      "intro − w imieniu Prezesa Urzędu Och",
+      "intro po przeprowadzeniu postępowani",
+      "holding uznaje się, że działanie poleg",
+      "holding 1. „Koszty ponoszone przez ucz",
+    ]);
+    // The text stays as printed: the two paragraphs read as the one.
+    const all = blocks.map(({ plainText }) => plainText).join(" ");
+    expect(all).toContain(
+      "z siedzibą w Warszawie, uznaje się, że działanie polegające",
+    );
+  });
+});
+
 // ── Each rule that drops a line, on a PDF built for it ───
 
 describe("a UOKiK decision whose first page carries the office's letterhead footer", () => {

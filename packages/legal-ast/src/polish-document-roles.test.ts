@@ -17,6 +17,7 @@ import {
   isPlSignatureLine,
   namesPlDocumentType,
   opensPlRuling,
+  plRulingClauseStart,
   startsWithPlOperativeVerb,
 } from "./polish-document-roles";
 
@@ -355,5 +356,25 @@ describe("a Polish authority's decision title", () => {
     "Decyzja nr DOK-9/2011 jest prawomocna",
   ])("%p is not one", (line) => {
     expect(isPlAuthorityDecisionTitle(line)).toBe(false);
+  });
+});
+
+describe("a Polish recital that rules in its last clause", () => {
+  test("the ruling starts at its verb", () => {
+    const text =
+      "po przeprowadzeniu postępowania przeciwko spółce z siedzibą w Warszawie, uznaje się, że działanie narusza interesy konsumentów";
+    const start = plRulingClauseStart(text);
+    expect(start === undefined ? undefined : text.slice(start)).toStartWith(
+      "uznaje się, że działanie",
+    );
+  });
+
+  test("a recital without a ruling, or a ruling without a recital, is not split", () => {
+    expect(
+      plRulingClauseStart(
+        "po rozpoznaniu na rozprawie w dniu 1 lutego 2022 roku w Warszawie odwołania",
+      ),
+    ).toBeUndefined();
+    expect(plRulingClauseStart("Sąd, oddala apelację")).toBeUndefined();
   });
 });

@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-uodo] only adds the authority decision-title predicate, which the data-protection reader does not call.
+// parser-output-unchanged: [pl-uodo] only adds the recital-then-ruling clause reading, which the data-protection reader does not call.
 /**
  * How a Polish decision names its own parts: the operative verbs its ruling
  * opens with, the reasons heading, the recital before the ruling, the closing
@@ -474,4 +474,28 @@ export const isPlAuthorityDecisionTitle = (text: string): boolean => {
     NUMBERED_DECISION_TITLE_RE.test(line) ||
     DOCKETED_DECISION_TITLE_RE.test(line)
   );
+};
+
+/**
+ * The clause a recital runs on into when the ruling's verb follows it in the
+ * same paragraph: `…, uznaje się, że …` after `po przeprowadzeniu
+ * postępowania … przeciwko …`.
+ */
+const RULING_CLAUSE_RE = new RegExp(
+  `, (?=(?:${POLISH_OPERATIVE_FORMS.join("|")})(?!\\p{L}))`,
+  "iu",
+);
+
+/**
+ * Where the ruling starts in a paragraph that opens on the recital and
+ * rules in its last clause (`po przeprowadzeniu postępowania … , uznaje się,
+ * że …`): the offset of the operative verb, or `undefined` when the
+ * paragraph is no such recital or states no ruling.
+ */
+export const plRulingClauseStart = (text: string): number | undefined => {
+  if (!isPlOpeningRecital(text)) {
+    return undefined;
+  }
+  const match = RULING_CLAUSE_RE.exec(text);
+  return match === null ? undefined : match.index + match[0].length;
 };
