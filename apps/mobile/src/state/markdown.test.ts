@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import { MOBILE_REDIRECT_SCHEMES } from "@stll/api-contract/mobile-client";
 
-import { openableLink } from "./links";
 import { parseInline, parseMarkdown } from "./markdown";
 import type { Block, Span } from "./markdown";
 
@@ -23,7 +22,14 @@ describe("inline spans", () => {
       { text: ", " },
       { text: "code", code: true },
       { text: " and " },
-      { text: "the ruling", link: openableLink("https://x.test/r", SCHEME) },
+      {
+        text: "the ruling",
+        link: expect.objectContaining({
+          kind: "web",
+          url: "https://x.test/r",
+          host: "x.test",
+        }),
+      },
       { text: "." },
     ]);
   });
