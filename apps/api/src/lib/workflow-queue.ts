@@ -1756,6 +1756,8 @@ const processOneBatch = async ({
             scopedDb: actor.writeDb,
             workspaceId,
             entityId,
+            entityVersionId,
+            propertyIds: aiModelProperties.map(({ id }) => id),
             read: { type: "tooLarge" },
           });
         }
@@ -1765,6 +1767,8 @@ const processOneBatch = async ({
             scopedDb: actor.writeDb,
             workspaceId,
             entityId,
+            entityVersionId,
+            propertyIds: aiModelProperties.map(({ id }) => id),
             read: { type: "cut", withheld: batchResult.value.withheld },
           });
         }

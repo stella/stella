@@ -117,10 +117,38 @@ export const recordRunWithheldSources = async (
   );
 };
 
+const loadPlaybookSourceIds = async (
+  tx: Transaction,
+  {
+    workspaceId,
+    propertyIds,
+  }: {
+    workspaceId: SafeId<"workspace">;
+    propertyIds: readonly SafeId<"property">[];
+  },
+) => {
+  const rows = await tx
+    .select({
+      id: properties.id,
+      playbookSourceId: properties.playbookSourceId,
+    })
+    .from(properties)
+    .where(
+      and(
+        eq(properties.workspaceId, workspaceId),
+        inArray(properties.id, [...propertyIds]),
+      ),
+    );
+  return new Map(rows.map((row) => [row.id, row.playbookSourceId]));
+};
+
 type RecordTableRunDocumentReadArgs = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+  /** The columns the batch extracted. */
+  propertyIds: readonly SafeId<"property">[];
   read:
     | { type: "tooLarge" }
     | { type: "cut"; withheld: readonly ReviewWithheldSource[] };
@@ -130,29 +158,51 @@ type RecordTableRunDocumentReadArgs = {
  * Tells the document's active table run how its extraction read the document.
  * Grading runs a level later and sees only stored cells, so the run hears it
  * from the extraction batch that made the cut.
+ *
+ * A run has no link to one workflow request, because a run opened while a
+ * workflow is in flight is carried by that workflow. What ties a batch to the
+ * run is what it read: the pinned version, for one of the run's positions.
  */
 export const recordTableRunDocumentRead = async ({
   scopedDb,
   workspaceId,
   entityId,
+  entityVersionId,
+  propertyIds,
   read,
 }: RecordTableRunDocumentReadArgs): Promise<void> => {
   await scopedDb(async (tx) => {
     const run = await lockActiveTableRun(tx, { workspaceId, entityId });
-    if (run === undefined) {
+    if (run === undefined || run.entityVersionId !== entityVersionId) {
+      return;
+    }
+    const sourceIds = new Set(
+      (await loadPlaybookSourceIds(tx, { workspaceId, propertyIds })).values(),
+    );
+    const { positions } = planReviewRun({
+      basis: run.basis,
+      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+    });
+    if (!positions.some(({ positionId }) => sourceIds.has(positionId))) {
       return;
     }
     switch (read.type) {
       case "tooLarge":
         await failRun(tx, workspaceId, run.id, "document_too_large");
         return;
-      case "cut":
-        await recordRunWithheldSources(tx, {
-          workspaceId,
-          runId: run.id,
-          withheld: read.withheld,
-        });
+      case "cut": {
+        const withheld = read.withheld.filter(
+          ({ fileFieldId }) => fileFieldId === run.fileFieldId,
+        );
+        if (withheld.length > 0) {
+          await recordRunWithheldSources(tx, {
+            workspaceId,
+            runId: run.id,
+            withheld,
+          });
+        }
         return;
+      }
       default:
         read satisfies never;
         panic(`Unhandled document read: ${String(read)}`);
@@ -204,21 +254,10 @@ export const recordTableRunVerdicts = async ({
       ...graded.map((verdict) => verdict.propertyId),
       ...unresolvedPropertyIds,
     ];
-    const sourceRows = await tx
-      .select({
-        id: properties.id,
-        playbookSourceId: properties.playbookSourceId,
-      })
-      .from(properties)
-      .where(
-        and(
-          eq(properties.workspaceId, workspaceId),
-          inArray(properties.id, propertyIds),
-        ),
-      );
-    const sourceIdByPropertyId = new Map(
-      sourceRows.map((row) => [row.id, row.playbookSourceId]),
-    );
+    const sourceIdByPropertyId = await loadPlaybookSourceIds(tx, {
+      workspaceId,
+      propertyIds,
+    });
 
     const belongsToRun = (propertyId: SafeId<"property">): boolean => {
       const sourceId = sourceIdByPropertyId.get(propertyId);

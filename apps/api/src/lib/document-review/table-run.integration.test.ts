@@ -560,7 +560,9 @@ describe("telling a table run how its document was read", () => {
     charactersTotal: 1000,
   });
   const openRun = async () => {
-    const opened = await openTableRuns(await seedPlaybookDefinition());
+    const definitionId = await seedPlaybookDefinition();
+    const { askId } = await seedMaterializedColumns(definitionId);
+    const opened = await openTableRuns(definitionId);
     const runId = opened.runs.at(0)?.runId ?? panic("No run was opened");
     await testDb
       .update(documentReviewRuns)
@@ -580,25 +582,39 @@ describe("telling a table run how its document was read", () => {
           .from(documentReviewRuns)
           .where(eq(documentReviewRuns.id, runId))
       ).at(0);
-    return { read };
+    const [pinned] = await testDb
+      .select({ entityVersionId: documentReviewRuns.entityVersionId })
+      .from(documentReviewRuns)
+      .where(eq(documentReviewRuns.id, runId));
+    const batch: BatchRead = {
+      entityVersionId: pinned?.entityVersionId ?? panic("No pinned version"),
+      propertyIds: [askId],
+    };
+    return { read, batch };
   };
+  type BatchRead = Pick<
+    Parameters<typeof recordTableRunDocumentRead>[0],
+    "entityVersionId" | "propertyIds"
+  >;
   const report = async (
+    batch: BatchRead,
     read: Parameters<typeof recordTableRunDocumentRead>[0]["read"],
   ) =>
     await recordTableRunDocumentRead({
       scopedDb,
       workspaceId: ids.wsA1,
       entityId: ids.entityA1,
+      ...batch,
       read,
     });
 
   afterEach(clearRuns);
 
   test("a later batch repeats a file's record instead of adding to it", async () => {
-    const { read } = await openRun();
+    const { read, batch } = await openRun();
 
-    await report({ type: "cut", withheld: [source(100)] });
-    await report({ type: "cut", withheld: [source(200)] });
+    await report(batch, { type: "cut", withheld: [source(100)] });
+    await report(batch, { type: "cut", withheld: [source(200)] });
 
     expect(await read()).toMatchObject({
       withheldSources: [source(200)],
@@ -606,14 +622,53 @@ describe("telling a table run how its document was read", () => {
   });
 
   test("a document too large fails the run with its own code", async () => {
-    const { read } = await openRun();
+    const { read, batch } = await openRun();
 
-    await report({ type: "tooLarge" });
+    await report(batch, { type: "tooLarge" });
 
     expect(await read()).toMatchObject({
       status: "failed",
       errorCode: "document_too_large",
     });
+  });
+
+  test("a batch for a column outside the run leaves the run alone", async () => {
+    const { read, batch } = await openRun();
+
+    await report(
+      { ...batch, propertyIds: [toSafeId<"property">(Bun.randomUUIDv7())] },
+      { type: "tooLarge" },
+    );
+
+    expect(await read()).toMatchObject({ status: "running", errorCode: null });
+  });
+
+  test("a batch that read another version leaves the run alone", async () => {
+    const { read, batch } = await openRun();
+
+    await report(
+      {
+        ...batch,
+        entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
+      },
+      { type: "tooLarge" },
+    );
+
+    expect(await read()).toMatchObject({ status: "running", errorCode: null });
+  });
+
+  test("a cut records only the file the run reviews", async () => {
+    const { read, batch } = await openRun();
+    const otherFile = {
+      ...source(900),
+      fileFieldId: Bun.randomUUIDv7(),
+    };
+
+    await report(batch, { type: "cut", withheld: [otherFile, source(100)] });
+    expect(await read()).toMatchObject({ withheldSources: [source(100)] });
+
+    await report(batch, { type: "cut", withheld: [otherFile] });
+    expect(await read()).toMatchObject({ withheldSources: [source(100)] });
   });
 });
 
