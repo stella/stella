@@ -337,6 +337,14 @@ describe("a Czech bench recital", () => {
     ).toBe(0);
   });
 
+  test("states the bench's decision", () => {
+    expect(
+      czechBenchRecitalStart([recitalLine("IV. ÚS 35/96")], 1, {
+        opensAfterHeadMatter: true,
+      }),
+    ).toBeUndefined();
+  });
+
   test("is short and carries no court number", () => {
     expect(
       czechBenchRecitalStart(
@@ -350,7 +358,10 @@ describe("a Czech bench recital", () => {
     ).toBeUndefined();
     expect(
       czechBenchRecitalStart(
-        [title, ...["a", "b", "c", "d"].map((text) => recitalLine(text))],
+        [
+          title,
+          ...["soud rozhodl", "b", "c", "d"].map((text) => recitalLine(text)),
+        ],
         5,
       ),
     ).toBeUndefined();

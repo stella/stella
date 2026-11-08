@@ -325,13 +325,16 @@ export const isCzechVerdictFormulaLine = (text: string): boolean =>
 const BENCH_RECITAL_MAX_PARAGRAPHS = 3;
 /** A paragraph opening on the court's number (`12.`, `[12]`) is reasoning. */
 const COURT_NUMBERED_RE = /^(?:\[\d{1,4}\]|\d{1,4}\.)\s/u;
+/** The verb a bench recital states its decision with (`… rozhodl …`). */
+const BENCH_DECIDED_RE = /(?<!\p{L})rozhodl[aoi]?(?!\p{L})/iu;
 
 /**
  * Where the bench recital ending before `end` starts (`Ústavní soud České
  * republiky` / `v senátě rozhodl ve věci … `, or one paragraph ending
  * `takto:`): the role-less paragraphs that run back to the decision's head
  * matter (its title, docket or opening formula). Only a short recital that
- * carries no court number is one, so a `takto:` the reasons quote is not;
+ * carries no court number and states the bench's decision (`rozhodl`) is
+ * one, so a `takto:` the reasons quote, or a docket line above it, is not;
  * `undefined` when the paragraphs before `end` are no recital. A reader
  * whose blocks open after the head matter it keeps apart says so with
  * `opensAfterHeadMatter`: a recital may then run back to its first block.
@@ -361,7 +364,8 @@ export const czechBenchRecitalStart = (
   return followsHeadMatter &&
     recital.length > 0 &&
     recital.length <= BENCH_RECITAL_MAX_PARAGRAPHS &&
-    !recital.some((block) => COURT_NUMBERED_RE.test(block.plainText.trim()))
+    !recital.some((block) => COURT_NUMBERED_RE.test(block.plainText.trim())) &&
+    recital.some((block) => BENCH_DECIDED_RE.test(block.plainText))
     ? start
     : undefined;
 };
