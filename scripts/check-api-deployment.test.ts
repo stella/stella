@@ -448,7 +448,7 @@ describe("API deployment health receipt", () => {
       : undefined;
     const condition = isRecord(send) ? send["if"] : undefined;
     if (typeof condition !== "string") {
-      return expect.unreachable("alerts require a send condition");
+      expect.unreachable("alerts require a send condition");
     }
     const sends = (decision: string, failed: boolean) =>
       evaluate(condition, {
