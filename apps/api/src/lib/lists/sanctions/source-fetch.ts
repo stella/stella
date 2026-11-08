@@ -47,8 +47,8 @@ const STREAM_TOTAL_TIMEOUT_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 3;
 const MAX_REDIRECT_HOPS = 3;
 const PARSE_SLICE_BYTES = 16 * 1024;
-const EU_XML_TITLE = "Consolidated Financial Sanctions File 1.1";
-const EU_XML_PATH = "/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content";
+// The publisher's declared XML 1.1 location; the feed adds its access token.
+const EU_XML = new URL(SANCTIONS_SOURCES.eu.download.urls[0]);
 const CZ_CSV_NAME = /^Vnitrostatni_sankcni_seznam_\d{4}_\d{2}_\d{2}\.csv$/u;
 
 export class SanctionsRefreshError extends TaggedError(
@@ -69,65 +69,42 @@ const refreshError = (
     source,
   });
 
-const record = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const idOf = (value: unknown): string | null => {
-  if (!record(value)) {
-    return null;
-  }
-  const id = value["@id"];
-  return typeof id === "string" ? id : null;
-};
-
 const safeUrl = (value: string, base?: string): URL | null => {
   const parsed = Result.try(() => new URL(value, base));
   return parsed.isOk() ? parsed.value : null;
 };
 
+/**
+ * Finds the XML 1.1 file, with its current query token, in the Commission's
+ * feed of published list files. The feed is served by the host that serves
+ * the file, so discovery depends on nothing the download does not already
+ * depend on. Exactly one feed item may name the file.
+ */
 export const discoverEuXmlUrl = (
-  metadata: unknown,
+  feed: string,
 ): Result<string, SanctionsRefreshError> => {
-  if (!record(metadata) || !Array.isArray(metadata["@graph"])) {
+  const $ = load(feed, { xml: true });
+  const channel = $("rss > channel");
+  if (channel.length !== 1) {
     return Result.err(refreshError("eu", "metadata-invalid"));
   }
 
-  const candidates: string[] = [];
-  for (const node of metadata["@graph"]) {
-    if (!record(node) || node["@type"] !== "dcat:Distribution") {
-      continue;
-    }
-    const titles = node["dct:title"];
+  const candidates = new Set<string>();
+  channel.children("item").each((_index, item) => {
+    const url = safeUrl($(item).children("link").first().text().trim());
     if (
-      !Array.isArray(titles) ||
-      !titles.some(
-        (title) =>
-          record(title) &&
-          title["@language"] === "en" &&
-          title["@value"] === EU_XML_TITLE,
-      )
-    ) {
-      continue;
-    }
-    if (!idOf(node["dct:format"])?.endsWith("/XML")) {
-      continue;
-    }
-    const download = idOf(node["dcat:downloadURL"]);
-    const url = download === null ? null : safeUrl(download);
-    if (
-      url?.protocol !== "https:" ||
-      url.hostname !== "webgate.ec.europa.eu" ||
-      url.pathname !== EU_XML_PATH ||
+      url?.origin !== EU_XML.origin ||
+      url.pathname !== EU_XML.pathname ||
       url.username !== "" ||
       url.password !== ""
     ) {
-      continue;
+      return;
     }
-    candidates.push(url.href);
-  }
+    candidates.add(url.href);
+  });
 
-  const candidate = candidates.at(0);
-  return candidates.length === 1 && candidate !== undefined
+  const [candidate, ...others] = candidates;
+  return candidate !== undefined && others.length === 0
     ? Result.ok(candidate)
     : Result.err(refreshError("eu", "metadata-invalid"));
 };
@@ -205,6 +182,7 @@ const lastModifiedOf = (
 type FetchOptions = {
   permit: ThirdPartyOutboundPermit;
   euXmlUrlOverride?: string | undefined;
+  fetchBytesRequest?: typeof safeOutboundFetchBytes | undefined;
   fetchStreamRequest?: typeof safeOutboundFetchStream | undefined;
   signal: AbortSignal;
   streamTotalTimeoutMs?: number | undefined;
@@ -212,40 +190,37 @@ type FetchOptions = {
 };
 
 const headersFor = ({
-  accept,
   userAgent,
 }: {
-  accept?: string | undefined;
   userAgent?: string | undefined;
 }): Record<string, string> => ({
-  ...(accept === undefined ? {} : { Accept: accept }),
   "User-Agent": userAgent ?? INGESTION_USER_AGENT,
 });
 
 const fetchBytes = async ({
   permit,
+  fetchBytesRequest = safeOutboundFetchBytes,
   maxBytes,
   signal,
   source,
   url,
   userAgent,
-  accept,
 }: {
-  accept?: string | undefined;
   permit: ThirdPartyOutboundPermit;
+  fetchBytesRequest?: typeof safeOutboundFetchBytes | undefined;
   maxBytes: number;
   signal: AbortSignal;
   source: SanctionsSource;
   url: string;
   userAgent?: string | undefined;
 }): Promise<Result<ArrayBuffer, SanctionsRefreshError>> => {
-  const response = await safeOutboundFetchBytes({
+  const response = await fetchBytesRequest({
     permit,
     url,
     maxBytes,
     timeoutMs: REQUEST_TIMEOUT_MS,
     signal,
-    headers: headersFor({ accept, userAgent }),
+    headers: headersFor({ userAgent }),
   });
   if (response.isErr()) {
     return Result.err(refreshError(source, "fetch-failed"));
@@ -446,29 +421,23 @@ const loadMarkerOnce = async (
     case "eu": {
       let downloadUrl = options.euXmlUrlOverride;
       if (downloadUrl === undefined) {
-        const metadataBytes = await fetchBytes({
+        const feedBytes = await fetchBytes({
           permit: options.permit,
+          fetchBytesRequest: options.fetchBytesRequest,
           signal: options.signal,
           source,
           url: SANCTIONS_SOURCE_CONFIG.eu.markerUrl,
           maxBytes: METADATA_MAX_BYTES,
-          accept: "application/ld+json",
           userAgent: options.userAgent,
         });
-        if (metadataBytes.isErr()) {
-          return metadataBytes;
+        if (feedBytes.isErr()) {
+          return feedBytes;
         }
-        const metadataText = decodeUtf8(source, metadataBytes.value);
-        if (metadataText.isErr()) {
-          return metadataText;
+        const feed = decodeUtf8(source, feedBytes.value);
+        if (feed.isErr()) {
+          return feed;
         }
-        const parsed = Result.try((): unknown =>
-          JSON.parse(metadataText.value),
-        );
-        if (parsed.isErr()) {
-          return Result.err(refreshError(source, "metadata-invalid"));
-        }
-        const discovered = discoverEuXmlUrl(parsed.value);
+        const discovered = discoverEuXmlUrl(feed.value);
         if (discovered.isErr()) {
           return discovered;
         }
@@ -521,6 +490,7 @@ const loadMarkerOnce = async (
     case "cz": {
       const page = await fetchBytes({
         permit: options.permit,
+        fetchBytesRequest: options.fetchBytesRequest,
         signal: options.signal,
         source,
         url: SANCTIONS_SOURCE_CONFIG.cz.markerUrl,
@@ -633,6 +603,7 @@ const loadEditionOnce = async (
   if (marker.source === "cz") {
     const downloaded = await fetchBytes({
       permit: options.permit,
+      fetchBytesRequest: options.fetchBytesRequest,
       signal: options.signal,
       source: marker.source,
       url: marker.downloadUrl,
