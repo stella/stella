@@ -2119,6 +2119,13 @@ const provisionRefusal = (
 });
 
 /**
+ * No EU provision links are recorded yet, so a corrected EU filter would only
+ * answer not_found: the next call a refusal names is the text search.
+ */
+const EU_PROVISION_FILTER_HINT =
+  "Omit provision and name the EU provisions in queries.";
+
+/**
  * Reads the provision a caller names against the country's citation profile,
  * the vocabulary the corpus's provision links were extracted with, as the act
  * in force today. Every refusal names what to send instead.
@@ -2132,7 +2139,7 @@ const resolveSearchProvision = (
   if (euCitations.length > 1) {
     return provisionRefusal(
       "The provision names several provisions or a range",
-      'Pass one EU provision per search, for example "Article 6(1)(a) GDPR".',
+      EU_PROVISION_FILTER_HINT,
     );
   }
   const euCitation = euCitations.at(0);
@@ -2142,7 +2149,7 @@ const resolveSearchProvision = (
     if (before.length > 0 || (after.length > 0 && after !== ".")) {
       return provisionRefusal(
         "The provision names several provisions or contains unsupported text",
-        'Pass one complete EU provision per search, for example "Article 6(1)(a) GDPR"; search enumerated provisions separately.',
+        EU_PROVISION_FILTER_HINT,
       );
     }
     const { reference } = euCitation;

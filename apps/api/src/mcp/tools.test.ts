@@ -1578,7 +1578,7 @@ describe("OpenAI-compatible MCP tools", () => {
           minLength: 1,
           maxLength: 256,
           description:
-            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total.',
+            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". EU acts such as GDPR have no recorded links yet: use queries. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total.',
         },
         has_legal_sentence: {
           type: "boolean",
@@ -6321,6 +6321,23 @@ describe("OpenAI-compatible MCP tools", () => {
         });
         expect(JSON.stringify(payload)).toContain(message);
         expect(JSON.stringify(payload)).toContain('"hint"');
+      },
+    );
+
+    test.each(["Article 5 and Article 6 GDPR", "citing Article 6(1)(a) GDPR"])(
+      "the refusal of %s sends the caller to queries, not to another EU filter",
+      async (provision) => {
+        const result = await handleMcpToolCall({
+          args: { queries: ["kamera"], country: "CZE", provision },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+        expect(parseToolPayload(result)).toMatchObject({
+          error: {
+            code: "validation_error",
+            hint: "Omit provision and name the EU provisions in queries.",
+          },
+        });
       },
     );
 
