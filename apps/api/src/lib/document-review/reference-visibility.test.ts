@@ -236,6 +236,27 @@ describe("basisForReader", () => {
       referencesForReader(withProse.references, new Set()),
     );
   });
+
+  test("reads a scope the stored basis predates as null", () => {
+    // Runs opened before the snapshot carried a scope stored a basis whose
+    // snapshot has no `scope` key at all (the JSON round trip is how the row
+    // actually comes back). The reader contract is `PlaybookScope | null`:
+    // the missing key must surface as a present null, not as an absent key
+    // a client reads as undefined.
+    const legacy = JSON.parse(
+      JSON.stringify(withProse),
+    ) as DocumentReviewRunBasis;
+    const snapshot: Record<string, unknown> =
+      legacy.playbook.definitionSnapshot;
+    delete snapshot["scope"];
+    expect("scope" in legacy.playbook.definitionSnapshot).toBe(false);
+
+    const shown = basisForReader(legacy, new Set());
+    expect(shown.playbook.definitionSnapshot.scope).toBeNull();
+    expect(
+      JSON.parse(JSON.stringify(shown)).playbook.definitionSnapshot,
+    ).toHaveProperty("scope", null);
+  });
 });
 
 /** Every prose string in a value: the string leaves that contain whitespace,

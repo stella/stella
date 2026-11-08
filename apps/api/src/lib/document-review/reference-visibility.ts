@@ -197,7 +197,10 @@ export const basisForReader = (
             positionForReader(position, readable),
           ),
         },
-        scope: definitionSnapshot.scope,
+        // A basis stored before the snapshot carried a scope has no key
+        // for it; the reader contract is `PlaybookScope | null`, so the
+        // missing key reads as null rather than surfacing undefined.
+        scope: definitionSnapshot.scope ?? null,
       },
     },
     references: referencesForReader(basis.references, readable),
