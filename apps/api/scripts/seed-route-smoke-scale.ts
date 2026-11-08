@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { LIST_ITEM_TYPE, TASK_STATUS } from "@stll/api-contract/entity-options";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import {
   routeSmokeScaleEmail,
@@ -134,7 +135,7 @@ await runScriptWithErrorOutput(async () => {
             eq(workspaces.id, workspaceId),
             eq(workspaces.name, `route-smoke-${workspaceId.slice(0, 8)}`),
             eq(workspaces.organizationId, organizationId),
-            eq(workspaces.status, "active"),
+            eq(workspaces.status, WORKSPACE_STATUS.active),
             eq(member.userId, userId),
             eq(member.role, "owner"),
           ),
