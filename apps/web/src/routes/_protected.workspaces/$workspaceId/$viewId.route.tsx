@@ -64,7 +64,12 @@ import {
   type CurrentWorkspaceDocument,
   getCurrentWorkspaceDocument,
 } from "@/lib/workspaces/use-workspace-view-params";
-import { isWorkspaceViewId } from "@/lib/workspaces/view-params.logic";
+import {
+  DEFAULT_WORKSPACE_VIEW_ID,
+  isWorkspaceViewId,
+  workspaceViewRouteIds,
+  workspaceViewsInclude,
+} from "@/lib/workspaces/view-params.logic";
 import { routeSearchSchema } from "@/route-search-params";
 import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
@@ -117,12 +122,15 @@ export const Route = createFileRoute(
     const isDocumentRoute = context.documentOnScreen !== undefined;
 
     const views = await loadRouteResource({
-      ids: [workspaceId, viewId],
+      ids: workspaceViewRouteIds(workspaceId, viewId),
       load: async () =>
         await ensureRouteQueryData(queryClient, viewsOptions(workspaceId)),
-      exists: (loadedViews) => loadedViews.some((view) => view.id === viewId),
+      exists: (loadedViews) => workspaceViewsInclude(loadedViews, viewId),
     });
-    const activeView = views.find((view) => view.id === viewId);
+    const activeView =
+      viewId === DEFAULT_WORKSPACE_VIEW_ID
+        ? selectAvailableWorkspaceView(views, viewId)
+        : views.find((view) => view.id === viewId);
 
     if (!activeView) {
       return;
@@ -580,7 +588,7 @@ const PENDING_OVERVIEW_CARD_KEYS = ["o1", "o2", "o3", "o4"];
 const PendingTableBody = () => (
   <div className="flex flex-col">
     <div className="flex items-center gap-4 border-b px-3 py-2">
-      <Skeleton className="size-4 rounded" />
+      <Skeleton className="size-4 rounded-sm" />
       {PENDING_TABLE_CELLS.map((cell) => (
         <Skeleton className={cn("h-3", cell.width)} key={cell.key} />
       ))}
@@ -590,7 +598,7 @@ const PendingTableBody = () => (
         className="flex items-center gap-4 border-b px-3 py-2.5"
         key={rowKey}
       >
-        <Skeleton className="size-4 rounded" />
+        <Skeleton className="size-4 rounded-sm" />
         {PENDING_TABLE_CELLS.map((cell) => (
           <Skeleton className={cn("h-4", cell.width)} key={cell.key} />
         ))}

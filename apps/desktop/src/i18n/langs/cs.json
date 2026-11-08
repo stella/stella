@@ -38,7 +38,7 @@
     "reconnectAccount": "Znovu připojit k stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Změny zůstávají lokální a budou automaticky zopakovány",
+    "checkpointDelayedBody": "{fileName}: změny zůstávají lokální a budou automaticky zopakovány",
     "checkpointDelayedTitle": "Synchronizace kontrolního bodu zpožděna",
     "diagnosticsCopiedBody": "Vložte ji do žádosti o podporu, když bude potřeba.",
     "diagnosticsCopiedTitle": "Diagnostika zkopírována",
@@ -54,11 +54,13 @@
     "recoveryResetTitle": "Lokální data obnovy byla resetována",
     "revisionCreatedBody": "{fileName} uložen jako verze {versionNumber}. Úpravy na desktopu dokončeny",
     "revisionCreatedTitle": "Revize stella vytvořena",
-    "sessionClosedSaved": "{fileName} — Lokální kopie zůstává zachována v Dočasných pracovních kopiích",
-    "sessionClosedUnsaved": "{fileName} — Máte neuložené lokální úpravy. Svou kopii najdete v Dočasných pracovních kopiích.",
-    "takenOverBody": "{fileName} — Znovu otevřete ze stella zde, abyste si převzali úpravy zpět",
+    "sessionClosedSaved": "{fileName}: lokální kopie zůstává zachována v Dočasných pracovních kopiích",
+    "sessionClosedUnsaved": "{fileName}: máte neuložené lokální úpravy. Svou kopii najdete v Dočasných pracovních kopiích.",
+    "takenOverBody": "{fileName}: znovu otevřete ze stella zde, abyste si převzali úpravy zpět",
     "takenOverLocalError": "Úpravy na desktopu přesunuty na jiné zařízení. Tato lokální kopie je zachována.",
-    "takenOverTitle": "Úpravy přesunuty na jiné zařízení"
+    "takenOverTitle": "Úpravy přesunuty na jiné zařízení",
+    "editsSetAsideTitle": "Úpravy odloženy",
+    "editsSetAsideBody": "Neuložené úpravy byly odloženy. Znovu se připojte ke stejnému účtu a otevřete složku pro obnovení v Nastavení."
   },
   "dialog": {
     "accountWindowTitle": "Připojit účet",
@@ -232,7 +234,16 @@
     "permissionDenied": "Vypnuto v nastavení systému.",
     "permissionManaged": "Spravuje vaše organizace",
     "errorUpdateAutostart": "Aplikaci stella desktop se nepodařilo nastavit spouštění při přihlášení.",
-    "errorPermissions": "stella desktop nemohl přečíst nebo změnit toto oprávnění."
+    "errorPermissions": "stella desktop nemohl přečíst nebo změnit toto oprávnění.",
+    "recoveryTitle": "Odložené úpravy",
+    "recoveryBody": "Neuložené úpravy se zde uchovávají pro váš účet. Otevřete složku a obnovte je.",
+    "recoverySignIn": "Úpravy byly odloženy pro daný účet. Znovu se k němu připojte a otevřete jeho složku.",
+    "recoveryUnassigned": "U některých úprav není zaznamenán účet. Otevřete jejich složku a obnovte je ručně.",
+    "recoveryPending": "Některé úpravy se stále odkládají. Dokončete akci opakováním.",
+    "recoveryOpenFolder": "Otevřít složku pro obnovení",
+    "recoveryOpenUnassigned": "Otevřít nepřiřazené úpravy",
+    "recoveryFilePending": "Čeká se na odložení",
+    "recoveryError": "Složku pro obnovení se nepodařilo otevřít. Zkuste to znovu."
   },
   "clipboard": {
     "registryUnavailable": "Pro vaše jurisdikce nejsou povoleny žádné rejstříky.",
@@ -490,6 +501,10 @@
     "evidenceTitles": "Názvy",
     "evidenceApps": "Aplikace",
     "rangeEmpty": "V tomto úseku se nic nezaznamenalo.",
+    "entryStart": "Začátek",
+    "entryEnd": "Konec",
+    "rangeEndBeforeStart": "Nastavte konec až po začátku.",
+    "rangeDraftedLeftOut": "{duration}, čas již zahrnutý v konceptech se nepočítá",
     "calendarHint": "Otevřením čárkovaného návrhu ho zkontrolujete; tažením ve sloupci Časové záznamy vytvoříte záznam pro libovolný úsek.",
     "aiDraftWrite": "Navrhnout pomocí stella AI",
     "aiDraftAgain": "Navrhnout znovu",
@@ -717,6 +732,61 @@
     "callbackConnectedTitle": "ChatGPT je připojen",
     "callbackConnectedBody": "Tuto kartu můžete zavřít a vrátit se do stelly.",
     "callbackNotConnectedTitle": "ChatGPT se nepřipojil",
-    "callbackNotConnectedBody": "Vraťte se do stelly, zjistěte, co se stalo, a zkuste to znovu."
+    "callbackNotConnectedBody": "Vraťte se do stelly, zjistěte, co se stalo, a zkuste to znovu.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Používejte své předplatné Claude pro lokální agenty ve stelle. Využití se započítává do tarifu Claude, odděleně od předplatného stelly.",
+      "notInstalled": "Claude Code zatím není na tomto počítači nainstalován.",
+      "signIn": "Přihlásit se přes Claude",
+      "openSignInPage": "Otevřít stránku přihlášení",
+      "signedIn": "Přihlášeno ke Claude",
+      "signedInAs": "Přihlášeno ke Claude · {email}",
+      "signOut": "Odhlásit se",
+      "apiKey": "Claude Code je přihlášen klíčem API, který stella nepoužívá. Odhlaste se a pak se přihlaste se svým předplatným Claude.",
+      "failure": {
+        "notCompleted": "Přihlášení nebylo dokončeno. Zkuste to znovu.",
+        "timedOut": "Přihlášení trvalo příliš dlouho. Zkuste to znovu.",
+        "unavailable": "Claude Code se na tomto počítači nepodařilo spustit. Zkuste to znovu."
+      }
+    },
+    "install": {
+      "notInstalled": "{name} zatím není na tomto počítači nainstalován.",
+      "install": "Nainstalovat",
+      "downloading": "Stahování {name} {version}: {percent} %",
+      "verifying": "Kontrola {name} {version}",
+      "ready": "{name} {version} je nainstalován.",
+      "retry": "Zkusit znovu",
+      "activeStays": "Dál se používá verze {version}.",
+      "failure": {
+        "download": "{name} se nepodařilo stáhnout. Zkontrolujte připojení k internetu a zkuste to znovu.",
+        "verification": "{name} se nepodařilo ověřit, proto nebyl nainstalován.",
+        "storage": "{name} se nepodařilo uložit do tohoto počítače. Zkontrolujte, zda je na disku volné místo."
+      }
+    }
+  },
+  "localSkills": {
+    "title": "Místní dovednosti",
+    "description": "Složky s dovednostmi v tomto počítači. Místní běhy na tomto počítači je mohou používat a nic z nich se nenahrává.",
+    "add": "Přidat složku",
+    "remove": "Odebrat",
+    "removeFolder": "Odebrat {path}",
+    "unusable": "Nelze použít",
+    "notice": {
+      "action_failed": "Nepodařilo se to. Zkuste to znovu.",
+      "too_many": "Tento počítač už má tolik složek s dovednostmi, kolik může použít. Nejdřív některou odeberte.",
+      "already_listed": "Tato složka už je v seznamu.",
+      "missing": "Tato složka už neexistuje.",
+      "not_a_folder": "Toto už není složka.",
+      "no_skill_file": "V této složce není SKILL.md.",
+      "skill_file_not_regular": "SKILL.md musí být běžný soubor, ne odkaz.",
+      "skill_file_too_large": "SKILL.md je příliš velký na přečtení.",
+      "unreadable": "Tuto složku se nepodařilo přečíst.",
+      "no_name": "Hlavička SKILL.md neobsahuje název.",
+      "invalid_name": "Název v SKILL.md smí obsahovat jen písmena, číslice, tečky, pomlčky a podtržítka a musí začínat písmenem nebo číslicí.",
+      "duplicate_name": "Dovednost s tímto názvem už má jiná složka v seznamu.",
+      "runs_can_write": "Do této složky mohou místní běhy zapisovat, proto v ní dovednost být nemůže.",
+      "network_folder": "Tato složka je na síťovém úložišti. Dovednosti musí být na vlastním disku tohoto počítače.",
+      "path_changed": "Některá nadřazená složka se změnila. Odeberte ji a přidejte znovu."
+    }
   }
 }

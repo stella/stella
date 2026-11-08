@@ -1,5 +1,5 @@
-import type { ContentPart, ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import { HarnessStartError } from "./adapter";
 
@@ -12,6 +12,35 @@ import { HarnessStartError } from "./adapter";
  * Approach adapted from t3code (MIT): provider switches hand over a bounded
  * summary of the history instead of the native session.
  */
+
+const contentPartSchema = v.union([
+  v.object({ type: v.literal("text"), content: v.string() }),
+  v.object({ type: v.picklist(["image", "audio", "video", "document"]) }),
+]);
+
+const transcriptMessageSchema = v.object({
+  role: v.picklist(["user", "assistant", "tool"]),
+  content: v.nullable(v.union([v.string(), v.array(contentPartSchema)])),
+  toolCalls: v.optional(
+    v.array(
+      v.object({
+        function: v.object({ name: v.string(), arguments: v.string() }),
+      }),
+    ),
+  ),
+});
+
+/**
+ * What a turn reads of each transcript message: a TanStack `ModelMessage`
+ * satisfies it, and a transcript that arrives over a wire is checked against
+ * it before a turn starts, so nothing the handoff reads is assumed.
+ */
+export const harnessTranscriptSchema = v.array(transcriptMessageSchema);
+export type HarnessTranscriptMessage = v.InferOutput<
+  typeof transcriptMessageSchema
+>;
+type ContentPart = v.InferOutput<typeof contentPartSchema>;
+type MessageContent = HarnessTranscriptMessage["content"];
 
 /** Whole-handoff budget; the newest history is kept, the oldest dropped. */
 const HANDOFF_MAX_BYTES = 64 * 1024;
@@ -27,15 +56,13 @@ const truncateBytes = (text: string, maxBytes: number): string => {
   if (byteLength(text) <= maxBytes) {
     return text;
   }
+  // Streaming decode holds back a character the cut split, instead of
+  // replacing it with U+FFFD; a U+FFFD already in the text is kept.
   const kept = new TextDecoder().decode(
-    encoder.encode(text).slice(0, maxBytes),
+    encoder.encode(text).subarray(0, maxBytes),
+    { stream: true },
   );
-  // A cut inside a multi-byte character decodes to U+FFFD; drop it.
-  let end = kept.length;
-  while (end > 0 && kept[end - 1] === "\uFFFD") {
-    end -= 1;
-  }
-  return `${kept.slice(0, end)} [truncated]`;
+  return `${kept} [truncated]`;
 };
 
 /** Attachments are named but not transferred; the prompt is text only. */
@@ -54,7 +81,7 @@ const contentPartText = (part: ContentPart): string => {
   }
 };
 
-const contentText = (content: ModelMessage["content"]): string => {
+const contentText = (content: MessageContent): string => {
   if (content === null) {
     return "";
   }
@@ -64,12 +91,25 @@ const contentText = (content: ModelMessage["content"]): string => {
   return content.map(contentPartText).join("\n");
 };
 
+/** Only what the user typed, without the attachment placeholders. */
+const typedText = (content: MessageContent): string => {
+  if (content === null) {
+    return "";
+  }
+  if (typeof content === "string") {
+    return content;
+  }
+  return content
+    .flatMap((part) => (part.type === "text" ? [part.content] : []))
+    .join("\n");
+};
+
 /**
  * Text a message contributes to the handoff. Provider reasoning (`thinking`)
  * belongs to the session that produced it and is never handed to another
  * harness.
  */
-const messageBlock = (message: ModelMessage): string | null => {
+const messageBlock = (message: HarnessTranscriptMessage): string | null => {
   const text = contentText(message.content).trim();
   switch (message.role) {
     case "user":
@@ -92,8 +132,18 @@ const messageBlock = (message: ModelMessage): string | null => {
   }
 };
 
-const renderHistory = (history: readonly ModelMessage[]): string | null => {
+const BLOCK_SEPARATOR = "\n\n";
+const OMITTED_MARKER = "[earlier messages omitted]";
+
+/** The history, newest kept first; the whole string fits the budget. */
+const renderHistory = (
+  history: readonly HarnessTranscriptMessage[],
+): string | null => {
   const blocks: string[] = [];
+  const separatorBytes = byteLength(BLOCK_SEPARATOR);
+  // Reserved up front, so the marker fits whenever it is needed.
+  const budget =
+    HANDOFF_MAX_BYTES - byteLength(OMITTED_MARKER) - separatorBytes;
   let used = 0;
   let omitted = false;
   for (const message of history.toReversed()) {
@@ -102,8 +152,9 @@ const renderHistory = (history: readonly ModelMessage[]): string | null => {
       continue;
     }
     const bounded = truncateBytes(block, MESSAGE_MAX_BYTES);
-    const size = byteLength(bounded);
-    if (used + size > HANDOFF_MAX_BYTES) {
+    const size =
+      byteLength(bounded) + (blocks.length === 0 ? 0 : separatorBytes);
+    if (used + size > budget) {
       omitted = true;
       break;
     }
@@ -114,9 +165,9 @@ const renderHistory = (history: readonly ModelMessage[]): string | null => {
     return null;
   }
   if (omitted) {
-    blocks.push("[earlier messages omitted]");
+    blocks.push(OMITTED_MARKER);
   }
-  return blocks.toReversed().join("\n\n");
+  return blocks.toReversed().join(BLOCK_SEPARATOR);
 };
 
 /**
@@ -126,7 +177,7 @@ const renderHistory = (history: readonly ModelMessage[]): string | null => {
 type TurnPromptMode = "resumed" | "standalone";
 
 type BuildTurnPromptOptions = {
-  transcript: readonly ModelMessage[];
+  transcript: readonly HarnessTranscriptMessage[];
   mode: TurnPromptMode;
 };
 
@@ -135,8 +186,8 @@ export const buildTurnPrompt = ({
   mode,
 }: BuildTurnPromptOptions): Result<string, HarnessStartError> => {
   const last = transcript.at(-1);
-  const request = last?.role === "user" ? contentText(last.content).trim() : "";
-  if (request === "") {
+  // Attachments are only named in the prompt, so they cannot be the request.
+  if (last?.role !== "user" || typedText(last.content).trim() === "") {
     return Result.err(
       new HarnessStartError({
         reason: "invalid_transcript",
@@ -145,6 +196,7 @@ export const buildTurnPrompt = ({
       }),
     );
   }
+  const request = contentText(last.content).trim();
   if (mode === "resumed") {
     return Result.ok(request);
   }

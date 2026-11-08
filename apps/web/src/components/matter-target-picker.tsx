@@ -362,7 +362,7 @@ const FolderSelectionButton = ({
   >
     <span
       className={cn(
-        "hover:bg-accent flex w-full min-w-0 items-center gap-1 rounded px-2 py-1 text-sm",
+        "hover:bg-accent flex w-full min-w-0 items-center gap-1 rounded-sm px-2 py-1 text-sm",
         selected && "bg-accent",
       )}
     >
@@ -524,7 +524,7 @@ export const MatterTargetPicker = ({
                   >
                     <span
                       className={cn(
-                        "hover:bg-accent flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm",
+                        "hover:bg-accent flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm",
                         isSelected && "bg-accent",
                       )}
                     >
@@ -872,7 +872,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
         }}
         variant="plain"
       >
-        <span className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-sm">
+        <span className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded-sm px-2 py-1 text-sm">
           <FolderPlusIcon className="size-4 shrink-0" />
           <span className="truncate">{t("workspaces.newFolder")}</span>
         </span>
@@ -909,7 +909,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           {({ isDropTarget, dragHandle }) => (
             <div
               className={cn(
-                "flex items-center gap-1 rounded",
+                "flex items-center gap-1 rounded-sm",
                 isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
               )}
               style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
@@ -998,7 +998,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
             >
               <span
                 className={cn(
-                  "hover:bg-accent flex w-full items-center gap-1 rounded px-2 py-1 text-sm",
+                  "hover:bg-accent flex w-full items-center gap-1 rounded-sm px-2 py-1 text-sm",
                   selectedExistingParentId === null && "bg-accent",
                   isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
                 )}

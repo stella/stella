@@ -33,6 +33,10 @@ import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
 } from "@stll/api-contract/professional-use";
+import {
+  WORKSPACE_STATUS,
+  workspaceIsVisible,
+} from "@stll/api-contract/workspace-status";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
 import { isUiLocale } from "@stll/locales";
@@ -87,7 +91,12 @@ import {
   isPendingTwoFactorSignIn,
 } from "@/api/lib/auth-artifacts";
 import { revokeCredentialsForAccessReset } from "@/api/lib/auth/access-reset-revocation";
-import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import { ACCESS_TOKEN_EXPIRES_IN_SECONDS } from "@/api/lib/auth/access-token-lifetime";
+import {
+  type AccessibleWorkspace,
+  admitsWorkspaceStatus,
+  type WorkspaceStatusAccess,
+} from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import {
   admitApiAccessTokenRoute,
@@ -160,10 +169,12 @@ import type {
 } from "@/api/lib/auth/member-caller";
 import { createMemberInvitationSectionsPlugin } from "@/api/lib/auth/member-invitation-sections";
 import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
+import { withConfiguredOAuthResources } from "@/api/lib/auth/oauth-configured-resources";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
 } from "@/api/lib/auth/oauth-consent-info";
+import { getOAuthGrantIdentityClaims } from "@/api/lib/auth/oauth-grant-identity";
 import { withOwnClientDocuments } from "@/api/lib/auth/oauth-own-client-documents";
 import {
   createStellaOAuthProvider,
@@ -248,6 +259,7 @@ import {
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
+import { socialTokenExchangePlugin } from "@/api/lib/auth/social-token-exchange";
 import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
 import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
 import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-runtime";
@@ -347,6 +359,7 @@ import {
 } from "@/api/lib/rate-limit/otp-account-budget";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { memoizePerRequest } from "@/api/lib/request-memo";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -414,9 +427,6 @@ const { getAuthoritativeSessionFromCtx } = isLocalDevOpen()
 /** Authenticated handlers receive a bounded session reader. */
 export const ownerSyntheticSessionAuthorityReader =
   bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
-
-/** Access token lifetime in seconds (15 minutes). */
-const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
 const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
@@ -1309,21 +1319,30 @@ const socialSignInTwoFactorRedirectPlugin = {
 } satisfies BetterAuthPlugin;
 
 /**
- * Whether the current auth request is the organization page's continue step.
- * The provider re-enters its authorize logic from that endpoint under the
- * authorize path, so the step is recognised by the request it answers.
+ * Whether the current auth request is the organization page's pick or its
+ * continue step. The provider re-enters its authorize logic from both, under
+ * the authorize path, so each is recognised by the request it answers.
+ *
+ * The pick is the page's `set-active` with the signed authorization request:
+ * setting the session's organization makes the provider resume authorizing
+ * in that same request. Answering it with the organization page again would
+ * send the browser back to the picker it just used, before the page could
+ * take its continue step.
  */
 const isOrganizationPageContinuation = (): boolean => {
   const endpoint = tryGetCurrentAuthEndpointContext();
   const request = endpoint?.request;
-  if (!request || request.method !== "POST") {
+  if (!request || request.method !== "POST" || !isRecord(endpoint.body)) {
     return false;
   }
+  const path = new URL(request.url).pathname;
+  if (path === new URL(getAuthEndpointUrl("oauth2/continue")).pathname) {
+    return endpoint.body["postLogin"] === true;
+  }
   return (
-    new URL(request.url).pathname ===
-      new URL(getAuthEndpointUrl("oauth2/continue")).pathname &&
-    isRecord(endpoint.body) &&
-    endpoint.body["postLogin"] === true
+    path === new URL(getAuthEndpointUrl("organization/set-active")).pathname &&
+    typeof endpoint.body["organizationId"] === "string" &&
+    typeof endpoint.body["oauth_query"] === "string"
   );
 };
 
@@ -1644,7 +1663,12 @@ export const createAuth = (
 
   const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
     const adapter = withAuthRetention({
-      adapter: withBatchedOrganizationMemberships(rawAuthAdapter(options)),
+      // The provider reads OAuth resources only as this code configures
+      // them, whatever a newer release has added to the stored policy.
+      adapter: withConfiguredOAuthResources(
+        withBatchedOrganizationMemberships(rawAuthAdapter(options)),
+        oauthResources,
+      ),
       ownClientResources: getOwnNativeClientResources,
       admitClient: async () =>
         await admitOpenClient({
@@ -2135,6 +2159,8 @@ export const createAuth = (
           }
           throw removal.error;
         }
+        // The removal cleared the member's attorney assignments on contacts.
+        announceContactSetChanged(organizationId);
       },
     },
     async sendInvitationEmail(data, request) {
@@ -2576,6 +2602,8 @@ export const createAuth = (
       // Must be registered after `twoFactorWithSignInGate` so its after-hook
       // runs after the two-factor hook has set the pending-challenge response.
       socialSignInTwoFactorRedirectPlugin,
+      // Before the outcome log, so the log counts the redirect it settles.
+      socialTokenExchangePlugin,
       // After the two-factor redirect, so it counts the response the browser
       // actually receives.
       socialSignInOutcomePlugin,
@@ -2625,7 +2653,10 @@ export const createAuth = (
                     });
                     throw error;
                   }
-                  return claims.value;
+                  return {
+                    ...claims.value,
+                    ...(await getOAuthGrantIdentityClaims(input)),
+                  };
                 },
               },
             },
@@ -2641,7 +2672,7 @@ export const createAuth = (
               ),
             },
           ],
-          accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
+          accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN_SECONDS,
           refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
           refreshTokenReuseInterval: REFRESH_TOKEN_REUSE_INTERVAL,
           clientReference: ({ session }) =>
@@ -3116,7 +3147,10 @@ type ValidateAuthRejection = { ok: false } & ValidateAuthRefusal;
 
 const rejectValidateAuth = (
   rejection: ValidateAuthRefusal,
-): ValidateAuthRejection => ({ ok: false, ...rejection });
+): ValidateAuthRejection => ({
+  ok: false,
+  ...rejection,
+});
 
 /**
  * Account routes confirm the session still exists in storage. Organization
@@ -3233,8 +3267,6 @@ const featureAccessColumns = (organizationId: SafeId<"organization">) => {
           >`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId} and ${featureEnrolments.featureId} = ANY(${typedPgArray(enrolmentFeatureIds, "text")})), '{}')`,
   };
 };
-
-const ACTIVE_WORKSPACE_STATUS = "active";
 
 export const resolveMemberAuthorization = async (
   { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
@@ -3476,7 +3508,7 @@ export const resolveWorkspaceRealtimeAudience = async (
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
-        eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
         memberReachesMatterSql(
           { organizationId: member.organizationId, userId: member.userId },
           workspaces.id,
@@ -3992,7 +4024,7 @@ const resolveValidateAuth = async ({
     activeWorkspaceIdsPromise ??= getAccessibleWorkspaces().then((items) => {
       const activeWorkspaceIds: SafeId<"workspace">[] = [];
       for (const item of items) {
-        if (item.status !== "deleting") {
+        if (workspaceIsVisible(item.status)) {
           activeWorkspaceIds.push(item.id);
         }
       }
@@ -4200,9 +4232,6 @@ export type {
   WorkspaceCaller,
 } from "@/api/lib/auth/member-caller";
 
-/** Which matter statuses a workspace route admits; archived only where it says so. */
-export type WorkspaceStatusAccess = "active" | "active-or-archived";
-
 /**
  * Matter access for a member: the matter the validated `:workspaceId` names
  * must be one the member may use, in a status the route admits. Its audit
@@ -4215,10 +4244,7 @@ export const authorizeWorkspace = async (
   admitted: WorkspaceStatusAccess,
 ): Promise<CallerOutcome<WorkspaceCaller>> => {
   const workspace = await memberCaller.getWorkspaceAccess(workspaceId);
-  const admittedStatus =
-    workspace?.status === "active" ||
-    (admitted === "active-or-archived" && workspace?.status === "archived");
-  if (!admittedStatus) {
+  if (!admitsWorkspaceStatus(workspace?.status, admitted)) {
     return { ok: false, answer: status(404, AUTH_REJECTION_BODY[404]) };
   }
   return {

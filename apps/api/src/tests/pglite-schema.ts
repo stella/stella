@@ -11,6 +11,7 @@ import { WORKSPACE_ACCESS_VIEW_NAME } from "@/api/db/rls";
 import { FLOW_TRANSITION_SPECS_V1 } from "@/api/lib/db/flow-run-transition-spec";
 import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 
+import { parseMigrationStatements } from "../../../../scripts/check-migration-safety";
 import { readDecisionDocketFilingYearMigration } from "./decision-docket-filing-year-migration";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
@@ -149,6 +150,11 @@ const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
   nodePath.join(
     DRIZZLE_DIR,
     "20260901060000_concurrent_corpus_projection_revision_fence",
+    "migration.sql",
+  ),
+  nodePath.join(
+    DRIZZLE_DIR,
+    "20261107183000_corpus_projection_revision_settled",
     "migration.sql",
   ),
 ] as const;
@@ -535,6 +541,98 @@ const installPgliteGeneratedEntityFeatureGates = async (
       }
       await db.execute(sql.raw(executable));
     }
+  }
+};
+
+/** Install correspondence lifecycle routines omitted by declarative schema push. */
+export const installPgliteCorrespondenceSources = async (
+  db: PgliteSchemaDb,
+) => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261102071300_data_box_sources",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    /^(?:CREATE FUNCTION|CREATE TRIGGER|CREATE CONSTRAINT TRIGGER)\b/u.test(
+      executableSql(statement),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+  const maintenance = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261102071500_correspondence_source_maintenance",
+      "migration.sql",
+    ),
+  );
+  // Privilege changes require their existing routines, which schema push omits.
+  // Derive prerequisites from the migration and install their latest definitions.
+  const restrictedNames = new Set(
+    maintenance.flatMap((statement) => {
+      const name = /^REVOKE EXECUTE ON FUNCTION public\.([a-z_]+)\(/u
+        .exec(executableSql(statement))
+        ?.at(1);
+      return name ? [name] : [];
+    }),
+  );
+  const definitions = new Map<string, string>();
+  for (const migration of readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .toSorted()) {
+    const migrationPath = nodePath.join(
+      DRIZZLE_DIR,
+      migration,
+      "migration.sql",
+    );
+    for (const { raw: source } of parseMigrationStatements(
+      readFileSync(migrationPath, "utf-8"),
+    )) {
+      const name =
+        /^CREATE(?: OR REPLACE)? FUNCTION (?:public\.)?"?([a-z_]+)"?\(/u
+          .exec(source)
+          ?.at(1);
+      if (name && restrictedNames.has(name)) {
+        definitions.set(name, source);
+      }
+    }
+  }
+  for (const name of restrictedNames) {
+    const definition = definitions.get(name);
+    if (!definition) {
+      panic(`Migration function definition not found: ${name}`);
+    }
+  }
+  for (const definition of definitions.values()) {
+    await db.execute(
+      sql.raw(
+        definition.replace(
+          /^CREATE(?: OR REPLACE)? FUNCTION/u,
+          "CREATE OR REPLACE FUNCTION",
+        ),
+      ),
+    );
+  }
+  // Reinstall this routine's policies from its migration so fixtures exercise
+  // the shipped policy definitions as well as the private role and functions.
+  // Every policy the migration creates replaces the one schema push made.
+  for (const statement of maintenance) {
+    const policy =
+      /^CREATE POLICY (?<name>[a-z_]+) ON (?<table>public\.[a-z_]+)/u.exec(
+        executableSql(statement),
+      )?.groups;
+    if (policy?.["name"] !== undefined && policy["table"] !== undefined) {
+      await db.execute(
+        sql.raw(
+          `DROP POLICY IF EXISTS ${policy["name"]} ON ${policy["table"]}`,
+        ),
+      );
+    }
+    await db.execute(sql.raw(statement));
   }
 };
 
@@ -1256,6 +1354,40 @@ export const installPgliteCaseLawSitemapChanges = async (
           : statement,
       ),
     );
+  }
+};
+
+/**
+ * Install the ranking-signal change functions and triggers from the production
+ * migration after schema push, which creates the table but has no construct
+ * for a function or a trigger.
+ */
+export const installPgliteCaseLawRankingSignalChanges = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261104180000_case_law_ranking_signal_changes",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith(
+        'CREATE FUNCTION "case_law_citation_authority_bucket"',
+      ) ||
+      source.startsWith('CREATE FUNCTION "log_case_law_ranking_signal_') ||
+      source.startsWith('CREATE TRIGGER "case_law_decisions_ranking_signal_')
+    );
+  });
+  if (statements.length !== 7) {
+    panic(
+      "Expected the bucket function, two change functions and four triggers",
+    );
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
   }
 };
 

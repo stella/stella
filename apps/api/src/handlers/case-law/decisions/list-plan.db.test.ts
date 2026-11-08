@@ -147,7 +147,7 @@ test.each(ORDERS_BY_BAND)(
       expect(plan.slice(0, plan.indexOf(`${scan} using`))).not.toMatch(
         /\b(Sort|Bitmap Heap Scan)\b/u,
       );
-      expect(plan).toContain("case_law_decisions_lang_group_idx");
+      expect(plan).toContain("case_law_decisions_language_group_published_idx");
       expect(plan).toMatch(/Index Cond: .*language_group_key/u);
       expect(plan).not.toContain("Seq Scan on case_law_decisions");
     }

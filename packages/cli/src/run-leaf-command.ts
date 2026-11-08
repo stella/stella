@@ -1164,9 +1164,9 @@ export const renderToolError = ({
       actionAdmissionRefusalOutput({
         refusal: admission,
         format,
-        ...(envelope?.requestId === undefined
-          ? {}
-          : { requestId: envelope.requestId }),
+        ...(envelope?.requestId !== undefined
+          ? { requestId: envelope.requestId }
+          : {}),
       }),
     );
     setExit(context, classifyToolError(errorPayload));

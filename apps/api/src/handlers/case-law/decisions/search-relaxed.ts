@@ -107,7 +107,7 @@ export const readTermCoverage = async ({
   queries,
   ids,
 }: ReadTermCoverageOptions): Promise<
-  Result<ReadonlyMap<string, number>, HandlerError<502 | 503>>
+  Result<ReadonlyMap<string, number>, HandlerError<400 | 502 | 503>>
 > => {
   if (ids.length === 0) {
     return Result.ok(new Map());
@@ -119,7 +119,7 @@ export const readTermCoverage = async ({
     limit: TERM_COVERAGE_CONCURRENCY,
     operation: async (
       query,
-    ): Promise<Result<void, HandlerError<502 | 503>>> => {
+    ): Promise<Result<void, HandlerError<400 | 502 | 503>>> => {
       const answer = await aggregate({
         observer,
         indexId,

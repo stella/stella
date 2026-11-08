@@ -35,6 +35,7 @@ import {
   ENTITY_CHECK_UNAVAILABLE_REASONS,
 } from "@stll/business-registries/entity-checks";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { READER_TEXT_QUOTE_ORPHAN_REASONS } from "@stll/legal-ast/reader-text-quote";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
@@ -47,6 +48,7 @@ import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
 } from "@/api/lib/case-law/decision-read-vocabulary";
+import { DECISION_QUERY_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
@@ -478,6 +480,17 @@ const documentFieldContentProjection = v.variant("type", [
       citation: v.exactOptional(v.string()),
       jurisdiction: v.exactOptional(v.string()),
       sourceType: v.exactOptional(v.string()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("record"),
+      schemaVersion: v.number(),
+      // Typed values (a register entry, a list of proceedings) and their
+      // source provenance, shaped by the column's schema rather than paths
+      // this projection could enumerate.
+      state: unenumeratedJson(),
     }),
   ),
 ]);
@@ -1800,6 +1813,17 @@ const caseLawDecisionProjection = v.strictObject({
         }),
       ),
       truncated: v.optional(v.literal(true)),
+      // Only on an empty answer: which words matched nothing, and the next call.
+      warnings: v.optional(
+        v.array(
+          v.strictObject({
+            code: v.picklist(DECISION_QUERY_WARNING_CODES),
+            audience: v.picklist(["agent", "user"]),
+            message: v.string(),
+            hint: v.string(),
+          }),
+        ),
+      ),
     }),
   ),
   // Why there is no text, when there is none. At most one is present, and
@@ -1928,9 +1952,6 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
           resourceName: passthroughId(),
           score: v.number(),
           snippet: v.nullable(contentText()),
-          // The publisher's own document URL, which may embed the publisher's
-          // own UUID — never a Stella tenant id, so it is forwarded unchanged.
-          sourceUrl: v.nullable(publicUrl()),
           status: v.string(),
           title: v.string(),
         }),
@@ -1976,9 +1997,6 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     ),
     outlineTruncated: v.optional(v.boolean()),
     resourceName: passthroughId(),
-    // The publisher's own document URL, which may embed the publisher's own
-    // UUID — never a Stella tenant id, so it is forwarded unchanged.
-    sourceUrl: v.nullable(publicUrl()),
     status: v.string(),
     text: v.nullable(contentText()),
     // Present only where the source permits displaying wording but bars
@@ -2602,6 +2620,28 @@ const readerAnnotationPassageProjection = v.strictObject({
   quote: v.string(),
 });
 
+/**
+ * A listed mark's passage in the document's current text: placed at the
+ * anchor where its quote now is, or orphaned when the text no longer has its
+ * words in one place it can be told by.
+ */
+const listedReaderAnnotationPassageProjection = v.variant("placement", [
+  projectionBranch(
+    v.strictObject({
+      placement: v.literal("placed"),
+      anchor: v.string(),
+      quote: v.string(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      placement: v.literal("orphaned"),
+      reason: v.picklist(READER_TEXT_QUOTE_ORPHAN_REASONS),
+      quote: v.string(),
+    }),
+  ),
+]);
+
 /** list_reader_annotations: one entry per mark, its passages grouped. */
 export const LIST_READER_ANNOTATIONS_PROJECTION = v.strictObject({
   annotations: v.array(
@@ -2615,7 +2655,7 @@ export const LIST_READER_ANNOTATIONS_PROJECTION = v.strictObject({
       mine: v.boolean(),
       authorName: v.string(),
       createdAt: v.string(),
-      passages: v.array(readerAnnotationPassageProjection),
+      passages: v.array(listedReaderAnnotationPassageProjection),
     }),
   ),
   nextCursor: v.nullable(v.string()),

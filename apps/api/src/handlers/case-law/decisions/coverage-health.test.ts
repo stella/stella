@@ -191,19 +191,30 @@ describe("country health", () => {
     expect(caseLawCountryHealth([])).toBe(CASE_LAW_COVERAGE_HEALTH.UNKNOWN);
   });
 
-  test("an unknown source outranks a current one but not a delayed one", () => {
+  test("a source that has never run does not speak for those that have", () => {
+    for (const sibling of [
+      CASE_LAW_COVERAGE_HEALTH.CURRENT,
+      CASE_LAW_COVERAGE_HEALTH.DELAYED,
+      CASE_LAW_COVERAGE_HEALTH.STALLED,
+      CASE_LAW_COVERAGE_HEALTH.SNAPSHOT,
+    ]) {
+      expect(
+        caseLawCountryHealth([sibling, CASE_LAW_COVERAGE_HEALTH.UNKNOWN]),
+      ).toBe(sibling);
+      expect(
+        caseLawCountryHealth([CASE_LAW_COVERAGE_HEALTH.UNKNOWN, sibling]),
+      ).toBe(sibling);
+    }
+  });
+
+  test("a country reads as never run only when none of its running sources has", () => {
     expect(
       caseLawCountryHealth([
-        CASE_LAW_COVERAGE_HEALTH.CURRENT,
+        CASE_LAW_COVERAGE_HEALTH.UNKNOWN,
+        CASE_LAW_COVERAGE_HEALTH.DISABLED,
         CASE_LAW_COVERAGE_HEALTH.UNKNOWN,
       ]),
     ).toBe(CASE_LAW_COVERAGE_HEALTH.UNKNOWN);
-    expect(
-      caseLawCountryHealth([
-        CASE_LAW_COVERAGE_HEALTH.UNKNOWN,
-        CASE_LAW_COVERAGE_HEALTH.DELAYED,
-      ]),
-    ).toBe(CASE_LAW_COVERAGE_HEALTH.DELAYED);
   });
 });
 

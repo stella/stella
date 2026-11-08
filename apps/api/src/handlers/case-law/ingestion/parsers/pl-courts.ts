@@ -54,6 +54,22 @@ import type {
   TableCell,
 } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import {
+  containsPlOperativeVerb,
+  isPlClosingLine,
+  isPlCompositionLine,
+  isPlHoldingHeading,
+  isPlLegalBasisRuling,
+  isPlNumberedReasonsHeading,
+  isPlOpeningRecital,
+  isPlReasonsHeading,
+  isPlSignatureBlank,
+  isPlSignatureLine,
+  namesPlDocumentType,
+  opensPlRuling,
+  opensWithPlSignatureTitle,
+} from "@stll/legal-ast/polish-document-roles";
+import { collapseLetterSpacing } from "@stll/text-normalize";
 
 import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
 import {
@@ -61,14 +77,11 @@ import {
   renderHtmlWhiteSpace,
 } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
 import { readCommonCourtInlines } from "./pl-common-court-inlines";
-import {
-  isPlHoldingHeading,
-  startsWithPlOperativeVerb,
-} from "./pl-operative-verbs";
 import {
   appendTextInline,
   inlinesToPlainText,
@@ -165,19 +178,34 @@ const DECISION_TITLES: ReadonlySet<string> = new Set(
   ),
 );
 const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt[:\s]/iu;
-const REASONS_HEADING_RE = /^uzasadnienie\b/iu;
-// The editor numbers the reasons on from the operative points when they
-// share one outline ("V. UZASADNIENIE" after point IV).
-const NUMBERED_REASONS_HEADING_RE = /^[IVXLC]+\s*[.)]\s*uzasadnienie$/iu;
 const DECISION_ITEM_PREFIX_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
+const DECISION_ITEM_MARKER_RE =
+  /^(?<marker>[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
+
+/** How a list numbers its points: `1)`, `I.`, `a)`. */
+type ItemFamily = "arabic" | "roman" | "letter";
+
+const itemFamilyOf = (text: string): ItemFamily | undefined => {
+  const marker = DECISION_ITEM_MARKER_RE.exec(text)?.groups?.["marker"];
+  if (marker === undefined) {
+    return undefined;
+  }
+  if (/^\d+$/u.test(marker)) {
+    return "arabic";
+  }
+  // One lowercase letter is a letter point; `ii`, `I`, `IV` are Roman.
+  return /^[IVXLCDM]+$/u.test(marker) || /^[ivxlcdm]{2,}$/u.test(marker)
+    ? "roman"
+    : "letter";
+};
+/**
+ * A one-letter marker other than a list's first (`a)`, `i.`): in the head
+ * matter it is an abbreviation (`s. J. urodz.`, "son of"; `c.`, "daughter
+ * of"), not a ruling point, since a ruling's lettered points start at `a`.
+ * Numbered and multi-letter Roman points are never read this way.
+ */
+const LETTER_ABBREVIATION_PREFIX_RE = /^[b-hj-z][.)](?:\s+|$)/iu;
 const AUTHORITY_DECISION_TITLE_RE = /^decyzja\s+nr\b/iu;
-const COMPOSITION_LINE_RE = /\bw składzie\s*:/iu;
-const OPENING_RECITAL_RE =
-  /^(?:po rozpoznaniu|po rozpatrzeniu|na posiedzeniu|na rozprawie|w sprawie)\b/iu;
-const CLOSING_RE =
-  /^[A-ZĄĆĘŁŃÓŚŹŻ][\p{L} .-]+,\s+dnia\s+\d{1,2}\s+\p{L}+\s+\d{4}\s*r?\.?$/u;
-const SIGNATURE_RE =
-  /^(?:SSA|SSA del\.|SSO|SSR|sędzia|Sędzia|Przewodniczący|Przewodnicząca|Prezes|sprawozdawca)\b/u;
 const PANEL_MEMBER_RE = /^(?:SSN|SSA|SSO|SSR)\b|\(ławnik[^)]*\)$/iu;
 const CLERK_MARK_RE = /^\[(?:\p{L}{2,3}|\p{L}\.(?:\p{L}\.?){1,3})\]$/u;
 const CLERK_INITIALS_RE = /^(?:\p{Lu}\.){1,4}$/u;
@@ -199,10 +227,18 @@ type ParserState = {
   sawDecisionTitle: boolean;
   decisionTitle: string | undefined;
   fallbackDecisionTitle: string | undefined;
+  /** The document's type as its publisher declares it, which its title names. */
+  declaredType: string | undefined;
   normalizedCaseNumber: string;
   panelNames: string[];
   superscripts: boolean;
   markup: PlDecisionMarkup | undefined;
+  /**
+   * How the list a recital announced numbers its points (`… o zbadanie:`
+   * then `1)`, `2)`, `a)`): its points, and the points nested under them,
+   * stay in the recital; a point numbered otherwise opens the ruling.
+   */
+  recitalList: ItemFamily | undefined;
   /** A list item's marker, waiting to open the item's first paragraph. */
   pendingMarker: Inline[] | undefined;
   listMarkers: WeakMap<Element, WeakMap<Element, string | null>>;
@@ -219,13 +255,15 @@ const normalizeWhitespace = (text: string): string =>
     .replace(/(?<![ \t])[ \t]+\n/gu, "\n")
     .trim();
 
+// Each line is read through the letter-spacing owner while the wider gap
+// between two spaced words still marks the word boundary.
 const normalizeLegacyPlainText = (text: string): string =>
   text
     .replace(/\r\n/gu, "\n")
     .replace(/\u00a0/gu, " ")
     .replace(/\t+/gu, " ")
     .split("\n")
-    .map((line) => line.replace(/ {2,}/gu, " ").trim())
+    .map((line) => collapseLetterSpacing(line).replace(/ {2,}/gu, " ").trim())
     .join("\n")
     .replace(/\n{3,}/gu, "\n\n")
     .trim();
@@ -256,6 +294,7 @@ type CreateStateOptions = {
   markup: PlDecisionMarkup | undefined;
   caseNumber: string;
   fallbackDecisionTitle: string | undefined;
+  declaredType: string | undefined;
   footnoteIds: readonly string[] | undefined;
 };
 
@@ -265,6 +304,7 @@ const createState = ({
   markup,
   caseNumber,
   fallbackDecisionTitle,
+  declaredType,
 }: CreateStateOptions): ParserState => ({
   blocks: [],
   blockIndex: 0,
@@ -276,11 +316,13 @@ const createState = ({
   sawDecisionTitle: false,
   decisionTitle: undefined,
   fallbackDecisionTitle,
+  declaredType,
   normalizedCaseNumber: caseNumber.replace(/\s+/gu, " ").trim(),
   panelNames: [],
   footnoteHrefs: new Set(footnoteIds?.map((noteId) => `#${noteId}`)),
   superscripts,
   markup,
+  recitalList: undefined,
   pendingMarker: undefined,
   listMarkers: new WeakMap(),
   listItemBoundaries: new WeakMap(),
@@ -423,14 +465,16 @@ const walkInlines = (
 ): Inline[] =>
   trimLineBreaks(
     lineBreaksOf(
-      readMarkupInlines(
-        state,
-        walkInlinesShared($, el, {
-          sanitizeHref: (href) =>
-            state.footnoteHrefs.has(href) ? href : sanitizeUrl(href),
-          anonymized: false,
-          superscripts: state.superscripts,
-        }),
+      readInlineLetterSpacing(
+        readMarkupInlines(
+          state,
+          walkInlinesShared($, el, {
+            sanitizeHref: (href) =>
+              state.footnoteHrefs.has(href) ? href : sanitizeUrl(href),
+            anonymized: false,
+            superscripts: state.superscripts,
+          }),
+        ),
       ),
     ),
   );
@@ -645,6 +689,28 @@ const orderedListMarker = (
   return marker ?? undefined;
 };
 
+/**
+ * A recital line that announces a list of its own (`… o zbadanie:`): the
+ * points under it are the provisions or claims the recital names, not the
+ * ruling, which a line that rules (`… orzeka:`) would open. The bench line
+ * (`w składzie:`) announces its members, and the ruling follows it.
+ */
+const announcesRecitalList = (previous: Block | undefined): boolean =>
+  previous?.type === "paragraph" &&
+  previous.role === "intro" &&
+  previous.plainText.trimEnd().endsWith(":") &&
+  !containsPlOperativeVerb(previous.plainText);
+
+/** The blank a signing label leaves for the signature, under that label. */
+const signsBlank = (state: ParserState, plainText: string): boolean => {
+  const previous = state.blocks.at(-1);
+  return (
+    isPlSignatureBlank(plainText) &&
+    previous?.type === "paragraph" &&
+    previous.role === "signature"
+  );
+};
+
 const inferParagraphRole = (
   state: ParserState,
   plainText: string,
@@ -656,13 +722,23 @@ const inferParagraphRole = (
 
   const numbered = DECISION_ITEM_PREFIX_RE.test(normalizedText);
   const previous = state.blocks.at(-1);
+  // A point that rules on its own legal basis (`I. Na podstawie art. 27 …
+  // uznaje …`) opens the ruling wherever the head matter ends, with or
+  // without a line that names the ruling's verb first.
   const isStructuredHolding =
     numbered &&
-    (state.section === "composition" ||
-      state.section === "recital" ||
-      (previous?.type === "heading" && previous.role === "decision-title"));
+    (((state.section === "composition" || state.section === "recital") &&
+      !LETTER_ABBREVIATION_PREFIX_RE.test(normalizedText)) ||
+      (previous?.type === "heading" && previous.role === "decision-title") ||
+      opensPlRuling(normalizedText) ||
+      isPlLegalBasisRuling(
+        normalizedText.replace(DECISION_ITEM_PREFIX_RE, ""),
+      ));
+  // The ruling also opens on its legal basis when the same sentence rules
+  // (`Na podstawie art. 14b … stwierdza, że …`).
   const isUnnumberedOperative =
-    !numbered && startsWithPlOperativeVerb(normalizedText);
+    !numbered &&
+    (opensPlRuling(normalizedText) || isPlLegalBasisRuling(normalizedText));
   const signatureText = normalizedText.replace(/\[[\p{L}]{1,3}\]$/u, "").trim();
   const panelTokens = state.panelNames
     .flatMap((name) => name.split(/\s+/u))
@@ -691,15 +767,22 @@ const inferParagraphRole = (
 
   switch (state.section) {
     case "reasoning":
-      if (CLOSING_RE.test(plainText)) {
+      if (isPlClosingLine(plainText)) {
         return "closing";
       }
-      if (plainText.length <= 120 && SIGNATURE_RE.test(plainText)) {
+      if (
+        isPlSignatureLine(plainText) ||
+        opensWithPlSignatureTitle(plainText) ||
+        signsBlank(state, plainText)
+      ) {
         return "signature";
       }
       return "argumentation";
     case "holding":
-      return "holding";
+      // The bench signs under its ruling: the operative part is over.
+      return isPlSignatureLine(plainText) || signsBlank(state, plainText)
+        ? "signature"
+        : "holding";
     case "preamble":
     case "composition":
     case "recital":
@@ -729,20 +812,59 @@ const rememberPanelMember = (
   }
 };
 
+/**
+ * The family of a point that belongs to the list its recital announced, or
+ * nothing when the point is not one: a point under a recital line ending
+ * `:` with no operative verb starts the list, and a point of the same
+ * family, or a letter point nested under one, goes on with it.
+ */
+const recitalListItem = (
+  state: ParserState,
+  plainText: string,
+): ItemFamily | undefined => {
+  if (state.section !== "recital") {
+    return undefined;
+  }
+  const family = itemFamilyOf(plainText.replace(/\s+/gu, " ").trim());
+  if (family === undefined) {
+    return undefined;
+  }
+  if (announcesRecitalList(state.blocks.at(-1))) {
+    return family;
+  }
+  return state.recitalList !== undefined &&
+    (family === state.recitalList || family === "letter")
+    ? state.recitalList
+    : undefined;
+};
+
 const classifyParagraph = (
   state: ParserState,
   plainText: string,
 ): ParagraphRole | undefined => {
+  const listed = recitalListItem(state, plainText);
+  if (listed !== undefined) {
+    // The list goes on across the recital's own lines between its points.
+    state.recitalList = listed;
+    return "intro";
+  }
   const role = inferParagraphRole(state, plainText);
   rememberPanelMember(state, plainText, role);
+  // The bench signs under its ruling: what follows the signatures is not
+  // the ruling, but the reasons, whether or not they carry a heading.
+  if (state.section === "holding" && role === "signature") {
+    state.section = "reasoning";
+    return role;
+  }
   if (role === "holding") {
     state.section = "holding";
+    state.recitalList = undefined;
     return role;
   }
   if (state.section === "preamble" || state.section === "composition") {
-    if (OPENING_RECITAL_RE.test(plainText)) {
+    if (isPlOpeningRecital(plainText)) {
       state.section = "recital";
-    } else if (COMPOSITION_LINE_RE.test(plainText)) {
+    } else if (isPlCompositionLine(plainText)) {
       state.section = "composition";
     }
   }
@@ -766,13 +888,28 @@ const handleHeadingText = (
   }
 
   if (
-    REASONS_HEADING_RE.test(plainText) &&
+    isPlReasonsHeading(plainText) &&
     !state.sawDecisionTitle &&
     state.fallbackDecisionTitle !== undefined &&
     state.fallbackDecisionTitle !== POLISH_DECISION_TITLE_MAP.uzasadnienie
   ) {
     pushHeading(state, 2, plainText, "section-heading", inlines);
     state.section = "reasoning";
+    return true;
+  }
+
+  // A document titled by its own type (`INTERPRETACJA INDYWIDUALNA`) has
+  // that title, whatever the type: the reasons heading after it is a
+  // section of the document, not its title.
+  if (
+    !state.sawDecisionTitle &&
+    state.declaredType !== undefined &&
+    !isDecisionTitleText(plainText) &&
+    namesPlDocumentType(plainText, state.declaredType)
+  ) {
+    pushHeading(state, 1, plainText, "decision-title", inlines);
+    state.sawDecisionTitle = true;
+    state.decisionTitle = plainText;
     return true;
   }
 
@@ -783,13 +920,13 @@ const handleHeadingText = (
       state.decisionTitle?.trim().toLocaleUpperCase("pl-PL") ===
         normalizedPlainText
     ) {
-      if (REASONS_HEADING_RE.test(plainText)) {
+      if (isPlReasonsHeading(plainText)) {
         state.section = "reasoning";
       }
       return true;
     }
 
-    if (REASONS_HEADING_RE.test(plainText) && state.sawDecisionTitle) {
+    if (isPlReasonsHeading(plainText) && state.sawDecisionTitle) {
       pushHeading(state, 2, plainText, "section-heading", inlines);
       state.section = "reasoning";
       return true;
@@ -798,16 +935,16 @@ const handleHeadingText = (
     pushHeading(state, 1, plainText, "decision-title", inlines);
     state.sawDecisionTitle = true;
     state.decisionTitle = plainText;
-    if (REASONS_HEADING_RE.test(plainText)) {
+    if (isPlReasonsHeading(plainText)) {
       state.section = "reasoning";
     }
     return true;
   }
 
   if (
-    REASONS_HEADING_RE.test(plainText) ||
+    isPlReasonsHeading(plainText) ||
     (state.markup === PL_DECISION_MARKUP.COMMON_COURT &&
-      NUMBERED_REASONS_HEADING_RE.test(plainText))
+      isPlNumberedReasonsHeading(plainText))
   ) {
     pushHeading(state, 2, plainText, "section-heading", inlines);
     state.section = "reasoning";
@@ -1121,6 +1258,17 @@ const parseNode = (
     const inlines = walkInlines($, $node, state);
     const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
     if (!plainText) {
+      return;
+    }
+
+    // A layout that sets the signing label apart as a heading still signs:
+    // it is the bench's line under the ruling, not a part of the decision.
+    if (
+      (state.section === "holding" || state.section === "reasoning") &&
+      isPlSignatureLine(plainText)
+    ) {
+      pushParagraph(state, plainText, inlines, "signature");
+      state.section = "reasoning";
       return;
     }
 
@@ -1573,6 +1721,7 @@ export const parsePlDecisionContent = (
     markup: input.markup,
     caseNumber: input.caseNumber,
     fallbackDecisionTitle: normalizeDecisionTitle(input.decisionType),
+    declaredType: input.decisionType,
   });
 
   if (hasHtmlTags(input.content)) {

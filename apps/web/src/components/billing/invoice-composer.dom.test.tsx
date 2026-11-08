@@ -5,10 +5,10 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { INVOICE_ISSUE_BLOCKER } from "@stll/api-contract/billing";
 import type { InvoiceIssueBlocker } from "@stll/api-contract/billing";
 import { cents } from "@stll/money";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
 import type { InvoicePrefill } from "@/lib/workspaces/queries/invoices";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/invoices/new" });
 
@@ -203,7 +203,7 @@ test("without a number series the review step is not ready and names where to se
     screen
       .getByRole("link", { name: messages.billing.numberSeries.title })
       .getAttribute("href"),
-  ).toBe("/admin/number-series");
+  ).toBe("/settings/organization/number-series");
   expect(
     button(messages.billing.invoiceComposer.issueInvoice).disabled,
   ).toBeTrue();
@@ -224,7 +224,7 @@ test("without a seller the review step links to the billing profiles", async () 
     screen
       .getByRole("link", { name: messages.admin.billingProfiles })
       .getAttribute("href"),
-  ).toBe("/admin/billing");
+  ).toBe("/settings/organization/billing");
   expect(
     button(messages.billing.invoiceComposer.issueInvoice).disabled,
   ).toBeTrue();

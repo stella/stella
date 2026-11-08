@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { DOCX_MAX_ENTRIES } from "@/api/lib/docx-archive";
 
@@ -149,14 +148,15 @@ describe("patchSheetXml", () => {
 
 /** Build a minimal in-memory XLSX (OOXML ZIP) with 1 sheet. */
 const makeXlsx = async (sheetXml: string): Promise<ArrayBuffer> => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "xl/workbook.xml",
     '<?xml version="1.0"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"></workbook>',
   );
-  writeZipEntry(zip, "xl/worksheets/sheet1.xml", sheetXml);
-  return zip.generateAsync({ type: "arraybuffer" });
+  zip.set("xl/worksheets/sheet1.xml", sheetXml);
+  return zip
+    .generate({ compression: "store" })
+    .then((archive) => archive.buffer);
 };
 
 const sheetXmlWithNoPageSetup = [
@@ -171,12 +171,12 @@ describe("applyFitToPage", () => {
     const buf = await makeXlsx(sheetXmlWithNoPageSetup);
     const out = await applyFitToPage(buf);
 
-    const zip = await JSZip.loadAsync(out);
-    const entry = zip.file("xl/worksheets/sheet1.xml");
+    const zip = await ZipArchive.read(out);
+    const entry = zip.entry("xl/worksheets/sheet1.xml");
     if (!entry) {
       throw new Error("Missing sheet1.xml in ZIP");
     }
-    const xml = await entry.async("string");
+    const xml = await entry.text();
     expect(xml).toContain(EXPECTED_FIT_TO_PAGE);
     expect(xml).toContain(EXPECTED_FIT_TO_WIDTH);
   });
@@ -192,13 +192,13 @@ describe("applyFitToPage", () => {
   it("returns the original buffer when the archive exceeds the entry cap", async () => {
     // The patch is optional print styling, so an archive the bounded reader
     // refuses is forwarded untouched rather than inflated in-process.
-    const zip = new JSZip();
-    writeZipEntry(zip, "xl/workbook.xml", "<workbook/>");
-    writeZipEntry(zip, "xl/worksheets/sheet1.xml", sheetXmlWithNoPageSetup);
+    const zip = new ZipArchive();
+    zip.set("xl/workbook.xml", "<workbook/>");
+    zip.set("xl/worksheets/sheet1.xml", sheetXmlWithNoPageSetup);
     for (let index = 0; index < DOCX_MAX_ENTRIES; index += 1) {
-      writeZipEntry(zip, `filler/${index}.txt`, "x");
+      zip.set(`filler/${index}.txt`, "x");
     }
-    const buf = await zip.generateAsync({ type: "arraybuffer" });
+    const buf = (await zip.generate({ compression: "store" })).buffer;
 
     const out = await applyFitToPage(buf);
     expect(out).toBe(buf);
@@ -206,9 +206,9 @@ describe("applyFitToPage", () => {
 
   it("returns unchanged when ZIP has no xl/workbook.xml (e.g. a DOCX)", async () => {
     // Build a DOCX-like ZIP without xl/workbook.xml
-    const zip = new JSZip();
-    writeZipEntry(zip, "word/document.xml", "<document/>");
-    const buf = await zip.generateAsync({ type: "arraybuffer" });
+    const zip = new ZipArchive();
+    zip.set("word/document.xml", "<document/>");
+    const buf = (await zip.generate({ compression: "store" })).buffer;
 
     const out = await applyFitToPage(buf);
 

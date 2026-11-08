@@ -3,7 +3,14 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  CHAT_INPUT_REFUSAL_CODE,
+} from "@stll/api-contract";
+import {
+  isChatFileMimeType,
+  isRunOutputMimeType,
+} from "@stll/api-contract/chat-file-types";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
@@ -493,6 +500,7 @@ export const hydrateFilePart = async ({
         }
         return Result.err(
           new HandlerError({
+            code: CHAT_INPUT_REFUSAL_CODE.attachmentNoText,
             status: 422,
             message: "Chat DOCX attachment did not contain extractable text",
           }),
@@ -526,6 +534,7 @@ export const hydrateFilePart = async ({
         }
         return Result.err(
           new HandlerError({
+            code: CHAT_INPUT_REFUSAL_CODE.attachmentNoText,
             status: 422,
             message: "Chat XLSX attachment did not contain extractable text",
           }),
@@ -565,7 +574,7 @@ type ReserveChatObjectCleanupIntent = (options: {
   Result<SafeId<"pendingUpload">[], SafeDbError | HandlerError<400>>
 >;
 
-type UploadUserFileDependencies = {
+export type UploadUserFileDependencies = {
   generateImageThumbnail?: typeof generateImageThumbnail;
   organizationFileUsageDb?: Parameters<typeof writeOrganizationFile>[0]["db"];
   putS3ObjectWithSignal?: typeof putS3ObjectWithSignal;
@@ -682,6 +691,12 @@ type UploadUserFileInput = {
     fileName: string;
     mimeType: string;
   };
+  /**
+   * A file a local run handed back rather than one a member attached. It may
+   * also be of a type a chat never accepts, which its readers only ever deliver
+   * as a forced download (`isDownloadOnlyFileMimeType`).
+   */
+  isRunOutput?: boolean;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -693,6 +708,7 @@ type UploadUserFileInput = {
 export const uploadUserFile = async ({
   dependencies,
   file,
+  isRunOutput = false,
   organizationId,
   recordAuditEvent,
   safeDb,
@@ -718,10 +734,16 @@ export const uploadUserFile = async ({
     // validateChatFileParts at message-send: user files are later served
     // inline (Content-Disposition without a filename), so a stored
     // text/html or image/svg+xml would render in the bucket origin. Any
-    // caller reaching this function must be held to the same allowlist.
-    if (!isChatFileMimeType(file.mimeType)) {
+    // caller reaching this function must be held to the same allowlist; a
+    // run's output adds only the types every reader forces to a download.
+    if (
+      !(isRunOutput
+        ? isRunOutputMimeType(file.mimeType)
+        : isChatFileMimeType(file.mimeType))
+    ) {
       return Result.err(
         new HandlerError({
+          code: CHAT_INPUT_REFUSAL_CODE.attachmentUnsupported,
           status: 422,
           message: "Unsupported file type",
         }),
@@ -749,6 +771,7 @@ export const uploadUserFile = async ({
       return Result.err(
         FileScanRejectedError.is(scanResult.error)
           ? new HandlerError({
+              code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
               status: 422,
               message: "Chat attachment was rejected by the security scan",
             })
@@ -783,6 +806,7 @@ export const uploadUserFile = async ({
     if (file.mimeType === XLSX_MIME_TYPE && extractedText === null) {
       return Result.err(
         new HandlerError({
+          code: CHAT_INPUT_REFUSAL_CODE.attachmentNoText,
           status: 422,
           message: "Chat XLSX attachment did not contain extractable text",
         }),

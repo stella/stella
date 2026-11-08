@@ -85,6 +85,7 @@ const TOOL_COVERAGE = {
   open_case_law_decision: excluded(PUBLIC_CORPUS),
   read_case_law_decision_blocks: excluded(PUBLIC_CORPUS),
   preview_cited_provision: excluded(PUBLIC_CORPUS),
+  list_case_law_courts: excluded(PUBLIC_CORPUS),
   set_practice_jurisdictions: RUN,
   search_legislation: excluded(PUBLIC_CORPUS),
   read_statute: excluded(PUBLIC_CORPUS),

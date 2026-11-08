@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 
 import {
+  chatRunsChangedRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
   newNotificationRealtimeEvent,
   type OrganizationRealtimeEvent,
@@ -127,7 +128,7 @@ const FANOUT_CASES: { [C in RealtimeChannel]: readonly ChannelEvent[C][] } = {
     },
   ],
   organization: [resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY)],
-  user: [newNotificationRealtimeEvent()],
+  user: [newNotificationRealtimeEvent(), chatRunsChangedRealtimeEvent()],
   session: [
     {
       type: REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED,
@@ -511,19 +512,42 @@ const HARNESSES: { [C in RealtimeChannel]: ChannelHarness<C> } = {
       broadcast(audience.workspaceId, event);
     },
   },
-  // Every open matter stream of the organization; the event carries no
-  // content, so it reaches them without a membership read.
+  // Every open matter stream and every user stream of the organization, so a
+  // tab with no matter open still hears it; the event carries no content, so
+  // it reaches them without a membership read. Excluded: another
+  // organization's matter and user streams, including the same person's tab
+  // on that organization.
   organization: {
     statementsPerPublish: 0,
     delivery: () => "frame",
     open: async ({ entitled, excluded }, signal) => ({
-      entitled: workspaceStreams({ target: audience, count: entitled, signal }),
+      entitled: [
+        ...userStreams({
+          userId: userAt(audience, 0),
+          organizationId: audience.organizationId,
+          count: Math.ceil(entitled / 2),
+          signal,
+        }),
+        ...workspaceStreams({
+          target: audience,
+          count: Math.floor(entitled / 2),
+          signal,
+        }),
+      ],
       excluded: excluded
-        ? workspaceStreams({
-            target: otherOrganization,
-            count: LARGE_AUDIENCE,
-            signal,
-          })
+        ? [
+            ...workspaceStreams({
+              target: otherOrganization,
+              count: LARGE_AUDIENCE,
+              signal,
+            }),
+            ...userStreams({
+              userId: userAt(audience, 0),
+              organizationId: otherOrganization.organizationId,
+              count: LARGE_AUDIENCE,
+              signal,
+            }),
+          ]
         : [],
     }),
     publish: (event) => {

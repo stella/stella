@@ -38,7 +38,7 @@ export const describeApiKeyRefusal = ({
   ...(typeof key?.start === "string"
     ? { "key.start": key.start.slice(0, MACHINE_API_KEY_START_LENGTH) }
     : {}),
-  ...(key?.kind === undefined ? {} : { "key.kind": key.kind }),
+  ...(key?.kind !== undefined ? { "key.kind": key.kind } : {}),
   ...(requestId === undefined ? {} : { "request.id": requestId }),
 });
 

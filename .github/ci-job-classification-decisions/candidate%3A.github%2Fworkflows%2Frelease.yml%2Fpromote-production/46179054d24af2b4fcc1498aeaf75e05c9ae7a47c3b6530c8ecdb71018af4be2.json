@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Dispatches the production promotion of the proven digests at most once and verifies production serves the release commit.",
+  "reviewedDigest": "46179054d24af2b4fcc1498aeaf75e05c9ae7a47c3b6530c8ecdb71018af4be2"
+}

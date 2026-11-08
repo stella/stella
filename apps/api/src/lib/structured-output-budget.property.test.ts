@@ -38,6 +38,7 @@ const CONTENT_KINDS = [
   "text",
   "date",
   "int",
+  "money",
   "single-select",
   "multi-select",
 ] as const;
@@ -52,6 +53,8 @@ const contentForKind = (kind: ContentKind): AiExtractablePropertyContent => {
       return { version: 1, type: "date" };
     case "int":
       return { version: 1, type: "int" };
+    case "money":
+      return { version: 1, type: "money", currency: "EUR" };
     case "single-select":
     case "multi-select":
       return {

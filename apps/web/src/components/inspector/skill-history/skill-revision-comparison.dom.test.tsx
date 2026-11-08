@@ -1,8 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 // Happy DOM omits the legacy editing API that the EditContext polyfill wraps.

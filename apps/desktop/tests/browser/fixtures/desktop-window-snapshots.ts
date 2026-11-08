@@ -39,6 +39,12 @@ export const ACCOUNT = {
 } as const satisfies DesktopAccountSnapshot;
 
 export const APP_STATE = {
+  documentRecovery: {
+    edits: [],
+    unassigned: false,
+    pending: false,
+    access: "available",
+  },
   bridgePort: 45_901,
   bridgeVersion: 1,
   capabilities: [],

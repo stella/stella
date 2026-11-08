@@ -19,6 +19,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { createTestClock } from "@stll/test-kit";
 import { Temporal, Temporal as Time } from "@stll/time";
 
 // Stand-ins for the schema objects and the values that reach a comparison.
@@ -340,6 +341,11 @@ const _sqlOperandCall = lte(decisions.updatedAt, sql`now()`);
 const _clockNow = lte(decisions.updatedAt, new Date());
 const _clockDerived = lt(decisions.updatedAt, new Date(Date.now() - 60_000));
 const _clockArithmetic = lt(decisions.updatedAt, new Date(Date.now()));
+const testClock = createTestClock();
+const _testClockDerived = lt(
+  decisions.updatedAt,
+  new Date(testClock.now() - 60_000),
+);
 
 const _temporalClockDerived = lt(
   decisions.updatedAt,
@@ -450,6 +456,7 @@ export const __noTruncatedTimestampComparisonFixture = {
   _clockNow,
   _clockDerived,
   _clockArithmetic,
+  _testClockDerived,
   _temporalClockDerived,
   _temporalClockAliasedImport,
   _clockBinding,

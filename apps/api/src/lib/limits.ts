@@ -841,6 +841,22 @@ export const LIMITS = {
   /** Bound per-document passage searches and their per-split fan-out. */
   corpusIndexHighlightConcurrency: 8,
   /**
+   * Corpus search reads one API process sends the engine at once
+   * (`corpus-index-admission.ts`). Sized to the search node's cores across
+   * the API replicas: past that, reads only slow each other down.
+   */
+  corpusIndexSearchConcurrency: 3,
+  /**
+   * Reads one process holds queued behind those; a read past this is
+   * refused at once as the index being unavailable, retryable, rather than
+   * left to wait out a queue it would not reach the front of in time. Ten
+   * agent searches' worth of first rounds (five phrasings, a scan and an
+   * aggregation each).
+   */
+  corpusIndexSearchQueueMax: 100,
+  /** Longest any queued read waits; its own timeout normally ends it first. */
+  corpusIndexSearchQueueMaxWaitMs: 30_000,
+  /**
    * Folded groups (the acts of a legislation search) a cursor may carry past
    * capped scan windows, so none is shown again from a deeper member. A
    * continuation that would carry more is not offered, which keeps the
@@ -906,6 +922,10 @@ export const LIMITS = {
   chatThreadListPageSizeDefault: 50,
   /** Max page size for the user's chat thread history. */
   chatThreadListPageSizeMax: 100,
+  /** Default page size for the caller's unfinished chat runs. */
+  chatActiveRunsPageSizeDefault: 100,
+  /** Max page size for the caller's unfinished chat runs. */
+  chatActiveRunsPageSizeMax: 100,
   /** Default page size for one chat thread's message history. The reader
    *  loads the most recent page first and fetches older pages on demand
    *  as the user scrolls up, so a long conversation never loads in full. */

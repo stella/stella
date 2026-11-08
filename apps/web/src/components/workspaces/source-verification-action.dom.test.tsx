@@ -11,12 +11,12 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
 
 import arabicMessages from "@/i18n/langs/ar.json";
 import englishMessages from "@/i18n/langs/en.json";
 import type { OrganizationSettings } from "@/queries/organization-settings";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const sourceId = "019a0000-0000-7000-8000-000000000004";

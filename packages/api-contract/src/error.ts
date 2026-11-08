@@ -71,6 +71,28 @@ export const MEMBER_REMOVAL_BUSY_CODE = "member_removal_busy" as const;
 export const CHAT_CONTINUATION_REJECTED_ERROR_CODE =
   "chat_continuation_rejected" as const;
 
+/** A chat user message with nothing a model can read: no text and no attachment. */
+export const CHAT_MESSAGE_EMPTY_ERROR_CODE = "chat_message_empty" as const;
+
+/**
+ * Why a chat turn was refused before its stream began, for a reason the person
+ * can act on: change the model, the open file or the attachment.
+ */
+export const CHAT_INPUT_REFUSAL_CODE = {
+  activeFileNoText: "chat_active_file_no_text",
+  activeFileTooLarge: "chat_active_file_too_large",
+  agentRunsDisabled: "chat_agent_runs_disabled",
+  attachmentNoText: "chat_attachment_no_text",
+  attachmentUnsupported: "chat_attachment_unsupported",
+  documentUnsupported: "chat_document_unsupported",
+  imageInvalid: "bedrock_image_invalid",
+  imageUnsupported: "image_input_unsupported",
+  toolsUnsupported: "chat_tools_unsupported",
+} as const;
+
+export type ChatInputRefusalCode =
+  (typeof CHAT_INPUT_REFUSAL_CODE)[keyof typeof CHAT_INPUT_REFUSAL_CODE];
+
 /** A chat request whose turn has no execution it may continue: the turn was
  *  stopped, superseded or already settled. */
 export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;

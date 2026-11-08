@@ -4,6 +4,10 @@
 //! `apps/desktop/docs/local-only-data.md`): its own keychain key, AES-256-GCM
 //! JSON envelopes written atomically with owner-only permissions, and a key
 //! that is never re-minted while encrypted data still depends on it.
+//!
+//! Harness files and staged directories are created and published through
+//! pinned parent handles. The Codex token channel's directory, socket and
+//! pipe operations are owned by [`token_broker`].
 
 #![allow(
   clippy::disallowed_methods,
@@ -52,7 +56,14 @@ fn read_envelope(
       )));
     }
   };
-  let metadata: serde_json::Value = serde_json::from_slice(&raw).map_err(|error| {
+  parse_envelope(&raw, label).map(Some)
+}
+
+fn parse_envelope(
+  raw: &[u8],
+  label: &str,
+) -> Result<EncryptedEnvelope, EncryptedReadError> {
+  let metadata: serde_json::Value = serde_json::from_slice(raw).map_err(|error| {
     log_json_error(&error, "encrypted store envelope is invalid");
     EncryptedReadError::Unreadable(format!("{label} envelope is invalid"))
   })?;
@@ -66,9 +77,86 @@ fn read_envelope(
       "{label} store version is unsupported"
     )));
   }
-  serde_json::from_slice(&raw).map(Some).map_err(|error| {
+  serde_json::from_slice(raw).map_err(|error| {
     log_json_error(&error, "encrypted store envelope is invalid");
     EncryptedReadError::Unreadable(format!("{label} envelope is invalid"))
+  })
+}
+
+fn cipher(key: &[u8; 32], label: &str) -> Result<Aes256Gcm, String> {
+  Aes256Gcm::new_from_slice(key)
+    .map_err(|error| format!("{label} encryption key is invalid: {error}"))
+}
+
+/// The envelope holding `value` as JSON encrypted under `key`, bound to
+/// `associated_data`.
+fn seal<T: Serialize>(
+  key: &[u8; 32],
+  associated_data: &[u8],
+  value: &T,
+  label: &str,
+) -> Result<Vec<u8>, String> {
+  let plaintext = serde_json::to_vec(value)
+    .map_err(|error| format!("{label} serialization failed: {error}"))?;
+  let nonce = Nonce::generate();
+  let ciphertext = cipher(key, label)?
+    .encrypt(
+      &nonce,
+      Payload {
+        msg: &plaintext,
+        aad: associated_data,
+      },
+    )
+    .map_err(|error| format!("{label} encryption failed: {error}"))?;
+  let envelope = EncryptedEnvelope {
+    ciphertext: hex::encode(ciphertext),
+    nonce: hex::encode(nonce),
+    version: ENVELOPE_VERSION,
+  };
+  serde_json::to_vec(&envelope)
+    .map_err(|error| format!("{label} envelope serialization failed: {error}"))
+}
+
+/// The value `envelope` holds, if it decrypts under `key` bound to
+/// `associated_data`.
+fn unseal<T: DeserializeOwned>(
+  key: &[u8; 32],
+  associated_data: &[u8],
+  envelope: EncryptedEnvelope,
+  label: &str,
+) -> Result<T, EncryptedReadError> {
+  let nonce = hex::decode(envelope.nonce).map_err(|error| {
+    EncryptedReadError::Unreadable(format!("{label} nonce is invalid: {error}"))
+  })?;
+  if nonce.len() != NONCE_BYTES {
+    return Err(EncryptedReadError::Unreadable(format!(
+      "{label} nonce has an invalid length"
+    )));
+  }
+  let nonce = Nonce::try_from(nonce.as_slice()).map_err(|error| {
+    EncryptedReadError::Unreadable(format!("{label} nonce is invalid: {error}"))
+  })?;
+  let ciphertext = hex::decode(envelope.ciphertext).map_err(|error| {
+    EncryptedReadError::Unreadable(format!("{label} ciphertext is invalid: {error}"))
+  })?;
+  let plaintext = cipher(key, label)
+    .map_err(EncryptedReadError::Unavailable)?
+    .decrypt(
+      &nonce,
+      Payload {
+        msg: &ciphertext,
+        aad: associated_data,
+      },
+    )
+    .map_err(|error| {
+      EncryptedReadError::Unreadable(format!(
+        "{label} store could not be decrypted: {error}"
+      ))
+    })?;
+  serde_json::from_slice(&plaintext).map_err(|error| {
+    // serde would quote the decrypted contents it failed on.
+    log_json_error(&error, "encrypted store contents are invalid");
+    EncryptedReadError::Incompatible(format!("{label} store is invalid"))
   })
 }
 
@@ -127,11 +215,6 @@ impl EncryptedJsonFile {
     &self.path
   }
 
-  fn cipher(&self) -> Result<Aes256Gcm, String> {
-    Aes256Gcm::new_from_slice(&self.key)
-      .map_err(|error| format!("{} encryption key is invalid: {error}", self.label))
-  }
-
   pub fn load<T: DeserializeOwned>(&self) -> Result<Option<T>, String> {
     self.load_checked().map_err(|error| error.to_string())
   }
@@ -139,46 +222,10 @@ impl EncryptedJsonFile {
   pub fn load_checked<T: DeserializeOwned>(
     &self,
   ) -> Result<Option<T>, EncryptedReadError> {
-    let label = self.label;
-    let Some(envelope) = read_envelope(&self.path, label)? else {
+    let Some(envelope) = read_envelope(&self.path, self.label)? else {
       return Ok(None);
     };
-    let nonce = hex::decode(envelope.nonce).map_err(|error| {
-      EncryptedReadError::Unreadable(format!("{label} nonce is invalid: {error}"))
-    })?;
-    if nonce.len() != NONCE_BYTES {
-      return Err(EncryptedReadError::Unreadable(format!(
-        "{label} nonce has an invalid length"
-      )));
-    }
-    let nonce = Nonce::try_from(nonce.as_slice()).map_err(|error| {
-      EncryptedReadError::Unreadable(format!("{label} nonce is invalid: {error}"))
-    })?;
-    let ciphertext = hex::decode(envelope.ciphertext).map_err(|error| {
-      EncryptedReadError::Unreadable(format!("{label} ciphertext is invalid: {error}"))
-    })?;
-    let plaintext = self
-      .cipher()
-      .map_err(EncryptedReadError::Unavailable)?
-      .decrypt(
-        &nonce,
-        Payload {
-          msg: &ciphertext,
-          aad: &self.associated_data,
-        },
-      )
-      .map_err(|error| {
-        EncryptedReadError::Unreadable(format!(
-          "{label} store could not be decrypted: {error}"
-        ))
-      })?;
-    serde_json::from_slice(&plaintext)
-      .map(Some)
-      .map_err(|error| {
-        // serde would quote the decrypted contents it failed on.
-        log_json_error(&error, "encrypted store contents are invalid");
-        EncryptedReadError::Incompatible(format!("{label} store is invalid"))
-      })
+    unseal(&self.key, &self.associated_data, envelope, self.label).map(Some)
   }
 
   pub fn persist<T: Serialize>(&self, value: &T) -> Result<(), String> {
@@ -187,28 +234,139 @@ impl EncryptedJsonFile {
       create_private_dir(parent)
         .map_err(|error| format!("{label} store directory failed: {error}"))?;
     }
-    let plaintext = serde_json::to_vec(value)
-      .map_err(|error| format!("{label} serialization failed: {error}"))?;
-    let nonce = Nonce::generate();
-    let ciphertext = self
-      .cipher()?
-      .encrypt(
-        &nonce,
-        Payload {
-          msg: &plaintext,
-          aad: &self.associated_data,
-        },
-      )
-      .map_err(|error| format!("{label} encryption failed: {error}"))?;
-    let envelope = EncryptedEnvelope {
-      ciphertext: hex::encode(ciphertext),
-      nonce: hex::encode(nonce),
-      version: ENVELOPE_VERSION,
-    };
-    let json = serde_json::to_vec(&envelope)
-      .map_err(|error| format!("{label} envelope serialization failed: {error}"))?;
+    let json = seal(&self.key, &self.associated_data, value, label)?;
     write_private_atomic(&self.path, &json)
       .map_err(|error| format!("{label} store write failed: {error}"))
+  }
+}
+
+/// Values appended to one file, each encrypted under a store key as one
+/// envelope per line. Each line is bound to `associated_data` and to its
+/// position, so a line moved, repeated or dropped from the middle fails to
+/// decrypt. Appending writes only the new line; [`Self::replace`] rewrites
+/// the file whole and atomically.
+#[derive(Clone)]
+pub struct EncryptedJsonLog {
+  key: [u8; 32],
+  path: PathBuf,
+  associated_data: Vec<u8>,
+  label: &'static str,
+}
+
+/// What [`EncryptedJsonLog::load`] read.
+pub struct LogContents<T> {
+  /// Every whole line, in order.
+  pub values: Vec<T>,
+  /// The file ends in a line a crash cut short. It is left out, and the
+  /// file must be replaced before anything is appended to it.
+  pub torn: bool,
+}
+
+impl EncryptedJsonLog {
+  /// `label` names the store in error messages; it must not carry user data.
+  pub fn new(key: [u8; 32], path: PathBuf, label: &'static str) -> Self {
+    Self {
+      key,
+      path,
+      associated_data: Vec::new(),
+      label,
+    }
+  }
+
+  pub fn with_associated_data(mut self, associated_data: impl Into<Vec<u8>>) -> Self {
+    self.associated_data = associated_data.into();
+    self
+  }
+
+  /// The associated data of the line at `index`: the log's own, a byte no
+  /// UTF-8 text holds, then the position at a fixed width.
+  fn line_associated_data(&self, index: u64) -> Vec<u8> {
+    let mut associated_data = self.associated_data.clone();
+    associated_data.push(0xff);
+    associated_data.extend_from_slice(&index.to_be_bytes());
+    associated_data
+  }
+
+  fn line<T: Serialize>(&self, index: u64, value: &T) -> Result<Vec<u8>, String> {
+    let mut line = seal(
+      &self.key,
+      &self.line_associated_data(index),
+      value,
+      self.label,
+    )?;
+    line.push(b'\n');
+    Ok(line)
+  }
+
+  /// Every value the file holds; `None` when there is no file. Bytes after
+  /// the last newline are what an interrupted append leaves, since a line's
+  /// newline is the last byte it writes: they are reported as `torn`, not as
+  /// an error. A whole line that does not read makes the file unreadable,
+  /// as it may hold a value already acted on.
+  pub fn load<T: DeserializeOwned>(
+    &self,
+  ) -> Result<Option<LogContents<T>>, EncryptedReadError> {
+    let label = self.label;
+    let raw = match fs::read(&self.path) {
+      Ok(raw) => raw,
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+      Err(error) => {
+        return Err(EncryptedReadError::Unavailable(format!(
+          "{label} store read failed: {error}"
+        )));
+      }
+    };
+    let mut values = Vec::new();
+    let mut torn = false;
+    for line in raw.split_inclusive(|byte| *byte == b'\n') {
+      let Some(line) = line.strip_suffix(b"\n") else {
+        torn = true;
+        break;
+      };
+      let envelope = parse_envelope(line, label)?;
+      let index = u64::try_from(values.len()).map_err(|error| {
+        EncryptedReadError::Unreadable(format!("{label} holds too many lines: {error}"))
+      })?;
+      values.push(unseal(
+        &self.key,
+        &self.line_associated_data(index),
+        envelope,
+        label,
+      )?);
+    }
+    Ok(Some(LogContents { values, torn }))
+  }
+
+  /// Replace the file with exactly `values`, atomically; the bytes written.
+  pub fn replace<T: Serialize>(&self, values: &[T]) -> Result<u64, String> {
+    let label = self.label;
+    if let Some(parent) = self.path.parent() {
+      create_private_dir(parent)
+        .map_err(|error| format!("{label} store directory failed: {error}"))?;
+    }
+    let mut bytes = Vec::new();
+    for (index, value) in (0_u64..).zip(values) {
+      bytes.extend(self.line(index, value)?);
+    }
+    write_private_atomic(&self.path, &bytes)
+      .map_err(|error| format!("{label} store write failed: {error}"))?;
+    Ok(u64::try_from(bytes.len()).unwrap_or(u64::MAX))
+  }
+
+  /// Append `value` as the line at `index`, the number of whole lines the
+  /// file holds, synced to the disk before this returns; the bytes written.
+  /// After a failure the file may end in a partial line: [`Self::replace`]
+  /// it before appending again.
+  pub fn append<T: Serialize>(&self, index: u64, value: &T) -> Result<u64, String> {
+    let label = self.label;
+    let line = self.line(index, value)?;
+    let mut file = open_private(OpenMode::Append, &self.path)
+      .map_err(|error| format!("{label} store open failed: {error}"))?;
+    file
+      .write_all(&line)
+      .and_then(|()| file.sync_data())
+      .map_err(|error| format!("{label} store append failed: {error}"))?;
+    Ok(u64::try_from(line.len()).unwrap_or(u64::MAX))
   }
 }
 
@@ -222,19 +380,25 @@ mod platform;
 #[derive(Clone, Copy)]
 pub enum OpenMode {
   Read,
+  #[cfg(windows)]
+  ExclusiveRead,
   CreateNew,
   Append,
-  #[cfg(windows)]
+  #[cfg(test)]
   AppendExisting,
   Lock,
 }
 
-pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
-  platform::create_directory(directory)
+pub fn create_private_dir_new(path: &Path) -> std::io::Result<()> {
+  platform::Parent::at(path)?.create_directory_new()
 }
 
-pub(crate) fn create_private_dir_new(path: &Path) -> std::io::Result<()> {
-  platform::create_directory_new(path)
+pub fn publish_directory(source: &Path, destination: &Path) -> std::io::Result<()> {
+  platform::Parent::at(source)?.publish_directory(&platform::Parent::at(destination)?)
+}
+
+pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
+  platform::create_directory(directory)
 }
 
 #[cfg(test)]
@@ -286,15 +450,16 @@ pub(crate) fn create_harness_file(
   Ok(file)
 }
 
-pub(crate) fn publish_harness_directory(
-  source: &Path,
-  destination: &Path,
-) -> std::io::Result<()> {
-  platform::Parent::at(source)?.rename_directory_to(&platform::Parent::at(destination)?)
-}
-
 pub fn rename_private(source: &Path, destination: &Path) -> std::io::Result<()> {
   platform::Parent::at(source)?.rename_to(&platform::Parent::at(destination)?)
+}
+
+pub fn remove_private(path: &Path) -> std::io::Result<()> {
+  platform::Parent::at(path)?.remove()
+}
+
+pub fn move_private(source: &Path, destination: &Path) -> std::io::Result<()> {
+  platform::Parent::at(source)?.move_to(&platform::Parent::at(destination)?)
 }
 
 pub fn link_private(source: &Path, destination: &Path) -> std::io::Result<()> {
@@ -320,9 +485,11 @@ pub fn disable_autostart(app: &tauri::AppHandle) -> Result<(), String> {
 
 pub fn install_update(
   update: &tauri_plugin_updater::Update,
-  package: &[u8],
+  package: &crate::updater::VerifiedUpdatePackage,
 ) -> Result<(), String> {
-  update.install(package).map_err(|error| error.to_string())
+  update
+    .install(package.as_bytes())
+    .map_err(|error| error.to_string())
 }
 
 // Repository code generation writes a fixed source artifact, outside application data.
@@ -472,6 +639,80 @@ pub fn debug_build_is_memory_only(_env: &str) -> bool {
 mod tests {
   use super::*;
 
+  #[cfg(windows)]
+  #[test]
+  fn runtime_publication_pins_windows_directory_paths() {
+    let root = unique_path().parent().unwrap().to_path_buf();
+    create_private_dir(&root).unwrap();
+    let staging = root.join("staging");
+    create_private_dir_new(&staging).unwrap();
+    let path = staging.join("tool.exe");
+    let mut file = create_harness_file(&path, true).unwrap();
+    file.write_all(b"runtime").unwrap();
+    drop(file);
+    let source = platform::Parent::at(&staging).unwrap();
+    let destination = platform::Parent::at(&root.join("published")).unwrap();
+    assert!(fs::rename(&root, root.with_extension("moved")).is_err());
+    source.publish_directory(&destination).unwrap();
+    assert_eq!(
+      fs::read(root.join("published/tool.exe")).unwrap(),
+      b"runtime"
+    );
+    drop(source);
+    drop(destination);
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn harness_modes_and_directory_publication_use_pinned_parents() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let root = unique_path().parent().unwrap().to_path_buf();
+    create_private_dir(&root).unwrap();
+    assert_eq!(
+      fs::metadata(&root).unwrap().permissions().mode() & 0o777,
+      0o700
+    );
+    let staging = root.join("staging");
+    create_private_dir_new(&staging).unwrap();
+    assert_eq!(
+      create_private_dir_new(&staging).unwrap_err().kind(),
+      std::io::ErrorKind::AlreadyExists
+    );
+    for (name, executable, expected) in [("tool", true, 0o700), ("data", false, 0o600)]
+    {
+      let file = create_harness_file(&staging.join(name), executable).unwrap();
+      assert_eq!(
+        file.metadata().unwrap().permissions().mode() & 0o777,
+        expected
+      );
+    }
+    let source = platform::Parent::at(&staging).unwrap();
+    let destination = platform::Parent::at(&root.join("published")).unwrap();
+    let moved = root.with_extension("moved");
+    let outside = root.with_extension("outside");
+    create_private_dir(&outside).unwrap();
+    fs::rename(&root, &moved).unwrap();
+    symlink(&outside, &root).unwrap();
+    source.publish_directory(&destination).unwrap();
+    assert!(!moved.join("staging").exists());
+    assert!(moved.join("published/tool").is_file());
+    assert_eq!(
+      fs::metadata(moved.join("published/tool"))
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777,
+      0o700
+    );
+    assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+    assert!(create_harness_file(&root.join("unexpected"), true).is_err());
+    assert!(create_private_dir_new(&root.join("unexpected")).is_err());
+    fs::remove_file(&root).unwrap();
+    fs::remove_dir_all(moved).unwrap();
+    fs::remove_dir(outside).unwrap();
+  }
+
   #[cfg(unix)]
   fn assert_link_error(error: std::io::Error) {
     assert!(
@@ -505,7 +746,7 @@ mod tests {
     symlink(&outside, &directory_link).unwrap();
     assert_link_error(create_private_dir(&directory_link).unwrap_err());
     assert_link_error(
-      publish_harness_directory(&directory_link, &root.join("published")).unwrap_err(),
+      publish_directory(&directory_link, &root.join("published")).unwrap_err(),
     );
     assert!(write_private_atomic(&directory_link.join("file"), b"value").is_err());
     let middle = root.join("middle");
@@ -537,7 +778,7 @@ mod tests {
     );
     write_private_atomic(&staged.join("record"), b"complete").unwrap();
     let published = root.join("published");
-    publish_harness_directory(&staged, &published).unwrap();
+    publish_directory(&staged, &published).unwrap();
     assert!(!staged.exists());
     assert_eq!(fs::read(published.join("record")).unwrap(), b"complete");
     fs::remove_dir_all(root).unwrap();
@@ -619,6 +860,39 @@ mod tests {
     assert!(directory_target.is_dir());
     assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 2);
     fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
+  #[cfg(windows)]
+  #[test]
+  fn local_file_creation_observes_shared_handles() {
+    let path = unique_path();
+    create_private_dir(path.parent().unwrap()).unwrap();
+    write_private_atomic(&path, b"document").unwrap();
+    drop(open_private(OpenMode::ExclusiveRead, &path).unwrap());
+    let reader = open_private(OpenMode::Read, &path).unwrap();
+    assert!(open_private(OpenMode::ExclusiveRead, &path).is_err());
+    drop(reader);
+    drop(open_private(OpenMode::ExclusiveRead, &path).unwrap());
+    fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
+  #[test]
+  fn local_file_creation_moves_without_replacing_a_copy() {
+    let source = unique_path();
+    let destination = source.with_file_name("recovery.docx");
+    create_private_dir(source.parent().unwrap()).unwrap();
+    write_private_atomic(&source, b"first").unwrap();
+    move_private(&source, &destination).unwrap();
+    assert!(!source.exists());
+    assert_eq!(fs::read(&destination).unwrap(), b"first");
+    write_private_atomic(&source, b"second").unwrap();
+    assert_eq!(
+      move_private(&source, &destination).unwrap_err().kind(),
+      std::io::ErrorKind::AlreadyExists
+    );
+    assert_eq!(fs::read(&source).unwrap(), b"second");
+    assert_eq!(fs::read(&destination).unwrap(), b"first");
+    fs::remove_dir_all(source.parent().unwrap()).unwrap();
   }
 
   /// A store path in its own fresh directory, so `persist` restricts that
@@ -833,6 +1107,58 @@ mod tests {
     remove_store(&path);
   }
 
+  #[cfg(unix)]
+  #[test]
+  fn atomic_writes_sync_the_pinned_directory_after_a_platform_path_change() {
+    use std::os::unix::fs::{MetadataExt, symlink};
+    let root = unique_path().parent().unwrap().to_path_buf();
+    let original = root.join("original");
+    let moved = root.join("moved");
+    let outside = root.join("outside");
+    create_private_dir(&original).unwrap();
+    create_private_dir(&outside).unwrap();
+    let path = original.join("store.json");
+    write_private_atomic(&path, b"old").unwrap();
+    let pinned_inode = fs::metadata(&original).unwrap().ino();
+    let directory_synced = std::cell::Cell::new(false);
+    write_private_atomic_with(&path, b"new", |file| {
+      if file.metadata()?.is_dir() {
+        assert_eq!(file.metadata()?.ino(), pinned_inode);
+        assert_eq!(fs::read(moved.join("store.json"))?, b"new");
+        directory_synced.set(true);
+      } else {
+        assert_eq!(fs::read(&path)?, b"old");
+        fs::rename(&original, &moved)?;
+        symlink(&outside, &original)?;
+      }
+      file.sync_all()
+    })
+    .unwrap();
+    assert!(directory_synced.get());
+    assert_eq!(fs::read(moved.join("store.json")).unwrap(), b"new");
+    assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(&moved).unwrap().count(), 1);
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn a_failed_directory_sync_is_reported_after_replacement() {
+    let path = unique_path();
+    create_private_dir(path.parent().unwrap()).unwrap();
+    write_private_atomic(&path, b"old").unwrap();
+    let result = write_private_atomic_with(&path, b"new", |file| {
+      if file.metadata()?.is_dir() {
+        return Err(std::io::Error::other("directory sync unavailable"));
+      }
+      file.sync_all()
+    });
+    assert!(result.unwrap_err().contains("directory sync unavailable"));
+    assert_eq!(fs::read(&path).unwrap(), b"new");
+    assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
+    remove_store(&path);
+  }
+
   #[test]
   fn a_failed_sync_keeps_the_old_file_and_no_temporary() {
     let path = unique_path();
@@ -881,6 +1207,86 @@ mod tests {
         .unwrap(),
       Some(1)
     );
+    remove_store(&path);
+  }
+
+  #[test]
+  fn log_lines_append_without_plaintext_and_stay_bound_to_their_position() {
+    let path = unique_path();
+    let log = EncryptedJsonLog::new([7; 32], path.clone(), "test")
+      .with_associated_data("log:1");
+    assert!(log.load::<String>().unwrap().is_none());
+    assert_eq!(log.replace::<String>(&[]).unwrap(), 0);
+    let first = log.append(0, &"private one").unwrap();
+    let second = log.append(1, &"private two").unwrap();
+    let raw = fs::read(&path).unwrap();
+    // Each append wrote its own line and nothing else.
+    assert_eq!(u64::try_from(raw.len()).unwrap(), first + second);
+    assert!(!String::from_utf8_lossy(&raw).contains("private"));
+    let read = log.load::<String>().unwrap().unwrap();
+    assert_eq!(read.values, ["private one", "private two"]);
+    assert!(!read.torn);
+    #[cfg(unix)]
+    {
+      use std::os::unix::fs::PermissionsExt;
+      assert_eq!(
+        fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o600
+      );
+    }
+    // Swapped lines do not read: each is bound to its position.
+    let text = String::from_utf8(raw.clone()).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    fs::write(&path, format!("{}\n{}\n", lines[1], lines[0])).unwrap();
+    assert!(matches!(
+      log.load::<String>(),
+      Err(EncryptedReadError::Unreadable(_))
+    ));
+    // Nor does another log's file, or the file under another key.
+    fs::write(&path, &raw).unwrap();
+    let other = EncryptedJsonLog::new([7; 32], path.clone(), "test")
+      .with_associated_data("log:2");
+    assert!(other.load::<String>().is_err());
+    let wrong_key = EncryptedJsonLog::new([8; 32], path.clone(), "test")
+      .with_associated_data("log:1");
+    assert!(wrong_key.load::<String>().is_err());
+    remove_store(&path);
+  }
+
+  #[test]
+  fn a_log_line_an_append_cut_short_is_torn_not_unreadable() {
+    let path = unique_path();
+    let log = EncryptedJsonLog::new([7; 32], path.clone(), "test");
+    log.replace(&["kept".to_owned()]).unwrap();
+    log.append(1, &"cut").unwrap();
+    let whole = fs::read(&path).unwrap();
+    let kept = whole.iter().position(|byte| *byte == b'\n').unwrap() + 1;
+    // An append ends with its newline: anything after the last one is cut.
+    let mut zeros = whole[..kept].to_vec();
+    zeros.extend([0; 16]);
+    for torn in [&whole[..=kept], &whole[..whole.len() - 1], &zeros[..]] {
+      fs::write(&path, torn).unwrap();
+      let read = log.load::<String>().unwrap().unwrap();
+      assert_eq!(read.values, ["kept"]);
+      assert!(read.torn);
+    }
+    // A whole line that does not read is damage, last or not: it may hold
+    // a value already acted on.
+    let mut last = whole[..kept].to_vec();
+    last.extend_from_slice(b"garbage\n");
+    let mut middle = last.clone();
+    middle.extend_from_slice(&whole[kept..]);
+    for damaged in [last, middle] {
+      fs::write(&path, &damaged).unwrap();
+      assert!(matches!(
+        log.load::<String>(),
+        Err(EncryptedReadError::Unreadable(_))
+      ));
+    }
+    log.replace(&["again".to_owned()]).unwrap();
+    let read = log.load::<String>().unwrap().unwrap();
+    assert_eq!(read.values, ["again"]);
+    assert!(!read.torn);
     remove_store(&path);
   }
 

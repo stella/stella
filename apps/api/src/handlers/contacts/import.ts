@@ -9,6 +9,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 
 const config = {
@@ -72,6 +73,7 @@ const importContacts = createSafeRootHandler(
           ),
         "contacts-import.flush-contact-search-repairs",
       );
+      announceContactSetChanged(session.activeOrganizationId);
     }
 
     return Result.ok({

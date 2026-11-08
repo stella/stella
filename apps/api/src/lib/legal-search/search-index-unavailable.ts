@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { classifyFailure } from "@stll/errors";
+
 import { HttpStatusResponse } from "@/api/http/status";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
@@ -48,18 +50,29 @@ export const searchIndexUnavailableError = (
  *
  * - `budget_expired`: the request ran out of time, the public read timeout;
  * - `unreachable`, `index_missing`: the index is unavailable;
+ * - `caller_aborted`: the caller went away, so nothing is wrong with the index;
  * - `answered`: whatever the caller makes of an engine that did answer.
  */
 export const corpusIndexReadRefusal = <TStatus extends HandlerErrorStatusCode>(
   error: CorpusIndexError,
   answered: (error: CorpusIndexError) => HandlerError<TStatus>,
-): HandlerError<TStatus | 503> => {
+): HandlerError<TStatus | 400 | 503> => {
   switch (error.reach) {
     case "budget_expired":
       return publicReadTimeoutRefusal(error);
     case "unreachable":
     case "index_missing":
       return searchIndexUnavailableError(error);
+    case "caller_aborted":
+      return classifyFailure(
+        new HandlerError({
+          status: 400,
+          code: "request_aborted",
+          message: "Request aborted",
+          cause: error,
+        }),
+        "client_disconnected",
+      );
     case "answered":
       return answered(error);
     default:

@@ -1,5 +1,15 @@
 import { panic } from "better-result";
-import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  lte,
+  sql,
+} from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias, unionAll } from "drizzle-orm/pg-core";
 import * as v from "valibot";
@@ -140,6 +150,12 @@ const [
 
 const listDecisionCitationsQueryEntries = v.object({
   direction: v.picklist(CITATION_DIRECTIONS),
+  /**
+   * `all` lists every citation the decision's text makes, the case's own
+   * history included, for a reader that links the text. It reads the citing
+   * side only: nothing that counts authority passes it.
+   */
+  kinds: v.optional(v.literal("all")),
   doctrine: v.optional(
     v.union([v.literal(distinguishesDoctrine), v.literal(limitsDoctrine)]),
   ),
@@ -169,6 +185,13 @@ export const listDecisionCitationsQuerySchema = v.pipe(
       "Invalid cursor",
     ),
     ["cursor"],
+  ),
+  v.forward(
+    v.check(
+      (query) => query.kinds === undefined || query.direction === "outgoing",
+      "Every kind is listed only for the citations a decision makes",
+    ),
+    ["kinds"],
   ),
 );
 
@@ -294,11 +317,12 @@ export const decodeCitationCursor = (
   const parts = decodePaginationCursor(cursor);
   const id = parts?.at(0);
   if (
-    parts?.length !== 4 ||
+    parts?.length !== 5 ||
     !isUuidPaginationCursorPart(id) ||
     parts.at(1) !== query.direction ||
     parts.at(2) !== (query.doctrine ?? null) ||
-    parts.at(3) !== (query.polarity ?? null)
+    parts.at(3) !== (query.polarity ?? null) ||
+    parts.at(4) !== (query.kinds ?? null)
   ) {
     return null;
   }
@@ -322,6 +346,7 @@ export const encodeCitationPageCursor = ({
     query.direction,
     query.doctrine ?? null,
     query.polarity ?? null,
+    query.kinds ?? null,
   ]);
 
 type ScannedRow = {
@@ -505,6 +530,7 @@ export const listDecisionCitationsHandler = async ({
     direction: query.direction,
     ...(query.doctrine === undefined ? {} : { doctrine: query.doctrine }),
     ...(query.polarity === undefined ? {} : { polarity: query.polarity }),
+    ...(query.kinds === undefined ? {} : { kinds: query.kinds }),
     limit: pageSize,
     countries,
     tx,
@@ -542,6 +568,8 @@ type DecisionCitationPageQueryOptions = {
   direction: CitationDirection;
   doctrine?: Exclude<DoctrineTreatment, "not_stated">;
   polarity?: CitationTreatment;
+  /** `all` keeps the case's own history; see the query's `kinds`. */
+  kinds?: "all";
   limit: number;
   countries: readonly string[];
   tx: CaseLawPublicReadTransaction;
@@ -573,6 +601,7 @@ export const decisionCitationPageQuery = ({
   direction,
   doctrine,
   polarity,
+  kinds,
   limit,
   countries,
   tx,
@@ -600,7 +629,11 @@ export const decisionCitationPageQuery = ({
       doctrinalTreatment: doctrinalTreatmentField(doctrineAvailable),
       evidenceQuote: doctrineEvidenceQuoteField(doctrineAvailable),
     },
-    where: and(precedentOnly, doctrineFilter, polarityFilter),
+    where: and(
+      kinds === "all" ? undefined : precedentOnly,
+      doctrineFilter,
+      polarityFilter,
+    ),
     after: cursorId,
     limit: windowSize,
   });
@@ -623,6 +656,8 @@ export const decisionCitationPageQuery = ({
     .limit(limit + 1)
     .as("citation_graph_candidates");
   const relatedDecision = relatedDecisionLookup(tx, candidates.relatedId);
+  // Every lookup row carries its id, so joining on it matches the same rows
+  // as `true` and proves `decision` matched whenever its id is not NULL.
   return tx
     .select({
       id: candidates.id,
@@ -658,7 +693,7 @@ export const decisionCitationPageQuery = ({
       },
     })
     .from(candidates)
-    .leftJoinLateral(relatedDecision, sql`true`)
+    .leftJoinLateral(relatedDecision, isNotNull(relatedDecision.id))
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .orderBy(asc(candidates.id))
     .limit(limit + 1);

@@ -132,7 +132,10 @@ export const defineScopedTransitions = <
   const keyColumn = columns[key];
   const keyNames = [key, ...scope];
   const keyColumns = keyNames.map((name) => columns[name]);
-  if (state?.enumValues === undefined || keyColumn === undefined) {
+  if (state === undefined || keyColumn === undefined) {
+    panic("A scoped transition requires an enum state and identity columns");
+  }
+  if (state.enumValues === undefined) {
     panic("A scoped transition requires an enum state and identity columns");
   }
   const stateValues = state.enumValues;
@@ -1568,6 +1571,8 @@ type TransitionLifecycleArgs<
   tx: TTx;
   spec: DefinedLifecycle<TTable, TKey, TGraphs>;
   moves: LifecycleMoves<NoInfer<TGraphs>>;
+  /** Write-time conditions a row must still meet to move; see `guard`. */
+  guard?: SQL;
   set?: Omit<
     PgUpdateSetSource<NoInfer<TTable>>,
     NoInfer<TKey> | (keyof NoInfer<TGraphs> & string)
@@ -1607,6 +1612,7 @@ export const transitionLifecycle = async <
   spec,
   id,
   moves,
+  guard,
   set,
   recordTransitionAuditEvent,
 }: TransitionLifecycleArgs<TTx, TTable, TKey, TGraphs> & {
@@ -1635,6 +1641,7 @@ export const transitionLifecycle = async <
     moves: lifecycleMoves(spec.lifecycleColumns, moves),
     set,
     fence: { key: undefined, value: undefined },
+    guard,
     recordTransitionAuditEvent: async ([changed]) => {
       await recordTransitionAuditEvent(tx, {
         id: idDecoder.mapFromDriverValue(
@@ -1662,6 +1669,7 @@ export const transitionLifecycleBatch = async <
   spec,
   ids,
   moves,
+  guard,
   set,
   recordTransitionAuditEvent,
 }: TransitionLifecycleArgs<TTx, TTable, TKey, TGraphs> & {
@@ -1689,6 +1697,7 @@ export const transitionLifecycleBatch = async <
     moves: lifecycleMoves(spec.lifecycleColumns, moves),
     set,
     fence: { key: undefined, value: undefined },
+    guard,
     recordTransitionAuditEvent: async (changed) => {
       await recordTransitionAuditEvent(tx, { ids: decode(changed), moves });
     },

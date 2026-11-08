@@ -2,7 +2,10 @@ import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
 import { RETENTION_PROJECTION_FAILURE } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
-import { projectSkCourtsDocument } from "@/api/handlers/case-law/ingestion/retention/sources/sk-courts-document";
+import {
+  projectSkCourtsDocument,
+  withoutMetadataTable,
+} from "@/api/handlers/case-law/ingestion/retention/sources/sk-courts-document";
 import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import {
   validateAst,
@@ -108,6 +111,64 @@ describe("sk-courts document retention projection", () => {
 
   test("a document that lost a paragraph reads as lost text", async () => {
     expect((await retention(await decisionPdf(), true)).ok).toBe(false);
+  });
+
+  test("the six-row metadata table that opens a decision is not decision text", () => {
+    // As obcan.justice.sk prints it on decisions of the time (6CoP/12/2012).
+    const table = [
+      "Súd: Krajský súd Trenčín",
+      "Spisová značka: 6CoP/12/2012",
+      "Identifikačné číslo súdneho spisu: 3511207298",
+      "Dátum vydania rozhodnutia: 21. 02. 2012",
+      "Meno a priezvisko sudcu, VSÚ: JUDr. Stanislava Marková",
+      "ECLI: ECLI:SK:KSTN:2012:3511207298.1",
+    ];
+    const body = ["ROZSUDOK V MENE", "SLOVENSKEJ REPUBLIKY"];
+    expect(withoutMetadataTable([...table, ...body])).toEqual(body);
+  });
+
+  test("the three-row header is dropped the same way", () => {
+    const body = ["Rozsudok", "Okresný súd v konaní takto"];
+    expect(
+      withoutMetadataTable([
+        `Súd: ${COURT}`,
+        `Spisová značka: ${CASE_NUMBER}`,
+        `ECLI: ${ECLI}`,
+        ...body,
+      ]),
+    ).toEqual(body);
+  });
+
+  test("labelled lines without a closing ECLI row stay text", () => {
+    const lines = [
+      `Súd: ${COURT}`,
+      `Spisová značka: ${CASE_NUMBER}`,
+      "Rozsudok",
+    ];
+    expect(withoutMetadataTable(lines)).toEqual(lines);
+  });
+
+  test("a table with an empty row stays text", () => {
+    // As printed when the listing omits a value (5Co/387/2010).
+    const lines = [
+      "Súd: Krajský súd Žilina",
+      "Spisová značka: 5Co/387/2010",
+      "Identifikačné číslo súdneho spisu:",
+      "Dátum vydania rozhodnutia: 15. 03. 2011",
+      "Meno a priezvisko sudcu, VSÚ: JUDr. Miroslav Jamrich",
+      "ECLI:",
+      "ROZSUDOK V MENE",
+    ];
+    expect(withoutMetadataTable(lines)).toEqual(lines);
+  });
+
+  test("labelled lines inside the decision stay text", () => {
+    const lines = [
+      "Rozsudok",
+      `Spisová značka: ${CASE_NUMBER}`,
+      `ECLI: ${ECLI}`,
+    ];
+    expect(withoutMetadataTable(lines)).toEqual(lines);
   });
 
   test("bytes no PDF opens from are an unreadable document", async () => {

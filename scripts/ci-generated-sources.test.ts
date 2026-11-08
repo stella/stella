@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { CI_GENERATED_DIRECTORIES } from "../packages/scripts/src/generated-files";
 import { PR_CODE_QUALITY_CANCEL_JOBS } from "./ci-cancellation-contract";
 import { CI_GENERATION_COMMANDS } from "./generated-files";
 import { lexShell, programWords } from "./install-free-ci";
@@ -681,7 +682,9 @@ const generationCommandViolations = (command: readonly string[]) => {
       : ["Turbo owner package script does not exist"];
   }
   if (!target.startsWith("--cwd=")) {
-    return command.length === 2 &&
+    // A generator that also has a check mode is asked to write.
+    return (command.length === 2 ||
+      (command.length === 3 && action === "--write")) &&
       existsSync(new URL(`../${target}`, import.meta.url))
       ? []
       : ["Expected a direct generator file or explicit package script"];
@@ -707,7 +710,10 @@ const generationCommandViolations = (command: readonly string[]) => {
 };
 
 test("every preparation command resolves a real generator file or package script", () => {
-  for (const command of CI_GENERATION_COMMANDS) {
+  for (const command of [
+    ...CI_GENERATION_COMMANDS,
+    ...CI_GENERATED_DIRECTORIES.map((directory) => directory.command),
+  ]) {
     expect(generationCommandViolations(command), command.join(" ")).toEqual([]);
   }
   for (const command of [
@@ -745,6 +751,9 @@ test("every preparation command resolves a real generator file or package script
     "utf-8",
   );
   expect(producer).toContain("for (const command of CI_GENERATION_COMMANDS)");
+  expect(producer).toContain(
+    "for (const { command } of CI_GENERATED_DIRECTORIES)",
+  );
   expect(
     generationCommandViolations([
       "bun",

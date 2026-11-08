@@ -325,6 +325,10 @@ const searchDecisions = async ({
             query,
             limit,
             country,
+            // This tool returns links only: the facets and total the handler
+            // would aggregate over each country's whole result set are
+            // never read.
+            describeResultSet: false,
             ...(position.cursor === undefined
               ? {}
               : { cursor: position.cursor }),

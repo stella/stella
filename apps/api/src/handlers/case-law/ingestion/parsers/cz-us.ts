@@ -67,6 +67,7 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
   CZ_TAKTO,
   CZ_TAKTO_TAIL_RE,
+  isCzechBareSignatoryName,
   isCzechOpeningFormula,
   isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
@@ -101,7 +102,7 @@ import {
   readHardWrap,
 } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import {
-  collapseLetterSpacing,
+  readInlineLetterSpacing,
   withAttestedLetterSpacing,
 } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
@@ -525,7 +526,7 @@ const reflowUsLines = (
       reading === null ? inlines : mapInlineText(inlines, reading.clean),
     );
   const spelled = (inlines: readonly Inline[]): Inline[] =>
-    mapInlineText(inlines, collapseLetterSpacing);
+    readInlineLetterSpacing(inlines);
 
   const lines: ParsedLine[] = [];
   let paragraph: Inline[] | null = null;
@@ -713,6 +714,15 @@ const DISSENT_HEADING_MAX_CHARS = 120;
  * opens with a date ("Dne 26. 8. 1993 zaslaly stěžovatelky …") is reasoning.
  */
 const CLOSING_MAX_CHARS = 80;
+/**
+ * A bare name under the closing, or under the signature lines that follow
+ * it, signs the decision or a separate opinion: the Court's judges often sign
+ * with no academic title and no "v. r.".
+ */
+const signsUnderClosing = (plainText: string, previous: Block | undefined) =>
+  isCzechBareSignatoryName(plainText) &&
+  previous?.type === "paragraph" &&
+  (previous.role === "closing" || previous.role === "signature");
 /** Longest heading an author continuation can make. */
 const DISSENT_TITLE_MAX_CHARS = 500;
 
@@ -907,6 +917,20 @@ const classifyUsBodyLine = ({
 
   // Signature: judge title line
   if (!courtNumbered && SIGNATURE_RE.test(plainText) && plainText.length < 80) {
+    state.inRuling = false;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "signature",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
+  if (!courtNumbered && signsUnderClosing(plainText, blocks.at(-1))) {
     state.inRuling = false;
     state.blockIndex += 1;
     blocks.push({
