@@ -155,6 +155,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/chat/link-icons/:hostname": "crud",
   "GET /v1/chat/link-icons/exact": "crud",
   "GET /v1/chat/local-runners": "crud",
+  "GET /v1/chat/mcp-apps/:app": "crud",
   "GET /v1/chat/model-options": "crud",
   "GET /v1/chat/runs/active": "crud",
   "GET /v1/chat/skill-availability": "crud",
@@ -550,6 +551,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/chat/threads/:threadId/export": "crud",
   "POST /v1/chat/threads/:threadId/connectors/:toolCallId": "crud",
   "POST /v1/chat/threads/:threadId/fork": "crud",
+  "POST /v1/chat/threads/:threadId/mcp-apps/:toolCallId/call": "search",
   "POST /v1/chat/threads/:threadId/messages/:messageId/revisions": "crud",
   "POST /v1/chat/threads/:threadId/messages/:messageId/revisions/:revision/revert":
     "crud",

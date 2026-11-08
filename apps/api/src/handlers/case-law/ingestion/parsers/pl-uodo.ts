@@ -36,6 +36,7 @@ import type {
   ParagraphListDepth,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import { isPlRecitalLine } from "@stll/legal-ast/polish-document-roles";
 
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
@@ -420,18 +421,38 @@ const walkUnit = (
 };
 
 /**
+ * The head matter an operative branch opens with, before its first point:
+ * the legal basis the authority decides on and the recital naming the
+ * proceedings. The portal prints them as unmarked units of the same branch;
+ * they introduce the ruling and are not part of it.
+ */
+const markOperativeLeadIn = (blocks: readonly Block[]): void => {
+  for (const block of blocks) {
+    if (block.type !== "paragraph" || !isPlRecitalLine(block.plainText)) {
+      return;
+    }
+    block.role = "intro";
+  }
+};
+
+/**
  * The branches of the decision. The one without a title is the operative
- * part, which is what the reader sets as the holding; a titled branch is the
- * reasons, read as body text.
+ * part, which is what the reader sets as the holding once its lead-in is
+ * read off; a titled branch is the reasons, read as the authority's
+ * argumentation.
  */
 const walkBranches = (state: ParseState, block: Element): void => {
   for (const branch of block.children) {
     if (isTag(branch) && branch.tagName === "xUnit") {
       const titled = ownText(state.$, childElements(branch, "xTitle").at(0));
+      const start = state.blocks.length;
       walkUnit(state, branch, 0, {
-        role: titled === "" ? "holding" : undefined,
+        role: titled === "" ? "holding" : "argumentation",
         listDepth: 0,
       });
+      if (titled === "") {
+        markOperativeLeadIn(state.blocks.slice(start));
+      }
       continue;
     }
     if (isTag(branch) && branch.tagName === "xText") {

@@ -156,6 +156,7 @@ const turnInput = (
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
   skillFolders: [],
+  toolPath: [],
   ...overrides,
 });
 
@@ -264,6 +265,18 @@ describe("Codex adapter over a stdio app-server", () => {
       },
     });
     expect(startup().packageCache).toEqual(packageCacheEnvironment(CACHE_DIR));
+  });
+
+  test("a managed tool comes first on the server's PATH and the inherited PATH stays", async () => {
+    const toolDir = path.join(tmpdir(), "stella-managed-bun", "bin");
+    const withTool = await run("tool_calls", {
+      overrides: { toolPath: [toolDir] },
+    });
+    expect(withTool.startup().path).toBe(
+      `${toolDir}${path.delimiter}${process.env["PATH"] ?? ""}`,
+    );
+    const without = await run("tool_calls");
+    expect(without.startup().path).toBe(process.env["PATH"]);
   });
 
   describe("skill folders", () => {

@@ -200,6 +200,7 @@ fn run_start(model: &str) -> SidecarRunStart {
     ],
     attachments: Vec::new(),
     skill_folders: Vec::new(),
+    tool_path: Vec::new(),
     harness_session_id: None,
     policy: RunPolicy {
       network: NetworkPolicy::Open,
