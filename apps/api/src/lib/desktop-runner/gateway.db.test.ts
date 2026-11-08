@@ -27,6 +27,7 @@ import {
 } from "@stll/api-contract/chat";
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
@@ -2426,6 +2427,7 @@ describe("chat turns on a computer", () => {
         cachedInputTokens: 0,
         outputTokens: 5,
         reasoningOutputTokens: 0,
+        context: { usedTokens: 15, windowTokens: 200_000 },
       },
     },
   ];
@@ -2739,6 +2741,61 @@ describe("chat turns on a computer", () => {
       });
       expect(seen).toEqual([chatThreadId, null]);
     });
+  });
+
+  test("a finished run's context report reaches the turn, and one the desktop made up does not", async () => {
+    const finishedTurn = async (
+      rewrite: (chunk: unknown) => unknown,
+    ): Promise<unknown> => {
+      const chatThreadId = await newThread();
+      const { desktopId, desktop } = shared();
+      const turn = collect(
+        createLocalChatRun(
+          contextFor(chatThreadId),
+          startPlan(desktopId),
+        ).stream({
+          chatRunId: Bun.randomUUIDv7(),
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "What does the matter hold?" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+      const start = await desktop.receive("run.start");
+      desktop.send({ type: "run.accepted", runId: start.runId });
+      const run = desktopRun(desktop, start.runId);
+      await run.events(
+        (await harnessChunks(start.runId, completedTurn)).map(rewrite),
+      );
+      await run.finish("completed", "codex-session-1");
+      const finish = (await turn.done).findLast(
+        ({ type }) => type === EventType.RUN_FINISHED,
+      );
+      return finish?.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY];
+    };
+    const withReport = (report: unknown) => (chunk: unknown) =>
+      isRecord(chunk) && chunk["type"] === EventType.RUN_FINISHED
+        ? {
+            ...chunk,
+            metadata: {
+              ...(isRecord(chunk["metadata"]) ? chunk["metadata"] : {}),
+              [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: report,
+            },
+          }
+        : chunk;
+
+    expect(await finishedTurn((chunk) => chunk)).toEqual({
+      usedTokens: 15,
+      windowTokens: 200_000,
+    });
+    for (const forged of [
+      { usedTokens: 15, windowTokens: 200_000, label: "<b>full</b>" },
+      { usedTokens: 1.5, windowTokens: 200_000 },
+      { usedTokens: 15 },
+    ]) {
+      expect(await finishedTurn(withReport(forged))).toBeUndefined();
+    }
   });
 
   test("the thread's next turn on the same computer resumes the harness session", async () => {
