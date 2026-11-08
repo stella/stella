@@ -8,7 +8,7 @@ defaults:
 # pull_request_target executes trusted base-repository workflow code with secrets.
 # Never check out PR head code, build or install it, or interpolate PR data into
 # executable code. This workflow is limited to API calls in pinned actions;
-# head SHAs are data for the Checks API, never executable input.
+# head SHAs are data for the Statuses API, never executable input.
 
 on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] API-only; no checkout or execution of PR code
@@ -33,9 +33,10 @@ concurrency:
 
 permissions:
   contents: read
-  checks: write
+  statuses: write
   issues: write
-  pull-requests: read
+  # Posts the signing prompt on the pull request.
+  pull-requests: write
 
 jobs:
   verify-signatures:
@@ -136,12 +137,14 @@ jobs:
               "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT",
             ]);
             const MAX_PULL_COMMITS = 250;
-            const MAX_GROUP_ENTRIES = 100;
             const MAX_COMMIT_AUTHORS = 1000;
             const { owner, repo } = context.repo;
             const api = github;
             const store = process.env.CLA_STORE_TOKEN ? new github.constructor({ auth: process.env.CLA_STORE_TOKEN }) : api;
+            const RUN_URL = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
+            const MAX_STATUS_DESCRIPTION = 140;
             const checks = new Set();
+            const promptErrors = [];
             const fail = (code) => {
               const error = new Error(code);
               error.name = "ClaPolicyError";
@@ -149,6 +152,11 @@ jobs:
             };
             const positiveInteger = (value) => Number.isSafeInteger(value) && value > 0;
             const validSha = (value) => typeof value === "string" && /^[0-9a-f]{40}$/u.test(value);
+            // GitHub's own words and the permissions it would accept; a bare status names neither.
+            const refusalDetail = (error) => [
+              error.message,
+              error.response?.headers?.["x-accepted-github-permissions"],
+            ].filter(Boolean).join("; accepted permissions: ");
             const retryApi = async (operation) => {
               for (let attempt = 1; ; attempt++) {
                 try {
@@ -229,22 +237,27 @@ jobs:
               });
               return membership?.state === "active" && (membership.role === "member" || membership.role === "admin");
             };
+            // A commit status belongs to the commit. A check run posted through the API joins
+            // a suite GitHub picks on that commit, which can be another workflow's run.
+            // Replaying a status is safe: the newest one for a context wins. A verdict
+            // lost to one server error would leave a required check pending until the
+            // merge queue's timeout, holding every entry behind it.
+            const postStatus = ({ sha, name }, state, description) => retryApi(() => api.request("POST /repos/{owner}/{repo}/statuses/{sha}", {
+              owner, repo, sha, context: name, state, target_url: RUN_URL,
+              description: description.length > MAX_STATUS_DESCRIPTION ? `${description.slice(0, MAX_STATUS_DESCRIPTION - 1)}…` : description,
+            }));
             const startCheck = async (sha, name = "cla") => {
               if (!validSha(sha)) fail("CLA_INVALID_HEAD");
-              const { data } = await request("POST /repos/{owner}/{repo}/check-runs", {
-                name, head_sha: sha, status: "in_progress",
-                output: { title: "CLA_CHECKING", summary: "Verifying contributor signatures." },
-              });
-              if (!positiveInteger(data.id)) fail("CLA_INVALID_CHECK_RUN");
-              checks.add(data.id);
-              return data.id;
+              const check = { sha, name };
+              // Registered first: a post that failed may still have landed, so a failed
+              // run must report on this check too rather than leave it pending.
+              checks.add(check);
+              await postStatus(check, "pending", "CLA_CHECKING: Verifying contributor signatures.");
+              return check;
             };
-            const completeCheck = async (id, conclusion, title, summary) => {
-              await request("PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}", {
-                check_run_id: id, status: "completed", conclusion, completed_at: new Date().toISOString(),
-                output: { title, summary },
-              });
-              checks.delete(id);
+            const completeCheck = async (check, state, title, summary) => {
+              await postStatus(check, state, `${title}: ${summary}`);
+              checks.delete(check);
             };
             const readPull = async (number) => {
               if (!positiveInteger(number)) fail("CLA_INVALID_PULL_NUMBER");
@@ -350,24 +363,33 @@ jobs:
                   created_at: signingComment.created_at, repoId: pull.base.repo.id, pullRequestNo: pull.number,
                 });
               }
-              if (unsigned.length) await prompt(pull, comments, unsigned);
+              if (unsigned.length) {
+                // The verdict stands without the comment, and the check names who signs and how.
+                await prompt(pull, comments, unsigned).catch((error) => {
+                  const code = `CLA_PROMPT_ERROR_${error.status ?? "UNKNOWN"}`;
+                  core.error(`${code} (#${pull.number}): ${refusalDetail(error)}`, { title: "signature-prompt-failed" });
+                  promptErrors.push(code);
+                });
+              }
               return { unsigned, unlinked };
             };
-            const finishVerification = async (id, unsigned, unlinked) => {
+            const finishVerification = async (check, unsigned, unlinked) => {
               const failed = unsigned.length > 0 || unlinked.length > 0;
               const title = unlinked.length ? "CLA_UNLINKED_AUTHOR" : unsigned.length ? "CLA_UNSIGNED" : "CLA_VERIFIED";
               const details = [];
               if (unlinked.length) details.push(`Commit authors have no linked GitHub account: ${unlinked.join(", ")}. Link the author identity to a GitHub account before verification.`);
               if (unsigned.length) details.push(`Unsigned contributors: ${unsigned.join(", ")}. Read [the CLA](${DOCUMENT}) and each contributor must post exactly: ${SENTENCE}`);
-              await completeCheck(id, failed ? "failure" : "success", title,
-                failed ? details.join("\n\n") : "Every contributor covered by this check is signed or exempt.");
+              // The status description is short; the run summary it links to carries the instructions.
+              if (failed) await core.summary.addRaw(`## ${title}\n\n${details.join("\n\n")}\n\n`).write();
+              await completeCheck(check, failed ? "failure" : "success", title,
+                failed ? `See details. ${[...unsigned, ...unlinked].join(", ")}` : "Every contributor covered by this check is signed or exempt.");
             };
             const verifyNumber = async (number) => {
               const pull = await readPull(number);
-              const id = await startCheck(pull.head.sha);
+              const shared = await startCheck(pull.head.sha);
               // Shared-head checks cover immutable contributors, never unrelated openers.
               const contributors = await verifyPull(pull, undefined, false);
-              await finishVerification(id, contributors.unsigned, contributors.unlinked);
+              await finishVerification(shared, contributors.unsigned, contributors.unlinked);
               const scoped = await startCheck(pull.head.sha, `cla/pr-${number}`);
               const verdict = await verifyPull(pull);
               await finishVerification(scoped, verdict.unsigned, verdict.unlinked);
@@ -377,28 +399,77 @@ jobs:
             // group head, and GitHub ends that commit's subject with "(#<number>)".
             // Membership comes from these immutable commits, so a merge queue
             // snapshot taken while GitHub is still building groups is never read.
+            // BEGIN GENERATED merge-group parser
+            const parseMergeGroupEntries = ({ group, added, fail }) => {
+              const MAX_GROUP_ENTRIES = 100;
+              /** @param {unknown} value @returns {value is Record<string, unknown>} */
+              const record = (value) =>
+                typeof value === "object" && value !== null && !Array.isArray(value);
+              /** @param {unknown} value @returns {value is unknown[]} */
+              const array = (value) => Array.isArray(value);
+              /** @param {unknown} value @returns {value is number} */
+              const positiveInteger = (value) =>
+                typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+              /** @param {unknown} value @returns {value is string} */
+              const validSha = (value) =>
+                typeof value === "string" && /^[0-9a-f]{40}$/u.test(value);
+              if (
+                !record(group) ||
+                !validSha(group["base_sha"]) ||
+                !validSha(group["head_sha"]) ||
+                !record(added) ||
+                !array(added["commits"]) ||
+                !positiveInteger(added["total_commits"]) ||
+                added["total_commits"] > MAX_GROUP_ENTRIES ||
+                added["commits"].length !== added["total_commits"]
+              )
+                return fail("CLA_UNEXPECTED_GROUP_COMMIT");
+              const entries = [];
+              let base = group["base_sha"];
+              for (const commit of added["commits"]) {
+                const parents = record(commit) ? commit["parents"] : undefined;
+                const parent = array(parents) ? parents.at(0) : undefined;
+                const data = record(commit) ? commit["commit"] : undefined;
+                if (
+                  !record(commit) ||
+                  !validSha(commit["sha"]) ||
+                  !array(parents) ||
+                  parents.length !== 1 ||
+                  !record(parent) ||
+                  parent["sha"] !== base ||
+                  !record(data) ||
+                  typeof data["message"] !== "string"
+                )
+                  return fail("CLA_UNEXPECTED_GROUP_COMMIT");
+                const number = Number(
+                  data["message"]
+                    .split("\n", 1)
+                    .join("")
+                    .trimEnd()
+                    .match(/\(#([1-9][0-9]*)\)$/u)?.[1],
+                );
+                if (!positiveInteger(number)) fail("CLA_UNEXPECTED_GROUP_COMMIT");
+                entries.push({
+                  number,
+                  baseCommit: { oid: base },
+                  headCommit: { oid: commit["sha"] },
+                });
+                base = commit["sha"];
+              }
+              if (base !== group["head_sha"]) fail("CLA_UNEXPECTED_GROUP_COMMIT");
+              if (new Set(entries.map(({ number }) => number)).size !== entries.length)
+                fail("CLA_AMBIGUOUS_GROUP_CHAIN");
+              return entries;
+            };
+            // END GENERATED merge-group parser
             const groupEntries = async (group) => {
               const { data: added } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
                 basehead: `${group.base_sha}...${group.head_sha}`,
               });
-              if (!Array.isArray(added.commits) || !positiveInteger(added.total_commits) ||
-                  added.total_commits > MAX_GROUP_ENTRIES || added.commits.length !== added.total_commits) fail("CLA_UNEXPECTED_GROUP_COMMIT");
-              const entries = [];
-              let base = group.base_sha;
-              for (const commit of added.commits) {
-                if (!validSha(commit?.sha) || !Array.isArray(commit.parents) || commit.parents.length !== 1 ||
-                    commit.parents[0]?.sha !== base || typeof commit.commit?.message !== "string") fail("CLA_UNEXPECTED_GROUP_COMMIT");
-                const number = Number(commit.commit.message.split("\n", 1)[0].trimEnd().match(/\(#([1-9][0-9]*)\)$/u)?.[1]);
-                if (!positiveInteger(number)) fail("CLA_UNEXPECTED_GROUP_COMMIT");
-                entries.push({ number, baseCommit: { oid: base }, headCommit: { oid: commit.sha } });
-                base = commit.sha;
-              }
-              if (base !== group.head_sha) fail("CLA_UNEXPECTED_GROUP_COMMIT");
-              if (new Set(entries.map(({ number }) => number)).size !== entries.length) fail("CLA_AMBIGUOUS_GROUP_CHAIN");
-              return entries;
+              return parseMergeGroupEntries({ group, added, fail });
             };
             const verifyGroup = async (group) => {
-              const id = await startCheck(group?.head_sha);
+              const check = await startCheck(group?.head_sha);
               if (!validSha(group.base_sha) || typeof group.base_ref !== "string" || typeof group.head_ref !== "string") fail("CLA_INVALID_MERGE_GROUP");
               // The queue ref names the queued pull request and the tree it was queued onto.
               const anchor = group.head_ref.match(/\/pr-([1-9][0-9]*)-([0-9a-f]{40})$/u);
@@ -416,7 +487,7 @@ jobs:
                 unsigned.push(...verdict.unsigned.map((login) => `${login} (#${entry.number})`));
                 unlinked.push(...verdict.unlinked.map((sha) => `${sha} (#${entry.number})`));
               }
-              await finishVerification(id, unsigned, unlinked);
+              await finishVerification(check, unsigned, unlinked);
             };
             try {
               switch (context.eventName) {
@@ -446,13 +517,15 @@ jobs:
                 default:
                   fail("CLA_UNSUPPORTED_EVENT");
               }
+              if (promptErrors.length) core.setFailed([...new Set(promptErrors)].join(", "));
             } catch (error) {
               const infrastructure = error.name === "ClaInfrastructureError";
               const code = infrastructure || error.name === "ClaPolicyError" ? error.message : `CLA_API_ERROR_${error.status ?? "UNKNOWN"}`;
               if (infrastructure) core.error(code, { title: "signature-service-unavailable" });
+              else if (Number.isInteger(error.status) && error.message) core.error(`${code}: ${refusalDetail(error)}`, { title: "signature-api-refused" });
               core.setFailed(code);
-              for (const id of checks) {
-                await completeCheck(id, "failure", infrastructure ? "CLA_API_UNAVAILABLE" : "CLA_ERROR",
+              for (const check of checks) {
+                await completeCheck(check, "failure", infrastructure ? "CLA_API_UNAVAILABLE" : "CLA_ERROR",
                   `Verification failed (${code}). Check workflow permissions and rerun.`).catch((reportError) => {
                     core.error(`CLA_CHECK_REPORT_ERROR_${reportError.status ?? "UNKNOWN"}`, { title: "signature-check-report-failed" });
                   });

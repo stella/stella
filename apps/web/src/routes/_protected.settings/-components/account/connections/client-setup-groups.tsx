@@ -33,6 +33,7 @@ import {
   ListItemMedia,
   ListItemTitle,
 } from "@stll/ui/list";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { CopyActionButton } from "@/components/copy-action-button";
 
@@ -178,11 +179,10 @@ const SetupList = ({ rows }: { rows: readonly SetupRow[] }) => (
         <ListItemActions>
           {row.note !== undefined && (
             <code
-              className="bg-muted text-muted-foreground hidden max-w-64 truncate rounded-md px-2 py-1 font-mono text-xs md:block"
+              className="bg-muted text-muted-foreground hidden max-w-64 rounded-md px-2 py-1 font-mono text-xs md:block"
               dir="ltr"
-              title={row.value}
             >
-              {row.value}
+              <TruncatedText>{row.value}</TruncatedText>
             </code>
           )}
           <CopyActionButton

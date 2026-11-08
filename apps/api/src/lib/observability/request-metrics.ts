@@ -1,6 +1,11 @@
 import { panic } from "better-result";
 
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
+import type { TranscriptionModelId } from "@stll/ai-catalog/transcription";
+import type {
+  CaseLawResearchAnswerFailureReason,
+  CaseLawResearchAnswerState,
+} from "@stll/api-contract";
 import type { SanctionsSource } from "@stll/sanctions";
 
 import type { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
@@ -113,22 +118,35 @@ type McpRequestMetricInput = {
   >;
   queryCount: number;
   totalMs: number;
+  /**
+   * The called tool's latency budget (`mcp/tool-latency-budgets.ts`), on a
+   * `tools/call` record only. `overBudget` is what the slow-tool log metric
+   * filter counts, so the alarm and the canary judge by the same table.
+   */
+  latencyBudgetMs?: number;
 };
 
 export const buildMcpRequestMetricRecord = ({
   phases,
   totalMs,
+  latencyBudgetMs,
   ...fields
-}: McpRequestMetricInput) => ({
-  event: "mcp.request.phases",
-  ...fields,
-  auth: Math.floor(phases.auth),
-  context: Math.floor(phases.context),
-  server_build: Math.floor(phases.server_build),
-  tool_projection: Math.floor(phases.tool_projection),
-  dispatch: Math.floor(phases.dispatch),
-  total: Math.ceil(totalMs),
-});
+}: McpRequestMetricInput) => {
+  const total = Math.ceil(totalMs);
+  return {
+    event: "mcp.request.phases",
+    ...fields,
+    auth: Math.floor(phases.auth),
+    context: Math.floor(phases.context),
+    server_build: Math.floor(phases.server_build),
+    tool_projection: Math.floor(phases.tool_projection),
+    dispatch: Math.floor(phases.dispatch),
+    total,
+    ...(latencyBudgetMs === undefined
+      ? {}
+      : { budget: latencyBudgetMs, overBudget: total > latencyBudgetMs }),
+  };
+};
 
 export const emitMcpRequestMetric = (input: McpRequestMetricInput): void => {
   writeMetricLine(buildMcpRequestMetricRecord(input));
@@ -191,6 +209,33 @@ export const emitVerificationRunFailureMetric = (
       errorCode satisfies never;
       panic("Unknown verification failure code");
   }
+};
+
+export const CASE_LAW_RESEARCH_CELLS_EVENT = "case_law.research_answer.cells";
+
+/**
+ * Research cells one write settled, one line per outcome, counted only where
+ * the write landed. `decision_unavailable` and `no_text` on a decision the
+ * search just served mean the read path is broken, not that a model refused:
+ * the API log's metric filter counts them against all settled cells, so a
+ * read that starts failing every cell alarms within the hour instead of
+ * waiting for someone to notice empty columns.
+ */
+export const emitCaseLawResearchCellsMetric = ({
+  state,
+  failureReason,
+  cells,
+}: {
+  state: Exclude<CaseLawResearchAnswerState, "pending">;
+  failureReason: CaseLawResearchAnswerFailureReason | null;
+  cells: number;
+}): void => {
+  writeMetricLine({
+    event: CASE_LAW_RESEARCH_CELLS_EVENT,
+    state,
+    failureReason: failureReason ?? "none",
+    CaseLawResearchAnswerCells: cells,
+  });
 };
 
 export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
@@ -692,6 +737,17 @@ export const emitAnonymizationRefusalMetric = (
 };
 
 const ACTION_RESPONSE_OVERSIZE_METRIC = "ActionResponseOversize";
+const TRANSCRIPTION_DURATION_MISMATCH_METRIC = "TranscriptionDurationMismatch";
+
+export const emitTranscriptionDurationMismatchMetric = (
+  modelId: TranscriptionModelId,
+): void => {
+  writeMetricLine({
+    event: "transcription.duration_mismatch",
+    modelId,
+    [TRANSCRIPTION_DURATION_MISMATCH_METRIC]: 1,
+  });
+};
 
 type PublicCorpusAdmissionMetric = {
   class: Exclude<PublicCorpusClass, "browse">;

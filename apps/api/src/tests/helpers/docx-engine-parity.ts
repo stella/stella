@@ -1,8 +1,7 @@
 import { panic } from "better-result";
-import JSZip from "jszip";
 import { readdir } from "node:fs/promises";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
@@ -46,20 +45,18 @@ export const engineParityCases = async () => {
     p("{% endfor %}"),
     `<w:tbl><w:tr><w:tc>${p("{% for row in rows %}") + p("{{ row.name }}") + p("{% endfor %}")}</w:tc></w:tr></w:tbl>`,
   ].join("");
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
   );
   cases.push({
     name: "directive-loops.docx",
-    file: testDocxFile(await zip.generateAsync({ type: "uint8array" })),
+    file: testDocxFile(await zip.generate({ compression: "store" })),
     values: {
       groups: [
         {
@@ -76,16 +73,17 @@ export const engineParityCases = async () => {
 
 // Retain exact XML equality evidence without copying fixture content.
 export const engineParityXmlDigests = async (file: ScannedFile) => {
-  const zip = await JSZip.loadAsync(file.bytes);
+  const zip = await ZipArchive.read(file.bytes);
   const parts: Record<string, string> = {};
-  for (const path of Object.keys(zip.files)
+  for (const path of zip
+    .paths()
     .filter((partName) => partName.endsWith(".xml"))
     .toSorted()) {
-    const entry = zip.file(path);
+    const entry = zip.entry(path);
     if (!entry) {
       panic(`Missing XML part ${path}`);
     }
-    parts[path] = hashSha256Hex(await entry.async("string"));
+    parts[path] = hashSha256Hex(await entry.text());
   }
   return `${JSON.stringify(parts, null, 2)}\n`;
 };

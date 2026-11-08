@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { escapeLike } from "./escape-like";
 
@@ -68,16 +68,18 @@ describe("escapeLike", () => {
   });
 
   test("invariant: output never contains an unescaped metacharacter", () => {
-    fc.assert(
+    assertProperty(
+      "invariant: output never contains an unescaped metacharacter",
       fc.property(fc.string(), (input) => {
         expect(hasNoUnescapedSpecial(escapeLike(input))).toBe(true);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("invariant: stripping escapes recovers the original input", () => {
-    fc.assert(
+    assertProperty(
+      "invariant: stripping escapes recovers the original input",
       fc.property(fc.string(), (input) => {
         const escaped = escapeLike(input);
         // Removing each escaping backslash (consume-next-char parse)
@@ -91,7 +93,7 @@ describe("escapeLike", () => {
         }
         expect(recovered).toBe(input);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -111,14 +113,15 @@ describe("escapeLike", () => {
   });
 
   test("invariant: escaped length equals input length plus metachar count", () => {
-    fc.assert(
+    assertProperty(
+      "invariant: escaped length equals input length plus metachar count",
       fc.property(fc.string(), (input) => {
         const metaCount = Array.from(input).filter((char) =>
           SPECIAL.has(char),
         ).length;
         expect(escapeLike(input).length).toBe(input.length + metaCount);
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

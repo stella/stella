@@ -1,0 +1,4 @@
+{
+  "add-column": "A nullable-free boolean with a constant default is a catalog change. The mutation fence is taken first so running writers finish before the lock is asked for, and the lock itself is bounded to one second.",
+  "create-trigger": "Both triggers are created under the mutation fence with a one-second lock bound, so projection writers are already held and readers are not blocked."
+}

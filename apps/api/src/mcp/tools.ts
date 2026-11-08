@@ -59,6 +59,7 @@ import {
   MCP_PUBLIC_CORPUS_CLASS,
 } from "@/api/mcp/static-tool-definitions";
 import { scopeToolResultToSurface } from "@/api/mcp/surface-tool-mentions";
+import { runToolWithRealtime } from "@/api/mcp/tool-realtime";
 import type {
   InternalToolResult,
   McpToolDefinition,
@@ -67,6 +68,7 @@ import type {
   ToolScope,
 } from "@/api/mcp/tool-types";
 import {
+  caseLawSearchTimeoutResult,
   confirmationUnavailableResult,
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
@@ -648,9 +650,11 @@ const dispatchMcpToolCall = async ({
           const executionContext = requiresConfirmation
             ? bindApprovedMcpAuditContext(authorizedContext)
             : authorizedContext;
-          const response = await handler({
+          const response = await runToolWithRealtime({
             args: normalizedArgs,
             context: executionContext,
+            handler,
+            toolName,
           });
           const finalized = await finalizeToolEgress(
             {
@@ -701,7 +705,8 @@ const MCP_OUTPUT_CONTRACT_SINK = failureSink({
  * failure owner instead, which grades it a defect and logs it at ERROR: the
  * caller sees an ordinary tool error, so nothing else would surface it. A
  * search index that could not be reached is not a defect of the call, so it
- * keeps its own retryable `search_index_unavailable` envelope.
+ * keeps its own retryable `search_index_unavailable` envelope, and a public
+ * read the request's latency budget ended keeps `public_read_timeout`.
  */
 const internalErrorResult = ({
   mode,
@@ -726,6 +731,13 @@ const internalErrorResult = ({
       ),
     );
   }
+  // A read the request's budget ended is a timeout, not the index being
+  // unavailable, whatever the read was waiting on.
+  if (publicReadTimeoutError(error) !== null) {
+    return serializeToolResult(
+      internalFailureResult(error, "mcp.internalErrorResult"),
+    );
+  }
   if (isSearchIndexUnavailable(error)) {
     return serializeToolResult(
       scopeToolResultToSurface(searchIndexUnavailableResult(error), {
@@ -734,9 +746,11 @@ const internalErrorResult = ({
       }),
     );
   }
-  if (publicReadTimeoutError(error) !== null) {
+  const timeout =
+    toolName === "search_case_law" ? caseLawSearchTimeoutResult(error) : null;
+  if (timeout !== null) {
     return serializeToolResult(
-      internalFailureResult(error, "mcp.internalErrorResult"),
+      scopeToolResultToSurface(timeout, { mode, context }),
     );
   }
   if (contractViolation !== undefined) {

@@ -55,7 +55,10 @@ export const authFixtureLoaderData = (routeId: string) => {
         provider: null,
       } satisfies typeof ErrorRoute.types.loaderData;
     case "/auth/accept-invitation/$invitationId":
-      return { invitation } satisfies typeof InvitationRoute.types.loaderData;
+      return {
+        type: "invitation",
+        invitation,
+      } satisfies typeof InvitationRoute.types.loaderData;
     default:
       return undefined;
   }

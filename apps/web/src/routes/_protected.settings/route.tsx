@@ -1,8 +1,8 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Navigate, Outlet } from "@tanstack/react-router";
 
-import { SettingsShell } from "@/components/settings-shell/settings-shell";
 import { pageTitle } from "@/lib/page-title";
 import { routePresentation } from "@/routes/-route-presentation";
+import { SettingsShell } from "@/routes/_protected.settings/-components/settings-shell/settings-shell";
 
 export const Route = createFileRoute("/_protected/settings")({
   staticData: {
@@ -16,6 +16,9 @@ export const Route = createFileRoute("/_protected/settings")({
     meta: [{ title: pageTitle("common.settings") }],
   }),
   component: SettingsLayout,
+  // A stale settings link stays in settings rather than leaving for the
+  // matters list.
+  notFoundComponent: () => <Navigate replace to="/settings/account/profile" />,
 });
 
 function SettingsLayout() {

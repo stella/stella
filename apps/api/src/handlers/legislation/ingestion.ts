@@ -597,7 +597,12 @@ const writeDecidedVersionTx = async (
       .where(eq(legislationDocuments.id, id));
   }
   await syncLegislationWorkNamesTx(tx, [
-    { id, country: values.country, title: values.title },
+    {
+      id,
+      country: values.country,
+      title: values.title,
+      documentType: values.documentType ?? null,
+    },
   ]);
   return id;
 };

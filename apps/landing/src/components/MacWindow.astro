@@ -14,9 +14,9 @@ const { label, class: className } = Astro.props;
 <div class:list={["macwin", className]}>
   <div class="macwin-titlebar">
     <div aria-hidden="true" class="macwin-lights">
-      <span class="macwin-light" style="background: #ff5f57"></span>
-      <span class="macwin-light" style="background: #febc2e"></span>
-      <span class="macwin-light" style="background: #28c840"></span>
+      <span class="macwin-light" style="background: var(--mac-close)"></span>
+      <span class="macwin-light" style="background: var(--mac-minimize)"></span>
+      <span class="macwin-light" style="background: var(--mac-maximize)"></span>
     </div>
     <div class="macwin-label">{label}</div>
   </div>
@@ -37,7 +37,7 @@ const { label, class: className } = Astro.props;
     /* --card is translucent in the dark theme; composite it over the page
        background for an opaque surface. */
     background: linear-gradient(var(--card), var(--card)) var(--background);
-    box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5);
+    box-shadow: 0 42px 110px -54px var(--preview-window-shadow);
   }
 
   .macwin-titlebar {
@@ -51,10 +51,10 @@ const { label, class: className } = Astro.props;
       color-mix(in srgb, var(--foreground) 8%, transparent);
     background: linear-gradient(
       180deg,
-      color-mix(in srgb, var(--card) 98%, white 2%),
+      color-mix(in srgb, var(--card) 98%, var(--color-white) 2%),
       color-mix(in srgb, var(--card) 94%, var(--muted) 6%)
     );
-    box-shadow: inset 0 1px 0 color-mix(in srgb, white 50%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-white) 50%, transparent);
   }
 
   .macwin-lights {

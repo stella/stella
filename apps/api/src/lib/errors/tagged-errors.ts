@@ -421,9 +421,10 @@ export class CorpusMemberDigestMismatchError extends TaggedError(
 }> {}
 
 /**
- * A stored document AST carried vocabulary this reader does not declare:
- * a block role, a block kind, or an inline kind. The read served the
- * document with those degraded (see `persistedAstDegradations` in
+ * A stored document AST carried vocabulary this reader does not declare
+ * (a block role, a block kind, or an inline kind) or head matter after the
+ * body. The read served the document with those degraded (see
+ * `persistedAstDegradations` and `headMatterOrderDegradations` in
  * `@stll/legal-ast/document-ast`); this is telemetry only, so the row is
  * visible: either a writer newer than this reader, or a row written past
  * the ingestion boundary that needs repair.

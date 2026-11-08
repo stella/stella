@@ -1,0 +1,18 @@
+{
+  "id": "no-render-phase-update",
+  "rules": ["no-render-phase-update/no-render-phase-update"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-render-phase-update/no-render-phase-update",
+    "apps",
+    "packages"
+  ]
+}
