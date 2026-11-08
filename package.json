@@ -197,7 +197,7 @@
     "@expo/cli": "58.1.18",
     "@expo/router-server": "58.0.20",
     "@expo/ui": "58.0.26",
-    "@modelcontextprotocol/sdk": "1.32.1",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@stll/folio-core": "0.66.1",
     "adm-zip": "0.6.1",
     "body-parser": "2.4.0",
