@@ -572,27 +572,30 @@ export const czRegionalCaseNumberOf = (
 ): { caseNumber: string; sheetNumber: string | undefined } => {
   const reference = splitCaseReference(item.jednaciCislo);
   const docket = REGIONAL_DOCKET.exec(reference.caseNumber)?.groups;
-  const ecliParts = (toOptionalValue(item.ecli) ?? "")
-    .split(":")
-    .at(4)
-    ?.split(".");
-  if (docket === undefined || ecliParts === undefined) {
+  const senate = docket?.["senate"];
+  const printedRegistry = docket?.["registry"];
+  const number = docket?.["number"];
+  const year = docket?.["year"];
+  const [ecliSenate, ecliRegistry, ecliNumber, ecliYear] =
+    (toOptionalValue(item.ecli) ?? "").split(":").at(4)?.split(".") ?? [];
+  if (
+    senate === undefined ||
+    printedRegistry === undefined ||
+    number === undefined ||
+    year === undefined ||
+    ecliRegistry === undefined ||
+    ecliSenate !== senate ||
+    ecliNumber !== number ||
+    ecliYear !== year ||
+    ecliRegistry.toLocaleLowerCase("cs") !==
+      printedRegistry.toLocaleLowerCase("cs")
+  ) {
     return reference;
   }
-  const [senate, registry, number, year] = ecliParts;
-  const sameDocket =
-    senate === docket["senate"] &&
-    number === docket["number"] &&
-    year === docket["year"] &&
-    registry !== undefined &&
-    registry.toLocaleLowerCase("cs") ===
-      docket["registry"]?.toLocaleLowerCase("cs");
-  return sameDocket
-    ? {
-        ...reference,
-        caseNumber: `${docket["senate"]} ${registry} ${docket["number"]}/${docket["year"]}`,
-      }
-    : reference;
+  return {
+    ...reference,
+    caseNumber: `${senate} ${ecliRegistry} ${number}/${year}`,
+  };
 };
 
 type CzRegionalListingRead =
