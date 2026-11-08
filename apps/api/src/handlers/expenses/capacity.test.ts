@@ -87,7 +87,7 @@ test("concurrent creates serialize the workspace cap decision with the insert", 
         recordAuditEvent,
         body: {
           matterId,
-          dateIncurred: new Date().toISOString().slice(0, 10),
+          dateIncurred: "2026-01-15",
           timezoneId: "UTC",
           amount: 1,
           currency: "USD",

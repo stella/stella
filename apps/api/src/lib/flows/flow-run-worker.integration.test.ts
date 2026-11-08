@@ -29,6 +29,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { inspectDocxPackage } from "@stll/folio-core/server";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+import { dbClock } from "@stll/test-kit/db";
 import { parseTimeZoneId } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -294,7 +295,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       id: organizationId,
       name: "Flow Worker Test Org",
       slug: `flow-worker-test-${organizationId}`,
-      createdAt: new Date(),
+      createdAt: dbClock.now(),
     });
     await recordNewOrganizationAccessState(testDb, {
       organizationId,
@@ -318,14 +319,14 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         organizationId,
         userId,
         role: "owner",
-        createdAt: new Date(),
+        createdAt: dbClock.now(),
       },
       {
         id: Bun.randomUUIDv7(),
         organizationId,
         userId: backupOwnerUserId,
         role: "owner",
-        createdAt: new Date(),
+        createdAt: dbClock.now(),
       },
     ]);
     await testDb.insert(workspaces).values({
@@ -1608,7 +1609,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         organizationId,
         userId: reviewer,
         role: "member",
-        createdAt: new Date(),
+        createdAt: dbClock.now(),
       });
       await testDb
         .insert(workspaceMembers)
@@ -1748,7 +1749,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       organizationId,
       userId: departed,
       role: "member",
-      createdAt: new Date(),
+      createdAt: dbClock.now(),
     });
     const definitionId = createSafeId<"flowDefinition">();
     await testDb.insert(flowDefinitions).values({

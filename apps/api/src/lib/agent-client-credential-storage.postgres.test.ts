@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { asc, eq, sql } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
+
 import {
   AGENT_CLIENT_BATCH_SIZE,
   countPreviousAgentClientValues,
@@ -249,7 +251,7 @@ if (!databaseUrl || !enabled) {
               id: declared.id,
               task: BACKFILL_AGENT_CLIENT_STORAGE_TASK,
               schedule: declared.schedule,
-              nextRunAt: new Date(Date.now() - 60_000),
+              nextRunAt: dbClock.ago(60_000),
               enabled: false,
               payload: { paused: false, completed: true },
             }),

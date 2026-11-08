@@ -53,21 +53,6 @@ export const REPLAY_WRITER_REGISTRY = [
     kind: "pending",
   },
   {
-    file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 443,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 752,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 762,
-    kind: "pending",
-  },
-  {
     file: "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
     line: 490,
     kind: "pending",
@@ -388,6 +373,24 @@ export const REPLAY_WRITER_REGISTRY = [
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
     line: 407,
     kind: "pending",
+  },
+  {
+    file: "apps/api/src/lib/legal-search/removal-reconciliation-store.ts",
+    line: 170,
+    kind: "transition",
+    invariant: {
+      file: "apps/api/src/handlers/case-law/ingestion/removal-retry-lane.postgres.test.ts",
+      test: "a claimed retry classifies a restored decision without a publisher probe",
+    },
+  },
+  {
+    file: "apps/api/src/lib/legal-search/removal-reconciliation-store.ts",
+    line: 367,
+    kind: "transition",
+    invariant: {
+      file: "apps/api/src/handlers/case-law/ingestion/removal-retry-lane.postgres.test.ts",
+      test: "bounded retries leave the remainder due for the next run",
+    },
   },
   {
     file: "apps/api/src/lib/legal-search/sk-document-backfill.ts",

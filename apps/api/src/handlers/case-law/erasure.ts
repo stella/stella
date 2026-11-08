@@ -16,6 +16,7 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {
   lockCaseLawDecisionRows,
   lockCaseLawRepublication,
@@ -490,21 +491,24 @@ export const redactCaseLawDecision = async ({
         );
       pendingFenceResults.push(
         (async () => {
+          const redaction = replayWrite(caseLawDecisions, {
+            redactedAt: decision.redactedAt ?? new Date(),
+            corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+            fulltext: null,
+            sections: null,
+            documentAst: null,
+            contentHash: null,
+            // The inline raw column predates object storage; nothing writes it
+            // any more, and a row that still holds it holds the publisher's text.
+            sourceRaw: null,
+          });
           // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
           await tx
             .update(caseLawDecisions)
-            .set({
-              redactedAt: decision.redactedAt ?? new Date(),
-              corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-              fulltext: null,
-              sections: null,
-              documentAst: null,
-              contentHash: null,
-              // The inline raw column predates object storage; nothing writes it
-              // any more, and a row that still holds it holds the publisher's text.
-              sourceRaw: null,
-            })
-            .where(eq(caseLawDecisions.id, decision.id));
+            .set(redaction.set)
+            .where(
+              and(redaction.setWhere, eq(caseLawDecisions.id, decision.id)),
+            );
           // Supplements carry the same personal text: those merged into this
           // decision, and the one this row stands for. Payloads under this
           // decision's prefix go with the sweep below; one its judgment holds is
@@ -842,21 +846,31 @@ const eraseFencedDecision = async ({
   // blocks every reader.
   if (corpusErasure.type !== "incomplete" && rawErasure.type !== "incomplete") {
     await scopedDb(async (tx) => {
+      const objectKeys = replayWrite(caseLawDecisions, {
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
+        sourceRawS3Key: null,
+        sourceRawContentType: null,
+      });
       // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
       await tx
         .update(caseLawDecisions)
-        .set({
-          textS3Key: null,
-          normalizedS3Key: null,
-          astS3Key: null,
-          sourceRawS3Key: null,
-          sourceRawContentType: null,
-        })
-        .where(eq(caseLawDecisions.id, decisionId));
+        .set(objectKeys.set)
+        .where(and(objectKeys.setWhere, eq(caseLawDecisions.id, decisionId)));
+      const identityKeys = replayWrite(caseLawDecisionSourceIdentities, {
+        sourceRawS3Key: null,
+        sourceRawContentType: null,
+      });
       await tx
         .update(caseLawDecisionSourceIdentities)
-        .set({ sourceRawS3Key: null, sourceRawContentType: null })
-        .where(eq(caseLawDecisionSourceIdentities.decisionId, decisionId));
+        .set(identityKeys.set)
+        .where(
+          and(
+            identityKeys.setWhere,
+            eq(caseLawDecisionSourceIdentities.decisionId, decisionId),
+          ),
+        );
       await runDecisionWriteExtension(tx, decisionId);
     });
   }

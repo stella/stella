@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
 import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -65,11 +66,21 @@ if (!databaseUrl || !runPostgresTests) {
           id: organizationId,
           name: "Backfill",
           slug: organizationId,
-          createdAt: new Date(),
+          createdAt: dbClock.now(),
         });
+        const [databaseClock] = await writerDb
+          .select({
+            epochMs:
+              sql<number>`(extract(epoch from now()) * 1000)::float8`.mapWith(
+                Number,
+              ),
+          })
+          .from(sql`(SELECT 1) AS database_clock`);
         await recordNewOrganizationAccessState(writerDb, {
           organizationId,
-          now: new Date(),
+          now: new Date(
+            databaseClock?.epochMs ?? panic("Database clock missing"),
+          ),
         });
         await writerDb.insert(member).values(
           [formerId, keptId].map((userId) => ({
@@ -77,7 +88,7 @@ if (!databaseUrl || !runPostgresTests) {
             organizationId,
             userId,
             role: "member",
-            createdAt: new Date(),
+            createdAt: dbClock.now(),
           })),
         );
         await writerDb.insert(workspaces).values({

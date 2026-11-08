@@ -198,7 +198,11 @@ const updateRateEntry = createSafeHandler(
     switch (outcome.status) {
       case "table-not-found":
         return Result.err(
-          new HandlerError({ status: 404, message: "Rate table not found" }),
+          new HandlerError({
+            status: 404,
+            code: "not_found",
+            message: "Rate table not found",
+          }),
         );
       case "currency-changed":
         return Result.err(
@@ -211,12 +215,17 @@ const updateRateEntry = createSafeHandler(
         );
       case "entry-not-found":
         return Result.err(
-          new HandlerError({ status: 404, message: "Rate entry not found" }),
+          new HandlerError({
+            status: 404,
+            code: "not_found",
+            message: "Rate entry not found",
+          }),
         );
       case "invalid-range":
         return Result.err(
           new HandlerError({
             status: 400,
+            code: "rate_entry_invalid_range",
             message: "effectiveTo must be >= effectiveFrom",
           }),
         );
@@ -224,6 +233,7 @@ const updateRateEntry = createSafeHandler(
         return Result.err(
           new HandlerError({
             status: 400,
+            code: "rate_entry_overlap",
             message:
               "Date range overlaps with an existing entry for this person, role, or table default",
           }),

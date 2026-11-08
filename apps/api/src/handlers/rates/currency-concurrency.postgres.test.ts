@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   featureEnrolments,
@@ -66,14 +68,14 @@ if (!databaseUrl || !runPostgres) {
           id: organizationId,
           name: "Rate currency serialization",
           slug: organizationId,
-          createdAt: new Date(),
+          createdAt: dbClock.now(),
         });
         await setup.db.insert(member).values({
           id: mintAuthProviderIdValue(),
           organizationId,
           userId,
           role: "owner",
-          createdAt: new Date(),
+          createdAt: dbClock.now(),
         });
         await setup.db.insert(featureEnrolments).values({
           organizationId,

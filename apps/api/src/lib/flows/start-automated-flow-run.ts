@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
@@ -200,7 +202,7 @@ export const startAutomatedFlowRun = async (
   }
   const currentAuthority = authorization.value;
   if (
-    currentAuthority?.workspace?.status !== "active" ||
+    !workspaceAcceptsWrites(currentAuthority?.workspace?.status) ||
     !isMemberRole(currentAuthority.role) ||
     !hasCurrentMemberPermission(currentAuthority.role, { flow: ["run"] })
   ) {

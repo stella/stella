@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import type { CaseSearchResultWithHearings } from "@stll/infosoud";
+import { dbClock } from "@stll/test-kit/db";
 
 import { organization } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -85,7 +86,7 @@ const withTrackedCase = async (
     id: organizationId,
     name: "InfoSoud active-matter test",
     slug: `infosoud-active-${organizationId}`,
-    createdAt: new Date(),
+    createdAt: dbClock.now(),
   });
   try {
     await rootDb.insert(workspaces).values({
