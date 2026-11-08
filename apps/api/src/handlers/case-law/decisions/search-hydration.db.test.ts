@@ -1772,9 +1772,10 @@ test("a provision-only list reads its page and excerpts in one snapshot", async 
       loadCourtWeights: async () => await Promise.resolve(courtWeights),
     },
   });
-  // One read for ids, citing sentences and rows (one repeatable-read
-  // transaction), one for the language alternates.
-  expect(reads - before).toBe(2);
+  // One read for the provision's scope, which only chooses the path; one for
+  // ids, citing sentences and rows (one repeatable-read transaction); one for
+  // the language alternates.
+  expect(reads - before).toBe(3);
 });
 
 test("a provision-only list cursor resumes only the request it was issued for", async () => {
