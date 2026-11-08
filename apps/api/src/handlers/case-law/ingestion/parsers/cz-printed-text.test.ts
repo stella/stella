@@ -240,7 +240,7 @@ describe("structure", () => {
   });
 
   test("NSS: a separate opinion headed by the docket it names is headed, numbered from 1 and signed", async () => {
-    const ast = await readNss("7-as-155-2015");
+    const ast = await readNss("7-as-155-2015", "decision-roles/");
     expect(
       headings(ast, 2).filter((heading) =>
         heading.startsWith("Odlišné stanovisko"),

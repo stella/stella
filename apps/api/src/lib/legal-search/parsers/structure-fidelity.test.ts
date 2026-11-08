@@ -294,16 +294,16 @@ test("a list point the sentence runs on into is the list's paragraph, not a cut"
     cut([
       [
         undefined,
-        "1.) jak posoudit zásah okamžikový, avšak se zásahem trvajícím a s trvajícími důsledky,",
+        "a) jak posoudit zásah okamžikový, avšak se zásahem trvajícím a s trvajícími důsledky,",
       ],
-      [undefined, "2.) jak postupovat při kvalifikaci tvrzeného zásahu"],
+      [undefined, "b) jak postupovat při kvalifikaci tvrzeného zásahu"],
     ]),
   ).toEqual([]);
   expect(
     cut([
       [
         undefined,
-        "1.) jak posoudit zásah okamžikový, avšak se zásahem trvajícím a s trvajícími důsledky,",
+        "a) jak posoudit zásah okamžikový, avšak se zásahem trvajícím a s trvajícími důsledky,",
       ],
       [undefined, "jak postupovat při kvalifikaci tvrzeného zásahu"],
     ]),
