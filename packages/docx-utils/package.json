@@ -1,6 +1,6 @@
 {
   "name": "@stll/docx-utils",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Low-level OOXML helpers: relationship and content-type management, attached-template handling, office format metadata, and namespace constants.",
   "keywords": [
     "docx",

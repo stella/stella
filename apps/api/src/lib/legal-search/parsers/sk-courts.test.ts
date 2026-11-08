@@ -9,7 +9,8 @@ import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { documentAstSchema } from "@stll/legal-ast/document-ast";
+import type { Inline } from "@stll/legal-ast/document-ast";
+import { documentAstSchema, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import appealLines from "@/api/lib/legal-search/parsers/fixtures/sk-courts-appeal-lines.json";
@@ -528,12 +529,18 @@ test("a title set over two lines, and a repeated section marker, keep identities
         (block) => block.type === "heading" && block.role === "decision-title",
       )
       .map((block) => block.plainText),
-  ).toEqual(["ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY"]);
+  ).toEqual(["ROZSUDOK"]);
+  // The formula is set in the title's type over its two lines, and is the
+  // court's opening words, not its title.
   expect(
     documentAst.blocks
       .filter((block) => block.type === "paragraph")
       .map((block) => block.plainText),
-  ).toEqual(["Súd žalobu zamieta.", "Náhradu nepriznáva."]);
+  ).toEqual([
+    "V MENE SLOVENSKEJ REPUBLIKY",
+    "Súd žalobu zamieta.",
+    "Náhradu nepriznáva.",
+  ]);
 });
 
 describe("reader-compatible Slovak heading identities", () => {
@@ -569,8 +576,13 @@ describe("reader-compatible Slovak heading identities", () => {
     };
   };
 
-  test("consecutive bold title lines form one reader heading", () => {
-    const ast = build(["ROZSUDOK V MENE", "SLOVENSKEJ REPUBLIKY", "rozhodol:"]);
+  test("consecutive bold title lines form one reader heading, the formula apart", () => {
+    const ast = build([
+      "TRESTNÝ",
+      "ROZKAZ V MENE",
+      "SLOVENSKEJ REPUBLIKY",
+      "rozhodol:",
+    ]);
     expect(
       ast.blocks.filter(
         (block) => block.type === "heading" && block.role === "decision-title",
@@ -579,10 +591,53 @@ describe("reader-compatible Slovak heading identities", () => {
       {
         type: "heading",
         anchorId: "h-title",
-        plainText: "ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY",
+        plainText: "TRESTNÝ ROZKAZ",
       },
     ]);
+    expect(ast.blocks[1]).toMatchObject({
+      type: "paragraph",
+      role: "intro",
+      plainText: "V MENE SLOVENSKEJ REPUBLIKY",
+    });
     expect(v.safeParse(documentAstSchema, ast).success).toBe(true);
+  });
+
+  test("the formula keeps the formatting it was printed in when read off the title", () => {
+    const blocks = buildSkDecisionPdfBlocks({
+      lines: [
+        { text: "ROZSUDOK V MENE", bold: true },
+        { text: "SLOVENSKEJ REPUBLIKY", bold: false },
+        { text: "rozhodol:", bold: true },
+      ].map(({ text, bold }) => ({
+        text,
+        segments: [bold ? { text, bold: true as const } : { text }],
+        bold,
+        fontSize: text === text.toUpperCase() ? 20 : 10,
+        pageIndex: 0,
+      })),
+      metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
+    });
+    const [title, formula] = blocks;
+    expect(title).toMatchObject({
+      type: "heading",
+      role: "decision-title",
+      plainText: "ROZSUDOK",
+    });
+    expect(formula).toMatchObject({
+      type: "paragraph",
+      role: "intro",
+      plainText: "V MENE SLOVENSKEJ REPUBLIKY",
+    });
+    const boldTexts = (inlines: readonly Inline[]): string[] =>
+      inlines.flatMap((inline) =>
+        inline.type === "bold" ? [plainTextOf(inline.children)] : [],
+      );
+    expect(title?.type === "heading" ? boldTexts(title.inlines) : []).toEqual([
+      "ROZSUDOK",
+    ]);
+    expect(
+      formula?.type === "paragraph" ? boldTexts(formula.inlines) : [],
+    ).toEqual(["V MENE"]);
   });
 
   test("repeated fixed section anchors remain unique for the reader", () => {

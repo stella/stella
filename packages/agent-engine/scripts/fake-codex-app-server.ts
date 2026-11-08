@@ -1008,6 +1008,7 @@ if (import.meta.main) {
       pid: process.pid,
       /** What follows the scenario: the launch's own arguments. */
       args: process.argv.slice(3),
+      path: process.env["PATH"],
       /** Where the turn points package managers' caches. */
       packageCache: Object.fromEntries(
         Object.entries(process.env).filter(([name]) =>

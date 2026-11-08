@@ -2117,11 +2117,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-3",
           "excerpt": " str. 35), zwanego dalej również „rozporządzeniem 2016/679”, ⏎ po przeprowadzeniu wszczętego z urzędu postępowania admin"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-4",
-          "excerpt": "ą w G. przy ul. (…), Prezes Urzędu Ochrony Danych Osobowych, ⏎ stwierdzając naruszenie przez Prokuraturę Rejonową w G. z"
         }
       ],
       "pl-uodo-listing-2023.json.gz:14": [
@@ -2129,11 +2124,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-3",
           "excerpt": " str. 35), zwanego dalej również „rozporządzeniem 2016/679”, ⏎ po przeprowadzeniu wszczętego z urzędu postępowania admin"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-4",
-          "excerpt": "ą w G. przy ul. (…), Prezes Urzędu Ochrony Danych Osobowych, ⏎ stwierdzając naruszenie przez Prokuraturę Rejonową w G. z"
         }
       ],
       "pl-uodo-zsoss-440-82-2019.xml:recorded-listing-context": [
@@ -2141,11 +2131,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-3",
           "excerpt": "em i zwalczaniem przestępczości (Dz. U. z 2019 r. poz. 125), ⏎ po przeprowadzeniu postępowania administracyjnego w spraw"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-4",
-          "excerpt": "ionej jego danych osobowych przez Prokuraturę Okręgową w W., ⏎ umarzam postępowanie"
         }
       ]
     }

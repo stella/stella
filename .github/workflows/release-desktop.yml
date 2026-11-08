@@ -165,10 +165,20 @@ jobs:
 
           bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}"
           if [[ -n "$UPSTREAM_RUN_ID" ]]; then
-            if ! bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA"; then
-              echo "::notice::No production promotion receipt for $REF; no desktop publication."
-              exit 0
-            fi
+            receipt_status=0
+            bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA" || receipt_status=$?
+            case "$receipt_status" in
+              0) ;;
+              1)
+                echo "::notice::No production promotion receipt for $REF; no desktop publication."
+                exit 0
+                ;;
+              *)
+                # An unreadable receipt must not pass as a run with nothing to publish.
+                echo "::error::The production promotion receipt for $REF could not be read"
+                exit 1
+                ;;
+            esac
           else
             [[ "$REF" != *-* ]] || { echo 'Desktop publication requires a stable promoted ref' >&2; exit 1; }
             # Manual recovery must target the commit production currently serves.
@@ -800,3 +810,43 @@ jobs:
       - name: Promote release to latest
         timeout-minutes: 10
         run: bash scripts/promote-desktop-release.sh
+
+  release-complete:
+    needs:
+      [
+        resolve,
+        build,
+        verify-production,
+        manifest,
+        promote-latest,
+        carry-forward,
+      ]
+    if: ${{ always() && needs.resolve.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all release jobs to complete
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        # The verdict is computed before it is read, so an unreadable needs
+        # record fails the job instead of reading as "nothing failed".
+        run: |
+          set -euo pipefail
+          unfinished=$(jq -nr '
+            input
+            | .resolve.outputs as $release
+            | to_entries[]
+            | select(.key != "resolve")
+            | select(if $release.should_build == "true" then
+                .key != "carry-forward"
+                and ($release.channel == "prod" or (.key != "verify-production" and .key != "promote-latest"))
+              else .key == "carry-forward" and $release.channel == "prod" end)
+            | select(.value.result != "success")
+            | [.key, .value.result] | @tsv' <<< "$NEEDS")
+          failed=0
+          while IFS=$'\t' read -r job result; do
+            [[ -n "$job" ]] || continue
+            echo "::error::Required desktop release job $job ended $result"
+            failed=1
+          done <<< "$unfinished"
+          exit "$failed"
