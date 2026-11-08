@@ -528,12 +528,18 @@ test("a title set over two lines, and a repeated section marker, keep identities
         (block) => block.type === "heading" && block.role === "decision-title",
       )
       .map((block) => block.plainText),
-  ).toEqual(["ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY"]);
+  ).toEqual(["ROZSUDOK"]);
+  // The formula is set in the title's type over its two lines, and is the
+  // court's opening words, not its title.
   expect(
     documentAst.blocks
       .filter((block) => block.type === "paragraph")
       .map((block) => block.plainText),
-  ).toEqual(["Súd žalobu zamieta.", "Náhradu nepriznáva."]);
+  ).toEqual([
+    "V MENE SLOVENSKEJ REPUBLIKY",
+    "Súd žalobu zamieta.",
+    "Náhradu nepriznáva.",
+  ]);
 });
 
 describe("reader-compatible Slovak heading identities", () => {
@@ -569,8 +575,13 @@ describe("reader-compatible Slovak heading identities", () => {
     };
   };
 
-  test("consecutive bold title lines form one reader heading", () => {
-    const ast = build(["ROZSUDOK V MENE", "SLOVENSKEJ REPUBLIKY", "rozhodol:"]);
+  test("consecutive bold title lines form one reader heading, the formula apart", () => {
+    const ast = build([
+      "TRESTNÝ",
+      "ROZKAZ V MENE",
+      "SLOVENSKEJ REPUBLIKY",
+      "rozhodol:",
+    ]);
     expect(
       ast.blocks.filter(
         (block) => block.type === "heading" && block.role === "decision-title",
@@ -579,9 +590,14 @@ describe("reader-compatible Slovak heading identities", () => {
       {
         type: "heading",
         anchorId: "h-title",
-        plainText: "ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY",
+        plainText: "TRESTNÝ ROZKAZ",
       },
     ]);
+    expect(ast.blocks[1]).toMatchObject({
+      type: "paragraph",
+      role: "intro",
+      plainText: "V MENE SLOVENSKEJ REPUBLIKY",
+    });
     expect(v.safeParse(documentAstSchema, ast).success).toBe(true);
   });
 

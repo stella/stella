@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { skSectionHeading } from "./slovak-document-roles";
+import {
+  isSkOpeningFormula,
+  skSectionHeading,
+  splitSkTitleFormula,
+} from "./slovak-document-roles";
 
 describe("Slovak Roman section headings", () => {
   test("dividers and titled sections share outline levels", () => {
@@ -51,4 +55,31 @@ test("Roman titled items are prose outside reasoning while bare dividers remain 
     expect(skSectionHeading("I. Súd žalobu zamieta.", section)).toBeNull();
     expect(skSectionHeading("I.", section)).toEqual({ level: 3 });
   }
+});
+
+describe("the Slovak opening formula", () => {
+  test.each([
+    "V MENE SLOVENSKEJ REPUBLIKY",
+    "V  M E N E   S L O V E N S K E J   R E P U B L I K Y",
+    "v mene republiky",
+  ])("%j is the formula", (text) => {
+    expect(isSkOpeningFormula(text)).toBe(true);
+  });
+
+  test("is read off a title it runs on from", () => {
+    expect(splitSkTitleFormula("ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY")).toEqual(
+      { title: "ROZSUDOK", formula: "V MENE SLOVENSKEJ REPUBLIKY" },
+    );
+    expect(
+      splitSkTitleFormula("TRESTNÝ ROZKAZ V MENE SLOVENSKEJ REPUBLIKY"),
+    ).toEqual({
+      title: "TRESTNÝ ROZKAZ",
+      formula: "V MENE SLOVENSKEJ REPUBLIKY",
+    });
+    expect(splitSkTitleFormula("ROZSUDOK")).toBeUndefined();
+    expect(splitSkTitleFormula("ROZSUDOK V MENE")).toBeUndefined();
+    expect(
+      splitSkTitleFormula("Súd rozhodol V MENE SLOVENSKEJ REPUBLIKY"),
+    ).toBeUndefined();
+  });
 });

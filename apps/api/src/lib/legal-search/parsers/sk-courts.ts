@@ -47,11 +47,13 @@ import {
   isSkDecisionTitle,
   isSkHoldingMarker,
   isSkInstructionMarker,
+  isSkOpeningFormula,
   isSkReasoningMarker,
   isSkStandaloneInstructionMarker,
   SK_CLOSING_RE,
   SK_JUDGE_TITLE_RE,
   skSectionHeading,
+  splitSkTitleFormula,
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 import { collapseLetterSpacing } from "@stll/text-normalize";
@@ -423,7 +425,7 @@ function isStructuralStart(line: PdfLine, section: Section): boolean {
   ) {
     return true;
   }
-  if (isSkDecisionTitle(line.text)) {
+  if (isSkDecisionTitle(line.text) || isSkOpeningFormula(line.text)) {
     return true;
   }
   // Closing formula and signature always start a new block
@@ -740,6 +742,40 @@ const readLetterSpacing = (line: PdfLine): ReadPdfLine => {
   return { ...line, inlines, text: plainTextOf(inlines).trim() };
 };
 
+const hasBold = (inlines: readonly Inline[]): boolean =>
+  inlines.some((inline) => inline.type === "bold");
+
+/**
+ * Read the formula off a title it was set in one run with: the title keeps
+ * its words, and the formula follows as the court's opening words.
+ */
+const separateOpeningFormula = ({
+  blocks,
+  makeId,
+  makeAnchor,
+}: Omit<AppendDecisionTitleOptions, "line">): void => {
+  const title = blocks.at(-1);
+  if (title?.type !== "heading" || title.role !== "decision-title") {
+    return;
+  }
+  const split = splitSkTitleFormula(title.plainText);
+  if (split === undefined) {
+    return;
+  }
+  const inlinesOf = (text: string): Inline[] =>
+    hasBold(title.inlines) ? boldInline(text) : [{ type: "text", text }];
+  title.plainText = split.title;
+  title.inlines = inlinesOf(split.title);
+  blocks.push({
+    id: makeId(),
+    anchorId: makeAnchor("p-formula"),
+    type: "paragraph",
+    role: "intro",
+    inlines: inlinesOf(split.formula),
+    plainText: split.formula,
+  });
+};
+
 /**
  * Classify extracted PDF lines into AST blocks.
  *
@@ -756,12 +792,27 @@ const classifyLines = (lines: readonly ReadPdfLine[]): Block[] => {
   for (const line of lines) {
     const { text, bold, fontSize } = line;
 
+    // The formula the court decides under is set in the title's type but
+    // is the court's opening words, not part of the title.
+    if (section === "preamble" && isSkOpeningFormula(text)) {
+      blocks.push({
+        id: makeId(),
+        anchorId: makeAnchor(`p${++blockCount}`),
+        type: "paragraph",
+        role: "intro",
+        inlines: line.inlines,
+        plainText: text,
+      });
+      continue;
+    }
+
     // Decision title: large font or matching decision type
     if (
       section === "preamble" &&
       (fontSize > TITLE_FONT_SIZE || isSkDecisionTitle(text))
     ) {
       appendDecisionTitle({ blocks, line, makeId, makeAnchor });
+      separateOpeningFormula({ blocks, makeId, makeAnchor });
       continue;
     }
 

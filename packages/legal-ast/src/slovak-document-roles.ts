@@ -1,3 +1,4 @@
+// parser-output-unchanged: [sk-us] only adds isSkOpeningFormula and splitSkTitleFormula, which only the Slovak courts' PDF reader calls; this source's lines are read as before.
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { caseLawSectionHeading } from "./case-law-heading";
@@ -56,6 +57,39 @@ const normalized = (text: string): string =>
 
 export const isSkDecisionTitle = (text: string): boolean =>
   DECISION_TITLES.has(normalized(text));
+
+/**
+ * The formula a court decides under, printed with the title in the same
+ * type (`ROZSUDOK` / `V MENE SLOVENSKEJ REPUBLIKY`). It is the court's
+ * words, not its title, so it is never part of the `decision-title`.
+ */
+const OPENING_FORMULAE: ReadonlySet<string> = new Set([
+  "vmeneslovenskejrepubliky",
+  "vmenerepubliky",
+]);
+
+export const isSkOpeningFormula = (text: string): boolean =>
+  OPENING_FORMULAE.has(normalized(text));
+
+/**
+ * A title line run on into the formula, as the court sets them in one type
+ * (`ROZSUDOK V MENE` / `SLOVENSKEJ REPUBLIKY`): the title and the formula,
+ * split at the word where the formula begins, or nothing when the line is
+ * not that run.
+ */
+export const splitSkTitleFormula = (
+  text: string,
+): { title: string; formula: string } | undefined => {
+  const words = text.trim().split(/\s+/u);
+  for (let at = 1; at < words.length; at += 1) {
+    const title = words.slice(0, at).join(" ");
+    const formula = words.slice(at).join(" ");
+    if (isSkDecisionTitle(title) && isSkOpeningFormula(formula)) {
+      return { title, formula };
+    }
+  }
+  return undefined;
+};
 
 export const isSkHoldingMarker = (text: string): boolean => {
   if (text.trim().length > MARKER_LINE_MAX_CHARS) {
