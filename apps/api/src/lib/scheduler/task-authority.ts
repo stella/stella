@@ -287,6 +287,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "sanctions-monitoring.ts",
     "Processes organization-scoped contact screening marks without a member run.",
   ),
+  "softLaw.sync": platform(
+    "soft-law-sync.ts",
+    "Syncs public regulator guidance from served sources.",
+  ),
   "sanctions.refreshSources": platform(
     "sanctions-refresh.ts",
     "Refreshes public sanctions lists.",

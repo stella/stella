@@ -226,6 +226,10 @@ import {
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
 import {
+  SYNC_SOFT_LAW_TASK,
+  syncSoftLawTask,
+} from "@/api/lib/scheduler/tasks/soft-law-sync";
+import {
   REFRESH_STATUTE_SITEMAP_SHARDS_TASK,
   refreshStatuteSitemapShardsTask,
 } from "@/api/lib/scheduler/tasks/statute-sitemap-shard-refresh";
@@ -276,6 +280,7 @@ const SCHEDULER_TASKS = {
   [RECEIVE_EMAIL_DELIVERABILITY_TASK]: receiveEmailDeliverability,
   [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
+  [SYNC_SOFT_LAW_TASK]: syncSoftLawTask,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
   [DISPATCH_NATIVE_EXTRACTION_TASK]: dispatchNativeExtraction,

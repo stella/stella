@@ -89,6 +89,7 @@ import { AUDIT_SCHEDULER_PAUSES_TASK } from "@/api/lib/scheduler/tasks/scheduler
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import { SYNC_SOFT_LAW_TASK } from "@/api/lib/scheduler/tasks/soft-law-sync";
 import { REFRESH_STATUTE_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/statute-sitemap-shard-refresh";
 import { RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
 import { PURGE_SYSTEM_AUDIT_RUNS_TASK } from "@/api/lib/scheduler/tasks/system-audit-retention";
@@ -832,6 +833,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60_000 },
     task: DRAIN_SANCTIONS_MONITORING_TASK,
+    reads: "unmeasured",
+  },
+  {
+    description: "Sync regulator guidance from served sources",
+    enabled: env.SOFT_LAW_SYNC_ENABLED,
+    id: "softLaw.sync.daily",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: DAY_IN_MS },
+    task: SYNC_SOFT_LAW_TASK,
     reads: "unmeasured",
   },
   {
