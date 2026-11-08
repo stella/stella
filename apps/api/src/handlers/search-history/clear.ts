@@ -89,6 +89,7 @@ const clearSearchHistory = createSafeRootHandler(
             abortTransaction(
               new HandlerError({
                 status: 409,
+                code: "search_history_country_unclassifiable",
                 message:
                   "A legacy document could not be classified. Clear all history or contact support.",
               }),
@@ -103,6 +104,7 @@ const clearSearchHistory = createSafeRootHandler(
             abortTransaction(
               new HandlerError({
                 status: 409,
+                code: "search_history_country_clear_pending",
                 message:
                   "Country clear is awaiting legacy document classification. Try again after maintenance completes.",
               }),
