@@ -425,6 +425,38 @@ const sectionHeadingIn = (key: string): SectionHeading | null =>
   ) ?? null;
 
 /**
+ * A title the court prints inside its reasons, whatever its wording.
+ *
+ * Courts title the parts of their reasons in their own words (`Kereset`,
+ * `Az alperes döntése`, `A törvényszék döntése és jogi indokai`, `Záró rész,
+ * perköltség, illeték`), and the DOCX states no style that marks them, so no
+ * list of wordings can be complete. What a title has and a reasons paragraph
+ * lacks is its shape: it is short, opens with a capital, cites no number or
+ * section, and ends without the punctuation every sentence and every
+ * introduction to a list ends with. Read only under the reasons heading,
+ * where every paragraph the court numbers is `[N]`, so an unnumbered line of
+ * that shape is a title; the summary and applied-legislation sections list
+ * acts by name and are left alone.
+ */
+const PRINTED_SUBHEADING_FORBIDDEN = /[\p{N}§\n]/u;
+const PRINTED_SUBHEADING_START = /^\p{Lu}/u;
+const PRINTED_SUBHEADING_UNFINISHED_END = /[.:;,!?…"'”»)\]-]$/u;
+
+const isPrintedSubheading = (text: string): boolean => {
+  const line = text.trim();
+  return (
+    line.length > 0 &&
+    line.length <= HEADING_LINE_MAX &&
+    PRINTED_SUBHEADING_START.test(line) &&
+    !PRINTED_SUBHEADING_FORBIDDEN.test(line) &&
+    !PRINTED_SUBHEADING_UNFINISHED_END.test(line)
+  );
+};
+
+/** The level-1 section under which the court titles its own parts. */
+const REASONS_HEADING_KEY = "indokolás";
+
+/**
  * The operative part's own introduction, which courts set as a centred, spaced
  * line rather than as a heading: `Í T É L E T E T :`, `v é g z é s t :`.
  *
@@ -1190,6 +1222,8 @@ export const parseHuBhgyDecision = (
   /** The header label the lines below a labelled one still belong to. */
   let continuedRole: ParagraphRole | null = null;
   let region: Region = "front";
+  /** Whether the last level-1 heading was the reasons' own (`Indokolás`). */
+  let underReasonsHeading = false;
   /**
    * Read through a call: the line handlers move `region`, and a direct
    * comparison after them would still see the value narrowed before them.
@@ -1252,6 +1286,9 @@ export const parseHuBhgyDecision = (
     const heading = sectionHeadingIn(key);
     if (heading !== null) {
       region = heading.region ?? region;
+      if (heading.level === 1) {
+        underReasonsHeading = heading.key === REASONS_HEADING_KEY;
+      }
       builder.heading({
         type: "heading",
         level: heading.level,
@@ -1271,6 +1308,7 @@ export const parseHuBhgyDecision = (
       )
     ) {
       region = "operative";
+      underReasonsHeading = false;
       builder.heading({
         type: "heading",
         level: 1,
@@ -1374,6 +1412,21 @@ export const parseHuBhgyDecision = (
     );
     const number = numbered?.groups?.["number"];
     const role: ParagraphRole = BODY_ROLE[region];
+    if (
+      number === undefined &&
+      region === "reasoning" &&
+      underReasonsHeading &&
+      isPrintedSubheading(normalized.plainText)
+    ) {
+      builder.heading({
+        type: "heading",
+        level: 2,
+        role: HEADING_ROLE_BY_LEVEL[2],
+        inlines: normalized.inlines,
+        plainText: normalized.plainText,
+      });
+      return;
+    }
     if (number === undefined) {
       builder.paragraph({
         type: "paragraph",

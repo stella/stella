@@ -910,6 +910,52 @@ describe("reading a document folio handed over", () => {
     ]);
   });
 
+  test("titles the court prints inside its reasons are headings, whatever their wording", () => {
+    const parsed = parse([
+      { text: "Indokolás" },
+      { text: "Az alperes döntése" },
+      { text: "[1]\tAz alperes a kérelmet elutasította." },
+      { text: "Kereset" },
+      { text: "[2]\tA felperes keresetében a határozat megsemmisítését kérte." },
+      { text: "A törvényszék döntése és jogi indokai", bold: true },
+      { text: "[3]\tA kereset nem alapos." },
+      { text: "Záró rész, perköltség, illeték" },
+      { text: "[4]\tA perköltségről a bíróság a Kp. 35. §-a alapján döntött." },
+    ]);
+    expect(shapeOf(parsed.documentAst.blocks)).toEqual([
+      "h1:section-heading:Indokolás",
+      "h2:section-heading:Az alperes döntése",
+      "p:argumentation#1:Az alperes a kérelmet elutasította.",
+      "h2:section-heading:Kereset",
+      "p:argumentation#2:A felperes keresetében a határozat megsemmisítését kérte.",
+      "h2:section-heading:A törvényszék döntése és jogi indokai",
+      "p:argumentation#3:A kereset nem alapos.",
+      "h2:section-heading:Záró rész, perköltség, illeték",
+      "p:argumentation#4:A perköltségről a bíróság a Kp. 35. §-a alapján döntött.",
+    ]);
+  });
+
+  test("a sentence, a cited provision or an applied act is never read as a title", () => {
+    const parsed = parse([
+      { text: "Indokolás" },
+      { text: "A kereset nem alapos." },
+      { text: "A Kúria az alábbiakat állapította meg:" },
+      { text: "Pp. 346. § (5) bekezdés" },
+      { text: "a jogerős ítélet hatályában fenntartandó" },
+      { text: "Alkalmazott jogszabályok" },
+      { text: "A polgári perrendtartásról szóló törvény" },
+    ]);
+    expect(shapeOf(parsed.documentAst.blocks)).toEqual([
+      "h1:section-heading:Indokolás",
+      "p:argumentation:A kereset nem alapos.",
+      "p:argumentation:A Kúria az alábbiakat állapította meg:",
+      "p:argumentation:Pp. 346. § (5) bekezdés",
+      "p:argumentation:a jogerős ítélet hatályában fenntartandó",
+      "h1:section-heading:Alkalmazott jogszabályok",
+      "p:argumentation:A polgári perrendtartásról szóló törvény",
+    ]);
+  });
+
   test("court summaries and applied legislation open substantive sections", () => {
     const parsed = parse([
       { text: "Indokolás" },
@@ -1428,7 +1474,7 @@ const parseHuNoteHeading = (texts: readonly string[]) =>
     [
       { text: "Indokolás" },
       { text: "Majority text", footnotes: [1] },
-      { text: "Later majority text" },
+      { text: "Later majority text." },
     ],
     [
       {
@@ -1608,6 +1654,36 @@ describe("the operative part's introduction, wherever the court prints it", () =
       "p:holding:A végzés ellen fellebbezésnek",
     ]);
     expect(parsed.decisionType).toBe("végzés");
+  });
+
+  // The reasons are titled in bold lines no list of wordings names.
+  test("Kf.700217/2022/7: the titles inside the reasons are headings", async () => {
+    const bytes = await Bun.file(
+      new URL("hu-bhgy-kf-700217-2022-7.docx", FIXTURES_DIR),
+    ).arrayBuffer();
+    const parsed = parseHuBhgyDecision({
+      document: await parseDocx(bytes, {
+        detectVariables: false,
+        preloadFonts: false,
+      }),
+      listedCaseNumber: "Kf.700217/2022/7",
+      court: "Fővárosi Ítélőtábla",
+      sourceUrl: "https://eakta.birosag.hu/anonimizalt-hatarozatok",
+      documentUrl: "https://eakta.birosag.hu/hatarozat-letoltes/",
+      documentId: "84d8db7d-444a-4ab4-9585-3b38169dbc6b",
+      statutes: [],
+    });
+    const titles = parsed.documentAst.blocks.flatMap((block) =>
+      block.type === "heading" && block.level === 2 ? [block.plainText] : [],
+    );
+    expect(titles).toEqual([
+      "A fellebbezés alapjául szolgáló tényállás",
+      "A felperes keresete",
+      "Az elsőfokú bíróság ítélete",
+      "A fellebbezés, a fellebbezési ellenkérelem",
+      "A másodfokú bíróság döntése és annak jogi indokai",
+      "Záró rész",
+    ]);
   });
 
   // A partial judgment introduces its operative part as `r é s z í t é l e t e t .`
