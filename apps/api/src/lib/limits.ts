@@ -672,6 +672,13 @@ export const LIMITS = {
    * token itself is shorter; the bound leaves room to change it.
    */
   caseLawDecisionTextVersionMaxLength: 24,
+  /** Characters of one docket register, such as "Cdo". */
+  caseLawDocketRegisterMaxChars: 16,
+  /** Registers one search may list. */
+  caseLawDocketRegistersFilterMax: 8,
+  /** Bounds of the senate number a docket opens with. */
+  caseLawSenateMin: 1,
+  caseLawSenateMax: 999,
   /**
    * Characters of one case reference. A docket, an ECLI or a reporter
    * citation; anything longer is prose and belongs in a text search.

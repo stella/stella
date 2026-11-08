@@ -14,6 +14,40 @@ export const decisionSearchCategorySql = (metadata: SQLWrapper) =>
     AND length(${metadata} ->> 'category') <= 128
     THEN ${metadata} ->> 'category' END)`;
 
+/** Countries whose dockets open with a senate and a register. */
+export const DOCKET_REGISTER_COUNTRIES: ReadonlySet<string> = new Set([
+  "CZE",
+  "SVK",
+]);
+
+type DocketRegisterFilter = {
+  docketRegisters?: readonly string[] | undefined;
+  senate?: number | undefined;
+};
+
+/**
+ * A pattern for "<senate> <register> <number>" dockets, as Czech and Slovak
+ * courts write them ("21 Cdo 641/2018", "6Co/163/2012"). The register is
+ * matched whole, so "Cdo" leaves "Cdon" out. A Constitutional Court docket
+ * ("III.ÚS 336/96") opens with neither and never matches.
+ */
+export const docketRegisterPattern = ({
+  docketRegisters,
+  senate,
+}: DocketRegisterFilter): string => {
+  const senatePattern = senate === undefined ? "\\d+" : String(senate);
+  const registerPattern =
+    docketRegisters === undefined
+      ? "[^\\s\\d/]+"
+      : `(?:${docketRegisters.map((register) => register.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")).join("|")})`;
+  return `^\\s*${senatePattern}\\s*${registerPattern}[\\s/]`;
+};
+
+export const decisionDocketRegisterSql = (
+  caseNumber: SQLWrapper,
+  filter: DocketRegisterFilter,
+) => sql`${caseNumber} ~* ${docketRegisterPattern(filter)}`;
+
 export const decisionHasLegalSentenceSql = (metadata: SQLWrapper) => {
   const absenceEntries = storedDecisionTextAbsenceEntriesSql(metadata);
 
