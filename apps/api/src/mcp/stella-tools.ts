@@ -1035,6 +1035,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       page: { kind: AGENT_INPUT_NORMALIZATION_KIND.number, range: "clamp" },
       include: { kind: "string-list" },
+      preferred_language: { kind: AGENT_INPUT_NORMALIZATION_KIND.filter },
     },
     access: "read",
     permissions: openMcpRead("public case-law corpus"),
@@ -2499,6 +2500,34 @@ const caseLawSearchResultFor = (
   const preferredLanguage = preferredLanguageOf(args);
   return (entry: ReturnType<typeof mergeCaseLawSearchHits>[number]) =>
     caseLawSearchResult({ ...entry, preferredLanguage });
+};
+
+/**
+ * The merged page's continuation: null when every query is exhausted, which
+ * makes the merged page the last one; otherwise each query's own cursor.
+ */
+const mergedCaseLawSearchCursor = (
+  pages: readonly CaseLawQueryOutcome[],
+): string | null => {
+  const subCursors = pages.map((outcome) => {
+    switch (outcome.type) {
+      case "exhausted":
+        return null;
+      case "page":
+        return outcome.page.nextCursor;
+      case "timed_out":
+        // A continuation runs the page again. A first page has no cursor to
+        // carry, and the envelope's `null` would read as ended, so it is
+        // `null` here and its warning names the call that reruns it.
+        return outcome.subCursor ?? null;
+      default:
+        outcome satisfies never;
+        return panic("Unhandled case-law query outcome");
+    }
+  });
+  return subCursors.every((subCursor) => subCursor === null)
+    ? null
+    : encodePaginationCursor(subCursors);
 };
 
 /**

@@ -1242,7 +1242,10 @@
         "preferred_language": {
           "type": "string",
           "maxLength": 8,
-          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed."
+          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
         },
         "query": {
           "type": "string",

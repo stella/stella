@@ -527,7 +527,10 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "preferred_language": {
           "type": "string",
           "maxLength": 8,
-          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed."
+          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
         },
         "query": {
           "type": "string",
@@ -7892,7 +7895,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "preferred_language": {
           "type": "string",
           "maxLength": 8,
-          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed."
+          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
         },
         "query": {
           "type": "string",
@@ -15993,7 +15999,10 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "preferred_language": {
           "type": "string",
           "maxLength": 8,
-          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed."
+          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
         },
         "query": {
           "type": "string",
@@ -18085,7 +18094,10 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "preferred_language": {
           "type": "string",
           "maxLength": 8,
-          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed."
+          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
         },
         "query": {
           "type": "string",

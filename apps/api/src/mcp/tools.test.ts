@@ -7896,8 +7896,8 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_decision reads the preferred language's version", async () => {
     const CZECH_VERSION_ID = "019dce0c-e98c-7000-a129-07b2b5486972";
     readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
-    const readVersions = mock(() =>
-      Promise.resolve(new Map([[DECISION_ID, CZECH_VERSION_ID]])),
+    const readVersions = mock(
+      async () => new Map([[DECISION_ID, CZECH_VERSION_ID]]),
     );
     const { items } = await readDecisions(
       { decision_ids: [DECISION_ID], preferred_language: "CS" },
