@@ -15,6 +15,7 @@ import {
 } from "./czech-document-roles.js";
 import {
   containsPlOperativeVerb,
+  isPlAppealInstruction,
   isPlHoldingHeading,
   isPlReasonsHeading,
   isPlRecitalLine,
@@ -33,6 +34,11 @@ export type DecisionRoleGrammar = {
    * basis), where the language has one to read.
    */
   readonly isRecitalLine?: (text: string) => boolean;
+  /**
+   * A line that instructs the parties on the remedy against the decision,
+   * where the language has one to read: it is never the ruling.
+   */
+  readonly isAppealInstruction?: (text: string) => boolean;
   /** A line that rules: it holds an operative verb. */
   readonly isOperativeLine?: (text: string) => boolean;
   /**
@@ -61,6 +67,7 @@ const DECISION_ROLE_GRAMMARS: ReadonlyMap<string, DecisionRoleGrammar> =
         isReasonsHeading: isPlReasonsHeading,
         isSignatureLine: isPlSignatureLine,
         isRecitalLine: isPlRecitalLine,
+        isAppealInstruction: isPlAppealInstruction,
         isOperativeLine: isPlOperativeLine,
         opensRuling: opensPlRuling,
       },

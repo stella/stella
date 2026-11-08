@@ -1627,6 +1627,7 @@
   "chat.tool.search-past-chats": "Searching past chats",
   "chat.tool.set_field_value": "Set field value",
   "chat.tool.set_practice_jurisdictions": "Set practice jurisdictions",
+  "chat.tool.show_app": "Showing interactive view",
   "chat.tool.show_in_document": "Showing in document",
   "chat.tool.spawn_subagents": "Delegating to subagents",
   "chat.tool.suggestChangesApplied": "Applied {applied, plural, one {# edit} other {# edits}}",

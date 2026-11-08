@@ -6,10 +6,12 @@ import {
   isCzechAuthorityDecisionTitle,
   isCzechAuthoritySignatureLine,
   isCzechBareSignatoryName,
+  isCzechCopyCertification,
   isCzechInstructionHeading,
   isCzechOpeningFormula,
   isCzechReasonsHeading,
   isCzechRulingLeadIn,
+  isCzechSignatoryName,
   isCzechSignatureLine,
   isCzechTaktoLine,
   normalizeCzechJudgeName,
@@ -88,6 +90,44 @@ describe("the office a Czech judge signs under", () => {
     expect(isCzechBareSignatoryName("Petra Svobodová-Dvořáková")).toBe(true);
     expect(isCzechBareSignatoryName("Josef")).toBe(false);
     expect(isCzechBareSignatoryName("Kasační stížnost se zamítá.")).toBe(false);
+  });
+
+  test.each([
+    "JUDr. Miluše Došková",
+    "Mgr. Miroslav Hromada, Ph.D.",
+    "JUDr. František B a l á k, v.r.",
+    "doc. JUDr. Jan Novák, CSc.",
+    "Dr. Jan Novák",
+    "Mgr. Petra Svobodová, MSc.",
+    "Josef Baxa",
+  ])("%p signs as a name with its degrees", (line) => {
+    expect(isCzechSignatoryName(line)).toBe(true);
+  });
+
+  test.each([
+    "JUDr.",
+    "předseda senátu",
+    "Za správnost vyhotovení: Ivana Svobodová",
+    "Mgr. Novák zastoupený advokátem",
+  ])("%p is not a signed name", (line) => {
+    expect(isCzechSignatoryName(line)).toBe(false);
+  });
+
+  test("the certification of a copy is the office's, letter-spaced or not", () => {
+    expect(
+      isCzechCopyCertification("Za správnost vyhotovení: Ivana Svobodová"),
+    ).toBe(true);
+    expect(isCzechCopyCertification("Za správnost vyhotovení:")).toBe(true);
+    // Decomposed letters and a no-break space read the same.
+    expect(
+      isCzechCopyCertification("Za\u00a0spra\u0301vnost vyhotovení:"),
+    ).toBe(true);
+    expect(
+      isCzechCopyCertification("Z a  s p r á v n o s t  vyhotovení:"),
+    ).toBe(true);
+    expect(
+      isCzechCopyCertification("Za správnost výpočtu odpovídá žalobce."),
+    ).toBe(false);
   });
 });
 

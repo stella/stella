@@ -41,7 +41,7 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
   CZ_TAKTO,
   CZ_TAKTO_TAIL_RE,
-  isCzechBareSignatoryName,
+  isCzechSignatoryName,
   isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -1011,7 +1011,7 @@ const namesSignatory = ({
   const underClosing =
     previous?.type === "paragraph" && previous.role === "closing";
   return (
-    (centered || (underClosing && isCzechBareSignatoryName(plainText))) &&
+    (centered || (underClosing && isCzechSignatoryName(plainText))) &&
     plainText.length < 60 &&
     (phase !== DOCUMENT_PHASE.INSTRUCTION || underClosing)
   );

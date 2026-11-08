@@ -60,13 +60,18 @@ import {
 } from "@stll/legal-ast/document-ast";
 import {
   containsPlOperativeVerb,
+  isPlAppealInstruction,
+  isPlBenchMemberLine,
   isPlClosingLine,
   isPlCompositionLine,
+  isPlDecisionDateLine,
   isPlHoldingHeading,
+  isPlInstructionHeading,
   isPlLegalBasisRuling,
   isPlNumberedReasonsHeading,
   isPlOpeningRecital,
   isPlReasonsHeading,
+  isPlRemedyFilingLine,
   isPlSignatureBlank,
   isPlSignatureLine,
   namesPlDocumentType,
@@ -190,7 +195,8 @@ const DECISION_TITLES: ReadonlySet<string> = new Set(
     (title) => title !== POLISH_DECISION_TITLE_MAP.decyzja,
   ),
 );
-const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt[:\s]/iu;
+/** A docket line: `Sygn. akt: I C 155/19`, `Sygn. akt. I C 155/19`. */
+const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt\.?[:\s]/iu;
 const DECISION_ITEM_PREFIX_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
 const DECISION_ITEM_MARKER_RE =
   /^(?<marker>[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
@@ -761,6 +767,41 @@ const signsBlank = (state: ParserState, plainText: string): boolean => {
   );
 };
 
+/** Whether the last heading so far heads the instructions on appeal. */
+const underInstructionHeading = (state: ParserState): boolean => {
+  const heading = state.blocks.findLast((block) => block.type === "heading");
+  return heading !== undefined && isPlInstructionHeading(heading.plainText);
+};
+
+/** Whether a line closes or signs the decision. */
+const closesOrSigns = (state: ParserState, plainText: string): boolean =>
+  isPlClosingLine(plainText) ||
+  isPlSignatureLine(plainText) ||
+  opensWithPlSignatureTitle(plainText) ||
+  signsBlank(state, plainText);
+
+/**
+ * Whether a paragraph instructs the parties on appeal: the instruction
+ * itself, where the remedy is filed right after it, or any line under the
+ * instructions' heading that neither closes nor signs the decision.
+ */
+const instructsOnAppeal = (state: ParserState, plainText: string): boolean => {
+  if (isPlAppealInstruction(plainText)) {
+    return true;
+  }
+  const previous = state.blocks.at(-1);
+  if (
+    previous?.type === "paragraph" &&
+    previous.role === undefined &&
+    isPlRemedyFilingLine(plainText) &&
+    (isPlAppealInstruction(previous.plainText) ||
+      isPlRemedyFilingLine(previous.plainText))
+  ) {
+    return true;
+  }
+  return underInstructionHeading(state) && !closesOrSigns(state, plainText);
+};
+
 const inferParagraphRole = (
   state: ParserState,
   plainText: string,
@@ -906,6 +947,13 @@ const classifyParagraph = (
       ? "publisher-note"
       : "apparatus";
   }
+  // The instructions on appeal are neither the ruling nor its reasons.
+  if (
+    (state.section === "holding" || state.section === "reasoning") &&
+    instructsOnAppeal(state, plainText)
+  ) {
+    return undefined;
+  }
   const role = inferParagraphRole(state, plainText);
   // A block of marks alone (`-`, `.`) is no part of the decision's text,
   // unless it is the blank a signature is written on.
@@ -1014,6 +1062,15 @@ const handleHeadingText = (
   ) {
     pushHeading(state, 2, plainText, "section-heading", inlines);
     state.section = "reasoning";
+    return true;
+  }
+
+  // The instructions on appeal stand under a heading of their own.
+  if (
+    (state.section === "holding" || state.section === "reasoning") &&
+    isPlInstructionHeading(plainText)
+  ) {
+    pushHeading(state, 2, plainText, "section-heading", inlines);
     return true;
   }
 
@@ -1282,6 +1339,64 @@ const parseListItemContent = ({
   return marker;
 };
 
+/** A heading element: a heading, or a line the layout only set apart. */
+const parseHeadingElement = (
+  $: cheerio.CheerioAPI,
+  state: ParserState,
+  $node: cheerio.Cheerio<AnyNode>,
+  tag: string,
+): void => {
+  const inlines = walkInlines($, $node, state);
+  const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
+  if (!plainText) {
+    return;
+  }
+
+  // A layout that sets the signing label apart as a heading still signs:
+  // it is the bench's line under the ruling, not a part of the decision.
+  if (
+    (state.section === "holding" || state.section === "reasoning") &&
+    isPlSignatureLine(plainText)
+  ) {
+    pushParagraph(state, plainText, inlines, "signature");
+    state.section = "reasoning";
+    return;
+  }
+
+  // A layout that sets the docket apart as a heading still prints the
+  // docket: it names the case, it heads no part of the decision.
+  if (isCaseNumberText(state, plainText)) {
+    pushParagraph(state, plainText, inlines, "case-number");
+    return;
+  }
+
+  if (handleHeadingText(state, plainText, inlines)) {
+    return;
+  }
+
+  // A layout that sets a line of the head matter apart as a heading (the
+  // decision's date, who sat on the bench) still prints the head matter:
+  // the line heads no part of the decision and opens no ruling, wherever
+  // the head matter stands to the title.
+  if (
+    (state.section === "preamble" ||
+      state.section === "composition" ||
+      state.section === "recital") &&
+    (isPlBenchMemberLine(plainText) || isPlDecisionDateLine(plainText))
+  ) {
+    pushParagraph(state, plainText, inlines, "intro");
+    return;
+  }
+
+  pushHeading(
+    state,
+    tag === "h1" || tag === "h2" ? 2 : 3,
+    plainText,
+    "section-heading",
+    inlines,
+  );
+};
+
 const parseNode = (
   $: cheerio.CheerioAPI,
   state: ParserState,
@@ -1331,34 +1446,7 @@ const parseNode = (
   }
 
   if (/^h[1-6]$/u.test(tag)) {
-    const inlines = walkInlines($, $node, state);
-    const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
-    if (!plainText) {
-      return;
-    }
-
-    // A layout that sets the signing label apart as a heading still signs:
-    // it is the bench's line under the ruling, not a part of the decision.
-    if (
-      (state.section === "holding" || state.section === "reasoning") &&
-      isPlSignatureLine(plainText)
-    ) {
-      pushParagraph(state, plainText, inlines, "signature");
-      state.section = "reasoning";
-      return;
-    }
-
-    if (handleHeadingText(state, plainText, inlines)) {
-      return;
-    }
-
-    pushHeading(
-      state,
-      tag === "h1" || tag === "h2" ? 2 : 3,
-      plainText,
-      "section-heading",
-      inlines,
-    );
+    parseHeadingElement($, state, $node, tag);
     return;
   }
 
