@@ -2,7 +2,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { cellMetadata, fields, justifications } from "@/api/db/schema";
+import {
+  cellMetadata,
+  fields,
+  justifications,
+  properties,
+} from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -225,6 +230,44 @@ describe("cell companions across a clone", () => {
           ),
         );
       expect(carried).toEqual([]);
+    });
+  });
+
+  test("a clone into another matter maps each lock onto the target's property", async () => {
+    await inRolledBackTransaction(async (tx) => {
+      const { targetVersionId, fieldClones } = await seedClone(tx);
+      await tx.insert(cellMetadata).values({
+        workspaceId: ids.wsA1,
+        entityVersionId: ids.entityVersionA1,
+        propertyId: ids.filePropertyA1,
+        metadata: { version: 1, manualFlags: [], locked: true },
+      });
+      const targetPropertyId = createSafeId<"property">();
+      await tx.insert(properties).values({
+        id: targetPropertyId,
+        workspaceId: ids.wsA1,
+        name: "Counterpart",
+        content: { version: 1, type: "text" },
+        tool: { version: 1, type: "manual-input" },
+        status: "fresh",
+      });
+
+      const companions = await planCellCompanions({
+        tx: asTestRaw<Transaction>(tx),
+        kind: "copy",
+        sourceWorkspaceId: ids.wsA1,
+        targetWorkspaceId: ids.wsA1,
+        versions: [{ sourceVersionId: ids.entityVersionA1, targetVersionId }],
+        fieldClones,
+        // The file property has no counterpart in the target.
+        propertyIds: new Map([[ids.propertyA1, targetPropertyId]]),
+      });
+
+      expect(companions.metadata.map(({ propertyId }) => propertyId)).toEqual([
+        targetPropertyId,
+      ]);
+      await writeCompanions(tx, companions);
+      expect(await lockOf(tx, targetVersionId, targetPropertyId)).toBe(true);
     });
   });
 });

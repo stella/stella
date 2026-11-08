@@ -22,23 +22,22 @@ type CellCloneKind = "desktop-edit" | "restore" | "copy" | "move";
  * what it carries. A new file version carries the same as a desktop edit,
  * under the row lock its own writer (`write-file-version.ts`) takes.
  */
+type CompanionCarry = {
+  metadata: "carried" | "dropped";
+  justifications: "carried" | "dropped";
+};
+
 const CELL_COMPANION_POLICY = {
   "desktop-edit": { metadata: "carried", justifications: "dropped" },
   restore: { metadata: "carried", justifications: "carried" },
   copy: { metadata: "carried", justifications: "carried" },
   move: { metadata: "carried", justifications: "carried" },
-} as const satisfies Record<
-  CellCloneKind,
-  {
-    metadata: "carried" | "dropped";
-    justifications: "carried" | "dropped";
-  }
->;
+} as const satisfies Record<CellCloneKind, CompanionCarry>;
 
 type CellCompanionPolicy = typeof CELL_COMPANION_POLICY;
 
 /** One source version and the version its cells were cloned into. */
-export type VersionClone = {
+type VersionClone = {
   sourceVersionId: SafeId<"entityVersion">;
   targetVersionId: SafeId<"entityVersion">;
 };
@@ -51,6 +50,13 @@ type PlanCellCompanionsOptions<Kind extends CellCloneKind> = {
   versions: readonly VersionClone[];
   /** Cells the clone replaced rather than copied (a new file), whose companions stay behind. */
   replacedPropertyIds?: readonly SafeId<"property">[];
+  /**
+   * Source property to target property, for a clone into another matter,
+   * whose properties are its own. A cell whose property has no counterpart
+   * there was not cloned, so its lock stays behind. Omitted, a property keeps
+   * its id.
+   */
+  propertyIds?: ReadonlyMap<SafeId<"property">, SafeId<"property">> | undefined;
 } & (CellCompanionPolicy[Kind]["justifications"] extends "carried"
   ? {
       /** Every cloned cell: source field id to the id of its clone. */
@@ -76,6 +82,7 @@ const planMetadata = async ({
   targetWorkspaceId,
   versions,
   replacedPropertyIds = [],
+  propertyIds,
 }: Omit<
   PlanCellCompanionsOptions<CellCloneKind>,
   "kind" | "fieldClones"
@@ -110,12 +117,18 @@ const planMetadata = async ({
       );
     for (const { entityVersionId, ...row } of rows) {
       const targetVersionId = targetVersionIds.get(entityVersionId);
+      const propertyId =
+        propertyIds === undefined
+          ? row.propertyId
+          : propertyIds.get(row.propertyId);
       if (
         targetVersionId !== undefined &&
+        propertyId !== undefined &&
         !replacedPropertyIds.includes(row.propertyId)
       ) {
         planned.push({
           ...row,
+          propertyId,
           workspaceId: targetWorkspaceId,
           entityVersionId: targetVersionId,
         });
@@ -205,8 +218,7 @@ const planJustifications = async ({
 export const planCellCompanions = async <Kind extends CellCloneKind>(
   options: PlanCellCompanionsOptions<Kind>,
 ): Promise<CellCompanionRows> => {
-  const policy: CellCompanionPolicy[CellCloneKind] =
-    CELL_COMPANION_POLICY[options.kind];
+  const policy: CompanionCarry = CELL_COMPANION_POLICY[options.kind];
   return {
     metadata: policy.metadata === "carried" ? await planMetadata(options) : [],
     justifications:

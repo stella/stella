@@ -691,6 +691,12 @@ type CopyEntitiesProps = {
   /** Source workspace ID for audit log (cross-workspace only). */
   sourceWorkspaceId?: SafeId<"workspace">;
   /**
+   * Source property to target property for a copy into another matter. The
+   * snapshot's fields already carry target properties; a cell's lock and
+   * override are read from the source, so they map through this.
+   */
+  propertyIds?: ReadonlyMap<SafeId<"property">, SafeId<"property">> | undefined;
+  /**
    * Whether the target rows are a new document (a copy) or the same
    * document in another matter (a move, whose source rows the caller
    * deletes in this transaction). Only a move mutates the source
@@ -1572,6 +1578,7 @@ const planEntityCopies = async ({
 
 type WriteCopyPlanOptions = {
   tx: Transaction;
+  propertyIds: ReadonlyMap<SafeId<"property">, SafeId<"property">> | undefined;
   plan: CopyPlan;
   transfer: EntityTransfer;
   targetWorkspaceId: SafeId<"workspace">;
@@ -1586,6 +1593,7 @@ const writeCopyPlan = async ({
   transfer,
   targetWorkspaceId,
   sourceWorkspaceId,
+  propertyIds,
   recordAuditEvent,
 }: WriteCopyPlanOptions): Promise<void> => {
   await insertEntityBatch({
@@ -1605,6 +1613,7 @@ const writeCopyPlan = async ({
     targetWorkspaceId,
     versions: plan.versionTransfers,
     fieldClones: plan.fieldClones,
+    propertyIds,
   });
   for (const rows of chunkItems(companions.metadata, CELL_COMPANION_BATCH)) {
     await tx.insert(cellMetadata).values(rows);
@@ -1671,6 +1680,7 @@ export const copyEntities = async ({
   sourceEntityId,
   sourceEntities,
   sourceWorkspaceId: copySourceWorkspaceId,
+  propertyIds,
   targetRootEntityId,
   targetRootName,
   transfer,
@@ -1756,6 +1766,7 @@ export const copyEntities = async ({
     transfer,
     targetWorkspaceId,
     sourceWorkspaceId,
+    propertyIds,
     recordAuditEvent,
   });
 
