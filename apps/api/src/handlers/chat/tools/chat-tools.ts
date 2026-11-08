@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 
 import {
-  type BrowserClientCapability,
+  type BrowserExtensionCapability,
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type ChatSourceScope,
 } from "@stll/api-contract";
@@ -12,6 +12,7 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
+import { browserExtensionPolicy } from "@/api/handlers/chat/browser-extension-capability";
 import {
   CHAT_EDIT_APPLY_MODE,
   type ChatEditApplyMode,
@@ -240,8 +241,7 @@ type ResolveRegisteredDocxEditModeOptions = {
   recordAuditEventAvailable: boolean;
   requestWorkspaceId: SafeId<"workspace"> | null;
   toolWorkspaceIds: AuthorizedToolWorkspaceIds;
-  workspaceStatusById:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+  workspaceStatusById: ReadonlyMap<string, AccessibleWorkspace["status"]>;
 };
 
 type ChatRequestWorkspaceOptions = Pick<
@@ -261,7 +261,7 @@ const chatRequestWorkspace = ({
   ) {
     return null;
   }
-  const status = workspaceStatusById?.get(requestWorkspaceId);
+  const status = workspaceStatusById.get(requestWorkspaceId);
   return status === undefined ? null : { id: requestWorkspaceId, status };
 };
 
@@ -537,7 +537,7 @@ export type GetChatToolsProps = {
    * Present only when the requesting web surface has a live, permissioned
    * extension executor; absent means the tool is not registered.
    */
-  browserClient?: BrowserClientCapability | undefined;
+  browserExtension?: BrowserExtensionCapability | undefined;
   /**
    * Which client executor resolves `suggest_changes` this turn, and so
    * which per-surface schema the model sees. Not derivable from the two
@@ -609,8 +609,7 @@ export type GetChatToolsProps = {
    * NOT default to "active" on the write path; callers supply real statuses
    * from `accessibleWorkspaces`.
    */
-  workspaceStatusById?:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+  workspaceStatusById: ReadonlyMap<string, AccessibleWorkspace["status"]>;
   /**
    * Current delegation depth; 0 at top level. Subagent toolsets are
    * built by re-invoking `getChatTools` with `depth + 1` (see
@@ -959,7 +958,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     hasActiveDocxEditClient,
     hasActiveDocxFileClient,
     docxSuggestionSurface,
-    browserClient,
+    browserExtension,
     webSearchEnabled,
     webSearchProviders,
     externalTools = {},
@@ -1068,6 +1067,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     toolWorkspaceIds,
     userId,
     userEmail,
+    workspaceStatusById,
   });
   const skillTools = createSkillTools({
     activeSkillContext,
@@ -1112,7 +1112,10 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const { boeTools, infosoudTools } = nativeSourceTools(
     disabledNativeToolSlugs,
   );
-  const browserControlTools = browserClient ? createBrowserControlTool() : {};
+  const browserControlTools =
+    browserExtension && browserExtensionPolicy(browserExtension).toolOffered
+      ? createBrowserControlTool()
+      : {};
   const { webSearchProvider, urlFetcher } = webSearchProviders;
   // The `webSearchProvider !== null` re-check narrows the type for
   // createWebSearchTools; it is implied by `webResearchAvailable`.
@@ -1400,7 +1403,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
         buildSubagentToolset: (proposalSink) =>
           getChatTools({
             ...props,
-            browserClient: undefined,
+            browserExtension: undefined,
             visualTools: undefined,
             hasActiveDocxEditClient: false,
             delegationDepth: delegationDepth + 1,

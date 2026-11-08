@@ -1,0 +1,5 @@
+{
+  "create-table-references": "The new tables are empty, so their user, organization and runner foreign keys validate no existing rows. The referenced user and organization tables take bounded locks under 1s lock_timeout and 5s statement_timeout.",
+  "row-level-security": "Enabling and forcing RLS changes only metadata on the new empty tables, bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The owner-only and deny-application policies are metadata on the new empty tables, bounded by 1s lock_timeout and 5s statement_timeout."
+}

@@ -24,6 +24,7 @@ import {
   sanctionsSourceIds,
 } from "@/api/lib/lists/sanctions/source-config";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { ORGANIZATION_DELETION_FOR_TEST_SQL } from "@/api/tests/helpers/organization-deletion";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -282,7 +283,9 @@ describe.skipIf(!runPostgresTests)("production sanctions mount", () => {
         } finally {
           for (const tenant of tenants) {
             // Parent-first teardown lets owner memberships cascade after the organization is gone.
-            await owner`DELETE FROM organization WHERE id = ${tenant.id}`;
+            await owner.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+              tenant.id,
+            ]);
             await owner`DELETE FROM "user" WHERE id = ${tenant.user}`;
           }
           for (const { source } of editions) {

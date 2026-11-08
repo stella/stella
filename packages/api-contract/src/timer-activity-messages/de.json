@@ -1,0 +1,11 @@
+{
+  "timer": "Timer",
+  "running": "Läuft",
+  "paused": "Pausiert",
+  "noMatter": "Keine Akte",
+  "noDescription": "Keine Beschreibung",
+  "more": "{count, plural, one {# weiterer Timer} other {# weitere Timer}}",
+  "startedElsewhere": "Auf einem anderen Gerät wurde ein Timer gestartet",
+  "pause": "Pausieren",
+  "resume": "Fortsetzen"
+}

@@ -4,9 +4,9 @@ import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop
 
 import { timedSegments, totalDurationMs } from "../src/activity/activity-logic";
 import {
+  cleanSharedContext,
   matchDay,
   withoutAppSuffix,
-  withoutSharedContext,
 } from "../src/activity/day-review-logic";
 
 const candidates = [
@@ -220,6 +220,12 @@ describe("local matter day review", () => {
   });
 });
 
+/** The distinct own parts of `titles`, in order. */
+const withoutSharedContext = (titles: readonly string[]) => {
+  const cleaned = cleanSharedContext(titles);
+  return [...new Set(titles.map((title) => cleaned.get(title) ?? title))];
+};
+
 describe("window title evidence", () => {
   test("drops a label that several titles share", () => {
     expect(
@@ -309,11 +315,18 @@ describe("window title evidence", () => {
       draftedEntries: [],
     }).groups;
     expect(group?.evidence).toEqual([
-      { identifier: "ghostty", name: "Ghostty", details: ["stella", "notes"] },
+      {
+        identifier: "ghostty",
+        name: "Ghostty",
+        details: [
+          { title: "stella", durationMs: 30_000 },
+          { title: "notes", durationMs: 10_000 },
+        ],
+      },
       {
         identifier: "chrome",
         name: "Google Chrome",
-        details: ["Merge queue"],
+        details: [{ title: "Merge queue", durationMs: 10_000 }],
       },
     ]);
   });

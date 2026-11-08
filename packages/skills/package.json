@@ -22,6 +22,10 @@
       "types": "./src/frontmatter.ts",
       "import": "./src/frontmatter.ts"
     },
+    "./starter-skills": {
+      "types": "./src/starter-skills.ts",
+      "import": "./src/starter-skills.ts"
+    },
     "./static-import-graph": {
       "types": "./src/static-import-graph.ts",
       "import": "./src/static-import-graph.ts"

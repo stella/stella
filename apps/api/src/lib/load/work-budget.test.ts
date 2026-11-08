@@ -264,3 +264,50 @@ test("overlapping holds, aborts, timeouts and memory pressure keep exact account
     { numRuns: 60 },
   );
 });
+
+test("ranked waiters are admitted lowest rank first, key by key, then unranked ones", async () => {
+  const budget = createWorkBudget({
+    slots: 1,
+    bytes: 10,
+    maxWaiters: 10,
+    maxWaitMs: 1000,
+  });
+  const held = await budget.acquire({});
+  if (held.type !== "admitted") {
+    throw new Error("expected admission");
+  }
+  const order: string[] = [];
+  const queue = async (
+    name: string,
+    rank?: readonly number[],
+  ): Promise<void> => {
+    const result: WorkBudgetResult = await budget.acquire(
+      rank === undefined ? {} : { rank },
+    );
+    order.push(name);
+    if (result.type === "admitted") {
+      // Release on a later turn, so each admission is observed alone.
+      queueMicrotask(result.release);
+    }
+  };
+  const waiters = [
+    queue("unranked"),
+    queue("late-0", [20, 0]),
+    queue("early-1", [10, 1]),
+    queue("early-0", [10, 0]),
+    queue("late-1", [20, 1]),
+    queue("earliest-7", [9.5, 7]),
+    queue("late-1-again", [20, 1]),
+  ];
+  held.release();
+  await Promise.all(waiters);
+  expect(order).toEqual([
+    "earliest-7",
+    "early-0",
+    "early-1",
+    "late-0",
+    "late-1",
+    "late-1-again",
+    "unranked",
+  ]);
+});

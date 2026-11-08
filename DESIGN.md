@@ -41,14 +41,14 @@ hex values in components; use the semantic tokens below.
 | Token                  | Light                         | Dark                          | Role                      |
 | ---------------------- | ----------------------------- | ----------------------------- | ------------------------- |
 | `--background`         | white                         | neutral-950 / 95% white blend | Page canvas               |
-| `--foreground`         | neutral-800                   | neutral-100                   | Primary text              |
+| `--foreground`         | neutral-900                   | neutral-100                   | Primary text              |
 | `--card`               | white                         | background / 98% white blend  | Card surfaces             |
-| `--card-foreground`    | neutral-800                   | neutral-100                   | Text on cards             |
+| `--card-foreground`    | neutral-900                   | neutral-100                   | Text on cards             |
 | `--primary`            | neutral-800                   | neutral-100                   | Primary actions, headings |
 | `--primary-foreground` | neutral-50                    | neutral-800                   | Text on primary           |
 | `--secondary`          | black / 4%                    | white / 4%                    | Secondary surfaces        |
 | `--muted`              | black / 4%                    | white / 4%                    | Subdued backgrounds       |
-| `--muted-foreground`   | neutral-500 / 90% black blend | neutral-500 / 90% white blend | Secondary text            |
+| `--muted-foreground`   | neutral-500 / 90% black blend | neutral-400                   | Secondary text            |
 | `--accent`             | black / 4%                    | white / 4%                    | Hover/focus highlights    |
 | `--destructive`        | red-500                       | red-500 / 90% white blend     | Destructive actions       |
 | `--info`               | blue-500                      | blue-500                      | Informational status      |
@@ -80,6 +80,11 @@ are redefined per palette; components need no palette-specific code.
 
 ### Brand Colours (Reference)
 
+Rendered from `BRAND_PALETTE` in `packages/brand/src/palette.ts`
+(`@stll/brand`), which also exports the sRGB triples PDF output draws with.
+
+<!-- BEGIN GENERATED BRAND COLOURS -->
+
 | Name        | Hex       | Usage                          |
 | ----------- | --------- | ------------------------------ |
 | Black       | `#000`    | Primary text, logo mark        |
@@ -87,8 +92,16 @@ are redefined per palette; components need no palette-specific code.
 | Pale Blue   | `#e2f6fd` | Light tint surfaces            |
 | Blue Accent | `#59a1d4` | Accent in marketing material   |
 
+<!-- END GENERATED BRAND COLOURS -->
+
 ### Colour Discipline
 
+- A colour is a theme token (`var(--token)` or a token class) or a
+  `@stll/brand` constant. The `no-raw-color-literals` lint rule and the
+  stylelint colour rules reject a raw hex, `rgb()`, `hsl()`, `oklch()` or
+  `color()` anywhere else; colour that is document data, not design, is
+  exempted by path in `oxlint.config.ts` and `.stylelintrc.json`, each entry
+  with its reason.
 - One accent colour per surface region; everything else is neutral
   or a semantic status colour.
 - No pure `#000000` backgrounds in app chrome (dark mode uses a
@@ -172,7 +185,7 @@ Icons: **lucide-react**.
 ### Key Components
 
 Accordion, AlertDialog, Avatar, Badge, Breadcrumb, Button, Checkbox,
-Combobox, Dialog, Field, Form, Input, InputGroup, InputOTP, Label,
+Collapsible, Combobox, Dialog, Field, Form, Input, InputGroup, InputOTP, Label,
 Menu, Pagination, Popover, PreviewCard, ScrollArea, Select,
 Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip,
 TruncatedText.
@@ -208,19 +221,200 @@ TruncatedText.
 
 - **default:** primary foreground on primary background
 - **destructive:** destructive colours
+- **destructive-outline:** the outline box with destructive text and a
+  destructive tint on hover
 - **outline:** border + transparent background
 - **secondary:** secondary surface
 - **ghost:** transparent, accent on hover
 - **muted:** muted text, foreground text and accent on hover (quiet
   actions in toolbars and rows)
 - **destructive-ghost:** destructive text, transparent, tinted on hover
+- **muted-destructive:** muted text until hovered, then destructive: a
+  delete beside quiet row actions
 - **link:** underline, no background
+- **plain:** no box at all: a click target whose look is its content
+  (a card, a thumbnail, a cell). It keeps the button's disabled
+  disposition, tooltip and focus ring, lays out like a native button
+  (`inline-block`, content from the start), and ignores `size`.
+  `shape` (`box`, the container radius; `round`, an avatar or pill)
+  sets the outline its focus ring follows. Selected, it draws an inset
+  edge above its content.
 
 Sizes: `default` (h-9), `sm` (h-8, small type), `xs` (h-7, small
-type), `lg` (h-10), `xl` (h-11), `icon` and `icon-*` (square),
-`row` (a menu-list row).
-A small control renders small type itself; do not add `text-xs` to
-a `sm` button, select, or input.
+type), `lg` (h-10), `xl` (h-11), `chip` (a 28px pill beside the
+composer's round controls), `icon` and `icon-*` (square),
+`icon-2xs` (a 16px glyph action in a dense row; the touch target
+still grows to 44px under a coarse pointer), `row` (a menu-list row),
+`inline` (a short action inside a line of text: no height, padding or
+type of its own, and text that stays selectable; quiet variants drop
+their hover fill, and with no variant it is an underlined link). A
+`<button>` is one atomic box even at `display: inline`, so an inline
+button never breaks across the paragraph's lines: a label too long for
+the line moves down whole. Text that must flow with the prose (a
+citation in reader text) is a `ButtonTextRun`: the text sits in a
+native `<label>` that wraps with the line and forwards a press to the
+button it holds.
+
+**Text selection.** Buttons are `select-none`: a label is not text to
+copy. Two exceptions: `size="inline"` and `ButtonTextRun` are
+`select-text`, because a reference inside prose is copied with the
+passage; and
+`plain` leaves selection to the browser, which in practice does not
+drag-select inside a button. So a plain row or card is fine as is, but
+if a reader needs to select or copy its text (a quoted passage, an
+identifier), the text is not the button: make a heading, an inline
+`Button` or a `CopyButton` the target and leave the text beside it.
+
+These are the only variants and sizes. A screen that seems to need
+another (a card button, a tile, a hint) composes `plain` with the
+content's own surface, or adds the variant here first.
+
+**Selected.** `selected` marks the current choice in a set (the active
+filter, a picked option) with the variant's selected treatment: an
+inset edge and a raised or stronger surface, never the hover fill
+alone, so the choice stays visible under the pointer and without it.
+The ARIA state (`aria-pressed`, `aria-current`, ...) stays the
+caller's. A row of exclusive options (filter tabs, view modes) is a
+`ToggleGroup`, which owns that state.
+
+**Focus ring.** Drawn outside the box with a gap by default;
+`focusRing="inside"` draws it within the box, for a target that fills
+an `overflow-hidden` container where an outside ring would be clipped.
+
+### One Name per Concept
+
+When a screen needs a look the components lack, add it once here and in
+`packages/ui`, under these names:
+
+| Concept                                                            | API                                                                                    |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)                                      |
+| Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)                        |
+| Long reference that wraps with running text                        | `ButtonTextRun`                                                                        |
+| Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options                            |
+| Filter tabs, view modes, density                                   | `ToggleGroup` + `ToggleGroupItem` (a segmented tray)                                   |
+| A button that stays pressed                                        | `Toggle`                                                                               |
+| Setting row with a switch                                          | `SwitchField` (`label`, `description`); `Switch size="sm"`                             |
+| Keyboard shortcut                                                  | `Kbd keys={["mod", "K"]}` (platform spelling); `MenuShortcut`, `TooltipPopup shortcut` |
+| Menu row that navigates                                            | `MenuLinkItem` (an `<a>`)                                                              |
+| Fact with no value                                                 | `DetailsItem` with empty children (draws a dash)                                       |
+| Quiet disclosure line                                              | `AccordionTrigger variant="muted"`                                                     |
+| Disclosure inside a dialog or card                                 | `AccordionTrigger`/`AccordionPanel` `size="sm"`                                        |
+| Choice row or card around a radio                                  | `Label variant="choice"` / `"choice-card"`                                             |
+| Short label and value record                                       | `DetailsGrid variant="list"` (+ `orientation`)                                         |
+| Small muted caption in a filter bar or dense form                  | `Label variant="muted"`                                                                |
+| One-line or compact form                                           | `Form layout="inline"`, `density="snug" \| "compact"`                                  |
+| Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`)               |
+| Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                                         |
+| Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds                        |
+| A small control renders small type itself; do not add `text-xs` to |
+| a `sm` button, select, or input.                                   |
+
+**Every name in use.** Each closed set of names an exported component
+accepts (variants, sizes, tones, layers, sides, ...), one line per prop:
+the components, the prop, then its names. It is read from `packages/ui`
+into `scripts/ui-api-snapshot.json`, and
+`.oxlint-plugins/__tests__/ui-api-snapshot.test.ts` fails when this list,
+that snapshot and the source disagree. A new name is a design decision:
+check the concepts above and the names below for one that already says
+it, and add it here in the same change that adds it to `packages/ui`.
+
+- `AccordionContent`, `AccordionPanel`, `AccordionTrigger` `size`: `compact`, `default`, `sm`
+- `AccordionTrigger` `variant`: `default`, `muted`
+- `AlertDialogBackdrop`, `AlertDialogContent`, `AlertDialogOverlay`, `AlertDialogPopup`, `AlertDialogViewport`, `DatePickerPopover`, `DateRangeFilter`, `DialogBackdrop`, `DialogContent`, `DialogOverlay`, `DialogPopup`, `DialogViewport`, `PopoverContent`, `PopoverPopup` `layer`: `chrome`, `chrome-raised`, `default`, `popup`, `search`, `search-child`
+- `AlertDialogFooter`, `DialogFooter`, `SheetFooter` `variant`: `bare`, `default`
+- `AnimatedPreview`, `AnimatedPreviewMotion` `pace`: `beat`, `glance`, `read`
+- `AnimatedPreview` `playback`: `loop`, `once`
+- `Badge`, `ReviewDecisionActions`, `ReviewStatusBadge` `size`: `sm`, `xs`
+- `Badge` `tone`: `destructive`, `info`, `neutral`, `success`, `warning`
+- `BidiText`, `UserText` `as`: `bdi`, `div`, `p`, `span`
+- `BidiText`, `UserText` `direction`: `auto`, `ltr`, `rtl`
+- `Button` `focusRing`: `inside`, `outside`
+- `Button`, `ButtonTextRun` `layout`: `wrap`
+- `Button` `shape`: `box`, `round`
+- `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
+- `Button` `variant`: `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
+- `ColorPicker`, `EntityActionsButton`, `SortableHead`, `TableCell`, `TableHead` `align`: `center`, `end`, `start`
+- `ColorPicker`, `EntityActionsButton` `side`: `bottom`, `left`, `right`, `top`
+- `ColorPickerContent` `presentation`: `inline`, `popover`
+- `ComboboxTrigger` `variant`: `field`, `plain`
+- `CommandItem` `size`: `default`, `row`
+- `CourtBadge`, `DocumentIdentityBadge` `size`: `default`, `inline`
+- `CourtBadge` `weight`: `dashed`, `outline`, `solid`, `tinted`
+- `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle` `size`: `compact`, `touch`
+- `DatePickerPopover`, `DateRangeFilter` `variant`: `field`, `inline`
+- `DetailsGrid` `labelWidth`: `auto`, `lg`, `md`, `sm`
+- `DetailsGrid` `orientation`: `auto`, `horizontal`, `vertical`
+- `DetailsGrid` `variant`: `list`, `sheet`
+- `DetailsItem` `span`: `wide`
+- `DialogContent`, `DialogPopup` `size`: `default`, `lg`, `sm`, `xl`
+- `DocumentMark` `kind`: `csv`, `excel`, `markdown`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `word`
+- `DropdownMenuCheckboxItem`, `MenuCheckboxItem` `variant`: `default`, `switch`
+- `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
+- `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`
+- `Form` `density`: `compact`, `default`, `snug`
+- `Form` `layout`: `inline`, `stack`
+- `InlineDropIndicator` `position`: `after`, `before`
+- `InputGroupAddon` `align`: `block-end`, `block-start`, `inline-end`, `inline-start`
+- `InputGroupTextarea`, `Textarea` `fieldSizing`: `content`, `fixed`
+- `InspectorDock` `mount`: `content`, `shell-end`
+- `InspectorEntityTab` `inactiveIcon`: `dim`, `legible`
+- `KanbanCardShell` `actionsVisibility`: `always`, `hover`
+- `KanbanCardShell` `appearance`: `proposal`, `standard`
+- `KanbanVirtualCell` `footerPlacement`: `end`, `sticky-start`
+- `Kbd` `variant`: `cap`, `plain`
+- `Label` `variant`: `choice`, `choice-card`, `default`, `muted`
+- `LandingItemText` `iconTone`: `matter`, `muted`
+- `LandingRowIcon` `tone`: `matter`, `muted`
+- `ListItemDescription` `variant`: `code`, `text`
+- `ListItemMedia` `variant`: `icon`, `initial`
+- `ListItemStatus` `tone`: `destructive`, `neutral`, `success`, `warning`
+- `Loader` `animation`: `none`, `spin`
+- `Loader` `size`: `lg`, `md`, `sm`
+- `Loader` `variant`: `decorative`, `status`
+- `MatterIcon` `variant`: `all`, `none`
+- `OutlineRail` `presentation`: `panel`, `popover`, `rail`
+- `PanelTrigger`, `Sidebar` `side`: `left`, `right`
+- `PopoverContent`, `PopoverPopup` `padding`: `default`, `md`, `none`, `sm`, `xs`
+- `PreviewPane` `overflow`: `clip`, `scroll`
+- `PreviewPane` `size`: `default`, `thumbnail`
+- `Prose` `size`: `default`, `lede`, `sm`
+- `Prose`, `TableCell`, `TableRow` `tone`: `default`, `muted`
+- `ReviewDecisionActions` `state`: `accepted`, `applying`, `dismissed`, `pending`, `rejected`
+- `ReviewOutOfDateNotice` `tone`: `muted`, `warning`
+- `ReviewSeverityDot` `level`: `critical`, `high`, `low`, `medium`, `none`
+- `ReviewStatusBadge`, `ReviewStatusDot` `tone`: `destructive`, `highlight`, `neutral`, `success`, `warning`
+- `ReviewStatusBadge` `variant`: `outline`, `solid`, `strong`
+- `ScrollArea` `axis`: `both`, `vertical`
+- `SelectTrigger` `align`: `center`, `start`
+- `SheetContent`, `SheetPopup` `side`: `block-end`, `block-start`, `inline-end`, `inline-start`
+- `SheetContent`, `SheetPopup` `variant`: `default`, `inset`
+- `Sidebar` `collapsible`: `icon`, `none`, `offcanvas`
+- `Sidebar` `variant`: `floating`, `inset`, `sidebar`
+- `SidebarMenuButton` `size`: `default`, `lg`, `rail`, `sm`
+- `SidebarMenuButton` `variant`: `default`, `outline`
+- `SidebarMenuSubButton`, `SplitButton` `size`: `md`, `sm`
+- `SortableHead` `sortDirection`: `asc`, `desc`
+- `SplitButton` `surface`: `menu`, `popover`
+- `StatusMark` `status`: `done`, `failed`, `pending`, `running`
+- `Step` `status`: `completed`, `current`, `upcoming`
+- `Steps` `variant`: `compact`, `default`, `progress`
+- `Switch`, `SwitchField` `size`: `default`, `sm`
+- `Table` `density`: `compact`, `default`
+- `Table` `inset`: `card`, `default`
+- `Table` `scroll`: `parent`, `self`
+- `TableChart` `kind`: `bar`, `line`, `pie`, `scatter`
+- `TableChart` `xMode`: `category`, `numeric`
+- `TableHeader` `surface`: `muted`, `plain`
+- `TabsList` `variant`: `default`, `underline`
+- `Text` `variant`: `badge`, `body`, `button`, `caption`, `display`, `error`, `headline`, `label`, `link`, `rowTitle`, `section`, `title`
+- `TextMark` `state`: `active`, `matched`, `rest`
+- `TextMark` `tone`: `destructive`, `muted`, `option-green`, `option-purple`, `option-red`, `option-sky`, `option-violet`, `option-yellow`, `success`, `warning`
+- `TextMark` `variant`: `dotted`, `fill`, `strike`, `underline`, `wavy`
+- `TextMark` `weight`: `inherit`, `medium`
+- `ToastProvider` `position`: `bottom-center`, `bottom-left`, `bottom-right`, `top-center`, `top-left`, `top-right`
+- `Toggle`, `ToggleGroupItem` `variant`: `ghost`, `muted`, `outline`
+- `ToolbarIconAction` `density`: `header`, `toolbar`
 
 ### Menu Rows & Sections
 
@@ -251,18 +445,25 @@ Tailwind 4's `--spacing()` function with the default 0.25rem
 
 ### Border Radius
 
-Root variable: `--radius: 0.625rem` (10px).
+Tailwind's default scale: 4, 6, 8, 12 and 16px. Name the step: a bare
+`rounded` or a pixel value (`rounded-[7px]`) drifts off the scale, and
+`radius-scale` rejects both.
 
-| Usage           | Class          | Approximate |
-| --------------- | -------------- | ----------- |
-| Small elements  | `rounded-md`   | 6px         |
-| Most containers | `rounded-lg`   | 8px         |
-| Cards, dialogs  | `rounded-xl`   | 12px        |
-| Large dialogs   | `rounded-2xl`  | 16px        |
-| Circular        | `rounded-full` | -           |
+| Usage                                              | Class          | Size |
+| -------------------------------------------------- | -------------- | ---- |
+| Checkboxes, keycaps, inline chips and tags         | `rounded-sm`   | 4px  |
+| Compact buttons, icon buttons, menu rows, tooltips | `rounded-md`   | 6px  |
+| Buttons, inputs, selects, popovers, menus, toasts  | `rounded-lg`   | 8px  |
+| Cards and frames                                   | `rounded-xl`   | 12px |
+| Dialogs and sheets                                 | `rounded-2xl`  | 16px |
+| Pills, avatars, dots                               | `rounded-full` | -    |
+
+`--radius` (0.5rem, equal to `--radius-lg`) is the corner radius generated
+visuals receive; app markup does not read it.
 
 **Concentric radius rule:** outer = inner + gap. Nested rounded
-elements must account for the padding between them.
+elements must account for the padding between them. An inner layer one
+border width in uses `rounded-[calc(var(--radius-lg)-1px)]`.
 
 ### Content Width
 

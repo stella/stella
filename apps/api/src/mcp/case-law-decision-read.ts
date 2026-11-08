@@ -16,6 +16,11 @@ import type { DecisionCitationDigest } from "@/api/handlers/case-law/decisions/c
 import type { RankedRelatedDecision } from "@/api/handlers/case-law/decisions/citation-graph";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationTreatment } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  queryWordsAbsentWarning,
+  queryWordsApartWarning,
+} from "@/api/lib/case-law/search-warnings";
+import type { DecisionQueryWarning } from "@/api/lib/case-law/search-warnings";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
@@ -146,10 +151,16 @@ const isEmptyValue = (value: unknown): boolean =>
   (isRecord(value) && Object.keys(value).length === 0);
 
 /**
- * A value two keys may share only by restating each other: text, a list or a
- * record. A flag or a count is left alone, because two different facts can
- * both be `true` or `3`.
+ * Publisher-native keys that record the same field as a canonical key, keyed
+ * by the native name. Equal values under two other keys are two facts (a
+ * presiding judge who is also the rapporteur), so only a declared pair is
+ * ever collapsed.
  */
+const NATIVE_METADATA_ALIASES: Readonly<Record<string, string>> = {
+  kategorieRozhodnuti: "category",
+};
+
+/** Text, a list or a record, compared as stored; null for anything else. */
 const duplicateKeyOf = (value: unknown): string | null => {
   if (typeof value === "string") {
     return comparableScalar(value);
@@ -165,10 +176,10 @@ const duplicateKeyOf = (value: unknown): string | null => {
  *
  * Dropped: empty values; a value that restates a top-level field of the
  * answer (the court, the date, the docket, the ECLI, a URL), whatever key the
- * publisher filed it under; and a value two keys both carry (a publisher's
- * native label beside the canonical one, `kategorieRozhodnuti` beside
- * `category`), of which the shorter key is kept, the canonical names being
- * the short English ones. Everything else passes through as stored.
+ * publisher filed it under; and a publisher's native label that restates its
+ * canonical key (`kategorieRozhodnuti` beside an equal `category`). Everything
+ * else passes through as stored, including different keys that happen to hold
+ * the same value.
  */
 export const compactDecisionMetadata = ({
   metadata,
@@ -190,20 +201,18 @@ export const compactDecisionMetadata = ({
     const comparable = comparableScalar(value);
     return comparable === null || !answered.has(comparable);
   });
-  // The first key per shared value, shortest name first.
-  const keeper = new Map<string, string>();
-  for (const [key, value] of kept.toSorted(
-    ([left], [right]) => left.length - right.length || compareKeys(left, right),
-  )) {
-    const duplicate = duplicateKeyOf(value);
-    if (duplicate !== null && !keeper.has(duplicate)) {
-      keeper.set(duplicate, key);
-    }
-  }
   return Object.fromEntries(
     kept.filter(([key, value]) => {
+      const canonical = Object.hasOwn(NATIVE_METADATA_ALIASES, key)
+        ? NATIVE_METADATA_ALIASES[key]
+        : undefined;
+      if (canonical === undefined || !Object.hasOwn(metadata, canonical)) {
+        return true;
+      }
       const duplicate = duplicateKeyOf(value);
-      return duplicate === null || keeper.get(duplicate) === key;
+      return (
+        duplicate === null || duplicate !== duplicateKeyOf(metadata[canonical])
+      );
     }),
   );
 };
@@ -445,11 +454,57 @@ export type QueryParagraph = DecisionParagraph & {
 };
 
 /**
+ * Why no paragraph held every word, and the largest set one paragraph does
+ * hold, in the query's own order and spelling. Asking for that set always
+ * finds its paragraph, so the call the warning names cannot come back empty.
+ */
+const queryMissWarning = ({
+  language,
+  spellings,
+  termSets,
+}: {
+  language: string;
+  /** Each wanted term with the word the query spelled it as. */
+  spellings: ReadonlyMap<string, string>;
+  termSets: readonly ReadonlySet<string>[];
+}): DecisionQueryWarning => {
+  const wanted = [...spellings.keys()];
+  const spellingOf = (term: string): string =>
+    spellings.get(term) ?? panic("A wanted term must have its spelling");
+  let largest: string[] = [];
+  for (const terms of termSets) {
+    const held = wanted.filter((term) => terms.has(term));
+    if (held.length > largest.length) {
+      largest = held;
+    }
+  }
+  if (largest.length === 0) {
+    return queryWordsAbsentWarning({ language, words: wanted.map(spellingOf) });
+  }
+  const present = wanted.filter((term) =>
+    termSets.some((terms) => terms.has(term)),
+  );
+  return queryWordsApartWarning({
+    absentWords: wanted
+      .filter((term) => !present.includes(term))
+      .map(spellingOf),
+    presentWords: present.map(spellingOf),
+    retry: {
+      query: largest.map(spellingOf).join(" "),
+      hitCount: termSets.filter((terms) =>
+        largest.every((term) => terms.has(term)),
+      ).length,
+    },
+  });
+};
+
+/**
  * The paragraphs holding every word of `query`, each with the paragraph
  * before and after it, in document order and without repeats. At most
  * `QUERY_HIT_LIMIT` matches, and no more text than `budget` characters: the
  * first match is cut to it, and a neighbour or later match that does not fit
- * what is left is dropped and marks the answer truncated.
+ * what is left is dropped and marks the answer truncated. No match returns no
+ * paragraph at all, with a warning naming the words.
  */
 export const paragraphsMatching = ({
   budget,
@@ -461,16 +516,38 @@ export const paragraphsMatching = ({
   language: string;
   paragraphs: readonly DecisionParagraph[];
   query: string;
-}): { hitCount: number; paragraphs: QueryParagraph[]; truncated: boolean } => {
+}): {
+  hitCount: number;
+  paragraphs: QueryParagraph[];
+  truncated: boolean;
+  warning: DecisionQueryWarning | null;
+} => {
   const termOf = termMatcher(language);
-  const wanted = [...new Set(corpusTokens(query).map(termOf))];
+  const spellings = new Map<string, string>();
+  for (const word of corpusTokens(query)) {
+    const term = termOf(word);
+    if (!spellings.has(term)) {
+      spellings.set(term, word);
+    }
+  }
+  const wanted = [...spellings.keys()];
   if (wanted.length === 0) {
     return panic("A paragraph query must carry a word");
   }
-  const hits = paragraphs.flatMap((paragraph, index) => {
-    const terms = new Set(corpusTokens(paragraph.text).map(termOf));
-    return wanted.every((term) => terms.has(term)) ? [index] : [];
-  });
+  const termSets = paragraphs.map(
+    (paragraph) => new Set(corpusTokens(paragraph.text).map(termOf)),
+  );
+  const hits = termSets.flatMap((terms, index) =>
+    wanted.every((term) => terms.has(term)) ? [index] : [],
+  );
+  if (hits.length === 0) {
+    return {
+      hitCount: 0,
+      paragraphs: [],
+      truncated: false,
+      warning: queryMissWarning({ language, spellings, termSets }),
+    };
+  }
 
   // Each chosen paragraph and how much of it travels. Only the first match
   // may be cut, to the budget, on a whole code point; everything after it
@@ -529,5 +606,6 @@ export const paragraphsMatching = ({
         };
       }),
     truncated,
+    warning: null,
   };
 };

@@ -571,11 +571,7 @@ describe("public decision reader database boundary", () => {
       expect(resolved).toMatchObject({
         status: "resolved",
         document: {
-          text: {
-            status: "readable",
-            blocks: buildFulltextParagraphBlocks(FULLTEXT),
-            extent: { type: "complete" },
-          },
+          text: { status: "readable", charCount: FULLTEXT.length },
         },
       });
     },

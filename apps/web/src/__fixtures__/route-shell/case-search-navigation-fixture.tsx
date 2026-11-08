@@ -38,6 +38,7 @@ const hit = {
   languageAlternates: [],
   decisionDate: "2026-01-01",
   decisionType: null,
+  decisionTypeKind: null,
   sourceUrl: null,
   headnote: { type: "absent", reason: "not_published" },
   keywords: null,

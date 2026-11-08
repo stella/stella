@@ -1,6 +1,9 @@
 import { SQL } from "bun";
 import { describe, expect, spyOn, test } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { validateLedger } from "../lib/db/migration-ledger";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
@@ -202,6 +205,7 @@ const runScripted = async ({
         }
         await Promise.resolve();
       },
+      blockers: () => [],
       classifyLedger: async () =>
         await Promise.resolve(
           ledgerProgress === "own"
@@ -364,6 +368,7 @@ test("the schema ladder restores the session lock timeout before the online phas
       );
     },
     classifyLedger: async () => ({ status: "unchanged", committedReceipts: 0 }),
+    blockers: () => [],
     retry: {
       ...DEFAULT_LOCK_RETRY_CONFIG,
       lockTimeoutsMs: [25],
@@ -400,6 +405,7 @@ test("the schema ladder restores the session lock timeout after a failure", asyn
       throw failure;
     },
     classifyLedger: async () => ({ status: "unchanged", committedReceipts: 0 }),
+    blockers: () => [],
     retry: {
       ...DEFAULT_LOCK_RETRY_CONFIG,
       lockTimeoutsMs: [25],
@@ -436,6 +442,7 @@ test("a terminated schema session preserves the observation failure without rese
       throw failure;
     },
     classifyLedger: async () => ({ status: "unchanged", committedReceipts: 0 }),
+    blockers: () => [],
     retry: {
       ...DEFAULT_LOCK_RETRY_CONFIG,
       random: () => 0.5,
@@ -448,4 +455,86 @@ test("a terminated schema session preserves the observation failure without rese
   );
   expect(rejection).toBe(failure);
   expect(statements).toEqual([]);
+});
+
+test("a pending set is never rerun for a failure that is not a lock refusal", async () => {
+  await assertProperty(
+    "a pending set is never rerun for a failure that is not a lock refusal",
+    fc.asyncProperty(
+      fc.constantFrom("40P01", "57014", "23505", "42501", "42P01", "08006"),
+      async (errno) => {
+        expect(errno).not.toBe(PG_ERROR.LOCK_NOT_AVAILABLE);
+        const failure = serverFailure(errno);
+        const run = await runScripted({ script: [failure, null] });
+        expect(run.outcome).toBe(failure);
+        expect(run.attempts).toBe(1);
+        expect(run.sleeps).toEqual([]);
+      },
+    ),
+  );
+});
+
+test("an exhausted ladder names each blocking session without query text", async () => {
+  const blocker = {
+    pid: 4242,
+    state: "idle in transaction",
+    applicationName: "citation-reader",
+    xactAgeMs: 61_500,
+    waitEvent: "ClientRead",
+    queryFingerprint: "select ? from secret_table",
+  };
+  const rejection = await applyPendingRetryingLockWaits({
+    apply: async () => {
+      throw lockWaitLoss();
+    },
+    classifyLedger: async () => ({ status: "unchanged", committedReceipts: 0 }),
+    blockers: () => [blocker],
+    retry: {
+      ...DEFAULT_LOCK_RETRY_CONFIG,
+      lockTimeoutsMs: [10],
+      random: () => 0.5,
+      now: () => 0,
+      sleep: async () => await Promise.resolve(),
+    },
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(MigrationLockWaitError.is(rejection)).toBe(true);
+  expect(rejection).toMatchObject({ blockers: [blocker] });
+  expect(
+    await applyPendingRetryingLockWaits({
+      label: "Migration preflight",
+      apply: async () => {
+        throw lockWaitLoss();
+      },
+      classifyLedger: async () => ({
+        status: "unchanged",
+        committedReceipts: 0,
+      }),
+      blockers: () => [],
+      retry: {
+        ...DEFAULT_LOCK_RETRY_CONFIG,
+        lockTimeoutsMs: [10],
+        random: () => 0.5,
+        now: () => 0,
+        sleep: async () => await Promise.resolve(),
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    ),
+  ).toMatchObject({
+    message: expect.stringContaining(
+      "Migration preflight lost a lock wait after 1 attempts",
+    ),
+  });
+  const { message } = MigrationLockWaitError.is(rejection)
+    ? rejection
+    : { message: "" };
+  expect(message).toContain("pid 4242");
+  expect(message).toContain("idle in transaction");
+  expect(message).toContain('"citation-reader"');
+  expect(message).toContain("61500 ms");
+  expect(message).not.toContain("secret_table");
 });

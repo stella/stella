@@ -57,6 +57,11 @@ const placeholders = (message: string): string[] => [
   ),
 ];
 
+// The catalogue half of the `no-em-dash-copy` oxlint rule, which does not parse
+// JSON: copy breaks a sentence with a period, comma, colon or parentheses. A
+// value that is only the glyph is the empty-cell marker, not punctuation.
+const EM_DASH = "\u2014";
+
 const english = readCatalogue("en");
 const translatedLocales = UI_LOCALES.filter((locale) => locale !== "en");
 
@@ -64,6 +69,17 @@ describe("desktop locale catalogues", () => {
   test("ship exactly the UI locales the web app ships", () => {
     expect(shippedLocales.toSorted()).toEqual([...UI_LOCALES].toSorted());
   });
+
+  for (const locale of shippedLocales) {
+    test(`${locale} copy contains no em dash`, () => {
+      const withEmDash = Object.entries(readCatalogue(locale))
+        .filter(
+          ([, message]) => message.includes(EM_DASH) && message !== EM_DASH,
+        )
+        .map(([key]) => key);
+      expect(withEmDash).toEqual([]);
+    });
+  }
 
   for (const locale of translatedLocales) {
     test(`${locale} has every English key and no extras`, () => {

@@ -667,9 +667,13 @@ test("the lockfile release-age guard follows every tracked lockfile", () => {
     "bun.lock",
     ".claude/mcp/bun.lock",
     "tools/nested/bun.lock",
+    "apps/desktop/src-tauri/Cargo.lock",
+    "packages/scan-engine/Cargo.lock",
+    "packages/scan-engine/Cargo.toml",
     "scripts/check-lockfile-release-ages.ts",
     "scripts/check-lockfile-release-ages.test.ts",
     "scripts/check-stll-quarantine-excludes.ts",
+    "scripts/crates-io-release-age.ts",
   ]) {
     expect(runSelector([file], ["lockfile_ages_required"]), file).toEqual([
       "true",
@@ -680,6 +684,7 @@ test("the lockfile release-age guard follows every tracked lockfile", () => {
     "bunfig.toml",
     "apps/web/package.json",
     "docs/bun.lock.md",
+    "packages/scan-engine/src/lib.rs",
   ]) {
     expect(runSelector([file], ["lockfile_ages_required"]), file).toEqual([
       "false",

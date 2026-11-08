@@ -11,8 +11,8 @@ import { ebsBalance } from "@stll/db-load-gate/indicators";
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 
 import {
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "../lib/scheduler/backfill-config";
 import { isRecord } from "../lib/type-guards";
 import { withGatedTestClients } from "../tests/gated-test-database";
@@ -22,7 +22,7 @@ import type { OnlineMigrationConnection } from "./online-migration-connection";
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const config = {
-  ...SCHEDULER_BACKFILL_CONFIG,
+  ...schedulerBackfillConfig(),
   minSize: 1,
   maxSize: 4,
   minSleepMs: 0,

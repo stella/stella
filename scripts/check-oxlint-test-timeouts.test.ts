@@ -24,7 +24,7 @@ const checkTimeouts = (
 
 const customLintTestTimeoutViolations = (
   options: Parameters<typeof checkTimeouts>[0] = {},
-) => checkTimeouts({ now: new Date("2026-10-21T00:00:00.000Z"), ...options });
+) => checkTimeouts({ scope: "all", ...options });
 
 const IMPORTS =
   'import { test, it, describe, setDefaultTimeout } from "bun:test";\n';
@@ -404,25 +404,15 @@ const rolloutFixture = (directory: string, lines: readonly number[]) =>
     ],
   ]);
 
-for (const { name, now, changedLines, diagnostics } of [
+for (const { name, changedLines, diagnostics } of [
   {
     name: "unchanged during rollout",
-    now: "2026-10-14",
     changedLines: [],
     diagnostics: [],
   },
   {
     name: "changed inside the call during rollout",
-    now: "2026-10-14",
     changedLines: [6],
-    diagnostics: [
-      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
-    ],
-  },
-  {
-    name: "unchanged after rollout expiry",
-    now: "2026-10-21",
-    changedLines: [],
     diagnostics: [
       "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
     ],
@@ -437,7 +427,6 @@ for (const { name, now, changedLines, diagnostics } of [
       expect(
         checkTimeouts({
           directory,
-          now: new Date(now),
           changedLines: rolloutFixture(directory, changedLines),
         }),
       ).toEqual(diagnostics);
@@ -451,34 +440,16 @@ test("the first week ignores an unchanged timeout and rejects a changed one", ()
       file,
       `${IMPORTS}test("legacy", () => {}, 60_000);\ntest("new", () => {}, 60_000);\n`,
     );
-    const now = new Date("2026-10-14T00:00:00.000Z");
     expect(
       checkTimeouts({
         directory,
-        now,
         changedLines: rolloutFixture(directory, []),
       }),
     ).toEqual([]);
     expect(
       checkTimeouts({
         directory,
-        now,
         changedLines: rolloutFixture(directory, [3]),
-      }),
-    ).toEqual([
-      "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
-    ]);
-  });
-});
-
-test("the rollout expires into full timeout enforcement", () => {
-  withFixture((directory, file) => {
-    writeFileSync(file, `${IMPORTS}test("legacy", () => {}, 60_000);\n`);
-    expect(
-      checkTimeouts({
-        directory,
-        now: new Date("2026-10-21T00:00:00.000Z"),
-        changedLines: rolloutFixture(directory, []),
       }),
     ).toEqual([
       "fixture.test.ts: pass test options inline without timeout keys or spreads; exceptions require an allow-list reason",
@@ -495,7 +466,6 @@ test("the changed timeout option is enforced inside a multiline call", () => {
     expect(
       checkTimeouts({
         directory,
-        now: new Date("2026-10-14T00:00:00.000Z"),
         changedLines: rolloutFixture(directory, [5]),
       }),
     ).toEqual([
@@ -511,7 +481,6 @@ test("full enforcement can be requested during rollout", () => {
       checkTimeouts({
         directory,
         scope: "all",
-        now: new Date("2026-10-14T00:00:00.000Z"),
         changedLines: rolloutFixture(directory, []),
       }),
     ).toEqual([

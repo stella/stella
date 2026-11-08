@@ -1,0 +1,151 @@
+{
+  "package": "@stll/html",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/load.d.ts",
+      "exports": [
+        {
+          "name": "Cheerio",
+          "kind": "class+interface",
+          "space": "type"
+        },
+        {
+          "name": "CheerioAPI",
+          "kind": "interface",
+          "space": "type"
+        },
+        {
+          "name": "CheerioOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "htmlTreeAdapter",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "load",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./bounded": {
+      "type": "module",
+      "file": "./src/bounded.d.ts",
+      "exports": [
+        {
+          "name": "CheerioAPI",
+          "kind": "interface",
+          "space": "type"
+        },
+        {
+          "name": "loadWithAllocationBudget",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./email": {
+      "type": "module",
+      "file": "./src/email.d.ts",
+      "exports": [
+        {
+          "name": "EMAIL_PREVIEW_DOM_OPTIONS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "loadEmailDocument",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "serializeEmailNode",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "serializeEmailPreviewMarkup",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./nodes": {
+      "type": "module",
+      "file": "./src/nodes.d.ts",
+      "exports": [
+        {
+          "name": "AnyNode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "Element",
+          "kind": "class",
+          "space": "type"
+        },
+        {
+          "name": "ParentNode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "Text",
+          "kind": "class",
+          "space": "type"
+        },
+        {
+          "name": "cloneNode",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "createElement",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "createText",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "hasChildren",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isCDATA",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isComment",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isTag",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isText",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/bounded.d.ts": "export type { CheerioAPI } from \"./selection\";\ntype AllocationBudget = {\n    maxDomAllocations: number;\n    reject: () => never;\n};\nexport declare const loadWithAllocationBudget: (html: string, { maxDomAllocations, reject }: AllocationBudget) => import(\"cheerio/slim\").CheerioAPI;\n",
+    "./src/email.d.ts": "import type { AnyNode } from \"./nodes\";\nexport declare const EMAIL_PREVIEW_DOM_OPTIONS: Readonly<{\n    scriptingEnabled: false;\n    treeAdapter: import(\"parse5\").TreeAdapter<import(\"parse5-htmlparser2-tree-adapter\").Htmlparser2TreeAdapterMap>;\n}>;\nexport declare const loadEmailDocument: (html: string) => import(\"cheerio/slim\").CheerioAPI;\nexport declare const serializeEmailNode: (node: AnyNode) => string;\nexport declare const serializeEmailPreviewMarkup: ($: ReturnType<typeof loadEmailDocument>) => string;\n",
+    "./src/load.d.ts": "import type { CheerioAPI, CheerioOptions } from \"./selection\";\nexport type { Cheerio, CheerioAPI, CheerioOptions } from \"./selection\";\nexport declare const htmlTreeAdapter: import(\"parse5\").TreeAdapter<import(\"parse5-htmlparser2-tree-adapter\").Htmlparser2TreeAdapterMap>;\nexport declare const load: (content: string, options?: CheerioOptions | null, document?: boolean) => CheerioAPI;\n",
+    "./src/nodes.d.ts": "import { cloneNode as domCloneNode, Element as DomElement, hasChildren as domHasChildren, isCDATA as domIsCDATA, isComment as domIsComment, isTag as domIsTag, isText as domIsText, Text as DomText } from \"domhandler\";\nexport type { AnyNode, Element, ParentNode, Text } from \"domhandler\";\nexport declare const createElement: (...args: ConstructorParameters<typeof DomElement>) => DomElement;\nexport declare const createText: (data: string) => DomText;\nexport declare const cloneNode: typeof domCloneNode;\nexport declare const hasChildren: typeof domHasChildren;\nexport declare const isCDATA: typeof domIsCDATA;\nexport declare const isComment: typeof domIsComment;\nexport declare const isTag: typeof domIsTag;\nexport declare const isText: typeof domIsText;\n",
+    "./src/selection.d.ts": "import type { CheerioOptions as Options } from \"cheerio/slim\";\nexport type { Cheerio, CheerioAPI } from \"cheerio/slim\";\nexport type CheerioOptions = Omit<Options, \"xmlMode\"> & {\n    xmlMode?: boolean;\n};\n"
+  }
+}

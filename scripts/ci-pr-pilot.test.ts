@@ -278,7 +278,10 @@ const DECLARED_NORMAL_PLAN_CHANGES = new Set([
 ]);
 // Jobs that now also run at fast depth: on a pull request they run, and every
 // other event keeps the plan its former predicate had at full depth.
-const DECLARED_EVERY_DEPTH_CHANGES = new Set(["e2e-landing"]);
+const DECLARED_EVERY_DEPTH_CHANGES = new Set([
+  "e2e-landing",
+  "desktop-rust-tests",
+]);
 
 // Jobs that became parts of one shared job: the part's steps, under the
 // shared job's condition, keep the job's former plan.
@@ -413,7 +416,10 @@ test("off and unset preserve today's job plan across every event and depth", asy
     "web-build",
     "scan-engine-wasm-drift",
   ]);
-  expect([...DECLARED_EVERY_DEPTH_CHANGES]).toEqual(["e2e-landing"]);
+  expect([...DECLARED_EVERY_DEPTH_CHANGES]).toEqual([
+    "e2e-landing",
+    "desktop-rust-tests",
+  ]);
 });
 
 test("Postgres PR execution follows explicit opt-in in either pilot profile", () => {
@@ -505,7 +511,7 @@ test("Docker checks retain every queue depth in both coverage profiles", () => {
   }
 });
 
-test("desktop Rust tests retain merge-group selection in every coverage profile and queue depth", () => {
+test("desktop Rust tests run on normal pull requests and merge groups at every queue depth", () => {
   expect(fastJobs(workflow)).not.toContain("desktop-rust-tests");
   for (const profile of ["normal-v1", "pilot-fast-v1"]) {
     for (const event of ["pull_request", "merge_group"]) {
@@ -521,7 +527,10 @@ test("desktop Rust tests retain merge-group selection in every coverage profile 
               context,
             ),
             `${profile}/${event}/${queueDepth}/${required}`,
-          ).toBe(event === "merge_group" && required === "true");
+          ).toBe(
+            required === "true" &&
+              (event === "merge_group" || profile === "normal-v1"),
+          );
         }
       }
     }

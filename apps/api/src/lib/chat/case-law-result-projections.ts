@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { caseLawCourtYearSchema } from "@stll/api-contract/case-law-court-year";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import {
   DECISION_HEADNOTE_KEYWORDS,
   DECISION_TEXT_AVAILABILITY,
@@ -106,6 +107,7 @@ const caseLawSearchIdentityFields = {
   decisionId: passthroughId(),
   resourceName: passthroughId(),
   decisionType: v.nullable(v.string()),
+  decisionTypeKind: v.nullable(v.picklist(DECISION_TYPE_KINDS)),
   ecli: v.nullable(v.string()),
   language: v.string(),
   // Which of the call's `queries` returned this decision, by index,
@@ -117,9 +119,6 @@ const caseLawSearchIdentityFields = {
   // Whether the decision holds every word of the query, or only some of them
   // (appended after the others when few decisions held every word).
   match: v.picklist(DECISION_SEARCH_MATCHES),
-  // The publisher's own decision URL, which may embed the publisher's
-  // own UUID — never a Stella tenant id, so it is forwarded unchanged.
-  sourceUrl: v.nullable(publicUrl()),
 } as const;
 
 /**

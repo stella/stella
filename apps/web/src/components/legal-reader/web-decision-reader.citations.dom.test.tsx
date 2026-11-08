@@ -11,8 +11,7 @@ import {
 import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -222,6 +221,10 @@ const renderReader = async () => {
             endOffset: CITING_PARAGRAPH.indexOf(CITED_CASE) + 5,
             id: "topic-over-citation",
             kind: "highlight",
+            quote: CITING_PARAGRAPH.slice(
+              CITING_PARAGRAPH.indexOf("zn."),
+              CITING_PARAGRAPH.indexOf(CITED_CASE) + 5,
+            ),
             startOffset: CITING_PARAGRAPH.indexOf("zn."),
             style: "underline",
           },
@@ -264,38 +267,26 @@ const popup = async () => {
 };
 
 describe("a citation card in the decision text", () => {
-  test("a citation split by text runs, an overlapping mark, and an NBSP owns one court badge", async () => {
+  test("a citation split by text runs, an overlapping mark, and an NBSP keeps exactly its printed characters", async () => {
     const view = await renderReader();
     const paragraphElement = view.container.querySelector<HTMLElement>(
       '[data-anchor="anchor-citing"]',
     );
     expect(paragraphElement).not.toBeNull();
+    // A reference in the decision text draws nothing beside its characters.
     expect(
       paragraphElement?.querySelectorAll('[data-slot="court-badge"]'),
-    ).toHaveLength(2);
+    ).toHaveLength(0);
+    expect(paragraphElement?.textContent).toEndWith(CITING_PARAGRAPH);
 
     const citationLinks = paragraphElement?.querySelectorAll(
       `[data-decision-citation="${citedId}"]`,
     );
     expect(citationLinks).toHaveLength(4);
     const citationText = Array.from(citationLinks ?? [])
-      .map((link) => {
-        const copy = link.cloneNode(true);
-        if (!(copy instanceof Element)) {
-          return "";
-        }
-        for (const node of copy.querySelectorAll("[data-reader-chrome]")) {
-          node.remove();
-        }
-        return copy.textContent;
-      })
+      .map((link) => link.textContent)
       .join("");
     expect(citationText).toBe(CITED_REFERENCE);
-    expect(
-      Array.from(citationLinks ?? []).flatMap((link) =>
-        Array.from(link.querySelectorAll('[data-slot="court-badge"]')),
-      ),
-    ).toHaveLength(1);
   });
 
   test("describes the cited decision and offers its other mentions without echoing the citing paragraph", async () => {

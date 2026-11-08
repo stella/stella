@@ -1,0 +1,4 @@
+{
+  "add-column": "Nullable provenance columns have no defaults and require no row rewrite; ACCESS EXCLUSIVE acquisition is bounded by the 1s lock_timeout and 10s statement_timeout.",
+  "add-constraint": "Provenance checks are added NOT VALID without scanning existing rows; online repairs validate them after the schema transaction releases its locks."
+}

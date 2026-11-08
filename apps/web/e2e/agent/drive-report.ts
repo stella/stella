@@ -259,7 +259,9 @@ export const pageTotals = ({ requests }: NetworkCapture) => {
   let responseBytes = 0;
   for (const request of requests) {
     dbQueries += request.dbQueries ?? 0;
-    responseBytes += request.responseBytes ?? 0;
+    if (request.responseSize.status === "measured") {
+      responseBytes += request.responseSize.bytes;
+    }
   }
   return { apiRequests: requests.length, dbQueries, responseBytes };
 };

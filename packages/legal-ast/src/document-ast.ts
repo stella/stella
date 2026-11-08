@@ -1,3 +1,4 @@
+// parser-output-unchanged: persisted readers and ingestion writers accept head matter after the body and report late blocks; parsers emit the same output, and writers now store such an AST instead of refusing it.
 // parser-output-unchanged: adds withUniqueBlockIdentities and re-keys repeated identities in the persisted reader. sk-us carries its parser version bump; main already gives sk-courts unique identities; every other enrolled fixture output repeats none (replay conformance asserts it).
 // parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
 // parser-output-unchanged: [at-courts] registered replay fixture fields are unchanged by numeric index normalization.
@@ -24,6 +25,7 @@
 // parser-output-unchanged: [pl-uokik] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: Guidance metadata is a new union branch; decision metadata keeps its fields and no parser writes the optional type.
+// parser-output-unchanged: Statute anchor resolution (`resolveDocumentAnchor`, `resolveDocumentHeadingAnchor`) now reads the publisher's scheme; no decision parser or adapter calls either.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
@@ -56,6 +58,8 @@ import {
   rawInlineTypes,
 } from "./inline.js";
 import type { Inline } from "./inline.js";
+import { anchorEndsWithPath } from "./statute-anchor-scheme.js";
+import type { StatuteBlocks } from "./statute-anchor-scheme.js";
 
 export type {
   Inline,
@@ -316,12 +320,13 @@ export const hasBlockInlines = (block: Block): block is InlineBlock =>
 
 /**
  * Resolve an AST anchor stated without its structural parent path. Exact
- * anchors win; a suffix alias is usable only when it identifies one block.
+ * anchors win; a tail alias is usable only when it identifies one block.
  * This lets a legal reference such as `cl_7` reach `prilohy-cl_7` without
- * guessing when several annexes repeat the same local designation.
+ * guessing when several annexes repeat the same local designation. The tail
+ * is whole segments of the publisher's scheme, never a substring.
  */
 const resolveAnchorCandidate = <TBlock extends Block>(
-  blocks: readonly TBlock[],
+  { blocks, scheme }: StatuteBlocks<TBlock>,
   requestedAnchorId: string,
 ): TBlock | null => {
   const exact = blocks.find(({ anchorId }) => anchorId === requestedAnchorId);
@@ -329,10 +334,14 @@ const resolveAnchorCandidate = <TBlock extends Block>(
     return exact;
   }
 
-  const suffix = `-${requestedAnchorId}`;
   let resolved: TBlock | null = null;
   for (const block of blocks) {
-    if (!block.anchorId.endsWith(suffix)) {
+    if (
+      !anchorEndsWithPath(scheme, {
+        anchor: block.anchorId,
+        tail: requestedAnchorId,
+      })
+    ) {
       continue;
     }
     if (resolved !== null) {
@@ -344,16 +353,21 @@ const resolveAnchorCandidate = <TBlock extends Block>(
 };
 
 export const resolveDocumentAnchor = (
-  blocks: readonly Block[],
+  statute: StatuteBlocks<Block>,
   requestedAnchorId: string,
-): Block | null => resolveAnchorCandidate(blocks, requestedAnchorId);
+): Block | null => resolveAnchorCandidate(statute, requestedAnchorId);
 
 export const resolveDocumentHeadingAnchor = (
-  blocks: readonly Block[],
+  { blocks, scheme }: StatuteBlocks<Block>,
   requestedAnchorId: string,
 ): HeadingBlock | null =>
   resolveAnchorCandidate(
-    blocks.filter((block): block is HeadingBlock => block.type === "heading"),
+    {
+      blocks: blocks.filter(
+        (block): block is HeadingBlock => block.type === "heading",
+      ),
+      scheme,
+    },
     requestedAnchorId,
   );
 
@@ -869,7 +883,9 @@ export type PersistedAstDegradation =
       blockId: string | null;
       field: BlockIdentityField;
       value: string;
-    };
+    }
+  /** Head matter stored after the body started; served where it was written. */
+  | { kind: "head-matter-order"; blockId: string };
 
 const storedBlockShape = v.object({
   id: v.optional(v.string()),
@@ -1176,21 +1192,39 @@ export const isHeadMatterBlock = (block: Block): boolean =>
     isApparatusRole(block.role)) ||
   (block.type === "heading" && block.role === "publisher-heading");
 
-/** Publisher head matter may precede, but never interrupt or follow, the body.
- * Notes retain their own placement and are never a head-matter region. */
-export const headMatterPrecedesBody = (blocks: readonly Block[]): boolean => {
+/** Head-matter blocks placed after the body started, in document order. */
+const lateHeadMatter = (blocks: readonly Block[]): Block[] => {
+  const late: Block[] = [];
   let bodyStarted = false;
   for (const block of blocks) {
     if (footnoteOf(block) !== null) {
       continue;
     }
     if (bodyStarted && isHeadMatterBlock(block)) {
-      return false;
+      late.push(block);
     }
     bodyStarted ||= startsDecisionBody(block);
   }
-  return true;
+  return late;
 };
+
+/** Publisher head matter may precede, but never interrupt or follow, the body.
+ * Notes retain their own placement and are never a head-matter region. */
+export const headMatterPrecedesBody = (blocks: readonly Block[]): boolean =>
+  lateHeadMatter(blocks).length === 0;
+
+/**
+ * Rows stored before writers enforced the head-matter order keep their
+ * blocks where they were written: the reader serves them and reports each
+ * late block, and a reparse with the current parser repairs the row.
+ */
+export const headMatterOrderDegradations = (
+  blocks: readonly Block[],
+): PersistedAstDegradation[] =>
+  lateHeadMatter(blocks).map((block) => ({
+    kind: "head-matter-order",
+    blockId: block.id,
+  }));
 
 const HEAD_MATTER_ORDER_MESSAGE = "Head matter must precede the decision body";
 
@@ -1199,14 +1233,15 @@ const headMatterOrderCheck = v.check(
   HEAD_MATTER_ORDER_MESSAGE,
 );
 
-export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
+/** The writer contract without the head-matter order rule, which rows written
+ * before that rule existed may break while every other rule still holds. */
+const documentAstAnyOrderSchema: v.GenericSchema<DocumentAst> = v.pipe(
   v.object({
     version: v.literal(1),
     source: documentAstSourceSchema,
     metadata: documentAstMetadataSchema,
     blocks: v.array(blockSchema),
   }),
-  headMatterOrderCheck,
   v.check(
     ({ blocks }) => footnoteGroupsShareLabels(blocks),
     "Adjacent footnote blocks sharing a noteId must repeat one label",
@@ -1215,6 +1250,11 @@ export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
     ({ blocks }) => hasUniqueBlockIdentities(blocks),
     "Block ids and anchorIds must be unique",
   ),
+);
+
+export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
+  documentAstAnyOrderSchema,
+  headMatterOrderCheck,
 );
 
 const emptyDocumentAstSource = () =>
@@ -1258,6 +1298,10 @@ const persistedDocumentAstWireSchema = v.object({
  * document over that would take its text down with a duplicated link
  * target, so the reader re-keys the repeats by the rule writers apply
  * (`withUniqueBlockIdentities`) and reports each one.
+ *
+ * Block order is never a reason to refuse a stored row: rows written before
+ * an ordering rule existed would lose their text on read. The reader reports
+ * misplaced head matter (`headMatterOrderDegradations`).
  */
 export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
   v.pipe(
@@ -1272,7 +1316,6 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
         ),
       ),
     })),
-    headMatterOrderCheck,
     v.check(
       ({ blocks }) => hasUniqueBlockIdentities(blocks),
       "Block ids and anchorIds must be unique",
@@ -1281,6 +1324,11 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
 
 export const isDocumentAst = (val: unknown): val is DocumentAst =>
   v.is(documentAstSchema, val);
+
+/** A writer-valid AST whose head matter may follow the body. */
+export const isDocumentAstInAnyBlockOrder = (
+  val: unknown,
+): val is DocumentAst => v.is(documentAstAnyOrderSchema, val);
 
 export const parseDocumentAst = (raw: unknown): DocumentAst | null => {
   if (raw === null || raw === undefined) {

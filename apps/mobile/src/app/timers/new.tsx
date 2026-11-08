@@ -34,6 +34,7 @@ const NewTimerScreen = () => {
 const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("timers");
   const tabs = useTranslations("tabs");
+  const words = useTranslations("timerActivity");
   const colors = useAppColors();
   const router = useRouter();
   const { end } = useSession();
@@ -98,6 +99,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
         }}
       />
       <ScrollView
+        alwaysBounceVertical={false}
         className="bg-background flex-1"
         contentContainerStyle={screenStyles.content}
         contentInsetAdjustmentBehavior="automatic"
@@ -117,7 +119,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
           <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
             <MatterPicker
               matters={matters}
-              noneLabel={t("noMatter")}
+              noneLabel={words("noMatter")}
               onSelect={setMatterId}
               selected={matterId}
             />

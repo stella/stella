@@ -8,10 +8,10 @@ import * as v from "valibot";
 
 import { cents } from "@stll/money";
 import { assertProperty } from "@stll/property-testing";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts/a" });
 
@@ -121,6 +121,7 @@ const contact = (id: typeof A, notes: string | null) =>
     vatId: null,
     vatPayer: null,
     invoiceLanguage: null,
+    timeBillingFormat: "categories",
     bankAccounts: null,
     billingAddress: null,
     defaultHourlyRate: null,
@@ -133,6 +134,10 @@ const contact = (id: typeof A, notes: string | null) =>
     dateOfBirth: null,
     nationalityCodes: [],
     sanctionsMonitoringMode: "included",
+    externalSource: null,
+    externalId: null,
+    externalChangeKey: null,
+    importedAt: null,
     createdBy: null,
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",

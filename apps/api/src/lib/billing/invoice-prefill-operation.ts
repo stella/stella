@@ -14,6 +14,7 @@ import {
 } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { readInvoiceIssueBlockers } from "@/api/lib/billing/invoice-issue-readiness";
 import {
   readInvoicePrefillContext,
   resolveInvoicePrefillContext,
@@ -251,6 +252,15 @@ export const readMatterInvoicePrefills = async (
     arrangements.map((row) => [row.workspaceId, row]),
   );
   const invoiceDate = todayFor(timeZone).toString();
+  // The composer issues a new invoice for the prefilled seller (one for
+  // every matter): the preconditions finalizing checks, read by the same
+  // owner, so "Issue invoice" shows only when issuing can succeed.
+  const issueBlockers = await readInvoiceIssueBlockers(tx, {
+    documentType: "invoice",
+    sellerProfileId: context.seller?.id ?? null,
+    invoiceNumber: null,
+    finalizedAt: null,
+  });
   const prefills = workspaceIds.map((workspaceId: SafeId<"workspace">) => {
     const shownEntries = arrayOrEmpty(entriesByMatter.get(workspaceId)).map(
       ({ entry }) => entry,
@@ -304,6 +314,7 @@ export const readMatterInvoicePrefills = async (
                 defaultCurrency: prefill.seller.defaultCurrency,
               },
         sellerSource: prefill.sellerSource,
+        issueBlockers,
         buyer: prefill.buyer,
         buyerSource: prefill.buyerSource,
         vat: prefill.vat,

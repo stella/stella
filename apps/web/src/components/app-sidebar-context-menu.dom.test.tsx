@@ -9,8 +9,9 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 
@@ -127,6 +128,7 @@ test("sidebar context menus delete only the row that was right-clicked", async (
               onDeleted={() => undefined}
               onExpandedChange={() => undefined}
               onTogglePin={() => undefined}
+              runStatus={undefined}
               userId="user_sidebar"
               workspace={{
                 client: null,
@@ -135,6 +137,7 @@ test("sidebar context menus delete only the row that was right-clicked", async (
                 lastActivityAt: new Date("2026-07-01T12:00:00.000Z"),
                 name: "Northwind matter",
                 reference: null,
+                status: "active",
               }}
             />
           </SidebarProvider>
@@ -167,7 +170,7 @@ test("sidebar context menus delete only the row that was right-clicked", async (
   fireEvent.contextMenu(documentRow);
   const documentMenu = await screen.findByRole("menu");
   fireEvent.click(
-    within(documentMenu).getByRole("menuitem", { name: "Delete" }),
+    within(documentMenu).getByRole("menuitem", { name: "Delete from matter…" }),
   );
   const dialog = await screen.findByRole("alertdialog");
   fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));

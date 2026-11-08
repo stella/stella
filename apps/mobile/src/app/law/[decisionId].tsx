@@ -25,7 +25,8 @@ const DecisionScreen = () => {
     caseNumber?: string;
     decisionId: string;
   }>();
-  const session = state.status === "signed-in" ? state.source.session() : null;
+  const session =
+    state.status === "signed-in" ? (state.source.session() ?? null) : null;
 
   return (
     <View style={[screenStyles.screen, { backgroundColor: colors.background }]}>

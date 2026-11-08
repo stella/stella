@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "The imports directory owns the external-reference identity contract shared by contact creation, batch import, and document provenance. Keeping validation limits, identity mapping, and tenant-scoped upsert primitives together avoids separate implementations in each consuming slice."
+}

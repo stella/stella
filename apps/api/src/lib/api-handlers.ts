@@ -5,7 +5,10 @@ import * as v from "valibot";
 
 import type { ModelTask } from "@stll/ai-catalog";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import type { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract/mcp";
+import type { ORGANIZATION_CREATE_SCOPE } from "@stll/api-contract/organization-create";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import type { FailureGrade } from "@stll/errors";
 import type { PermissionInput } from "@stll/permissions";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -36,9 +39,11 @@ import {
   authenticateSession,
   authorizeWorkspace,
 } from "@/api/lib/auth";
-import type { WorkspaceStatusAccess } from "@/api/lib/auth";
+import type { WorkspaceStatusAccess } from "@/api/lib/auth/accessible-workspace";
 import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
 import type { AccountAccess } from "@/api/lib/auth/account-access";
+import { hasAccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
+import type { AccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type {
@@ -95,6 +100,7 @@ import {
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
+  answeredFailureSeverity,
   legacyChannelOf,
   observeShadow,
   SHADOW_SINKS,
@@ -214,6 +220,11 @@ export type { McpToolName };
  *   `assistant_chat`.
  * - `notification_inbox`: the caller's own notifications (list, mark one
  *   read). Mark-all and announcements stay `internal` under `native_tool_ui`.
+ * - `cross_matter_search`: the search screen's results across the matters the
+ *   caller can open, by text, result type, editor, file type and date. The
+ *   curated `search` and `search_across_matters` tools are separate, narrower
+ *   knowledge searches; facets, preview and the AI helpers stay `internal`
+ *   under `search_ui`.
  */
 type McpCapabilityReason =
   | "template_authoring_ui"
@@ -234,7 +245,10 @@ type McpCapabilityReason =
   | "correspondence"
   | "personal_history"
   | "assistant_memory"
-  | "notification_inbox";
+  | "notification_inbox"
+  | "organization_management"
+  | "organization_admin"
+  | "cross_matter_search";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from
@@ -283,6 +297,9 @@ type McpCapabilityReason =
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
+ * - `native_device`: a native app registering the device it runs on (push
+ *   alert delivery). Only the signed-in app holds the device token; an agent
+ *   that could register one could route a person's alerts elsewhere.
  */
 type McpInternalReason =
   | "auth_plumbing"
@@ -306,7 +323,8 @@ type McpInternalReason =
   | "document_processing"
   | "native_tool_ui"
   | "billing_ui"
-  | "compound_consent";
+  | "compound_consent"
+  | "native_device";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler
@@ -332,6 +350,8 @@ export type McpExposure =
   | {
       type: "capability";
       reason: McpCapabilityReason;
+      /** Curated wrapper that delegates to this capability. */
+      by?: McpToolName;
       consumesServices: ServiceClassification;
       confirmation?: "required";
       readClass?: McpReadClass;
@@ -576,14 +596,26 @@ export const getSafeHandlerAccessMetadata = (handler: unknown) =>
     ? safeHandlerAccountAccess.get(handler)
     : undefined;
 
+type AccountCapabilityScope =
+  | (typeof ACCOUNT_EXPORT_SCOPES)[keyof typeof ACCOUNT_EXPORT_SCOPES]
+  | typeof ORGANIZATION_CREATE_SCOPE;
+
+type SessionCapabilityAuthority =
+  | { mcp: Extract<McpExposure, { type: "internal" }>; accountScope?: never }
+  | {
+      mcp: Exclude<McpExposure, { type: "internal" }>;
+      accountScope: AccountCapabilityScope;
+    };
+
 export type SessionHandlerConfig = InputSchema &
+  SessionCapabilityAuthority &
   WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
     accountAccess: AccountAccess;
-    mcp: McpExposure;
+    idempotency?: { type: "replay" };
     /**
      * Session handlers run outside an organization scope, so they can only
      * state that a successful call announces no resource sets.
@@ -594,6 +626,7 @@ export type SessionHandlerConfig = InputSchema &
 type SessionHandlerContext<
   TConfig extends SessionHandlerConfig = SessionHandlerConfig,
 > = RouteContext<TConfig> & {
+  accountAuthority?: AccountCapabilityAuthority;
   user: {
     id: SafeId<"user">;
     email: string;
@@ -644,6 +677,8 @@ type SafeErrorBody = {
   retryAfterMs?: number;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
+  /** Matter destination for a scope correction the caller may follow. */
+  workspaceId?: string;
   /**
    * Structured fields surfaced on specific error responses. Today
    * only the 402 UsageLimitExceeded path uses them so the
@@ -2170,6 +2205,7 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
     ? {}
     : { retryAfterMs: error.retryAfterMs }),
   ...(error.issues ? { issues: error.issues } : {}),
+  ...(error.workspaceId ? { workspaceId: error.workspaceId } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).
   ...(error.usage
@@ -2221,7 +2257,8 @@ export const createSafeRootHandler = <
     : [dependencies?: HandlerAdmissionDependencies<RootHandlerContext<TConfig>>]
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> => {
   const admission = dependencies.at(0);
-  if (config.idempotency !== undefined && admission?.authorize === undefined) {
+  const authorizesBeforeReplay = admission?.authorize !== undefined;
+  if (config.idempotency !== undefined && !authorizesBeforeReplay) {
     panic("Replay-enabled root handlers require pre-replay authorization");
   }
   const core = createSafeScopedHandler("member", config, handler, admission);
@@ -2277,6 +2314,19 @@ export const createSafeSessionHandler = <
       ctx: SessionHandlerContext<TConfig>,
     ): Promise<SafeHandlerResult<TResult>> =>
       await withSafeHandlerExceptionScope(ctx, async () => {
+        if (
+          config.accountScope !== undefined &&
+          ctx.accountAuthority !== undefined &&
+          !hasAccountCapabilityAuthority(
+            ctx.accountAuthority,
+            config.accountScope,
+          )
+        ) {
+          return toSafeStatusResponse(403, {
+            code: "missing_scope",
+            message: `This operation requires ${config.accountScope} consent.`,
+          });
+        }
         if (requiresAccountCheck(config.accountAccess)) {
           const accountAccess = checkAccountOperation(
             ctx.user.email,
@@ -2684,18 +2734,19 @@ const logAndCaptureSafeError = ({
   }
   const reqCtx = getRequestContext();
   const evidence = readEvidence(error);
-  const severity =
-    statusCode >= 500 &&
-    !(
-      HandlerError.is(error) &&
-      error.code === ACTION_ADMISSION_CODES.featureDisabled
-    )
-      ? "ERROR"
-      : "WARN";
+  const featureDisabled =
+    HandlerError.is(error) &&
+    error.code === ACTION_ADMISSION_CODES.featureDisabled;
+  const severityFor = (grade: FailureGrade | undefined) =>
+    featureDisabled ? "WARN" : answeredFailureSeverity(statusCode, grade);
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.handler,
-    channel: legacyChannelOf({ severity, capture: telemetry === "capture" }),
+    channel: ({ grade }) =>
+      legacyChannelOf({
+        severity: severityFor(grade),
+        capture: telemetry === "capture",
+      }),
     request,
     route,
     requestState: { answeredStatus: statusCode },
@@ -2747,12 +2798,11 @@ const logAndCaptureSafeError = ({
     attributes["enduser.organization_id"] = reqCtx.organizationId;
   }
 
-  // The owner's grade rides along in shadow; it decides nothing here yet.
   Object.assign(attributes, shadowFields(grading));
 
   // Operator feature refusals retain 503 on the wire while remaining an
-  // expected warning. Other server failures keep their error severity.
-  if (severity === "ERROR") {
+  // expected warning. Other server failures take their grade's severity.
+  if (severityFor(grading?.grade) === "ERROR") {
     logger.error("request.failed", attributes);
   } else {
     logger.warn("request.failed", attributes);
