@@ -1411,8 +1411,12 @@ describe("the table of contents after the signatures", () => {
       celex: "62017TJ0612",
       html,
     });
-    const roleOf = (text: string) =>
-      documentAst.blocks.find((block) => block.plainText.endsWith(text))?.role;
+    const roleOf = (text: string) => {
+      const block = documentAst.blocks.find((candidate) =>
+        candidate.plainText.endsWith(text),
+      );
+      return block?.type === "paragraph" ? block.role : undefined;
+    };
     expect(roleOf("Annuls Article 1 of the decision;")).toBe("holding");
     expect(roleOf("Dismisses the action as to the remainder;")).toBe("holding");
     expect(roleOf("I. Background to the dispute")).toBe("publisher-note");
