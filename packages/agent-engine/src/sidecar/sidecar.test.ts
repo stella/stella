@@ -572,7 +572,7 @@ describe("harness holder over its socket", () => {
       outcome: {
         type: "ready",
         version: "0.166.0",
-        capabilities: ["approvals", "interrupt", "resume"],
+        capabilities: ["approvals", "interrupt", "resume", "image_input"],
         approvalModes: ["ask"],
         models: [{ id: "gpt-test", label: "GPT Test", isDefault: true }],
       },
@@ -717,6 +717,113 @@ describe("harness holder over its socket", () => {
     );
     expect(server.headers.Authorization).toMatch(/^Bearer \S{43,}$/u);
     expect(JSON.stringify(holder.received())).not.toContain(RUN_TOKEN);
+  });
+
+  test("hands each harness the turn's attached image from its copy; a PDF reaches Claude only", async () => {
+    // A real 1x1 PNG and a one-page PDF, already copied by an earlier turn,
+    // so nothing is fetched: the link below is never read.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const pdf = Buffer.from(
+      "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n",
+      "latin1",
+    );
+    const image = "attachments/019a0000-0000-7000-8000-0000000000a1/plan.png";
+    const document =
+      "attachments/019a0000-0000-7000-8000-0000000000a2/smlouva.pdf";
+    const earlier =
+      "attachments/019a0000-0000-7000-8000-0000000000a3/earlier.png";
+    const holder = await spawnHolder();
+    const workspaceDir = path.join(holder.root, "workspace");
+    for (const [at, bytes] of [
+      [image, png],
+      [document, pdf],
+      [earlier, png],
+    ] as const) {
+      mkdirSync(path.join(workspaceDir, path.dirname(at)), {
+        recursive: true,
+      });
+      writeFileSync(path.join(workspaceDir, at), bytes);
+    }
+    const turn = {
+      attachments: [image, document, earlier].map((at) => ({
+        path: at,
+        url: "https://files.example.test/never-read",
+      })),
+      messages: [
+        { role: "user", content: `Earlier: ${earlier}` },
+        { role: "assistant", content: "Seen." },
+        {
+          role: "user",
+          content: [
+            { type: "text", content: "Compare the plan with the contract." },
+            { type: "text", content: `The plan is at ${image}.` },
+            { type: "text", content: `The contract is at ${document}.` },
+          ],
+        },
+      ],
+    };
+    const { client } = await desktop(holder);
+    const claudeRun = startRun(
+      client,
+      holder,
+      {
+        harness: "claude-code",
+        executable: fakeClaude(holder.root, "stella_tools"),
+        model: "sonnet",
+      },
+      turn,
+    );
+    expect(await client.waitFor(is("run.finished", claudeRun))).toMatchObject({
+      outcome: "completed",
+    });
+    const codexRun = runStart(client, holder, "stella_tools", turn);
+    expect(await client.waitFor(is("run.finished", codexRun))).toMatchObject({
+      outcome: "completed",
+    });
+
+    const userMessage = holder.received().find(({ type }) => type === "user");
+    expect(userMessage).toMatchObject({
+      message: {
+        content: [
+          {
+            type: "image",
+            source: { media_type: "image/png", data: png.toString("base64") },
+          },
+          {
+            type: "document",
+            source: {
+              media_type: "application/pdf",
+              data: pdf.toString("base64"),
+            },
+          },
+          {
+            type: "text",
+            text: expect.stringContaining(`The contract is at ${document}.`),
+          },
+        ],
+      },
+    });
+    const turnStart = holder
+      .received()
+      .find(({ method }) => method === "turn/start");
+    expect(turnStart?.params).toMatchObject({
+      input: [
+        {
+          type: "image",
+          url: `data:image/png;base64,${png.toString("base64")}`,
+        },
+        {
+          type: "text",
+          text: expect.stringContaining(`The contract is at ${document}.`),
+        },
+      ],
+    });
+    expect(holder.log()).toContain(
+      "an attached file stays a path only: not_accepted",
+    );
   });
 
   test("a Claude Code run finishes as interrupted or cancelled", async () => {

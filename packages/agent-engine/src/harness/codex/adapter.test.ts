@@ -42,6 +42,7 @@ import {
   FAKE_CONTEXT_WINDOW,
   FAKE_MCP_CALL,
   FAKE_RESUMED_THREAD_ID,
+  FAKE_TEXT_ONLY_MODEL,
   FAKE_THREAD_ID,
   type FakeScenario,
 } from "../../../scripts/fake-codex-app-server";
@@ -153,6 +154,7 @@ const turnInput = (
     token: MCP_TOKEN,
   },
   transcript,
+  inputFiles: [],
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
   skillFolders: [],
@@ -871,6 +873,49 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(prompt).toContain("Search both.");
   });
 
+  test("the turn's images open turn/start as data URLs; a PDF stays the path the text names", async () => {
+    const { events, received } = await run("tool_calls", {
+      overrides: {
+        inputFiles: [
+          { type: "image", mediaType: "image/webp", base64: "UklGRg==" },
+          { type: "pdf", base64: "JVBERi0x" },
+        ],
+      },
+    });
+    // The fake ends with code 96 on input the app-server would refuse.
+    expect(terminal(events)?.type).toBe("turn.completed");
+    expect(
+      received().find(({ method }) => method === "turn/start")?.params,
+    ).toEqual({
+      threadId: FAKE_THREAD_ID,
+      input: [
+        { type: "image", url: "data:image/webp;base64,UklGRg==" },
+        {
+          type: "text",
+          text: expect.stringContaining("Search both."),
+          text_elements: [],
+        },
+      ],
+    });
+  });
+
+  test("a model that reads no images gets the turn's images as the paths its text names", async () => {
+    const { events, received } = await run("tool_calls", {
+      overrides: {
+        model: FAKE_TEXT_ONLY_MODEL,
+        inputFiles: [
+          { type: "image", mediaType: "image/png", base64: "iVBORw0K" },
+        ],
+      },
+    });
+    expect(terminal(events)?.type).toBe("turn.completed");
+    expect(
+      received().find(({ method }) => method === "turn/start")?.params,
+    ).toMatchObject({
+      input: [{ type: "text", text: expect.stringContaining("Search both.") }],
+    });
+  });
+
   test("a resumed session gets only the new message", async () => {
     const { events, received } = await run("resume_ok", {
       overrides: {
@@ -1067,7 +1112,7 @@ describe("Codex adapter over a stdio app-server", () => {
           inputModalities: ["text", "image"],
         },
       ],
-      capabilities: ["approvals", "interrupt", "resume"],
+      capabilities: ["approvals", "interrupt", "resume", "image_input"],
       approvalModes: ["ask"],
       usageLimit: null,
     });
@@ -1396,6 +1441,12 @@ const ThreadItemTypes = v.object({
   }),
 });
 
+const UserInputVariants = v.object({
+  definitions: v.object({
+    UserInput: v.object({ oneOf: v.array(v.looseObject({})) }),
+  }),
+});
+
 const readJson = async (directory: string, file: string): Promise<unknown> =>
   Bun.file(path.join(directory, file)).json();
 
@@ -1495,6 +1546,20 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
         ({ properties }) => properties.type.enum[0],
       );
     expect(new Set(itemTypes)).toEqual(new Set(CODEX_ITEM_TYPES));
+
+    // `turn/start` takes an image as a URL, which a data URL is.
+    const userInputs = v.parse(
+      UserInputVariants,
+      await readJson(out, "codex_app_server_protocol.v2.schemas.json"),
+    ).definitions.UserInput.oneOf;
+    expect(userInputs).toContainEqual(
+      expect.objectContaining({
+        title: "ImageUserInput",
+        anyOf: expect.arrayContaining([
+          expect.objectContaining({ title: "UrlUserInput", required: ["url"] }),
+        ]),
+      }),
+    );
 
     const commandDecisions = await decisionsIn(
       out,

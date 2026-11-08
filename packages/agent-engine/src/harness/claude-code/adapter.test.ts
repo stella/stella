@@ -187,6 +187,12 @@ const transcript: ModelMessage[] = [
   { role: "user", content: "Search both." },
 ];
 
+/** An image and a PDF, as the sidecar reads them from the run's folder. */
+const INPUT_FILES: HarnessTurnInput["inputFiles"] = [
+  { type: "image", mediaType: "image/png", base64: "iVBORw0K" },
+  { type: "pdf", base64: "JVBERi0x" },
+];
+
 const turnInput = (
   workspaceDir: string,
   overrides: Partial<HarnessTurnInput> = {},
@@ -203,6 +209,7 @@ const turnInput = (
     token: MCP_TOKEN,
   },
   transcript,
+  inputFiles: [],
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
   skillFolders: [],
@@ -781,6 +788,42 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
+  test("the turn's images and PDFs open its user message as blocks the CLI accepts", async () => {
+    const { events, received } = await run("stella_tools", {
+      overrides: { inputFiles: INPUT_FILES },
+    });
+    // The fake ends with code 96 on content the Messages API would refuse.
+    expect(terminal(events)?.type).toBe("turn.completed");
+    expect(
+      received()
+        .filter(({ type }) => type === "user")
+        .map(({ message }) => message),
+    ).toEqual([
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: "image/png",
+              data: "iVBORw0K",
+            },
+          },
+          {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: "JVBERi0x",
+            },
+          },
+          { type: "text", text: expect.stringContaining("Search both.") },
+        ],
+      },
+    ]);
+  });
+
   test("a resumed session gets only the new message", async () => {
     const { events, startups, received } = await run("resume_ok", {
       overrides: {
@@ -928,7 +971,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
           inputModalities: ["text"],
         },
       ],
-      capabilities: ["approvals", "interrupt", "resume"],
+      capabilities: ["approvals", "interrupt", "resume", "image_input"],
       approvalModes: ["ask", "auto", "full_auto"],
       // The exhausted model-specific window does not count.
       usageLimit: { resetsAt: "2099-10-28T14:00:00Z" },
