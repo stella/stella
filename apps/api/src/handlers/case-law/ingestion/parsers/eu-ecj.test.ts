@@ -1325,8 +1325,11 @@ describe("title lines and the footnote list", () => {
     expect(titles.map((block) => block.plainText)).toEqual([
       "OPINION OF ADVOCATE GENERAL KOKOTT delivered on 26 April 2018 (1)",
     ]);
+    const [title] = titles;
     expect(
-      titles[0]?.inlines.filter((inline) => inline.type === "line-break"),
+      title?.type === "heading"
+        ? title.inlines.filter((inline) => inline.type === "line-break")
+        : [],
     ).toHaveLength(2);
   });
 
