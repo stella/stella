@@ -32,7 +32,7 @@
     "docker:stop-dev": "docker compose --profile dev down",
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "bun ../../packages/scripts/src/api-typecheck.ts",
-    "lint": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && cd ../.. && bunx --no-install turbo run generate:typecheck-declarations --filter=@stll/api && GOMEMLIMIT=6GiB bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/api",
+    "lint": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && cd ../.. && bunx --no-install turbo run generate:typecheck-declarations --filter=@stll/api && GOMEMLIMIT=6GiB bun apps/api/scripts/lint-shards.ts bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check",
     "lint:profile": "bun run lint --debug timings --format=default",
     "lint:fix": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && cd ../.. && bunx --no-install turbo run generate:typecheck-declarations --filter=@stll/api && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/api",
     "ocr:fetch-models": "bun src/scripts/fetch-ocr-models.ts",
