@@ -60,7 +60,7 @@ pub(crate) use endpoint::EndpointError;
 use endpoint::Endpoints;
 pub(crate) use protocol::{
   HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
-  SidecarRunStart,
+  SidecarRunStart, SkillFolderRef,
 };
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProbeFailure,
@@ -68,10 +68,10 @@ use protocol::{
 };
 
 use crate::runner_protocol::{
-  Ack, ApprovalKind, Harness, HarnessModel, HarnessReport, HarnessUnavailableReason,
-  JsonObject, LimitedHarness, ReadyHarness, RejectReason, RunAnswer, RunApproval,
-  RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness, UnavailableHarness,
-  UnsupportedHarness,
+  Ack, ApprovalKind, ApprovalMode, Harness, HarnessModel, HarnessReport,
+  HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, RejectReason,
+  RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
+  UnavailableHarness, UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
@@ -544,6 +544,7 @@ pub(crate) fn harness_report(
     ProbeOutcome::Ready {
       version,
       capabilities,
+      approval_modes,
       models,
     } => {
       let mut seen = std::collections::HashSet::new();
@@ -567,10 +568,17 @@ pub(crate) fn harness_report(
         .copied()
         .filter(|capability| listed.insert(capability.wire_name()))
         .collect();
+      // Each mode once, in the contract's order; `Ask` is always offered.
+      let approval_modes = ApprovalMode::ALL
+        .iter()
+        .copied()
+        .filter(|mode| *mode == ApprovalMode::Ask || approval_modes.contains(mode))
+        .collect();
       HarnessReport::Ready(ReadyHarness {
         id: harness,
         version: version.clone(),
         capabilities,
+        approval_modes,
         models,
       })
     }
@@ -1423,19 +1431,24 @@ impl Supervisor {
           message_type = rejected.message_type.as_deref().unwrap_or(""),
           "harness holder rejected a message"
         );
-        // A run the holder would not take, or no longer holds.
-        let refused_run = matches!(
-          rejected.message_type.as_deref(),
-          Some("run.start" | "resume" | "hello")
-        ) && matches!(
-          rejected.reason,
-          Rejection::Draining
-            | Rejection::AtCapacity
-            | Rejection::DuplicateRun
-            | Rejection::UnknownRun
-        );
-        if let (true, Some(run_id)) = (refused_run, rejected.run_id) {
-          self.fail_run(&run_id);
+        // A run start the holder refused, for any reason, never begins. The
+        // holder names the run when the line named it validly; otherwise it
+        // is among those that have reported nothing yet.
+        let refused_start = rejected.message_type.as_deref() == Some("run.start");
+        // A run the holder no longer holds.
+        let refused_run = refused_start
+          || matches!(rejected.message_type.as_deref(), Some("resume" | "hello"))
+            && matches!(
+              rejected.reason,
+              Rejection::Draining
+                | Rejection::AtCapacity
+                | Rejection::DuplicateRun
+                | Rejection::UnknownRun
+            );
+        match rejected.run_id {
+          Some(run_id) if refused_run => self.fail_run(&run_id),
+          None if refused_start => self.fail_silent_runs(),
+          _ => {}
         }
       }
     }
@@ -1489,6 +1502,26 @@ impl Supervisor {
     };
     if let Some(outputs) = run.claim.and_then(|claim| claim.outputs) {
       finish_failed(outputs);
+    }
+  }
+
+  /// A refused start that names no run could be any run still waiting for its
+  /// first message, and none of those may wait for a run that will never begin.
+  fn fail_silent_runs(&mut self) {
+    let silent: Vec<String> = self
+      .runs
+      .iter()
+      .filter(|(_run_id, run)| {
+        run.last_seq == 0
+          && run
+            .claim
+            .as_ref()
+            .is_some_and(|claim| claim.outputs.is_some())
+      })
+      .map(|(run_id, _run)| run_id.clone())
+      .collect();
+    for run_id in silent {
+      self.fail_run(&run_id);
     }
   }
 

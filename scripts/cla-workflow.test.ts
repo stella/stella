@@ -942,6 +942,47 @@ describe("contributor signature workflow", () => {
     expect(lastOutput(run).conclusion).toBe("success");
   });
 
+  test("a merge group's verdict survives a server error on its status", async () => {
+    const run = fixture({
+      event: "merge_group",
+      payload: {
+        merge_group: {
+          head_sha: SQUASH,
+          base_sha: BASE,
+          base_ref: "refs/heads/main",
+          head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${PREDECESSOR}`,
+        },
+      },
+      pulls: [pull(), pull(18)],
+      signatures: [signature()],
+      apiFailures: [
+        {
+          route: "POST /repos/{owner}/{repo}/statuses/{sha}",
+          // The pending status lands; the verdict's first post does not.
+          errors: [null, { status: 500 }],
+        },
+      ],
+    });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(run.delays).toEqual([2000]);
+    expect(lastOutput(run).conclusion).toBe("success");
+  });
+
+  test("a pending status that may have landed still gets a failed verdict", async () => {
+    const run = fixture({
+      apiFailures: [
+        {
+          route: "POST /repos/{owner}/{repo}/statuses/{sha}",
+          errors: [{ status: 500 }, { status: 500 }, { status: 500 }],
+        },
+      ],
+    });
+    await run.execute();
+    expect(run.errors).toEqual(["CLA_API_UNAVAILABLE status=500 attempts=3"]);
+    expect(run.updates.at(-1)?.["state"]).toBe("failure");
+  });
+
   test("an unsigned contributor remains a policy verdict without API retries", async () => {
     const run = fixture();
     await run.execute();

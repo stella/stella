@@ -763,5 +763,30 @@
         "storage": "No se pudo guardar {name} en este ordenador. Comprueba que haya espacio libre en el disco."
       }
     }
+  },
+  "localSkills": {
+    "title": "Habilidades locales",
+    "description": "Carpetas de habilidades en este ordenador. Las ejecuciones locales de este ordenador pueden usarlas y no se sube nada de ellas.",
+    "add": "Añadir carpeta",
+    "remove": "Quitar",
+    "removeFolder": "Quitar {path}",
+    "unusable": "No se puede usar",
+    "notice": {
+      "action_failed": "No ha funcionado. Inténtelo de nuevo.",
+      "too_many": "Este ordenador ya tiene todas las carpetas de habilidades que puede usar. Quite una primero.",
+      "already_listed": "Esta carpeta ya está en la lista.",
+      "missing": "Esta carpeta ya no existe.",
+      "not_a_folder": "Esto ya no es una carpeta.",
+      "no_skill_file": "Esta carpeta no tiene SKILL.md.",
+      "skill_file_not_regular": "SKILL.md debe ser un archivo normal, no un enlace.",
+      "skill_file_too_large": "SKILL.md es demasiado grande para leerlo.",
+      "unreadable": "No se ha podido leer esta carpeta.",
+      "no_name": "La cabecera de SKILL.md no tiene nombre.",
+      "invalid_name": "El nombre en SKILL.md solo puede usar letras, cifras, puntos, guiones y guiones bajos, y debe empezar por una letra o una cifra.",
+      "duplicate_name": "Otra carpeta de la lista tiene una habilidad con este nombre.",
+      "runs_can_write": "Las ejecuciones locales pueden escribir en esta carpeta, así que no puede contener una habilidad.",
+      "network_folder": "Esta carpeta está en una unidad de red. Las habilidades deben estar en el disco de este ordenador.",
+      "path_changed": "Ha cambiado una carpeta superior. Quite esta carpeta y añádala de nuevo."
+    }
   }
 }

@@ -22,6 +22,10 @@ import {
   generatedVisualPartSchema,
 } from "@stll/api-contract/generated-visual";
 import { isOwnKey, ownEntry } from "@stll/api-contract/own-key";
+import {
+  STELLA_MCP_APP_MIME_TYPE,
+  stellaMcpAppPartSchema,
+} from "@stll/api-contract/stella-mcp-app";
 
 import { carriedChatPart } from "@/api/db/stored-chat-part-codec";
 import type { STORED_CHAT_PART_TYPES } from "@/api/db/stored-chat-part-codec";
@@ -48,6 +52,10 @@ import type {
 } from "@/api/handlers/chat/types";
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  appPresentsTool,
+  chatMcpAppByUri,
+} from "@/api/lib/chat/mcp-app-catalog";
 import {
   isPersistedJsonObject,
   isPersistedJsonValue,
@@ -341,6 +349,19 @@ export const isChatAttachmentPart = (
   isRecord(part["source"]) &&
   "value" in part["source"] &&
   typeof part["source"]["value"] === "string";
+
+/**
+ * A file on an assistant message is one the answer handed the member. Nobody
+ * sent it to the model, so it never goes to one, and its bytes are never
+ * fetched to prepare a turn or copied to a computer as an attachment. Every
+ * reader that turns a message's files into model input or a run's attachments
+ * asks this first; the message itself keeps the part, so it still shows.
+ */
+export const isAnswerFilePart = (
+  role: ChatMessage["role"],
+  part: unknown,
+): part is ChatAttachmentPart =>
+  role === "assistant" && isChatAttachmentPart(part);
 
 export const isChatDocumentPart = (part: unknown): part is ChatAttachmentPart =>
   isChatAttachmentPart(part) && part.type === "document";
@@ -1179,6 +1200,16 @@ const isUiResourcePart = (part: Record<string, unknown>): boolean => {
   if (resource["mimeType"] === GENERATED_VISUAL_MIME_TYPE) {
     return v.is(generatedVisualPartSchema, part);
   }
+  if (resource["mimeType"] === STELLA_MCP_APP_MIME_TYPE) {
+    const app = v.safeParse(stellaMcpAppPartSchema, part);
+    if (!app.success) {
+      return false;
+    }
+    const presented = chatMcpAppByUri(app.output.resource.uri);
+    return (
+      presented !== undefined && appPresentsTool(presented, app.output.toolName)
+    );
+  }
   if (
     typeof resource["uri"] !== "string" ||
     !resource["uri"].startsWith("ui://") ||
@@ -1470,7 +1501,10 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
       };
     case "ui-resource": {
       const { resource } = part;
-      if (resource.mimeType === GENERATED_VISUAL_MIME_TYPE) {
+      if (
+        resource.mimeType === GENERATED_VISUAL_MIME_TYPE ||
+        resource.mimeType === STELLA_MCP_APP_MIME_TYPE
+      ) {
         return part;
       }
       const normalizedResource =
@@ -1529,10 +1563,12 @@ export const classifyChatPartForPersistence = (
     panic("Cannot classify a malformed chat part for persistence");
   }
   const type = part["type"];
+  // A server resource is persisted only as the server minted it.
   if (
     type === "ui-resource" &&
     isRecord(part["resource"]) &&
-    part["resource"]["mimeType"] === GENERATED_VISUAL_MIME_TYPE &&
+    (part["resource"]["mimeType"] === GENERATED_VISUAL_MIME_TYPE ||
+      part["resource"]["mimeType"] === STELLA_MCP_APP_MIME_TYPE) &&
     !visualOrigin?.accepts(part)
   ) {
     return { type: "drop", partType: type };
@@ -1859,7 +1895,10 @@ export const mergeAnonRestorations = (
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&
   metadata.anonRestorations === undefined &&
+  metadata.answerQuotes === undefined &&
   metadata.contextNotice === undefined &&
+  metadata.localRunContext === undefined &&
+  metadata.localRunFilesNotShared === undefined &&
   metadata.mentions === undefined &&
   metadata.refContext === undefined &&
   metadata.refEncoding === undefined &&

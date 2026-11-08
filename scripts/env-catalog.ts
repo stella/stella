@@ -308,6 +308,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
   VITE_API_URL: "http://localhost:3001",
   VITE_BROWSER_API_URL: "http://localhost:3000/api",
   VITE_COLLAB_URL: "ws://localhost:3002",
+  VITE_DOCUMENTS_BUCKET: "stella",
+  VITE_DOCUMENTS_ENDPOINT: "http://localhost:9000",
   VITE_POSTHOG_KEY: "phc_",
   VITE_POSTHOG_HOST: "https://eu.i.posthog.com",
   VITE_POSTHOG_UI_HOST: "https://eu.posthog.com",
@@ -686,6 +688,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   USE_MOCK_AI:
     'Return canned AI responses in local development and tests. An organization\'s own AI key still answers for real; "force" mocks those requests too. Deployed runtimes reject this setting.',
   VITE_API_URL: "API base URL used by the SPA for Eden treaty requests.",
+  VITE_DOCUMENTS_BUCKET: "S3 bucket used for browser document transfers.",
+  VITE_DOCUMENTS_ENDPOINT:
+    "S3 or S3-compatible endpoint used for browser document transfers.",
   VITE_BROWSER_API_URL:
     "Same-origin browser API mount. Must be the exact /api path on VITE_PUBLIC_APP_URL; unset uses VITE_API_URL.",
   VITE_AUTH_GOOGLE:
@@ -1081,6 +1086,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_BROWSER_API_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_COLLAB_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_BRIDGE_PORT: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_DOCUMENTS_BUCKET: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_DOCUMENTS_ENDPOINT: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_RELEASES_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
@@ -1146,6 +1153,8 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "TRANSACTIONAL_EMAIL_FROM",
   "USE_MOCK_AI",
   "VITE_API_URL",
+  "VITE_DOCUMENTS_BUCKET",
+  "VITE_DOCUMENTS_ENDPOINT",
   "VITE_POSTHOG_KEY",
   "VITE_PUBLIC_APP_URL",
 ]);
@@ -1493,6 +1502,8 @@ export const TOOLING_ENV_KEYS = new Set([
   // file their tests name; the fake Codex app server also logs its CODEX_HOME.
   "FAKE_HARNESS_LOG",
   "CODEX_HOME",
+  // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
+  "FAKE_SKILL_PATH",
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",
@@ -1587,6 +1598,9 @@ export const TOOLING_ENV_KEYS = new Set([
   // The release resolve job exports the network retry helper's path, staged
   // from the workflow's own revision, for its git fetches.
   "NETWORK_RETRY_SCRIPT",
+  // The promote names the repository whose deployment names the deploy
+  // contract check reads (scripts/check-deploy-env-contract.ts).
+  "DEPLOY_ENV_CONTRACT_INFRA_REPOSITORY",
   // The release rehearsal workflow provides its deployment-repository target.
   "STAGING_DEPLOY_REPOSITORY",
   // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):

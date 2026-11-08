@@ -28,6 +28,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/html/src/**/*.{ts,tsx}",
+  "apps/api/src/lib/data-sources/**/*.ts",
   "apps/api/src/db/online-migration-entries/**/*.ts",
   "packages/playwright-tools/src/**/*.ts",
   "packages/render-probe/src/**/*.{ts,tsx}",
@@ -114,6 +115,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/verify/**/*.ts",
   "apps/api/src/handlers/work-obligations/**/*.ts",
   "apps/api/src/lib/account-export/**/*.ts",
+  "apps/api/src/lib/ai-generation/**/*.ts",
   "apps/api/src/lib/bbox/**/*.ts",
   "apps/api/src/lib/billing/**/*.ts",
   "apps/api/src/lib/clauses/**/*.ts",
@@ -212,6 +214,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/routes/_protected.time_.report/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
+  "apps/web/src/security/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
   "apps/web/src/testing/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
@@ -220,6 +223,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/analytics-config/src/**/*.ts",
   "packages/api-client/src/**/*.ts",
   "packages/auth-model/src/**/*.ts",
+  "packages/brand/src/**/*.ts",
   "packages/calculations/src/**/*.ts",
   "packages/catalogue/src/**/*.ts",
   "packages/chat-limits/src/**/*.ts",
@@ -294,6 +298,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // The OAuth provider consumes a client discovery's refusal as a rejected
   // APIError, which the stale-if-error wrapper passes through unchanged.
   "apps/api/src/lib/auth/cimd-stale-if-error.ts",
+  // Better Auth maps a rejected code exchange to its callback error, so the
+  // retry wrapper hands the provider's rejection back unchanged.
+  "apps/api/src/lib/auth/social-token-exchange.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",

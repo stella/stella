@@ -1,8 +1,7 @@
 import type { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
   applyDocxTranslationSegments,
@@ -22,23 +21,23 @@ const defaultNamespacePart = (body: string): string =>
 const createDocx = async (
   parts: Readonly<Record<string, string>>,
 ): Promise<ArrayBuffer> => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   for (const [path, value] of Object.entries(parts)) {
-    writeZipEntry(zip, path, value);
+    zip.set(path, value);
   }
-  return await zip.generateAsync({ type: "arraybuffer" });
+  return (await zip.generate({ compression: "store" })).buffer;
 };
 
 const readEntry = async (
   buffer: ArrayBuffer,
   path: string,
 ): Promise<string> => {
-  const zip = await JSZip.loadAsync(buffer);
-  const entry = zip.file(path);
+  const zip = await ZipArchive.read(buffer);
+  const entry = zip.entry(path);
   if (!entry) {
     throw new Error(`Missing ${path}`);
   }
-  return await entry.async("string");
+  return await entry.text();
 };
 
 const captureRejection = async (

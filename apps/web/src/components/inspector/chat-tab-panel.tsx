@@ -749,7 +749,6 @@ export const ChatTabPanel = ({
                     sendNow: sendQueuedMessageNow,
                   }}
                   queuedMessages={queuedMessages}
-                  showThinkingIndicator
                   streamdownComponents={streamdownComponents}
                   userMessageEdit={userMessageEdit}
                   waitingForComputer={waitingForComputer}

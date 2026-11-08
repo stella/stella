@@ -242,7 +242,6 @@
     "headnote": "Teza",
     "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
     "openSource": "Otwórz źródło oryginalne",
-    "openFailed": "Nie udało się otworzyć linku.",
     "loadFailed": "Nie udało się wczytać orzecznictwa.",
     "share": "Udostępnij"
   },
@@ -268,8 +267,6 @@
     "newTimer": "Nowy licznik",
     "description": "Nad czym pracujesz?",
     "matterTitle": "Sprawa",
-    "pause": "Wstrzymaj",
-    "resume": "Wznów",
     "save": "Zapisz",
     "discard": "Odrzuć",
     "emptyTitle": "Brak liczników",
@@ -348,5 +345,11 @@
   "pane": {
     "showList": "Pokaż listę",
     "hideList": "Ukryj listę"
+  },
+  "link": {
+    "open": "Otwórz",
+    "share": "Udostępnij",
+    "cancel": "Anuluj",
+    "openFailed": "Nie udało się otworzyć linku."
   }
 }

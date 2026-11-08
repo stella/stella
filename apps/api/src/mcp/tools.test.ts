@@ -9,7 +9,6 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import JSZip from "jszip";
 import * as v from "valibot";
 
 import {
@@ -52,7 +51,7 @@ import type {
   EntityCheckResult,
   runEntityCheck as runEntityCheckForTest,
 } from "@stll/business-registries/entity-checks";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -289,9 +288,8 @@ const handleMcpToolCallWithCapturedObserver = async (
  * `read_content_across_matters`'s markdown branch.
  */
 const makeDocxBytes = async (bodyText = "Signed below.") => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -310,15 +308,14 @@ const makeDocxBytes = async (bodyText = "Signed below.") => {
   <w:p><w:r><w:t>${bodyText}</w:t></w:r></w:p>
 </w:body></w:document>`,
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="xml" ContentType="application/xml"/>
 </Types>`,
   );
-  const bytes = await zip.generateAsync({ type: "uint8array" });
+  const bytes = await zip.generate({ compression: "store" });
   return bytes.buffer.slice(
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength,
@@ -3004,7 +3001,6 @@ describe("OpenAI-compatible MCP tools", () => {
             matchingPassages: 4,
             match: "all_terms",
             snippet: 'Relevant holding on "smlouva"',
-            sourceUrl: "https://example.test/decision",
           },
         ],
         total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
@@ -3044,6 +3040,51 @@ describe("OpenAI-compatible MCP tools", () => {
       });
     },
   );
+
+  test("search_case_law carries a publisher link only through the link rule", async () => {
+    const hitWith = (sourceUrl: string | null) => ({
+      ...createCaseLawHit(DECISION_ID, "holding"),
+      sourceUrl,
+    });
+    const linksOf = async (sourceUrl: string | null) => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: null,
+        hits: [hitWith(sourceUrl)],
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: "smlouva",
+        warnings: [],
+      });
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", queries: ["smlouva"] },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      );
+      return v
+        .parse(
+          v.object({ results: v.array(v.record(v.string(), v.unknown())) }),
+          payload,
+        )
+        .results.at(0);
+    };
+
+    const http = await linksOf("https://example.test/decision");
+    expect(http).toHaveProperty("source_url", "https://example.test/decision");
+    expect(http).not.toHaveProperty("sourceUrl");
+
+    // A stored value the rule does not accept reaches the caller nowhere.
+    const other = await linksOf("ftp://example.test/decision");
+    expect(other).not.toHaveProperty("source_url");
+    expect(other).not.toHaveProperty("sourceUrl");
+    expect(JSON.stringify(other)).not.toContain("ftp://");
+
+    const none = await linksOf(null);
+    expect(none).not.toHaveProperty("source_url");
+    expect(none).not.toHaveProperty("sourceUrl");
+  });
 
   test("search_case_law withholds a result's text when its source licence keeps it from AI use", async () => {
     const hit = {
@@ -3330,7 +3371,6 @@ describe("OpenAI-compatible MCP tools", () => {
           matchingPassages: 1,
           match: "all_terms",
           snippet: "Relevant holding",
-          sourceUrl: "https://example.test/decision",
         },
       ],
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
@@ -4834,7 +4874,6 @@ describe("OpenAI-compatible MCP tools", () => {
             resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
             score: 1.5,
             snippet: "nahrada skody",
-            sourceUrl: "https://example.test/89-2012",
             status: "in_force",
             title: STATUTE_TITLE,
           },
@@ -4986,7 +5025,6 @@ describe("OpenAI-compatible MCP tools", () => {
         ],
         outlineTruncated: false,
         resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
-        sourceUrl: "https://example.test/89-2012",
         status: "in_force",
         text: expectedText.slice(0, 8000),
         title: STATUTE_TITLE,
@@ -6971,6 +7009,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: string;
         }[];
         truncated?: true;
+        warnings?: { code: string; message: string; hint: string }[];
       };
       outline?: { page: number; title: string; url?: string }[];
       page?: number;
@@ -8035,6 +8074,47 @@ describe("OpenAI-compatible MCP tools", () => {
     // fields unless asked.
     expect(entry.decision).not.toHaveProperty("text");
     expect(entry.decision).not.toHaveProperty("court");
+  });
+
+  test("read_case_law_decision names the words of a query no paragraph holds whole", async () => {
+    const paragraphs = ["Nájemce zaplatil včas.", "Soud posoudil výpověď."];
+    const base = createReadDecisionResult();
+    readDecisionHandlerMock.mockResolvedValue({
+      ...base,
+      documentAst: {
+        ...base.documentAst,
+        blocks: paragraphs.map((plainText, index) => ({
+          anchorId: `p-${String(index + 1)}`,
+          id: `b-${String(index + 1)}`,
+          inlines: [],
+          plainText,
+          type: "paragraph",
+        })),
+      },
+    });
+
+    const apart = await readOne({ query: "soud nájemce výpověď Listina" });
+    expect(apart.decision?.matches).toMatchObject({
+      hitCount: 0,
+      paragraphs: [],
+      warnings: [{ code: "query_words_apart", audience: "agent" }],
+    });
+    expect(apart.decision?.matches?.warnings?.[0]?.message).toContain(
+      "Nowhere in the decision: Listina.",
+    );
+    expect(apart.decision?.matches?.warnings?.[0]?.hint).toContain(
+      'query "soud výpověď"',
+    );
+
+    const absent = await readOne({ query: "Listina" });
+    expect(absent.decision?.matches).toMatchObject({
+      hitCount: 0,
+      paragraphs: [],
+      warnings: [{ code: "query_words_absent", audience: "agent" }],
+    });
+
+    const found = await readOne({ query: "soud výpověď" });
+    expect(found.decision?.matches).not.toHaveProperty("warnings");
   });
 
   test("read_case_law_decision uses court paragraphs in match and outline links", async () => {

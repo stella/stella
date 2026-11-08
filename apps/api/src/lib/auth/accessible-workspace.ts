@@ -1,5 +1,10 @@
 import type { InferSelectModel } from "drizzle-orm";
 
+import {
+  WORKSPACE_STATUS,
+  workspaceAcceptsWrites,
+} from "@stll/api-contract/workspace-status";
+
 import type { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -21,5 +26,5 @@ export const admitsWorkspaceStatus = (
   status: AccessibleWorkspace["status"] | null | undefined,
   admitted: WorkspaceStatusAccess,
 ): boolean =>
-  status === "active" ||
-  (admitted === "active-or-archived" && status === "archived");
+  workspaceAcceptsWrites(status) ||
+  (admitted === "active-or-archived" && status === WORKSPACE_STATUS.archived);

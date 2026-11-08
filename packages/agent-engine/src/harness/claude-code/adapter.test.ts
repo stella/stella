@@ -6,11 +6,19 @@ import {
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
+  renameSync,
   rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -18,10 +26,14 @@ import * as v from "valibot";
 
 import {
   FAKE_APPROVAL_REASON,
+  FAKE_CLAUDE_CONTEXT_WINDOW,
   FAKE_CLAUDE_VERSION,
+  FAKE_ESCAPE_COMMAND,
   FAKE_MCP_CALL,
   FAKE_PERMISSION_SUGGESTION,
   FAKE_RESUMED_SESSION_ID,
+  FAKE_SANDBOX_HOST,
+  FAKE_SANDBOX_REFUSAL,
   FAKE_UNLISTED_DEFAULT,
   type FakeScenarioName,
 } from "../../../scripts/fake-claude-code-cli";
@@ -37,6 +49,7 @@ import {
   resolveHarnessCompatibility,
 } from "../compatibility";
 import { type HarnessEvent, harnessSessionId } from "../events";
+import { packageCacheEnvironment } from "../package-cache";
 import { harnessEventsToChunks } from "../stream-chunks";
 import { createClaudeCodeHarnessAdapter } from "./adapter";
 
@@ -49,6 +62,8 @@ const FAKE_CODEX = path.join(
   "../../../scripts/fake-codex-app-server.ts",
 );
 const MCP_TOKEN = "run-token-123";
+/** The computer's package cache; the turn never creates it. */
+const CACHE_DIR = path.join(tmpdir(), "stella-agent-package-cache");
 const INSTRUCTIONS = "Use the stella MCP server.";
 
 /** Variables a stray shell or parent session could hand the CLI. */
@@ -87,6 +102,7 @@ const LogEntrySchema = v.looseObject({
     v.object({
       args: v.array(v.string()),
       cwd: v.string(),
+      path: v.optional(v.string()),
       env: v.record(v.string(), v.string()),
     }),
   ),
@@ -94,7 +110,15 @@ const LogEntrySchema = v.looseObject({
 
 const harnessFor = (
   scenario: FakeScenarioName,
-  { requestTimeoutMs = 10_000 }: { requestTimeoutMs?: number } = {},
+  {
+    platform = "darwin",
+    requestTimeoutMs = 10_000,
+    environment = {},
+  }: {
+    platform?: NodeJS.Platform;
+    requestTimeoutMs?: number;
+    environment?: Readonly<Record<string, string>>;
+  } = {},
 ) => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-claude-adapter-"));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
@@ -108,6 +132,7 @@ const harnessFor = (
     claudeConfigDir,
     environment: {
       ...STRAY_ENVIRONMENT,
+      ...environment,
       FAKE_HARNESS_LOG: logPath,
       PATH: process.env["PATH"] ?? "",
     },
@@ -116,6 +141,7 @@ const harnessFor = (
     onBackgroundError: (error) => {
       backgroundErrors.push(error);
     },
+    platform,
   });
   const entries = () =>
     readFileSync(logPath, "utf-8")
@@ -147,6 +173,7 @@ const harnessFor = (
     adapter,
     claudeConfigDir,
     workspaceDir,
+    logPath,
     received,
     startups,
     controlRequests,
@@ -169,7 +196,7 @@ const turnInput = (
   workspaceDir,
   model: "sonnet",
   instructions: INSTRUCTIONS,
-  policy: { network: "open", fs: "workspace" },
+  policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
     serverName: FAKE_STELLA_SERVER,
     url: "https://mcp.example.test/mcp",
@@ -177,6 +204,9 @@ const turnInput = (
   },
   transcript,
   continuation: { type: "fresh" },
+  cacheDir: CACHE_DIR,
+  skillFolders: [],
+  toolPath: [],
   ...overrides,
 });
 
@@ -286,6 +316,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
       DISABLE_AUTOUPDATER: "1",
       ENABLE_CLAUDEAI_MCP_SERVERS: "false",
       FAKE_KEEP: "1",
+      ...packageCacheEnvironment(CACHE_DIR),
     });
     const args = startup?.args ?? [];
     const sessionId = args[args.indexOf("--session-id") + 1];
@@ -338,6 +369,8 @@ describe("Claude Code adapter over stream-json stdio", () => {
       sessionId: harnessSessionId(sessionId ?? ""),
       continuation: { type: "fresh" },
     });
+    // The context is the main thread's last request, against the window of
+    // the model that made it.
     expect(terminal(events)).toEqual({
       type: "turn.completed",
       usage: {
@@ -345,6 +378,10 @@ describe("Claude Code adapter over stream-json stdio", () => {
         cachedInputTokens: 20,
         outputTokens: 30,
         reasoningOutputTokens: 0,
+        context: {
+          usedTokens: 4 + 600 + 10_000 + 40,
+          windowTokens: FAKE_CLAUDE_CONTEXT_WINDOW,
+        },
       },
     });
   });
@@ -892,6 +929,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
         },
       ],
       capabilities: ["approvals", "interrupt", "resume"],
+      approvalModes: ["ask", "auto", "full_auto"],
       // The exhausted model-specific window does not count.
       usageLimit: { resetsAt: "2099-10-28T14:00:00Z" },
     });
@@ -962,6 +1000,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
       onBackgroundError: (error) => {
         backgroundErrors.push(error);
       },
+      platform: "darwin",
     });
     const probed = await harness.probe();
     expect(Result.isError(probed) && probed.error.reason).toBe(
@@ -990,7 +1029,509 @@ describe("Claude Code adapter over stream-json stdio", () => {
         gracePeriodMs: 10,
         requestTimeoutMs: 10_000,
         onBackgroundError: () => undefined,
+        platform: "darwin",
       }),
     ).toThrow("CLAUDE_CONFIG_DIR must be stella's");
+  });
+});
+
+describe("Claude Code approval modes", () => {
+  /** The CLI's arguments for one turn in `approvals`. */
+  const argsFor = async (
+    approvals: HarnessTurnInput["policy"]["approvals"],
+  ) => {
+    const { startups } = await run("tool_calls", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals },
+      },
+    });
+    return startups()[0]?.args ?? [];
+  };
+  const valueOf = (args: readonly string[], flag: string) =>
+    args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined;
+
+  test("ask accepts edits in the workspace and asks about the rest, without the sandbox", async () => {
+    const args = await argsFor("ask");
+    expect(valueOf(args, "--permission-mode")).toBe("acceptEdits");
+    expect(args).not.toContain("--settings");
+  });
+
+  test("auto lets the CLI approve what it judges safe, without the sandbox", async () => {
+    const args = await argsFor("auto");
+    expect(valueOf(args, "--permission-mode")).toBe("auto");
+    expect(args).not.toContain("--settings");
+  });
+
+  test("full auto runs commands in the required OS sandbox and never skips permission checks", async () => {
+    const args = await argsFor("full_auto");
+    expect(valueOf(args, "--permission-mode")).toBe("acceptEdits");
+    expect(args).not.toContain("bypassPermissions");
+    expect(args).not.toContain("--dangerously-skip-permissions");
+    expect(JSON.parse(valueOf(args, "--settings") ?? "null")).toEqual({
+      sandbox: {
+        enabled: true,
+        failIfUnavailable: true,
+        autoAllowBashIfSandboxed: true,
+        allowUnsandboxedCommands: true,
+        filesystem: { allowWrite: [CACHE_DIR] },
+      },
+    });
+  });
+
+  test("full auto lets sandboxed commands reach the network and still asks before leaving the sandbox", async () => {
+    const { events, answers } = await run("sandbox_network", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals: "full_auto" },
+      },
+      onEvent: async (event, turn) => {
+        if (event.type === "approval.requested") {
+          await turn.respond({
+            type: "approval",
+            requestId: event.request.requestId,
+            decision: "deny",
+          });
+        }
+      },
+    });
+    const approvals = events.flatMap((event) =>
+      event.type === "approval.requested" ? [event.request] : [],
+    );
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0]).toMatchObject({
+      kind: "command",
+      toolCall: { input: { command: FAKE_ESCAPE_COMMAND } },
+    });
+    expect(answers()).toEqual([
+      {
+        subtype: "success",
+        request_id: "cli-1",
+        response: {
+          behavior: "allow",
+          updatedInput: { host: FAKE_SANDBOX_HOST },
+        },
+      },
+      {
+        subtype: "success",
+        request_id: "cli-2",
+        response: expect.objectContaining({ behavior: "deny" }),
+      },
+    ]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("outside full auto a request to reach a host is asked about", async () => {
+    const { events } = await run("sandbox_network", {
+      onEvent: async (event, turn) => {
+        if (event.type === "approval.requested") {
+          await turn.respond({
+            type: "approval",
+            requestId: event.request.requestId,
+            decision: "deny",
+          });
+        }
+      },
+    });
+    expect(
+      events.filter((event) => event.type === "approval.requested"),
+    ).toHaveLength(2);
+  });
+
+  test("full auto fails as sandbox unavailable when the CLI cannot start its sandbox", async () => {
+    const harness = harnessFor("sandbox_unavailable");
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, {
+        policy: { network: "open", fs: "workspace", approvals: "full_auto" },
+      }),
+    );
+    expect(Result.isError(started) && started.error).toMatchObject({
+      reason: "sandbox_unavailable",
+      message: FAKE_SANDBOX_REFUSAL,
+    });
+    // A refused sandbox is not a missing session: no unsandboxed retry.
+    expect(harness.startups()).toHaveLength(1);
+  });
+
+  test("where the CLI has no sandbox, full auto is not offered and never starts the CLI", async () => {
+    for (const platform of ["win32", "linux"] as const) {
+      const harness = harnessFor("probe", { platform });
+      const probed = await harness.adapter.probe();
+      expect(Result.isOk(probed) && probed.value.approvalModes).toEqual([
+        "ask",
+        "auto",
+      ]);
+      const unsandboxed = harnessFor("tool_calls", { platform });
+      const started = await unsandboxed.adapter.startTurn(
+        turnInput(unsandboxed.workspaceDir, {
+          policy: { network: "open", fs: "workspace", approvals: "full_auto" },
+        }),
+      );
+      expect(Result.isError(started) && started.error.reason).toBe(
+        "sandbox_unavailable",
+      );
+      expect(existsSync(unsandboxed.logPath)).toBe(false);
+    }
+  });
+});
+
+describe("Claude Code managed tools", () => {
+  const toolDir = path.join(tmpdir(), "stella-managed-bun", "bin");
+
+  test("a managed tool comes first on the CLI's PATH and the inherited PATH stays", async () => {
+    const { startups } = await run("tool_calls", {
+      overrides: { toolPath: [toolDir] },
+    });
+    expect(startups()[0]?.path).toBe(
+      `${toolDir}${path.delimiter}${process.env["PATH"] ?? ""}`,
+    );
+  });
+
+  test("without a managed tool the inherited PATH is untouched", async () => {
+    const { startups } = await run("tool_calls");
+    expect(startups()[0]?.path).toBe(process.env["PATH"]);
+  });
+});
+
+describe("Claude Code skill folders", () => {
+  const valueOf = (args: readonly string[], flag: string) =>
+    args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined;
+
+  /** A real skill folder, outside the harness's own directories. */
+  const skillFolder = (name: string) => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-skill-folder-"));
+    cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+    const folder = path.join(root, name);
+    mkdirSync(path.join(folder, "scripts"), { recursive: true });
+    writeFileSync(
+      path.join(folder, "SKILL.md"),
+      `---\nname: ${name}\ndescription: An invented skill.\n---\nBody.\n`,
+    );
+    writeFileSync(path.join(folder, "scripts", "run.ts"), "export {};\n");
+    return { name, path: folder };
+  };
+
+  const contentsOf = (folder: string) =>
+    readdirSync(folder, { recursive: true, encoding: "utf-8" }).toSorted();
+
+  /** The CLI's arguments for a turn, and its plugin as the CLI finds it. */
+  const startedWith = async (
+    skillFolders: HarnessTurnInput["skillFolders"],
+    approvals: HarnessTurnInput["policy"]["approvals"] = "ask",
+  ) => {
+    const harness = harnessFor("tool_calls");
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, {
+        skillFolders,
+        policy: { network: "open", fs: "workspace", approvals },
+      }),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const turn = started.value;
+    const finished = async () => {
+      for await (const _event of turn.events) {
+        // Drained: the turn ends after its terminal event.
+      }
+      await turn.dispose();
+    };
+    return {
+      ...harness,
+      args: harness.startups()[0]?.args ?? [],
+      finished,
+    };
+  };
+
+  test("a listed folder loads through a plugin stella owns, with the harness's isolation kept", async () => {
+    const skill = skillFolder("fixture-skill");
+    const before = contentsOf(skill.path);
+    const { args, claudeConfigDir, finished } = await startedWith([skill]);
+
+    const plugin = valueOf(args, "--plugin-dir") ?? "";
+    expect(path.dirname(path.dirname(plugin))).toBe(claudeConfigDir);
+    const link = path.join(plugin, "skills", skill.name);
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(link)).toBe(skill.path);
+    expect(
+      JSON.parse(
+        readFileSync(
+          path.join(plugin, ".claude-plugin", "plugin.json"),
+          "utf-8",
+        ),
+      ),
+    ).toEqual({ name: "local-skills" });
+
+    // The harness's isolation is untouched by a skill, and the folder is not
+    // made a working directory, which `acceptEdits` would then write to.
+    expect(valueOf(args, "--setting-sources")).toBe("");
+    expect(args).toContain("--strict-mcp-config");
+    expect(args).not.toContain("--add-dir");
+
+    await finished();
+    expect(existsSync(plugin)).toBe(false);
+    expect(contentsOf(skill.path)).toEqual(before);
+  });
+
+  test("a turn without skill folders has no plugin and no extra settings", async () => {
+    const { args, claudeConfigDir, finished } = await startedWith([]);
+    expect(args).not.toContain("--plugin-dir");
+    expect(args).not.toContain("--settings");
+    expect(existsSync(path.join(claudeConfigDir, "stella-skill-plugins"))).toBe(
+      false,
+    );
+    await finished();
+  });
+
+  test("a folder that vanished, holds no SKILL.md or is a link is left out and the turn still runs", async () => {
+    const good = skillFolder("good-skill");
+    const vanished = skillFolder("vanished-skill");
+    rmSync(vanished.path, { recursive: true });
+    const empty = skillFolder("empty-skill");
+    rmSync(path.join(empty.path, "SKILL.md"));
+    const target = skillFolder("linked-skill");
+    const linkedFolder = {
+      name: "linked-folder",
+      path: `${target.path}-link`,
+    };
+    symlinkSync(target.path, linkedFolder.path);
+    cleanups.push(() => rmSync(linkedFolder.path, { force: true }));
+    const linkedFile = skillFolder("linked-file");
+    rmSync(path.join(linkedFile.path, "SKILL.md"));
+    symlinkSync(
+      path.join(target.path, "SKILL.md"),
+      path.join(linkedFile.path, "SKILL.md"),
+    );
+
+    const { args, finished } = await startedWith([
+      vanished,
+      empty,
+      linkedFolder,
+      linkedFile,
+      good,
+    ]);
+    const plugin = valueOf(args, "--plugin-dir") ?? "";
+    expect(readdirSync(path.join(plugin, "skills"))).toEqual([good.name]);
+    await finished();
+  });
+
+  test("a skill renamed since the desktop listed it, or whose header never closes, is left out", async () => {
+    const good = skillFolder("good-skill");
+    const renamed = skillFolder("listed-skill");
+    writeFileSync(
+      path.join(renamed.path, "SKILL.md"),
+      "---\nname: another-skill\n---\nBody.\n",
+    );
+    const unclosed = skillFolder("unclosed-skill");
+    writeFileSync(
+      path.join(unclosed.path, "SKILL.md"),
+      "---\nname: unclosed-skill\nBody.\n",
+    );
+    const { args, finished } = await startedWith([renamed, unclosed, good]);
+    const plugin = valueOf(args, "--plugin-dir") ?? "";
+    expect(readdirSync(path.join(plugin, "skills"))).toEqual([good.name]);
+    await finished();
+  });
+
+  test("when no folder is usable the turn runs without a plugin", async () => {
+    const vanished = skillFolder("vanished-skill");
+    rmSync(vanished.path, { recursive: true });
+    const { args, finished } = await startedWith([vanished]);
+    expect(args).not.toContain("--plugin-dir");
+    expect(args).not.toContain("--settings");
+    await finished();
+  });
+
+  test("a name that would leave the plugin's folder, or repeats one, is not linked", async () => {
+    const skill = skillFolder("fixture-skill");
+    const other = skillFolder("other-skill");
+    const { args, finished } = await startedWith([
+      { name: "../escape", path: other.path },
+      skill,
+      { name: skill.name, path: other.path },
+    ]);
+    const plugin = valueOf(args, "--plugin-dir") ?? "";
+    expect(readdirSync(path.join(plugin, "skills"))).toEqual([skill.name]);
+    expect(readlinkSync(path.join(plugin, "skills", skill.name))).toBe(
+      skill.path,
+    );
+    await finished();
+  });
+
+  test.each(["ask", "auto"] as const)(
+    "in %s the folder reads without asking and never takes an edit",
+    async (approvals) => {
+      const skill = skillFolder("fixture-skill");
+      const { args, finished } = await startedWith([skill], approvals);
+      const plugin = valueOf(args, "--plugin-dir") ?? "";
+      expect(JSON.parse(valueOf(args, "--settings") ?? "null")).toEqual({
+        permissions: {
+          allow: [`Read(/${plugin}/**)`, `Read(/${skill.path}/**)`],
+          deny: [`Edit(/${plugin}/**)`, `Edit(/${skill.path}/**)`],
+        },
+      });
+      await finished();
+    },
+  );
+
+  test("in full auto the sandbox keeps writes to the cache and refuses the folder", async () => {
+    const skill = skillFolder("fixture-skill");
+    const { args, finished } = await startedWith([skill], "full_auto");
+    const plugin = valueOf(args, "--plugin-dir") ?? "";
+    expect(JSON.parse(valueOf(args, "--settings") ?? "null")).toEqual({
+      sandbox: {
+        enabled: true,
+        failIfUnavailable: true,
+        autoAllowBashIfSandboxed: true,
+        allowUnsandboxedCommands: true,
+        filesystem: { allowWrite: [CACHE_DIR], denyWrite: [skill.path] },
+      },
+      permissions: {
+        allow: [`Read(/${plugin}/**)`, `Read(/${skill.path}/**)`],
+        deny: [`Edit(/${plugin}/**)`, `Edit(/${skill.path}/**)`],
+      },
+    });
+    await finished();
+  });
+
+  test("rules name a path's special characters literally", async () => {
+    const skill = skillFolder("fixture-skill");
+    const odd = `${skill.path} (copy) [1]`;
+    renameSync(skill.path, odd);
+    cleanups.push(() => rmSync(odd, { recursive: true, force: true }));
+    const { args, finished } = await startedWith([
+      { name: skill.name, path: odd },
+    ]);
+    const rules = JSON.parse(valueOf(args, "--settings") ?? "null").permissions;
+    expect(rules.allow[1]).toEndWith(String.raw` \(copy\) \[1\]/**)`);
+    await finished();
+  });
+
+  test("a document folder's own settings and skills are never asked for", async () => {
+    const harness = harnessFor("tool_calls");
+    const planted = path.join(
+      harness.workspaceDir,
+      ".claude",
+      "skills",
+      "planted",
+    );
+    mkdirSync(planted, { recursive: true });
+    writeFileSync(
+      path.join(planted, "SKILL.md"),
+      "---\nname: planted\ndescription: x\n---\nx\n",
+    );
+    writeFileSync(
+      path.join(harness.workspaceDir, ".claude", "settings.json"),
+      '{"permissions":{"allow":["Bash(*)"]}}',
+    );
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const args = harness.startups()[0]?.args ?? [];
+    expect(valueOf(args, "--setting-sources")).toBe("");
+    expect(args).toContain("--strict-mcp-config");
+    expect(args).not.toContain("--plugin-dir");
+    expect(JSON.stringify(args)).not.toContain(harness.workspaceDir);
+    for await (const _event of started.value.events) {
+      // Drained.
+    }
+    await started.value.dispose();
+  });
+
+  test("a read and a command on a skill reach stella by name and status, an unrelated call unchanged", async () => {
+    const skill = skillFolder("fixture-skill");
+    const harness = harnessFor("reads_skill", {
+      environment: { FAKE_SKILL_PATH: skill.path },
+    });
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, { skillFolders: [skill] }),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of started.value.events) {
+      events.push(event);
+    }
+    await started.value.dispose();
+
+    expect(JSON.stringify(events)).not.toContain(skill.path);
+    expect(JSON.stringify(events)).not.toContain("Licensed");
+    expect(toolCompletions(events)).toEqual([
+      expect.objectContaining({
+        toolCall: expect.objectContaining({
+          input: { tool: "Read" },
+        }),
+        result: {
+          content: JSON.stringify({ status: "completed" }),
+          status: "succeeded",
+        },
+      }),
+      expect.objectContaining({
+        toolCall: expect.objectContaining({
+          input: { command: `bun <skill:${skill.name}>/scripts/run.ts` },
+        }),
+        result: {
+          content: JSON.stringify({ status: "completed" }),
+          status: "succeeded",
+        },
+      }),
+      expect.objectContaining({
+        toolCall: expect.objectContaining({ input: { command: "ls" } }),
+        result: {
+          content: JSON.stringify({
+            aggregated_output: "notes.md\n",
+            status: "completed",
+          }),
+          status: "succeeded",
+        },
+      }),
+    ]);
+  });
+
+  test("a turn whose plugin cannot be written does not start the CLI", async () => {
+    const skill = skillFolder("fixture-skill");
+    const harness = harnessFor("tool_calls");
+    writeFileSync(
+      path.join(harness.claudeConfigDir, "stella-skill-plugins"),
+      "in the way",
+    );
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, { skillFolders: [skill] }),
+    );
+    expect(Result.isError(started) && started.error.reason).toBe(
+      "start_rejected",
+    );
+    expect(existsSync(harness.logPath)).toBe(false);
+  });
+
+  test("a plugin a dead holder left behind is removed without touching the folder it links to", async () => {
+    const skill = skillFolder("fixture-skill");
+    const left = skillFolder("left-skill");
+    const before = contentsOf(left.path);
+    const harness = harnessFor("tool_calls");
+    const stale = path.join(
+      harness.claudeConfigDir,
+      "stella-skill-plugins",
+      "left-behind",
+    );
+    mkdirSync(path.join(stale, "skills"), { recursive: true });
+    symlinkSync(left.path, path.join(stale, "skills", left.name));
+    const longAgo = new Date(0);
+    utimesSync(stale, longAgo, longAgo);
+
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, { skillFolders: [skill] }),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    expect(existsSync(stale)).toBe(false);
+    expect(contentsOf(left.path)).toEqual(before);
+    for await (const _event of started.value.events) {
+      // Drained.
+    }
+    await started.value.dispose();
   });
 });

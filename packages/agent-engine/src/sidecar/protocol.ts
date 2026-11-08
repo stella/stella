@@ -7,11 +7,14 @@ import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
+  DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
   DESKTOP_RUNNER_RUN_OUTCOMES,
+  desktopRunnerAttachmentSchema,
   desktopRunnerQuestionAnswersSchema,
+  MAX_RUN_ATTACHMENTS,
 } from "@stll/api-contract/desktop-runner";
 
 /**
@@ -119,6 +122,8 @@ const SIDECAR_SECRET_HEX_LENGTH = 64;
 const MAX_MESSAGE_TYPE_LENGTH = 64;
 const MAX_MODELS = 100;
 const MAX_RUN_MESSAGES = 1000;
+const MAX_RUN_SKILL_FOLDERS = 32;
+const MAX_RUN_TOOL_DIRECTORIES = 8;
 const MAX_LAUNCH_ENTRIES = 32;
 /** Process ids are unsigned 32-bit on every platform the desktop runs on. */
 const MAX_PID = 4_294_967_295;
@@ -277,12 +282,37 @@ export const sidecarHostMessageSchema = v.variant("type", [
     ...harnessLaunchEntries,
     /** The directory the harness runs in and may write to. */
     workspaceDir: absolutePathSchema,
+    /** The computer's package-manager cache, writable in every sandbox. */
+    cacheDir: absolutePathSchema,
     model: modelIdSchema,
     instructions: v.pipe(v.string(), v.maxLength(65_536)),
     messages: v.pipe(
       v.array(modelMessageSchema),
       v.minLength(1),
       v.maxLength(MAX_RUN_MESSAGES),
+    ),
+    /** Files to copy into `workspaceDir` before the harness starts. */
+    attachments: v.pipe(
+      v.array(desktopRunnerAttachmentSchema),
+      v.maxLength(MAX_RUN_ATTACHMENTS),
+    ),
+    /**
+     * The skill folders the member listed on this computer. The desktop adds
+     * them to a run the API started, and never tells the API about them.
+     */
+    skillFolders: v.pipe(
+      v.array(
+        v.object({
+          name: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+          path: absolutePathSchema,
+        }),
+      ),
+      v.maxLength(MAX_RUN_SKILL_FOLDERS),
+    ),
+    /** Directories of managed tools, put first on the harness's `PATH`. */
+    toolPath: v.pipe(
+      v.array(absolutePathSchema),
+      v.maxLength(MAX_RUN_TOOL_DIRECTORIES),
     ),
     /** The native session to resume; `null` starts fresh. */
     harnessSessionId: v.nullable(
@@ -291,6 +321,7 @@ export const sidecarHostMessageSchema = v.variant("type", [
     policy: v.object({
       network: v.picklist(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: v.picklist(DESKTOP_RUNNER_FS_POLICIES),
+      approvals: v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
     }),
     mcp: v.object({
       serverName: v.pipe(v.string(), v.regex(/^[a-z][a-z\d_]{0,63}$/u)),
@@ -367,6 +398,8 @@ const probeOutcomeSchema = v.variant("type", [
     type: v.literal("ready"),
     version: desktopVersionSchema,
     capabilities: v.array(v.picklist(DESKTOP_RUNNER_HARNESS_CAPABILITIES)),
+    /** The approval modes this computer can run the harness in. */
+    approvalModes: v.array(v.picklist(DESKTOP_RUNNER_APPROVAL_MODES)),
     models: v.pipe(
       v.array(
         v.object({
@@ -492,6 +525,8 @@ export type SidecarHostLine =
         "too_large" | "not_json" | "unknown_type" | "invalid"
       >;
       messageType: string | null;
+      /** The run a known message was for, when it named one validly. */
+      runId?: string | null;
     };
 
 const HOST_MESSAGE_TYPES: ReadonlySet<string> = new Set(
@@ -531,9 +566,17 @@ export const parseSidecarHostLine = (line: string): SidecarHostLine => {
     return { type: "rejected", reason: "unknown_type", messageType };
   }
   const parsed = v.safeParse(sidecarHostMessageSchema, json.value);
-  return parsed.success
-    ? { type: "message", message: parsed.output }
-    : { type: "rejected", reason: "invalid", messageType };
+  if (parsed.success) {
+    return { type: "message", message: parsed.output };
+  }
+  // The run the line was for, so the host can end it instead of waiting.
+  const run = v.safeParse(v.object({ runId: runIdSchema }), json.value);
+  return {
+    type: "rejected",
+    reason: "invalid",
+    messageType,
+    runId: run.success ? run.output.runId : null,
+  };
 };
 
 /**

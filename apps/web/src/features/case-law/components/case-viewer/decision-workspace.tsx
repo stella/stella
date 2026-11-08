@@ -89,6 +89,7 @@ import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-vie
 import type { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
+import { judgePortraitSrc } from "@/features/case-law/components/case-viewer/decision-judges";
 import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
 import { decisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
 import {
@@ -108,6 +109,7 @@ import { useDecisionCitationAnchors } from "@/features/case-law/components/case-
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { ReaderProvisionModeToggle } from "@/features/case-law/components/reader-provision-mode-toggle";
+import { withSeparateOpinion } from "@/features/case-law/decision-outline.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
@@ -843,6 +845,21 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     return { items, anchorById };
   })();
 
+  // The analysis follows the notes filter; who wrote separately is the
+  // court's, not a note, so their entry stays whatever the filter shows.
+  const railOutline = withSeparateOpinion({
+    blocks: marginBlocks,
+    formatPortraitCredit: (source) =>
+      t("caseLaw.viewer.portraitCredit", { source }),
+    judges: decision.judges,
+    opinionLabel: t("caseLaw.viewer.judgeRole.dissenting"),
+    outline:
+      showAiNotes && hasAnalysis
+        ? analysisOutline
+        : { anchorById: new Map(), items: [] },
+    portraitSrc: judgePortraitSrc,
+  });
+
   const marginItems = flatAnalysisHeadings.flatMap((heading) => {
     const items: AnalysisMarginItem[] = [];
     const first = heading.annotations.at(0);
@@ -1006,14 +1023,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
           >
             {/* The outline shares the composer's positioned host so it inherits
                 the published block-end inset as the composer grows. */}
-            {showAiNotes && hasAnalysis && analysisTree.length > 0 && (
+            {railOutline.items.length > 0 && (
               <OutlineRail
                 ariaLabel={t("statutes.outline")}
-                items={analysisOutline.items}
+                items={[...railOutline.items]}
                 // The shared breadcrumb and zoom row owns the top band.
                 topOffset={READER_BREADCRUMB_CLEARANCE}
                 onJump={(id, container) => {
-                  const anchorId = analysisOutline.anchorById.get(id);
+                  const anchorId = railOutline.anchorById.get(id);
                   if (anchorId === undefined) {
                     return;
                   }
@@ -1030,7 +1047,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   el.dataset["highlight"] = "";
                 }}
                 resolvePct={(id, container) => {
-                  const anchorId = analysisOutline.anchorById.get(id);
+                  const anchorId = railOutline.anchorById.get(id);
                   if (anchorId === undefined || container.scrollHeight <= 0) {
                     return null;
                   }

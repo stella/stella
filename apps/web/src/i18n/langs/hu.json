@@ -152,6 +152,7 @@
     "emailPlaceholder": "te@example.com",
     "error": {
       "generic": "A bejelentkezés során hiba történt. Kérjük, próbálja újra.",
+      "providerUnavailable": "A bejelentkezési szolgáltató most nem válaszol. Kérjük, próbálja újra egy perc múlva.",
       "title": "Nem sikerült bejelentkeztetni"
     },
     "handoffAccount": "Folytatja <account>{email}</account> fiókkal a(z) <organization>{organizationName}</organization> szervezetben?",
@@ -162,7 +163,9 @@
       "declinedDescription": "Elutasította ezt a meghívót. Biztonságosan bezárhatja ezt az oldalt.",
       "description": "{inviterEmail} meghívta Önt a(z) {organizationName} szervezetbe {role} szerepkörrel.",
       "goToWorkspaces": "Ügyekhez",
-      "title": "Szervezeti meghívó"
+      "title": "Szervezeti meghívó",
+      "verifyEmailHint": "A(z) {email} cím megerősítéséhez jelentkezzen ki, majd jelentkezzen be az erre a címre küldött egyszer használatos kóddal.",
+      "wrongAccountHint": "Jelenleg ezzel a címmel van bejelentkezve: {email}. Jelentkezzen ki, majd jelentkezzen be azzal a címmel, amelyre a meghívót küldték."
     },
     "lastUsed": "Legutóbb használt",
     "oneTimeCodeExpired": "Az egyszer használatos kód lejárt. Kérjen új kódot.",
@@ -633,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Az óradíj nem lehet negatív",
     "hours": "Órák",
+    "invalidNumberFormat": "Ellenőrizze a számformátumot",
     "invoiceComposer": {
       "addSellerProfile": "Hozzon létre eladói profilt a számlázási beállításokban",
       "billedHours": "Számlázott órák",
@@ -1460,6 +1464,8 @@
     },
     "answerQuote": {
       "showInDecision": "Megjelenítés a határozatban",
+      "unverified": "Az idézet nem ellenőrizhető",
+      "unverifiedHint": "A hivatkozott határozatok nem tartalmazzák szó szerint ezt a szöveget",
       "verified": "Ellenőrzött idézet",
       "verifiedHint": "Szó szerint: {source}"
     },
@@ -1579,6 +1585,8 @@
       "full": "{percent}% megtelt",
       "instructions": "Rendszerutasítások",
       "percent": "{percent}%",
+      "reported": "Ahogy a számítógépén futó kódoló ügynök a legutóbbi válasza után jelentette. Az ügynök maga kezeli a kontextusát.",
+      "reportedTokens": "{used} / {total} token",
       "summary": "Korábbi üzenetek összefoglalója",
       "summaryWithCount": "{count} korábbi üzenet összefoglalója",
       "title": "Beszélgetés kontextusa",
@@ -1682,13 +1690,23 @@
     "localRun": {
       "cloud": "stella-felhő",
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
+      "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
       "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
       "errorUnavailable": "A számítógépe leállította ennek a válasznak a feldolgozását. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
+      "filesNotShared": "A meg nem osztható fájlok a számítógépén maradnak: {fileNames}",
       "onThisComputer": "{harness} ezen a számítógépen",
+      "permissionAskDescription": "A csevegés mappájában lévő fájlokat magától szerkeszti; minden más előtt rákérdez.",
+      "permissionAutoDescription": "Amit biztonságosnak ítél, magától elvégzi; a többire rákérdez.",
+      "permissionFullAuto": "Teljesen automatikus",
+      "permissionFullAutoDescription": "A csevegés mappáján belül semmire sem kérdez rá; mielőtt bármit módosítana a számítógépén, mindig rákérdez.",
+      "permissionSandboxed": "Elkülönített környezetben fut; mielőtt bármit módosítana a számítógépén, rákérdez.",
+      "permissionUnavailable": "Ezen a számítógépen nem érhető el",
+      "permissions": "Engedélyek",
       "refusalConflictingRunMode": "Ez a kérés egyszerre futna a felhőbeli ügynökkel és a számítógépén. Válasszon egyet a Futtatás itt menüben.",
       "refusalHarnessUnavailable": "A számítógépén futó kódoló ügynök most nem tudja fogadni ezt a kérést. Ellenőrizze a stella desktopban.",
       "refusalModelUnavailable": "A számítógépén futó kódoló ügynök már nem kínálja ezt a modellt. Válasszon másikat a Futtatás itt menüben.",
       "refusalNoComputer": "Egyik számítógépe sem csatlakozik. Nyissa meg a stella desktopot, majd küldje el újra.",
+      "refusalPermissionUnavailable": "A számítógépén futó kódoló ügynök nem futhat ezekkel az engedélyekkel. Válasszon másik lehetőséget az Engedélyek menüben.",
       "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
       "runOn": "Futtatás itt",
@@ -1700,6 +1718,16 @@
       "stateUnavailable": "Jelenleg nem érhető el",
       "stateUnsupported": "Ez a verzió nem támogatott",
       "waitingForComputer": "Várakozás a számítógép újracsatlakozására…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Jelölje be az összes megfelelőt",
+      "dismiss": "Elvetés és leállítás",
+      "secretAnswer": "Rejtett válasz",
+      "secretPlaceholder": "Az Ön válasza rejtve marad"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# csevegés vár Önre} other {# csevegés vár Önre}}",
+      "working": "{count, plural, one {# csevegés fut} other {# csevegés fut}}"
     },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mcpReconnect": {
@@ -1842,10 +1870,18 @@
       "toolbarLabel": "Kijelölt szöveg"
     },
     "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, lépjen kapcsolatba az ügyfélszolgálattal.",
+    "sendErrorActiveFileNoText": "A megnyitott fájl nem tartalmaz olyan szöveget, amelyet a stella el tud olvasni. Zárja be, vagy nyisson meg egy másik fájlt.",
+    "sendErrorActiveFileTooLarge": "A megnyitott fájl túl nagy a csevegéshez. Zárja be, vagy nyisson meg egy kisebb fájlt.",
+    "sendErrorAgentRunsDisabled": "Az ügynökfuttatások itt nem érhetők el. Forduljon a munkaterület adminisztrátorához.",
     "sendErrorAnonymizationBlocked": "A stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsa el a fájlt, vagy küldje el az üzenetet anonimizálás nélkül.",
+    "sendErrorAttachmentNoText": "Az egyik csatolt fájl nem tartalmaz olyan szöveget, amelyet a stella el tud olvasni. Távolítsa el, vagy csatoljon másik fájlt.",
+    "sendErrorAttachmentUnsupported": "Ez a fájltípus nem csatolható csevegéshez. Csatoljon másik fájlt.",
     "sendErrorConnectionFailed": "Nem sikerült kapcsolódni a csevegéshez. Ellenőrizze a kapcsolatot, és próbálja újra.",
     "sendErrorContinuationRejected": "A csevegést nem sikerült folytatni. Az újrakezdéshez küldjön új üzenetet.",
+    "sendErrorDocumentUnsupported": "Ez a modell nem tudja elolvasni az egyik csatolt dokumentumot. Távolítsa el a mellékletet, vagy váltson olyan modellre, amely támogatja.",
     "sendErrorEmptyCompletion": "Az AI üres választ adott. Próbálja újra, vagy fogalmazza át az üzenetet.",
+    "sendErrorImageInvalid": "Ezt a képet nem sikerült előkészíteni a modell számára. Töltsön fel kisebb képet, vagy váltson modellt.",
+    "sendErrorImageUnsupported": "Ez a modell nem tudja elolvasni a csatolt képeket. Távolítsa el a képet, vagy váltson olyan modellre, amely támogatja a képeket.",
     "sendErrorLoopDetected": "Az AI-válasz túl sokszor ismétlődött. Próbálja újra szűkebb kéréssel.",
     "sendErrorMessageEmpty": "Az üzenet nem tartalmaz elküldhető szöveget. Írja be a kérdését, vagy csatoljon egy fájlt, majd küldje el.",
     "sendErrorModelUnavailable": "A beállított AI-modell már nem érhető el. Kérje meg a munkaterület adminisztrátorát, hogy frissítse a modellt a szervezet beállításaiban.",
@@ -1857,6 +1893,7 @@
     "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbálja újra egy perc múlva, vagy forduljon a munkaterület adminisztrátorához.",
     "sendErrorStreamIncomplete": "Az AI válasza megszakadt, mielőtt elkészült volna. Próbálja újra.",
     "sendErrorTimedOut": "A csevegés nem válaszolt időben. Próbálja újra.",
+    "sendErrorToolsUnsupported": "Ez a modell nem tud eszközöket használni, ezért nem tud válaszolni az ügyével kapcsolatos kérdésekre. Váltson olyan modellre, amely támogatja az eszközöket.",
     "sendPrompt": "Üzenet küldése",
     "sendQueuedMessageNow": "Küldés most",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
@@ -1903,7 +1940,7 @@
       "unavailable": "Nem sikerült diagramot kiválasztani. A táblázat látható.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Kontextussal dolgozom",
+    "thinking": "Gondolkodás",
     "threadFiles": {
       "title": "Fájlok ebben a csevegésben"
     },
@@ -2030,6 +2067,11 @@
       "needsInputTitle": "A stellának szüksége van Önre",
       "replyReadyBody": "A stella befejezte a választ a csevegésben.",
       "replyReadyTitle": "Kész a válasz"
+    },
+    "turnStatus": {
+      "waitingForApproval": "Jóváhagyásra vár",
+      "waitingForInput": "Bevitelre vár",
+      "writing": "Írás"
     },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",
@@ -3952,6 +3994,8 @@
     "reopenTab": "{name} újranyitása",
     "resizePane": "Panel átméretezése",
     "review": {
+      "acceptChange": "Módosítás elfogadása",
+      "acceptFinding": "Megállapítás elfogadása",
       "actionNeeded": "Teendő",
       "addComment": "Hozzáadás megjegyzésként",
       "addNote": "Megjegyzés hozzáadása az ellenfélnek",
@@ -3992,6 +4036,7 @@
         "dismissed": "Elvetve"
       },
       "description": "Válasszon egy kidolgozott playbookot, referenciadokumentumokat vagy mindkettőt.",
+      "dismissFinding": "Megállapítás elvetése",
       "documentChanged": "A dokumentum az ellenőrzés óta megváltozott.",
       "export": {
         "counterparty": "Letöltés az ellenfélnek",
@@ -4015,6 +4060,7 @@
       "history": {
         "backToLatest": "Vissza a legutóbbihoz",
         "decided": "{decided, number}/{total, number} eldöntve",
+        "fromTable": "A táblázatból",
         "references": "{count, plural, one {# referencia} other {# referencia}}"
       },
       "impact": {
@@ -4039,7 +4085,6 @@
         "unanchored": "Nincs kikötéshez kötve"
       },
       "newTopic": "Új ellenőrzési téma",
-      "noChangeNeeded": "Nincs szükség módosításra",
       "noEditor": "Nyissa meg a dokumentumot a módosítások elfogadásához",
       "noMaterialDifferences": "Nem találtunk lényeges eltérést",
       "noPassage": "Nincs szövegrész",
@@ -4122,6 +4167,11 @@
         "noSide": "nincs oldal",
         "proposedFromReferences": "a referenciákból javasolt álláspontok",
         "unnamedReferences": "{count, plural, one {# referenciadokumentum} other {# referenciadokumentum}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Ennek a verziónak a teljes ellenőrzése</link> hivatkozásokkal és javasolt módosításokkal elérhető az ellenőrzési előzményekben.",
+        "origin": "<strong>A táblázatból indítva.</strong> Ezek a megállapítások a táblázathoz kinyert értékek alapján készültek, ezért nem hivatkoznak a dokumentumra, és nem tartalmaznak javasolt módosításokat.",
+        "runAnotherReview": "A hivatkozásokhoz és a javasolt módosításokhoz használja a következő gombot: <action>{label}</action>."
       },
       "targetAsReference": "Az ellenőrzött dokumentum nem lehet saját referenciája.",
       "targetColumn": "Ez a dokumentum",
@@ -5242,6 +5292,8 @@
       "betaDescription": "Próbálja ki a még fejlesztés alatt álló funkciókat",
       "betaInbox": "Beérkezett üzenetek és értesítések",
       "betaInboxDescription": "A Beérkezett üzenetek és az értesítési harang megjelenítése",
+      "betaLocalAgents": "Ügynökök a számítógépén",
+      "betaLocalAgentsDescription": "Csevegések futtatása Codexszel vagy Claude Code-dal a számítógépén a stella desktop segítségével",
       "betaTimeBillingDescription": "Időkövetés, számlák és költségek megjelenítése",
       "chatNotifications": "Csevegési értesítések",
       "chatNotificationsBlocked": "A stella értesítései le vannak tiltva ebben a böngészőben. Engedélyezze őket a böngésző webhely-beállításaiban.",
@@ -6470,6 +6522,10 @@
       },
       "noProperties": "Nincs számítható tulajdonság",
       "unavailable": "—"
+    },
+    "cellOverride": {
+      "machineValue": "Eredeti AI-érték",
+      "reasonPlaceholder": "A módosítás indoka (nem kötelező)"
     },
     "copyToMatter": {
       "copied": "Másolva az ügyiratba",

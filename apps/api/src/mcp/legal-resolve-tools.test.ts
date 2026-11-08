@@ -83,18 +83,7 @@ const responses = {
       status: "resolved",
       document: {
         ...identity,
-        text: {
-          status: "readable",
-          blocks: [{ type: "paragraph", text: "Synthetic excerpt" }],
-          extent: { type: "partial", returnedChars: 17, totalChars: 10_000 },
-        },
-      },
-    },
-    {
-      status: "resolved",
-      document: {
-        ...identity,
-        text: { status: "readable", blocks: [], extent: { type: "complete" } },
+        text: { status: "readable", charCount: 10_000 },
       },
     },
     {
@@ -214,8 +203,7 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
           ]);
           if (
             response.status === "resolved" &&
-            response.document.kind === "decision" &&
-            response.document.text.status === "withheld"
+            response.document.kind === "decision"
           ) {
             expect(wire.structuredContent).not.toHaveProperty(
               "document.blocks",

@@ -13,6 +13,7 @@ import {
   isChatPastedTextPart,
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import {
   isApprovalGatedBuiltInChatTool,
@@ -22,6 +23,7 @@ import { isOwnKey } from "@stll/api-contract/own-key";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
+import { withLocalRunLimitResetsAt } from "@/features/chat/chat-local-run-limit";
 import type { TranslationKey } from "@/i18n/types";
 import type { WebApiRoutes } from "@/lib/api";
 import type {
@@ -170,6 +172,9 @@ const USER_INPUT_TOOL_NAMES = {
   [ASK_USER_TOOL_NAME]: true,
   [REQUEST_SECRET_TOOL_NAME]: true,
   [CONNECT_CONNECTOR_TOOL_NAME]: true,
+  // A blocking question a coding agent on the member's computer asks: its
+  // call stays open until the member answers it from the question card.
+  [CHAT_LOCAL_RUN_QUESTION_TOOL]: true,
 } as const satisfies Record<string, true>;
 export type UserInputChatToolName = keyof typeof USER_INPUT_TOOL_NAMES;
 
@@ -1082,9 +1087,12 @@ export const getChatAssistantTurnError = (
   switch (outcome.type) {
     case "failed":
       return outcome.refusal === undefined
-        ? withProviderDiagnostic(
-            new Error(outcome.error),
-            outcome.providerDiagnostic,
+        ? withLocalRunLimitResetsAt(
+            withProviderDiagnostic(
+              new Error(outcome.error),
+              outcome.providerDiagnostic,
+            ),
+            outcome.limitResetsAt,
           )
         : toAPIError({
             status: ACTION_ADMISSION_REFUSALS[outcome.refusal.code].status,

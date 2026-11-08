@@ -256,6 +256,10 @@ const REVIEWED_MODEL_EXCLUSIONS = {
     "2026-08-22: floating alias; do not offer or assign fixed-model metadata",
   "google:gemini-flash-lite-latest":
     "2026-08-22: floating alias; do not offer or assign fixed-model metadata",
+  "mistral:deepseek-v4-1-flash-1017":
+    "2026-11-05: third-party relay; DeepSeek model served through the Mistral platform, not a Mistral model",
+  "mistral:mistral-large-4-0-8":
+    "2026-11-05: duplicate alias; versioned ID at the rates of mistral-large-4, the offered picker ID",
   "mistral:zai-glm-5-2":
     "2026-08-28: third-party relay; GLM model served through the Mistral platform, not a Mistral model",
   "mistral:zai-glm-5-3":

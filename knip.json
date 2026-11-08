@@ -14,6 +14,9 @@
         "oxlint.tailwind.config.ts"
       ],
       "ignoreDependencies": [
+        // Read from the root by @astrojs/astro2tsx, which declares only the core.
+        "@emnapi/core",
+        "@emnapi/runtime",
         // tsc-native.ts constructs this compiler binary path dynamically.
         "tsrs",
         "squawk-cli"
@@ -51,6 +54,9 @@
     },
     "packages/analytics-config": {
       "entry": ["src/**/*.test.ts"]
+    },
+    "packages/brand": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
     "packages/cli": {
       "entry": ["src/**/*.test.ts"]

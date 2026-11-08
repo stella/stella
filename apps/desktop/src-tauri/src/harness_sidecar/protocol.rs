@@ -13,8 +13,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::runner_protocol::{
-  Ack, ApprovalKind, Harness, HarnessCapability, JsonObject, McpBinding, RunAnswer,
-  RunApproval, RunOutcome, RunPolicy, RunRef, RunTokenRefresh,
+  Ack, ApprovalKind, ApprovalMode, Harness, HarnessCapability, JsonObject, McpBinding,
+  RunAnswer, RunApproval, RunAttachment, RunOutcome, RunPolicy, RunRef,
+  RunTokenRefresh,
 };
 
 pub(crate) const SIDECAR_PROTOCOL: u32 = 3;
@@ -178,6 +179,13 @@ pub(crate) struct HarnessProcess {
   pub(crate) pid: NonZeroU32,
 }
 
+/// A skill folder a run may load: the skill's name and its absolute path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct SkillFolderRef {
+  pub(crate) name: String,
+  pub(crate) path: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SidecarRunStart {
@@ -188,10 +196,18 @@ pub(crate) struct SidecarRunStart {
   pub(crate) config_dir: String,
   pub(crate) launch: HarnessLaunchSettings,
   pub(crate) workspace_dir: String,
+  /// The computer's package-manager cache, writable in every sandbox.
+  pub(crate) cache_dir: String,
   pub(crate) model: String,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
   pub(crate) harness_session_id: Option<String>,
+  /// Files to copy into `workspace_dir` before the harness starts.
+  pub(crate) attachments: Vec<RunAttachment>,
+  /// The skill folders listed on this computer; never known to the API.
+  pub(crate) skill_folders: Vec<SkillFolderRef>,
+  /// Directories of managed tools; the adapter puts them first on `PATH`.
+  pub(crate) tool_path: Vec<String>,
   pub(crate) policy: RunPolicy,
   pub(crate) mcp: McpBinding,
 }
@@ -278,10 +294,11 @@ pub(crate) struct ProbedModel {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub(crate) enum ProbeOutcome {
-  #[serde(rename = "ready")]
+  #[serde(rename = "ready", rename_all = "camelCase")]
   Ready {
     version: String,
     capabilities: Vec<HarnessCapability>,
+    approval_modes: Vec<ApprovalMode>,
     models: Vec<ProbedModel>,
   },
   #[serde(rename = "needs_login")]

@@ -152,6 +152,7 @@
     "emailPlaceholder": "teie@example.com",
     "error": {
       "generic": "Sisselogimisel läks midagi valesti. Palun proovige uuesti.",
+      "providerUnavailable": "Sisselogimise teenus ei vasta praegu. Palun proovige minuti pärast uuesti.",
       "title": "Sisselogimine ebaõnnestus"
     },
     "handoffAccount": "Kas jätkata kasutajana <account>{email}</account> organisatsioonis <organization>{organizationName}</organization>?",
@@ -162,7 +163,9 @@
       "declinedDescription": "Olete selle kutse tagasi lükanud. Võite selle lehe sulgeda.",
       "description": "{inviterEmail} kutsus teid organisatsiooni {organizationName} liikmeks rolliga {role}.",
       "goToWorkspaces": "Mine toimikutesse",
-      "title": "Kutse organisatsiooni"
+      "title": "Kutse organisatsiooni",
+      "verifyEmailHint": "Aadressi {email} kinnitamiseks logige välja ja logige sisse ühekordse koodiga, mille sellele aadressile saadame.",
+      "wrongAccountHint": "Olete sisse logitud kontoga {email}. Logige välja ja logige sisse aadressiga, kuhu kutse saadeti."
     },
     "lastUsed": "Viimati kasutatud",
     "oneTimeCodeExpired": "Sinu ühekordne kood on aegunud. Küsi uus kood.",
@@ -633,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Tunnitasu ei tohi olla negatiivne",
     "hours": "Tunnid",
+    "invalidNumberFormat": "Kontrollige arvu vormingut",
     "invoiceComposer": {
       "addSellerProfile": "Lisage müüja profiil arvelduse seadetes",
       "billedHours": "Arveldatavad tunnid",
@@ -1460,6 +1464,8 @@
     },
     "answerQuote": {
       "showInDecision": "Näita lahendis",
+      "unverified": "Tsitaati ei õnnestunud kontrollida",
+      "unverifiedHint": "Viidatud lahendid ei sisalda seda teksti sõna-sõnalt",
       "verified": "Kontrollitud tsitaat",
       "verifiedHint": "Sõna-sõnalt: {source}"
     },
@@ -1579,6 +1585,8 @@
       "full": "{percent}% täis",
       "instructions": "Süsteemi juhised",
       "percent": "{percent}%",
+      "reported": "Nii, nagu sinu arvutis töötav programmeerimisagent pärast oma viimast vastust teatas. Agent haldab oma konteksti ise.",
+      "reportedTokens": "{used} / {total} tokenit",
       "summary": "Vanemate sõnumite kokkuvõte",
       "summaryWithCount": "{count} vanema sõnumi kokkuvõte",
       "title": "Vestluse kontekst",
@@ -1682,13 +1690,23 @@
     "localRun": {
       "cloud": "stella pilv",
       "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
+      "errorLimitResetsAt": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Uuesti saad proovida alates {time}.",
       "errorNeedsLogin": "Sinu arvutis töötav programmeerimisagent vajab uuesti sisselogimist. Logi sisse stella desktopi kaudu ja proovi uuesti.",
       "errorUnavailable": "Sinu arvuti lõpetas selle vastuse töötlemise. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti.",
+      "filesNotShared": "Failid, mida ei õnnestunud jagada, jäävad sinu arvutisse: {fileNames}",
       "onThisComputer": "{harness} selles arvutis",
+      "permissionAskDescription": "Muudab vestluse kaustas olevaid faile ise; kõige muu kohta küsib.",
+      "permissionAutoDescription": "Teeb ise seda, mida peab ohutuks; ülejäänu kohta küsib.",
+      "permissionFullAuto": "Täisautomaatne",
+      "permissionFullAutoDescription": "Ei küsi vestluse kaustas millegi kohta; küsib alati enne, kui sinu arvutis midagi muudab.",
+      "permissionSandboxed": "Töötab liivakastis; küsib enne, kui sinu arvutis midagi muudab.",
+      "permissionUnavailable": "Selles arvutis pole saadaval",
+      "permissions": "Õigused",
       "refusalConflictingRunMode": "See päring soovib käivituda korraga pilveagendiga ja sinu arvutis. Vali menüüs Käivita üks.",
       "refusalHarnessUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa seda päringut praegu vastu võtta. Kontrolli seda stella desktopis.",
       "refusalModelUnavailable": "Sinu arvutis töötav programmeerimisagent seda mudelit enam ei paku. Vali menüüs Käivita mõni teine.",
       "refusalNoComputer": "Ükski sinu arvuti pole ühendatud. Ava stella desktop ja saada uuesti.",
+      "refusalPermissionUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa nende õigustega töötada. Vali menüüs Õigused mõni muu valik.",
       "refusalTooLarge": "See vestlus on sinu arvutile üleandmiseks liiga pikk. Alusta uut vestlust, et seda seal käitada.",
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
       "runOn": "Käivita",
@@ -1700,6 +1718,16 @@
       "stateUnavailable": "Praegu pole saadaval",
       "stateUnsupported": "Seda versiooni ei toetata",
       "waitingForComputer": "Ootame, kuni sinu arvuti uuesti ühendub…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Valige kõik sobivad",
+      "dismiss": "Jäta kõrvale ja peata",
+      "secretAnswer": "Vastus on peidetud",
+      "secretPlaceholder": "Teie vastus jääb peidetuks"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# vestlus ootab teid} other {# vestlust ootab teid}}",
+      "working": "{count, plural, one {# vestlus on töös} other {# vestlust on töös}}"
     },
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mcpReconnect": {
@@ -1842,10 +1870,18 @@
       "toolbarLabel": "Valitud tekst"
     },
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
+    "sendErrorActiveFileNoText": "Avatud failis pole teksti, mida stella lugeda saaks. Sulge see või ava mõni teine fail.",
+    "sendErrorActiveFileTooLarge": "Avatud fail on vestluse jaoks liiga suur. Sulge see või ava väiksem fail.",
+    "sendErrorAgentRunsDisabled": "Agendi käivitused pole siin saadaval. Võta ühendust töökoha administraatoriga.",
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
+    "sendErrorAttachmentNoText": "Manustatud failis pole teksti, mida stella lugeda saaks. Eemalda see või lisa mõni teine fail.",
+    "sendErrorAttachmentUnsupported": "Seda failitüüpi ei saa vestlusele lisada. Lisa mõni teine fail.",
     "sendErrorConnectionFailed": "Vestlusega ühenduse loomine ebaõnnestus. Kontrollige ühendust ja proovige uuesti.",
     "sendErrorContinuationRejected": "Vestlust ei saanud jätkata. Uuesti alustamiseks saatke uus sõnum.",
+    "sendErrorDocumentUnsupported": "See mudel ei saa üht manustatud dokumenti lugeda. Eemalda manus või vaheta mudelile, mis seda toetab.",
     "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
+    "sendErrorImageInvalid": "Seda pilti ei õnnestunud mudeli jaoks ette valmistada. Laadi üles väiksem pilt või vaheta mudelit.",
+    "sendErrorImageUnsupported": "See mudel ei saa manustatud pilte lugeda. Eemalda pilt või vaheta mudelile, mis pilte toetab.",
     "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
     "sendErrorMessageEmpty": "Selles sõnumis pole saatmiseks teksti. Kirjuta oma küsimus või lisa fail ja saada sõnum seejärel.",
     "sendErrorModelUnavailable": "Seadistatud AI-mudel pole enam saadaval. Palu töökoha administraatoril mudelit organisatsiooni seadetes uuendada.",
@@ -1857,6 +1893,7 @@
     "sendErrorQuotaExhausted": "AI teenusepakkuja kvoot on täis. Proovi minuti pärast uuesti või võta ühendust tööruumi administraatoriga.",
     "sendErrorStreamIncomplete": "AI vastus katkes enne, kui see valmis sai. Proovi uuesti.",
     "sendErrorTimedOut": "Vestlusteenus ei vastanud õigel ajal. Proovige uuesti.",
+    "sendErrorToolsUnsupported": "See mudel ei saa tööriistu kasutada, seega ei saa see sinu toimiku kohta küsimustele vastata. Vaheta mudelile, mis tööriistu toetab.",
     "sendPrompt": "Saada sõnum",
     "sendQueuedMessageNow": "Saada kohe",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
@@ -1903,7 +1940,7 @@
       "unavailable": "Diagrammi ei õnnestunud valida. Kuvatakse tabel.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Töötan kontekstiga",
+    "thinking": "Mõtlemine",
     "threadFiles": {
       "title": "Selle vestluse failid"
     },
@@ -2030,6 +2067,11 @@
       "needsInputTitle": "stella vajab teie sisendit",
       "replyReadyBody": "stella lõpetas vestluses vastamise.",
       "replyReadyTitle": "Vastus on valmis"
+    },
+    "turnStatus": {
+      "waitingForApproval": "Kinnituse ootamine",
+      "waitingForInput": "Sisendi ootamine",
+      "writing": "Kirjutamine"
     },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus",
@@ -3952,6 +3994,8 @@
     "reopenTab": "Ava {name} uuesti",
     "resizePane": "Muuda paneeli suurust",
     "review": {
+      "acceptChange": "Nõustu muudatusega",
+      "acceptFinding": "Aktsepteeri leid",
       "actionNeeded": "Vajab tegutsemist",
       "addComment": "Lisa kommentaarina",
       "addNote": "Lisa kommentaar vastaspoolele",
@@ -3992,6 +4036,7 @@
         "dismissed": "Kõrvale jäetud"
       },
       "description": "Valige koostatud kontrolljuhend, võrdlusdokumendid või mõlemad.",
+      "dismissFinding": "Jäta leid kõrvale",
       "documentChanged": "See dokument on pärast seda ülevaatust muutunud.",
       "export": {
         "counterparty": "Laadi vastaspoole jaoks alla",
@@ -4015,6 +4060,7 @@
       "history": {
         "backToLatest": "Tagasi uusima juurde",
         "decided": "{decided, number}/{total, number} otsustatud",
+        "fromTable": "Tabelist",
         "references": "{count, plural, one {# võrdlusdokument} other {# võrdlusdokumenti}}"
       },
       "impact": {
@@ -4039,7 +4085,6 @@
         "unanchored": "Ei ole seotud ühegi klausliga"
       },
       "newTopic": "Uus läbivaatuse teema",
-      "noChangeNeeded": "Muudatust pole vaja",
       "noEditor": "Avage dokument, et muudatusi aktsepteerida",
       "noMaterialDifferences": "Olulisi erinevusi ei leitud",
       "noPassage": "Väljavõtet pole",
@@ -4122,6 +4167,11 @@
         "noSide": "Pool puudub",
         "proposedFromReferences": "Võrdlustest pakutud seisukohad",
         "unnamedReferences": "{count, plural, one {# võrdlusdokument} other {# võrdlusdokumenti}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Selle versiooni täielik ülevaatus</link> koos linkide ja kavandatavate muudatustega on saadaval ülevaatuste ajaloos.",
+        "origin": "<strong>Käivitatud tabelist.</strong> Need leiud hinnati tabeli jaoks eraldatud väärtuste põhjal, mistõttu need ei viita dokumendile ega sisalda kavandatavaid muudatusi.",
+        "runAnotherReview": "Linkide ja kavandatavate muudatuste saamiseks kasutage nuppu <action>{label}</action>."
       },
       "targetAsReference": "Ülevaadatav dokument ei saa olla iseenda võrdlusdokument.",
       "targetColumn": "See dokument",
@@ -5242,6 +5292,8 @@
       "betaDescription": "Proovige funktsioone, mis on alles arendamisel",
       "betaInbox": "Postkast ja teavitused",
       "betaInboxDescription": "Kuva postkast ja teavituste kell",
+      "betaLocalAgents": "Agendid sinu arvutis",
+      "betaLocalAgentsDescription": "Käivita vestlused Codexi või Claude Code'iga oma arvutis rakenduse stella desktop kaudu",
       "betaTimeBillingDescription": "Kuva ajajälgimine, arved ja kulud",
       "chatNotifications": "Vestluse teavitused",
       "chatNotificationsBlocked": "stella teavitused on selles brauseris blokeeritud. Lubage need brauseri saidiseadetes.",
@@ -6470,6 +6522,10 @@
       },
       "noProperties": "Arvutamiseks pole omadust",
       "unavailable": "—"
+    },
+    "cellOverride": {
+      "machineValue": "Algne AI väärtus",
+      "reasonPlaceholder": "Muudatuse põhjus (valikuline)"
     },
     "copyToMatter": {
       "copied": "Kopeeritud toimikusse",

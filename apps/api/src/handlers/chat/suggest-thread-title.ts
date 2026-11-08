@@ -162,7 +162,6 @@ export const createSuggestThreadTitle = ({
         thread,
         messageWindow,
         admit,
-        generateTextForTask,
       }),
     );
     return await authorization.execute(async ({ proof }) => {
@@ -213,7 +212,7 @@ export const createSuggestThreadTitle = ({
                 const generated = yield* Result.await(
                   Result.tryPromise({
                     try: async () =>
-                      await checked.generateTextForTask({
+                      await generateTextForTask({
                         userId: modelAdmission.userId,
                         dataClass: "customer",
                         abortSignal: actionSignal,

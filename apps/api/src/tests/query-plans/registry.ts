@@ -106,6 +106,17 @@ type QueryPlanEntry = {
   };
 };
 
+/**
+ * A read that resolves a decision's language versions probes that one group,
+ * a handful of rows per decision on the page, off the covering group index.
+ */
+const LANGUAGE_GROUP_HEAP_FETCHES = {
+  type: "heapFetchBudget",
+  rows: 1000,
+  reason:
+    "One decision's language group per row of a bounded page, and heap visits are only for pages not yet all-visible.",
+} as const;
+
 const shardConditions = getShardConditions({
   country: "CZE",
   year: "2010",
@@ -325,6 +336,12 @@ export const QUERY_PLAN_REGISTRY = [
     role: "public-law-reader",
     build: (tx) => sitemapShardDecisionsQuery(tx, shardConditions),
     seed: "case-law",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: SITEMAP_SHARD_BUCKET_COUNT * LIMITS.caseLawSitemapShardUrlLimit,
+      reason:
+        "One country-month, read as one range of the partial sitemap index before the page is fetched; a month the sitemap can still list holds at most one URL limit per bucket, and heap visits are only for pages not yet all-visible.",
+    },
     contract: planContracts["case-law.sitemap-shard-read"],
   },
   {
@@ -418,10 +435,7 @@ export const QUERY_PLAN_REGISTRY = [
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
       }),
     seed: "case-law",
-    heapFetchMitigation: {
-      type: "batched",
-      pageSize: QUERY_PLAN_SAMPLE.caseLaw.candidateIds.length,
-    },
+    heapFetchMitigation: LANGUAGE_GROUP_HEAP_FETCHES,
     contract: planContracts["case-law.search-candidate-rows"],
   },
   {
@@ -475,6 +489,7 @@ export const QUERY_PLAN_REGISTRY = [
         tx,
       }),
     seed: "case-law",
+    heapFetchMitigation: LANGUAGE_GROUP_HEAP_FETCHES,
     contract: planContracts["case-law.citation-page-incoming"],
   },
   {
@@ -493,6 +508,7 @@ export const QUERY_PLAN_REGISTRY = [
         tx,
       }),
     seed: "case-law",
+    heapFetchMitigation: LANGUAGE_GROUP_HEAP_FETCHES,
     contract: planContracts["case-law.citation-page-incoming-doctrine"],
   },
   {
@@ -526,6 +542,7 @@ export const QUERY_PLAN_REGISTRY = [
       }).summary,
     seed: "case-law",
     planMode: "covering-index",
+    heapFetchMitigation: LANGUAGE_GROUP_HEAP_FETCHES,
     contract: planContracts["case-law.citation-summary"],
   },
   {
@@ -568,6 +585,7 @@ export const QUERY_PLAN_REGISTRY = [
       }).topCiting(CITATION_DIGEST_TOP_CITING),
     seed: "case-law",
     planMode: "covering-index",
+    heapFetchMitigation: LANGUAGE_GROUP_HEAP_FETCHES,
     contract: planContracts["case-law.top-citing-decisions"],
   },
   {
@@ -601,6 +619,7 @@ export const QUERY_PLAN_REGISTRY = [
         tx,
       }),
     seed: "case-law",
+    heapFetchMitigation: LANGUAGE_GROUP_HEAP_FETCHES,
     contract: planContracts["case-law.citation-page-incoming-work"],
   },
   {
@@ -618,6 +637,7 @@ export const QUERY_PLAN_REGISTRY = [
         tx,
       }),
     seed: "case-law",
+    heapFetchMitigation: LANGUAGE_GROUP_HEAP_FETCHES,
     contract: planContracts["case-law.citation-page-outgoing-work"],
   },
   {
@@ -632,6 +652,7 @@ export const QUERY_PLAN_REGISTRY = [
         tx,
       }).summary,
     seed: "case-law",
+    heapFetchMitigation: LANGUAGE_GROUP_HEAP_FETCHES,
     contract: planContracts["case-law.citation-summary-work"],
   },
   {

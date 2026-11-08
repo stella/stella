@@ -1,6 +1,10 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import {
+  WORKSPACE_STATUS,
+  type WorkspaceStatus,
+} from "@stll/api-contract/workspace-status";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
@@ -22,7 +26,7 @@ afterAll(async () => {
 
 const LABEL = "Change color";
 
-const renderPickers = (status: string) => {
+const renderPickers = (status: WorkspaceStatus) => {
   const matter = { color: null, id: "matter-1", status };
   return render(
     <QueryClientProvider client={new QueryClient()}>
@@ -39,7 +43,7 @@ const renderPickers = (status: string) => {
 };
 
 test("an active matter offers one named button per picker, never a button inside a button", () => {
-  const view = renderPickers("active");
+  const view = renderPickers(WORKSPACE_STATUS.active);
 
   const buttons = view.getAllByRole("button");
   expect(buttons).toHaveLength(2);
@@ -49,7 +53,7 @@ test("an active matter offers one named button per picker, never a button inside
   }
 });
 
-test.each(["archived", "deleting"])(
+test.each([WORKSPACE_STATUS.archived, WORKSPACE_STATUS.deleting])(
   "a %s matter shows its icon without a color picker",
   (status) => {
     const view = renderPickers(status);

@@ -19,6 +19,7 @@ import {
   getChatAttachmentFilename,
   getChatAttachmentMimeType,
   getChatAttachmentUrl,
+  isAnswerFilePart,
   isChatAttachmentPart,
   isProviderVisibleChatPart,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -1240,6 +1241,9 @@ const removeProviderInvisibleParts = (
   for (const message of messages) {
     const parts: ChatMessage["parts"] = [];
     for (const part of message.parts) {
+      if (isAnswerFilePart(message.role, part)) {
+        continue;
+      }
       if (isProviderVisibleChatPart(part)) {
         parts.push(part);
       }

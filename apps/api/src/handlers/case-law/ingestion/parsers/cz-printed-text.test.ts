@@ -31,7 +31,7 @@ const gunzipText = async (name: string): Promise<string> =>
     Bun.gunzipSync(await Bun.file(new URL(name, FIXTURES)).bytes()),
   );
 
-const readNss = async (name: string): Promise<DocumentAst> =>
+const readNss = async (name: string, directory = ""): Promise<DocumentAst> =>
   parseNssDecisionHtml({
     caseNumber: name,
     ecli: undefined,
@@ -39,7 +39,7 @@ const readNss = async (name: string): Promise<DocumentAst> =>
     decisionDate: undefined,
     decisionType: undefined,
     sourceUrl: undefined,
-    html: await gunzipText(`cz-nss-${name}.html.gz`),
+    html: await gunzipText(`${directory}cz-nss-${name}.html.gz`),
     detailMetadata: {},
   }).documentAst;
 
@@ -232,6 +232,46 @@ describe("structure", () => {
     expect(
       paragraphs(ast).filter((block) => /^\[\d+\]/u.test(block.plainText)),
     ).toEqual([]);
+  });
+
+  test("NSS: a separate opinion headed by the docket it names is headed, numbered from 1 and signed", async () => {
+    const ast = await readNss("7-as-155-2015", "decision-roles/");
+    expect(
+      headings(ast, 2).filter((heading) =>
+        heading.startsWith("Odlišné stanovisko"),
+      ),
+    ).toEqual([
+      "Odlišné stanovisko podle § 55a s. ř. s. soudce Karla Šimky k odůvodnění rozsudku rozšířeného senátu Nejvyššího správního soudu ze dne 21. 11. 2017, č. j. 7 As 155/2015 – 160.",
+      "Odlišné stanovisko podle § 55a s. ř. s. soudce Aleše Roztočila k odůvodnění rozsudku rozšířeného senátu Nejvyššího správního soudu ze dne 21. 11. 2017, č. j. 7 As 155/2015 – 160.",
+    ]);
+    const dissents = paragraphs(ast).filter(
+      (block) => block.role === "dissent",
+    );
+    expect(numbersOf(dissents)).toEqual([...range(1, 13), ...range(1, 8)]);
+    expect(
+      paragraphs(ast).filter((block) => /^\[\d+\]/u.test(block.plainText)),
+    ).toEqual([]);
+    // The report that an opinion was filed stays a sentence of the decision.
+    expect(
+      paragraphs(ast).some((block) =>
+        block.plainText.startsWith(
+          "Odlišné stanovisko k rozsudku v souladu s § 55a s. ř. s. uplatnil soudce Karel Šimka.",
+        ),
+      ),
+    ).toBe(true);
+    // The president signs the judgment, each member his own opinion.
+    expect(
+      paragraphs(ast)
+        .filter((block) => block.role === "signature")
+        .map((block) => block.plainText),
+    ).toEqual([
+      "Josef Baxa",
+      "předseda rozšířeného senátu",
+      "Karel Šimka",
+      "člen rozšířeného senátu",
+      "Aleš Roztočil",
+      "člen rozšířeného senátu",
+    ]);
   });
 
   test("NSS: a decision set in a layout table reads paragraph by paragraph, with the list's numbers", async () => {

@@ -188,6 +188,13 @@ wire_values!(NetworkPolicy { Open => "open" });
 
 wire_values!(FsPolicy { Workspace => "workspace" });
 
+// How much a run asks before it acts; `Ask` is every harness's default.
+wire_values!(ApprovalMode {
+  Ask => "ask",
+  Auto => "auto",
+  FullAuto => "full_auto",
+});
+
 /// A run-scoped MCP token. `Debug` never prints it.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -257,10 +264,13 @@ pub(crate) struct HarnessModel {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ReadyHarness {
   pub(crate) id: Harness,
   pub(crate) version: String,
   pub(crate) capabilities: Vec<HarnessCapability>,
+  /// The approval modes this desktop can run the harness in; lists `Ask`.
+  pub(crate) approval_modes: Vec<ApprovalMode>,
   pub(crate) models: Vec<HarnessModel>,
 }
 
@@ -409,6 +419,7 @@ pub(crate) struct Reconnect {
 pub(crate) struct RunPolicy {
   pub(crate) network: NetworkPolicy,
   pub(crate) fs: FsPolicy,
+  pub(crate) approvals: ApprovalMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -424,14 +435,26 @@ pub(crate) struct McpBinding {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RunStart {
   pub(crate) run_id: String,
+  /// The folder the run works in; a chat's runs share one.
+  pub(crate) folder_id: String,
   pub(crate) harness: Harness,
   pub(crate) harness_version: String,
   pub(crate) model: String,
   pub(crate) harness_session_id: Option<String>,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
+  /// Files the sidecar copies into the run's folder before the harness starts.
+  #[serde(default)]
+  pub(crate) attachments: Vec<RunAttachment>,
   pub(crate) policy: RunPolicy,
   pub(crate) mcp: McpBinding,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RunAttachment {
+  pub(crate) path: String,
+  pub(crate) url: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -479,7 +502,7 @@ wire_union!(ServerMessage tagged "type" {
   Welcome(Welcome) => "welcome",
   UpgradeRequired(UpgradeRequired) => "upgrade_required",
   Reconnect(Reconnect) => "reconnect",
-  RunStart(RunStart) => "run.start",
+  RunStart(Box<RunStart>) => "run.start",
   RunInput(RunInput) => "run.input",
   RunApproval(RunApproval) => "run.approval",
   RunAnswer(RunAnswer) => "run.answer",
@@ -608,6 +631,10 @@ mod tests {
       (
         "fsPolicies",
         names(FsPolicy::ALL.iter().map(|value| value.wire_name())),
+      ),
+      (
+        "approvalModes",
+        names(ApprovalMode::ALL.iter().map(|value| value.wire_name())),
       ),
       ("harnessStates", names(HarnessReport::TAGS.iter().copied())),
       (

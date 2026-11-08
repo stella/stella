@@ -152,6 +152,7 @@
     "emailPlaceholder": "jus@example.com",
     "error": {
       "generic": "Pieslēdzoties kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",
+      "providerUnavailable": "Pieteikšanās pakalpojums pašlaik neatbild. Lūdzu, mēģiniet vēlreiz pēc minūtes.",
       "title": "Neizdevās jūs pieslēgt"
     },
     "handoffAccount": "Vai turpināt kā <account>{email}</account> organizācijā <organization>{organizationName}</organization>?",
@@ -162,7 +163,9 @@
       "declinedDescription": "Jūs esat noraidījis šo uzaicinājumu. Varat droši aizvērt šo lapu.",
       "description": "{inviterEmail} ir uzaicinājis jūs pievienoties organizācijai {organizationName} kā {role}.",
       "goToWorkspaces": "Doties uz lietām",
-      "title": "Uzaicinājums organizācijā"
+      "title": "Uzaicinājums organizācijā",
+      "verifyEmailHint": "Lai apstiprinātu adresi {email}, atslēdzieties un pieslēdzieties ar vienreizējo kodu, ko nosūtīsim uz šo adresi.",
+      "wrongAccountHint": "Pašlaik izmantojat kontu {email}. Atslēdzieties un pieslēdzieties ar adresi, uz kuru tika nosūtīts uzaicinājums."
     },
     "lastUsed": "Pēdējoreiz izmantots",
     "oneTimeCodeExpired": "Jūsu vienreizējā koda derīguma termiņš ir beidzies. Pieprasiet jaunu kodu.",
@@ -633,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Stundas likme nedrīkst būt negatīva",
     "hours": "Stundas",
+    "invalidNumberFormat": "Pārbaudiet skaitļa formātu",
     "invoiceComposer": {
       "addSellerProfile": "Pievienojiet pārdevēja profilu norēķinu iestatījumos",
       "billedHours": "Apmaksājamās stundas",
@@ -1460,6 +1464,8 @@
     },
     "answerQuote": {
       "showInDecision": "Rādīt nolēmumā",
+      "unverified": "Citātu neizdevās pārbaudīt",
+      "unverifiedHint": "Citētajos nolēmumos šis teksts vārds vārdā nav atrodams",
       "verified": "Pārbaudīts citāts",
       "verifiedHint": "Vārds vārdā: {source}"
     },
@@ -1579,6 +1585,8 @@
       "full": "Aizpildīts par {percent}%",
       "instructions": "Sistēmas norādes",
       "percent": "{percent}%",
+      "reported": "Kā ziņoja programmēšanas aģents jūsu datorā pēc savas pēdējās atbildes. Aģents savu kontekstu pārvalda pats.",
+      "reportedTokens": "{used} / {total} tokeni",
       "summary": "Vecāko ziņojumu kopsavilkums",
       "summaryWithCount": "{count} vecāko ziņojumu kopsavilkums",
       "title": "Sarunas konteksts",
@@ -1682,13 +1690,23 @@
     "localRun": {
       "cloud": "stella mākonis",
       "errorLimitReached": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Mēģiniet vēlreiz, kad limits tiks atjaunots.",
+      "errorLimitResetsAt": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Vēlreiz mēģināt varēsiet pēc {time}.",
       "errorNeedsLogin": "Programmēšanas aģents jūsu datorā prasa pieteikties vēlreiz. Piesakieties lietotnē stella desktop un mēģiniet vēlreiz.",
       "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
+      "filesNotShared": "Faili, kurus neizdevās kopīgot, paliek jūsu datorā: {fileNames}",
       "onThisComputer": "{harness} šajā datorā",
+      "permissionAskDescription": "Tērzēšanas mapes failus rediģē pats; par visu citu jautā.",
+      "permissionAutoDescription": "To, ko uzskata par drošu, dara pats; par pārējo jautā.",
+      "permissionFullAuto": "Pilnībā automātiski",
+      "permissionFullAutoDescription": "Par neko tērzēšanas mapē nejautā; pirms kaut ko maina jūsu datorā, vienmēr pajautā.",
+      "permissionSandboxed": "Darbojas izolētā vidē; pirms kaut ko maina jūsu datorā, pajautā.",
+      "permissionUnavailable": "Šajā datorā nav pieejams",
+      "permissions": "Atļaujas",
       "refusalConflictingRunMode": "Šis pieprasījums vienlaikus prasa darboties ar mākoņa aģentu un jūsu datorā. Izvēlieties vienu izvēlnē Palaist.",
       "refusalHarnessUnavailable": "Programmēšanas aģents jūsu datorā šobrīd nevar pieņemt šo pieprasījumu. Pārbaudiet to lietotnē stella desktop.",
       "refusalModelUnavailable": "Programmēšanas aģents jūsu datorā vairs nepiedāvā šo modeli. Izvēlieties citu izvēlnē Palaist.",
       "refusalNoComputer": "Neviens no jūsu datoriem nav savienots. Atveriet stella desktop un nosūtiet vēlreiz.",
+      "refusalPermissionUnavailable": "Programmēšanas aģents jūsu datorā nevar darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
       "refusalTooLarge": "Šī saruna ir pārāk gara, lai to nodotu jūsu datoram. Sāciet jaunu tērzēšanu, lai to palaistu tur.",
       "refusalUnavailable": "Tērzēšanu palaišana jūsu datorā jūsu kontam nav pieejama.",
       "runOn": "Palaist",
@@ -1700,6 +1718,16 @@
       "stateUnavailable": "Pašlaik nav pieejams",
       "stateUnsupported": "Šī versija netiek atbalstīta",
       "waitingForComputer": "Gaida, līdz jūsu dators atkal izveidos savienojumu…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Izvēlieties visus atbilstošos",
+      "dismiss": "Noraidīt un apturēt",
+      "secretAnswer": "Atbilde ir paslēpta",
+      "secretPlaceholder": "Jūsu atbilde paliks paslēpta"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, zero {# tērzēšanu gaida jūs} one {# tērzēšana gaida jūs} other {# tērzēšanas gaida jūs}}",
+      "working": "{count, plural, zero {# tērzēšanu darbojas} one {# tērzēšana darbojas} other {# tērzēšanas darbojas}}"
     },
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mcpReconnect": {
@@ -1842,10 +1870,18 @@
       "toolbarLabel": "Atlasītais teksts"
     },
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
+    "sendErrorActiveFileNoText": "Atvērtajā failā nav teksta, ko stella varētu izlasīt. Aizveriet to vai atveriet citu failu.",
+    "sendErrorActiveFileTooLarge": "Atvērtais fails ir pārāk liels tērzēšanai. Aizveriet to vai atveriet mazāku failu.",
+    "sendErrorAgentRunsDisabled": "Aģenta izpildes šeit nav pieejamas. Sazinieties ar darba telpas administratoru.",
     "sendErrorAnonymizationBlocked": "stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",
+    "sendErrorAttachmentNoText": "Pievienotajā failā nav teksta, ko stella varētu izlasīt. Noņemiet to vai pievienojiet citu failu.",
+    "sendErrorAttachmentUnsupported": "Šāda veida failu nevar pievienot tērzēšanai. Pievienojiet citu failu.",
     "sendErrorConnectionFailed": "Neizdevās izveidot savienojumu ar tērzēšanu. Pārbaudiet savienojumu un mēģiniet vēlreiz.",
     "sendErrorContinuationRejected": "Tērzēšanu neizdevās turpināt. Nosūtiet jaunu ziņojumu, lai sāktu no jauna.",
+    "sendErrorDocumentUnsupported": "Šis modelis nevar izlasīt vienu no pievienotajiem dokumentiem. Noņemiet pielikumu vai pārslēdzieties uz modeli, kas to atbalsta.",
     "sendErrorEmptyCompletion": "AI atgrieza tukšu atbildi. Mēģiniet vēlreiz vai pārfrāzējiet ziņu.",
+    "sendErrorImageInvalid": "Šo attēlu neizdevās sagatavot modelim. Augšupielādējiet mazāku attēlu vai nomainiet modeli.",
+    "sendErrorImageUnsupported": "Šis modelis nevar izlasīt pievienotos attēlus. Noņemiet attēlu vai pārslēdzieties uz modeli, kas atbalsta attēlus.",
     "sendErrorLoopDetected": "AI atbilde atkārtojās pārāk daudz reižu. Mēģiniet vēlreiz ar šaurāku pieprasījumu.",
     "sendErrorMessageEmpty": "Šajā ziņā nav teksta, ko nosūtīt. Ierakstiet savu jautājumu vai pievienojiet failu un pēc tam nosūtiet ziņu.",
     "sendErrorModelUnavailable": "Konfigurētais AI modelis vairs nav pieejams. Sazinieties ar darba telpas administratoru, lai atjauninātu modeli organizācijas iestatījumos.",
@@ -1857,6 +1893,7 @@
     "sendErrorQuotaExhausted": "AI pakalpojumu sniedzēja kvota ir izsmelta. Mēģiniet vēlreiz pēc minūtes vai sazinieties ar darba telpas administratoru.",
     "sendErrorStreamIncomplete": "AI atbilde tika pārtraukta, pirms tā bija pabeigta. Mēģiniet vēlreiz.",
     "sendErrorTimedOut": "Tērzēšanas pakalpojums neatbildēja laikus. Mēģiniet vēlreiz.",
+    "sendErrorToolsUnsupported": "Šis modelis nevar izmantot rīkus, tāpēc nevar atbildēt uz jautājumiem par jūsu lietu. Pārslēdzieties uz modeli, kas atbalsta rīkus.",
     "sendPrompt": "Sūtīt ziņojumu",
     "sendQueuedMessageNow": "Sūtīt tūlīt",
     "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",
@@ -1903,7 +1940,7 @@
       "unavailable": "Neizdevās izvēlēties diagrammu. Tiek rādīta tabula.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Strādāju ar kontekstu",
+    "thinking": "Domāšana",
     "threadFiles": {
       "title": "Šīs tērzēšanas faili"
     },
@@ -2030,6 +2067,11 @@
       "needsInputTitle": "stellai vajadzīga jūsu rīcība",
       "replyReadyBody": "stella pabeidza atbildēt jūsu tērzēšanā.",
       "replyReadyTitle": "Atbilde gatava"
+    },
+    "turnStatus": {
+      "waitingForApproval": "Gaida apstiprinājumu",
+      "waitingForInput": "Gaida ievadi",
+      "writing": "Raksta"
     },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",
@@ -3952,6 +3994,8 @@
     "reopenTab": "Atkārtoti atvērt {name}",
     "resizePane": "Mainīt paneļa izmēru",
     "review": {
+      "acceptChange": "Pieņemt izmaiņas",
+      "acceptFinding": "Pieņemt secinājumu",
       "actionNeeded": "Nepieciešama rīcība",
       "addComment": "Pievienot kā komentāru",
       "addNote": "Pievienot komentāru pretpusei",
@@ -3992,6 +4036,7 @@
         "dismissed": "Noraidīts"
       },
       "description": "Izvēlieties sagatavotu pārbaudes ceļvedi, atsauces dokumentus vai abus.",
+      "dismissFinding": "Noraidīt secinājumu",
       "documentChanged": "Šis dokuments pēc šīs pārbaudes ir mainījies.",
       "export": {
         "counterparty": "Lejupielādēt pretpusei",
@@ -4015,6 +4060,7 @@
       "history": {
         "backToLatest": "Atpakaļ pie jaunākās",
         "decided": "{decided, number} no {total, number} izlemts",
+        "fromTable": "No tabulas",
         "references": "{count, plural, zero {# atsauču} one {# atsauce} other {# atsauces}}"
       },
       "impact": {
@@ -4039,7 +4085,6 @@
         "unanchored": "Nav saistīts ar klauzulu"
       },
       "newTopic": "Jauna pārbaudes tēma",
-      "noChangeNeeded": "Izmaiņas nav nepieciešamas",
       "noEditor": "Atveriet dokumentu, lai apstiprinātu izmaiņas",
       "noMaterialDifferences": "Būtiskas atšķirības nav atrastas",
       "noPassage": "Fragmenta nav",
@@ -4122,6 +4167,11 @@
         "noSide": "Nav puses",
         "proposedFromReferences": "Pozīcijas, kas ierosinātas no atsaucēm",
         "unnamedReferences": "{count, plural, zero {# atsauces dokumentu} one {# atsauces dokuments} other {# atsauces dokumenti}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Šīs versijas pilna pārbaude</link> ar saitēm un ierosinātajām izmaiņām ir pieejama pārbaužu vēsturē.",
+        "origin": "<strong>Palaists no tabulas.</strong> Šie secinājumi novērtēti pēc tabulai iegūtajām vērtībām, tāpēc tie nav saistīti ar dokumentu un neietver ierosinātās izmaiņas.",
+        "runAnotherReview": "Lai iegūtu saites un ierosinātās izmaiņas, izmantojiet pogu <action>{label}</action>."
       },
       "targetAsReference": "Pārbaudāmais dokuments nevar būt savs paša atsauces dokuments.",
       "targetColumn": "Šis dokuments",
@@ -5242,6 +5292,8 @@
       "betaDescription": "Izmēģiniet funkcijas, kas vēl tiek izstrādātas",
       "betaInbox": "Iesūtne un paziņojumi",
       "betaInboxDescription": "Rādīt iesūtni un paziņojumu zvaniņu",
+      "betaLocalAgents": "Aģenti jūsu datorā",
+      "betaLocalAgentsDescription": "Palaist tērzēšanas ar Codex vai Claude Code jūsu datorā, izmantojot stella desktop",
       "betaTimeBillingDescription": "Rādīt laika uzskaiti, rēķinus un izdevumus",
       "chatNotifications": "Tērzēšanas paziņojumi",
       "chatNotificationsBlocked": "stellas paziņojumi šajā pārlūkprogrammā ir bloķēti. Atļaujiet tos pārlūkprogrammas vietnes iestatījumos.",
@@ -6470,6 +6522,10 @@
       },
       "noProperties": "Nav rekvizīta, ko aprēķināt",
       "unavailable": "—"
+    },
+    "cellOverride": {
+      "machineValue": "Sākotnējā AI vērtība",
+      "reasonPlaceholder": "Izmaiņu iemesls (neobligāti)"
     },
     "copyToMatter": {
       "copied": "Nokopēts lietā",

@@ -12,14 +12,15 @@ import type {
   HarnessRespondError,
   HarnessTurn,
 } from "../adapter";
-import type {
-  HarnessApprovalOption,
-  HarnessContinuation,
-  HarnessEvent,
-  HarnessQuestion,
-  HarnessSessionId,
-  HarnessToolCall,
-  HarnessUsage,
+import {
+  type HarnessApprovalOption,
+  harnessContextUsage,
+  type HarnessContinuation,
+  type HarnessEvent,
+  type HarnessQuestion,
+  type HarnessSessionId,
+  type HarnessToolCall,
+  type HarnessUsage,
 } from "../events";
 import { unsupportedItem } from "../tool-parts";
 import {
@@ -151,20 +152,58 @@ const plainReason = (text: string) => {
   return plain.trim().slice(0, MAX_REASON_CHARS);
 };
 
-const usageOf = (result: ClaudeResultMessage): HarnessUsage | null => {
+type ClaudeMessageUsage = NonNullable<ClaudeResultMessage["usage"]>;
+
+/** The main thread's last model request: the model and what it held. */
+type LastRequest = { model: string | null; contextTokens: number };
+
+/** Anthropic reports cache reads and writes apart from `input_tokens`. */
+const inputTokensOf = (usage: ClaudeMessageUsage) =>
+  usage.input_tokens +
+  (usage.cache_creation_input_tokens ?? 0) +
+  (usage.cache_read_input_tokens ?? 0);
+
+/**
+ * The context window of the model that made the last request. A result that
+ * names one model only is that model's, whatever the request called it.
+ */
+const contextWindowOf = (
+  result: ClaudeResultMessage,
+  model: string | null,
+): number | undefined => {
+  const models = Object.entries(result.modelUsage ?? {});
+  const named =
+    model === null
+      ? undefined
+      : models.find(([name]) => name === model)?.[1].contextWindow;
+  if (named !== undefined) {
+    return named;
+  }
+  const [only] = models;
+  return models.length === 1 ? only?.[1].contextWindow : undefined;
+};
+
+const usageOf = (
+  result: ClaudeResultMessage,
+  lastRequest: LastRequest | null,
+): HarnessUsage | null => {
   const { usage } = result;
   if (usage === undefined) {
     return null;
   }
-  // Anthropic reports cache reads and writes apart from `input_tokens`.
-  const cached = usage.cache_read_input_tokens ?? 0;
   return {
-    inputTokens:
-      usage.input_tokens + (usage.cache_creation_input_tokens ?? 0) + cached,
-    cachedInputTokens: cached,
+    inputTokens: inputTokensOf(usage),
+    cachedInputTokens: usage.cache_read_input_tokens ?? 0,
     outputTokens: usage.output_tokens,
     // Thinking tokens are counted inside output tokens and not broken out.
     reasoningOutputTokens: 0,
+    context:
+      lastRequest === null
+        ? null
+        : harnessContextUsage(
+            lastRequest.contextTokens,
+            contextWindowOf(result, lastRequest.model),
+          ),
   };
 };
 
@@ -236,11 +275,25 @@ type ClaudeCodeTurnSessionOptions = {
   detached: Detached;
   /** The server name the turn registered the stella MCP binding under. */
   stellaServer: string;
+  /**
+   * Whether a sandboxed command's request to reach a host is answered
+   * without asking. A local run's network is open; the CLI's sandbox routes
+   * commands through a proxy that asks about every new host.
+   */
+  allowSandboxNetwork: boolean;
 };
+
+/**
+ * The tool name the CLI asks with when a sandboxed command reaches a host its
+ * sandbox has not allowed yet. Not a model tool: no tool call carries it.
+ */
+const SANDBOX_NETWORK_TOOL = "SandboxNetworkAccess";
 
 export class ClaudeCodeTurnSession {
   private began = false;
   private assistantError: string | null = null;
+  /** The main thread's last model request, for the context it held. */
+  private lastRequest: LastRequest | null = null;
   private readonly rejectedResets: Temporal.Instant[] = [];
   private readonly early: EarlyMessage[] = [];
   private readonly toolUses = new Map<string, HeldToolUse>();
@@ -257,11 +310,13 @@ export class ClaudeCodeTurnSession {
 
   private readonly lifecycle: HarnessTurnLifecycle<ClaudeCliClient>;
   private readonly stellaServer: string;
+  private readonly allowSandboxNetwork: boolean;
 
   constructor({
     gracePeriodMs,
     detached,
     stellaServer,
+    allowSandboxNetwork,
   }: ClaudeCodeTurnSessionOptions) {
     this.lifecycle = new HarnessTurnLifecycle({
       gracePeriodMs,
@@ -269,6 +324,7 @@ export class ClaudeCodeTurnSession {
       name: "claude-turn",
     });
     this.stellaServer = stellaServer;
+    this.allowSandboxNetwork = allowSandboxNetwork;
   }
 
   /** Handlers for the process; messages before `begin` are held. */
@@ -558,6 +614,14 @@ export class ClaudeCodeTurnSession {
       this.assistantError = parsed.error;
       return;
     }
+    const { usage } = parsed.message;
+    if (usage !== undefined) {
+      // The next request carries this one's prompt and answer.
+      this.lastRequest = {
+        model: parsed.message.model ?? null,
+        contextTokens: inputTokensOf(usage) + usage.output_tokens,
+      };
+    }
     const messageId = parsed.message.id;
     for (const raw of parsed.message.content) {
       if (!isClaudeContentBlockType(raw.type)) {
@@ -646,7 +710,10 @@ export class ClaudeCodeTurnSession {
       return;
     }
     if (parsed.subtype === "success" && !parsed.is_error) {
-      this.emit({ type: "turn.completed", usage: usageOf(parsed) });
+      this.emit({
+        type: "turn.completed",
+        usage: usageOf(parsed, this.lastRequest),
+      });
       return;
     }
     this.emit({
@@ -695,6 +762,13 @@ export class ClaudeCodeTurnSession {
       "permission request",
     );
     if (parsed === null) {
+      return;
+    }
+    if (parsed.tool_name === SANDBOX_NETWORK_TOOL && this.allowSandboxNetwork) {
+      this.client?.respond(controlId, {
+        behavior: "allow",
+        updatedInput: parsed.input,
+      });
       return;
     }
     const requestId = requestIdFor(controlId);

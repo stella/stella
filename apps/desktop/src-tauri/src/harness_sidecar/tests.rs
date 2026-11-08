@@ -189,6 +189,7 @@ fn run_start(model: &str) -> SidecarRunStart {
     config_dir: "/data/harness-home/codex".to_owned(),
     launch: HarnessLaunchSettings::default(),
     workspace_dir: "/data/runs/1".to_owned(),
+    cache_dir: "/data/agent-package-cache".to_owned(),
     model: model.to_owned(),
     instructions: String::new(),
     messages: vec![
@@ -197,10 +198,14 @@ fn run_start(model: &str) -> SidecarRunStart {
         .unwrap()
         .clone(),
     ],
+    attachments: Vec::new(),
+    skill_folders: Vec::new(),
+    tool_path: Vec::new(),
     harness_session_id: None,
     policy: RunPolicy {
       network: NetworkPolicy::Open,
       fs: FsPolicy::Workspace,
+      approvals: ApprovalMode::FullAuto,
     },
     mcp: McpBinding {
       server_name: "stella".to_owned(),
@@ -687,6 +692,38 @@ fn a_holder_that_dies_fails_its_runs_and_the_next_run_starts_a_new_one() {
 }
 
 #[test]
+fn a_run_start_the_holder_finds_invalid_fails_that_run_and_no_other() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut running = sidecar.start_run(run_start("wait")).unwrap();
+    let _first = next(&mut running).await;
+    let mut refused = sidecar.start_run(run_start("refuse-invalid")).unwrap();
+    assert_eq!(finish(&mut refused).await, vec![ended(RunOutcome::Failed)]);
+    let mut after = sidecar.start_run(run_start("gpt-test")).unwrap();
+    assert!(matches!(
+      finish(&mut after).await.last(),
+      Some(SidecarRunOutput::Finished {
+        outcome: RunOutcome::Completed,
+        ..
+      })
+    ));
+    sidecar.shutdown().await;
+  });
+}
+
+#[test]
+fn a_run_start_the_holder_refuses_without_naming_it_still_ends_the_run() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut refused = sidecar.start_run(run_start("refuse-unnamed")).unwrap();
+    assert_eq!(finish(&mut refused).await, vec![ended(RunOutcome::Failed)]);
+    sidecar.shutdown().await;
+  });
+}
+
+#[test]
 fn a_line_that_breaks_the_protocol_fails_the_held_runs() {
   let fixture = Fixture::new();
   with_children(async {
@@ -979,6 +1016,7 @@ fn probe_outcomes_become_runner_reports() {
   let ready = ProbeOutcome::Ready {
     version: "0.165.0".to_owned(),
     capabilities: vec![HarnessCapability::Approvals, HarnessCapability::Approvals],
+    approval_modes: vec![ApprovalMode::FullAuto, ApprovalMode::FullAuto],
     models: vec![
       ProbedModel {
         id: "gpt-test".to_owned(),
@@ -998,6 +1036,7 @@ fn probe_outcomes_become_runner_reports() {
       id: Harness::Codex,
       version: "0.165.0".to_owned(),
       capabilities: vec![HarnessCapability::Approvals],
+      approval_modes: vec![ApprovalMode::Ask, ApprovalMode::FullAuto],
       models: vec![HarnessModel {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
@@ -1007,6 +1046,7 @@ fn probe_outcomes_become_runner_reports() {
   let no_models = ProbeOutcome::Ready {
     version: "0.165.0".to_owned(),
     capabilities: Vec::new(),
+    approval_modes: Vec::new(),
     models: Vec::new(),
   };
   assert_eq!(
@@ -1450,6 +1490,16 @@ mod stand_in {
     match message["type"].as_str().unwrap_or_default() {
       "run.start" => {
         let model = message["model"].as_str().unwrap_or_default().to_owned();
+        if matches!(model.as_str(), "refuse-invalid" | "refuse-unnamed") {
+          let rejected = json!({
+            "type": "rejected",
+            "reason": "invalid",
+            "messageType": "run.start",
+            "runId": (model == "refuse-invalid").then_some(run_id.as_str()),
+          });
+          write(held, &format!("{rejected}\n")).await;
+          return;
+        }
         held.runs.insert(
           run_id.clone(),
           StandInRun {

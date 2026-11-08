@@ -4,6 +4,10 @@ import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
+import {
+  DESKTOP_RUNNER_APPROVAL_MODES,
+  type DesktopRunnerApprovalMode,
+} from "@stll/api-contract/desktop-runner";
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
 import {
@@ -24,6 +28,9 @@ import {
   type HarnessSessionId,
   harnessSessionId,
 } from "../events";
+import { packageCacheEnvironment } from "../package-cache";
+import { redactingSkillPaths } from "../skill-redaction";
+import { toolPathEnvironment } from "../tool-path";
 import { buildTurnPrompt } from "../transcript-handoff";
 import { settlesWithin } from "../turn-lifecycle";
 import {
@@ -38,6 +45,13 @@ import {
   InitializeResponseSchema,
   McpSetServersResponseSchema,
 } from "./protocol";
+import {
+  openSkillPlugin,
+  removeSkillPlugin,
+  SKILL_PLUGIN_NAME,
+  type SkillPlugin,
+  skillPluginPermissions,
+} from "./skill-plugin";
 import { ClaudeCodeTurnSession } from "./turn";
 
 /**
@@ -79,6 +93,8 @@ export type ClaudeCodeHarnessAdapterOptions = {
   requestTimeoutMs: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
+  /** The platform the CLI runs on, which decides whether it can sandbox. */
+  platform: NodeJS.Platform;
 };
 
 /**
@@ -101,17 +117,93 @@ const isCapability = (value: string): value is HarnessCapability =>
   Object.hasOwn(CLAUDE_CODE_CAPABILITIES, value);
 
 /**
- * Edits inside the working directory go ahead; anything else, including a
- * path outside it, is asked about through the permission prompt. A mode that
- * skips permission checks is never used.
+ * The CLI's permission mode per approval mode. In `acceptEdits`, edits inside
+ * the working directory go ahead and anything else, including a path outside
+ * it, is asked about through the permission prompt; in `auto`, the CLI's own
+ * review approves what it judges safe and asks about the rest. Full auto adds
+ * the CLI's OS sandbox to `acceptEdits` (see `sandboxSettings`). A mode that
+ * skips permission checks is never used: it would also approve a command's
+ * request to leave the sandbox.
  */
 const PERMISSION_MODE = {
-  workspace: "acceptEdits",
-} as const satisfies Record<HarnessRunPolicy["fs"], string>;
-/** The CLI's network is open; its own sandbox, which would close it, is off. */
+  ask: "acceptEdits",
+  auto: "auto",
+  full_auto: "acceptEdits",
+} as const satisfies Record<HarnessRunPolicy["approvals"], string>;
+/**
+ * The CLI's network is open. Outside full auto its sandbox is off; in full
+ * auto the sandbox's proxy asks about each new host and the turn allows it.
+ */
 const NETWORK_ARGS = {
   open: [],
 } as const satisfies Record<HarnessRunPolicy["network"], readonly string[]>;
+
+/**
+ * Where the CLI's OS sandbox runs: macOS (Seatbelt). The pinned release's
+ * Windows sandbox is not generally available, so full auto is not offered
+ * there.
+ */
+const SANDBOX_PLATFORMS: ReadonlySet<NodeJS.Platform> = new Set(["darwin"]);
+
+/**
+ * Full auto's sandbox, passed with `--settings`. Bash commands run inside the
+ * OS sandbox, which confines writes to the working directory, the sandbox's
+ * own temp directory (its `TMPDIR`) and the package cache, and they run
+ * without asking. A skill folder is never writable, even one inside that temp
+ * directory. A command that asks to run outside the sandbox is asked about
+ * like any other action, never approved on its own. When the sandbox cannot
+ * start the CLI refuses to start instead of running commands unconfined.
+ */
+const sandboxSettings = (
+  cacheDir: string,
+  skillFolders: readonly string[],
+) => ({
+  sandbox: {
+    enabled: true,
+    failIfUnavailable: true,
+    autoAllowBashIfSandboxed: true,
+    allowUnsandboxedCommands: true,
+    filesystem: {
+      allowWrite: [cacheDir],
+      ...(skillFolders.length > 0 ? { denyWrite: skillFolders } : {}),
+    },
+  },
+});
+
+/** The CLI's refusal when the sandbox it was told to require cannot start. */
+const SANDBOX_REFUSAL = "Sandbox required but unavailable";
+
+const approvalModes = (
+  platform: NodeJS.Platform,
+): DesktopRunnerApprovalMode[] =>
+  DESKTOP_RUNNER_APPROVAL_MODES.filter(
+    (mode) => mode !== "full_auto" || SANDBOX_PLATFORMS.has(platform),
+  );
+
+/**
+ * The turn's `--settings`, which load even with `--setting-sources ""`: the
+ * sandbox in full auto and the rules for its skill folders.
+ */
+const settingsArgs = (
+  input: HarnessTurnInput,
+  skills: SkillPlugin | null,
+  platform: NodeJS.Platform,
+) => {
+  const settings = {
+    ...(input.policy.approvals === "full_auto"
+      ? sandboxSettings(
+          input.cacheDir,
+          (skills?.folders ?? []).map(({ path: folder }) => folder),
+        )
+      : {}),
+    ...(skills === null
+      ? {}
+      : { permissions: skillPluginPermissions(skills, platform) }),
+  };
+  return Object.keys(settings).length === 0
+    ? []
+    : ["--settings", JSON.stringify(settings)];
+};
 
 /**
  * Variables dropped from the CLI's environment: an API key, auth token,
@@ -184,10 +276,14 @@ const isStripped = (name: string) =>
   STRIPPED_ENV_NAMES.has(name) ||
   STRIPPED_ENV_PREFIXES.some((prefix) => name.startsWith(prefix));
 
-const childEnvironment = (options: ClaudeCodeHarnessAdapterOptions) => ({
+const childEnvironment = (
+  options: ClaudeCodeHarnessAdapterOptions,
+  environment: Readonly<Record<string, string>>,
+) => ({
   ...Object.fromEntries(
     Object.entries(options.environment).filter(([name]) => !isStripped(name)),
   ),
+  ...environment,
   ...FIXED_ENV,
   CLAUDE_CONFIG_DIR: options.claudeConfigDir,
 });
@@ -195,8 +291,15 @@ const childEnvironment = (options: ClaudeCodeHarnessAdapterOptions) => ({
 type Initialized = v.InferOutput<typeof InitializeResponseSchema>;
 type Connection = { client: ClaudeCliClient; init: Initialized };
 type ConnectFailure = {
-  /** `start_rejected`: the CLI started and reported why it cannot run. */
-  reason: "harness_unavailable" | "protocol_violation" | "start_rejected";
+  /**
+   * `start_rejected`: the CLI started and reported why it cannot run;
+   * `sandbox_unavailable`: the reason was the sandbox it was told to require.
+   */
+  reason:
+    | "harness_unavailable"
+    | "protocol_violation"
+    | "start_rejected"
+    | "sandbox_unavailable";
   message: string;
 };
 
@@ -204,6 +307,8 @@ type ConnectOptions = {
   options: ClaudeCodeHarnessAdapterOptions;
   cwd: string;
   args: readonly string[];
+  /** Set over the base environment for this process. */
+  environment: Readonly<Record<string, string>>;
   handlers: ClaudeCliHandlers;
   /** Extra `initialize` fields, such as the turn's instructions. */
   initialize: Record<string, unknown>;
@@ -214,6 +319,7 @@ const connect = async ({
   options,
   cwd,
   args,
+  environment,
   handlers,
   initialize,
 }: ConnectOptions): Promise<Result<Connection, ConnectFailure>> => {
@@ -223,34 +329,32 @@ const connect = async ({
     initialized: false,
     refusal: null,
   };
-  const started = Result.try(() =>
-    startClaudeCli({
-      launch: options.launch,
-      args,
-      detached: createDetached(options.onBackgroundError),
-      deadlines: {
-        requestMs: options.requestTimeoutMs,
-        terminateMs: options.gracePeriodMs,
+  const started = startClaudeCli({
+    launch: options.launch,
+    args,
+    detached: createDetached(options.onBackgroundError),
+    deadlines: {
+      requestMs: options.requestTimeoutMs,
+      terminateMs: options.gracePeriodMs,
+    },
+    cwd,
+    env: childEnvironment(options, environment),
+    handlers: {
+      ...handlers,
+      message: (type, raw) => {
+        if (!startup.initialized && type === "result") {
+          const errors = v.safeParse(
+            v.object({ errors: v.array(v.string()) }),
+            raw,
+          );
+          startup.refusal = errors.success
+            ? errors.output.errors.join("\n")
+            : "The harness could not start the session.";
+        }
+        handlers.message(type, raw);
       },
-      cwd,
-      env: childEnvironment(options),
-      handlers: {
-        ...handlers,
-        message: (type, raw) => {
-          if (!startup.initialized && type === "result") {
-            const errors = v.safeParse(
-              v.object({ errors: v.array(v.string()) }),
-              raw,
-            );
-            startup.refusal = errors.success
-              ? errors.output.errors.join("\n")
-              : "The harness could not start the session.";
-          }
-          handlers.message(type, raw);
-        },
-      },
-    }),
-  );
+    },
+  });
   if (Result.isError(started)) {
     return Result.err({
       reason: "harness_unavailable",
@@ -268,7 +372,12 @@ const connect = async ({
   }
   await client.kill();
   if (startup.refusal !== null) {
-    return Result.err({ reason: "start_rejected", message: startup.refusal });
+    return Result.err({
+      reason: startup.refusal.startsWith(SANDBOX_REFUSAL)
+        ? "sandbox_unavailable"
+        : "start_rejected",
+      message: startup.refusal,
+    });
   }
   return Result.err(
     Result.isError(initialized)
@@ -385,6 +494,7 @@ const probe = async (
     options,
     cwd: options.claudeConfigDir,
     args: [...PROTOCOL_ARGS, "--no-session-persistence"],
+    environment: {},
     handlers: refusingHandlers(holder),
     initialize: {},
   });
@@ -416,6 +526,7 @@ const probe = async (
           auth,
           models: auth.type === "signed_out" ? [] : modelsOf(init),
           capabilities: capabilities(),
+          approvalModes: approvalModes(options.platform),
           usageLimit:
             auth.type === "signed_out" ? null : await readUsageLimit(client),
         });
@@ -427,11 +538,18 @@ type SessionTarget =
   | { type: "fresh"; sessionId: HarnessSessionId }
   | { type: "resume"; sessionId: HarnessSessionId };
 
-const turnArgs = (input: HarnessTurnInput, target: SessionTarget) => [
+const turnArgs = (
+  options: ClaudeCodeHarnessAdapterOptions,
+  input: HarnessTurnInput,
+  target: SessionTarget,
+  skills: SkillPlugin | null,
+) => [
   ...PROTOCOL_ARGS,
   "--include-partial-messages",
   "--permission-mode",
-  PERMISSION_MODE[input.policy.fs],
+  PERMISSION_MODE[input.policy.approvals],
+  ...settingsArgs(input, skills, options.platform),
+  ...(skills === null ? [] : ["--plugin-dir", skills.dir]),
   ...NETWORK_ARGS[input.policy.network],
   // The stella MCP server enforces its own approvals for writes.
   "--allowedTools",
@@ -455,16 +573,22 @@ const openSession = async (
   options: ClaudeCodeHarnessAdapterOptions,
   input: HarnessTurnInput,
   target: SessionTarget,
+  skills: SkillPlugin | null,
 ): Promise<Result<OpenedSession, OpenFailure>> => {
   const session = new ClaudeCodeTurnSession({
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
     stellaServer: input.mcp.serverName,
+    allowSandboxNetwork: input.policy.approvals === "full_auto",
   });
   const connected = await connect({
     options,
     cwd: input.workspaceDir,
-    args: turnArgs(input, target),
+    args: turnArgs(options, input, target, skills),
+    environment: {
+      ...packageCacheEnvironment(input.cacheDir),
+      ...toolPathEnvironment(options.environment, input.toolPath),
+    },
     handlers: session.handlers,
     // Instructions travel over stdio, never on the command line.
     initialize: { appendSystemPrompt: input.instructions },
@@ -525,6 +649,88 @@ const startError = (failure: OpenFailure): HarnessStartError =>
     ? failure.error
     : new HarnessStartError(failure.failure);
 
+const openTurn = async (
+  options: ClaudeCodeHarnessAdapterOptions,
+  input: HarnessTurnInput,
+  skills: SkillPlugin | null,
+  standalone: string,
+): Promise<Result<HarnessTurn, HarnessStartError>> => {
+  const fresh = (): SessionTarget => ({
+    type: "fresh",
+    sessionId: harnessSessionId(crypto.randomUUID()),
+  });
+  let target: SessionTarget =
+    input.continuation.type === "resume"
+      ? { type: "resume", sessionId: input.continuation.sessionId }
+      : fresh();
+  let continuation: HarnessContinuation =
+    target.type === "resume" ? { type: "resumed" } : { type: "fresh" };
+  let opened = await openSession(options, input, target, skills);
+  if (
+    Result.isError(opened) &&
+    target.type === "resume" &&
+    opened.error.type === "connect" &&
+    opened.error.failure.reason === "start_rejected"
+  ) {
+    const { message } = opened.error.failure;
+    target = fresh();
+    continuation = {
+      type: "resume_unavailable",
+      reason: SESSION_MISSING.test(message)
+        ? "session_not_found"
+        : "resume_rejected",
+      message,
+    };
+    opened = await openSession(options, input, target, skills);
+  }
+  if (Result.isError(opened)) {
+    return Result.err(startError(opened.error));
+  }
+  const { session, client } = opened.value;
+  const prompt =
+    continuation.type === "resumed"
+      ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
+      : Result.ok(standalone);
+  if (Result.isError(prompt)) {
+    session.abandon();
+    await client.kill();
+    return prompt;
+  }
+  session.begin({ sessionId: target.sessionId, continuation });
+  client.send({
+    type: "user",
+    message: { role: "user", content: [{ type: "text", text: prompt.value }] },
+    parent_tool_use_id: null,
+    session_id: target.sessionId,
+  });
+  return Result.ok(session.turn());
+};
+
+const removePlugin = async (
+  options: ClaudeCodeHarnessAdapterOptions,
+  skills: SkillPlugin,
+) => {
+  const removed = await removeSkillPlugin(skills.dir);
+  if (Result.isError(removed)) {
+    options.onBackgroundError(removed.error, "skillPlugin.remove");
+  }
+};
+
+/** The turn's `dispose` also removes its plugin, once the CLI has stopped. */
+const releasingSkills = (
+  options: ClaudeCodeHarnessAdapterOptions,
+  turn: HarnessTurn,
+  skills: SkillPlugin,
+): HarnessTurn => ({
+  events: turn.events,
+  respond: turn.respond,
+  interrupt: turn.interrupt,
+  dispose: async () => {
+    await turn.dispose();
+    await removePlugin(options, skills);
+  },
+});
+
 const startTurn = async (
   options: ClaudeCodeHarnessAdapterOptions,
   input: HarnessTurnInput,
@@ -544,55 +750,50 @@ const startTurn = async (
   if (!MCP_SERVER_NAME.test(input.mcp.serverName)) {
     panic("Claude Code adapter: the MCP server name must be plain");
   }
-  const fresh = (): SessionTarget => ({
-    type: "fresh",
-    sessionId: harnessSessionId(crypto.randomUUID()),
-  });
-  let target: SessionTarget =
-    input.continuation.type === "resume"
-      ? { type: "resume", sessionId: input.continuation.sessionId }
-      : fresh();
-  let continuation: HarnessContinuation =
-    target.type === "resume" ? { type: "resumed" } : { type: "fresh" };
-  let opened = await openSession(options, input, target);
-  if (
-    Result.isError(opened) &&
-    target.type === "resume" &&
-    opened.error.type === "connect" &&
-    opened.error.failure.reason === "start_rejected"
-  ) {
-    const { message } = opened.error.failure;
-    target = fresh();
-    continuation = {
-      type: "resume_unavailable",
-      reason: SESSION_MISSING.test(message)
-        ? "session_not_found"
-        : "resume_rejected",
-      message,
-    };
-    opened = await openSession(options, input, target);
+  if (!path.isAbsolute(input.cacheDir)) {
+    panic("Claude Code adapter: the cache directory must be an absolute path");
   }
+  // Full auto never runs without the sandbox, so where the CLI has none the
+  // turn fails before the CLI starts.
+  if (!approvalModes(options.platform).includes(input.policy.approvals)) {
+    return Result.err(
+      new HarnessStartError({
+        reason: "sandbox_unavailable",
+        message: "This computer cannot run the harness in its sandbox.",
+      }),
+    );
+  }
+  const skills = await openSkillPlugin({
+    configDir: options.claudeConfigDir,
+    folders: input.skillFolders,
+    platform: options.platform,
+    onBackgroundError: options.onBackgroundError,
+  });
+  if (Result.isError(skills)) {
+    return Result.err(
+      new HarnessStartError({
+        reason: "start_rejected",
+        message: skills.error.message,
+      }),
+    );
+  }
+  const opened = await openTurn(options, input, skills.value, standalone.value);
   if (Result.isError(opened)) {
-    return Result.err(startError(opened.error));
+    if (skills.value !== null) {
+      await removePlugin(options, skills.value);
+    }
+    return opened;
   }
-  const { session, client } = opened.value;
-  const prompt =
-    continuation.type === "resumed"
-      ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
-      : standalone;
-  if (Result.isError(prompt)) {
-    session.abandon();
-    await client.kill();
-    return prompt;
-  }
-  session.begin({ sessionId: target.sessionId, continuation });
-  client.send({
-    type: "user",
-    message: { role: "user", content: [{ type: "text", text: prompt.value }] },
-    parent_tool_use_id: null,
-    session_id: target.sessionId,
+  const turn = redactingSkillPaths(opened.value, {
+    folders: input.skillFolders,
+    plugin:
+      skills.value === null
+        ? null
+        : { dir: skills.value.dir, name: SKILL_PLUGIN_NAME },
   });
-  return Result.ok(session.turn());
+  return Result.ok(
+    skills.value === null ? turn : releasingSkills(options, turn, skills.value),
+  );
 };
 
 export const createClaudeCodeHarnessAdapter = (

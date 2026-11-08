@@ -20,7 +20,7 @@ export default {
     specifiers: ["@/api/handlers/case-law/ingestion/parsers/pl-printed-lines"],
     allowed: [
       {
-        path: "apps/api/src/handlers/case-law/ingestion/parsers/pl-sn.ts",
+        path: "apps/api/src/handlers/case-law/ingestion/parsers/pdf-bands.ts",
         reason: "Current caller; moves to the owner.",
       },
       {

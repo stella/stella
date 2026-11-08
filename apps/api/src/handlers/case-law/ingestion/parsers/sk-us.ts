@@ -63,7 +63,12 @@ import {
   skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
-import { normalizeUnicode } from "@stll/text-normalize";
+import {
+  documentWordCounts,
+  joinWordSeams,
+  letterGapCounts,
+  normalizeUnicode,
+} from "@stll/text-normalize";
 
 import {
   ANONYMIZED_CLASS,
@@ -73,7 +78,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { createBlockAnchorAllocator } from "@/api/lib/legal-search/parsers/block-anchors";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 
 /**
  * What a dropped anonymized run reads as.
@@ -617,9 +622,6 @@ const setInlines = (line: MarkupLine, inlines: readonly Inline[]): void => {
  */
 type WordGap = "no-break" | "plain";
 
-/** A gap between two letters, and which space sets it. */
-const LETTER_GAP = /\p{L}\p{M}*(?<gap>[  ])(?=\p{L})/gu;
-
 /**
  * No-break gaps between letters outnumber plain ones by at least this much
  * in a file that sets its words apart with no-break spaces. The recorded
@@ -629,17 +631,7 @@ const LETTER_GAP = /\p{L}\p{M}*(?<gap>[  ])(?=\p{L})/gu;
 const NO_BREAK_GAP_DOMINANCE = 50;
 
 const wordGapOf = (lines: readonly MarkupLine[]): WordGap => {
-  let noBreak = 0;
-  let plain = 0;
-  for (const { text } of lines) {
-    for (const match of text.matchAll(LETTER_GAP)) {
-      if (match.groups?.["gap"] === " ") {
-        plain += 1;
-      } else {
-        noBreak += 1;
-      }
-    }
-  }
+  const { plain, noBreak } = letterGapCounts(lines.map(({ text }) => text));
   return noBreak > 0 && plain * NO_BREAK_GAP_DOMINANCE <= noBreak
     ? "no-break"
     : "plain";
@@ -651,19 +643,9 @@ const wordGapOf = (lines: readonly MarkupLine[]): WordGap => {
  */
 const LOST_LINE_BREAK = /(?<=[.!?][“”"»)]{0,3}) (?=\d{1,3}\.[  ]{1,4}\p{Lu})/gu;
 
-/**
- * A seam inside a word: a letter (with at most a few combining marks), then
- * the lowercase rest of the word. Bounded repeats keep every match linear.
- */
-const SPACED_WORD_SEAM = /(?<=\p{L}\p{M}{0,4}) (?=\p{Ll})/gu;
-
 /** A word's letters, read the same however the file composed or cased them. */
 const wordKey = (word: string): string =>
   normalizeUnicode(word, "NFC").toLowerCase();
-
-/** The word that ends a text, and the one that opens it, at most 64 letters. */
-const LAST_WORD = /\p{L}[\p{L}\p{M}]{0,63}$/u;
-const FIRST_WORD = /^\p{L}[\p{L}\p{M}]{0,63}/u;
 
 /**
  * The words a file prints whole: letter runs in stretches no plain space
@@ -683,23 +665,6 @@ const wholeWordsOf = (lines: readonly MarkupLine[]): Set<string> => {
   }
   return words;
 };
-
-/**
- * A text with each plain space inside a word removed. A plain space between
- * two words the file prints whole is a gap the court set (`v súde`), and
- * stays.
- */
-const joinWordSeams = (text: string, words: ReadonlySet<string>): string =>
-  text.replaceAll(SPACED_WORD_SEAM, (seam: string, offset: number) => {
-    const before = LAST_WORD.exec(text.slice(Math.max(0, offset - 64), offset));
-    const after = FIRST_WORD.exec(text.slice(offset + 1, offset + 65));
-    return before !== null &&
-      after !== null &&
-      words.has(wordKey(before[0])) &&
-      words.has(wordKey(after[0]))
-      ? seam
-      : "";
-  });
 
 /** A line split before the given offsets of its text. */
 const splitLineAt = (
@@ -753,14 +718,10 @@ const readTextLayerSeams = (lines: readonly MarkupLine[]): MarkupLine[] => {
 /** U+00AD, the soft hyphen, spelled out: a formatter writes the escape as the character. */
 const SOFT_HYPHEN = String.fromCodePoint(0xad);
 
-/** Intact document words and section markers recognized by the shared vocabulary. */
+/** The document's words and section markers recognized by the shared vocabulary. */
 const typographyWords = (lines: readonly MarkupLine[]) => {
-  const words = new Set<string>();
   const spacedWords = new Set<string>();
   for (const { text } of lines) {
-    for (const [word] of text.matchAll(/\p{L}[\p{L}\p{M}]*/gu)) {
-      words.add(normalizeUnicode(word, "NFC").toLowerCase());
-    }
     const colon = text.indexOf(":");
     if (colon === -1) {
       continue;
@@ -787,7 +748,10 @@ const typographyWords = (lines: readonly MarkupLine[]) => {
       }
     }
   }
-  return { attestedWords: words, spacedWords };
+  return {
+    documentWords: documentWordCounts(lines.map(({ text }) => text)),
+    spacedWords,
+  };
 };
 
 /**
@@ -808,10 +772,9 @@ const readTypography = (
   inlines: readonly Inline[],
   evidence: ReturnType<typeof typographyWords>,
 ): Inline[] =>
-  rewriteInlineWhitespace(
+  readInlineLetterSpacing(
     mapInlineText(inlines, (text) => text.replaceAll(SOFT_HYPHEN, "-")),
-    // Over the whole line: a wrapper's edge is not a gap between words.
-    (text) => collapseLetterSpacing(text, { setApart: true, ...evidence }),
+    { setApart: true, ...evidence },
   );
 
 type Section = SkDocumentSection;

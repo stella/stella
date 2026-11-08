@@ -1,7 +1,7 @@
 import { useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
 import { clockOf, elapsedSeconds } from "@stll/api-contract/timer-activity";
@@ -15,6 +15,11 @@ import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
 import { discardTimer, saveTimer, toggleTimer } from "@/state/timers";
 import type { Timer } from "@/state/timers";
+
+// Every digit the same width, so a ticking clock does not shift.
+const CLOCK_STYLE = StyleSheet.create({
+  clock: { fontVariant: ["tabular-nums"] },
+}).clock;
 
 /**
  * One timer: its clock, counting while it runs, what it is for and its
@@ -63,7 +68,9 @@ export const TimerCard = ({
       <View className="gap-0.5">
         <Text
           accessibilityLabel={words(running ? "running" : "paused")}
-          variant={running ? "title" : "headline"}
+          className={running ? "" : "text-muted-foreground"}
+          style={CLOCK_STYLE}
+          variant="title"
         >
           {clockOf(elapsedSeconds(timer, now))}
         </Text>
@@ -90,7 +97,7 @@ export const TimerCard = ({
           }}
           variant="outline"
         >
-          {t(running ? "pause" : "resume")}
+          {words(running ? "pause" : "resume")}
         </Button>
         <Button
           className="flex-1"

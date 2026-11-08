@@ -763,5 +763,30 @@
         "storage": "{name} sa nepodarilo uložiť do tohto počítača. Skontrolujte, či je na disku voľné miesto."
       }
     }
+  },
+  "localSkills": {
+    "title": "Miestne zručnosti",
+    "description": "Priečinky so zručnosťami v tomto počítači. Miestne behy na tomto počítači ich môžu používať a nič z nich sa nenahráva.",
+    "add": "Pridať priečinok",
+    "remove": "Odstrániť",
+    "removeFolder": "Odstrániť {path}",
+    "unusable": "Nedá sa použiť",
+    "notice": {
+      "action_failed": "Nepodarilo sa to. Skúste to znova.",
+      "too_many": "Tento počítač už má toľko priečinkov so zručnosťami, koľko môže použiť. Najprv niektorý odstráňte.",
+      "already_listed": "Tento priečinok už je v zozname.",
+      "missing": "Tento priečinok už neexistuje.",
+      "not_a_folder": "Toto už nie je priečinok.",
+      "no_skill_file": "V tomto priečinku nie je SKILL.md.",
+      "skill_file_not_regular": "SKILL.md musí byť bežný súbor, nie odkaz.",
+      "skill_file_too_large": "SKILL.md je príliš veľký na prečítanie.",
+      "unreadable": "Tento priečinok sa nepodarilo prečítať.",
+      "no_name": "Hlavička SKILL.md neobsahuje názov.",
+      "invalid_name": "Názov v SKILL.md môže obsahovať len písmená, číslice, bodky, pomlčky a podčiarkovníky a musí sa začínať písmenom alebo číslicou.",
+      "duplicate_name": "Zručnosť s týmto názvom už má iný priečinok v zozname.",
+      "runs_can_write": "Do tohto priečinka môžu miestne behy zapisovať, preto v ňom zručnosť byť nemôže.",
+      "network_folder": "Tento priečinok je na sieťovom úložisku. Zručnosti musia byť na vlastnom disku tohto počítača.",
+      "path_changed": "Niektorý nadradený priečinok sa zmenil. Odstráňte ho a pridajte znova."
+    }
   }
 }

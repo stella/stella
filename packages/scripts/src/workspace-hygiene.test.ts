@@ -817,10 +817,41 @@ describe("workspace hygiene", () => {
         },
         {
           message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
           path: "apps/web/package.json",
         },
       ]),
+    );
+  });
+
+  test("rejects the TypeScript 6 compiler API in apps/api", async () => {
+    const apiTypecheck = "bun ../../packages/scripts/src/api-typecheck.ts";
+    const declaring = createWorkspaceRoot({
+      apiPackageJson: {
+        devDependencies: { typescript6: "catalog:" },
+        name: "@stll/api",
+        scripts: { typecheck: apiTypecheck },
+      },
+      rootPackageJson: {},
+      webPackageJson: { name: "@stll/web" },
+    });
+    expect(await validateWorkspaceRoot(declaring, LOCAL)).toContainEqual({
+      message:
+        "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
+      path: "apps/api/package.json",
+    });
+
+    const clean = createWorkspaceRoot({
+      apiPackageJson: {
+        devDependencies: { tsrs: "catalog:" },
+        name: "@stll/api",
+        scripts: { typecheck: apiTypecheck },
+      },
+      rootPackageJson: {},
+      webPackageJson: { name: "@stll/web" },
+    });
+    expect(await validateWorkspaceRoot(clean, LOCAL)).not.toContainEqual(
+      expect.objectContaining({ path: "apps/api/package.json" }),
     );
   });
 
@@ -845,13 +876,40 @@ describe("workspace hygiene", () => {
 
     expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
       message:
-        "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
+        "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
+      path: "packages/scripts/package.json",
+    });
+  });
+
+  test("the TypeScript 6 root-only check sees an npm alias", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {},
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+    writeFileSync(
+      path.join(rootDir, "packages/scripts/package.json"),
+      JSON.stringify({
+        dependencies: { compiler: "npm:typescript@6.0.3" },
+        name: "@stll/scripts",
+        scripts: {
+          typecheck: "bun check --no-pretty --all --project=tsconfig.json",
+        },
+      }),
+    );
+
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+      message:
+        "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
       path: "packages/scripts/package.json",
     });
   });
 });
 
 type CreateWorkspaceRootOptions = {
+  apiPackageJson?: Record<string, unknown>;
   mobilePackageJson?: Record<string, unknown>;
   rootPackageJson: Record<string, unknown>;
   webPackageJson: Record<string, unknown>;
@@ -861,6 +919,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 const createWorkspaceRoot = ({
+  apiPackageJson,
   mobilePackageJson,
   rootPackageJson,
   webPackageJson,
@@ -899,7 +958,7 @@ const createWorkspaceRoot = ({
   writeFileSync(
     path.join(rootDir, "apps/api/package.json"),
     JSON.stringify({
-      devDependencies: { typescript6: "catalog:" },
+      devDependencies: { tsrs: "catalog:" },
       name: "@stll/api",
       scripts: {
         typecheck: "bun check --no-pretty --all --project=tsconfig.json",
@@ -937,6 +996,13 @@ const createWorkspaceRoot = ({
       },
     }),
   );
+
+  if (apiPackageJson) {
+    writeFileSync(
+      path.join(rootDir, "apps/api/package.json"),
+      JSON.stringify(apiPackageJson),
+    );
+  }
 
   if (mobilePackageJson) {
     mkdirSync(path.join(rootDir, "apps/mobile"), { recursive: true });

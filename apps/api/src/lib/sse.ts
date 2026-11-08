@@ -447,6 +447,36 @@ const enqueueOrDrop = <TConnection extends StreamConnection>({
   }
 };
 
+type AddStreamWithinLimitOptions<TConnection extends StreamConnection> = {
+  close: (connection: TConnection) => void;
+  connection: TConnection;
+  limit: number;
+  /** Whether a registered stream belongs to the same holder as `connection`. */
+  sameHolder: (registered: TConnection) => boolean;
+  set: Set<TConnection>;
+};
+
+/**
+ * Register a stream, keeping at most `limit` streams per holder in `set`: the
+ * holder's oldest streams beyond it are removed and closed. The newest stream
+ * is the one a reconnecting client reads, so closing older ones never ends the
+ * stream the client is waiting on.
+ */
+export const addStreamWithinLimit = <TConnection extends StreamConnection>({
+  close,
+  connection,
+  limit,
+  sameHolder,
+  set,
+}: AddStreamWithinLimitOptions<TConnection>): void => {
+  set.add(connection);
+  const held = [...set].filter(sameHolder);
+  for (const stale of held.slice(0, Math.max(0, held.length - limit))) {
+    set.delete(stale);
+    close(stale);
+  }
+};
+
 /**
  * Register a new SSE connection for a workspace.
  * Returns a ReadableStream that stays open until the client disconnects.
@@ -494,7 +524,15 @@ export const subscribe = ({
         set = new Set();
         connections.set(workspaceId, set);
       }
-      set.add(conn);
+      addStreamWithinLimit({
+        close: (stale) => {
+          closeControllerQuietly(stale.controller);
+        },
+        connection: conn,
+        limit: LIMITS.sseStreamsPerSession,
+        sameHolder: (registered) => registered.sessionId === sessionId,
+        set,
+      });
 
       const cleanup = () => {
         set.delete(conn);
@@ -551,7 +589,15 @@ export const subscribeUser = ({
         set = new Set();
         userConnections.set(userId, set);
       }
-      set.add(conn);
+      addStreamWithinLimit({
+        close: (stale) => {
+          closeControllerQuietly(stale.controller);
+        },
+        connection: conn,
+        limit: LIMITS.sseStreamsPerSession,
+        sameHolder: (registered) => registered.sessionId === sessionId,
+        set,
+      });
 
       const cleanup = () => {
         set.delete(conn);

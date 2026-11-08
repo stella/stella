@@ -587,7 +587,10 @@ jobs:
                 });
                 for (const run of runs) {
                   if (run.id >= context.runId || run.head_sha !== pull.head.sha
-                      || !run.pull_requests?.some((linked) => linked.number === pull.number)
+                      || !(run.pull_requests?.some((linked) => linked.number === pull.number)
+                        // GitHub links no pull request to a run from a fork.
+                        || (!run.pull_requests?.length && run.head_repository?.id === pull.head.repo?.id
+                          && run.head_branch === pull.head.ref))
                       || run.conclusion === "cancelled") continue;
                   if (run.status !== "completed") {
                     mirrorsCodeRun = true;
@@ -4152,6 +4155,17 @@ jobs:
         # copies, so a change that rejects one of its writes cannot reach main.
         run: bun --env-file=.env.example run db:seed-local
 
+      - name: Replay the local dev seed
+        if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
+        timeout-minutes: 5
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella
+          NODE_ENV: development
+          STELLA_LOCAL_DEV: "1"
+        # Every later `bun run agent:up` seeds the database it already has.
+        run: bun --env-file=.env.example run db:seed-local
+
       - name: Configure ephemeral Postgres fixture maintenance
         working-directory: apps/api
         env:
@@ -5054,6 +5068,8 @@ jobs:
           --file apps/web/Dockerfile
           --build-arg PUBLIC_API_URL=https://api.smoke.invalid
           --build-arg PUBLIC_APP_URL=https://app.smoke.invalid
+          --build-arg S3_BUCKET=documents
+          --build-arg S3_ENDPOINT=https://objects.smoke.invalid
           --tag stella-web-runner:ci
           .
 
@@ -5242,7 +5258,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: read
@@ -5312,6 +5328,27 @@ jobs:
         if: failure() && steps.network-baseline.outcome == 'failure'
         run: |
           echo "::error::Network baseline failed. Fix unintended regressions; for intentional route changes, add the baseline:record label to this PR, then review the recorded budgets and resolve the recorder's review thread."
+
+      # Same stack and route table, on the narrowest current iPhone in WebKit.
+      - name: Check phone layouts
+        if: >-
+          !cancelled()
+          && steps.e2e-stack.outcome == 'success'
+        timeout-minutes: 8
+        id: phone-layout
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-phone-layouts.json
+          E2E_EXPECT_DEV_ROUTES: "false"
+          E2E_OUTPUT_DIR: test-results/phone-layout
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:phone
+
+      - name: Upload phone layout report
+        if: always() && steps.phone-layout.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: phone-layout-pr-blob
+          path: apps/web/e2e/test-results/phone-layout/blob-report/
+          retention-days: 7
 
       - name: Upload route smoke report
         if: always()
@@ -7364,6 +7401,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || inputs.sha || github.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || needs.ci-plan.outputs.target_base_sha }}
           HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PATCH_ID: ${{ needs.ci-plan.outputs.patch_id }}
           WORKFLOW_VERSION: ${{ needs.ci-plan.outputs.pr_depth_workflow_version }}
           TESTED_TREE: ${{ needs.ci-plan.outputs.tested_tree }}
@@ -7544,10 +7582,15 @@ jobs:
                 echo "::error::Metadata mirror could not list CI code runs."
                 return 1
               }
-              candidates=$(jq -cr --argjson current "$GITHUB_RUN_ID" --argjson pr "$PR_NUMBER" --arg head "$HEAD_SHA" '
+              # GitHub links no pull request to a run from a fork, so a fork run
+              # counts when it ran this head from the pull request's own branch.
+              candidates=$(jq -cr --argjson current "$GITHUB_RUN_ID" --argjson pr "$PR_NUMBER" --arg head "$HEAD_SHA" \
+                --arg head_repo "${HEAD_REPO_ID:-}" --arg head_ref "${HEAD_REF:-}" '
                 [.[].workflow_runs[]
                   | select(.id < $current and .head_sha == $head)
-                  | select(any(.pull_requests[]?; .number == $pr))]
+                  | select(any(.pull_requests[]?; .number == $pr)
+                      or ((.pull_requests // [] | length) == 0 and $head_repo != "" and $head_ref != ""
+                        and (.head_repository.id | tostring) == $head_repo and .head_branch == $head_ref))]
                 | sort_by(.run_number, .id) | reverse | .[]
                 | select(.status | type == "string")
                 | "\(.id) \(.status)"

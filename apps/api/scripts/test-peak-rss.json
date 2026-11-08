@@ -4520,14 +4520,6 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/case-law/ingestion/parsers/pl-operative-verbs.test.ts": {
-      "peakMb": 224,
-      "baselineMb": 224,
-      "source": {
-        "runId": "41265299690",
-        "job": "measure-1"
-      }
-    },
     "src/handlers/case-law/ingestion/parsers/pl-sn-ii-cskp.test.ts": {
       "peakMb": 212,
       "baselineMb": 212,

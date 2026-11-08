@@ -27,6 +27,7 @@ import {
   assembleCzRegionalDecision,
   buildCzRegionalDecision,
   czRegionalAdapter,
+  czRegionalCaseNumberOf,
   czRegionalEnvelopeWithChain,
   czRegionalListingIdentity,
   fetchCzRegionalAffectingDocs,
@@ -267,6 +268,49 @@ describe("the stored payload is an envelope of every response read", () => {
     expect(rejected).toMatchObject({
       type: "rejected",
       rejection: "unsupported-content",
+    });
+  });
+});
+
+describe("the docket keeps the court's registry spelling", () => {
+  test("the registry is spelled as the row's own ECLI spells it", () => {
+    // The listing prints "14 CO 25/2022-60"; the court's ECLI "14.Co.25.2022".
+    expect(
+      czRegionalCaseNumberOf({
+        jednaciCislo: "14 CO 25/2022-60",
+        ecli: "ECLI:CZ:KSBR:2023:14.Co.25.2022.1",
+      }),
+    ).toEqual({ caseNumber: "14 Co 25/2022", sheetNumber: "60" });
+    expect(
+      czRegionalCaseNumberOf({
+        jednaciCislo: "16 CO 179/2022-123",
+        ecli: "ECLI:CZ:KSOS:2022:16.Co.179.2022.1",
+      }).caseNumber,
+    ).toBe("16 Co 179/2022");
+  });
+
+  test("an ECLI of another docket, or none, leaves the docket as printed", () => {
+    expect(
+      czRegionalCaseNumberOf({
+        jednaciCislo: "14 CO 25/2022-60",
+        ecli: "ECLI:CZ:KSBR:2023:14.Co.26.2022.1",
+      }).caseNumber,
+    ).toBe("14 CO 25/2022");
+    expect(
+      czRegionalCaseNumberOf({ jednaciCislo: "12 C 157/2022-45", ecli: null })
+        .caseNumber,
+    ).toBe("12 C 157/2022");
+  });
+
+  test("the listing identity keys the row by the docket it is stored under", () => {
+    const raw = {
+      jednaciCislo: "14 CO 25/2022-60",
+      soud: "Krajský soud v Brně",
+      ecli: "ECLI:CZ:KSBR:2023:14.Co.25.2022.1",
+    };
+    expect(czRegionalListingIdentity(raw)).toMatchObject({
+      type: "case-number",
+      caseNumber: "14 Co 25/2022",
     });
   });
 });

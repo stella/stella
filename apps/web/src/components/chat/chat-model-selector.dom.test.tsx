@@ -42,6 +42,7 @@ const LOCAL_TARGET = {
   kind: "local",
   harness: "codex",
   model: "gpt-5-codex",
+  approvals: "ask",
 } as const satisfies ChatRunTarget;
 
 const READINESS: ChatLocalRunReadiness = {
@@ -57,6 +58,7 @@ const READINESS: ChatLocalRunReadiness = {
           state: "ready",
           version: "0.50.0",
           capabilities: ["approvals"],
+          approvalModes: ["ask"],
           models: [{ id: "gpt-5-codex", label: "GPT-5 Codex" }],
         },
       ],

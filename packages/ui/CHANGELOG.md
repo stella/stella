@@ -1,5 +1,33 @@
 # @stll/ui
 
+## 0.67.0
+
+### Minor Changes
+
+- [#7934](https://github.com/stella/stella/pull/7934) [`4c623bb`](https://github.com/stella/stella/commit/4c623bbc19a13167e06f819783849e10c8cbddc0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ColorPicker` takes its popover trigger as `trigger`, a single element that becomes the trigger itself instead of being wrapped in a second button. `children` is removed; pass `nativeButton={false}` when the trigger is not a native `<button>`.
+
+- [#7630](https://github.com/stella/stella/pull/7630) [`61932c3`](https://github.com/stella/stella/commit/61932c325b3ce81881dbd917961a301891b7d949) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `EntityActions` and `EntityActionsButton` (`@stll/ui/entity-actions`): an object's actions from one list, opened by its "…" button and by right-click with the same items. Shift + right-click, editable text, links and selected text keep the native menu, and a nested object answers before the one around it. `@stll/ui/native-context-menu` exports the predicates, including the narrower one a desktop webview applies. `ContextMenuActionItems` (`@stll/ui/context-menu`) renders an action list inside any menu popup.
+
+- [#7985](https://github.com/stella/stella/pull/7985) [`fa90f18`](https://github.com/stella/stella/commit/fa90f18c69c45e42359e2c5dc2e4511bf69466df) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `portraits` and `portraitCredit` to `OutlineItem`: the people an outline entry is about. The tick stays a tick and shows them in a card on hover or focus, the panel row shows their faces, and such an entry stays on the rail however dense the outline gets.
+
+- [#7437](https://github.com/stella/stella/pull/7437) [`b137d1b`](https://github.com/stella/stella/commit/b137d1b048e6d36123ba60d24ab99baaf8208de7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/kbd` (key caps that spell modifiers for the reader's platform, hydration-safe), used by `MenuShortcut` and a new `TooltipPopup` `shortcut` prop. Add `MenuLinkItem`. A loading `Button` keeps its width. `Textarea` takes `maxRows` and `showCount`. `DetailsGrid` takes `orientation="auto"` (by container width) and `labelWidth`, and an item with no value draws a dash.
+
+### Patch Changes
+
+- [#7285](https://github.com/stella/stella/pull/7285) [`50c904c`](https://github.com/stella/stella/commit/50c904c50877280367403165f00ef5d92663b23c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The theme defines `--auth-gradient-end`, `--error-gradient-end` and `--shadow-tint`, and a `category-tile` utility that colours a tile from its `--cat-hue`.
+
+## 0.66.0
+
+### Minor Changes
+
+- [#7897](https://github.com/stella/stella/pull/7897) [`21f18d7`](https://github.com/stella/stella/commit/21f18d7eae6c328149c77ebf2a1baff624de33c6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DayCalendar` blocks take a `topic` tone: a lighter tint from the matter palette, keyed by a stable topic key and drawn without a matter's edge. `mixed` blocks no longer draw diagonal stripes.
+
+- [#7899](https://github.com/stella/stella/pull/7899) [`e5ee9a9`](https://github.com/stella/stella/commit/e5ee9a9c120441b0bea4476df78e1432ace3146d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `TimeField` and `TimeFieldGroup` (`@stll/ui/time-field`): a wall-clock time to the minute as hour and minute selects in the locale's own clock and numerals. Fields in one `TimeFieldGroup` share a grid, so their labels, hours and minutes line up; in a narrow container each label moves above its selects, which never shrink below their value. The date picker's time row now uses it.
+
+- [#7619](https://github.com/stella/stella/pull/7619) [`254bf05`](https://github.com/stella/stella/commit/254bf058b481c2ea137f8e37664a37b80c537190) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `AnimatedPreview` (`@stll/ui/animated-preview`): a frame of ordered stages that cross-fade into each other once or in a loop, nestable inside a stage, with `AnimatedPreviewMotion` for a carry gesture and `AnimatedPreviewCard` for a hover and focus preview that describes its trigger. Reduced motion shows the final stage statically; the styles ship through `@stll/ui/theme.css`, and `@stll/ui/use-prefers-reduced-motion` exports the preference hook.
+
+- [#7867](https://github.com/stella/stella/pull/7867) [`72b68c8`](https://github.com/stella/stella/commit/72b68c8fc423618a9e060ead157dc3f2f30e1583) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `DocumentMark` (`@stll/ui/document-mark`), a file format's mark (PDF, Word, Excel, PowerPoint, RTF, ODT, ODS, CSV, Markdown) drawn from one artwork source, with a React Native renderer under the `react-native` condition.
+
 ## 0.65.1
 
 ### Patch Changes

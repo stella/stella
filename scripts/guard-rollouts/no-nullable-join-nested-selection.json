@@ -1,0 +1,22 @@
+{
+  "id": "no-nullable-join-nested-selection",
+  "rules": [
+    "no-nullable-join-nested-selection/no-nullable-join-nested-selection"
+  ],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-11T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-nullable-join-nested-selection/no-nullable-join-nested-selection",
+    "apps",
+    "packages",
+    "scripts"
+  ]
+}

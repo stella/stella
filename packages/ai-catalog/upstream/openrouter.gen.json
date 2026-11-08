@@ -175,6 +175,12 @@
       }
     },
     {
+      "id": "deepseek/deepseek-v4-flash-0731:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "deepseek/deepseek-v4-flash-vision-exp",
       "reasoning": {
         "default_effort": "high"
@@ -200,6 +206,12 @@
     },
     {
       "id": "deepseek/deepseek-v4.1-flash-1017",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "deepseek/deepseek-v4.1-flash-1017:batch",
       "reasoning": {
         "default_effort": "high"
       }
@@ -361,6 +373,18 @@
       }
     },
     {
+      "id": "google/gemini-omni-1.1-flash",
+      "reasoning": {
+        "default_effort": "low"
+      }
+    },
+    {
+      "id": "google/gemini-omni-1.2-flash",
+      "reasoning": {
+        "default_effort": "low"
+      }
+    },
+    {
       "id": "ibm-granite/granite-4.2-8b",
       "reasoning": {
         "default_effort": "high"
@@ -386,6 +410,12 @@
     },
     {
       "id": "meta/muse-glimmer-30b",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "meta/muse-glimmer-30b:batch",
       "reasoning": {
         "default_effort": "medium"
       }
@@ -949,6 +979,12 @@
       }
     },
     {
+      "id": "qwen/qwen3.8-27b:batch",
+      "reasoning": {
+        "default_effort": "xhigh"
+      }
+    },
+    {
       "id": "qwen/qwen3.8-max-0902",
       "reasoning": {
         "default_effort": "xhigh"
@@ -1045,13 +1081,7 @@
       }
     },
     {
-      "id": "thinkingmachines/inkling-small:free",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
-      "id": "thinkingmachines/inkling:free",
+      "id": "thinkingmachines/inkling-small:batch",
       "reasoning": {
         "default_effort": "high"
       }
@@ -1118,6 +1148,12 @@
     },
     {
       "id": "z-ai/glm-5.2",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.2:batch",
       "reasoning": {
         "default_effort": "high"
       }

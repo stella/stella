@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use ammonia::Builder as HtmlSanitizer;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::{DateTime, Duration, Utc};
@@ -35,8 +36,8 @@ use crate::{
   config::APP_DATA_DIR_NAME,
   desktop_telemetry::{
     DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
-    DesktopTelemetryOperation, DesktopTelemetrySpan, DesktopTelemetryWindow,
-    DesktopTimingReport,
+    DesktopTelemetryOperation, DesktopTelemetryReason, DesktopTelemetrySpan,
+    DesktopTelemetryWindow, DesktopTimingReport,
   },
   foreground_app::{AppExclusion, normalize_exclusions, normalized_identifier},
   foreground_app_visual::{
@@ -3297,11 +3298,14 @@ impl ClipboardHandler for HistoryClipboardHandler {
     #[cfg(target_os = "macos")]
     if let Err(error) = manager.reconcile_image_exports() {
       tracing::warn!(error = %error, "replaced clipboard image export cleanup will be retried");
-      self.telemetry.capture(DesktopErrorReport {
-        window: DesktopTelemetryWindow::Clipboard,
-        operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-        code: DesktopTelemetryErrorCode::PersistenceFailed,
-      });
+      self.telemetry.capture_with_reason(
+        DesktopErrorReport {
+          window: DesktopTelemetryWindow::Clipboard,
+          operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+          code: DesktopTelemetryErrorCode::PersistenceFailed,
+        },
+        DesktopTelemetryReason::ImageExportCleanup,
+      );
     }
     if is_internal_clipboard_write(&formats) {
       manager.clear_suppression();
@@ -3462,11 +3466,14 @@ impl HistoryClipboardHandler {
           }
           Err(error) => {
             tracing::error!(error = %error, "clipboard capture could not be persisted");
-            self.telemetry.capture(DesktopErrorReport {
-              window: DesktopTelemetryWindow::Clipboard,
-              operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-              code: DesktopTelemetryErrorCode::PersistenceFailed,
-            });
+            self.telemetry.capture_with_reason(
+              DesktopErrorReport {
+                window: DesktopTelemetryWindow::Clipboard,
+                operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+                code: DesktopTelemetryErrorCode::PersistenceFailed,
+              },
+              DesktopTelemetryReason::HistoryCapture,
+            );
             return ClipboardCaptureOutcome::Rejected;
           }
         }
@@ -3482,7 +3489,10 @@ impl HistoryClipboardHandler {
       }
     };
     if let Some(update) = update {
-      let _ = self.app.emit(HISTORY_EVENT, update);
+      best_effort(
+        self.app.emit(HISTORY_EVENT, update),
+        "clipboard history change was not announced",
+      );
     }
     outcome
   }
@@ -3876,7 +3886,10 @@ pub fn initialize_and_watch(
     });
     return;
   }
-  let _ = app.emit(HISTORY_EVENT, ());
+  best_effort(
+    app.emit(HISTORY_EVENT, ()),
+    "clipboard history change was not announced",
+  );
 
   let retention_manager = Arc::clone(&manager);
   let retention_app = app.clone();
@@ -3891,11 +3904,14 @@ pub fn initialize_and_watch(
           Ok(changed) => changed,
           Err(error) => {
             tracing::error!(error = %error, "expired clipboard history could not be removed");
-            retention_telemetry.capture(DesktopErrorReport {
-              window: DesktopTelemetryWindow::Clipboard,
-              operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-              code: DesktopTelemetryErrorCode::PersistenceFailed,
-            });
+            retention_telemetry.capture_with_reason(
+              DesktopErrorReport {
+                window: DesktopTelemetryWindow::Clipboard,
+                operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+                code: DesktopTelemetryErrorCode::PersistenceFailed,
+              },
+              DesktopTelemetryReason::RetentionSweep,
+            );
             false
           }
         },
@@ -3910,7 +3926,10 @@ pub fn initialize_and_watch(
         }
       };
       if changed {
-        let _ = retention_app.emit(HISTORY_EVENT, ());
+        best_effort(
+          retention_app.emit(HISTORY_EVENT, ()),
+          "clipboard history change was not announced",
+        );
       }
     }
   });

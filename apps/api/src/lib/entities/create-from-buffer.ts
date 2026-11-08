@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
@@ -393,7 +394,7 @@ export const createEntityFromBuffer = async ({
         // Callers authorize the matter before producing the bytes; the status
         // is read again under the lock so a matter archived or scheduled for
         // deletion in between receives nothing.
-        if (workspaceStatus !== "active") {
+        if (!workspaceAcceptsWrites(workspaceStatus)) {
           throw documentWriteRefusal(
             workspaceStatus === undefined
               ? "workspace-not-found"

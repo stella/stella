@@ -6,6 +6,7 @@ import { Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
+import { createFormatter } from "use-intl/core";
 
 import {
   AI_ERROR_KINDS,
@@ -31,6 +32,7 @@ import type {
   ChatUIMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { withLocalRunLimitResetsAt } from "@/features/chat/chat-local-run-limit";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
@@ -41,6 +43,7 @@ import {
   translateError,
 } from "@/lib/errors/localization";
 import { ProviderDiagnosticError } from "@/lib/errors/provider-diagnostic";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
@@ -374,7 +377,6 @@ describe("chat thread messages", () => {
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
-        showThinkingIndicator
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
@@ -398,7 +400,6 @@ describe("chat thread messages", () => {
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
-        showThinkingIndicator={false}
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
@@ -427,6 +428,61 @@ describe("chat thread messages", () => {
       expect(renderedText(html)).not.toContain(messages.chat.sendError);
     },
   );
+
+  test("a local run's usage limit says when it resets, in the member's locale and time zone, live and after a reload", () => {
+    const resetsAt = "2026-11-08T09:30:00.000Z";
+    const inZone = (timeZone: string, error: Error) =>
+      renderedText(
+        renderToStaticMarkup(
+          <IntlProvider locale="en" messages={messages} timeZone={timeZone}>
+            <FormattingProvider locale="en" timeZone={timeZone}>
+              <ChatErrorMessage error={error} isGenerating={false} />
+            </FormattingProvider>
+          </IntlProvider>,
+        ),
+      );
+    const expected = (timeZone: string) =>
+      messages.chat.localRun.errorLimitResetsAt.replace("{time}", () =>
+        createFormatter({ locale: "en", timeZone }).dateTime(
+          new Date(resetsAt),
+          MEDIUM_DATE_SHORT_TIME_FORMAT,
+        ),
+      );
+    const stored = {
+      id: "assistant-limited",
+      role: "assistant",
+      parts: [],
+      metadata: {
+        turnOutcome: {
+          type: "failed",
+          error: "local_runner_limit_reached",
+          limitResetsAt: resetsAt,
+        },
+      },
+    } satisfies PersistedChatMessage;
+    const reloaded =
+      getChatAssistantTurnError(structuredClone(stored)) ??
+      new Error("no turn error");
+    const live = withLocalRunLimitResetsAt(
+      new Error("local_runner_limit_reached"),
+      resetsAt,
+    );
+    for (const error of [reloaded, live]) {
+      expect(inZone("Europe/Prague", error)).toContain(
+        expected("Europe/Prague"),
+      );
+      expect(inZone("America/New_York", error)).toContain(
+        expected("America/New_York"),
+      );
+    }
+    // The fixture differs by zone, so the zone is what changed the text.
+    expect(expected("Europe/Prague")).not.toBe(expected("America/New_York"));
+
+    // Without a known reset the notice keeps its plain copy.
+    expect(inZone("UTC", new Error("local_runner_limit_reached"))).toContain(
+      messages.chat.localRun.errorLimitReached,
+    );
+  });
 
   test("an unknown AI failure keeps the chat's own copy", () => {
     const html = renderWithProviders(
@@ -1085,8 +1141,9 @@ describe("chat thread messages", () => {
         "Reading cited documents with create-document.",
       );
       expect(output).not.toContain("**");
-      expect(output).not.toContain('data-slot="loader"');
-      expect(output).not.toContain("Working with context");
+      expect(output.match(/data-slot="loader"/gu)).toHaveLength(1);
+      expect(output.match(/data-turn-live-status/gu)).toHaveLength(1);
+      expect(renderedText(output)).toContain(messages.chat.thinking);
     }
   });
 
@@ -1292,6 +1349,58 @@ describe("chat thread messages", () => {
     expect(html).toContain('aria-label="Preview: evidence.png"');
     expect(html).not.toContain('target="_blank"');
     expect(html).not.toContain('href="/v1/user-files/file_test123/content"');
+  });
+
+  describe("an answer's files", () => {
+    const fileUrl = "stella://file::file_report";
+    const documentPart = {
+      type: "document",
+      source: { type: "url", value: fileUrl, mimeType: "text/html" },
+      metadata: { filename: "report.html" },
+    } as const;
+    const render = (message: Partial<ChatUIMessage>) =>
+      renderWithProviders(
+        <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+          approvalPendingMessageId={null}
+          messages={[
+            {
+              id: "answer",
+              role: "assistant",
+              parts: [{ type: "text", content: "It is ready." }, documentPart],
+              ...message,
+            },
+          ]}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+
+    test("opens from a chip under the answer", () => {
+      const html = render({});
+      expect(html).toContain("It is ready.");
+      expect(html).toContain("report.html");
+      expect(html).toContain('/v1/user-files/file_report/content"');
+    });
+
+    test("an answer holding only a file still shows it", () => {
+      const html = render({ parts: [documentPart] });
+      expect(html).toContain("report.html");
+    });
+
+    test("names what could not be shared", () => {
+      const html = render({
+        parts: [{ type: "text", content: "It is ready." }],
+        metadata: { localRunFilesNotShared: ["data.zip", "dump.bin"] },
+      });
+      expect(html).toContain(
+        "Files that could not be shared stay on your computer: data.zip, dump.bin",
+      );
+    });
   });
 
   test("does not render remote image attachment URLs", () => {

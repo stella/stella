@@ -132,6 +132,28 @@ describe("sidecar protocol fixtures", () => {
     }
   });
 
+  test("an invalid message names the run it was for, when it named one validly", () => {
+    const runId = "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f";
+    expect(
+      parseSidecarHostLine(JSON.stringify({ type: "run.start", runId })),
+    ).toEqual({
+      type: "rejected",
+      reason: "invalid",
+      messageType: "run.start",
+      runId,
+    });
+    expect(
+      parseSidecarHostLine(
+        JSON.stringify({ type: "run.start", runId: "not-a-run-id" }),
+      ),
+    ).toEqual({
+      type: "rejected",
+      reason: "invalid",
+      messageType: "run.start",
+      runId: null,
+    });
+  });
+
   test("an unknown type keeps its name, bounded, in the rejection", () => {
     expect(
       parseSidecarHostLine(JSON.stringify({ type: "x".repeat(200) })),

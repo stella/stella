@@ -14,10 +14,10 @@ import { describe, expect, spyOn, test } from "bun:test";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import {
-  extractPlPdfLetterheadContent,
-  PL_PDF_PARAGRAPH_START,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
-import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import type { PdfLine } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import {
   parsePlUokikDocument as uncheckedParsePlUokikDocument,
   PL_UOKIK_RULING_UNREAD,
@@ -73,6 +73,15 @@ const DDK_2_2017 = new URL(
   import.meta.url,
 );
 
+/**
+ * A 2018 decision whose first page alone prints the office's letterhead
+ * footer, under a list of the operative part that runs on to the next page.
+ */
+const RBG_11_2018 = new URL(
+  "__fixtures__/pl-uokik-rbg-11-2018.pdf",
+  import.meta.url,
+);
+
 /** A 2017 decision numbering its pages `Strona N z M`, indented with spaces. */
 const DIH_48_2017 = new URL(
   "__fixtures__/pl-uokik-dih-48-2017.pdf",
@@ -97,9 +106,10 @@ const inputOf = (pdfs: Uint8Array[]): ParsePlUokikDocumentInput => ({
 
 /**
  * The lines the reader drops on purpose, named one by one: the Gdańsk
- * delegation's footer. Page numbers additionally need their own page's
- * number in the centered footer position. All other numeric text remains
- * in the oracle, including separately extracted raised spans.
+ * delegation's running footer and the Bydgoszcz delegation's first-page
+ * letterhead footer. Page numbers additionally need their own page's number
+ * in the centered footer position. All other numeric text remains in the
+ * oracle, including separately extracted raised spans.
  */
 const DROPPED_ON_PURPOSE: readonly RegExp[] = [
   /^Strona \d+ z \d+$/u,
@@ -109,6 +119,10 @@ const DROPPED_ON_PURPOSE: readonly RegExp[] = [
   /^gdansk@uokik\.gov\.pl/u,
   /^ul\. Podwale Przedmiejskie 30/u,
   /^80-824 Gdańsk, ul\. Podwale Przedmiejskie 30/u,
+  /^Sprawę prowadził:$/u,
+  /^\p{Lu}\p{Ll}+ \p{Lu}\p{Ll}+ – Zastępca Dyrektora Delegatury$/u,
+  /^Delegatura w Bydgoszczy bydgoszcz@uokik\.gov\.pl/u,
+  /^ul\. Długa 47 85-034 Bydgoszcz$/u,
 ];
 
 /**
@@ -184,6 +198,7 @@ describe("a UOKiK decision PDF", () => {
     ["a 2026 decision", RGD_9_2026],
     ["a 2017 decision set apart by spacing", DDK_2_2017],
     ["a 2017 decision numbering its pages", DIH_48_2017],
+    ["a 2018 decision with a first-page letterhead footer", RBG_11_2018],
   ])("%s keeps every word its text layer prints", async (_, fixture) => {
     const pdfs = [await bytesOf(fixture)];
     const parsed = await parsePlUokikDocument(inputOf(pdfs));
@@ -446,6 +461,28 @@ describe("a UOKiK decision read as the office sets its pages", () => {
 
 // ── Each rule that drops a line, on a PDF built for it ───
 
+describe("a UOKiK decision whose first page carries the office's letterhead footer", () => {
+  test("the footer leaves the text, and the list it was printed under runs on", async () => {
+    const parsed = await parsePlUokikDocument(
+      inputOf([await bytesOf(RBG_11_2018)]),
+    );
+    const texts = (parsed?.documentAst.blocks ?? []).map(
+      ({ plainText }) => plainText,
+    );
+    const all = texts.join("\n");
+    expect(all).not.toContain("Sprawę prowadził");
+    expect(all).not.toContain("bydgoszcz@uokik.gov.pl");
+    expect(all).not.toContain("ul. Długa 47");
+    const point = texts.indexOf("c) karty płatnicze,");
+    expect(point).toBeGreaterThan(-1);
+    expect(texts.at(point + 1)).toStartWith(
+      "- istotnych informacji umożliwiających ustalenie przez konsumentów",
+    );
+    // The office's place and name in the text itself stay.
+    expect(all).toContain("Bydgoszcz, dnia 27 sierpnia 2018 r.");
+  });
+});
+
 type Drawn = { text: string; x: number; y: number; size: number };
 
 const BODY_LINES = [
@@ -470,11 +507,11 @@ const builtPdf = async (pages: readonly (readonly Drawn[])[]) => {
 };
 
 const readBuilt = async (pages: readonly (readonly Drawn[])[]) => {
-  const { body, notes } = await extractPlPdfLetterheadContent(
+  const { body, notes } = await extractPdfBodyAndNotes(
     await builtPdf(pages),
-    PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+    PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
   );
-  const textOf = (lines: readonly PlSnLine[]) =>
+  const textOf = (lines: readonly PdfLine[]) =>
     lines.flatMap((line) =>
       line.type === "text" ? [line.runs.map(({ text }) => text).join("")] : [],
     );
@@ -734,7 +771,7 @@ const headerOf = async (fixture: URL) =>
   readPlUokikRulingHeader(await plUokikDocumentLines([await bytesOf(fixture)]));
 
 /** Lines as a text layer states them, for headers no capture holds. */
-const typeset = (lines: readonly string[]): PlSnLine[] =>
+const typeset = (lines: readonly string[]): PdfLine[] =>
   lines.map((text) => ({
     type: "text",
     runs: [{ text, bold: false }],

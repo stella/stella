@@ -14,11 +14,13 @@ const REMOVED_AST_FACADE_MODULE_IDS = new Set([
 ]);
 
 const ALLOWED_LEAF_IMPORTS = new Set([
+  "@/api/db/account-erasure-policies",
   "@/api/db/agent-auth-schema",
   "@/api/db/auth-schema",
   "@/api/db/backfill-runtime",
   "@/api/db/billing-validators",
   "@/api/db/case-law-court-activity-indexes",
+  "@/api/db/case-law-sitemap-indexes",
   "@/api/db/case-law-parsed-input-state",
   "@/api/db/columns",
   "@/api/db/connection-budget",

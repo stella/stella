@@ -762,6 +762,26 @@
   {
     "schema": "public",
     "table": "billing_draft_user_settings",
+    "policy": "account_erasure_owner_delete",
+    "command": "DELETE",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('billing_draft_user_settings'::regclass)::oid))) AND (user_id = NULLIF(current_setting('app.account_erasure_user_id'::text, true), ''::text)))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "billing_draft_user_settings",
+    "policy": "account_erasure_owner_select",
+    "command": "SELECT",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('billing_draft_user_settings'::regclass)::oid))) AND (user_id = NULLIF(current_setting('app.account_erasure_user_id'::text, true), ''::text)))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "billing_draft_user_settings",
     "policy": "user_delete",
     "command": "DELETE",
     "roles": ["stella"],
@@ -8032,6 +8052,26 @@
   {
     "schema": "public",
     "table": "legal_reader_annotations",
+    "policy": "account_erasure_owner_delete",
+    "command": "DELETE",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('legal_reader_annotations'::regclass)::oid))) AND (user_id = NULLIF(current_setting('app.account_erasure_user_id'::text, true), ''::text)) AND (visibility = 'private'::text))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "legal_reader_annotations",
+    "policy": "account_erasure_owner_select",
+    "command": "SELECT",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('legal_reader_annotations'::regclass)::oid))) AND (user_id = NULLIF(current_setting('app.account_erasure_user_id'::text, true), ''::text)) AND (visibility = 'private'::text))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "legal_reader_annotations",
     "policy": "account_export_owner_select",
     "command": "SELECT",
     "roles": ["public"],
@@ -10648,6 +10688,26 @@
     "permissive": "PERMISSIVE",
     "using": "(((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)))",
     "withCheck": "(((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)))"
+  },
+  {
+    "schema": "public",
+    "table": "saved_time_narratives",
+    "policy": "account_erasure_owner_delete",
+    "command": "DELETE",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('saved_time_narratives'::regclass)::oid))) AND (user_id = NULLIF(current_setting('app.account_erasure_user_id'::text, true), ''::text)))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "saved_time_narratives",
+    "policy": "account_erasure_owner_select",
+    "command": "SELECT",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('saved_time_narratives'::regclass)::oid))) AND (user_id = NULLIF(current_setting('app.account_erasure_user_id'::text, true), ''::text)))",
+    "withCheck": null
   },
   {
     "schema": "public",

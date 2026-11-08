@@ -6,6 +6,7 @@ import type {
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
+  DesktopRunnerApprovalMode,
 } from "@stll/api-contract/desktop-runner";
 
 import type { StellaSandboxMcpBinding } from "../sandbox";
@@ -17,11 +18,12 @@ import type { HarnessTranscriptMessage } from "./transcript-handoff";
  * terms. The network is open: a local run's access to stella is bounded by
  * its short-lived, run-scoped MCP token, not by egress rules. Writes stay
  * inside the run's workspace directory, and the harness asks before acting
- * outside that.
+ * outside that. `approvals` sets how much it asks inside those bounds.
  */
 export type HarnessRunPolicy = {
   network: (typeof DESKTOP_RUNNER_NETWORK_POLICIES)[number];
   fs: (typeof DESKTOP_RUNNER_FS_POLICIES)[number];
+  approvals: DesktopRunnerApprovalMode;
 };
 
 export type HarnessCapability =
@@ -36,6 +38,17 @@ export type HarnessCapability =
 export type HarnessContinuationRequest =
   { type: "fresh" } | { type: "resume"; sessionId: HarnessSessionId };
 
+/**
+ * A skill folder the member listed on this computer. It reaches the turn from
+ * the desktop alone and is never sent to the API.
+ */
+export type HarnessSkillFolder = {
+  /** The skill's name, from its `SKILL.md`. */
+  name: string;
+  /** Absolute path of the folder holding that `SKILL.md`; never written to. */
+  path: string;
+};
+
 export type HarnessTurnInput = {
   /** Stella run id; stamped on every chunk the turn produces. */
   runId: string;
@@ -43,6 +56,18 @@ export type HarnessTurnInput = {
   threadId: string;
   /** Absolute directory the harness runs in and may write to. */
   workspaceDir: string;
+  /**
+   * Absolute stella-owned directory for package-manager caches, shared by
+   * the computer's runs; writable inside every harness sandbox.
+   */
+  cacheDir: string;
+  /** Skills the harness loads for the turn, through its own mechanism. */
+  skillFolders: readonly HarnessSkillFolder[];
+  /**
+   * Absolute directories of tools the desktop manages, such as Bun, which the
+   * turn's commands find ahead of what the computer has.
+   */
+  toolPath: readonly string[];
   /** A model id the harness itself reported through `probe`. */
   model: string;
   /** Developer instructions for the harness. */
@@ -104,7 +129,9 @@ export class HarnessStartError extends TaggedError("HarnessStartError")<{
     | "invalid_transcript"
     | "harness_unavailable"
     | "protocol_violation"
-    | "start_rejected";
+    | "start_rejected"
+    /** The run's approval mode needs a sandbox the harness cannot start. */
+    | "sandbox_unavailable";
   message: string;
 }> {}
 
@@ -131,6 +158,8 @@ export type HarnessProbe = {
   models: readonly HarnessModel[];
   /** What this harness and adapter can do, as the runner reports it. */
   capabilities: readonly HarnessCapability[];
+  /** The approval modes this computer can run the harness in. */
+  approvalModes: readonly DesktopRunnerApprovalMode[];
   /**
    * Set when the harness reports its plan limit exhausted with a known
    * reset; `null` when it reports none or cannot say when it resets.
