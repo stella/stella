@@ -9,8 +9,10 @@ import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { containsRawUuid } from "@/api/lib/chat/uuid-mask";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { runAsCorpusSearchCaller } from "@/api/lib/legal-search/corpus-index-admission";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { mcpPublicReadCallerKey } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
@@ -437,18 +439,23 @@ export const executeRegistryRead = async ({
   }
   const authorizedContext = authorization.context;
 
-  const response =
-    handler === undefined
-      ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
-          args: scoped.value,
-          context: authorizedContext,
-        })
-      : await runInjectedHandler({
-          args: scoped.value,
-          context: authorizedContext,
-          toolName,
-          handler,
-        });
+  const invoke = async (invokeArgs: Record<string, unknown>) =>
+    await runAsCorpusSearchCaller(
+      mcpPublicReadCallerKey(authorizedContext),
+      async () =>
+        handler === undefined
+          ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
+              args: invokeArgs,
+              context: authorizedContext,
+            })
+          : await runInjectedHandler({
+              args: invokeArgs,
+              context: authorizedContext,
+              toolName,
+              handler,
+            }),
+    );
+  const response = await invoke(scoped.value);
   const finished = await finalizeToolEgress({
     context: authorizedContext,
     mode: "default",
