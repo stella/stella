@@ -2,18 +2,32 @@ import { panic } from "better-result";
 
 import type { JustificationContent } from "@/api/db/schema";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
+import type { AnswerShape } from "@/api/lib/workflow/ai-answer-schema";
 
 /**
- * The exact wording of every verified block a justification cites. Only a
+ * A clause summary leaves the wording to its citations, so a grader has to read
+ * them. Any other answer carries its own wording, which may come from a source
+ * the citations do not reach.
+ */
+export const withGradingSource = (
+  content: JustificationContent,
+  answerShape: AnswerShape,
+): JustificationContent =>
+  answerShape === "clause-summary"
+    ? { ...content, gradeFrom: "cited-passages" }
+    : content;
+
+/**
+ * The exact wording of every verified block a clause summary cites. Only a
  * verified citation holds text the server looked up; an unverified one is
- * whatever the model typed, and a Bates citation points at a page with no text.
- *
- * An answer that also cites a PDF yields no passages. Its PDF terms exist only
- * in the answer, so grading the DOCX passages alone would miss them.
+ * whatever the model typed.
  */
 export const verifiedPassageTexts = (
   content: JustificationContent,
 ): string[] => {
+  if (content.gradeFrom !== "cited-passages") {
+    return [];
+  }
   const texts: string[] = [];
   for (const block of content.blocks) {
     switch (block.kind) {
@@ -27,7 +41,6 @@ export const verifiedPassageTexts = (
         }
         break;
       case "pdf-bates":
-        return [];
       case "playbook-verdict":
       case "decision-passage":
         break;

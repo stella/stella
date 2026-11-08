@@ -6,7 +6,11 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { isMissingCorpusObjectError } from "@/api/lib/s3";
-import { generateBatch } from "@/api/lib/workflow/generate-batch";
+import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
+import {
+  fetchAndPrepareFiles,
+  generateBatch,
+} from "@/api/lib/workflow/generate-batch";
 import type { GenerateBatchProps } from "@/api/lib/workflow/generate-batch-shared";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -33,6 +37,8 @@ const dependencies = {
   fetchInputFieldsForBatch: async () => [
     { id: fileFieldId, propertyId, content: fileContent },
   ],
+  fetchAndPrepareFiles,
+  generateWorkflowData,
 };
 
 // The object the PDF path reaches for: the input file's own id under the

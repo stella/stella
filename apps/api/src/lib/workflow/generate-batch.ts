@@ -26,6 +26,7 @@ import {
   fieldContentFromValidated,
   validateAIOutput,
 } from "@/api/lib/workflow/ai-validators";
+import { withGradingSource } from "@/api/lib/workflow/cited-passages";
 import {
   fetchInputFieldsForBatch,
   prepareBatchInput,
@@ -55,14 +56,6 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 // reuses the exact same file-preparation + citation-allow-list wiring the batch
 // workflow uses, instead of forking a parallel DOCX→blocks / PDF→bates path.
 export { isAISupportedFile };
-
-export type GenerateBatchDependencies = {
-  fetchInputFieldsForBatch: typeof fetchInputFieldsForBatch;
-};
-
-const defaultGenerateBatchDependencies = {
-  fetchInputFieldsForBatch,
-} satisfies GenerateBatchDependencies;
 
 const addBatesNumbers = async (
   pdfBuffer: ArrayBuffer,
@@ -252,6 +245,18 @@ export const buildJustificationFilenames = (
   return filenames;
 };
 
+export type GenerateBatchDependencies = {
+  fetchInputFieldsForBatch: typeof fetchInputFieldsForBatch;
+  fetchAndPrepareFiles: typeof fetchAndPrepareFiles;
+  generateWorkflowData: typeof generateWorkflowData;
+};
+
+const defaultGenerateBatchDependencies = {
+  fetchInputFieldsForBatch,
+  fetchAndPrepareFiles,
+  generateWorkflowData,
+} satisfies GenerateBatchDependencies;
+
 export const generateBatch = async (
   {
     abortSignal,
@@ -323,7 +328,7 @@ export const generateBatch = async (
     const preparedFiles = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await fetchAndPrepareFiles(
+          await dependencies.fetchAndPrepareFiles(
             resolvedFiles,
             organizationId,
             workspaceId,
@@ -353,7 +358,7 @@ export const generateBatch = async (
     );
 
     const generation = yield* Result.await(
-      generateWorkflowData({
+      dependencies.generateWorkflowData({
         entityVersionId,
         files: preparedFiles,
         properties: aiInputProperties,
@@ -377,7 +382,7 @@ export const generateBatch = async (
     const aiJustifications: AIJustification[] = [];
     const settlements = new Map<SafeId<"property">, BatchSettlement>();
 
-    for (const property of aiInputProperties) {
+    for (const property of generation.properties) {
       if (generation.refusedPropertyIds.has(property.id)) {
         settlements.set(property.id, "refused");
         continue;
@@ -412,6 +417,10 @@ export const generateBatch = async (
           fieldId,
           justificationId,
           ...justification,
+          content: withGradingSource(
+            justification.content,
+            property.answerShape,
+          ),
         });
       }
 

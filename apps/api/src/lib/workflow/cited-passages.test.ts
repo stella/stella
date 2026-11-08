@@ -4,11 +4,11 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import type { JustificationContent } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   sharePassages,
   verifiedPassageTexts,
+  withGradingSource,
 } from "@/api/lib/workflow/cited-passages";
 import { normalizeJustification } from "@/api/lib/workflow/parse-justifications";
 
@@ -77,15 +77,17 @@ describe("verifiedPassageTexts", () => {
       ],
     });
     const content = Result.unwrap(normalized)?.content;
-    expect(content && verifiedPassageTexts(content)).toEqual([
-      "Payable within 30 days.",
-    ]);
+    expect(
+      content &&
+        verifiedPassageTexts(withGradingSource(content, "clause-summary")),
+    ).toEqual(["Payable within 30 days."]);
   });
 
   test("a page citation has no text to pass on", () => {
     expect(
       verifiedPassageTexts({
         version: 1,
+        gradeFrom: "cited-passages",
         blocks: [
           {
             kind: "pdf-bates",
@@ -100,42 +102,6 @@ describe("verifiedPassageTexts", () => {
         ],
       }),
     ).toEqual([]);
-  });
-
-  test("an answer citing both a DOCX and a PDF has no passages, in either order", () => {
-    const docx = {
-      kind: "docx-folio",
-      fileFieldId,
-      statements: [
-        {
-          text: "Payment term.",
-          citations: [
-            {
-              citationStatus: "verified",
-              blockId: "b1",
-              text: "Payable within 30 days.",
-            },
-          ],
-        },
-      ],
-    } as const satisfies JustificationContent["blocks"][number];
-    const pdf = {
-      kind: "pdf-bates",
-      fileFieldId,
-      statements: [
-        {
-          text: "Late fee.",
-          citations: [{ bates: "F1-0002", pageNumber: 2 }],
-        },
-      ],
-    } as const satisfies JustificationContent["blocks"][number];
-
-    expect(verifiedPassageTexts({ version: 1, blocks: [docx, pdf] })).toEqual(
-      [],
-    );
-    expect(verifiedPassageTexts({ version: 1, blocks: [pdf, docx] })).toEqual(
-      [],
-    );
   });
 });
 

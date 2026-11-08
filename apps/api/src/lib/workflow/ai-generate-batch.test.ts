@@ -255,6 +255,31 @@ describe("resolveClauseAnswerShapes", () => {
     expect(shapeFor([docx], [textInput])).toBe("clause-quote");
   });
 
+  test("a value that only gates the column is not a source", () => {
+    const gated = {
+      ...property("clause-summary"),
+      dependencies: [
+        {
+          dependsOnPropertyId: textInput.propertyId,
+          condition: {
+            type: "compare",
+            left: { type: "property", propertyId: textInput.propertyId },
+            op: "eq",
+            right: { type: "literal", value: "A value." },
+          },
+        },
+      ],
+    } as const satisfies AIBatchProperty;
+    const gatedShape = (files: readonly PreparedInputFile[]) =>
+      resolveClauseAnswerShapes([gated], {
+        files,
+        textInputs: [textInput],
+      }).at(0)?.answerShape;
+
+    expect(gatedShape([docx])).toBe("clause-summary");
+    expect(gatedShape([docx, pdf])).toBe("clause-quote");
+  });
+
   test("a value answer is the same whatever the sources", () => {
     expect(
       resolveClauseAnswerShapes([property("value")], {

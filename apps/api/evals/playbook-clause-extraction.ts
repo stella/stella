@@ -61,7 +61,10 @@ import {
   fieldContentFromValidated,
   validateAIOutput,
 } from "@/api/lib/workflow/ai-validators";
-import { verifiedPassageTexts } from "@/api/lib/workflow/cited-passages";
+import {
+  verifiedPassageTexts,
+  withGradingSource,
+} from "@/api/lib/workflow/cited-passages";
 import { buildJustificationFilenames } from "@/api/lib/workflow/generate-batch";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
@@ -544,7 +547,11 @@ const extractContract = async ({
     }).unwrap();
     passagesBySourceId.set(
       property.id,
-      justification === null ? [] : verifiedPassageTexts(justification.content),
+      justification === null
+        ? []
+        : verifiedPassageTexts(
+            withGradingSource(justification.content, property.answerShape),
+          ),
     );
   }
   return { contentBySourceId, passagesBySourceId, usage };

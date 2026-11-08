@@ -98,6 +98,8 @@ export type WorkflowDataOutput = Record<
 export type WorkflowDataGeneration = {
   output: WorkflowDataOutput;
   refusedPropertyIds: ReadonlySet<SafeId<"property">>;
+  /** The batch as it was asked, each property in its resolved answer shape. */
+  properties: AIBatchProperty[];
 };
 
 /** Everything but the tier, which only the chunk's admission can state. */
@@ -321,19 +323,31 @@ type ClauseAnswerSources = {
 /**
  * A clause summary relies on citations that resolve to exact wording, which
  * only a DOCX block offers. One source without blocks makes the whole batch
- * quote: the citation rules and the prompt are shared across its sources.
+ * quote: the citation rules and the prompt are shared across its sources. A
+ * value that only gates a column, such as its document type, holds no clause
+ * wording, so it is not such a source.
  */
 export const resolveClauseAnswerShapes = (
   properties: readonly AIBatchProperty[],
   { files, textInputs }: ClauseAnswerSources,
 ): AIBatchProperty[] => {
-  const everySourceHasBlocks =
-    textInputs.length === 0 && files.every((file) => file.kind === "docx");
-  return properties.map((property) =>
-    property.answerShape === "clause-summary" && !everySourceHasBlocks
-      ? { ...property, answerShape: "clause-quote" }
-      : property,
-  );
+  const everyFileHasBlocks = files.every((file) => file.kind === "docx");
+  return properties.map((property) => {
+    if (property.answerShape !== "clause-summary") {
+      return property;
+    }
+    const gateIds = new Set(
+      property.dependencies.flatMap(({ dependsOnPropertyId, condition }) =>
+        condition === null ? [] : [dependsOnPropertyId],
+      ),
+    );
+    const everySourceHasBlocks =
+      everyFileHasBlocks &&
+      textInputs.every(({ propertyId }) => gateIds.has(propertyId));
+    return everySourceHasBlocks
+      ? property
+      : { ...property, answerShape: "clause-quote" };
+  });
 };
 
 export const generateWorkflowData = async ({
@@ -497,6 +511,7 @@ export const generateWorkflowData = async ({
     return Result.ok({
       output: systemOneOutput,
       refusedPropertyIds: new Set(refusedPropertyIds),
+      properties,
     });
   }
 
@@ -680,5 +695,6 @@ export const generateWorkflowData = async ({
   return generated.map((output) => ({
     output,
     refusedPropertyIds: new Set(refusedPropertyIds),
+    properties,
   }));
 };

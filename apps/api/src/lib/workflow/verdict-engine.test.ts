@@ -313,6 +313,7 @@ describe("computeVerdictBatch — passages for the grader", () => {
     citations: DocxFolioJustificationBlock["statements"][number]["citations"],
   ): JustificationContent => ({
     version: 1,
+    gradeFrom: "cited-passages",
     blocks: [
       {
         kind: "docx-folio",
