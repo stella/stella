@@ -5,6 +5,7 @@ import { stableStringify } from "@stll/stable-stringify";
 import type { StableStringifyInput } from "@stll/stable-stringify";
 
 import { desktopRunnerAppCalls, desktopRunnerRuns } from "@/api/db/schema";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import type { DesktopRunnerDb, RunOwner } from "@/api/lib/desktop-runner/store";
 
 /**
@@ -142,29 +143,36 @@ export const pairAppCall = async (
   db: Pick<DesktopRunnerDb, "select" | "update">,
   { owner, runId, toolName, argumentsHash, toolCallId }: PairAppCallOptions,
 ): Promise<PairedAppCall | null> => {
-  const candidates = await db
-    .select({
-      id: calls.id,
-      resourceUri: calls.resourceUri,
-      result: calls.result,
-      pairedToolCallId: calls.pairedToolCallId,
-    })
-    .from(calls)
-    .innerJoin(runs, eq(runs.runId, calls.runId))
-    .where(
-      and(
-        ownsRun(owner, runId),
-        eq(calls.runId, runId),
-        eq(calls.toolName, toolName),
-        eq(calls.argumentsHash, argumentsHash),
-        or(
-          eq(calls.pairedToolCallId, toolCallId),
-          isNull(calls.pairedToolCallId),
+  const read = await readBounded(
+    db
+      .select({
+        id: calls.id,
+        resourceUri: calls.resourceUri,
+        result: calls.result,
+        pairedToolCallId: calls.pairedToolCallId,
+      })
+      .from(calls)
+      .innerJoin(runs, eq(runs.runId, calls.runId))
+      .where(
+        and(
+          ownsRun(owner, runId),
+          eq(calls.runId, runId),
+          eq(calls.toolName, toolName),
+          eq(calls.argumentsHash, argumentsHash),
+          or(
+            eq(calls.pairedToolCallId, toolCallId),
+            isNull(calls.pairedToolCallId),
+          ),
         ),
-      ),
-    )
-    .orderBy(asc(calls.id))
-    .limit(MAX_APP_CALLS_PER_RUN);
+      )
+      .orderBy(asc(calls.id)),
+    // The run's rows, with room for calls answered together past the bound.
+    MAX_APP_CALLS_PER_RUN * 2,
+  );
+  if (read.type === "overflow") {
+    return null;
+  }
+  const candidates = read.rows;
   const held = candidates.find(
     ({ pairedToolCallId }) => pairedToolCallId === toolCallId,
   );
