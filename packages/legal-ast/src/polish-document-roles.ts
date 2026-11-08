@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-uodo] only adds the ruling, composition, legal-basis ruling and document-type predicates, which the data-protection reader does not call; its recital reading is unchanged.
+// parser-output-unchanged: [pl-uodo] only adds the instruction-on-appeal, instruction-heading and remedy-filing predicates, which the data-protection reader does not call.
 /**
  * How a Polish decision names its own parts: the operative verbs its ruling
  * opens with, the reasons heading, the recital before the ruling, the closing
@@ -389,3 +389,41 @@ export const isPlSignatureLine = (text: string): boolean => {
 /** Whether a line is the blank a signature is written on. */
 export const isPlSignatureBlank = (text: string): boolean =>
   SIGNATURE_BLANK_RE.test(grammarLine(text).replaceAll(" ", ""));
+
+/**
+ * The heading the instructions on appeal stand under: `Pouczenie`,
+ * `POUCZENIA:`, or with its outline number (`14. Pouczenie`).
+ */
+const INSTRUCTION_HEADING_RE = /^(?:\d{1,3}\. ?)?pouczeni[ea] ?:?$/iu;
+
+/** Whether a line heads the instructions on appeal. */
+export const isPlInstructionHeading = (text: string): boolean =>
+  INSTRUCTION_HEADING_RE.test(grammarLine(text));
+
+/** A remedy that lies against a decision, as an instruction states it. */
+const REMEDY_LIES_RE =
+  /przysługuje(?: stronie| stronom)?,? (?:prawo do wniesienia )?(?:skarg|odwołani|zażaleni|apelacj|kasacj|sprzeciw)/iu;
+
+/** The decision the instruction is about: this one. */
+const THIS_DECISION_RE =
+  /^(?:na|od) (?:to |tego )?orzeczeni|niniejsz\p{Ll}* (?:decyzj|wyrok|postanowieni|orzeczeni|interpretacj)/iu;
+
+/**
+ * Whether a paragraph instructs the parties on the remedy against this
+ * decision (`Na orzeczenie … przysługuje skarga …`, `Stosownie do art. 81 …
+ * od niniejszej decyzji przysługuje odwołanie …`, `Stronie przysługuje prawo
+ * do wniesienia skargi na niniejszą interpretację …`). The instruction is
+ * not the ruling and not its reasons.
+ */
+export const isPlAppealInstruction = (text: string): boolean => {
+  const line = grammarLine(text);
+  return REMEDY_LIES_RE.test(line) && THIS_DECISION_RE.test(line);
+};
+
+/** Where a remedy is filed (`Skargę wnosi się …`), after the instruction. */
+const REMEDY_FILING_RE =
+  /^(?:skargę|odwołanie|zażalenie|apelację|kasację|sprzeciw) (?:wnosi|składa) się/iu;
+
+/** Whether a line goes on with the instruction: where the remedy is filed. */
+export const isPlRemedyFilingLine = (text: string): boolean =>
+  REMEDY_FILING_RE.test(grammarLine(text));

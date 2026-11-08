@@ -60,13 +60,16 @@ import {
 } from "@stll/legal-ast/document-ast";
 import {
   containsPlOperativeVerb,
+  isPlAppealInstruction,
   isPlClosingLine,
   isPlCompositionLine,
   isPlHoldingHeading,
+  isPlInstructionHeading,
   isPlLegalBasisRuling,
   isPlNumberedReasonsHeading,
   isPlOpeningRecital,
   isPlReasonsHeading,
+  isPlRemedyFilingLine,
   isPlSignatureBlank,
   isPlSignatureLine,
   namesPlDocumentType,
@@ -762,6 +765,41 @@ const signsBlank = (state: ParserState, plainText: string): boolean => {
   );
 };
 
+/** Whether the last heading so far heads the instructions on appeal. */
+const underInstructionHeading = (state: ParserState): boolean => {
+  const heading = state.blocks.findLast((block) => block.type === "heading");
+  return heading !== undefined && isPlInstructionHeading(heading.plainText);
+};
+
+/** Whether a line closes or signs the decision. */
+const closesOrSigns = (state: ParserState, plainText: string): boolean =>
+  isPlClosingLine(plainText) ||
+  isPlSignatureLine(plainText) ||
+  opensWithPlSignatureTitle(plainText) ||
+  signsBlank(state, plainText);
+
+/**
+ * Whether a paragraph instructs the parties on appeal: the instruction
+ * itself, where the remedy is filed right after it, or any line under the
+ * instructions' heading that neither closes nor signs the decision.
+ */
+const instructsOnAppeal = (state: ParserState, plainText: string): boolean => {
+  if (isPlAppealInstruction(plainText)) {
+    return true;
+  }
+  const previous = state.blocks.at(-1);
+  if (
+    previous?.type === "paragraph" &&
+    previous.role === undefined &&
+    isPlRemedyFilingLine(plainText) &&
+    (isPlAppealInstruction(previous.plainText) ||
+      isPlRemedyFilingLine(previous.plainText))
+  ) {
+    return true;
+  }
+  return underInstructionHeading(state) && !closesOrSigns(state, plainText);
+};
+
 const inferParagraphRole = (
   state: ParserState,
   plainText: string,
@@ -907,6 +945,13 @@ const classifyParagraph = (
       ? "publisher-note"
       : "apparatus";
   }
+  // The instructions on appeal are neither the ruling nor its reasons.
+  if (
+    (state.section === "holding" || state.section === "reasoning") &&
+    instructsOnAppeal(state, plainText)
+  ) {
+    return undefined;
+  }
   const role = inferParagraphRole(state, plainText);
   // A block of marks alone (`-`, `.`) is no part of the decision's text,
   // unless it is the blank a signature is written on.
@@ -1015,6 +1060,15 @@ const handleHeadingText = (
   ) {
     pushHeading(state, 2, plainText, "section-heading", inlines);
     state.section = "reasoning";
+    return true;
+  }
+
+  // The instructions on appeal stand under a heading of their own.
+  if (
+    (state.section === "holding" || state.section === "reasoning") &&
+    isPlInstructionHeading(plainText)
+  ) {
+    pushHeading(state, 2, plainText, "section-heading", inlines);
     return true;
   }
 

@@ -483,6 +483,26 @@ describe("a UOKiK decision whose first page carries the office's letterhead foot
   });
 });
 
+describe("a UOKiK decision's instruction on appeal", () => {
+  test("is neither the ruling nor its reasons", async () => {
+    const { blocks } = await parsedOf(RBG_11_2018);
+    const instruction = blocks.find(
+      (block) =>
+        block.type === "paragraph" &&
+        block.plainText.includes(
+          "od niniejszej decyzji przysługuje stronie odwołanie",
+        ),
+    );
+
+    expect(instruction?.plainText).toStartWith(
+      "Stosownie do treści art. 81 ust. 1 ustawy o ochronie konkurencji i konsumentów",
+    );
+    expect(
+      instruction?.type === "paragraph" ? instruction.role : "not a paragraph",
+    ).toBeUndefined();
+  });
+});
+
 type Drawn = { text: string; x: number; y: number; size: number };
 
 const BODY_LINES = [

@@ -154,7 +154,8 @@ const roleFindings = (
         rule === STRUCTURE_FIDELITY_RULES.SIGNATURE_AS_HOLDING ||
         rule === STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_REASONS ||
         rule === STRUCTURE_FIDELITY_RULES.RECITAL_AS_HOLDING ||
-        rule === STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING,
+        rule === STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING ||
+        rule === STRUCTURE_FIDELITY_RULES.INSTRUCTION_AS_HOLDING,
     )
     .map(({ rule, anchorId }) => `${rule} ${anchorId}`);
 
@@ -251,6 +252,33 @@ test("the recital before the first line that rules is not the ruling", () => {
           "Na podstawie art. 104 § 1 Kodeksu postępowania administracyjnego,",
         ],
         ["holding", "na podstawie art. 4 ust. 2 umorzyć postępowanie"],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+});
+
+test("the instruction on appeal under the ruling is not the ruling", () => {
+  expect(
+    roleFindings(
+      [
+        ["holding", "1. oddala odwołanie;"],
+        [
+          "holding",
+          "Na orzeczenie - w terminie 14 dni od jego doręczenia - przysługuje skarga za pośrednictwem Prezesa Krajowej Izby Odwoławczej.",
+        ],
+      ],
+      "pl",
+    ),
+  ).toEqual(["instruction-as-holding p-1"]);
+  expect(
+    roleFindings(
+      [
+        ["holding", "1. oddala odwołanie;"],
+        [
+          undefined,
+          "Na orzeczenie - w terminie 14 dni od jego doręczenia - przysługuje skarga za pośrednictwem Prezesa Krajowej Izby Odwoławczej.",
+        ],
       ],
       "pl",
     ),

@@ -108,6 +108,39 @@ const ncourtBlocks = async (name: string): Promise<Block[]> => {
     : panic(`${name} did not build: ${built.type}`);
 };
 
+/** The recorded tax interpretation ITPB1/415-126/07/HDO, read by its parser. */
+const kisBlocks = async (): Promise<Block[]> => {
+  const payload: unknown = JSON.parse(
+    await roleFixtureText("pl-kis-itpb1-415-126-07-hdo.json.gz"),
+  );
+  const fields =
+    isRecord(payload) &&
+    isRecord(payload["dokument"]) &&
+    Array.isArray(payload["dokument"]["fields"])
+      ? payload["dokument"]["fields"].filter(isRecord)
+      : panic("the recorded interpretation has no fields");
+  const value = fields.find(
+    (field) => field["key"] === "TRESC_INTERESARIUSZ",
+  )?.["value"];
+  const html =
+    typeof value === "string"
+      ? value
+      : panic("the recorded interpretation has no text");
+  const { documentAst } = parsePlKisDocumentHtml({
+    caseNumber: "ITPB1/415-126/07/HDO",
+    court: "Dyrektor Izby Skarbowej w Bydgoszczy",
+    decisionDate: "2007-10-23",
+    decisionType: "interpretacja indywidualna",
+    sourceUrl: "https://eureka.mf.gov.pl/informacje/podglad/21157",
+    documentUrl: "",
+    documentId: "21157",
+    keywords: [],
+    statutes: [],
+    html,
+  });
+  return documentAst.blocks;
+};
+
 const paragraphs = (blocks: readonly Block[]): ParagraphBlock[] =>
   blocks.filter((block): block is ParagraphBlock => block.type === "paragraph");
 
@@ -128,6 +161,7 @@ const roleFindings = (blocks: readonly Block[]): string[] =>
         rule === "holding-after-reasons" ||
         rule === "recital-as-holding" ||
         rule === "ruling-without-holding" ||
+        rule === "instruction-as-holding" ||
         rule === "holding-after-signature",
     )
     .map(({ rule, anchorId }) => `${rule} ${anchorId}`);
@@ -324,35 +358,7 @@ describe("Polish recitals that list what they name", () => {
 
 describe("Polish rulings that open on their legal basis or their verb", () => {
   test("ITPB1/415-126/07/HDO: the interpretation is titled by its type and rules in its opening sentence", async () => {
-    const payload: unknown = JSON.parse(
-      await roleFixtureText("pl-kis-itpb1-415-126-07-hdo.json.gz"),
-    );
-    const fields =
-      isRecord(payload) &&
-      isRecord(payload["dokument"]) &&
-      Array.isArray(payload["dokument"]["fields"])
-        ? payload["dokument"]["fields"].filter(isRecord)
-        : panic("the recorded interpretation has no fields");
-    const value = fields.find(
-      (field) => field["key"] === "TRESC_INTERESARIUSZ",
-    )?.["value"];
-    const html =
-      typeof value === "string"
-        ? value
-        : panic("the recorded interpretation has no text");
-    const { documentAst } = parsePlKisDocumentHtml({
-      caseNumber: "ITPB1/415-126/07/HDO",
-      court: "Dyrektor Izby Skarbowej w Bydgoszczy",
-      decisionDate: "2007-10-23",
-      decisionType: "interpretacja indywidualna",
-      sourceUrl: "https://eureka.mf.gov.pl/informacje/podglad/21157",
-      documentUrl: "",
-      documentId: "21157",
-      keywords: [],
-      statutes: [],
-      html,
-    });
-    const blocks = documentAst.blocks;
+    const blocks = await kisBlocks();
     const headings = blocks.flatMap((block) =>
       block.type === "heading"
         ? [`${block.role ?? "-"} ${block.plainText.trim()}`]
@@ -448,5 +454,55 @@ describe("a Polish decision's docket printed again inside it", () => {
       "paragraph case-number Sygn. akt: KIO 115/22",
       "paragraph case-number Sygn. akt: KIO 115/22",
     ]);
+  });
+});
+
+describe("Polish instructions on appeal are neither the ruling nor its reasons", () => {
+  const instructions = (blocks: readonly Block[]): ParagraphBlock[] =>
+    paragraphs(blocks).filter((block) =>
+      /przysługuje(?: stronie)? (?:prawo do wniesienia )?skarg|Skargę wnosi się/u.test(
+        block.plainText,
+      ),
+    );
+
+  test.each(["13694", "30308"])(
+    "KIO %s: the instruction under the ruling has no role, and the bench signs under it",
+    async (id) => {
+      const blocks = await kioBlocks(id);
+      const [instruction, ...others] = instructions(blocks);
+
+      expect(others).toEqual([]);
+      expect(instruction?.plainText).toStartWith("Stosownie do art. ");
+      expect(instruction?.role).toBeUndefined();
+      expect(
+        withRole(blocks, "holding").some((text) =>
+          text.includes("przysługuje"),
+        ),
+      ).toBe(false);
+      expect(withRole(blocks, "signature")[0]).toStartWith("Przewodniczący:");
+      expect(roleFindings(blocks)).toEqual([]);
+    },
+  );
+
+  test("KIO 1675/10: the instruction ends the ruling read from the common-court record", async () => {
+    const blocks = await saosBlocks("116508");
+    const [instruction] = instructions(blocks);
+
+    expect(instruction?.role).toBeUndefined();
+    expect(withRole(blocks, "holding")).toHaveLength(7);
+    expect(roleFindings(blocks)).toEqual([]);
+  });
+
+  test("ITPB1/415-126/07/HDO: the instruction and where the remedy is filed have no role", async () => {
+    const blocks = await kisBlocks();
+    const found = instructions(blocks);
+
+    expect(found.map((block) => block.plainText.trim().slice(0, 30))).toEqual([
+      "Stronie przysługuje prawo do w",
+      "Skargę wnosi się za pośrednict",
+    ]);
+    expect(found.map((block) => block.role)).toEqual([undefined, undefined]);
+    // The reasons before it stay the reasons.
+    expect(withRole(blocks, "argumentation").length).toBeGreaterThan(5);
   });
 });
