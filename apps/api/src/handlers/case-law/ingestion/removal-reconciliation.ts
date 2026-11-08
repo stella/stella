@@ -33,7 +33,10 @@ import {
   supersededRemovalEvidence,
 } from "@/api/lib/legal-search/removal-evidence";
 import {
+  isClaimedErasureRetry,
+  pauseRemovalCheckpoint,
   REMOVAL_PENDING_REASON,
+  REMOVAL_RETRY_KIND,
   REMOVAL_UNPROBEABLE_REASON,
   removalCheckpointSchema,
 } from "@/api/lib/legal-search/removal-reconciliation-state";
@@ -77,6 +80,7 @@ const REMOVAL_SOURCE_PROBES = {
 } as const satisfies Record<string, RemovalProbe>;
 
 type SweepOptions = {
+  mode?: "publisher-discovery" | "claimed-erasures";
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   signal: AbortSignal;
@@ -314,12 +318,55 @@ type ProcessRemovalDecisionOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   decisionId: SafeId<"caseLawDecision">;
-  reader: RemovalProbe;
+  reader: RemovalProbe | undefined;
   remove: typeof removePublisherDecision;
   signal: AbortSignal;
   mode: { type: "discovery" } | { type: "retry"; item: RemovalRetryItem };
   now: () => Date;
 };
+const readRemovalDecision = async ({
+  scopedDb,
+  sourceId,
+  decisionId,
+}: Pick<
+  ProcessRemovalDecisionOptions,
+  "scopedDb" | "sourceId" | "decisionId"
+>) => {
+  const decision = await scopedDb(async (tx) =>
+    (
+      await tx
+        .select({
+          id: caseLawDecisions.id,
+          sourceId: caseLawDecisions.sourceId,
+          sourceDocumentId: caseLawDecisions.sourceDocumentId,
+          redactedAt: caseLawDecisions.redactedAt,
+          sourceObservedAt: caseLawDecisions.sourceObservedAt,
+          sourceObservationOrder: caseLawDecisions.sourceObservationOrder,
+        })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.id, decisionId),
+            eq(caseLawDecisions.sourceId, sourceId),
+          ),
+        )
+        .limit(1)
+    ).at(0),
+  );
+  return decision === undefined
+    ? undefined
+    : {
+        ...decision,
+        evidenceRevision: {
+          decisionId: decision.id,
+          sourceId: decision.sourceId,
+          sourceObservationOrder:
+            decision.sourceObservationOrder?.toString() ?? null,
+          sourceObservedAt: decision.sourceObservedAt?.toISOString() ?? null,
+        },
+      };
+};
+
 /** Every item-local failure is an explicit durable disposition, never an enumeration stop. */
 const processRemovalDecision = async ({
   scopedDb,
@@ -341,43 +388,27 @@ const processRemovalDecision = async ({
       : undefined;
   const result = await Result.tryPromise({
     try: async (): Promise<RemovalStepOutcome | SourcePausedOutcome> => {
-      const decision = await scopedDb(async (tx) =>
-        (
-          await tx
-            .select({
-              id: caseLawDecisions.id,
-              sourceId: caseLawDecisions.sourceId,
-              sourceDocumentId: caseLawDecisions.sourceDocumentId,
-              redactedAt: caseLawDecisions.redactedAt,
-              sourceObservedAt: caseLawDecisions.sourceObservedAt,
-              sourceObservationOrder: caseLawDecisions.sourceObservationOrder,
-            })
-            .from(caseLawDecisions)
-            .where(
-              and(
-                eq(caseLawDecisions.id, decisionId),
-                eq(caseLawDecisions.sourceId, sourceId),
-              ),
-            )
-            .limit(1)
-        ).at(0),
-      );
+      const decision = await readRemovalDecision({
+        scopedDb,
+        sourceId,
+        decisionId,
+      });
       if (decision === undefined) {
         return { type: "settled" };
       }
       if (evidence !== undefined) {
-        const reason = supersededRemovalEvidence(evidence, decision);
+        const acceptedRetry =
+          mode.type === "retry" && isClaimedErasureRetry(mode.item.payload);
+        const reason =
+          supersededRemovalEvidence(evidence, decision) ??
+          (acceptedRetry && decision.redactedAt === null
+            ? REMOVAL_SUPERSEDED_REASON.RESTORED
+            : null);
         if (reason !== null) {
           return { type: "superseded", reason, evidence };
         }
       }
-      const revision = {
-        decisionId,
-        sourceId,
-        sourceObservationOrder:
-          decision.sourceObservationOrder?.toString() ?? null,
-        sourceObservedAt: decision.sourceObservedAt?.toISOString() ?? null,
-      };
+      const revision = decision.evidenceRevision;
       const erasureRetry = evidence !== undefined;
       if (decision.redactedAt === null) {
         if (decision.sourceDocumentId === null) {
@@ -385,6 +416,20 @@ const processRemovalDecision = async ({
             type: "unprobeable",
             reason: REMOVAL_UNPROBEABLE_REASON.MISSING_IDENTITY,
           };
+        }
+        if (reader === undefined) {
+          return evidence === undefined
+            ? {
+                type: "pending",
+                operation: "probe",
+                reason: REMOVAL_PENDING_REASON.OPERATION_FAILED,
+              }
+            : {
+                type: "pending",
+                operation: "erase",
+                evidence,
+                reason: REMOVAL_PENDING_REASON.STORES_PENDING,
+              };
         }
         // A queued absence is rechecked before its first irreversible redaction.
         const observed = (
@@ -461,7 +506,12 @@ const processRemovalDecision = async ({
               : REMOVAL_PENDING_REASON.STORES_PENDING,
         };
       }
-      const removed = await remove({ scopedDb, decisionId, evidence });
+      const removed = await remove({
+        scopedDb,
+        decisionId,
+        evidence,
+        retryItem: mode.type === "retry" ? mode.item : undefined,
+      });
       if (removed.isErr()) {
         captureError(
           removed.error,
@@ -524,6 +574,7 @@ type DiscoveryOptions = Required<
   Pick<SweepOptions, "sourceId" | "signal" | "now" | "remove">
 > & {
   probe: RemovalProbe | undefined;
+  mode?: "publisher-discovery" | "claimed-erasures";
   scopedDb: ScopedDb;
   deadline: number;
   clock: () => number;
@@ -671,7 +722,7 @@ const discoverPublisherRemovals = async ({
     // db-await-in-loop: ordered per-item CAS records the disposition and advances atomically.
     const committed = await commit(
       outcome.type === "source-paused"
-        ? { status: "paused", resume: next, resumeAt: outcome.resumeAt }
+        ? pauseRemovalCheckpoint(next, outcome.resumeAt)
         : next,
       [
         {
@@ -702,12 +753,17 @@ const retryPublisherRemovals = async ({
   remove,
   deadline,
   clock,
+  mode,
 }: RetryOptions): Promise<{ retried: number; pauseUntil: Date | null }> => {
   const items = await selectDueRemovalRetries({
     scopedDb,
     sourceId,
     now: now(),
     perKindLimit: REMOVAL_RETRY_PER_KIND_BUDGET,
+    ...(mode === "claimed-erasures"
+      ? { kinds: [REMOVAL_RETRY_KIND.ERASURE] }
+      : {}),
+    acceptedOnly: mode === "claimed-erasures",
   });
   let retried = 0;
   for (const item of items) {
@@ -717,12 +773,32 @@ const retryPublisherRemovals = async ({
     signal.throwIfAborted();
     // db-await-in-loop: honor the current kill switch and source CAS before every retry.
     const source = await readSource(scopedDb, sourceId);
-    if (source === undefined || source.removalCheckpoint?.status === "paused") {
+    if (source === undefined) {
       break;
     }
-    const reader = readerForSource(source, probe);
+    const reader =
+      mode === "claimed-erasures" ||
+      source.removalCheckpoint?.status === "paused"
+        ? undefined
+        : readerForSource(source, probe);
+    const isErasure =
+      item.payload.type === "pending" && item.payload.operation === "erase";
     if (reader === undefined) {
-      break;
+      if (!isErasure) {
+        continue;
+      }
+      // A publisher pause cannot prevent accepted cleanup, or authorize a new erasure.
+      const decision = await readRemovalDecision({
+        scopedDb,
+        sourceId,
+        decisionId: item.decisionId,
+      });
+      if (
+        decision?.redactedAt === null &&
+        !isClaimedErasureRetry(item.payload)
+      ) {
+        continue;
+      }
     }
     // db-await-in-loop: each due item has one attempt, bounded by the lane's per-kind budget.
     const outcome = await processRemovalDecision({
@@ -750,11 +826,7 @@ const retryPublisherRemovals = async ({
       source,
       next:
         outcome.type === "source-paused"
-          ? {
-              status: "paused",
-              resume: source.removalCheckpoint,
-              resumeAt: outcome.resumeAt,
-            }
+          ? pauseRemovalCheckpoint(source.removalCheckpoint, outcome.resumeAt)
           : source.removalCheckpoint,
       items: [
         {
@@ -819,6 +891,7 @@ export const reconcilePublisherRemovals = async ({
   clock = () => performance.now(),
   probe,
   remove = removePublisherDecision,
+  mode = "publisher-discovery",
 }: SweepOptions): Promise<Result<SweepOutcome, DatabaseError>> =>
   await Result.tryPromise({
     try: async () => {
@@ -850,15 +923,12 @@ export const reconcilePublisherRemovals = async ({
         remove,
         deadline,
         clock,
+        mode,
       };
-      const prepared = await prepareRemovalRun(context);
-      if (prepared.type !== "ready") {
-        return {
-          ...prepared,
-          retried: 0,
-          nextRetryAt: prepared.type === "paused" ? prepared.resumeAt : null,
-        };
-      }
+      const prepared =
+        mode === "claimed-erasures"
+          ? { type: "ready" as const }
+          : await prepareRemovalRun(context);
       // Due erasures have their own first phase; enumeration cannot spend its reservation.
       const first = await retryPublisherRemovals({
         ...context,
@@ -873,6 +943,32 @@ export const reconcilePublisherRemovals = async ({
           nextRetryAt: first.pauseUntil,
         };
       }
+      if (mode === "claimed-erasures") {
+        return {
+          type: "complete",
+          checked: 0,
+          retried: first.retried,
+          nextRetryAt: await nextRemovalRetryAt(scopedDb, sourceId, {
+            kinds: [REMOVAL_RETRY_KIND.ERASURE],
+            acceptedOnly: true,
+          }),
+        } as const;
+      }
+      if (prepared.type !== "ready") {
+        const nextRetryAt = await nextRemovalRetryAt(scopedDb, sourceId, {
+          kinds: [REMOVAL_RETRY_KIND.ERASURE],
+          acceptedOnly: true,
+        });
+        return {
+          ...prepared,
+          retried: first.retried,
+          nextRetryAt:
+            prepared.type === "paused" &&
+            (nextRetryAt === null || prepared.resumeAt < nextRetryAt)
+              ? prepared.resumeAt
+              : nextRetryAt,
+        };
+      }
       const discovered = await discoverPublisherRemovals(context);
       if (discovered.type === "paused") {
         return {
@@ -885,7 +981,13 @@ export const reconcilePublisherRemovals = async ({
         return {
           ...discovered,
           retried: first.retried,
-          nextRetryAt: discovered.type === "disabled" ? null : now(),
+          nextRetryAt:
+            discovered.type === "disabled"
+              ? await nextRemovalRetryAt(scopedDb, sourceId, {
+                  kinds: [REMOVAL_RETRY_KIND.ERASURE],
+                  acceptedOnly: true,
+                })
+              : now(),
         };
       }
       // Fast discovery may also settle newly queued work, within the remaining run budget.

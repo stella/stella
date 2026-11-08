@@ -40,6 +40,34 @@ export class InfoSoudParseError extends InfoSoudError {
   }
 }
 
+export type InfoSoudResponseIdentityMismatch =
+  | {
+      type: "case";
+      endpoint: string;
+      expected: SpisZn;
+      received: SpisZn;
+    }
+  | {
+      type: "court";
+      endpoint: string;
+      expected: string;
+      received: string;
+    };
+
+export class InfoSoudResponseIdentityError extends InfoSoudParseError {
+  readonly mismatch: InfoSoudResponseIdentityMismatch;
+
+  constructor(mismatch: InfoSoudResponseIdentityMismatch) {
+    super(
+      mismatch.type === "case"
+        ? `${mismatch.endpoint} does not match the requested case identity`
+        : `${mismatch.endpoint} does not match the requested court`,
+    );
+    this.name = "InfoSoudResponseIdentityError";
+    this.mismatch = mismatch;
+  }
+}
+
 export class InfoSoudRequestError extends InfoSoudError {
   readonly path: string;
 

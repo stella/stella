@@ -1,4 +1,5 @@
 import { env } from "@/api/env";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   redactCompletedWebhookEvents,
   WEBHOOK_RETENTION_BATCH_SIZE,
@@ -14,29 +15,25 @@ type DrainWebhookEventsOptions = {
   signal: AbortSignal;
   retentionDays: number | undefined;
   redact: (retentionDays: number) => Promise<number>;
-  scheduleContinuation: (nextRunAt: Date) => void;
 };
 
 export const drainWebhookEvents = async ({
   signal,
   retentionDays,
   redact,
-  scheduleContinuation,
-}: DrainWebhookEventsOptions) => {
+}: DrainWebhookEventsOptions): Promise<boolean> => {
   if (retentionDays === undefined) {
-    return;
+    return false;
   }
   for (let batch = 0; batch < MAX_RETENTION_BATCHES_PER_RUN; batch += 1) {
     if (signal.aborted) {
-      return;
+      return false;
     }
     if ((await redact(retentionDays)) < WEBHOOK_RETENTION_BATCH_SIZE) {
-      return;
+      return false;
     }
   }
-  if (!signal.aborted) {
-    scheduleContinuation(new Date());
-  }
+  return !signal.aborted;
 };
 
 export const redactHostedUsageWebhookEvents: SchedulerTask = async ({
@@ -44,24 +41,31 @@ export const redactHostedUsageWebhookEvents: SchedulerTask = async ({
   runId,
   signal,
   scheduleContinuation,
+  dueAt,
 }) => {
-  let redactedEvents = 0;
-  await drainWebhookEvents({
-    signal,
-    retentionDays: env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS,
-    scheduleContinuation,
-    redact: async (retentionDays) => {
-      const redacted = await redactCompletedWebhookEvents({
-        db,
-        retentionDays,
-        now: new Date(),
-      });
-      redactedEvents += redacted;
-      return redacted;
-    },
+  const now = dueAt.claimedAtDate();
+  const shouldContinue = await withAggregateTransaction(db, async (tx) => {
+    let redactedEvents = 0;
+    const hasMore = await drainWebhookEvents({
+      signal,
+      retentionDays: env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS,
+      redact: async (retentionDays) => {
+        const redacted = await redactCompletedWebhookEvents({
+          db: tx,
+          retentionDays,
+          now,
+        });
+        redactedEvents += redacted;
+        return redacted;
+      },
+    });
+    await recordSystemAudit(tx, "system:usage-webhook-retention", {
+      subject: runId,
+      counts: { redactedEvents },
+    });
+    return hasMore;
   });
-  await recordSystemAudit(db, "system:usage-webhook-retention", {
-    subject: runId,
-    counts: { redactedEvents },
-  });
+  if (shouldContinue && !signal.aborted) {
+    scheduleContinuation(now);
+  }
 };

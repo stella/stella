@@ -1,3 +1,4 @@
+// parser-output-unchanged: [eu-ecj] bounded Formex archive reads yield the same entries in the same order; only oversized archives are refused.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: [eu-ecj] capture retains original ZIP bytes; replay of existing envelopes is unchanged.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -29,6 +30,7 @@ import {
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-response-limit";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
   fetchPublisher,
@@ -1429,6 +1431,7 @@ const FORMEX_MANIFESTATION_TYPE = "fmx4";
 const FORMEX_MEDIA_TYPE = "application/xml;type=fmx4";
 
 const ZIP_MEDIA_TYPE = "application/zip";
+const FORMEX_ARCHIVE_MAX_ENTRIES = 4096;
 
 /**
  * The courts this source publishes for, by the corporate-body code the notice
@@ -2358,9 +2361,15 @@ const fetchFormex = async (
 export const readEcjFormexArchive = async (
   bytes: ArrayBuffer,
 ): Promise<string> => {
-  // The reader's default limits bound the entry count and the declared
-  // sizes, and each entry inflates no further than its declared size.
-  const archive = await ZipArchive.read(bytes);
+  // The entry count and declared sizes are bounded by the publisher response
+  // limit, and each entry inflates no further than its declared size.
+  const archive = await ZipArchive.read(bytes, {
+    limits: {
+      maxEntries: FORMEX_ARCHIVE_MAX_ENTRIES,
+      maxEntryBytes: PUBLISHER_BODY_MAX_BYTES,
+      maxTotalBytes: PUBLISHER_BODY_MAX_BYTES,
+    },
+  });
   const entries = await Promise.all(
     archive
       .entries()

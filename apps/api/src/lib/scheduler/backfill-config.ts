@@ -18,6 +18,7 @@ export const schedulerBackfillConfig = (
   }) satisfies HealthConfig;
 
 export const SCHEDULER_BACKFILL_IDS = {
+  claimedErasures: "caseLaw.reconcileClaimedErasures.minutely",
   coverage: "caseLaw.refreshCoverage.fiveMinute",
   populationCounts: "caseLaw.foldPopulationCounts.minutely",
   decisionIdentifiers: "caseLaw.reconcileDecisionIdentifiers.minutely",

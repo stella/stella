@@ -6,6 +6,7 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import type { seedSitemapReadBudget, ServedCaseLaw } from "./corpus-seed";
 import type { measureHostedErasureHistory } from "./hosted-erasure-run";
+import type { RedactionTombstoneScenario } from "./redaction-tombstone-seed";
 import type { RequestReceiptScenario } from "./request-receipt-seed";
 
 export type TenantStatementMeasurement = {
@@ -22,7 +23,9 @@ export type CorpusStatementMeasurement = {
   ownerDeadlineMs: number | undefined;
 };
 export type ScheduledJobScenario =
-  { type: "case-law"; served: ServedCaseLaw } | RequestReceiptScenario;
+  | { type: "case-law"; served: ServedCaseLaw }
+  | RequestReceiptScenario
+  | RedactionTombstoneScenario;
 export type ScheduledJobMeasurement = {
   prepare?: typeof seedSitemapReadBudget;
   /**

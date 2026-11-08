@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
@@ -15,10 +17,12 @@ import type {
 import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
+import { isMemberRole } from "@/api/lib/member-roles";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { QUEUED_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runQueuedKickoff } from "@/api/lib/rate-limit/queued-action-admission";
@@ -196,8 +200,12 @@ export const startAutomatedFlowRun = async (
     });
     return;
   }
-  const authorizedWorkspace = authorization.value?.workspace;
-  if (authorizedWorkspace === undefined || authorizedWorkspace === null) {
+  const currentAuthority = authorization.value;
+  if (
+    !workspaceAcceptsWrites(currentAuthority?.workspace?.status) ||
+    !isMemberRole(currentAuthority.role) ||
+    !hasCurrentMemberPermission(currentAuthority.role, { flow: ["run"] })
+  ) {
     logger.warn("flow.automated_run_actor_unauthorized", logContext);
     return;
   }

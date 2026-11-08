@@ -52,7 +52,9 @@ import {
   backfillCaseLawProvisionState,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import {
+  RECONCILE_CLAIMED_ERASURES_TASK,
   RECONCILE_PUBLISHER_REMOVALS_TASK,
+  reconcileClaimedErasuresTask,
   reconcilePublisherRemovalsTask,
 } from "@/api/lib/scheduler/tasks/case-law-publisher-removals";
 import {
@@ -262,6 +264,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 const SCHEDULER_TASKS = {
   [ERASE_HOSTED_CUSTOMERS_TASK]: eraseHostedCustomers,
   [SWEEP_REQUEST_RECEIPTS_TASK]: sweepRequestReceipts,
+  [RECONCILE_CLAIMED_ERASURES_TASK]: reconcileClaimedErasuresTask,
   [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,

@@ -10,9 +10,13 @@ import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
-import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
+
+import {
+  lockLegacyRateEntryTable,
+  lockRateTableWorkspace,
+} from "./rate-table-lock";
 
 const updateRateTableBodySchema = v.object({
   id: resourceIdSchema("rateTable"),
@@ -71,11 +75,9 @@ const updateRateTable = createSafeHandler(
 
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
-        await withAggregateLock({
-          aggregate: "rateTableWorkspace",
-          id: { workspaceId },
-          tx,
-        });
+        await lockRateTableWorkspace(tx, workspaceId);
+        // Previous builds create and move entries under this lock alone.
+        await lockLegacyRateEntryTable(tx, body.id);
         // The currency the rates are currently stored in, read under a row
         // lock BEFORE anything is written. The `existing` read above happened
         // outside this transaction, so a currency change that landed in
@@ -94,8 +96,7 @@ const updateRateTable = createSafeHandler(
               eq(rateTables.id, body.id),
               eq(rateTables.workspaceId, workspaceId),
             ),
-          )
-          .for("update");
+          );
         const locked = lockedRows.at(0);
         if (!locked) {
           return { status: "rate-not-found" as const };

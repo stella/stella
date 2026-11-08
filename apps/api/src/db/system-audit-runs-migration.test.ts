@@ -164,7 +164,17 @@ test("the purge deletes only rows past retention, in bounded batches", async () 
       now,
       signal: new AbortController().signal,
     }),
-  ).toEqual({ deletedRuns: expired, hasMore: false });
+  ).toEqual({
+    deletedRuns: SYSTEM_AUDIT_PURGE_BATCH_SIZE,
+    hasMore: true,
+  });
+  expect(
+    await purgeSystemAuditRuns({
+      db: executor,
+      now,
+      signal: new AbortController().signal,
+    }),
+  ).toEqual({ deletedRuns: 5, hasMore: false });
   expect(
     (await db.query("SELECT subject FROM system_audit_runs")).rows,
   ).toEqual([{ subject: "kept" }]);

@@ -17,6 +17,7 @@ import {
   REMOVAL_SWEEP_TIME_BUDGET_MS,
 } from "@/api/handlers/case-law/ingestion/removal-reconciliation";
 import type { PublisherRemovalRead } from "@/api/handlers/case-law/ingestion/removal-reconciliation";
+import { DOCUMENT_SUPPLEMENTS_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
 import { removePublisherDecision } from "@/api/handlers/case-law/publisher-removal";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -181,6 +182,54 @@ if (!databaseUrl || !runPostgresTests) {
         ).at(0),
       ).toEqual({ text: "Retained judgment text", redactedAt: null });
     };
+
+    test("the locked evidence fence precedes every composed-holder withdrawal", async () => {
+      const { sourceId, id } = await seed();
+      const holderId = await insertDecision(sourceId, "uksc/2024/holder");
+      await db
+        .update(caseLawDecisions)
+        .set({
+          caseNumber: "uksc/2024/old",
+          metadata: {
+            [DOCUMENT_SUPPLEMENTS_METADATA_KEY]: [
+              { sourceDocumentId: "uksc/2024/old" },
+            ],
+          },
+        })
+        .where(eq(caseLawDecisions.id, holderId));
+      let withdrawals = 0;
+      const result = await redactCaseLawDecisionWithSupplementHolders({
+        scopedDb,
+        decisionId: id,
+        evidence: {
+          type: "publisher-absence",
+          decisionId: id,
+          sourceId,
+          sourceDocumentId: "uksc/2024/old",
+          observedAt: NOW.toISOString(),
+          sourceObservedAt: NOW.toISOString(),
+          sourceObservationOrder: "0",
+          absence: "http-410",
+        },
+        redactDecision: async (options) =>
+          await redactCaseLawDecision({
+            ...options,
+            sweepRaw: async () => ({ type: "swept", legacy: "none" }),
+          }),
+        withdrawDocument: async () => {
+          withdrawals++;
+          return Result.ok({ type: "withdrawn" });
+        },
+      });
+      expect(result.unwrap()).toMatchObject({
+        redaction: { type: "superseded" },
+        holders: [],
+      });
+      expect(withdrawals).toBe(0);
+      await expectLive(id);
+      await expectLive(holderId);
+      expect(await retryItem(sourceId)).toBeUndefined();
+    });
 
     for (const change of ["identity", "arrival"] as const) {
       for (const boundary of ["queued", "transaction"] as const) {
