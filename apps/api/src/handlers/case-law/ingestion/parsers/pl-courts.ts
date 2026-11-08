@@ -188,7 +188,8 @@ const DECISION_TITLES: ReadonlySet<string> = new Set(
     (title) => title !== POLISH_DECISION_TITLE_MAP.decyzja,
   ),
 );
-const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt[:\s]/iu;
+/** A docket line: `Sygn. akt: I C 155/19`, `Sygn. akt. I C 155/19`. */
+const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt\.?[:\s]/iu;
 const DECISION_ITEM_PREFIX_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
 const DECISION_ITEM_MARKER_RE =
   /^(?<marker>[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
@@ -1345,6 +1346,13 @@ const parseNode = (
     ) {
       pushParagraph(state, plainText, inlines, "signature");
       state.section = "reasoning";
+      return;
+    }
+
+    // A layout that sets the docket apart as a heading still prints the
+    // docket: it names the case, it heads no part of the decision.
+    if (isCaseNumberText(state, plainText)) {
+      pushParagraph(state, plainText, inlines, "case-number");
       return;
     }
 

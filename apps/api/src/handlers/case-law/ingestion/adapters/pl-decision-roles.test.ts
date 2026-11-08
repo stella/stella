@@ -9,6 +9,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { load } from "@stll/html";
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 import { isPlReasonsHeading } from "@stll/legal-ast/polish-document-roles";
@@ -19,6 +20,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { assemblePlKioDecision as uncheckedAssemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";
 import { parsePlKisDocumentHtml as uncheckedParsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
 import { parsePlUodoDecisionXml as uncheckedParsePlUodoDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import { structureFidelityIn } from "@/api/lib/legal-search/parsers/structure-fidelity";
@@ -29,6 +32,7 @@ const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
 const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);
 const parsePlUodoDecisionXml = guardParser(uncheckedParsePlUodoDecisionXml);
 const parsePlKisDocumentHtml = guardParser(uncheckedParsePlKisDocumentHtml);
+const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 /** Decisions recorded for their roles, read by their parser alone. */
@@ -393,5 +397,56 @@ describe("Polish rulings that open on their legal basis or their verb", () => {
       ["I.zmienia", "II. zasąd"],
     );
     expect(roleFindings(blocks)).toEqual([]);
+  });
+});
+
+describe("a Polish decision's docket printed again inside it", () => {
+  const dockets = (blocks: readonly Block[]): string[] =>
+    blocks.flatMap((block) =>
+      block.plainText.startsWith("Sygn.")
+        ? [
+            `${block.type} ${"role" in block ? (block.role ?? "-") : "-"} ${block.plainText}`,
+          ]
+        : [],
+    );
+
+  test("I C 155/19: the docket between the ruling and the reasons is the docket, not a ruling point", async () => {
+    const blocks = await ncourtBlocks("pl-ncourt-i-c-155-19.xml.gz");
+
+    expect(dockets(blocks)).toEqual([
+      "paragraph case-number Sygn. akt: I C 155/19",
+      "paragraph case-number Sygn. akt. I C 155/19",
+    ]);
+    expect(withRole(blocks, "holding")).toEqual([
+      "I. powództwo oddala,",
+      expect.stringMatching(/^II\. zasądza od powoda na rzecz pozwanego/u),
+    ]);
+  });
+
+  test("KIO 115/22: a docket the layout sets as a heading is the docket", async () => {
+    const { documentAst } = parsePlDecisionContent({
+      caseNumber: "KIO 115/22",
+      ecli: undefined,
+      court: "Krajowa Izba Odwoławcza",
+      decisionDate: "2022-02-04",
+      decisionType: "wyrok",
+      sourceUrl: undefined,
+      documentUrl: undefined,
+      content: await roleFixtureText("pl-kio-content-16389.html.gz"),
+      loadHtml: (source) => {
+        const $ = load(source);
+        readPlKioLayout($);
+        return $;
+      },
+      keywords: [],
+      statutes: [],
+      documentId: "16389",
+      superscripts: true,
+    });
+
+    expect(dockets(documentAst.blocks)).toEqual([
+      "paragraph case-number Sygn. akt: KIO 115/22",
+      "paragraph case-number Sygn. akt: KIO 115/22",
+    ]);
   });
 });
