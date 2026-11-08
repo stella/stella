@@ -533,6 +533,7 @@
       "Checkout",
       "Full release typecheck",
       "Install dependencies",
+      "Install the docs MCP server",
       "Setup Bun"
     ],
     "steps": [
