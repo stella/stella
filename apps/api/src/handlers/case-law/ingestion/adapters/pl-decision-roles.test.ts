@@ -406,6 +406,30 @@ describe("Polish rulings that open on their legal basis or their verb", () => {
   });
 });
 
+/** KIO 115/22 read through the chamber's layout reader. */
+const kio11522Blocks = async (): Promise<Block[]> => {
+  const { documentAst } = parsePlDecisionContent({
+    caseNumber: "KIO 115/22",
+    ecli: undefined,
+    court: "Krajowa Izba Odwoławcza",
+    decisionDate: "2022-02-04",
+    decisionType: "wyrok",
+    sourceUrl: undefined,
+    documentUrl: undefined,
+    content: await roleFixtureText("pl-kio-content-16389.html.gz"),
+    loadHtml: (source) => {
+      const $ = load(source);
+      readPlKioLayout($);
+      return $;
+    },
+    keywords: [],
+    statutes: [],
+    documentId: "16389",
+    superscripts: true,
+  });
+  return documentAst.blocks;
+};
+
 describe("a Polish decision's docket printed again inside it", () => {
   const dockets = (blocks: readonly Block[]): string[] =>
     blocks.flatMap((block) =>
@@ -430,27 +454,9 @@ describe("a Polish decision's docket printed again inside it", () => {
   });
 
   test("KIO 115/22: a docket the layout sets as a heading is the docket", async () => {
-    const { documentAst } = parsePlDecisionContent({
-      caseNumber: "KIO 115/22",
-      ecli: undefined,
-      court: "Krajowa Izba Odwoławcza",
-      decisionDate: "2022-02-04",
-      decisionType: "wyrok",
-      sourceUrl: undefined,
-      documentUrl: undefined,
-      content: await roleFixtureText("pl-kio-content-16389.html.gz"),
-      loadHtml: (source) => {
-        const $ = load(source);
-        readPlKioLayout($);
-        return $;
-      },
-      keywords: [],
-      statutes: [],
-      documentId: "16389",
-      superscripts: true,
-    });
+    const blocks = await kio11522Blocks();
 
-    expect(dockets(documentAst.blocks)).toEqual([
+    expect(dockets(blocks)).toEqual([
       "paragraph case-number Sygn. akt: KIO 115/22",
       "paragraph case-number Sygn. akt: KIO 115/22",
     ]);
@@ -504,5 +510,32 @@ describe("Polish instructions on appeal are neither the ruling nor its reasons",
     expect(found.map((block) => block.role)).toEqual([undefined, undefined]);
     // The reasons before it stay the reasons.
     expect(withRole(blocks, "argumentation").length).toBeGreaterThan(5);
+  });
+});
+
+describe("a Polish decision's head matter set as headings", () => {
+  test("KIO 115/22: the date and the bench the layout sets as headings are the head matter", async () => {
+    const blocks = await kio11522Blocks();
+    const head = blocks.slice(
+      0,
+      blocks.findIndex((block) => block.plainText === "orzeka:"),
+    );
+
+    expect(
+      head.map(
+        (block) =>
+          `${block.type} ${"role" in block ? (block.role ?? "-") : "-"}`,
+      ),
+    ).toEqual([
+      "paragraph case-number",
+      "heading decision-title",
+      ...Array.from({ length: 6 }, () => "paragraph intro"),
+    ]);
+    expect(head.slice(2, 6).map((block) => block.plainText)).toEqual([
+      "z dnia 4 lutego 2022 r.",
+      "Krajowa Izba Odwoławcza - w składzie:",
+      "Przewodniczący: Ewa Sikorska",
+      "Protokolant: Aldona Karpińska",
+    ]);
   });
 });
