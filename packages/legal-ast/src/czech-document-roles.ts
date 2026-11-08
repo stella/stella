@@ -4,6 +4,10 @@
 import { collapseSpacedLetters, normalizeUnicode } from "@stll/text-normalize";
 
 import type { Block, ParagraphBlock } from "./document-ast.js";
+import {
+  PRINTED_LABEL_KIND,
+  readPrintedLabel,
+} from "./printed-paragraph-labels.js";
 
 /** Closing formula: `V Brně dne 6. ledna 2016`, `Brno 15. května 2023`. */
 export const CZ_CLOSING_RE =
@@ -323,8 +327,18 @@ export const isCzechVerdictFormulaLine = (text: string): boolean =>
 
 /** Most paragraphs a bench recital is printed in. */
 const BENCH_RECITAL_MAX_PARAGRAPHS = 3;
-/** A paragraph opening on the court's number (`12.`, `[12]`) is reasoning. */
-const COURT_NUMBERED_RE = /^(?:\[\d{1,4}\]|\d{1,4}\.)\s/u;
+/** The labels a court numbers its paragraphs with: `12.`, `[12]`, `5.5.`. */
+const COURT_NUMBER_KINDS: ReadonlySet<string> = new Set([
+  PRINTED_LABEL_KIND.BRACKET,
+  PRINTED_LABEL_KIND.NUMBER,
+  PRINTED_LABEL_KIND.SUBNUMBER,
+]);
+
+/** Whether a paragraph opens on the court's number: it is reasoning. */
+const opensOnCourtNumber = (text: string): boolean => {
+  const label = readPrintedLabel(text);
+  return label !== null && COURT_NUMBER_KINDS.has(label.kind);
+};
 /** The verb a bench recital states its decision with (`… rozhodl …`). */
 const BENCH_DECIDED_RE = /(?<!\p{L})rozhodl[aoi]?(?!\p{L})/iu;
 
@@ -364,7 +378,7 @@ export const czechBenchRecitalStart = (
   return followsHeadMatter &&
     recital.length > 0 &&
     recital.length <= BENCH_RECITAL_MAX_PARAGRAPHS &&
-    !recital.some((block) => COURT_NUMBERED_RE.test(block.plainText.trim())) &&
+    !recital.some((block) => opensOnCourtNumber(block.plainText)) &&
     recital.some((block) => BENCH_DECIDED_RE.test(block.plainText))
     ? start
     : undefined;
