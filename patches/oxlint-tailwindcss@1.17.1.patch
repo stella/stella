@@ -557,7 +557,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  	serviceName: "declarations"
  });
  /**
-@@ -5642,6 +5763,139 @@ function answersFor(cache) {
+@@ -5642,6 +5763,142 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -685,11 +685,14 @@ diff --git a/dist/index.mjs b/dist/index.mjs
 +	const pending = [...new Set(classes)].sort();
 +	if (pending.length === 0) return;
 +	const resolvedPath = resolve(cssPath);
-+	let ds = inThreadDesignSystems.get(resolvedPath);
++	// Keyed by the snapshot name, which hashes everything the stylesheet is
++	// built from, so changed inputs load their own design system.
++	const snapshot = cacheArtifactPaths(resolvedPath).json;
++	let ds = inThreadDesignSystems.get(snapshot);
 +	if (ds === void 0) {
 +		const { __unstable__loadDesignSystem: loadDesignSystem } = inThreadRequire(tailwindNodeFor(resolvedPath));
 +		ds = loadDesignSystem(readFileSync(resolvedPath, "utf-8"), { base: dirname(resolvedPath) });
-+		inThreadDesignSystems.set(resolvedPath, ds);
++		inThreadDesignSystems.set(snapshot, ds);
 +	}
 +	const handler = new Function("require", `${DECL_EXTRACTOR_SOURCE}\nreturn ${DECL_HANDLER_SOURCE};`)(inThreadRequire);
 +	persistDeclarationAnswers(resolvedPath, pending, await handler(await ds, { classes: pending }), cacheDir);
@@ -697,7 +700,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5662,12 +5916,18 @@ function answersFor(cache) {
+@@ -5662,12 +5919,18 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
@@ -716,7 +719,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  }
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
-@@ -10857,4 +11117,4 @@ const plugin = definePlugin({
+@@ -10857,4 +11120,4 @@ const plugin = definePlugin({
  		})
  	}
  });

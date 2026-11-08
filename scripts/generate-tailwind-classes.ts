@@ -360,7 +360,7 @@ const generate = async (cacheDirectory: string) => {
     const snapshot = await withinPassTime(
       `compiling the design system of ${stylesheet}`,
       writeDesignSystemSnapshot(
-        path.join(repositoryRoot, stylesheet),
+        path.resolve(repositoryRoot, stylesheet),
         cacheDirectory,
       ),
     );
@@ -469,7 +469,7 @@ export const snapshotProblems = (committed: ReadonlySet<string>) =>
     ...new Set(
       tailwindEntryPoints.flatMap(({ stylesheet }) => {
         const name = path.basename(
-          cacheArtifactPaths(path.join(repositoryRoot, stylesheet)).json,
+          cacheArtifactPaths(path.resolve(repositoryRoot, stylesheet)).json,
         );
         return committed.has(name)
           ? []

@@ -280,9 +280,9 @@ const lintFixture = async ({
           ...process.env,
           OXLINT_TAILWINDCSS_CACHE_DIR: cache,
           OXLINT_TAILWINDCSS_CACHE_READ_ONLY: readOnly ? "1" : "0",
-          ...(collect === undefined
-            ? {}
-            : { OXLINT_TAILWINDCSS_CACHE_COLLECT: collect }),
+          // Empty turns collection off, so a plain pass reports a missing
+          // answer even when this process inherited a collect file.
+          OXLINT_TAILWINDCSS_CACHE_COLLECT: collect ?? "",
         },
         stdout: "pipe",
         stderr: "pipe",
