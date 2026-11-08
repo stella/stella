@@ -187,6 +187,55 @@ type ReadPublicDecisionLanguageAlternatesOptions = {
   languageGroupKeys: readonly string[];
 };
 
+/**
+ * For each decision that has a version in `language` other than itself, the
+ * id of that version. A decision with none is absent from the answer.
+ */
+export const readPreferredLanguageVersionIds = async ({
+  caseLawDb,
+  decisionIds,
+  language,
+}: {
+  caseLawDb: CaseLawPublicReadDb;
+  decisionIds: readonly string[];
+  language: string;
+}): Promise<ReadonlyMap<string, string>> => {
+  const decisions = await caseLawDb(
+    async (tx) =>
+      await tx
+        .select({
+          id: publishedCaseLawDecisions.id,
+          languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+        })
+        .from(publishedCaseLawDecisions)
+        .where(inArray(publishedCaseLawDecisions.id, [...decisionIds]))
+        .limit(decisionIds.length),
+  );
+  const alternates = await readPublicDecisionLanguageAlternatesByGroup({
+    caseLawDb,
+    languageGroupKeys: [
+      ...new Set(
+        decisions.flatMap(({ languageGroupKey }) =>
+          languageGroupKey === null ? [] : [languageGroupKey],
+        ),
+      ),
+    ],
+  });
+  const versions = new Map<string, string>();
+  for (const { id, languageGroupKey } of decisions) {
+    const version = alternates
+      .alternatesFor(languageGroupKey)
+      .find(
+        (alternate) =>
+          normalizePublicDecisionLanguage(alternate.language) === language,
+      );
+    if (version !== undefined && version.id !== id) {
+      versions.set(id, version.id);
+    }
+  }
+  return versions;
+};
+
 /** Alternates for a page of hits, keyed by language group. */
 export const readPublicDecisionLanguageAlternatesByGroup = async ({
   caseLawDb,

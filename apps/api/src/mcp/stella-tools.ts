@@ -77,7 +77,9 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
+import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
+import { readPreferredLanguageVersionIds } from "@/api/lib/case-law/language-alternates";
 import {
   type CaseLawProvisionFilter,
   caseLawProvisionFilterOf,
@@ -790,6 +792,15 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.maxLength(LIMITS.caseLawDecisionTextVersionMaxLength),
         v.description(
           "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only.",
+        ),
+      ),
+    ),
+    preferred_language: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(LIMITS.mcpLanguageCodeMaxChars),
+        v.description(
+          "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed.",
         ),
       ),
     ),
@@ -2367,66 +2378,121 @@ const partialMatchWarnings = ({
     : [partialMatchesAppendedWarning({ partial, countsStrictSet })];
 };
 
-const caseLawSearchResult = ({
-  hit,
-  match,
-  matchedQueries,
-}: ReturnType<typeof mergeCaseLawSearchHits>[number]) => {
-  const resource = resourceRef({
-    type: RESOURCE_TYPE.CASE_LAW_DECISION,
-    id: brandPersistedCaseLawDecisionId(hit.decisionId),
-  });
-  return {
-    matchedQueries,
-    ...legalCitationLinkFields({
-      url: buildCaseLawDecisionAppUrl({
-        caseNumber: hit.caseNumber,
-        country: hit.country,
-        court: hit.court,
-        decisionId: hit.decisionId,
-        language: hit.language,
-        languageAlternates: hit.languageAlternates,
-        slug: hit.slug,
-      }),
-      sourceUrl: hit.sourceUrl,
-    }),
-    caseNumber: hit.caseNumber,
-    citationAuthority: hit.citationAuthority,
-    citationCount: hit.citationCount,
-    country: hit.country,
-    ...projectCaseLawCourt(hit),
-    decisionDate: hit.decisionDate,
-    decisionId: hit.decisionId,
-    resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
-    decisionType: hit.decisionType,
-    decisionTypeKind: hit.decisionTypeKind,
-    ecli: hit.ecli,
-    language: hit.language,
-    matchingPassages: hit.matchingPassages,
-    textAvailability: hit.textAvailability,
-    match,
-    ...(hit.textWithheldReason === null
-      ? {
-          snippet: toPlainTextSnippet(hit.headline),
-          keywords:
-            hit.keywords === null
-              ? null
-              : { ...hit.keywords, items: [...hit.keywords.items] },
-          headnote:
-            hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
-        }
-      : {
-          excerpt: {
-            type: "withheld" as const,
-            reason: hit.textWithheldReason,
-          },
-          // Headnote and classifications are the source's own text: the
-          // licence that withholds the excerpt withholds them too.
-          keywords: null,
-          headnote: null,
-        }),
-  };
+const preferredLanguageOf = ({
+  language,
+  preferred_language: preferredLanguage,
+}: v.InferOutput<typeof searchCaseLawArgs>): string | null =>
+  language === undefined
+    ? normalizePublicDecisionLanguage(preferredLanguage)
+    : null;
+
+/**
+ * The hit a caller asked to read in another language, as that version. The
+ * decision is the same; the snippet stays the one that matched, so the result
+ * says which language that was.
+ */
+const preferredLanguageHit = <
+  THit extends ReturnType<typeof mergeCaseLawSearchHits>[number]["hit"],
+>(
+  hit: THit,
+  preferredLanguage: string | null,
+) => {
+  const version =
+    preferredLanguage === null ||
+    normalizePublicDecisionLanguage(hit.language) === preferredLanguage
+      ? undefined
+      : hit.languageAlternates.find(
+          ({ language }) =>
+            normalizePublicDecisionLanguage(language) === preferredLanguage,
+        );
+  return version === undefined
+    ? { served: hit, matchedLanguage: undefined }
+    : {
+        served: {
+          ...hit,
+          decisionId: version.id,
+          caseNumber: version.caseNumber,
+          court: version.court,
+          decisionDate: version.decisionDate,
+          language: version.language,
+          slug: version.slug,
+          // The alternates read carries no publisher link; the reader URL and
+          // read_case_law_decision give this version's own.
+          sourceUrl: null,
+        },
+        matchedLanguage: hit.language,
+      };
 };
+
+const caseLawSearchResult =
+  (preferredLanguage: string | null) =>
+  ({
+    hit: matchedHit,
+    match,
+    matchedQueries,
+  }: ReturnType<typeof mergeCaseLawSearchHits>[number]) => {
+    const { served: hit, matchedLanguage } = preferredLanguageHit(
+      matchedHit,
+      preferredLanguage,
+    );
+    const resource = resourceRef({
+      type: RESOURCE_TYPE.CASE_LAW_DECISION,
+      id: brandPersistedCaseLawDecisionId(hit.decisionId),
+    });
+    return {
+      matchedQueries,
+      ...legalCitationLinkFields({
+        url: buildCaseLawDecisionAppUrl({
+          caseNumber: hit.caseNumber,
+          country: hit.country,
+          court: hit.court,
+          decisionId: hit.decisionId,
+          language: hit.language,
+          languageAlternates: hit.languageAlternates,
+          slug: hit.slug,
+        }),
+        sourceUrl: hit.sourceUrl,
+      }),
+      caseNumber: hit.caseNumber,
+      citationAuthority: hit.citationAuthority,
+      citationCount: hit.citationCount,
+      country: hit.country,
+      ...projectCaseLawCourt(hit),
+      decisionDate: hit.decisionDate,
+      decisionId: hit.decisionId,
+      resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
+      decisionType: hit.decisionType,
+      decisionTypeKind: hit.decisionTypeKind,
+      ecli: hit.ecli,
+      language: hit.language,
+      matchingPassages: hit.matchingPassages,
+      ...(matchedLanguage === undefined ? {} : { matchedLanguage }),
+      textAvailability: hit.textAvailability,
+      match,
+      ...(hit.textWithheldReason === null
+        ? {
+            snippet: toPlainTextSnippet(hit.headline),
+            keywords:
+              hit.keywords === null
+                ? null
+                : { ...hit.keywords, items: [...hit.keywords.items] },
+            headnote:
+              hit.headnote.type === TEXT_FIELD_TYPE.PRESENT
+                ? hit.headnote
+                : null,
+          }
+        : {
+            excerpt: {
+              type: "withheld" as const,
+              reason: hit.textWithheldReason,
+            },
+            // Headnote and classifications are the source's own text: the
+            // licence that withholds the excerpt withholds them too.
+            keywords: null,
+            headnote: null,
+          }),
+    };
+  };
 
 /**
  * The merged page's continuation: null when every query is exhausted, which
@@ -2455,6 +2521,10 @@ const mergedCaseLawSearchCursor = (
     ? null
     : encodePaginationCursor(subCursors);
 };
+
+const caseLawSearchResultFor = (
+  args: v.InferOutput<typeof searchCaseLawArgs>,
+) => caseLawSearchResult(preferredLanguageOf(args));
 
 /**
  * The merged page's outcome: truncated on the time budget when a phrasing
@@ -2640,7 +2710,7 @@ const listSearchCaseLawProvision = async ({
     ),
     nextCursor: page.nextCursor,
     paginationOutcome: page.paginationOutcome,
-    results: merged.map(caseLawSearchResult),
+    results: merged.map(caseLawSearchResultFor(args)),
     total: page.total,
     ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
   });
@@ -3067,7 +3137,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     searches: searchNotesForCall(searches, requests),
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
     paginationOutcome: mergedCaseLawPaginationOutcome(pages),
-    results: merged.map(caseLawSearchResult),
+    results: merged.map(caseLawSearchResultFor(parsed.output)),
     total: single?.total ?? SEARCH_TOTAL_NOT_COUNTED,
     ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
   });
@@ -3663,6 +3733,34 @@ const decisionTextPositionOf = ({
     ? { type: "page", page: page ?? LIMITS.caseLawDecisionFirstPage }
     : { type: "query", query };
 
+/** Each requested decision's version in the preferred language, where one exists. */
+const preferredDecisionVersions = async (
+  {
+    decision_ids: decisionIds,
+    preferred_language: rawPreferredLanguage,
+  }: DecisionReadArgs,
+  context: AuthorizedMcpRequestContext,
+): Promise<ReadonlyMap<string, string>> => {
+  const language = normalizePublicDecisionLanguage(rawPreferredLanguage);
+  return language === null
+    ? new Map()
+    : await (
+        context.testDependencies?.readPreferredLanguageVersionIds ??
+        readPreferredLanguageVersionIds
+      )({ caseLawDb: caseLawPublicReadDb, decisionIds, language });
+};
+
+/** An entry read as another language's version says which id was asked for. */
+const withRequestedDecisionId = (
+  requestedDecisionId: string | undefined,
+  item: DecisionItemResult,
+): DecisionItemResult =>
+  item.status === DECISION_READ_STATUS.found &&
+  requestedDecisionId !== undefined &&
+  requestedDecisionId !== item.decisionId
+    ? { ...item, decision: { ...item.decision, requestedDecisionId } }
+    : item;
+
 const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>
 > = async ({ args, context }) => {
@@ -3671,7 +3769,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const {
-    decision_ids: decisionIds,
+    decision_ids: requestedIds,
     full = false,
     include,
     max_chars: maxChars,
@@ -3682,6 +3780,11 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   if (refusal !== null) {
     return refusal;
   }
+  const preferredVersions = await preferredDecisionVersions(
+    parsed.output,
+    context,
+  );
+  const decisionIds = requestedIds.map((id) => preferredVersions.get(id) ?? id);
   const position = decisionTextPositionOf(parsed.output);
   const includedFields = decisionIncludedFields({ include, position });
 
@@ -3871,20 +3974,23 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   return toolDataResult(
     projectionPayload(READ_CASE_LAW_DECISION_PROJECTION, {
       items: decisionIds.map((decisionId, index) =>
-        failedIds.has(decisionId)
-          ? decisionReadFailedItem(decisionId)
-          : decisionItemResult({
-              decisionId,
-              windowChars: Math.max(1, windowChars[index] ?? 0),
-              outline: decisionIds.length === 1 ? "include" : "omit",
-              read: readOf(decisionId),
-              digest: digests.get(decisionId),
-              readsSharedCorpus,
-              documentHydration: onDemand.type,
-              position,
-              includedFields,
-              seenTextVersion,
-            }),
+        withRequestedDecisionId(
+          requestedIds[index],
+          failedIds.has(decisionId)
+            ? decisionReadFailedItem(decisionId)
+            : decisionItemResult({
+                decisionId,
+                windowChars: Math.max(1, windowChars[index] ?? 0),
+                outline: decisionIds.length === 1 ? "include" : "omit",
+                read: readOf(decisionId),
+                digest: digests.get(decisionId),
+                readsSharedCorpus,
+                documentHydration: onDemand.type,
+                position,
+                includedFields,
+                seenTextVersion,
+              }),
+        ),
       ),
     }),
   );

@@ -1573,6 +1573,16 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           FILTER_KIND,
         ),
+        preferred_language: withKind(
+          {
+            type: "string",
+            minLength: 1,
+            maxLength: 8,
+            description:
+              "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, and matchedLanguage names the language its snippet came from; otherwise it stays in the language that matched. Decisions in one language are unaffected. Ignored together with language.",
+          },
+          FILTER_KIND,
+        ),
         provision: {
           type: "string",
           minLength: 1,
@@ -3040,6 +3050,70 @@ describe("OpenAI-compatible MCP tools", () => {
       });
     },
   );
+
+  test("search_case_law returns a decision's version in the preferred language", async () => {
+    const CZECH_VERSION_ID = "019dce0c-e98c-7000-a129-07b2b5486972";
+    const alternate = (language: string, id: string) => ({
+      caseNumber: "C-51/17",
+      country: "EU",
+      court: "Soudní dvůr",
+      decisionDate: "2018-09-20",
+      id,
+      language,
+      slug: `c-51-17-${language}`,
+    });
+    const resultFor = async (args: Record<string, unknown>) => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: null,
+        hits: [
+          {
+            ...createCaseLawHit(DECISION_ID, "holding"),
+            language: "pl",
+            languageAlternates: [
+              alternate("pl", DECISION_ID),
+              alternate("cs", CZECH_VERSION_ID),
+            ],
+          },
+        ],
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: "C-51/17",
+        warnings: [],
+      });
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "EU", queries: ["C-51/17"], ...args },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      );
+      return v
+        .parse(
+          v.object({ results: v.array(v.record(v.string(), v.unknown())) }),
+          payload,
+        )
+        .results.at(0);
+    };
+
+    const preferred = await resultFor({ preferred_language: "cs" });
+    expect(preferred).toMatchObject({
+      decisionId: CZECH_VERSION_ID,
+      language: "cs",
+      matchedLanguage: "pl",
+    });
+    expect(preferred).not.toHaveProperty("source_url");
+
+    const missing = await resultFor({ preferred_language: "de" });
+    expect(missing).toMatchObject({ decisionId: DECISION_ID, language: "pl" });
+    expect(missing).not.toHaveProperty("matchedLanguage");
+
+    const filtered = await resultFor({
+      language: "pl",
+      preferred_language: "cs",
+    });
+    expect(filtered).toMatchObject({ decisionId: DECISION_ID, language: "pl" });
+  });
 
   test("search_case_law carries a publisher link only through the link rule", async () => {
     const hitWith = (sourceUrl: string | null) => ({
@@ -7011,6 +7085,7 @@ describe("OpenAI-compatible MCP tools", () => {
         truncated?: true;
         warnings?: { code: string; message: string; hint: string }[];
       };
+      requestedDecisionId?: string;
       outline?: { page: number; title: string; url?: string }[];
       page?: number;
       pageCount?: number;
@@ -7816,6 +7891,28 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(first.decision).toMatchObject({ text: "𠮷", pageCount: 2 });
     const second = await readOne({ max_chars: 1, page: 2 });
     expect(second.decision?.text).toBe("A");
+  });
+
+  test("read_case_law_decision reads the preferred language's version", async () => {
+    const CZECH_VERSION_ID = "019dce0c-e98c-7000-a129-07b2b5486972";
+    readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
+    const readVersions = mock(() =>
+      Promise.resolve(new Map([[DECISION_ID, CZECH_VERSION_ID]])),
+    );
+    const { items } = await readDecisions(
+      { decision_ids: [DECISION_ID], preferred_language: "CS" },
+      createContext({
+        testDependencies: { readPreferredLanguageVersionIds: readVersions },
+      }),
+    );
+
+    expect(readVersions).toHaveBeenCalledTimes(1);
+    expect(readVersions.mock.calls.at(0)).toMatchObject([
+      { decisionIds: [DECISION_ID], language: "cs" },
+    ]);
+    const item = items.at(0) ?? panic("Missing decision entry");
+    expect(item.decisionId).toBe(CZECH_VERSION_ID);
+    expect(item.decision?.requestedDecisionId).toBe(DECISION_ID);
   });
 
   test("read_case_law_decision flags a text that changed between pages", async () => {

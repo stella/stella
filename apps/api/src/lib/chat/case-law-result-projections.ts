@@ -115,6 +115,9 @@ const caseLawSearchIdentityFields = {
   matchedQueries: v.array(v.number()),
   // Passages of the decision that matched, within the scanned window.
   matchingPassages: v.number(),
+  // The language the snippet came from, when the result was returned as
+  // another language's version of the decision.
+  matchedLanguage: v.optional(v.string()),
   textAvailability: v.picklist(Object.values(DECISION_TEXT_AVAILABILITY)),
   // Whether the decision holds every word of the query, or only some of them
   // (appended after the others when few decisions held every word).
