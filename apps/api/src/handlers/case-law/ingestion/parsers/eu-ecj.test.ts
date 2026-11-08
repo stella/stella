@@ -1290,3 +1290,89 @@ describe("converter output", () => {
     }
   });
 });
+
+describe("title lines and the footnote list", () => {
+  const parseBody = (body: string) =>
+    parseEcjDecisionHtml({
+      caseNumber: "C-176/17",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62017CC0176",
+      html: `<html><body>${body}</body></html>`,
+    }).documentAst.blocks;
+
+  // The markup Cellar serves for an Advocate General's opinion: the title is
+  // set over three lines, and the third carries the first note reference.
+  const OPINION = [
+    "<p class='sum-title-1'><a id='conclusion'></a>OPINION OF ADVOCATE GENERAL</p>",
+    "<p class='sum-title-1'>KOKOTT</p>",
+    "<p class='sum-title-1'>delivered on 26 April 2018 (<span class='note'><a id='c-E0001' href='#t-E0001'>1</a></span>)</p>",
+    "<p class='subtitle'><span class='bold'>Case C‑176/17</span></p>",
+    "<p class='normal'>The request concerns consumer protection.</p>",
+    "<hr class='note'/>",
+    "<p class='note'>(<span class='note'><a id='t-E0001' href='#c-E0001'>1</a></span>)\tOriginal language: German.</p>",
+    "<p class='note'>(<span class='note'><a id='t-E0002' href='#c-E0002'>2</a></span>)\tCouncil Directive 93/13/EEC of 5 April 1993.</p>",
+    "<p class='note'>Continued text of the second note.</p>",
+  ].join("");
+
+  test("a title set over several lines is one decision title", () => {
+    const titles = parseBody(OPINION).filter(
+      (block) => block.type === "heading" && block.role === "decision-title",
+    );
+    expect(titles.map((block) => block.plainText)).toEqual([
+      "OPINION OF ADVOCATE GENERAL KOKOTT delivered on 26 April 2018 (1)",
+    ]);
+    expect(
+      titles[0]?.inlines.filter((inline) => inline.type === "line-break"),
+    ).toHaveLength(2);
+  });
+
+  test("a judgment's chamber and date lines are one decision title", () => {
+    const titles = parseBody(
+      [
+        "<p class='coj-sum-title-1'>JUDGMENT OF THE COURT (Fourth Chamber)</p>",
+        "<p class='coj-sum-title-1'>16 July 2020</p>",
+        "<p class='coj-normal'>Body paragraph.</p>",
+      ].join(""),
+    ).filter(
+      (block) => block.type === "heading" && block.role === "decision-title",
+    );
+    expect(titles.map((block) => block.plainText)).toEqual([
+      "JUDGMENT OF THE COURT (Fourth Chamber) 16 July 2020",
+    ]);
+  });
+
+  test("each footnote entry is a note keyed by the anchor its reference names", () => {
+    const notes = parseBody(OPINION).flatMap((block) =>
+      block.type === "paragraph" && block.note !== undefined
+        ? [
+            {
+              anchorId: block.anchorId,
+              note: block.note,
+              text: block.plainText,
+            },
+          ]
+        : [],
+    );
+    expect(notes).toEqual([
+      {
+        anchorId: "t-E0001",
+        note: { type: "footnote", label: "1", noteId: "t-E0001" },
+        text: expect.stringContaining("Original language: German."),
+      },
+      {
+        anchorId: "t-E0002",
+        note: { type: "footnote", label: "2", noteId: "t-E0002" },
+        text: expect.stringContaining("Council Directive 93/13/EEC"),
+      },
+      {
+        anchorId: expect.not.stringMatching(/^t-E0002$/u),
+        note: { type: "footnote", label: "2", noteId: "t-E0002" },
+        text: "Continued text of the second note.",
+      },
+    ]);
+  });
+});

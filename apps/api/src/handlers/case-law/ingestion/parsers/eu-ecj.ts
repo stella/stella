@@ -878,6 +878,36 @@ const classListOf = (el: cheerio.Cheerio<AnyNode>): string[] =>
       name.startsWith(CLASS_PREFIX) ? name.slice(CLASS_PREFIX.length) : name,
     );
 
+/**
+ * One title the court sets over several lines ("OPINION OF ADVOCATE
+ * GENERAL" / "KOKOTT" / "delivered on 26 April 2018", or the chamber and the
+ * date): the line joins the decision title before it, its printed lines kept
+ * apart. Returns whether the line was folded.
+ */
+const foldTitleLine = (
+  builder: BlockBuilder,
+  inlines: Inline[],
+  plainText: string,
+): boolean => {
+  const previous = builder.blocks.at(-1);
+  if (
+    !builder.inTitleRun ||
+    previous?.type !== "heading" ||
+    previous.role !== "decision-title"
+  ) {
+    return false;
+  }
+  builder.blocks[builder.blocks.length - 1] = {
+    ...previous,
+    inlines: [...previous.inlines, { type: "line-break" }, ...inlines],
+    plainText: `${previous.plainText} ${plainText}`,
+  };
+  // The line still takes its place in the anchor sequence, so every later
+  // block keeps the anchor a link or an annotation already names.
+  nextAnchor(builder, "h");
+  return true;
+};
+
 type VisitChildOptions = {
   $: cheerio.CheerioAPI;
   builder: BlockBuilder;
@@ -979,6 +1009,9 @@ const visitChild = ({
   }
 
   if (classes.includes(CLASS.title)) {
+    if (foldTitleLine(builder, inlines, plainText)) {
+      return;
+    }
     pushHeading(builder, {
       level: 1,
       role: builder.inTitleRun ? "decision-title" : "section-heading",
@@ -1017,8 +1050,53 @@ const visitChild = ({
     return;
   }
 
+  if (builder.zone === "footnotes" && classes.includes(CLASS.note)) {
+    pushFootnote(builder, $el, { inlines, plainText });
+    return;
+  }
+
   pushParagraph(builder, {
     ...roleOf(builder.zone),
+    inlines,
+    plainText,
+  });
+};
+
+/**
+ * One entry of the footnote list (`<p class="note">(<span class="note"><a
+ * id="t-…">1</a></span>)\tText</p>`): a footnote block keyed by the anchor
+ * the body's reference points at, its printed mark as the label. An entry
+ * continued in a further paragraph without its own anchor shares the note it
+ * continues.
+ */
+const pushFootnote = (
+  builder: BlockBuilder,
+  $el: cheerio.Cheerio<AnyNode>,
+  { inlines, plainText }: { inlines: Inline[]; plainText: string },
+): void => {
+  const anchor = $el.find("a[id]").first();
+  const noteId = anchor.attr("id");
+  const label = visibleHtmlText(anchor).trim();
+  const previous = builder.blocks.at(-1);
+  const continued =
+    previous?.type === "paragraph" && previous.note !== undefined
+      ? previous.note
+      : undefined;
+  const note =
+    noteId !== undefined && label.length > 0
+      ? { type: "footnote" as const, label, noteId }
+      : continued;
+  if (note === undefined) {
+    pushParagraph(builder, { inlines, plainText });
+    return;
+  }
+  // The entry keys its first block by the anchor the body's reference
+  // names; it still takes its place in the sequence, so later anchors stay.
+  const sequenced = nextAnchor(builder, "p");
+  const firstOfNote = note !== continued;
+  pushParagraph(builder, {
+    anchorId: firstOfNote && noteId !== undefined ? noteId : sequenced,
+    note,
     inlines,
     plainText,
   });
