@@ -24,7 +24,6 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/agent-engine"
   },
   "dependencies": {
-    "@stll/agent-input": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/errors": "workspace:*",
     "@stll/fetch": "workspace:*",

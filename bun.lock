@@ -684,7 +684,6 @@
       "name": "@stll/agent-engine",
       "version": "0.0.0",
       "dependencies": {
-        "@stll/agent-input": "workspace:*",
         "@stll/api-contract": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/fetch": "workspace:*",

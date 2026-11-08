@@ -1,8 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import { dlopen, FFIType } from "bun:ffi";
 import { closeSync, readdirSync, readFileSync } from "node:fs";
-
-import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import * as v from "valibot";
 
 /**
  * A harness CLI and every process it starts, ended together.
@@ -165,16 +164,24 @@ type SessionListing =
 
 const LINUX_STAT_FIELDS = { state: 0, session: 3 } as const;
 
+/** A whole decimal id, digits only: no sign, space or other spelling. */
+const ProcessIdSchema = v.pipe(
+  v.string(),
+  v.digits(),
+  v.toNumber(),
+  v.safeInteger(),
+  v.minValue(2),
+);
+
 /**
  * A process or group id as `/proc` or `ps` writes it, or `null` for text that
  * names none (`/proc/self`, a header) or one at or below 1, which no spawned
  * process has.
  */
-const processIdOf = (text: string | undefined): number | null =>
-  parseIntegerToken(text, { sign: "unsigned", min: 2 }).match({
-    ok: (id) => id,
-    err: () => null,
-  });
+const processIdOf = (text: string | undefined): number | null => {
+  const parsed = v.safeParse(ProcessIdSchema, text);
+  return parsed.success ? parsed.output : null;
+};
 
 /**
  * The session of `pid` from `/proc`, or `null` once it exited (a zombie
