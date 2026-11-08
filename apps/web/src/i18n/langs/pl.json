@@ -2027,6 +2027,7 @@
       "search-past-chats": "Przeszukiwanie poprzednich czatów",
       "set_field_value": "Ustaw wartość pola",
       "set_practice_jurisdictions": "Ustaw jurysdykcje praktyki",
+      "show_app": "Wyświetlanie widoku interaktywnego",
       "show_in_document": "Pokazywanie w dokumencie",
       "spawn_subagents": "Delegowanie do subagentów",
       "suggestChangesApplied": "Zastosowano {applied, plural, one {# zmianę} few {# zmiany} many {# zmian} other {# zmiany}}",

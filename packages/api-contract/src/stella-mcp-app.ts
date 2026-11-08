@@ -169,3 +169,27 @@ export const stellaMcpAppToolResultSchema = v.strictObject({
 export type StellaMcpAppToolResult = v.InferOutput<
   typeof stellaMcpAppToolResultSchema
 >;
+
+/**
+ * The chat tool that shows one of stella's apps for a read this turn ran.
+ * The model names the read by the `appId` the read's answer carried.
+ */
+export const SHOW_APP_TOOL_NAME = "show_app";
+
+/** A turn offers at most this many reads to show. */
+export const SHOW_APP_LIMITS = { appsPerTurn: 16, appIdChars: 16 } as const;
+
+export const showAppInputSchema = v.strictObject({
+  app_id: v.pipe(
+    v.string(),
+    v.regex(/^app_[0-9]{1,3}$/u),
+    v.maxLength(SHOW_APP_LIMITS.appIdChars),
+  ),
+});
+export type ShowAppInput = v.InferOutput<typeof showAppInputSchema>;
+
+export const showAppOutputSchema = v.strictObject({
+  shown: v.literal(true),
+  tool: toolNameSchema,
+});
+export type ShowAppOutput = v.InferOutput<typeof showAppOutputSchema>;

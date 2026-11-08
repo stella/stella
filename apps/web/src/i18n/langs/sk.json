@@ -2027,6 +2027,7 @@
       "search-past-chats": "Prehľadávanie predchádzajúcich chatov",
       "set_field_value": "Nastaviť hodnotu poľa",
       "set_practice_jurisdictions": "Nastaviť jurisdikcie",
+      "show_app": "Zobrazenie interaktívneho prehľadu",
       "show_in_document": "Zobrazenie v dokumente",
       "spawn_subagents": "Delegovanie na čiastkových agentov",
       "suggestChangesApplied": "{applied, plural, one {Použitá # úprava} few {Použité # úpravy} many {Použitých # úprav} other {Použitých # úpravy}}",

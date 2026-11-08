@@ -2027,6 +2027,7 @@
       "search-past-chats": "Varasemate vestluste otsimine",
       "set_field_value": "Määra välja väärtus",
       "set_practice_jurisdictions": "Määra praktikajurisdiktsioonid",
+      "show_app": "Interaktiivse vaate kuvamine",
       "show_in_document": "Dokumendis kuvamine",
       "spawn_subagents": "Delegeerimine alamagentidele",
       "suggestChangesApplied": "Rakendatud {applied, plural, one {# muudatus} other {# muudatust}}",

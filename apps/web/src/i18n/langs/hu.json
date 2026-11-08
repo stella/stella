@@ -2027,6 +2027,7 @@
       "search-past-chats": "Keresés a korábbi csevegésekben",
       "set_field_value": "Mezőérték beállítása",
       "set_practice_jurisdictions": "Joghatóságok beállítása",
+      "show_app": "Interaktív nézet megjelenítése",
       "show_in_document": "Megjelenítés a dokumentumban",
       "spawn_subagents": "Delegálás alügynököknek",
       "suggestChangesApplied": "{applied, plural, one {# módosítás alkalmazva} other {# módosítás alkalmazva}}",

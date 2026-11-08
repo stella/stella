@@ -67,6 +67,11 @@ import {
   REMEMBER_TOOL_NAME,
 } from "@/api/handlers/chat/tools/remember-tool";
 import { createSecretTools } from "@/api/handlers/chat/tools/secret-tools";
+import {
+  createShowAppTool,
+  createTurnAppLedger,
+} from "@/api/handlers/chat/tools/show-app-tool";
+import type { TurnAppLedger } from "@/api/handlers/chat/tools/show-app-tool";
 import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
 import {
   businessRegistryCallScope,
@@ -142,6 +147,7 @@ import {
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import { isAccountAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
 
 const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
@@ -388,6 +394,7 @@ type RegistryWriteTools = ChatRegistryWriteToolMap;
 type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
 type RememberTools = ReturnType<typeof createRememberTools>;
 type ShowVisualTools = ReturnType<typeof createShowVisualTools>;
+type ShowAppTools = ReturnType<typeof createShowAppTool>;
 type SecretTools = ReturnType<typeof createSecretTools>;
 type ConnectorTools = ReturnType<typeof createConnectorTools>;
 
@@ -416,7 +423,8 @@ type BuiltInChatTools = OrgTools &
   RegistryWriteTools &
   SubagentTools &
   RememberTools &
-  ShowVisualTools;
+  ShowVisualTools &
+  ShowAppTools;
 
 export type ChatTools = BuiltInChatTools;
 
@@ -428,9 +436,39 @@ export type ChatBuiltinApprovalToolName = Exclude<
 type BuiltInChatToolPolicyName =
   keyof BuiltInChatTools | CurrentSkillEditToolName;
 
+/**
+ * A turn's `show_app` and the ledger its code-mode reads feed. Every app
+ * chat shows presents a public-law read, so without the corpus, or without
+ * an origin that stores the turn's answer, a turn offers neither.
+ */
+const turnAppTools = (
+  appTools: Pick<Parameters<typeof createShowAppTool>[0], "origin"> | undefined,
+): {
+  codeMode: { recordAppRead?: TurnAppLedger["record"] };
+  tools: Partial<ShowAppTools>;
+} => {
+  if (
+    appTools === undefined ||
+    !isMcpToolFeatureEnabled("FEATURE_PUBLIC_LAW")
+  ) {
+    return { codeMode: {}, tools: {} };
+  }
+  const ledger = createTurnAppLedger();
+  return {
+    codeMode: { recordAppRead: ledger.record },
+    tools: createShowAppTool({ ledger, origin: appTools.origin }),
+  };
+};
+
 export type GetChatToolsProps = {
   /** Only the owning chat turn can issue and store displayed visual resources. */
   visualTools?: Parameters<typeof createShowVisualTools>[0] | undefined;
+  /**
+   * The owning turn's origin, which mints the parts `show_app` shows. Only a
+   * turn that stores its own answer offers the tool.
+   */
+  appTools?:
+    Pick<Parameters<typeof createShowAppTool>[0], "origin"> | undefined;
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: ChatRegistryContextDeps["testDependencies"] | undefined;
   /** Deployment gate; injectable so both disabled and enabled toolsets test. */
@@ -1048,7 +1086,9 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     directTools: [],
     unavailableReasons: new Map(),
   };
+  const turnApps = turnAppTools(props.appTools);
   const executionTools = buildChatCodeModeTools({
+    ...turnApps.codeMode,
     sourceScopes,
     featureAccessSnapshot,
     testDependencies,
@@ -1405,6 +1445,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
             ...props,
             browserExtension: undefined,
             visualTools: undefined,
+            appTools: undefined,
             hasActiveDocxEditClient: false,
             delegationDepth: delegationDepth + 1,
             projectToolSet: (tools) =>
@@ -1429,6 +1470,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...(props.visualTools === undefined
         ? {}
         : createShowVisualTools(props.visualTools)),
+      ...turnApps.tools,
       ...orgTools,
       ...secretTools,
       ...connectorTools,
