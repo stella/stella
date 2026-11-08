@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 7,
+  "reason": "Account deletion erases the account's exported personal records inside the confirmed deletion transaction, which records the deletion request; each per-table erasure carries the same skip as the existing deletion steps."
+}
