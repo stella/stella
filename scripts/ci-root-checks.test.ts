@@ -561,6 +561,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/check-marketing-recordings.ts",
     "scripts/ci-check-pool-registry.ts",
     "scripts/prepare-maintenance-release.ts",
+    "scripts/product-media.ts",
   ],
   "ci-checks-rest/Test CLI contract changeset guard": [
     "scripts/changeset-guard.ts",
