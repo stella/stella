@@ -3,7 +3,6 @@ import * as v from "valibot";
 
 import { searchHistoryPathCountry } from "@stll/api-contract/search-history-identity";
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig } from "@stll/db-load-gate/health";
 import type { Verdict } from "@stll/db-load-gate/health";
 
 import { createSafeId } from "@/api/lib/branded-types";
@@ -17,6 +16,7 @@ import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { systemAuditRow } from "@/api/lib/system-audit/record";
 import { isRecord } from "@/api/lib/type-guards";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { createBackfillRuntime } from "./backfill-runtime";
 import type {
   OnlineMigrationConnection,
@@ -135,7 +135,7 @@ export const createSearchHistoryCountryRepair = ({
       name: REPAIR_NAME,
       tableName: "search_history_entries",
       initialSize: BATCH,
-      config: defaultConfig,
+      config: loadGateHealthConfig(),
       connection,
       readVerdict,
       clock,
@@ -189,19 +189,17 @@ export const createSearchHistoryCountryRepair = ({
                 };
               }),
             );
-            const parameters: OnlineMigrationParam[] = classified.flatMap(
-              ({ id, organizationId, country }) => [
-                id,
-                organizationId,
-                country,
-              ],
-            );
-            const values = classified
-              .map(
-                (_, index) =>
-                  `($${index * 3 + 1}::uuid, $${index * 3 + 2}::varchar, $${index * 3 + 3}::varchar)`,
-              )
-              .join(", ");
+            // One JSON parameter keeps the statement text the same for every
+            // batch size.
+            const parameters: OnlineMigrationParam[] = [
+              JSON.stringify(
+                classified.map(({ id, organizationId, country }) => ({
+                  id,
+                  organization_id: organizationId,
+                  country,
+                })),
+              ),
+            ];
             await tx.query(
               `UPDATE public.search_history_entries AS entry
                   SET country = classified.country,
@@ -210,7 +208,7 @@ export const createSearchHistoryCountryRepair = ({
                         WHEN classified.country IS NULL THEN clock_timestamp()
                         ELSE NULL
                       END
-                 FROM (VALUES ${values}) AS classified(id, organization_id, country)
+                 FROM jsonb_to_recordset($1::text::jsonb) AS classified(id uuid, organization_id varchar, country varchar)
                 WHERE entry.id = classified.id
                   AND entry.organization_id = classified.organization_id
                   AND entry.country IS NULL
