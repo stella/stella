@@ -465,7 +465,7 @@ describe("workspace actions run after the checkout that brings them", () => {
   test("a root checkout, local or through the shared retry action, makes workspace actions usable", () => {
     for (const uses of [
       CHECKOUT,
-      "stella/.github/actions/partial-clone-checkout@9095c76cb8d5cb06bdd103aece6d9515393fa810",
+      "stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d",
     ]) {
       expect(() =>
         validateLocalActionsAfterCheckout(
