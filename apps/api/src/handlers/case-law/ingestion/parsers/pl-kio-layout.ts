@@ -1044,6 +1044,30 @@ export type PlKioLayoutReading = {
   readonly pageNumbers: readonly string[];
 };
 
+/** Alignments a converter sets a heading in; any other heading is body text. */
+const HEADING_ALIGNMENTS: ReadonlySet<string> = new Set(["center", "right"]);
+
+/**
+ * Read the headings the converter made of body lines as the paragraphs they
+ * are. The converter emits some printed lines of the body as `<h1>`, set
+ * justified like the text around them (`do Sądu Okręgowego w Warszawie.`,
+ * `2.2. zasądza od …`); the decision's own headings (`WYROK`,
+ * `Uzasadnienie`, `orzeka:`) are centred. A heading set otherwise is a
+ * paragraph, so the printed-line reader joins it with the lines it
+ * continues.
+ */
+const demoteBodyHeadings = ($: CheerioAPI): void => {
+  for (const element of $("h1, h2, h3, h4, h5, h6").toArray()) {
+    const alignment = inheritedStyleValue(element, "text-align");
+    if (
+      $(element).closest("table").length === 0 &&
+      (alignment === undefined || !HEADING_ALIGNMENTS.has(alignment))
+    ) {
+      element.name = "p";
+    }
+  }
+};
+
 /**
  * Read the converter's page furniture, printed lines and small type back into
  * the markup the decision states. Mutates `$`.
@@ -1059,6 +1083,7 @@ export const readPlKioLayout = ($: CheerioAPI): PlKioLayoutReading => {
   removeBidiMarks(body);
   liftSmallTypeIndices($, bodySize);
   spaceWordNumbering($);
+  demoteBodyHeadings($);
 
   const blocks = readLayoutBlocks($, { bodySize, authorBreaks });
   const numbered = pageNumbersOf({ blocks, bodyTypeface });
