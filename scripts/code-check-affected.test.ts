@@ -45,6 +45,7 @@ import {
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
   pluginFixtureModules,
+  prioritizeLeadLint,
   prioritizeWebLint,
   resultBoundaryLintCommand,
   ROOT_SCRIPT_LINT_INPUTS,
@@ -1463,6 +1464,40 @@ describe("parallel code-quality legs", () => {
     }
     expect(codeCheckConcurrency(8 * 1024 ** 3)).toBe(2);
     expect(codeCheckConcurrency(12 * 1024 ** 3)).toBe(3);
+  });
+
+  test("the API lint runs alone, then the other workspaces, then the API typecheck", () => {
+    const command = [
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "lint",
+      "typecheck",
+      "--summarize",
+      "--filter=!./apps/web",
+    ];
+    const api = {
+      workspace: "apps/api",
+      name: "@stll/api",
+      typecheckBesideLint: false,
+    };
+    const [lint, rest, typecheck, ...extra] = prioritizeLeadLint(
+      [command],
+      api,
+    );
+    expect(extra).toEqual([]);
+    expect(lint).toContain("@stll/api#lint");
+    expect(lint).not.toContain("@stll/api#typecheck");
+    expect(lint).not.toContain("lint");
+    expect(rest).toEqual([...command, "--filter=!./apps/api"]);
+    expect(typecheck).toContain("@stll/api#typecheck");
+    expect(typecheck).not.toContain("@stll/api#lint");
+    expect(
+      prioritizeLeadLint([[...command.slice(0, 5), "--summarize"]], api).map(
+        (entry) => entry.filter((argument) => argument.includes("@stll/api")),
+      ),
+    ).toEqual([["@stll/api#lint"], []]);
   });
 
   test("a container memory limit below the machine's is the limit the checks get", () => {
