@@ -861,6 +861,7 @@ const runGradingPass = async ({
     positions,
     passageTextById,
     contentBySourceId: extraction.value.contentBySourceId,
+    refusedSourceIds: extraction.value.refusedSourceIds,
     tiersBySourceId,
     target,
     documentRead: fit.value.type,

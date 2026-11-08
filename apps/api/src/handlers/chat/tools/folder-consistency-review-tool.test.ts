@@ -118,6 +118,7 @@ describe("review_folder_consistency", () => {
       );
       return Result.ok({
         lastBlockId: null,
+        refusedSourceIds: new Set<string>(),
         withheld: [],
         contentBySourceId: new Map([
           [
@@ -228,6 +229,7 @@ describe("review_folder_consistency", () => {
         );
         return Result.ok({
           lastBlockId: null,
+          refusedSourceIds: new Set<string>(),
           withheld: [],
           contentBySourceId: new Map([
             [

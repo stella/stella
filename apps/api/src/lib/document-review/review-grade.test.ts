@@ -223,6 +223,7 @@ const buildArgs = (
   perspective: NEUTRAL_PERSPECTIVE,
   referenceEntityVersionIds: [],
   passageTextById: referencePassageTextById,
+  refusedSourceIds: new Set<string>(),
   documentRead: "whole" as const,
   gradeTierMatches: gradeTierMatchesMock,
   gradeReferencePositions: gradeReferencePositionsMock,
@@ -257,6 +258,27 @@ describe("document review grading", () => {
       rationale: CUT_DOCUMENT_RATIONALE,
     });
     expect(findings.map(({ verdict }) => verdict)).not.toContain("missing");
+  });
+
+  test("flags a refused ask for review, in a whole or a cut document", async () => {
+    const refused = position(1);
+    const args = buildArgs([refused], new AbortController().signal);
+    args.contentBySourceId.delete(refused.sourceId);
+    const refusedSourceIds = new Set([refused.sourceId]);
+
+    for (const documentRead of ["whole", "cut"] as const) {
+      const [finding] = await buildFindings({
+        ...args,
+        refusedSourceIds,
+        documentRead,
+      });
+
+      expect(finding).toMatchObject({
+        verdict: "deviation",
+        rationale:
+          "Automated comparison against the standard could not be completed.",
+      });
+    }
   });
 
   test("does not propose a fix when model grading produced no verdict", async () => {

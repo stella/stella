@@ -136,6 +136,8 @@ export type OnFindingsGraded = (
 export type BuildFindingsArgs = AiGradingDeps & {
   positions: readonly Position[];
   contentBySourceId: ReadonlyMap<string, AskExtraction>;
+  /** Asks the model declined to answer, which say nothing about the document. */
+  refusedSourceIds: ReadonlySet<string>;
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
   /** The prepared target, compared directly against a reference standard's
    *  passages. */
@@ -223,15 +225,20 @@ const gradeWithoutModel = ({
   askContent,
   fieldContentBySourceId,
   documentRead,
+  askRefused,
 }: {
   position: Position;
   askContent: FieldContent | undefined;
   fieldContentBySourceId: ReadonlyMap<string, FieldContent>;
   documentRead: "whole" | "cut";
+  askRefused: boolean;
 }): GradingOutcome | null => {
   // Extract-only positions capture a value with no verdict.
   if (position.mode === "extract") {
     return { status: "graded", verdict: null, rationale: null };
+  }
+  if (askRefused) {
+    return UNGRADED_VERDICT;
   }
   if (documentRead === "cut" && askPresence(askContent) !== "present") {
     return {
@@ -572,6 +579,7 @@ const referenceFinding = (
 export const buildFindings = async ({
   positions,
   contentBySourceId,
+  refusedSourceIds,
   tiersBySourceId,
   target,
   perspective,
@@ -603,6 +611,7 @@ export const buildFindings = async ({
       askContent: contentBySourceId.get(position.sourceId)?.content,
       fieldContentBySourceId,
       documentRead,
+      askRefused: refusedSourceIds.has(position.sourceId),
     });
     if (verdict === null) {
       forModel.push(position);

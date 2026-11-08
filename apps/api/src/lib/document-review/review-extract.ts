@@ -83,6 +83,8 @@ export type ReviewAsk = {
 export type ReviewExtractionResult = {
   // Extracted ASK value + citations keyed by the originating position sourceId.
   contentBySourceId: Map<string, AskExtraction>;
+  // Asks the model declined to answer, which say nothing about the document.
+  refusedSourceIds: ReadonlySet<string>;
   // Last folio block id of the active DOCX, used as the insert anchor when a
   // FIX has no clause citation to replace. Null when no DOCX block exists.
   lastBlockId: string | null;
@@ -107,6 +109,7 @@ export type ExtractAskContentsArgs = {
 
 const EMPTY_RESULT: ReviewExtractionResult = {
   contentBySourceId: new Map(),
+  refusedSourceIds: new Set(),
   lastBlockId: null,
   withheld: [],
 };
@@ -306,8 +309,16 @@ export const extractAskContents = async ({
     );
 
     const contentBySourceId = new Map<string, AskExtraction>();
+    const refusedSourceIds = new Set<string>();
     for (const property of properties) {
       const sourceId = sourceIdByPropertyId.get(property.id);
+      if (
+        sourceId !== undefined &&
+        generation.refusedPropertyIds.has(property.id)
+      ) {
+        refusedSourceIds.add(sourceId);
+        continue;
+      }
       const propertyResult = generation.output[property.id];
       if (sourceId === undefined || !propertyResult) {
         continue;
@@ -356,6 +367,7 @@ export const extractAskContents = async ({
 
     return Result.ok({
       contentBySourceId,
+      refusedSourceIds,
       lastBlockId,
       withheld: generation.fit.type === "cut" ? generation.fit.withheld : [],
     });
