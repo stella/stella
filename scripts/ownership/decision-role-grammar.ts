@@ -18,6 +18,7 @@ export default {
     "A role rule written inside a parser imports nothing a lint rule could " +
     "confine; the structure-fidelity guard reads every source's fixtures " +
     "through the same grammar for a signature or the recital read as the " +
-    "ruling and a ruling after the reasons heading.",
+    "ruling, a ruling after the reasons heading, and a ruling the decision " +
+    "opens but holds no holding for.",
   enforcement: { kind: "none" },
 } as const satisfies OwnershipEntry;

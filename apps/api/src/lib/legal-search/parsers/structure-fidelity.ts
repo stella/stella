@@ -67,6 +67,11 @@ export const STRUCTURE_FIDELITY_RULES = {
    * the parser opened the operative part before its first operative line.
    */
   RECITAL_AS_HOLDING: "recital-as-holding",
+  /**
+   * A decision that opens a ruling before its reasons and holds no holding
+   * block: the parser read the ruling as head matter or as reasons.
+   */
+  RULING_WITHOUT_HOLDING: "ruling-without-holding",
 } as const;
 
 type StructureFidelityRule =
@@ -174,6 +179,10 @@ type RoleReading = {
   reasoned: boolean;
   /** Whether a line that rules has been read: the head matter is over. */
   ruled: boolean;
+  /** The first block before the reasons that opens a ruling. */
+  rulingOpening: Block | undefined;
+  /** Whether any paragraph is the decision's holding. */
+  held: boolean;
 };
 
 /** Whether a block opens the reasons, by the language's grammar. */
@@ -199,6 +208,14 @@ const holdingRoleRules = (
     : []),
 ];
 
+/** Whether a block opens a ruling, by the language's grammar. */
+const opensRuling = (
+  grammar: DecisionRoleGrammar | undefined,
+  block: Block,
+): boolean =>
+  (block.type === "heading" || block.type === "paragraph") &&
+  grammar?.opensRuling?.(block.plainText) === true;
+
 /** Whether a block rules, by the language's grammar. */
 const rules = (
   grammar: DecisionRoleGrammar | undefined,
@@ -221,10 +238,19 @@ export const structureFidelityIn = (
     grammar: decisionRoleGrammarOf(language),
     reasoned: false,
     ruled: false,
+    rulingOpening: undefined,
+    held: false,
   };
   for (const [index, block] of blocks.entries()) {
     const opens = opensReasons(reading.grammar, block);
     reading.ruled ||= rules(reading.grammar, block);
+    if (
+      reading.rulingOpening === undefined &&
+      !reading.reasoned &&
+      opensRuling(reading.grammar, block)
+    ) {
+      reading.rulingOpening = block;
+    }
     if (block.type !== "paragraph") {
       reading.reasoned ||= opens;
       continue;
@@ -243,6 +269,7 @@ export const structureFidelityIn = (
       finding(STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_SIGNATURE);
     }
     if (block.role === "holding") {
+      reading.held = true;
       for (const rule of holdingRoleRules(reading, text)) {
         finding(rule);
       }
@@ -269,6 +296,14 @@ export const structureFidelityIn = (
       );
     }
     reading.reasoned ||= opens;
+  }
+  const opening = reading.rulingOpening;
+  if (opening !== undefined && !reading.held) {
+    findings.push({
+      rule: STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING,
+      anchorId: opening.anchorId,
+      excerpt: excerptOf(opening.plainText.trim()),
+    });
   }
   return findings;
 };

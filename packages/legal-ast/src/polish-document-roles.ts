@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-uodo] only adds the ruling, composition, legal-basis ruling and document-type predicates, which the data-protection reader does not call; its recital reading is unchanged.
 /**
  * How a Polish decision names its own parts: the operative verbs its ruling
  * opens with, the reasons heading, the recital before the ruling, the closing
@@ -212,6 +213,28 @@ const REASONS_HEADING_RE = /^uzasadnienie\b/iu;
 // share one outline ("V. UZASADNIENIE" after point IV).
 const NUMBERED_REASONS_HEADING_RE = /^[IVXLC]+\s*[.)]\s*uzasadnienie$/iu;
 
+/** A ruling point's number, set apart or run on to its verb (`I.zmienia`). */
+const RULING_POINT_MARKER_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)] ?/u;
+
+/**
+ * Whether a line opens a ruling: a holding heading (`postanawia:`), or an
+ * operative verb, alone or after the point's number (`1. zasądza`,
+ * `I.zmienia`).
+ */
+export const opensPlRuling = (text: string): boolean => {
+  const line = grammarLine(text);
+  return (
+    isPlHoldingHeading(line) ||
+    startsWithPlOperativeVerb(line.replace(RULING_POINT_MARKER_RE, ""))
+  );
+};
+
+const COMPOSITION_LINE_RE = /\bw składzie(?: następującym)?\s?:/iu;
+
+/** Whether a line opens the bench (`w składzie:`, `w składzie następującym:`). */
+export const isPlCompositionLine = (text: string): boolean =>
+  COMPOSITION_LINE_RE.test(grammarLine(text));
+
 /** Whether a line opens the reasons (`Uzasadnienie`, `U z a s a d n i e n i e`). */
 export const isPlReasonsHeading = (text: string): boolean =>
   REASONS_HEADING_RE.test(grammarLine(text));
@@ -241,6 +264,27 @@ export const isPlRecitalLine = (text: string): boolean => {
     (OPENING_RECITAL_RE.test(line) || LEGAL_BASIS_RE.test(line)) &&
     !POLISH_OPERATIVE_WORD.test(line)
   );
+};
+
+/**
+ * Whether a line is the authority's ruling sentence on its legal basis:
+ * the basis, then the operative verb (`Na podstawie art. 14b § 1 … Dyrektor
+ * … stwierdza, że stanowisko … jest nieprawidłowe.`). The basis alone is the
+ * head matter before the ruling.
+ */
+export const isPlLegalBasisRuling = (text: string): boolean => {
+  const line = grammarLine(text);
+  return LEGAL_BASIS_RE.test(line) && POLISH_OPERATIVE_WORD.test(line);
+};
+
+/**
+ * Whether a line names the document's own declared type, as a title does
+ * (`INTERPRETACJA INDYWIDUALNA` for an individual tax interpretation).
+ */
+export const namesPlDocumentType = (text: string, type: string): boolean => {
+  const key = (value: string) =>
+    grammarLine(value).replace(/[.:]$/u, "").toLocaleLowerCase("pl-PL");
+  return key(type) !== "" && key(text) === key(type);
 };
 
 const CLOSING_RE =

@@ -19,6 +19,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { assemblePlKioDecision as uncheckedAssemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { parsePlKisDocumentHtml as uncheckedParsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
 import { parsePlUodoDecisionXml as uncheckedParsePlUodoDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import { structureFidelityIn } from "@/api/lib/legal-search/parsers/structure-fidelity";
 import { isRecord } from "@/api/lib/type-guards";
@@ -27,6 +28,7 @@ import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
 const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);
 const parsePlUodoDecisionXml = guardParser(uncheckedParsePlUodoDecisionXml);
+const parsePlKisDocumentHtml = guardParser(uncheckedParsePlKisDocumentHtml);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 /** Decisions recorded for their roles, read by their parser alone. */
@@ -121,6 +123,7 @@ const roleFindings = (blocks: readonly Block[]): string[] =>
         rule === "signature-as-holding" ||
         rule === "holding-after-reasons" ||
         rule === "recital-as-holding" ||
+        rule === "ruling-without-holding" ||
         rule === "holding-after-signature",
     )
     .map(({ rule, anchorId }) => `${rule} ${anchorId}`);
@@ -310,6 +313,81 @@ describe("Polish recitals that list what they name", () => {
     );
     expect(withRole(blocks, "intro")).toEqual(
       expect.arrayContaining(["J. J. (1)", "oskarżonego o to, że:"]),
+    );
+    expect(roleFindings(blocks)).toEqual([]);
+  });
+});
+
+describe("Polish rulings that open on their legal basis or their verb", () => {
+  test("ITPB1/415-126/07/HDO: the interpretation is titled by its type and rules in its opening sentence", async () => {
+    const payload: unknown = JSON.parse(
+      await roleFixtureText("pl-kis-itpb1-415-126-07-hdo.json.gz"),
+    );
+    const fields =
+      isRecord(payload) &&
+      isRecord(payload["dokument"]) &&
+      Array.isArray(payload["dokument"]["fields"])
+        ? payload["dokument"]["fields"].filter(isRecord)
+        : panic("the recorded interpretation has no fields");
+    const html =
+      fields.find((field) => field["key"] === "TRESC_INTERESARIUSZ")?.[
+        "value"
+      ] ?? panic("the recorded interpretation has no text");
+    const { documentAst } = parsePlKisDocumentHtml({
+      caseNumber: "ITPB1/415-126/07/HDO",
+      court: "Dyrektor Izby Skarbowej w Bydgoszczy",
+      decisionDate: "2007-10-23",
+      decisionType: "interpretacja indywidualna",
+      sourceUrl: "https://eureka.mf.gov.pl/informacje/podglad/21157",
+      documentUrl: "",
+      documentId: "21157",
+      keywords: [],
+      statutes: [],
+      html: String(html),
+    });
+    const blocks = documentAst.blocks;
+    const headings = blocks.flatMap((block) =>
+      block.type === "heading"
+        ? [`${block.role} ${block.plainText.trim()}`]
+        : [],
+    );
+
+    expect(headings).toEqual([
+      "decision-title INTERPRETACJA INDYWIDUALNA",
+      "section-heading UZASADNIENIE",
+    ]);
+    const holdings = withRole(blocks, "holding");
+    expect(holdings).toHaveLength(3);
+    expect(holdings[0]).toStartWith("Na podstawie art. 14b § 1 i § 6");
+    expect(holdings[0]).toContain("stwierdza, że stanowisko Pani");
+    expect(holdings.slice(1).map((text) => text.trim().slice(0, 11))).toEqual([
+      "w zakresie ",
+      "w zakresie ",
+    ]);
+    expect(roleFindings(blocks)).toEqual([]);
+  });
+
+  test("VIII Ga 248/09: a bench in a composition line of its own rules, signs, and its reasons follow", async () => {
+    const blocks = await kioBlocks("8247");
+
+    expect(
+      withRole(blocks, "holding").map((text) =>
+        text.replaceAll(/\s+/gu, " ").slice(0, 16),
+      ),
+    ).toEqual(["I. oddala skargę", "II. zasądza od s"]);
+    expect(withRole(blocks, "signature")).toEqual([
+      "SSO Piotr Sałamaj",
+      "SSO Krzysztof Górski",
+    ]);
+    expect(withRole(blocks, "argumentation").length).toBeGreaterThan(20);
+    expect(roleFindings(blocks)).toEqual([]);
+  });
+
+  test("IV U 23/18: a point whose number runs on to its verb opens the ruling", async () => {
+    const blocks = await dumpDayBlocks(336_806);
+
+    expect(withRole(blocks, "holding").map((text) => text.slice(0, 9))).toEqual(
+      ["I.zmienia", "II. zasąd"],
     );
     expect(roleFindings(blocks)).toEqual([]);
   });

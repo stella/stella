@@ -1029,3 +1029,44 @@ test("only exact footnotes from the current document extend the URL policy", asy
     ),
   ).toEqual(["#other-document-note"]);
 });
+
+describe("an authority's ruling points on their legal basis", () => {
+  // The layout of RGD-1/2026 (Prezes UOKiK, Gdańsk): the letterhead lines
+  // follow the title, and the ruling points open on their legal basis with
+  // no line naming the ruling's verb before them.
+  test("each point that rules on its basis is the holding, after any letterhead", () => {
+    const html = [
+      "<p>PREZES</p>",
+      "<p>URZĘDU OCHRONY KONKURENCJI I KONSUMENTÓW</p>",
+      "<p>Gdańsk, dnia 16 lutego 2026 r.</p>",
+      "<p>RGD-2.610.3.2026.AG</p>",
+      "<p>DECYZJA RGD - 1/2026</p>",
+      "<p>I. Na podstawie art. 27 ust. 1 i 2 ustawy o ochronie konkurencji i konsumentów uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie spółki.</p>",
+      "<p>II. Na podstawie art. 106 ust. 1 pkt 4 tej ustawy nakłada się na spółkę karę pieniężną.</p>",
+      "<p>UZASADNIENIE</p>",
+      "<p>[1] Prezes Urzędu wszczął postępowanie.</p>",
+    ].join("");
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(html, {
+        decisionType: "decyzja",
+        court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+      }),
+    );
+    const roles = documentAst.blocks.flatMap((block) =>
+      block.type === "paragraph"
+        ? [`${block.role ?? "-"} ${block.plainText.slice(0, 20)}`]
+        : [],
+    );
+
+    expect(roles).toEqual([
+      "intro PREZES",
+      "intro URZĘDU OCHRONY KONKU",
+      "intro Gdańsk, dnia 16 lute",
+      "intro RGD-2.610.3.2026.AG",
+      "intro DECYZJA RGD - 1/2026",
+      "holding I. Na podstawie art.",
+      "holding II. Na podstawie art",
+      "argumentation [1] Prezes Urzędu ws",
+    ]);
+  });
+});

@@ -153,7 +153,8 @@ const roleFindings = (
       ({ rule }) =>
         rule === STRUCTURE_FIDELITY_RULES.SIGNATURE_AS_HOLDING ||
         rule === STRUCTURE_FIDELITY_RULES.HOLDING_AFTER_REASONS ||
-        rule === STRUCTURE_FIDELITY_RULES.RECITAL_AS_HOLDING,
+        rule === STRUCTURE_FIDELITY_RULES.RECITAL_AS_HOLDING ||
+        rule === STRUCTURE_FIDELITY_RULES.RULING_WITHOUT_HOLDING,
     )
     .map(({ rule, anchorId }) => `${rule} ${anchorId}`);
 
@@ -250,6 +251,43 @@ test("the recital before the first line that rules is not the ruling", () => {
           "Na podstawie art. 104 § 1 Kodeksu postępowania administracyjnego,",
         ],
         ["holding", "na podstawie art. 4 ust. 2 umorzyć postępowanie"],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+});
+
+test("a decision that opens a ruling before its reasons holds it", () => {
+  expect(
+    roleFindings(
+      [
+        ["intro", "po rozpoznaniu sprawy ze skargi zamawiającego"],
+        ["intro", "I. oddala skargę,"],
+        ["heading", "Uzasadnienie"],
+        ["argumentation", "Zamawiający oddala protest."],
+      ],
+      "pl",
+    ),
+  ).toEqual(["ruling-without-holding p-1"]);
+  expect(
+    roleFindings(
+      [
+        ["intro", "po rozpoznaniu sprawy ze skargi zamawiającego"],
+        ["holding", "I. oddala skargę,"],
+        ["heading", "Uzasadnienie"],
+      ],
+      "pl",
+    ),
+  ).toEqual([]);
+  // An operative verb in the reasons opens no ruling of the decision's own.
+  expect(
+    roleFindings(
+      [
+        ["heading", "Uzasadnienie"],
+        [
+          "argumentation",
+          "1. oddala apelację, jak orzekł sąd pierwszej instancji",
+        ],
       ],
       "pl",
     ),

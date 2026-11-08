@@ -19,6 +19,7 @@ import {
   isPlReasonsHeading,
   isPlRecitalLine,
   isPlSignatureLine,
+  opensPlRuling,
 } from "./polish-document-roles.js";
 import { isSkReasoningMarker } from "./slovak-document-roles.js";
 
@@ -34,6 +35,12 @@ export type DecisionRoleGrammar = {
   readonly isRecitalLine?: (text: string) => boolean;
   /** A line that rules: it holds an operative verb. */
   readonly isOperativeLine?: (text: string) => boolean;
+  /**
+   * A line that opens a ruling: a holding heading or a point opening on its
+   * operative verb. A decision printing one before its reasons has a
+   * holding.
+   */
+  readonly opensRuling?: (text: string) => boolean;
 };
 
 const isPlOperativeLine = (text: string): boolean =>
@@ -55,6 +62,7 @@ const DECISION_ROLE_GRAMMARS: ReadonlyMap<string, DecisionRoleGrammar> =
         isSignatureLine: isPlSignatureLine,
         isRecitalLine: isPlRecitalLine,
         isOperativeLine: isPlOperativeLine,
+        opensRuling: opensPlRuling,
       },
     ],
     ["sk", { isReasonsHeading: isSkReasoningMarker }],

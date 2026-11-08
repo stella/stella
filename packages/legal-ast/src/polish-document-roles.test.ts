@@ -2,11 +2,15 @@ import { describe, expect, test } from "bun:test";
 
 import {
   containsPlOperativeVerb,
+  isPlCompositionLine,
   isPlHoldingHeading,
+  isPlLegalBasisRuling,
   isPlReasonsHeading,
   isPlRecitalLine,
   isPlSignatureBlank,
   isPlSignatureLine,
+  namesPlDocumentType,
+  opensPlRuling,
   startsWithPlOperativeVerb,
 } from "./polish-document-roles";
 
@@ -186,5 +190,66 @@ describe("the Polish head matter before the ruling", () => {
     expect(isPlHoldingHeading("p o s t a n a w i a")).toBe(true);
     expect(isPlHoldingHeading("o r z e k a :")).toBe(true);
     expect(startsWithPlOperativeVerb("o d d a l a apelację")).toBe(true);
+  });
+});
+
+describe("the opening of a Polish ruling", () => {
+  test.each([
+    "postanawia:",
+    "1. zasądza od pozwanego kwotę 100 zł",
+    "I.zmienia zaskarżoną decyzję",
+    "oddala apelację",
+    "o r z e k a :",
+  ])("opens a ruling: %s", (text) => {
+    expect(opensPlRuling(text)).toBe(true);
+  });
+
+  test.each([
+    "I. powództwo oddala,",
+    "po rozpoznaniu sprawy z powództwa M. D.",
+    "1. Sąd zważył, co następuje",
+  ])("does not open one on its verb: %s", (text) => {
+    expect(opensPlRuling(text)).toBe(false);
+  });
+
+  test("an authority rules in the sentence naming its legal basis", () => {
+    expect(
+      isPlLegalBasisRuling(
+        "Na podstawie art. 14b § 1 Ordynacji podatkowej Dyrektor Izby Skarbowej stwierdza, że stanowisko jest nieprawidłowe.",
+      ),
+    ).toBe(true);
+    expect(isPlLegalBasisRuling("na podstawie art. 437 § 2 kpk")).toBe(false);
+    expect(isPlLegalBasisRuling("1. zasądza na podstawie art. 98 k.p.c.")).toBe(
+      false,
+    );
+  });
+
+  test("the bench opens in either wording", () => {
+    expect(isPlCompositionLine("w składzie:")).toBe(true);
+    expect(
+      isPlCompositionLine(
+        "Sąd Okręgowy w Szczecinie Wydział VIII Gospodarczy w składzie następującym:",
+      ),
+    ).toBe(true);
+    expect(isPlCompositionLine("w składzie orzekającym zasiadał")).toBe(false);
+  });
+
+  test("a document's title names its declared type", () => {
+    expect(
+      namesPlDocumentType(
+        " INTERPRETACJA INDYWIDUALNA ",
+        "interpretacja indywidualna",
+      ),
+    ).toBe(true);
+    expect(
+      namesPlDocumentType(
+        "Zmiana interpretacji indywidualnej",
+        "zmiana interpretacji indywidualnej",
+      ),
+    ).toBe(true);
+    expect(
+      namesPlDocumentType("INTERPRETACJA INDYWIDUALNA", "interpretacja ogólna"),
+    ).toBe(false);
+    expect(namesPlDocumentType("", "")).toBe(false);
   });
 });
