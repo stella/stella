@@ -72,7 +72,7 @@ export const SOFT_LAW_SERVING_SETTINGS = {
       conditions: [],
       summaryDisclaimer: null,
     },
-    withheldKinds: ["inspection_report"],
+    withheldKinds: ["inspection_report", "other"],
   },
   "cz-suip": {
     serve: SOFT_LAW_SERVE_MODE.full,
@@ -83,7 +83,7 @@ export const SOFT_LAW_SERVING_SETTINGS = {
       conditions: [],
       summaryDisclaimer: null,
     },
-    withheldKinds: ["inspection_report"],
+    withheldKinds: ["inspection_report", "other"],
   },
   "eu-edpb": {
     serve: SOFT_LAW_SERVE_MODE.full,

@@ -363,6 +363,8 @@
         "./capabilities/skills.revisions.list.json",
         "./capabilities/skills.update.json",
         "./capabilities/skills.upload.json",
+        "./capabilities/soft-law.get.json",
+        "./capabilities/soft-law.search.json",
         "./capabilities/style-sets.create.json",
         "./capabilities/style-sets.delete.json",
         "./capabilities/style-sets.download.json",

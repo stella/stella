@@ -255,6 +255,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/law/statutes/shelf": "crud",
   "GET /v1/legislation/borme/:date": "crud",
   "GET /v1/legislation/corpus/:documentId": "crud",
+  "GET /v1/soft-law/:documentId": "crud",
+  "GET /v1/soft-law/search": "search",
   "GET /v1/legislation/laws/:lawId": "crud",
   "GET /v1/legislation/laws/:lawId/blocks/:blockId": "crud",
   "GET /v1/legislation/laws/:lawId/related": "crud",

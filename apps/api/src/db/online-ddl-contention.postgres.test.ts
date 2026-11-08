@@ -143,6 +143,10 @@ const installFixtureSchema = async (main: SQL, owner: ReservedSQL) => {
   };
   const tables = declaredTables();
   const texts = [...tables.values()].flat().join("\n");
+  // `search_fold` resolves the extension's dictionary while an index builds.
+  if (texts.includes("search_fold(")) {
+    once("extension:unaccent", `CREATE EXTENSION IF NOT EXISTS "unaccent"`);
+  }
   for (const [, opclass] of texts.matchAll(/\b([a-z0-9_]+_ops)\b/gu)) {
     for (const row of rowsOf(
       await main.unsafe(

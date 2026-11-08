@@ -396,6 +396,16 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "search",
       itemsKey: "results",
     },
+    search_guidance: {
+      command: ["guidance", "search"],
+      scope: "search",
+      itemsKey: "results",
+    },
+    read_guidance: {
+      command: ["guidance", "read"],
+      scope: "read",
+      windowedText: { textPath: "guidance.text" },
+    },
     read_statute: {
       command: ["legislation", "read"],
       scope: "read",
