@@ -1,4 +1,18 @@
+/**
+ * How a Polish decision names its own parts: the operative verbs its ruling
+ * opens with, the reasons heading, the recital before the ruling, the closing
+ * and the signatures after it.
+ *
+ * One grammar for every Polish parser (common courts, the procurement
+ * chamber, the authorities, the tax rulings), so a form of words one source
+ * teaches is read the same way by the others. Every predicate reads a line
+ * with its letter spacing collapsed: courts space a heading out for emphasis
+ * (`U z a s a d n i e n i e`), and the spaced line is the same heading.
+ */
+
 import { panic } from "better-result";
+
+import { collapseSpacedLetters } from "@stll/text-normalize";
 
 /** Third-person and infinitive forms used at the opening of Polish rulings. */
 type PolishVerbInflection =
@@ -170,3 +184,136 @@ const POLISH_HOLDING_HEADING = new RegExp(
 /** Whether text is a bare Polish operative section heading. */
 export const isPlHoldingHeading = (text: string): boolean =>
   POLISH_HOLDING_HEADING.test(text.trim());
+
+/**
+ * A line as the grammar reads it: spaced letters joined, whitespace single.
+ * A gap wider than one space, or a line break, separates words, so spaced
+ * letters are joined before the whitespace collapses.
+ */
+const grammarLine = (text: string): string =>
+  collapseSpacedLetters(text.replaceAll(/[^\S ]+/gu, "  "))
+    .replaceAll(/\s+/gu, " ")
+    .trim();
+
+const REASONS_HEADING_RE = /^uzasadnienie\b/iu;
+// The editor numbers the reasons on from the operative points when they
+// share one outline ("V. UZASADNIENIE" after point IV).
+const NUMBERED_REASONS_HEADING_RE = /^[IVXLC]+\s*[.)]\s*uzasadnienie$/iu;
+
+/** Whether a line opens the reasons (`Uzasadnienie`, `U z a s a d n i e n i e`). */
+export const isPlReasonsHeading = (text: string): boolean =>
+  REASONS_HEADING_RE.test(grammarLine(text));
+
+/** Whether a line opens the reasons under an outline number (`V. UZASADNIENIE`). */
+export const isPlNumberedReasonsHeading = (text: string): boolean =>
+  NUMBERED_REASONS_HEADING_RE.test(grammarLine(text));
+
+const OPENING_RECITAL_RE =
+  /^(?:po rozpoznaniu|po rozpatrzeniu|na posiedzeniu|na rozprawie|w sprawie)\b/iu;
+
+/** Whether a line opens the recital that names the hearing and the case. */
+export const isPlOpeningRecital = (text: string): boolean =>
+  OPENING_RECITAL_RE.test(grammarLine(text));
+
+const CLOSING_RE =
+  /^[A-ZĄĆĘŁŃÓŚŹŻ][\p{L} .-]+,\s+dnia\s+\d{1,2}\s+\p{L}+\s+\d{4}\s*r?\.?$/u;
+
+/** Whether a line is the closing: the place and the date (`Gliwice, dnia …`). */
+export const isPlClosingLine = (text: string): boolean =>
+  CLOSING_RE.test(grammarLine(text));
+
+/**
+ * A line opening on a judge's title or office (`SSA …`, `Sędzia …`,
+ * `Przewodniczący …`). It signs the reasons only where they end; the same
+ * opening in the head matter names the bench.
+ */
+const SIGNATURE_TITLE_RE =
+  /^(?:SSA|SSA del\.|SSO|SSR|sędzia|Sędzia|Przewodniczący|Przewodnicząca|Prezes|sprawozdawca)\b/u;
+
+/** Longest line a signature title opening is read on. */
+const SIGNATURE_TITLE_LINE_MAX_CHARS = 120;
+
+/** Whether a short line opens on a judge's title or office. */
+export const opensWithPlSignatureTitle = (text: string): boolean => {
+  const line = grammarLine(text);
+  return (
+    line.length <= SIGNATURE_TITLE_LINE_MAX_CHARS &&
+    SIGNATURE_TITLE_RE.test(line)
+  );
+};
+
+/** A judge's title as a bench signs: `SSO Jan Kowalski`, `SSA del. …`. */
+const BENCH_TITLES: ReadonlySet<string> = new Set([
+  "SSN",
+  "SSA",
+  "SSO",
+  "SSR",
+  "SNSA",
+  "SWSA",
+]);
+const SECONDED_MARK = "del.";
+/** Most words one signed name runs to (`Anna Maria Kowalska-Nowak`). */
+const SIGNED_NAME_MAX_WORDS = 4;
+const NAME_WORD_RE = /^\p{Lu}[\p{L}\p{M}'’.]*(?:-\p{Lu}?[\p{L}\p{M}'’.]*)*$/u;
+/** A role beside a signed name: `(spr.)`, `(przewodniczący)`. */
+const NAME_NOTE_RE = /^\([^()]*\)$/u;
+
+/**
+ * Whether a line is only judges' titles and names, as a bench signs under
+ * its ruling: `SSO Katarzyna Banko`, `SSA Ewa Jastrzębska SSA Małgorzata
+ * Wołczańska SSO del. Tomasz Tatarczyk`. Read word by word, so a line
+ * holding anything else (a ruling naming a judge) is not one.
+ */
+const isBenchSignatureLine = (line: string): boolean => {
+  // The line is read with single spaces, so a hyphen has at most one beside
+  // it on each side (`Balion - Hajduk`, `Staniszewska- Perenc`).
+  const words = line.replaceAll(/ ?- ?/gu, "-").split(" ");
+  let index = 0;
+  while (index < words.length) {
+    if (!BENCH_TITLES.has(words[index] ?? "")) {
+      return false;
+    }
+    index += 1;
+    if (words[index] === SECONDED_MARK) {
+      index += 1;
+    }
+    const nameStart = index;
+    while (
+      index < words.length &&
+      !BENCH_TITLES.has(words[index] ?? "") &&
+      NAME_WORD_RE.test(words[index] ?? "")
+    ) {
+      index += 1;
+    }
+    const nameWords = index - nameStart;
+    if (nameWords === 0 || nameWords > SIGNED_NAME_MAX_WORDS) {
+      return false;
+    }
+    if (NAME_NOTE_RE.test(words[index] ?? "")) {
+      index += 1;
+    }
+  }
+  return words.length > 0;
+};
+
+/**
+ * A signing label with the place for the signature left blank, or nothing
+ * after it: `Przewodniczący:…………`, `Skład orzekający Izby:`. A label
+ * followed by a name (`Przewodniczący: Anna Kowalska`) names the bench in
+ * the head matter and is not one.
+ */
+const SIGNING_LABEL_RE =
+  /^(?:przewodnicząc[ya]|członkowie|członek|sędziowie|skład orzekający(?: izby)?)\s?:?\s?[.…]*$/iu;
+
+/** The place left for a signature: a line of dots alone. */
+const SIGNATURE_BLANK_RE = /^[.…]{3,}$/u;
+
+/** Whether a line signs the decision: a bench's names or a signing label. */
+export const isPlSignatureLine = (text: string): boolean => {
+  const line = grammarLine(text);
+  return isBenchSignatureLine(line) || SIGNING_LABEL_RE.test(line);
+};
+
+/** Whether a line is the blank a signature is written on. */
+export const isPlSignatureBlank = (text: string): boolean =>
+  SIGNATURE_BLANK_RE.test(grammarLine(text).replaceAll(" ", ""));
