@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-uodo] only adds the bench-member and decision-date line predicates, which the data-protection reader does not call.
+// parser-output-unchanged: [pl-uodo] only adds the authority decision-title predicate, which the data-protection reader does not call.
 /**
  * How a Polish decision names its own parts: the operative verbs its ruling
  * opens with, the reasons heading, the recital before the ruling, the closing
@@ -450,3 +450,28 @@ const DECISION_DATE_LINE_RE =
 /** Whether a line gives the date of the decision and nothing else. */
 export const isPlDecisionDateLine = (text: string): boolean =>
   DECISION_DATE_LINE_RE.test(grammarLine(text));
+
+/**
+ * An authority's decision titled by its number: `DECYZJA nr DOK-9/2011`,
+ * `DECYZJA Nr RŁO 15/2009`. The line ends on the number; a sentence that
+ * names a decision by its number (`Decyzja nr 5 z dnia … została
+ * uchylona.`) is no title.
+ */
+const NUMBERED_DECISION_TITLE_RE =
+  /^(?:DECYZJA|Decyzja) (?:NR|Nr|nr)\.? (?:\p{Lu}{2,6}(?: ?- ?| ))?\d{1,4}(?:[./-]\d{1,4}){0,3}$/u;
+
+/**
+ * An authority's decision titled by its docket alone, with or without
+ * `nr`: `DECYZJA RGD - 1/2026`, `DECYZJA DIH-1/48/2017`.
+ */
+const DOCKETED_DECISION_TITLE_RE =
+  /^(?:DECYZJA|Decyzja) \p{Lu}{2,6}(?: ?- ?| )\d{1,4}(?:\/\d{1,4}){1,2}$/u;
+
+/** Whether a line is the title an authority's decision is printed under. */
+export const isPlAuthorityDecisionTitle = (text: string): boolean => {
+  const line = grammarLine(text);
+  return (
+    NUMBERED_DECISION_TITLE_RE.test(line) ||
+    DOCKETED_DECISION_TITLE_RE.test(line)
+  );
+};

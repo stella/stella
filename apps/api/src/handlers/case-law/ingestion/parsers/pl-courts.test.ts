@@ -1066,11 +1066,18 @@ describe("an authority's ruling points on their legal basis", () => {
       "intro URZĘDU OCHRONY KONKU",
       "intro Gdańsk, dnia 16 lute",
       "intro RGD-2.610.3.2026.AG",
-      "intro DECYZJA RGD - 1/2026",
       "holding I. Na podstawie art.",
       "holding II. Na podstawie art",
       "argumentation [1] Prezes Urzędu ws",
     ]);
+    // The docket the decision is printed under is its title, once.
+    expect(
+      documentAst.blocks.flatMap((block) =>
+        block.type === "heading" && block.role === "decision-title"
+          ? [block.plainText]
+          : [],
+      ),
+    ).toEqual(["DECYZJA RGD - 1/2026"]);
   });
 });
 
@@ -1178,5 +1185,31 @@ describe("head matter a layout sets as headings", () => {
       "heading section-heading orzeka:",
       "paragraph holding 1. oddala apelację,",
     ]);
+  });
+});
+
+describe("an authority's numbered title and its ruling", () => {
+  test("a date printed between the numbered title and the first point leaves the point the ruling", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        [
+          "<p>DECYZJA</p>",
+          "<p>DECYZJA NR RBG - 11/2018</p>",
+          "<p>Bydgoszcz, dnia 27 sierpnia 2018 r.</p>",
+          "<p>I. Na podstawie art. 27 ust. 1 i 2 ustawy o ochronie konkurencji i konsumentów</p>",
+          "<p>- w imieniu Prezesa Urzędu – uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie banku.</p>",
+        ].join(""),
+        {
+          decisionType: "decyzja",
+          court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        },
+      ),
+    );
+
+    expect(
+      documentAst.blocks.find(
+        (block) => block.type === "paragraph" && block.role === "holding",
+      )?.plainText,
+    ).toStartWith("I. Na podstawie art. 27");
   });
 });

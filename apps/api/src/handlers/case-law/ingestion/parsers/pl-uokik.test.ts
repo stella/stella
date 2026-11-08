@@ -504,6 +504,33 @@ describe("a UOKiK decision's numbered subheadings", () => {
   });
 });
 
+describe("a UOKiK decision's title and ruling", () => {
+  const titlesOf = (blocks: readonly Block[]): string[] =>
+    blocks.flatMap((block) =>
+      block.type === "heading" && block.role === "decision-title"
+        ? [block.plainText]
+        : [],
+    );
+  const firstHolding = (blocks: readonly Block[]): string | undefined =>
+    blocks.find(
+      (block) => block.type === "paragraph" && block.role === "holding",
+    )?.plainText;
+
+  test("DIH-48/2017 is titled by its docket alone, once, and rules under it", async () => {
+    const { blocks } = await parsedOf(DIH_48_2017);
+    expect(titlesOf(blocks)).toEqual(["DECYZJA DIH-1/48/2017"]);
+    expect(firstHolding(blocks)).toStartWith("Na podstawie art. 138 § 1 pkt 1");
+  });
+
+  test("RBG-11/2018 rules under its numbered title printed below the bare title", async () => {
+    const { blocks } = await parsedOf(RBG_11_2018);
+    expect(titlesOf(blocks)).toEqual(["DECYZJA"]);
+    expect(firstHolding(blocks)).toStartWith(
+      "I. Na podstawie art. 27 ust. 1 i 2 ustawy z dnia 16 lutego 2007 r.",
+    );
+  });
+});
+
 // ── Each rule that drops a line, on a PDF built for it ───
 
 describe("a UOKiK decision whose first page carries the office's letterhead footer", () => {
