@@ -11,9 +11,9 @@ type LoadWasmBuildOptions<T> = {
   singleThread: () => Promise<T>;
 };
 
-export const loadWasmBuild = <T>({
+export const loadWasmBuild = async <T>({
   isolated,
   threaded,
   singleThread,
 }: LoadWasmBuildOptions<T>): Promise<T> =>
-  isolated ? threaded() : singleThread();
+  await (isolated ? threaded() : singleThread());

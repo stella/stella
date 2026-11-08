@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { loadWasmBuild } from "./load-wasm-build";
+import { loadWasmBuild } from "@/lib/platform/wasm-build.logic";
 
 const builds = () => {
   const loaded: string[] = [];

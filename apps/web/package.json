@@ -6,11 +6,11 @@
   "type": "module",
   "imports": {
     "#aho-corasick": {
-      "browser": "./src/lib/wasm-matchers/aho-corasick.browser.ts",
+      "browser": "./src/lib/platform/aho-corasick.browser.ts",
       "default": "@stll/aho-corasick"
     },
     "#regex-set": {
-      "browser": "./src/lib/wasm-matchers/regex-set.browser.ts",
+      "browser": "./src/lib/platform/regex-set.browser.ts",
       "default": "@stll/regex-set"
     }
   },
