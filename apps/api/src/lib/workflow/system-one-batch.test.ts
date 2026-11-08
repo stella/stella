@@ -234,6 +234,20 @@ describe("splitPropertiesForSystemOne", () => {
       textProperty.id,
     ]);
   });
+
+  test.each(["clause-summary", "clause-quote"] as const)(
+    "a %s answer always goes through generation",
+    (answerShape) => {
+      const properties = [singleSelect, dateProperty, intProperty].map(
+        (entry) => ({ ...entry, answerShape }),
+      );
+
+      const split = splitPropertiesForSystemOne(properties);
+
+      expect(split.systemOne).toEqual([]);
+      expect(split.generative).toEqual(properties);
+    },
+  );
 });
 
 describe("outputFromSystemOneOutcomes", () => {
