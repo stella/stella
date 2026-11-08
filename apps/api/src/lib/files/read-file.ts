@@ -29,6 +29,8 @@ import {
 import { isNativelyRenderableMimeType } from "@/api/lib/files/gotenberg";
 import { openWithinDeadline } from "@/api/lib/files/storage-open-deadline";
 import { createFileKey } from "@/api/lib/files/utils";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { openS3ObjectStreamWithSignal } from "@/api/lib/s3";
 import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import { brandPersistedEntityVersionId } from "@/api/lib/safe-id-boundaries";
@@ -37,6 +39,11 @@ import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { issueSessionBoundCredentialTtl } from "@/api/lib/synthetic-principal/credential-policy";
 import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+const STORED_FILE_CONTENT_UNREADABLE = failureSink({
+  event: "files.content_grant_unreadable",
+  expected: [],
+});
 
 export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
 const FILE_READ_STORAGE_TIMEOUT_MS = 30_000;
@@ -441,7 +448,7 @@ export const readFileContentHandler = async ({
     );
     if (Result.isError(opened)) {
       abortSignal.throwIfAborted();
-      return { type: "storage-failure" as const };
+      return { type: "storage-failure" as const, cause: opened.error };
     }
     return { type: "response" as const, delivery, source: opened.value };
   });
@@ -454,7 +461,11 @@ export const readFileContentHandler = async ({
     case "not-found":
       return status(404);
     case "storage-failure":
-      return status(502);
+      return observedStatus(
+        { sink: STORED_FILE_CONTENT_UNREADABLE, cause: result.cause },
+        502,
+        "Bad Gateway",
+      );
     case "response": {
       return secureDocumentResponse({
         body: result.source.body,

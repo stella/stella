@@ -550,6 +550,7 @@ describe("workspace deletion", () => {
         ],
       },
       status: "running",
+      startedAt: new Date("2026-01-01T09:00:00Z"),
       currentStepIndex: 0,
       triggerSource: { type: "manual", userId: fixture.actorUserId },
       inputEntityIds: [],
@@ -561,6 +562,7 @@ describe("workspace deletion", () => {
       index: 0,
       kind: "ai",
       status: "running",
+      startedAt: new Date("2026-01-01T09:00:00Z"),
     });
     const auditEvents: AuditEvent[] = [];
 
