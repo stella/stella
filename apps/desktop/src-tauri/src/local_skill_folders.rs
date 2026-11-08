@@ -467,7 +467,10 @@ mod tests {
 
   impl Drop for Place {
     fn drop(&mut self) {
-      let _ = fs::remove_dir_all(&self.root);
+      crate::logging::best_effort(
+        fs::remove_dir_all(&self.root),
+        "skill folder test directory was not removed",
+      );
     }
   }
 

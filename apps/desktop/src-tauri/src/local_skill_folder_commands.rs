@@ -16,6 +16,7 @@ use crate::feature_gate::{DesktopFeature, FeatureGates};
 use crate::local_skill_folders::{
   SkillFolderListError, SkillFolderProblem, SkillFolderStatus, SkillFolders,
 };
+use crate::logging::best_effort;
 
 const CHANGED_EVENT: &str = "local-skill-folders-changed";
 const LOOK_BUDGET: Duration = Duration::from_secs(3);
@@ -79,7 +80,10 @@ pub async fn local_skill_folders_pick(
     dialog = dialog.set_parent(&window);
   }
   dialog.pick_folder(move |folder| {
-    let _ = picked.send(folder);
+    // Unsent only once the command stopped waiting, which needs no answer.
+    if picked.send(folder).is_err() {
+      tracing::debug!("skill folder pick finished after its command ended");
+    }
   });
   let Ok(Some(folder)) = answer.await else {
     return Ok(false);
@@ -93,7 +97,10 @@ pub async fn local_skill_folders_pick(
     .unwrap_or(Err(SkillFolderListError::Folder(
       SkillFolderProblem::Unreadable,
     )))?;
-  let _ = app.emit(CHANGED_EVENT, ());
+  best_effort(
+    app.emit(CHANGED_EVENT, ()),
+    "skill folder change was not announced",
+  );
   Ok(true)
 }
 
@@ -105,7 +112,10 @@ pub fn local_skill_folders_remove(
   path: String,
 ) -> Result<(), LocalSkillCommandError> {
   skill_folders(&gates)?.remove(&path)?;
-  let _ = app.emit(CHANGED_EVENT, ());
+  best_effort(
+    app.emit(CHANGED_EVENT, ()),
+    "skill folder change was not announced",
+  );
   Ok(())
 }
 
