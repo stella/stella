@@ -763,5 +763,30 @@
         "storage": "A {name} mentése nem sikerült ezen a számítógépen. Ellenőrizze, hogy van-e szabad hely a lemezen."
       }
     }
+  },
+  "localSkills": {
+    "title": "Helyi készségek",
+    "description": "Készségmappák ezen a számítógépen. A számítógép helyi futtatásai használhatják őket, a tartalmukból pedig semmi nem töltődik fel.",
+    "add": "Mappa hozzáadása",
+    "remove": "Eltávolítás",
+    "removeFolder": "{path} eltávolítása",
+    "unusable": "Nem használható",
+    "notice": {
+      "action_failed": "Ez nem sikerült. Próbálja újra.",
+      "too_many": "Ezen a számítógépen már annyi készségmappa van, amennyit használni tud. Előbb távolítson el egyet.",
+      "already_listed": "Ez a mappa már szerepel a listán.",
+      "missing": "Ez a mappa már nem létezik.",
+      "not_a_folder": "Ez már nem mappa.",
+      "no_skill_file": "Ebben a mappában nincs SKILL.md.",
+      "skill_file_not_regular": "A SKILL.md csak szokásos fájl lehet, hivatkozás nem.",
+      "skill_file_too_large": "A SKILL.md túl nagy ahhoz, hogy be lehessen olvasni.",
+      "unreadable": "Ezt a mappát nem sikerült beolvasni.",
+      "no_name": "A SKILL.md fejlécében nincs név.",
+      "invalid_name": "A SKILL.md-ben szereplő név csak betűket, számjegyeket, pontokat, kötőjeleket és aláhúzásjeleket tartalmazhat, és betűvel vagy számjeggyel kell kezdődnie.",
+      "duplicate_name": "A lista egy másik mappájában már van ilyen nevű készség.",
+      "runs_can_write": "A helyi futtatások írhatnak ebbe a mappába, ezért nem tartalmazhat készséget.",
+      "network_folder": "Ez a mappa hálózati megosztáson van. A készségeknek a számítógép saját lemezén kell lenniük.",
+      "path_changed": "Egy szülőmappa megváltozott. Távolítsa el ezt a mappát, majd adja hozzá újra."
+    }
   }
 }

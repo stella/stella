@@ -111,6 +111,9 @@
         "workspaceDir": "C:\\data\\runs\\0b6f5c8e",
         "attachments": [],
         "cacheDir": "C:\\data\\agent-package-cache",
+        "skillFolders": [
+          { "name": "fixture-skill", "path": "C:\\skills\\fixture-skill" }
+        ],
         "model": "gpt-test",
         "instructions": "Answer briefly.",
         "messages": [
@@ -149,6 +152,7 @@
         "workspaceDir": "/data/runs/0b6f5c8e",
         "attachments": [],
         "cacheDir": "/data/agent-package-cache",
+        "skillFolders": [],
         "model": "gpt-test",
         "instructions": "",
         "messages": [

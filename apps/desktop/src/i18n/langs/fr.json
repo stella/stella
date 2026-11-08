@@ -763,5 +763,30 @@
         "storage": "Impossible d’enregistrer {name} sur cet ordinateur. Vérifiez qu’il reste de l’espace libre sur le disque."
       }
     }
+  },
+  "localSkills": {
+    "title": "Compétences locales",
+    "description": "Dossiers de compétences sur cet ordinateur. Les exécutions locales sur cet ordinateur peuvent les utiliser et rien de leur contenu n'est envoyé.",
+    "add": "Ajouter un dossier",
+    "remove": "Retirer",
+    "removeFolder": "Retirer {path}",
+    "unusable": "Inutilisable",
+    "notice": {
+      "action_failed": "Cela n'a pas fonctionné. Réessayez.",
+      "too_many": "Cet ordinateur a déjà autant de dossiers de compétences qu'il peut en utiliser. Retirez-en d'abord un.",
+      "already_listed": "Ce dossier est déjà dans la liste.",
+      "missing": "Ce dossier n'existe plus.",
+      "not_a_folder": "Ce n'est plus un dossier.",
+      "no_skill_file": "Ce dossier ne contient pas de SKILL.md.",
+      "skill_file_not_regular": "SKILL.md doit être un fichier ordinaire, pas un lien.",
+      "skill_file_too_large": "SKILL.md est trop volumineux pour être lu.",
+      "unreadable": "Ce dossier n'a pas pu être lu.",
+      "no_name": "L'en-tête de SKILL.md ne contient pas de nom.",
+      "invalid_name": "Le nom dans SKILL.md ne peut contenir que des lettres, des chiffres, des points, des tirets et des tirets bas, et doit commencer par une lettre ou un chiffre.",
+      "duplicate_name": "Un autre dossier de la liste a une compétence portant ce nom.",
+      "runs_can_write": "Les exécutions locales peuvent écrire dans ce dossier, il ne peut donc pas contenir de compétence.",
+      "network_folder": "Ce dossier se trouve sur un partage réseau. Les compétences doivent être sur le disque de cet ordinateur.",
+      "path_changed": "Un dossier parent a changé. Retirez ce dossier et ajoutez-le de nouveau."
+    }
   }
 }

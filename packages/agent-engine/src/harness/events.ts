@@ -59,6 +59,12 @@ export type HarnessToolCall = {
   id: string;
   name: string;
   input: unknown;
+  /**
+   * What the harness asked of a native tool whose record leaves it out, such
+   * as the file a read opened. It stays in this process: only the skill filter
+   * reads it, and it is not part of what a turn reports.
+   */
+  localInput?: unknown;
 };
 
 export type HarnessToolResult = {

@@ -256,7 +256,12 @@ export const toolCallForUse = (
         input,
       };
     case "native":
-      return { id, name: HARNESS_TOOL_NAMES.nativeTool, input: { tool: name } };
+      return {
+        id,
+        name: HARNESS_TOOL_NAMES.nativeTool,
+        input: { tool: name },
+        localInput: input,
+      };
     default:
       kind satisfies never;
       return panic("Unhandled Claude tool kind");

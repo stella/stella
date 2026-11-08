@@ -78,6 +78,12 @@
       "apps/web/src/lib/workspaces/mutations/time-entries.ts": 3
     }
   },
+  "packages/agent-engine": {
+    "count": 1,
+    "files": {
+      "packages/agent-engine/src/harness/skill-folders.ts": 1
+    }
+  },
   "packages/business-registries": {
     "count": 22,
     "files": {
