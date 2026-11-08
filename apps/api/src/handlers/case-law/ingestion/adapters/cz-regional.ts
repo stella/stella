@@ -576,8 +576,13 @@ export const czRegionalCaseNumberOf = (
   const printedRegistry = docket?.["registry"];
   const number = docket?.["number"];
   const year = docket?.["year"];
+  // ECLI:CZ:KSOS:2022:16.Co.179.2022.1: the fifth part names the docket.
+  const ecliDocket = toOptionalValue(item.ecli)?.split(":").at(4);
+  if (ecliDocket === undefined) {
+    return reference;
+  }
   const [ecliSenate, ecliRegistry, ecliNumber, ecliYear] =
-    (toOptionalValue(item.ecli) ?? "").split(":").at(4)?.split(".") ?? [];
+    ecliDocket.split(".");
   if (
     senate === undefined ||
     printedRegistry === undefined ||
