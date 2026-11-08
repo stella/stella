@@ -1252,6 +1252,60 @@ export const parseHuBhgyDecision = (
   /** Lines before the first section heading, where the kind is printed. */
   const titleLines: string[] = [];
 
+  /**
+   * A body line of the decision's own text: a court-numbered paragraph, an
+   * unnumbered one, or a title the court prints inside its reasons.
+   */
+  const emitBodyText = (runs: DocLineData["runs"]): void => {
+    const normalized = normalizeInlineLine(inlinesOf(runs));
+    const { match: numbered, line: unnumbered } = stripInlineLinePrefix(
+      normalized,
+      COURT_PARAGRAPH_NUMBER,
+    );
+    const number = numbered?.groups?.["number"];
+    const role: ParagraphRole = BODY_ROLE[region];
+    const runsOnFromPrevious = previousParagraphRunsOn;
+    previousParagraphRunsOn = !SENTENCE_FINISHED_END.test(
+      normalized.plainText.trim(),
+    );
+    if (
+      number === undefined &&
+      region === "reasoning" &&
+      underReasonsHeading &&
+      !runsOnFromPrevious &&
+      isPrintedSubheading(normalized.plainText)
+    ) {
+      previousParagraphRunsOn = false;
+      builder.heading({
+        type: "heading",
+        level: 2,
+        role: HEADING_ROLE_BY_LEVEL[2],
+        inlines: normalized.inlines,
+        plainText: normalized.plainText,
+      });
+      return;
+    }
+    if (number === undefined) {
+      builder.paragraph({
+        type: "paragraph",
+        role,
+        inlines: normalized.inlines,
+        plainText: normalized.plainText,
+      });
+      return;
+    }
+    // The bracketed number is the citable paragraph number, so it is kept as
+    // structure: a citation names `[31]`, and a prefix inside the text would
+    // make every search for the paragraph's words find the number too.
+    builder.paragraph({
+      type: "paragraph",
+      role,
+      number: Number(number),
+      inlines: unnumbered.inlines,
+      plainText: unnumbered.plainText,
+    });
+  };
+
   const classifyBodyLine = (body: BodyDocumentLine<DocLineData>): void => {
     const line = body.value;
     const key = headingKey(line.text);
@@ -1417,53 +1471,7 @@ export const parseHuBhgyDecision = (
     // A footnote returned above, so a note's date-shaped line never dates the
     // decision; nor does the kiadmány's, which opens the closing region first.
     softBreakDate ??= closingDateAfterSoftBreak(line.text);
-    const normalized = normalizeInlineLine(inlinesOf(line.runs));
-    const { match: numbered, line: unnumbered } = stripInlineLinePrefix(
-      normalized,
-      COURT_PARAGRAPH_NUMBER,
-    );
-    const number = numbered?.groups?.["number"];
-    const role: ParagraphRole = BODY_ROLE[region];
-    const runsOnFromPrevious = previousParagraphRunsOn;
-    previousParagraphRunsOn = !SENTENCE_FINISHED_END.test(
-      normalized.plainText.trim(),
-    );
-    if (
-      number === undefined &&
-      region === "reasoning" &&
-      underReasonsHeading &&
-      !runsOnFromPrevious &&
-      isPrintedSubheading(normalized.plainText)
-    ) {
-      previousParagraphRunsOn = false;
-      builder.heading({
-        type: "heading",
-        level: 2,
-        role: HEADING_ROLE_BY_LEVEL[2],
-        inlines: normalized.inlines,
-        plainText: normalized.plainText,
-      });
-      return;
-    }
-    if (number === undefined) {
-      builder.paragraph({
-        type: "paragraph",
-        role,
-        inlines: normalized.inlines,
-        plainText: normalized.plainText,
-      });
-      return;
-    }
-    // The bracketed number is the citable paragraph number, so it is kept as
-    // structure: a citation names `[31]`, and a prefix inside the text would
-    // make every search for the paragraph's words find the number too.
-    builder.paragraph({
-      type: "paragraph",
-      role,
-      number: Number(number),
-      inlines: unnumbered.inlines,
-      plainText: unnumbered.plainText,
-    });
+    emitBodyText(line.runs);
   };
 
   const emitLine = (line: DocLine): void => {
