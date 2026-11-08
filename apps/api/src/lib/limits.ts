@@ -315,6 +315,13 @@ export const LIMITS = {
    *  interval of the sweep that ends every stream whose session or other
    *  credential no longer holds. */
   sseCredentialRecheckMs: 15_000,
+  /** Event streams one session may hold open on one workspace or user feed
+   *  per process. Opening another closes that session's oldest, so a client
+   *  that reconnects keeps its newest stream. */
+  sseStreamsPerSession: 32,
+  /** Event streams one desktop edit session may hold open per process; one
+   *  editor reads them, so a reconnect replaces the oldest. */
+  desktopEditSessionStreams: 8,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
   /** OOXML numbering levels are zero-based and bounded to nine levels. */
@@ -922,6 +929,10 @@ export const LIMITS = {
   chatThreadListPageSizeDefault: 50,
   /** Max page size for the user's chat thread history. */
   chatThreadListPageSizeMax: 100,
+  /** Default page size for the caller's unfinished chat runs. */
+  chatActiveRunsPageSizeDefault: 100,
+  /** Max page size for the caller's unfinished chat runs. */
+  chatActiveRunsPageSizeMax: 100,
   /** Default page size for one chat thread's message history. The reader
    *  loads the most recent page first and fetches older pages on demand
    *  as the user scrolls up, so a long conversation never loads in full. */

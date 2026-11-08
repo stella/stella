@@ -34,6 +34,20 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
+import {
+  CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
+  CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  type ChatLocalRunContext,
+  chatLocalRunContextSchema,
+  chatLocalRunFilePartsOf,
+  chatLocalRunFilesNotSharedSchema,
+  chatLocalRunLimitSchema,
+} from "@stll/api-contract/chat-run-target";
+import {
+  desktopRunnerAttachmentPath,
+  MAX_RUN_ATTACHMENTS,
+} from "@stll/api-contract/desktop-runner";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
@@ -54,10 +68,12 @@ import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
   classifyChatPartForPersistence,
+  createChatTextPart,
   getAwaitingUserInteraction,
   getAwaitingUserInteractions,
   getChatAttachmentMimeType,
   getUserFileIdFromAttachmentPart,
+  isAnswerFilePart,
   isApprovedClientCallAwaitingResult,
   isChatAttachmentPart,
   isChatDocumentPart,
@@ -100,7 +116,10 @@ import {
   NO_DECISION_PASSAGE_NUMBERS,
 } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
-import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
+import {
+  LOCAL_RUN_OUTPUTS_INSTRUCTIONS,
+  type LocalChatRun,
+} from "@/api/handlers/chat/local-run-chunks";
 import {
   createLoopRecoverySystemPrompt,
   detectModelLoop,
@@ -161,7 +180,10 @@ import type {
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
-import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
+import {
+  canHydrateFilePartAsPlainText,
+  hydrateFilePart,
+} from "@/api/handlers/chat/upload-files";
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -226,6 +248,7 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
+import type { LocalRunAttachment } from "@/api/lib/desktop-runner/control";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import {
@@ -256,6 +279,7 @@ import {
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -1608,7 +1632,7 @@ const runChatAttempts = async function* ({
       chatRunId: runId,
       chatTurnId,
       messages: convertMessagesToModelMessages([...surfaces.messages]),
-      instructions: surfaces.system,
+      instructions: `${surfaces.system}\n\n${LOCAL_RUN_OUTPUTS_INSTRUCTIONS}`,
       resume,
       // The run's own cut, as the provider gets it: a stop on any task, the
       // deadline, a lost owner or admission, a failed production.
@@ -2315,18 +2339,40 @@ const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
     providerMessage: chunk.message,
   });
   const usage = safeTokenUsageFromTerminalChunk(chunk);
+  const providerDiagnostic = providerDiagnosticFromChunk(chunk);
+  const limit =
+    kind === "local_runner_limit_reached"
+      ? localRunLimitFromChunk(chunk)
+      : undefined;
   return {
     type: EventType.RUN_ERROR,
     ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
     message: kind,
     code: kind,
     ...(usage === undefined ? {} : { usage }),
-    ...(providerDiagnosticFromChunk(chunk) === undefined
+    ...(providerDiagnostic === undefined && limit === undefined
       ? {}
       : {
-          metadata: { providerDiagnostic: providerDiagnosticFromChunk(chunk) },
+          metadata: {
+            ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
+            ...(limit === undefined
+              ? {}
+              : { [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: limit }),
+          },
         }),
   };
+};
+
+/**
+ * When the usage limit of a computer's harness resets, as the local turn's
+ * own run error carries it (`local-run-chunks.ts`), checked again here.
+ */
+const localRunLimitFromChunk = (chunk: RunErrorChunk) => {
+  const parsed = v.safeParse(
+    chatLocalRunLimitSchema,
+    chunk.metadata?.[CHAT_LOCAL_RUN_LIMIT_METADATA_KEY],
+  );
+  return parsed.success ? parsed.output : undefined;
 };
 
 /**
@@ -2588,6 +2634,8 @@ type StreamSettlementOptions = Pick<
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
   getUsage: () => TokenUsage | undefined;
+  /** How full the context of a turn run on the member's computer was. */
+  getLocalRunContext: () => ChatLocalRunContext | undefined;
   announceBeforeFailure: () => StreamChunk[];
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   getProducedAnswer: () => boolean;
@@ -2608,6 +2656,7 @@ const createStreamSettlement = ({
   rawArgumentsByIncompleteToolCallId,
   toolCallsWithCompleteInput,
   getUsage,
+  getLocalRunContext,
   getProducedAnswer,
   announceBeforeFailure,
   terminal,
@@ -2696,6 +2745,7 @@ const createStreamSettlement = ({
             producedAnswer: getProducedAnswer(),
             responseMessage,
             usage: getUsage(),
+            localRunContext: getLocalRunContext(),
           })
         : attachTerminalTurnOutcome({
             message: checkpoint,
@@ -2730,13 +2780,20 @@ const createStreamSettlement = ({
   };
 };
 
+type PersistenceRunState = {
+  cancelled: boolean;
+  /** What the turn's provider reported spending. */
+  usage?: TokenUsage | undefined;
+  /** The last run's context report is the one the next turn starts from. */
+  localRunContext?: ChatLocalRunContext | undefined;
+};
+
 type ProcessPersistenceChunkOptions = {
   responseMessageId: SafeId<"chatMessage">;
   sourceChunk: PublicStreamChunk;
   deferredRunFinishedChunks: PublicStreamChunk[];
   processor: ChatStreamProcessor;
-  runState: { cancelled: boolean };
-  recordUsage: (usage: TokenUsage | undefined) => void;
+  runState: PersistenceRunState;
   partProvenance: SnapshotPartReconciler;
 };
 
@@ -3045,7 +3102,6 @@ const processPersistenceChunk = ({
   deferredRunFinishedChunks,
   processor,
   runState,
-  recordUsage,
   partProvenance,
 }: ProcessPersistenceChunkOptions): PersistenceChunkResult => {
   if (
@@ -3107,8 +3163,10 @@ const processPersistenceChunk = ({
       panic("Unhandled TanStack completed stream event");
     }
     if (chunk.usage) {
-      recordUsage(tokenUsageFromTerminalChunk(chunk));
+      runState.usage = tokenUsageFromTerminalChunk(chunk);
     }
+    runState.localRunContext =
+      localRunContextFromChunk(chunk) ?? runState.localRunContext;
     // TanStack's agent loop can emit continuation events after a model
     // run finishes, notably `approval-requested` for a gated server tool.
     // The client already receives RUN_FINISHED only after the source is
@@ -3186,6 +3244,7 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
     panic("Unhandled TanStack failed stream event");
   }
   const providerDiagnostic = providerDiagnosticFromChunk(chunk);
+  const limit = localRunLimitFromChunk(chunk);
   return {
     chunk,
     usage: tokenUsageFromTerminalChunk(chunk),
@@ -3193,6 +3252,7 @@ const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
       type: "failed",
       error: classifyRunErrorChunk(sourceChunk),
       ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
+      ...(limit === undefined ? {} : { limitResetsAt: limit.resetsAt }),
     } as const satisfies ChatTurnOutcome,
   };
 };
@@ -3376,7 +3436,7 @@ export const processServerChatStream = async function* ({
   source,
 }: ProcessServerChatStreamProps): AsyncIterable<PublicStreamChunk> {
   const deferredRunFinishedChunks: PublicStreamChunk[] = [];
-  const runState = { cancelled: false };
+  const runState: PersistenceRunState = { cancelled: false };
   const responseMessageId = mapMessageId(
     ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL,
   );
@@ -3394,10 +3454,6 @@ export const processServerChatStream = async function* ({
   let producedAnswer = false;
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
   const toolCallsWithCompleteInput = approvedCallIdsOf(initialResponseMessage);
-  let usage: TokenUsage | undefined;
-  const recordUsage = (recorded: TokenUsage | undefined) => {
-    usage = recorded;
-  };
   // One accepted turn has exactly one terminal callback. Set before awaiting
   // persistence so a callback failure cannot re-enter and double-write a
   // different outcome from catch/finally.
@@ -3422,7 +3478,8 @@ export const processServerChatStream = async function* ({
     deferredRunFinishedChunks,
     rawArgumentsByIncompleteToolCallId,
     toolCallsWithCompleteInput,
-    getUsage: () => usage,
+    getUsage: () => runState.usage,
+    getLocalRunContext: () => runState.localRunContext,
     getProducedAnswer: () => producedAnswer,
     announceBeforeFailure: clientAssistantOwner.announceBeforeFailure,
     terminal,
@@ -3451,7 +3508,8 @@ export const processServerChatStream = async function* ({
         sourceChunk.type === EventType.RUN_ERROR &&
         (admissionLost() || admissionCutByControl())
       ) {
-        usage = tokenUsageFromTerminalChunk(sourceChunk) ?? usage;
+        runState.usage =
+          tokenUsageFromTerminalChunk(sourceChunk) ?? runState.usage;
         const outcome = admissionCutByControl()
           ? cutShortOutcome()
           : admissionLossOutcome();
@@ -3466,7 +3524,6 @@ export const processServerChatStream = async function* ({
         deferredRunFinishedChunks,
         processor,
         runState,
-        recordUsage,
         partProvenance,
       });
       if (processed.type === "deferred") {
@@ -3487,7 +3544,7 @@ export const processServerChatStream = async function* ({
       yield* resumeChunks;
       if (lifecycle === "failed") {
         const failure = failedRunDetails({ chunk, sourceChunk });
-        usage = failure.usage ?? usage;
+        runState.usage = failure.usage ?? runState.usage;
         await terminalize({
           flushProcessor: true,
           outcome: failure.outcome,
@@ -3601,11 +3658,14 @@ const processTurnForPersistence = ({
   const { processor, message } = createStreamMessageCapture({
     initialMessages,
     capture: (streamed) => {
-      const convertedMessage = toChatMessage(streamed, visualOrigin);
+      const convertedMessage = toChatMessage(
+        withLocalRunFileParts(streamed),
+        visualOrigin,
+      );
       return convertedMessage === null
         ? null
         : attachRestorationMetadata({
-            message: convertedMessage,
+            message: attachLocalRunFilesNotShared(convertedMessage, streamed),
             restorationPairs,
           });
     },
@@ -3626,6 +3686,7 @@ type FinishResponseMessageProps = {
   producedAnswer: boolean;
   responseMessage: ChatMessage | null;
   usage: TokenUsage | undefined;
+  localRunContext: ChatLocalRunContext | undefined;
 };
 
 const createTerminalResponseMessage = ({
@@ -3634,6 +3695,7 @@ const createTerminalResponseMessage = ({
   producedAnswer,
   responseMessage,
   usage,
+  localRunContext,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
   if (outcome.type === "completed" && !producedAnswer) {
     throw new ChatEmptyCompletionError({
@@ -3667,9 +3729,29 @@ const createTerminalResponseMessage = ({
     usage,
   });
   return attachTerminalTurnOutcome({
-    message: persistableMessage,
+    message:
+      localRunContext === undefined
+        ? persistableMessage
+        : {
+            ...persistableMessage,
+            metadata: { ...persistableMessage.metadata, localRunContext },
+          },
     turnOutcome: outcome,
   });
+};
+
+/**
+ * The context report of a turn run on the member's computer, as the local
+ * run's own reader checked it (`local-run-chunks.ts`), checked again here.
+ */
+const localRunContextFromChunk = (
+  chunk: Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>,
+) => {
+  const parsed = v.safeParse(
+    chatLocalRunContextSchema,
+    chunk.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY],
+  );
+  return parsed.success ? parsed.output : undefined;
 };
 
 const finalizeResponseProcessor = (processor: ChatStreamProcessor): void => {
@@ -5053,6 +5135,37 @@ const deanonymizeToolInputText = (
   return typeof deanonymized === "string" ? deanonymized : text;
 };
 
+/**
+ * The answer with the files a local run handed back as its parts: the stream
+ * carries them as metadata (`CHAT_LOCAL_RUN_FILES_METADATA_KEY`), and the stored
+ * message holds them the way every other reader expects a file.
+ */
+const withLocalRunFileParts = (streamed: UIMessage): UIMessage => {
+  const files = chatLocalRunFilePartsOf(streamed.metadata, streamed.parts);
+  return files.length === 0
+    ? streamed
+    : { ...streamed, parts: [...streamed.parts, ...files] };
+};
+
+const attachLocalRunFilesNotShared = (
+  message: ChatMessage,
+  streamed: UIMessage,
+): ChatMessage => {
+  const notShared = v.safeParse(
+    chatLocalRunFilesNotSharedSchema,
+    streamed.metadata?.[CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY],
+  );
+  return notShared.success && notShared.output.length > 0
+    ? {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          [CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY]: notShared.output,
+        },
+      }
+    : message;
+};
+
 const attachRestorationMetadata = ({
   message,
   restorationPairs,
@@ -5153,11 +5266,53 @@ const toChatParts = (
 };
 
 type HydrateMessagesProps = {
+  /**
+   * The turn runs on the member's computer, whose agent gets each file in its
+   * folder. Never with anonymized text, which a raw copy would defeat.
+   */
+  copiesFilesToComputer: boolean;
   messages: ChatMessage[];
   safeDb: SafeDb;
   sendMode: ChatSendMode;
   userId: SafeId<"user">;
 };
+
+const localRunFilePath = (file: Pick<StoredUserFile, "fileName" | "id">) =>
+  desktopRunnerAttachmentPath(file.id, sanitizeFilename(file.fileName));
+
+/**
+ * The attached files of the turn's messages, newest first. Beyond the cap,
+ * older files were copied on the turn that attached them.
+ */
+export const localRunAttachmentsOf = async ({
+  messages,
+  safeDb,
+  userId,
+}: Pick<HydrateMessagesProps, "messages" | "safeDb" | "userId">) =>
+  await Result.gen(async function* () {
+    const files = yield* Result.await(
+      readUserFilesByIds({ messages, safeDb, userId }),
+    );
+    const attachments = new Map<string, LocalRunAttachment>();
+    for (const message of messages.toReversed()) {
+      for (const part of message.parts) {
+        const fileId =
+          isChatAttachmentPart(part) && !isAnswerFilePart(message.role, part)
+            ? getUserFileIdFromAttachmentPart(part)
+            : null;
+        const file = fileId === null ? undefined : files.get(fileId);
+        if (file !== undefined && attachments.size < MAX_RUN_ATTACHMENTS) {
+          attachments.set(file.id, {
+            path: localRunFilePath(file),
+            fileId: file.id,
+            fileName: sanitizeFilename(file.fileName),
+            s3Key: file.s3Key,
+          });
+        }
+      }
+    }
+    return Result.ok([...attachments.values()]);
+  });
 
 type XlsxCacheWrite = {
   file: StoredUserFile;
@@ -5206,6 +5361,7 @@ const persistXlsxCacheWrites = async ({
 };
 
 export const hydrateMessages = async ({
+  copiesFilesToComputer,
   messages,
   safeDb,
   sendMode,
@@ -5226,7 +5382,10 @@ export const hydrateMessages = async ({
       const parts: ChatMessage["parts"] = [];
 
       for (const part of message.parts) {
-        if (!isChatAttachmentPart(part)) {
+        if (
+          !isChatAttachmentPart(part) ||
+          isAnswerFilePart(message.role, part)
+        ) {
           parts.push(part);
           continue;
         }
@@ -5240,6 +5399,19 @@ export const hydrateMessages = async ({
         const userFile = userFilesById.get(fileId);
         if (!userFile) {
           panic("Persisted chat file reference missing user_files row");
+        }
+
+        if (copiesFilesToComputer) {
+          parts.push(
+            createChatTextPart(
+              `Attached file "${userFile.fileName}" is in your folder at ${localRunFilePath(userFile)}.`,
+            ),
+          );
+          // An image or PDF stays out of the run's stored messages: the agent
+          // reads the copy. Text it could not extract without tools stays too.
+          if (!canHydrateFilePartAsPlainText(userFile.mimeType)) {
+            continue;
+          }
         }
 
         const hydratedPart = yield* Result.await(
@@ -5358,7 +5530,7 @@ const collectMessageUserFileIds = (
 
   for (const message of messages) {
     for (const part of message.parts) {
-      if (!isChatAttachmentPart(part)) {
+      if (!isChatAttachmentPart(part) || isAnswerFilePart(message.role, part)) {
         continue;
       }
 

@@ -152,6 +152,7 @@
     "emailPlaceholder": "jus@example.com",
     "error": {
       "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",
+      "providerUnavailable": "Prisijungimo paslauga šiuo metu neatsako. Bandykite dar kartą po minutės.",
       "title": "Nepavyko jūsų prijungti"
     },
     "handoffAccount": "Tęsti kaip <account>{email}</account> organizacijoje <organization>{organizationName}</organization>?",
@@ -635,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Valandinis įkainis negali būti neigiamas",
     "hours": "Valandos",
+    "invalidNumberFormat": "Patikrinkite skaičiaus formatą",
     "invoiceComposer": {
       "addSellerProfile": "Pridėkite pardavėjo profilį atsiskaitymo nustatymuose",
       "billedHours": "Apmokamos valandos",
@@ -1583,6 +1585,8 @@
       "full": "Užpildyta {percent}%",
       "instructions": "Sistemos instrukcijos",
       "percent": "{percent}%",
+      "reported": "Kaip pranešė programavimo agentas jūsų kompiuteryje po paskutinio atsakymo. Agentas pats tvarko savo kontekstą.",
+      "reportedTokens": "{used} / {total} tokenų",
       "summary": "Senesnių žinučių santrauka",
       "summaryWithCount": "{count} senesnių žinučių santrauka",
       "title": "Pokalbio kontekstas",
@@ -1686,8 +1690,10 @@
     "localRun": {
       "cloud": "stella debesis",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
+      "errorLimitResetsAt": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandyti dar kartą galėsite po {time}.",
       "errorNeedsLogin": "Programavimo agentas jūsų kompiuteryje prašo prisijungti iš naujo. Prisijunkite per stella desktop ir bandykite dar kartą.",
       "errorUnavailable": "Jūsų kompiuteris nustojo apdoroti šį atsakymą. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
+      "filesNotShared": "Failai, kurių nepavyko bendrinti, lieka jūsų kompiuteryje: {fileNames}",
       "onThisComputer": "{harness} šiame kompiuteryje",
       "permissionAskDescription": "Pokalbio aplanko failus redaguoja pats; dėl visko kito klausia.",
       "permissionAutoDescription": "Tai, ką laiko saugiu, atlieka pats; dėl kito klausia.",
@@ -1718,6 +1724,10 @@
       "dismiss": "Atmesti ir sustabdyti",
       "secretAnswer": "Atsakymas paslėptas",
       "secretPlaceholder": "Jūsų atsakymas liks paslėptas"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# pokalbis laukia jūsų} few {# pokalbiai laukia jūsų} many {# pokalbio laukia jūsų} other {# pokalbių laukia jūsų}}",
+      "working": "{count, plural, one {# pokalbis vykdomas} few {# pokalbiai vykdomi} many {# pokalbio vykdoma} other {# pokalbių vykdoma}}"
     },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mcpReconnect": {
@@ -3984,6 +3994,8 @@
     "reopenTab": "Iš naujo atidaryti {name}",
     "resizePane": "Keisti polangio dydį",
     "review": {
+      "acceptChange": "Priimti pakeitimą",
+      "acceptFinding": "Priimti išvadą",
       "actionNeeded": "Reikia veiksmų",
       "addComment": "Pridėti kaip komentarą",
       "addNote": "Pridėti komentarą priešingai šaliai",
@@ -4024,6 +4036,7 @@
         "dismissed": "Atmesta"
       },
       "description": "Pasirinkite parengtą peržiūros vadovą, referencinius dokumentus arba abu.",
+      "dismissFinding": "Atmesti išvadą",
       "documentChanged": "Šis dokumentas pasikeitė po šios peržiūros.",
       "export": {
         "counterparty": "Atsisiųsti priešingai šaliai",
@@ -4047,6 +4060,7 @@
       "history": {
         "backToLatest": "Grįžti prie naujausios",
         "decided": "{decided, number} iš {total, number} nuspręsta",
+        "fromTable": "Iš lentelės",
         "references": "{count, plural, one {# referencija} few {# referencijos} many {# referencijos} other {# referencijų}}"
       },
       "impact": {
@@ -4071,7 +4085,6 @@
         "unanchored": "Nesusieta su jokia sąlyga"
       },
       "newTopic": "Nauja peržiūros tema",
-      "noChangeNeeded": "Pakeitimo nereikia",
       "noEditor": "Atidarykite dokumentą, kad priimtumėte pakeitimus",
       "noMaterialDifferences": "Esminių skirtumų nerasta",
       "noPassage": "Ištraukos nėra",
@@ -4154,6 +4167,11 @@
         "noSide": "Nėra pusės",
         "proposedFromReferences": "Pozicijos, pasiūlytos iš referencijų",
         "unnamedReferences": "{count, plural, one {# referencinis dokumentas} few {# referenciniai dokumentai} many {# referencinio dokumento} other {# referencinių dokumentų}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Visa šios versijos peržiūra</link> su nuorodomis ir siūlomais pakeitimais pasiekiama peržiūrų istorijoje.",
+        "origin": "<strong>Paleista iš lentelės.</strong> Šios išvados įvertintos pagal lentelei išgautas reikšmes, todėl jos nesusietos su dokumentu ir neapima siūlomų pakeitimų.",
+        "runAnotherReview": "Kad gautumėte nuorodas ir siūlomus pakeitimus, naudokite mygtuką <action>{label}</action>."
       },
       "targetAsReference": "Peržiūrimas dokumentas negali būti pats sau referencinis dokumentas.",
       "targetColumn": "Šis dokumentas",

@@ -152,6 +152,7 @@
     "emailPlaceholder": "sie@beispiel.de",
     "error": {
       "generic": "Bei der Anmeldung ist etwas schiefgelaufen. Bitte versuchen Sie es erneut.",
+      "providerUnavailable": "Der Anmeldedienst antwortet gerade nicht. Bitte versuchen Sie es in einer Minute erneut.",
       "title": "Wir konnten Sie nicht anmelden"
     },
     "handoffAccount": "Als <account>{email}</account> in <organization>{organizationName}</organization> fortfahren?",
@@ -635,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Der Stundensatz darf nicht negativ sein",
     "hours": "Stunden",
+    "invalidNumberFormat": "Überprüfen Sie das Zahlenformat",
     "invoiceComposer": {
       "addSellerProfile": "Legen Sie in den Abrechnungseinstellungen ein Verkäuferprofil an",
       "billedHours": "Abgerechnete Stunden",
@@ -1583,6 +1585,8 @@
       "full": "{percent} % voll",
       "instructions": "Systemanweisungen",
       "percent": "{percent} %",
+      "reported": "So hat es der Coding-Agent auf Ihrem Computer nach seiner letzten Antwort gemeldet. Der Agent verwaltet seinen Kontext selbst.",
+      "reportedTokens": "{used} / {total} Tokens",
       "summary": "Zusammenfassung älterer Nachrichten",
       "summaryWithCount": "Zusammenfassung von {count} älteren Nachrichten",
       "title": "Kontext der Unterhaltung",
@@ -1686,8 +1690,10 @@
     "localRun": {
       "cloud": "stella-Cloud",
       "errorLimitReached": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Versuchen Sie es erneut, sobald das Limit zurückgesetzt ist.",
+      "errorLimitResetsAt": "Der Coding-Agent auf Ihrem Computer hat sein Nutzungslimit erreicht. Sie können es ab {time} erneut versuchen.",
       "errorNeedsLogin": "Der Coding-Agent auf Ihrem Computer verlangt eine erneute Anmeldung. Melden Sie sich über stella desktop an und versuchen Sie es dann erneut.",
       "errorUnavailable": "Ihr Computer hat die Bearbeitung dieser Antwort beendet. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
+      "filesNotShared": "Dateien, die nicht geteilt werden konnten, bleiben auf Ihrem Computer: {fileNames}",
       "onThisComputer": "{harness} auf diesem Computer",
       "permissionAskDescription": "Bearbeitet Dateien im Ordner des Chats selbst; fragt vor allem anderen nach.",
       "permissionAutoDescription": "Erledigt selbst, was es für sicher hält; fragt beim Rest nach.",
@@ -1718,6 +1724,10 @@
       "dismiss": "Verwerfen und anhalten",
       "secretAnswer": "Antwort verborgen",
       "secretPlaceholder": "Ihre Antwort bleibt verborgen"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# Chat wartet auf Sie} other {# Chats warten auf Sie}}",
+      "working": "{count, plural, one {# Chat arbeitet} other {# Chats arbeiten}}"
     },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mcpReconnect": {
@@ -3984,6 +3994,8 @@
     "reopenTab": "{name} erneut öffnen",
     "resizePane": "Bereich in der Größe ändern",
     "review": {
+      "acceptChange": "Änderung annehmen",
+      "acceptFinding": "Ergebnis annehmen",
       "actionNeeded": "Handlungsbedarf",
       "addComment": "Als Kommentar hinzufügen",
       "addNote": "Kommentar für die Gegenpartei hinzufügen",
@@ -4024,6 +4036,7 @@
         "dismissed": "Verworfen"
       },
       "description": "Wählen Sie ein erstelltes Playbook, Referenzdokumente oder beides.",
+      "dismissFinding": "Ergebnis verwerfen",
       "documentChanged": "Dieses Dokument hat sich seit dieser Prüfung geändert.",
       "export": {
         "counterparty": "Für die Gegenpartei herunterladen",
@@ -4047,6 +4060,7 @@
       "history": {
         "backToLatest": "Zurück zur neuesten Version",
         "decided": "{decided, number} von {total, number} entschieden",
+        "fromTable": "Aus der Tabelle",
         "references": "{count, plural, one {# Referenz} other {# Referenzen}}"
       },
       "impact": {
@@ -4071,7 +4085,6 @@
         "unanchored": "Nicht an eine Klausel gebunden"
       },
       "newTopic": "Neues Prüfthema",
-      "noChangeNeeded": "Keine Änderung nötig",
       "noEditor": "Öffnen Sie das Dokument, um Änderungen anzunehmen",
       "noMaterialDifferences": "Keine wesentlichen Unterschiede gefunden",
       "noPassage": "Keine Textstelle",
@@ -4154,6 +4167,11 @@
         "noSide": "keine Partei",
         "proposedFromReferences": "aus den Referenzen vorgeschlagene Standpunkte",
         "unnamedReferences": "{count, plural, one {# Referenzdokument} other {# Referenzdokumente}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Eine vollständige Prüfung dieser Version</link> mit Verweisen und vorgeschlagenen Änderungen finden Sie im Prüfverlauf.",
+        "origin": "<strong>Aus der Tabelle gestartet.</strong> Diese Ergebnisse wurden anhand der für die Tabelle extrahierten Werte bewertet. Sie verweisen daher nicht auf das Dokument und enthalten keine vorgeschlagenen Änderungen.",
+        "runAnotherReview": "Verweise und vorgeschlagene Änderungen erhalten Sie über die Schaltfläche <action>{label}</action>."
       },
       "targetAsReference": "Das geprüfte Dokument kann nicht seine eigene Referenz sein.",
       "targetColumn": "Dieses Dokument",

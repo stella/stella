@@ -167,6 +167,19 @@ describe("CZ ÚS decisions as the court numbered and set them", () => {
     }
   });
 
+  test("the President signs the judgment under his office", async () => {
+    const { documentAst } = await parsedFixture("cz-us-pl-us-42-2000.html.gz");
+    const blocks = bodyParagraphs(documentAst.blocks);
+    const office = blocks.findIndex(
+      (block) => block.plainText === "předseda Ústavního soudu",
+    );
+
+    expect(blocks[office - 1]?.plainText).toBe("JUDr. Zdeněk Kessler");
+    expect(blocks[office - 1]?.role).toBe("signature");
+    expect(blocks[office]?.role).toBe("signature");
+    expect(blocks[office - 2]?.role).toBe("closing");
+  });
+
   test("a sentence of an opinion that names it is not its heading", async () => {
     const { documentAst } = await parsedFixture("cz-us-pl-us-42-2000.html.gz");
 

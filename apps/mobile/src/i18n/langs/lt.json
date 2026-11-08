@@ -242,7 +242,6 @@
     "headnote": "Santrauka",
     "textUnavailable": "Šiam sprendimui teksto nėra",
     "openSource": "Atverti pirminį šaltinį",
-    "openFailed": "Nepavyko atidaryti nuorodos.",
     "loadFailed": "Nepavyko įkelti teismų praktikos.",
     "share": "Bendrinti"
   },
@@ -268,8 +267,6 @@
     "newTimer": "Naujas laikmatis",
     "description": "Prie ko dirbate?",
     "matterTitle": "Byla",
-    "pause": "Pristabdyti",
-    "resume": "Tęsti",
     "save": "Išsaugoti",
     "discard": "Atmesti",
     "emptyTitle": "Laikmačių nėra",
@@ -348,5 +345,11 @@
   "pane": {
     "showList": "Rodyti sąrašą",
     "hideList": "Slėpti sąrašą"
+  },
+  "link": {
+    "open": "Atidaryti",
+    "share": "Bendrinti",
+    "cancel": "Atšaukti",
+    "openFailed": "Nepavyko atidaryti nuorodos."
   }
 }

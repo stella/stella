@@ -536,26 +536,34 @@ const projectDecisionPage = async (
   });
   let repairs: DecisionIdentifierRepairDiagnostic | undefined;
   if (projections.length > 0) {
-    const expected = sql.join(
+    // One jsonb parameter each rather than VALUES lists. The pool keeps every
+    // prepared statement for the life of its connection, and a page's identifier
+    // count varies, so VALUES would leave a large plan on the connection for each
+    // count it ever saw. These statements keep one text whatever the page holds.
+    const expected = JSON.stringify(
       projections.flatMap(({ country, decisionId, identifiers }) =>
-        identifiers.map(
-          (identifier) =>
-            sql`(${decisionId}::uuid, ${identifier.type}::varchar, ${identifier.value}::varchar, ${normalizeDecisionIdentifierIn(country, identifier)}::varchar)`,
-        ),
+        identifiers.map((identifier) => ({
+          decision_id: decisionId,
+          type: identifier.type,
+          value: identifier.value,
+          normalized_value: normalizeDecisionIdentifierIn(country, identifier),
+        })),
       ),
-      sql`, `,
     );
-    const page = sql.join(
-      projections.map(({ decisionId }) => sql`(${decisionId}::uuid)`),
-      sql`, `,
+    const page = JSON.stringify(
+      projections.map(({ decisionId }) => ({ decision_id: decisionId })),
     );
 
     // Graph acquisition precedes the decision page at the transaction owner.
     // NO KEY UPDATE remains compatible with resolver KEY SHARE checks.
     const rewritten = await tx.execute(sql`
-    WITH expected(decision_id, type, value, normalized_value) AS (
-      VALUES ${expected}
-    ), page(decision_id) AS (VALUES ${page}),
+    WITH expected AS (
+      SELECT * FROM jsonb_to_recordset(${expected}::text::jsonb) AS row(
+        decision_id uuid, type varchar, value varchar, normalized_value varchar
+      )
+    ), page AS (
+      SELECT * FROM jsonb_to_recordset(${page}::text::jsonb) AS row(decision_id uuid)
+    ),
     deleted AS (
       DELETE FROM case_law_decision_identifiers stored USING page
       WHERE stored.decision_id = page.decision_id
@@ -705,7 +713,7 @@ const projectCitationPage = async (
       citationsScanned: checkpoint.citationsScanned,
     };
   }
-  const projected = sql.join(
+  const projected = JSON.stringify(
     rows.map((row) => {
       const { type, normalizedValue } = citationProjection(row);
       const checked = assertCitationStorageField(
@@ -715,12 +723,15 @@ const projectCitationPage = async (
       if (checked.isErr()) {
         abortTransaction(checked.error);
       }
-      return sql`(${row.id}::uuid, ${type}::varchar, ${checked.value}::varchar)`;
+      return { id: row.id, type, normalized_value: checked.value };
     }),
-    sql`, `,
   );
   await tx.execute(sql`
-    WITH projected(id, type, normalized_value) AS (VALUES ${projected})
+    WITH projected AS (
+      SELECT * FROM jsonb_to_recordset(${projected}::text::jsonb) AS row(
+        id uuid, type varchar, normalized_value varchar
+      )
+    )
     UPDATE case_law_citations citation
     SET identifier_type = projected.type,
         normalized_identifier_value = projected.normalized_value,

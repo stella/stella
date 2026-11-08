@@ -59,6 +59,12 @@ export type HarnessToolCall = {
   id: string;
   name: string;
   input: unknown;
+  /**
+   * What the harness asked of a native tool whose record leaves it out, such
+   * as the file a read opened. It stays in this process: only the skill filter
+   * reads it, and it is not part of what a turn reports.
+   */
+  localInput?: unknown;
 };
 
 export type HarnessToolResult = {
@@ -124,11 +130,39 @@ export type HarnessQuestionRequest = {
   answerWith: "response" | "next_message";
 };
 
+/**
+ * How full the model's context was after the turn's last model request, and
+ * the model's context window, both as the harness reported them.
+ */
+export type HarnessContextUsage = {
+  usedTokens: number;
+  windowTokens: number;
+};
+
+/**
+ * The context a harness reported, or `null` without a window to measure it
+ * against: a count that is not a whole number of tokens reports nothing.
+ */
+export const harnessContextUsage = (
+  usedTokens: number,
+  windowTokens: number | null | undefined,
+): HarnessContextUsage | null =>
+  windowTokens === null ||
+  windowTokens === undefined ||
+  !Number.isSafeInteger(windowTokens) ||
+  windowTokens <= 0 ||
+  !Number.isSafeInteger(usedTokens) ||
+  usedTokens < 0
+    ? null
+    : { usedTokens, windowTokens };
+
 export type HarnessUsage = {
   inputTokens: number;
   cachedInputTokens: number;
   outputTokens: number;
   reasoningOutputTokens: number;
+  /** `null` when the harness reported no context window. */
+  context: HarnessContextUsage | null;
 };
 
 /**

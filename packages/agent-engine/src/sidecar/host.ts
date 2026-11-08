@@ -15,6 +15,10 @@ import type {
   HarnessTurn,
 } from "../harness/adapter";
 import {
+  createChunkCoalescer,
+  scheduleTimeout,
+} from "../harness/chunk-coalescer";
+import {
   claudeCodeLaunch,
   createClaudeCodeHarnessAdapter,
 } from "../harness/claude-code/adapter";
@@ -37,7 +41,15 @@ import {
 } from "../harness/events";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
+import { copyAttachments } from "./attachments";
 import { type McpProxy, startMcpProxy } from "./mcp-proxy";
+import {
+  outputReportChunk,
+  type OutputSnapshot,
+  runOutputUploader,
+  shareOutputs,
+  snapshotOutputs,
+} from "./outputs";
 import type {
   SidecarHarnessLaunchSettings,
   SidecarHostMessage,
@@ -130,11 +142,17 @@ type HeldRun = {
   turn: HarnessTurn | null;
   /** Set before the turn starts too: a turn that opens later stops at once. */
   stop: RunStop;
+  /** Ends the attachment copy that comes before the turn. */
+  readonly stopCopying: AbortController;
   /**
    * Runner request id (a UUID) to the harness's own request id, for both
    * approvals and blocking questions.
    */
   requests: Map<string, string>;
+  /** The run's `outputs/` folder when it started; `null` until it opened. */
+  outputs: OutputSnapshot | null;
+  /** Cut by a stop, so sharing a stopped run's files ends at once. */
+  outputSharing: AbortController;
 };
 
 type Config = { appVersion: string; apiOrigin: string; proxy: McpProxy };
@@ -274,6 +292,13 @@ const probeOutcome = ({
 };
 
 /** The event stream for a run that ends before its harness starts. */
+const stoppedBeforeStart = (): AsyncIterable<HarnessEvent> => {
+  const queue = createEventQueue<HarnessEvent>();
+  queue.push({ type: "turn.interrupted" });
+  queue.close();
+  return queue.items;
+};
+
 const failedBeforeStart = (
   failure: HarnessFailure,
 ): AsyncIterable<HarnessEvent> => {
@@ -547,7 +572,10 @@ export class SidecarHost {
       turn: null,
       // A run that starts while the host stops is cancelled like the held ones.
       stop: this.stopping ? RUN_STOP.cancel : RUN_STOP.none,
+      stopCopying: new AbortController(),
       requests: new Map(),
+      outputs: null,
+      outputSharing: new AbortController(),
     };
     this.runs.set(message.runId, run);
     this.track(
@@ -563,6 +591,8 @@ export class SidecarHost {
       run.stop === RUN_STOP.cancel || reason === RUN_STOP.cancel
         ? RUN_STOP.cancel
         : RUN_STOP.interrupt;
+    run.stopCopying.abort();
+    run.outputSharing.abort();
     if (run.turn !== null) {
       this.detached(run.turn.interrupt(), "sidecar.interrupt");
     }
@@ -598,6 +628,7 @@ export class SidecarHost {
   private async open(
     message: SidecarRunStart,
     config: Config,
+    run: HeldRun,
   ): Promise<Result<HarnessTurn, HarnessFailure>> {
     // The wire checks each message's role only, as the runner socket does;
     // the turn reads more, so the rest is checked before anything starts.
@@ -635,11 +666,39 @@ export class SidecarHost {
         signal: null,
       });
     }
+    const copied = await copyAttachments(
+      message.attachments,
+      message.workspaceDir,
+      { signal: run.stopCopying.signal },
+    );
+    if (run.stop !== RUN_STOP.none) {
+      // Stopped during the copy: no harness starts for a run nobody wants now.
+      return Result.err({
+        type: "harness_exited",
+        message: "The run was stopped before it started.",
+        exitCode: null,
+        signal: null,
+      });
+    }
+    if (Result.isError(copied)) {
+      this.options.log(`a run's attachment failed: ${copied.error.message}`);
+      return Result.err({
+        type: "harness_exited",
+        message: "An attached file could not be copied to this computer.",
+        exitCode: null,
+        signal: null,
+      });
+    }
+    // Read after the copies and before the harness: what is there now was not
+    // written by this turn.
+    run.outputs = await snapshotOutputs(message.workspaceDir);
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
       workspaceDir: message.workspaceDir,
       cacheDir: message.cacheDir,
+      skillFolders: message.skillFolders,
+      toolPath: message.toolPath,
       model: message.model,
       instructions: message.instructions,
       policy: message.policy,
@@ -663,7 +722,7 @@ export class SidecarHost {
     config: Config,
     run: HeldRun,
   ) {
-    const opened = await this.open(message, config);
+    const opened = await this.open(message, config, run);
     const outcome: { value: RunOutcome; sessionId: string | null } = {
       value: "failed",
       sessionId: null,
@@ -697,6 +756,40 @@ export class SidecarHost {
         }
       }
       return nativeId;
+    };
+
+    /**
+     * Hand the member what the turn wrote to its `outputs/` folder, reported
+     * ahead of the finish that ends the chat turn. A failure stays with the
+     * files it concerns: the run has done its work whatever happens here.
+     */
+    const shareRunOutputs = async () => {
+      if (run.outputs === null) {
+        return;
+      }
+      const reports = shareOutputs({
+        workspaceDir: message.workspaceDir,
+        before: run.outputs,
+        upload: runOutputUploader({
+          apiOrigin: config.apiOrigin,
+          runId,
+          token: () => config.proxy.tokenOf(runId),
+        }),
+        signal: run.outputSharing.signal,
+      });
+      const shared = await Result.tryPromise(async () => {
+        for await (const report of reports) {
+          const timestamp = Temporal.Now.instant().epochMilliseconds;
+          send({
+            type: "run.event",
+            runId,
+            chunk: { ...outputReportChunk(report, timestamp) },
+          });
+        }
+      });
+      if (Result.isError(shared)) {
+        this.options.log("sharing a run's output files stopped early");
+      }
     };
 
     /**
@@ -740,6 +833,7 @@ export class SidecarHost {
             break;
           case "turn.completed":
             outcome.value = "completed";
+            await shareRunOutputs();
             yield event;
             break;
           case "turn.interrupted":
@@ -773,6 +867,8 @@ export class SidecarHost {
         this.detached(opened.value.interrupt(), "sidecar.interrupt");
       }
       events = opened.value.events;
+    } else if (run.stop !== RUN_STOP.none) {
+      events = stoppedBeforeStart();
     } else {
       events = failedBeforeStart(opened.error);
     }
@@ -784,11 +880,20 @@ export class SidecarHost {
       generateId: () => crypto.randomUUID(),
       now: () => Temporal.Now.instant().epochMilliseconds,
     });
+    // Streamed deltas merge before they are sent: each run event is one
+    // stored message, and a run may store only so many.
+    const coalescer = createChunkCoalescer({
+      emit: (chunk) => {
+        // A plain copy: TanStack declares chunks as interfaces, which carry
+        // no index signature.
+        send({ type: "run.event", runId, chunk: { ...chunk } });
+      },
+      schedule: scheduleTimeout,
+    });
     for await (const chunk of chunks) {
-      // A plain copy: TanStack declares chunks as interfaces, which carry
-      // no index signature.
-      send({ type: "run.event", runId, chunk: { ...chunk } });
+      coalescer.push(chunk);
     }
+    coalescer.flush();
     await run.turn?.dispose();
     const finished = {
       type: "run.finished",

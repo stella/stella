@@ -14,6 +14,7 @@ import type {
 } from "@stll/ai-catalog";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
+import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { ChatTurnResumeProbe } from "@stll/chat/resume-contract";
 import type { FolioAgentToolName } from "@stll/folio-agents";
@@ -187,6 +188,12 @@ export type ChatTurnOutcome =
        */
       providerDiagnostic?: ProviderDiagnostic;
       refusal?: ActionAdmissionRefusal;
+      /**
+       * When the usage limit of the harness that ran the turn on the
+       * member's computer resets (ISO 8601), for a `local_runner_limit_reached`
+       * failure whose harness reported it.
+       */
+      limitResetsAt?: string;
     }
   | {
       type: "interrupted";
@@ -233,6 +240,10 @@ export type ChatMessageMetadata = {
    * streamed; never stored. Incoming client metadata deliberately does not
    * accept this field. */
   contextNotice?: ChatContextNotice | null | undefined;
+  /** Server-owned: files a local run left on the member's computer because
+   * they could not be shared. Incoming client metadata deliberately does not
+   * accept this field. */
+  localRunFilesNotShared?: string[] | undefined;
   docxEditPreferences?:
     | {
         docxEditRepresentation?: "tracked-changes" | "direct" | undefined;
@@ -273,6 +284,12 @@ export type ChatMessageMetadata = {
       }
     | undefined;
   usage?: ChatMessageUsage | undefined;
+  /**
+   * How full the context of the harness that ran the turn on the member's
+   * computer was after its last model request, against its window, as the
+   * harness reported both. Server-owned; absent on a cloud turn.
+   */
+  localRunContext?: ChatLocalRunContext | undefined;
 };
 
 // UIMessage's other fields do not depend on its tool map. Omitting from the

@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "apps/api/src/lib/data-sources owns the data-source tool contract, its run pipeline and the tools a table column may call; no existing lib owner covers sources beyond company registers"
+}

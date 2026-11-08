@@ -242,7 +242,6 @@
     "headnote": "Leitsatz",
     "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
     "openSource": "Originalquelle öffnen",
-    "openFailed": "Der Link konnte nicht geöffnet werden.",
     "loadFailed": "Die Rechtsprechung konnte nicht geladen werden.",
     "share": "Teilen"
   },
@@ -268,8 +267,6 @@
     "newTimer": "Neuer Timer",
     "description": "Woran arbeiten Sie?",
     "matterTitle": "Akte",
-    "pause": "Pausieren",
-    "resume": "Fortsetzen",
     "save": "Speichern",
     "discard": "Verwerfen",
     "emptyTitle": "Keine Timer",
@@ -348,5 +345,11 @@
   "pane": {
     "showList": "Liste einblenden",
     "hideList": "Liste ausblenden"
+  },
+  "link": {
+    "open": "Öffnen",
+    "share": "Teilen",
+    "cancel": "Abbrechen",
+    "openFailed": "Der Link konnte nicht geöffnet werden."
   }
 }

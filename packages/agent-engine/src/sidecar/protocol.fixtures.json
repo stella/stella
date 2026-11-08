@@ -109,7 +109,12 @@
           "processGrant": true
         },
         "workspaceDir": "C:\\data\\runs\\0b6f5c8e",
+        "attachments": [],
         "cacheDir": "C:\\data\\agent-package-cache",
+        "skillFolders": [
+          { "name": "fixture-skill", "path": "C:\\skills\\fixture-skill" }
+        ],
+        "toolPath": ["C:\\data\\harness\\bun\\1.4.4\\package\\bin"],
         "model": "gpt-test",
         "instructions": "Answer briefly.",
         "messages": [
@@ -146,7 +151,10 @@
           "processGrant": false
         },
         "workspaceDir": "/data/runs/0b6f5c8e",
+        "attachments": [],
         "cacheDir": "/data/agent-package-cache",
+        "skillFolders": [],
+        "toolPath": [],
         "model": "gpt-test",
         "instructions": "",
         "messages": [

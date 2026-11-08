@@ -103,6 +103,10 @@
       "types": "./src/provision-version-grammar.ts",
       "import": "./src/provision-version-grammar.ts"
     },
+    "./printed-date": {
+      "types": "./src/printed-date.ts",
+      "import": "./src/printed-date.ts"
+    },
     "./us-code-citations": {
       "types": "./src/us-code-citations.ts",
       "import": "./src/us-code-citations.ts"
@@ -132,7 +136,7 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

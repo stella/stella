@@ -54,7 +54,6 @@ export const DOC_SOURCES = {
       "@tanstack/ai-openai",
       "@tanstack/ai-openrouter",
       "@tanstack/ai-persistence",
-      "@tanstack/ai-react",
       "@tanstack/ai-sandbox",
       "@tanstack/charts",
       "@tanstack/devtools-vite",
@@ -372,6 +371,20 @@ const PROBED_WITHOUT_LLMS_TXT = [
   [
     "@electric-sql/pglite",
     ["https://pglite.dev/llms.txt", "https://pglite.dev/docs/llms.txt"],
+  ],
+  [
+    "@emnapi/core",
+    [
+      "https://emnapi.netlify.app/llms.txt",
+      "https://raw.githubusercontent.com/toyobayashi/emnapi/main/llms.txt",
+    ],
+  ],
+  [
+    "@emnapi/runtime",
+    [
+      "https://emnapi.netlify.app/llms.txt",
+      "https://raw.githubusercontent.com/toyobayashi/emnapi/main/llms.txt",
+    ],
   ],
   [
     "@firecrawl/anydoc",

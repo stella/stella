@@ -185,6 +185,7 @@ export const FIRST_PARTY_MODEL_PROVIDERS: Exclude<
  */
 const GPT_61_MODEL_IDS = {
   sol: { openai: "gpt-6.1-sol", openrouter: "openai/gpt-6.1-sol" },
+  terra: { openai: "gpt-6.1-terra", openrouter: "openai/gpt-6.1-terra" },
 } as const;
 const GPT_61_OPENAI_MODEL_IDS = Object.values(GPT_61_MODEL_IDS).map(
   ({ openai }) => openai,
@@ -520,6 +521,10 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "GPT-6.1 Sol",
     iconProvider: "openai",
   },
+  [GPT_61_MODEL_IDS.terra.openai]: {
+    displayName: "GPT-6.1 Terra",
+    iconProvider: "openai",
+  },
   [GPT_6_MODEL_IDS.astra.openai]: {
     displayName: "GPT-6 Astra",
     iconProvider: "openai",
@@ -543,6 +548,7 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_56_MODEL_IDS.terra.openai]: {
     displayName: "GPT-5.6 Terra",
     iconProvider: "openai",
+    supersededBy: GPT_61_MODEL_IDS.terra.openai,
   },
   [GPT_56_MODEL_IDS.luna.openai]: {
     displayName: "GPT-5.6 Luna",
@@ -572,6 +578,10 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "GPT-6.1 Sol",
     iconProvider: "openai",
   },
+  [GPT_61_MODEL_IDS.terra.openrouter]: {
+    displayName: "GPT-6.1 Terra",
+    iconProvider: "openai",
+  },
   [GPT_6_MODEL_IDS.astra.openrouter]: {
     displayName: "GPT-6 Astra",
     iconProvider: "openai",
@@ -598,6 +608,7 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_56_MODEL_IDS.terra.openrouter]: {
     displayName: "GPT-5.6 Terra",
     iconProvider: "openai",
+    supersededBy: GPT_61_MODEL_IDS.terra.openrouter,
   },
   "google/gemini-4-argon": {
     displayName: "Gemini 4 Argon",
@@ -1040,6 +1051,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "gemini-3.5-flash": "supported",
   "gemini-3.1-flash-lite": "supported",
   "openai/gpt-6.1-sol": "supported",
+  "openai/gpt-6.1-terra": "supported",
   "openai/gpt-6-astra": "supported",
   "openai/gpt-6-sol": "supported",
   "openai/gpt-6-luna": "supported",
@@ -1062,6 +1074,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "openai/gpt-5.5": "supported",
   "openai/gpt-5.4-mini": "supported",
   "gpt-6.1-sol": "supported",
+  "gpt-6.1-terra": "supported",
   "gpt-6-astra": "supported",
   "gpt-6-sol": "supported",
   "gpt-6-luna": "supported",
@@ -1280,6 +1293,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.4": 400_000,
   "gpt-5.5": 400_000,
   "gpt-6.1-sol": 922_000,
+  "gpt-6.1-terra": 922_000,
   "gpt-6-astra": 922_000,
   "gpt-6-sol": 922_000,
   "gpt-6-luna": 922_000,
@@ -1321,6 +1335,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "anthropic/claude-opus-4.8": 200_000,
   "anthropic/claude-sonnet-4.6": 200_000,
   "openai/gpt-6.1-sol": 922_000,
+  "openai/gpt-6.1-terra": 922_000,
   "openai/gpt-6-astra": 922_000,
   "openai/gpt-6-sol": 922_000,
   "openai/gpt-6-luna": 922_000,

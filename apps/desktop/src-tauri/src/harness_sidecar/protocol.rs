@@ -14,7 +14,8 @@ use serde_json::Value;
 
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessCapability, JsonObject, McpBinding,
-  RunAnswer, RunApproval, RunOutcome, RunPolicy, RunRef, RunTokenRefresh,
+  RunAnswer, RunApproval, RunAttachment, RunOutcome, RunPolicy, RunRef,
+  RunTokenRefresh,
 };
 
 pub(crate) const SIDECAR_PROTOCOL: u32 = 3;
@@ -178,6 +179,13 @@ pub(crate) struct HarnessProcess {
   pub(crate) pid: NonZeroU32,
 }
 
+/// A skill folder a run may load: the skill's name and its absolute path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct SkillFolderRef {
+  pub(crate) name: String,
+  pub(crate) path: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SidecarRunStart {
@@ -194,6 +202,12 @@ pub(crate) struct SidecarRunStart {
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
   pub(crate) harness_session_id: Option<String>,
+  /// Files to copy into `workspace_dir` before the harness starts.
+  pub(crate) attachments: Vec<RunAttachment>,
+  /// The skill folders listed on this computer; never known to the API.
+  pub(crate) skill_folders: Vec<SkillFolderRef>,
+  /// Directories of managed tools; the adapter puts them first on `PATH`.
+  pub(crate) tool_path: Vec<String>,
   pub(crate) policy: RunPolicy,
   pub(crate) mcp: McpBinding,
 }

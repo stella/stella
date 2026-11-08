@@ -29,10 +29,10 @@
     "@playwright/test": "^1.64.1",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@types/chrome": "0.3.6",
+    "@types/chrome": "0.3.7",
     "bun-types": "catalog:",
     "vite": "catalog:",
-    "wxt": "0.21.4"
+    "wxt": "0.21.5"
   },
   "crawlPosture": "unserved"
 }

@@ -1675,6 +1675,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/chat/local-runs/:runId/outputs",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/chat/table-chart",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1697,6 +1701,10 @@
     {
       "id": "POST /v1/chat/threads/:threadId/fork",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/mcp-apps/:toolCallId/call",
+      "reason": "Runs one bounded read an app asks for through the MCP read path; awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
       "id": "POST /v1/chat/threads/:threadId/messages/:messageId/revisions",
@@ -2160,6 +2168,10 @@
     },
     {
       "id": "POST /v1/me/professional-use",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/me/timer-activity-devices/:deviceId/actions",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {

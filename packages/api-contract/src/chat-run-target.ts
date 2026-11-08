@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import type { AgentHarness } from "./agent-harness";
+import { apiDateTimeSchema } from "./api-date";
 import {
   DESKTOP_RUNNER_ANSWER_LIMITS,
   DESKTOP_RUNNER_APPROVAL_MODES,
@@ -10,6 +11,7 @@ import {
   desktopRunnerQuestionAnswersSchema,
   desktopRunnerQuestionIdSchema,
 } from "./desktop-runner";
+import { USER_FILE_URL_PREFIX } from "./user-file-url";
 
 /**
  * Where a chat turn runs. `cloud` is stella's own model path and the default;
@@ -234,3 +236,109 @@ export const chatLocalRunComputerEventSchema = v.strictObject({
 export type ChatLocalRunComputerEvent = v.InferOutput<
   typeof chatLocalRunComputerEventSchema
 >;
+
+/**
+ * The run-finished metadata key under which a turn that ran on the member's
+ * computer reports how full the harness's context was after its last model
+ * request, against the model's context window, as the harness reported both.
+ * The chat's context meter shows it for a thread whose turns run there.
+ */
+export const CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY = "localRunContext";
+
+/** No model context window is anywhere near this. */
+const MAX_CONTEXT_TOKENS = 100_000_000;
+
+export const chatLocalRunContextSchema = v.strictObject({
+  usedTokens: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(MAX_CONTEXT_TOKENS),
+  ),
+  windowTokens: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(MAX_CONTEXT_TOKENS),
+  ),
+});
+export type ChatLocalRunContext = v.InferOutput<
+  typeof chatLocalRunContextSchema
+>;
+
+/**
+ * What a turn on a computer tells the chat about the files it handed back, as
+ * metadata on the answer: every stream processor merges it and a rejoin's
+ * snapshot keeps it, so a live answer and a rejoined one read the same. The
+ * server alone writes these keys; a desktop's metadata never reaches a message.
+ *
+ * - `localRunFiles`: the shared files, each already checked against the
+ *   thread and its owner. Live only: the stored answer holds them as parts.
+ * - `localRunFilesNotShared`: the names of files left on the computer. Stored.
+ */
+export const CHAT_LOCAL_RUN_FILES_METADATA_KEY = "localRunFiles";
+export const CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY =
+  "localRunFilesNotShared";
+
+export const chatLocalRunFileSchema = v.strictObject({
+  url: v.pipe(v.string(), v.startsWith(USER_FILE_URL_PREFIX)),
+  filename: v.string(),
+  mimeType: v.string(),
+  placeholder: v.optional(v.string()),
+});
+export type ChatLocalRunFile = v.InferOutput<typeof chatLocalRunFileSchema>;
+
+export const chatLocalRunFilesNotSharedSchema = v.array(v.string());
+
+/** The message part a shared file reads as, live and once stored. */
+export const chatLocalRunFilePart = ({
+  url,
+  filename,
+  mimeType,
+  placeholder,
+}: ChatLocalRunFile) =>
+  ({
+    type: mimeType.startsWith("image/") ? "image" : "document",
+    source: { type: "url", value: url, mimeType },
+    metadata: {
+      filename,
+      ...(placeholder === undefined ? {} : { placeholder }),
+    },
+  }) as const;
+
+/**
+ * The file parts `metadata` adds to a message's `parts`. A file already among
+ * them adds none, so a stored answer that also carries the live metadata (a
+ * rejoin, a page's own message handed back to the client) shows it once.
+ */
+export const chatLocalRunFilePartsOf = (
+  metadata: unknown,
+  parts: readonly { type: string; source?: { value?: unknown } }[],
+) => {
+  if (typeof metadata !== "object" || metadata === null) {
+    return [];
+  }
+  const listed = v.safeParse(
+    v.array(chatLocalRunFileSchema),
+    Reflect.get(metadata, CHAT_LOCAL_RUN_FILES_METADATA_KEY),
+  );
+  if (!listed.success) {
+    return [];
+  }
+  const present = new Set(parts.map((part) => part.source?.value));
+  return listed.output
+    .filter(({ url }) => !present.has(url))
+    .map(chatLocalRunFilePart);
+};
+
+/**
+ * The run-error metadata key under which a turn that ended on the harness's
+ * usage limit says when the limit resets, as the harness reported it. The
+ * chat shows the time; a limit without a known reset carries none.
+ */
+export const CHAT_LOCAL_RUN_LIMIT_METADATA_KEY = "localRunLimit";
+
+export const chatLocalRunLimitSchema = v.strictObject({
+  resetsAt: v.pipe(apiDateTimeSchema, v.maxLength(32)),
+});
+export type ChatLocalRunLimit = v.InferOutput<typeof chatLocalRunLimitSchema>;

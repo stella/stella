@@ -997,6 +997,35 @@ describe("MCP registry input naming", () => {
     );
   });
 
+  // A corpus tool has one publisher link and it passes through the link rule,
+  // so no output can carry the stored value beside it.
+  test("no public-law tool declares a raw publisher link in its output", () => {
+    const declared = (node: unknown): string[] => {
+      if (Array.isArray(node)) {
+        return node.flatMap(declared);
+      }
+      if (typeof node !== "object" || node === null) {
+        return [];
+      }
+      return Object.entries(node).flatMap(([key, value]) => [
+        ...(key === "properties" &&
+        typeof value === "object" &&
+        value !== null &&
+        "sourceUrl" in value
+          ? ["sourceUrl"]
+          : []),
+        ...declared(value),
+      ]);
+    };
+    const tools = toMcpTools(listStaticMcpToolDefinitions("law"), {
+      mode: "law",
+    });
+    expect(tools.length).toBeGreaterThan(0);
+    for (const tool of tools) {
+      expect(declared(tool.outputSchema), tool.name).toEqual([]);
+    }
+  });
+
   // The other half of the same convention: inputs are snake_case, payloads are
   // camelCase. Property names are enforced structurally above; the payload half
   // cannot be, so every surface states the rule at connect time instead.
@@ -1004,7 +1033,7 @@ describe("MCP registry input naming", () => {
     for (const [mode, instructions] of Object.entries(MCP_INSTRUCTIONS)) {
       expect(
         instructions,
-        `The ${mode} instructions must state the snake_case-in/camelCase-out rule`,
+        `The ${mode} instructions must state the casing rule`,
       ).toContain(MCP_CASING_RULE);
     }
   });

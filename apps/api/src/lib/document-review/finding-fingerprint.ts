@@ -2,10 +2,10 @@
  * The identity of what a finding actually says, used to decide whether a
  * re-run reached the same conclusion about the same text.
  *
- * A reviewer's decision is a judgment about evidence, not about a row, so it
- * survives a re-run exactly as far as the evidence does: same verdict over the
- * same quoted passages means the decision still applies, anything else means
- * the reviewer has to look again.
+ * A reviewer's decision is a judgment about evidence, not about a row, so a new
+ * verdict or different quoted passages mean the reviewer has to look again. The
+ * same verdict over the same passages is necessary but not sufficient:
+ * `decision-carry-over.ts` also requires the position's rules to be unchanged.
  *
  * What the fingerprint covers, and why only this:
  *

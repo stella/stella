@@ -152,6 +152,7 @@
     "emailPlaceholder": "vy@priklad.cz",
     "error": {
       "generic": "Při přihlašování se něco pokazilo. Zkuste to prosím znovu.",
+      "providerUnavailable": "Poskytovatel přihlášení teď neodpovídá. Zkuste to prosím znovu za minutu.",
       "title": "Nepodařilo se vás přihlásit"
     },
     "handoffAccount": "Pokračovat jako <account>{email}</account> v organizaci <organization>{organizationName}</organization>?",
@@ -635,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Hodinová sazba nesmí být záporná",
     "hours": "Hodiny",
+    "invalidNumberFormat": "Zkontrolujte formát čísla",
     "invoiceComposer": {
       "addSellerProfile": "Přidejte profil dodavatele v nastavení fakturace",
       "billedHours": "Účtované hodiny",
@@ -1583,6 +1585,8 @@
       "full": "{percent} % zaplněno",
       "instructions": "Systémové pokyny",
       "percent": "{percent} %",
+      "reported": "Podle údajů programovacího agenta ve vašem počítači po jeho poslední odpovědi. Agent si kontext spravuje sám.",
+      "reportedTokens": "{used} / {total} tokenů",
       "summary": "Shrnutí starších zpráv",
       "summaryWithCount": "Shrnutí {count} starších zpráv",
       "title": "Kontext konverzace",
@@ -1686,8 +1690,10 @@
     "localRun": {
       "cloud": "Cloud stella",
       "errorLimitReached": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Zkuste to znovu, až se limit obnoví.",
+      "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",
       "errorNeedsLogin": "Programovací agent ve vašem počítači vyžaduje nové přihlášení. Přihlaste se přes stella desktop a zkuste to znovu.",
       "errorUnavailable": "Váš počítač přestal tuto odpověď zpracovávat. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
+      "filesNotShared": "Soubory, které se nepodařilo sdílet, zůstávají ve vašem počítači: {fileNames}",
       "onThisComputer": "{harness} v tomto počítači",
       "permissionAskDescription": "Soubory ve složce chatu upravuje sám; na vše ostatní se zeptá.",
       "permissionAutoDescription": "Co považuje za bezpečné, udělá sám; na zbytek se zeptá.",
@@ -1718,6 +1724,10 @@
       "dismiss": "Zamítnout a zastavit",
       "secretAnswer": "Odpověď je skrytá",
       "secretPlaceholder": "Vaše odpověď zůstane skrytá"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {Na vás čeká # chat} few {Na vás čekají # chaty} many {Na vás čeká # chatu} other {Na vás čeká # chatů}}",
+      "working": "{count, plural, one {Pracuje # chat} few {Pracují # chaty} many {Pracuje # chatu} other {Pracuje # chatů}}"
     },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mcpReconnect": {
@@ -3984,6 +3994,8 @@
     "reopenTab": "Znovu otevřít {name}",
     "resizePane": "Změnit šířku panelu",
     "review": {
+      "acceptChange": "Přijmout změnu",
+      "acceptFinding": "Přijmout zjištění",
       "actionNeeded": "K řešení",
       "addComment": "Přidat jako komentář",
       "addNote": "Přidat komentář pro protistranu",
@@ -4024,6 +4036,7 @@
         "dismissed": "Zamítnuto"
       },
       "description": "Vyberte schválený playbook, referenční dokumenty nebo obojí.",
+      "dismissFinding": "Zamítnout zjištění",
       "documentChanged": "Dokument se od této kontroly změnil.",
       "export": {
         "counterparty": "Stáhnout pro protistranu",
@@ -4047,6 +4060,7 @@
       "history": {
         "backToLatest": "Zpět na poslední",
         "decided": "rozhodnuto {decided, number} z {total, number}",
+        "fromTable": "Z tabulky",
         "references": "{count, plural, one {# reference} few {# reference} other {# referencí} many {# reference}}"
       },
       "impact": {
@@ -4071,7 +4085,6 @@
         "unanchored": "Bez vazby na ustanovení"
       },
       "newTopic": "Nové téma kontroly",
-      "noChangeNeeded": "Není třeba měnit",
       "noEditor": "Změny přijmete po otevření dokumentu",
       "noMaterialDifferences": "Nenalezeny žádné podstatné rozdíly",
       "noPassage": "Žádná pasáž",
@@ -4154,6 +4167,11 @@
         "noSide": "bez strany",
         "proposedFromReferences": "pozice navržené z referencí",
         "unnamedReferences": "{count, plural, one {# referenční dokument} few {# referenční dokumenty} other {# referenčních dokumentů} many {# referenčního dokumentu}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Úplná kontrola této verze</link> s odkazy a navrhovanými změnami je k dispozici v historii kontrol.",
+        "origin": "<strong>Spuštěno z tabulky.</strong> Tato zjištění byla vyhodnocena podle hodnot vytěžených pro tabulku, proto neodkazují na dokument a neobsahují navrhované změny.",
+        "runAnotherReview": "Odkazy a navrhované změny získáte přes tlačítko <action>{label}</action>."
       },
       "targetAsReference": "Kontrolovaný dokument nemůže být vlastní referencí.",
       "targetColumn": "Tento dokument",

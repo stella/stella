@@ -10,7 +10,8 @@
  *  - The route exists only when SMOKE_SESSION_SECRET is configured.
  *    That presence check is the environment gate: infrastructure
  *    injects the secret on non-production deployments only, and
- *    production must never configure it. A NODE_ENV guard would be
+ *    production must never configure it (the API refuses to boot with
+ *    it set and DEPLOY_ENVIRONMENT=production). A NODE_ENV guard would be
  *    meaningless here — the deployed binary is compiled with
  *    NODE_ENV=production and Bun inlines that read at build time,
  *    so it cannot distinguish staging from production at runtime.

@@ -155,6 +155,7 @@ const openWindow = async (
       claude_code_auth_get_status: () => null,
       // No install status either, read the same as the refusal with local agents off.
       harness_get_status: () => null,
+      local_skill_folders_get: () => null,
       desktop_report_error: () => null,
       desktop_report_timing: () => null,
       get_desktop_language: () => data.language,

@@ -3,6 +3,7 @@ import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { Button } from "@stll/ui/button";
 import {
   ArrowDownIcon,
@@ -29,6 +30,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { queryView } from "@/lib/query-view.logic";
+import type { MatterListStatus } from "@/lib/workspaces/archived-matters.logic";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import type { MattersColumnId } from "@/lib/workspaces/types";
@@ -40,8 +42,8 @@ import { useConfigStore } from "@/stores/config-store";
 const routeApi = getRouteApi("/_protected");
 
 type MattersToolbarProps = {
-  status: "active" | "archived";
-  onStatusChange: (status: "active" | "archived") => void;
+  status: MatterListStatus;
+  onStatusChange: (status: MatterListStatus) => void;
   search: string;
   onSearchChange: (value: string) => void;
   searchRef: React.RefObject<HTMLInputElement | null>;
@@ -79,18 +81,18 @@ export const MattersToolbar = ({
 
       <Menu>
         <MenuTrigger render={<Button size="xs" variant="ghost" />}>
-          {status === "archived"
+          {status === WORKSPACE_STATUS.archived
             ? t("memory.views.archived")
             : t("common.active")}
         </MenuTrigger>
         <MenuPopup>
           <MenuItem onClick={() => onStatusChange("active")}>
             {t("common.active")}
-            {status === "active" && <CheckIcon />}
+            {status === WORKSPACE_STATUS.active && <CheckIcon />}
           </MenuItem>
-          <MenuItem onClick={() => onStatusChange("archived")}>
+          <MenuItem onClick={() => onStatusChange(WORKSPACE_STATUS.archived)}>
             {t("memory.views.archived")}
-            {status === "archived" && <CheckIcon />}
+            {status === WORKSPACE_STATUS.archived && <CheckIcon />}
           </MenuItem>
         </MenuPopup>
       </Menu>

@@ -115,7 +115,10 @@ import {
   isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
 import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
-import { ContextNotice } from "@/components/chat/context-notice";
+import {
+  ContextNotice,
+  LocalRunFilesNotSharedNotice,
+} from "@/components/chat/context-notice";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
@@ -151,6 +154,7 @@ import {
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
+import { localRunLimitResetsAtFromThrown } from "@/features/chat/chat-local-run-limit";
 import {
   CHAT_REQUEST_ERROR_TRANSLATION_KEYS,
   type ChatRequestError,
@@ -177,6 +181,7 @@ import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -295,7 +300,7 @@ const useOlderMessagePaging = ({
 const showsNothing = (message: ChatUIMessage, isLast: boolean) =>
   message.role === "assistant" &&
   !isLast &&
-  !carriesContextNotice(message) &&
+  !carriesAnswerNotice(message) &&
   !hasVisibleAssistantParts(message.parts);
 
 /** Only an answer offers message actions. Its whole box, gaps between its parts
@@ -458,14 +463,7 @@ export const ChatThreadMessages = ({
             threadRef={messageActionsThreadRef(message, threadRef)}
           >
             <MessageContent
-              className={cn(
-                message.parts.some(
-                  (part) =>
-                    part.type === "ui-resource" &&
-                    uiResourceRenderer(part.resource.mimeType) ===
-                      "generated-visual",
-                ) && "w-full",
-              )}
+              className={cn(showsFullWidthResource(message) && "w-full")}
             >
               <MessageBodyRender
                 render={() => {
@@ -866,7 +864,7 @@ const StickyUserTurn = ({
           >
             <MessageContent className={cn(messageEdit.editing && "hidden")}>
               <div className="group-data-[stuck=true]/sticky:hidden">
-                <UserAttachments parts={fileParts} />
+                <MessageAttachments parts={fileParts} />
               </div>
               {!hasVisibleText && fileParts.length > 0 && (
                 <span className="text-muted-foreground hidden items-center gap-1 text-xs group-data-[stuck=true]/sticky:flex">
@@ -1006,6 +1004,17 @@ const normalizeUserMessageTextForDisplay = (text: string) => {
   return result;
 };
 
+/** Rendered apps that lay out across the whole message column. */
+const FULL_WIDTH_RENDERERS: ReadonlySet<ReturnType<typeof uiResourceRenderer>> =
+  new Set(["generated-visual", "stella-app"]);
+
+const showsFullWidthResource = (message: ChatUIMessage) =>
+  message.parts.some(
+    (part) =>
+      part.type === "ui-resource" &&
+      FULL_WIDTH_RENDERERS.has(uiResourceRenderer(part.resource.mimeType)),
+  );
+
 const IMAGE_MEDIA_TYPES = Object.freeze([
   "image/png",
   "image/jpeg",
@@ -1059,7 +1068,7 @@ const downloadDataAttachment = ({
 
 type UserAttachmentPart = ChatAttachmentPart | ChatPastedTextPart;
 
-const UserAttachments = ({
+const MessageAttachments = ({
   parts,
 }: {
   parts: readonly UserAttachmentPart[];
@@ -1214,6 +1223,18 @@ const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   return "chat.sendError";
 };
 
+/**
+ * A local run's usage limit with the time the harness said it resets, in the
+ * member's own locale and time zone.
+ */
+const LocalRunLimitResetMessage = ({ resetsAt }: { resetsAt: string }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return t("chat.localRun.errorLimitResetsAt", {
+    time: format.dateTime(new Date(resetsAt), MEDIUM_DATE_SHORT_TIME_FORMAT),
+  });
+};
+
 export const ChatErrorMessage = ({
   error,
   isGenerating,
@@ -1247,6 +1268,10 @@ export const ChatErrorMessage = ({
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
   }
+  const limitResetsAt =
+    aiErrorKindFromMessage(error.message) === "local_runner_limit_reached"
+      ? localRunLimitResetsAtFromThrown(error)
+      : null;
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1271,7 +1296,13 @@ export const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        <p className="text-sm">{errorMessage}</p>
+        <p className="text-sm">
+          {limitResetsAt === null ? (
+            errorMessage
+          ) : (
+            <LocalRunLimitResetMessage resetsAt={limitResetsAt} />
+          )}
+        </p>
         <ProviderSetupGuidanceNotice code={setupCode} />
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
@@ -1634,7 +1665,7 @@ const TextMessageParts = ({
         }
       }
 
-      return <UserAttachments parts={fileParts} />;
+      return <MessageAttachments parts={fileParts} />;
     })()}
     {message.parts.map((part, partIndex) =>
       part.type === "text" && !isChatPastedTextPart(part) ? (
@@ -1822,9 +1853,10 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
  * answer text, or a finished web search or fetch, which shows in the sources
  * tray instead of as a step.
  */
-/** A message without metadata carries no context notice. */
-const carriesContextNotice = (message: ChatUIMessage): boolean =>
-  message.metadata?.contextNotice !== undefined;
+/** A message without metadata carries no notice of its own. */
+const carriesAnswerNotice = (message: ChatUIMessage): boolean =>
+  message.metadata?.contextNotice !== undefined ||
+  message.metadata?.localRunFilesNotShared !== undefined;
 
 const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
   toAssistantPartRenderEntries(parts).some((entry) => {
@@ -2225,6 +2257,8 @@ const AssistantMessageParts = ({
           </AssistantProcessGroup>
         );
       })}
+      <MessageAttachments parts={message.parts.filter(isChatAttachmentPart)} />
+      <LocalRunFilesNotSharedNotice metadata={message.metadata} />
       <WebSearchSources parts={message.parts} />
     </>
   );
@@ -2375,7 +2409,7 @@ const hasAssistantAnswerContent = (parts: readonly ChatPart[]): boolean => {
     if (part.type === "text" && part.content.trim()) {
       return true;
     }
-    if (isRichChatPart(part)) {
+    if (isRichChatPart(part) || isChatAttachmentPart(part)) {
       return true;
     }
   }

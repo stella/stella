@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import {
+  chatRunsChangedRealtimeEvent,
   newNotificationRealtimeEvent,
   RESOURCE_TYPE,
   resourceSetUpdatedRealtimeEvent,
@@ -21,6 +22,15 @@ class FakeEventSource extends EventTarget {
     this.url = url;
     FakeEventSource.opened.push(this);
   }
+  open() {
+    this.readyState = 1;
+    this.dispatchEvent(new Event("open"));
+  }
+  /** The browser lost the connection and is retrying on its own. */
+  drop() {
+    this.readyState = 0;
+    this.dispatchEvent(new Event("error"));
+  }
   push(data: unknown) {
     this.dispatchEvent(
       new MessageEvent("message", { data: JSON.stringify(data) }),
@@ -35,6 +45,7 @@ Object.assign(globalThis, { EventSource: FakeEventSource });
 const { act, cleanup, renderHook } = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
+const { activeChatRunsOptions } = await import("@/features/chat/active-runs");
 const { contactsKeys } = await import("@/lib/contacts/queries");
 const { notificationsOptions } = await import("@/lib/notification-queries");
 const { useUserEventRefreshes } = await import("./user-events-sse");
@@ -56,7 +67,11 @@ const mount = () => {
     organizationId: ORGANIZATION,
     userId: USER,
   }).queryKey;
-  for (const key of [contactsList, otherFirmContacts]) {
+  const activeRuns = activeChatRunsOptions({
+    activeOrganizationId: ORGANIZATION,
+    userId: USER,
+  }).queryKey;
+  for (const key of [activeRuns, contactsList, otherFirmContacts]) {
     queryClient.setQueryData(key, { seeded: true });
   }
   // The notification refresh trims an infinite list to its first page.
@@ -76,7 +91,13 @@ const mount = () => {
   );
   const isStale = (key: readonly unknown[]) =>
     queryClient.getQueryState(key)?.isInvalidated === true;
-  return { contactsList, isStale, notifications, otherFirmContacts };
+  return {
+    activeRuns,
+    contactsList,
+    isStale,
+    notifications,
+    otherFirmContacts,
+  };
 };
 
 test("the app shell opens exactly one user stream", () => {
@@ -105,5 +126,55 @@ test("a notification event refreshes the notifications", async () => {
   });
 
   expect(view.isStale(view.notifications)).toBe(true);
+  expect(view.isStale(view.contactsList)).toBe(false);
+});
+
+test("a chat run change refreshes the active runs only", async () => {
+  const view = mount();
+  await act(async () => {
+    FakeEventSource.opened.at(0)?.push(chatRunsChangedRealtimeEvent());
+  });
+
+  expect(view.isStale(view.activeRuns)).toBe(true);
+  expect(view.isStale(view.notifications)).toBe(false);
+  expect(view.isStale(view.contactsList)).toBe(false);
+});
+
+test("the first open re-reads nothing: the queries were just fetched", async () => {
+  const view = mount();
+  await act(async () => {
+    FakeEventSource.opened.at(0)?.open();
+  });
+
+  expect(view.isStale(view.activeRuns)).toBe(false);
+  expect(view.isStale(view.notifications)).toBe(false);
+  expect(view.isStale(view.contactsList)).toBe(false);
+});
+
+test("a reopen after a drop re-reads everything the stream keeps fresh", async () => {
+  const view = mount();
+  const stream = FakeEventSource.opened.at(0);
+  await act(async () => {
+    stream?.open();
+    stream?.drop();
+    stream?.open();
+  });
+
+  expect(view.isStale(view.activeRuns)).toBe(true);
+  expect(view.isStale(view.notifications)).toBe(true);
+  expect(view.isStale(view.contactsList)).toBe(true);
+  expect(view.isStale(view.otherFirmContacts)).toBe(false);
+});
+
+test("a frame that is no known event refreshes nothing", async () => {
+  const view = mount();
+  await act(async () => {
+    FakeEventSource.opened
+      .at(0)
+      ?.push({ type: "not-a-user-event", data: null });
+  });
+
+  expect(view.isStale(view.activeRuns)).toBe(false);
+  expect(view.isStale(view.notifications)).toBe(false);
   expect(view.isStale(view.contactsList)).toBe(false);
 });

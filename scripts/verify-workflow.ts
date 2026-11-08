@@ -97,25 +97,34 @@ const phaseFromMarker = (
   }
 };
 
-/** Step markers select commands; workflow and job env remain CI-only context. */
-export const parseVerifyWorkflow = (
-  source: string,
-  mode: VerifyWorkflowMode,
-): VerifyWorkflowStep[] => {
+const modeMarker = (mode: VerifyWorkflowMode): string => {
   switch (mode) {
     case "verify":
+      return VERIFY_MARKER;
     case "autofix":
-      break;
+      return AUTOFIX_MARKER;
     default:
       mode satisfies never;
       throw new VerifyError(`Unknown workflow mode: ${String(mode)}`);
   }
+};
+
+type WorkflowJob = {
+  job: string;
+  definition: Record<string, unknown>;
+  steps: Record<string, unknown>[];
+};
+type ParsedWorkflow = {
+  workflow: Record<string, unknown>;
+  jobs: WorkflowJob[];
+};
+const parseWorkflowJobs = (source: string): ParsedWorkflow => {
   const parsed: unknown = Bun.YAML.parse(source);
   const workflow = record(parsed, "Workflow");
-  const jobs = record(workflow["jobs"], "Workflow jobs");
-  const selected: VerifyWorkflowStep[] = [];
-  const marker = mode === "verify" ? VERIFY_MARKER : AUTOFIX_MARKER;
-  for (const [job, jobValue] of Object.entries(jobs)) {
+  const jobs: WorkflowJob[] = [];
+  for (const [job, jobValue] of Object.entries(
+    record(workflow["jobs"], "Workflow jobs"),
+  )) {
     const definition = record(jobValue, `Job ${job}`);
     const steps = definition["steps"];
     if (steps === undefined) {
@@ -124,15 +133,35 @@ export const parseVerifyWorkflow = (
     if (!Array.isArray(steps)) {
       throw new VerifyError(`Job ${job} steps must be an array`);
     }
-    for (const [index, step] of flattenWorkflowSteps(steps).entries()) {
+    jobs.push({ job, definition, steps: flattenWorkflowSteps(steps) });
+  }
+  return { workflow, jobs };
+};
+
+type MarkedStepOptions = {
+  step: Record<string, unknown>;
+  marker: string;
+  label: string;
+};
+const isMarked = ({ step, marker, label }: MarkedStepOptions): boolean =>
+  step["env"] !== undefined &&
+  Object.hasOwn(record(step["env"], `${label} env`), marker);
+
+/** Step markers select commands; workflow and job env remain CI-only context. */
+export const parseVerifyWorkflow = (
+  source: string,
+  mode: VerifyWorkflowMode,
+): VerifyWorkflowStep[] => {
+  const marker = modeMarker(mode);
+  const { workflow, jobs } = parseWorkflowJobs(source);
+  const selected: VerifyWorkflowStep[] = [];
+  for (const { job, definition, steps } of jobs) {
+    for (const [index, step] of steps.entries()) {
       const label = `Job ${job} step ${index + 1}`;
-      if (step["env"] === undefined) {
+      if (!isMarked({ step, marker, label })) {
         continue;
       }
       const environment = record(step["env"], `${label} env`);
-      if (!Object.hasOwn(environment, marker)) {
-        continue;
-      }
       const phase = phaseFromMarker(environment[marker], mode, label);
       const name = staticString(step["name"], `${label} name`);
       const run = staticString(step["run"], `${label} run`);
@@ -179,20 +208,77 @@ export const parseVerifyWorkflow = (
   ];
 };
 
+const RUNNER_TEMP_ENTRY = /RUNNER_TEMP\}?"?\/([A-Za-z0-9._-]+)/gu;
+const CI_ONLY_ARM =
+  /^([ \t]*)if \[\[ "\$\{STELLA_VERIFY_LOCAL:-false\}" == true \]\]; then\n([\s\S]*?)^\1else\n[\s\S]*?^\1fi$/gmu;
+
+/**
+ * `RUNNER_TEMP` entries that marked steps use but an unmarked step of the
+ * same job touches first. In CI the unmarked step creates the entry; the
+ * local runner skips unmarked steps, so it must create the entry itself.
+ * The `else` arm of an exact `STELLA_VERIFY_LOCAL` branch never runs locally,
+ * so it is ignored; everything else in a marked step is scanned.
+ */
+export const parseHarnessRunnerTempEntries = (
+  source: string,
+  mode: VerifyWorkflowMode,
+): string[] => {
+  const marker = modeMarker(mode);
+  const entries = new Set<string>();
+  for (const { job, steps } of parseWorkflowJobs(source).jobs) {
+    const firstUseMarked = new Map<string, boolean>();
+    const used = new Set<string>();
+    for (const [index, step] of steps.entries()) {
+      const run = step["run"];
+      if (typeof run !== "string") {
+        continue;
+      }
+      const marked = isMarked({
+        step,
+        marker,
+        label: `Job ${job} step ${index + 1}`,
+      });
+      const scanned = marked ? run.replaceAll(CI_ONLY_ARM, "$2") : run;
+      for (const match of scanned.matchAll(RUNNER_TEMP_ENTRY)) {
+        const name = match[1];
+        if (name === undefined) {
+          continue;
+        }
+        if (!firstUseMarked.has(name)) {
+          firstUseMarked.set(name, marked);
+        }
+        if (marked) {
+          used.add(name);
+        }
+      }
+    }
+    for (const name of used) {
+      if (firstUseMarked.get(name) === false) {
+        entries.add(name);
+      }
+    }
+  }
+  return [...entries].toSorted();
+};
+
 type ReadVerifyWorkflowOptions = {
   root: string;
   mode: VerifyWorkflowMode;
 };
 
-export const readVerifyWorkflow = ({ root, mode }: ReadVerifyWorkflowOptions) =>
-  parseVerifyWorkflow(
-    readFileSync(
-      path.join(
-        root,
-        ".github/workflows",
-        mode === "verify" ? "ci.yml" : "autofix.yml",
-      ),
-      "utf-8",
+const readWorkflowSource = ({ root, mode }: ReadVerifyWorkflowOptions) =>
+  readFileSync(
+    path.join(
+      root,
+      ".github/workflows",
+      mode === "verify" ? "ci.yml" : "autofix.yml",
     ),
-    mode,
+    "utf-8",
   );
+
+export const readVerifyWorkflow = (options: ReadVerifyWorkflowOptions) =>
+  parseVerifyWorkflow(readWorkflowSource(options), options.mode);
+
+export const readHarnessRunnerTempEntries = (
+  options: ReadVerifyWorkflowOptions,
+) => parseHarnessRunnerTempEntries(readWorkflowSource(options), options.mode);

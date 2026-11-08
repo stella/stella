@@ -152,6 +152,7 @@
     "emailPlaceholder": "ty@example.com",
     "error": {
       "generic": "Coś poszło nie tak podczas logowania. Spróbuj ponownie.",
+      "providerUnavailable": "Dostawca logowania nie odpowiada w tej chwili. Spróbuj ponownie za minutę.",
       "title": "Nie udało się Cię zalogować"
     },
     "handoffAccount": "Kontynuować jako <account>{email}</account> w organizacji <organization>{organizationName}</organization>?",
@@ -635,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Stawka godzinowa nie może być ujemna",
     "hours": "Godziny",
+    "invalidNumberFormat": "Sprawdź format liczby",
     "invoiceComposer": {
       "addSellerProfile": "Dodaj profil sprzedawcy w ustawieniach rozliczeń",
       "billedHours": "Rozliczane godziny",
@@ -1583,6 +1585,8 @@
       "full": "{percent}% zapełnienia",
       "instructions": "Instrukcje systemowe",
       "percent": "{percent}%",
+      "reported": "Według agenta programistycznego na Twoim komputerze po jego ostatniej odpowiedzi. Agent sam zarządza swoim kontekstem.",
+      "reportedTokens": "{used} / {total} tokenów",
       "summary": "Podsumowanie starszych wiadomości",
       "summaryWithCount": "Podsumowanie {count} starszych wiadomości",
       "title": "Kontekst rozmowy",
@@ -1686,8 +1690,10 @@
     "localRun": {
       "cloud": "Chmura stella",
       "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",
+      "errorLimitResetsAt": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Możesz spróbować ponownie po {time}.",
       "errorNeedsLogin": "Agent programistyczny na Twoim komputerze wymaga ponownego zalogowania. Zaloguj się w stella desktop i spróbuj ponownie.",
       "errorUnavailable": "Twój komputer przestał przetwarzać tę odpowiedź. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
+      "filesNotShared": "Pliki, których nie udało się udostępnić, pozostają na Twoim komputerze: {fileNames}",
       "onThisComputer": "{harness} na tym komputerze",
       "permissionAskDescription": "Sam edytuje pliki w folderze czatu; o wszystko inne pyta.",
       "permissionAutoDescription": "Sam robi to, co uznaje za bezpieczne; o resztę pyta.",
@@ -1718,6 +1724,10 @@
       "dismiss": "Odrzuć i zatrzymaj",
       "secretAnswer": "Odpowiedź ukryta",
       "secretPlaceholder": "Twoja odpowiedź pozostanie ukryta"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# czat czeka na Ciebie} few {# czaty czekają na Ciebie} many {# czatów czeka na Ciebie} other {# czatu czeka na Ciebie}}",
+      "working": "{count, plural, one {# czat pracuje} few {# czaty pracują} many {# czatów pracuje} other {# czatu pracuje}}"
     },
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mcpReconnect": {
@@ -3984,6 +3994,8 @@
     "reopenTab": "Otwórz ponownie {name}",
     "resizePane": "Zmień rozmiar panelu",
     "review": {
+      "acceptChange": "Akceptuj zmianę",
+      "acceptFinding": "Akceptuj ustalenie",
       "actionNeeded": "Wymaga działania",
       "addComment": "Dodaj jako komentarz",
       "addNote": "Dodaj komentarz dla kontrahenta",
@@ -4024,6 +4036,7 @@
         "dismissed": "Odrzucono"
       },
       "description": "Wybierz przygotowany playbook, dokumenty referencyjne lub oba.",
+      "dismissFinding": "Odrzuć ustalenie",
       "documentChanged": "Ten dokument zmienił się po tej weryfikacji.",
       "export": {
         "counterparty": "Pobierz dla kontrahenta",
@@ -4047,6 +4060,7 @@
       "history": {
         "backToLatest": "Wróć do najnowszej",
         "decided": "rozstrzygnięto {decided, number} z {total, number}",
+        "fromTable": "Z tabeli",
         "references": "{count, plural, one {# referencja} few {# referencje} many {# referencji} other {# referencji}}"
       },
       "impact": {
@@ -4071,7 +4085,6 @@
         "unanchored": "Niepowiązane z klauzulą"
       },
       "newTopic": "Nowy temat przeglądu",
-      "noChangeNeeded": "Brak potrzeby zmiany",
       "noEditor": "Otwórz dokument, aby zaakceptować zmiany",
       "noMaterialDifferences": "Nie znaleziono istotnych różnic",
       "noPassage": "Brak fragmentu",
@@ -4154,6 +4167,11 @@
         "noSide": "bez strony",
         "proposedFromReferences": "stanowiska zaproponowane z referencji",
         "unnamedReferences": "{count, plural, one {# dokument referencyjny} few {# dokumenty referencyjne} many {# dokumentów referencyjnych} other {# dokumentu referencyjnego}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Pełna weryfikacja tej wersji</link> z odnośnikami i proponowanymi zmianami jest dostępna w historii weryfikacji.",
+        "origin": "<strong>Uruchomiono z tabeli.</strong> Te ustalenia oceniono na podstawie wartości wyodrębnionych do tabeli, dlatego nie odsyłają do dokumentu i nie zawierają proponowanych zmian.",
+        "runAnotherReview": "Aby uzyskać odnośniki i proponowane zmiany, użyj przycisku <action>{label}</action>."
       },
       "targetAsReference": "Sprawdzany dokument nie może być własną referencją.",
       "targetColumn": "Ten dokument",

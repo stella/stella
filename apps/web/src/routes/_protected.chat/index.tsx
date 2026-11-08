@@ -16,6 +16,7 @@ import {
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -722,7 +723,7 @@ function ChatIndex() {
                   name: matter.name,
                   color: matter.color,
                   client: matter.client,
-                  isArchived: matter.status === "archived",
+                  isArchived: matter.status === WORKSPACE_STATUS.archived,
                 }}
               >
                 <Link

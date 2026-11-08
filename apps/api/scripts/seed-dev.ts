@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 /**
  * Seed realistic test data for local development.
  *
@@ -104,6 +104,7 @@ import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
 import { createTextPdf } from "@/api/lib/files/text-pdf";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { cents } from "@/api/lib/money";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import {
   brandPersistedOrganizationId,
@@ -113,6 +114,7 @@ import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import type {
   PlaybookPositions,
+  PlaybookScope,
   Position,
   PositionSeverity,
 } from "@/api/lib/workflow/playbook-positions";
@@ -1053,6 +1055,38 @@ const buildProperties = (
     },
   ];
 };
+
+export const buildAllPropertySeeds = (): PropertySeed[] => [
+  ...seedWorkspaces.flatMap((workspace, index) =>
+    buildProperties(workspace.id, at(WS_LABELS, index)),
+  ),
+  ...MORE_WORKSPACES.flatMap(({ reference }) => {
+    const label = `extra-ws-${reference}`;
+    return buildProperties(seedId(label), label);
+  }),
+];
+
+export const buildPropertySeedDependencies = (seeds: readonly PropertySeed[]) =>
+  seeds
+    .filter(({ tool }) => tool.type === "ai-model")
+    .flatMap((prop) => {
+      const inputs = requireComputedColumnInputs({
+        candidates: seeds.filter(
+          ({ workspaceId }) => workspaceId === prop.workspaceId,
+        ),
+        inputs: [],
+      });
+      if (Result.isError(inputs)) {
+        return panic(`Seeded column ${prop.name} has no input`, inputs.error);
+      }
+      return inputs.value.map(({ dependsOnPropertyId, condition }) => ({
+        id: seedId(`${prop.id}-input-${dependsOnPropertyId}`),
+        workspaceId: prop.workspaceId,
+        propertyId: prop.id,
+        dependsOnPropertyId,
+        condition,
+      }));
+    });
 
 // ─── Entities (per-workspace) ───────────────────────────
 
@@ -2326,10 +2360,24 @@ const buildDdGeneralPosition = (input: DdPositionInput): Position => ({
   enabled: true,
 });
 
+/** The seeded general due diligence playbook, without its organization. */
+export const buildDdGeneralPlaybookDefinition = () => ({
+  id: seedId("playbook-dd-general"),
+  name: "Due Diligence Review (General)",
+  description:
+    "Buyer-side red-flag review of target contracts; applies to every document type.",
+  scope: { perspective: "buyer" } satisfies PlaybookScope,
+  positions: {
+    version: 3,
+    items: DD_GENERAL_POSITIONS.map(buildDdGeneralPosition),
+  } satisfies PlaybookPositions,
+});
+
 const seedDdGeneralPlaybook = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
-  const definitionId = seedId("playbook-dd-general");
+  const ddPlaybook = buildDdGeneralPlaybookDefinition();
+  const definitionId = ddPlaybook.id;
   // Same delete-then-insert as the Czech playbook: reruns pick up position
   // changes and materialized columns re-adopt by deterministic sourceId.
   await db.transaction(
@@ -2342,30 +2390,251 @@ const seedDdGeneralPlaybook = async (
     async (tx) =>
       await tx
         .insert(playbookDefinitions)
-        .values({
-          id: definitionId,
-          organizationId,
-          name: "Due Diligence Review (General)",
-          description:
-            "Buyer-side red-flag review of target contracts; applies to every document type.",
-          scope: { perspective: "buyer" },
-          positions: {
-            version: 3,
-            items: DD_GENERAL_POSITIONS.map(buildDdGeneralPosition),
-          } satisfies PlaybookPositions,
-        })
+        .values({ ...ddPlaybook, organizationId })
         .onConflictDoNothing(),
   );
+};
+
+/** The seeded Czech commercial playbook, without its organization. */
+export const buildCzPlaybookDefinition = () => {
+  // The payment-terms position is graded by a deterministic constraint over its
+  // own extracted value, so the constraint's property operand must point back to
+  // this position's sourceId. Build it once and reuse it for both.
+  const paymentTermsSourceId = seedId("playbook-cz-pos-splatnost-faktur");
+  return {
+    id: seedId("playbook-cz-obchodni-smlouva"),
+    name: "Kontrola obchodní smlouvy (CZ)",
+    description:
+      "Standardní revize obchodních a akvizičních smluv podle českého práva.",
+    scope: {
+      documentTypeKey: SPA_DOCUMENT_TYPE_KEY,
+      perspective: "buyer",
+    } satisfies PlaybookScope,
+    positions: {
+      version: 3,
+      items: [
+        {
+          mode: "graded",
+          sourceId: seedId("playbook-cz-pos-rozhodne-pravo"),
+          issue: "Rozhodné právo",
+          severity: "high",
+          ask: {
+            mode: "manual",
+            question: "Jakým právním řádem se smlouva řídí?",
+            content: { version: 1, type: "text" },
+          },
+          standard: {
+            source: "tiers",
+            tiers: {
+              acceptable: {
+                rules: [],
+                ideal: {
+                  source: "inline",
+                  text: "Smlouva se řídí právním řádem České republiky.",
+                },
+              },
+              fallback: {
+                entries: [
+                  {
+                    id: seedId("playbook-cz-fb-rozhodne-pravo-eu"),
+                    text: "Smlouva se řídí právem jiného členského státu Evropské unie.",
+                  },
+                ],
+              },
+              notAcceptable: { rules: [] },
+            },
+          },
+          guidance:
+            "Preferujeme volbu českého práva; jiné právo EU je akceptovatelný ústupek.",
+          enabled: true,
+        },
+        {
+          mode: "graded",
+          sourceId: seedId("playbook-cz-pos-omezeni-odpovednosti"),
+          issue: "Omezení odpovědnosti za škodu",
+          severity: "blocker",
+          ask: {
+            mode: "manual",
+            question:
+              "Je odpovědnost smluvní strany za škodu omezena? Pokud ano, jaká je maximální výše náhrady?",
+            content: { version: 1, type: "text" },
+          },
+          standard: {
+            source: "tiers",
+            tiers: {
+              acceptable: {
+                rules: [],
+                ideal: {
+                  source: "inline",
+                  text: "Odpovědnost za škodu je omezena a její celková výše nepřesahuje cenu plnění sjednanou ve smlouvě.",
+                },
+              },
+              fallback: {
+                entries: [
+                  {
+                    id: seedId("playbook-cz-fb-omezeni-odpovednosti-2x"),
+                    text: "Odpovědnost za škodu je omezena na dvojnásobek roční hodnoty plnění.",
+                  },
+                ],
+              },
+              notAcceptable: { rules: [] },
+            },
+          },
+          guidance: "Neomezená odpovědnost je nepřijatelná; vyžaduje eskalaci.",
+          enabled: true,
+        },
+        {
+          mode: "graded",
+          sourceId: paymentTermsSourceId,
+          issue: "Splatnost faktur (dny)",
+          severity: "medium",
+          ask: {
+            mode: "manual",
+            question:
+              "Jaká je splatnost faktur ve dnech? Odpověz pouze číslem.",
+            content: { version: 1, type: "int" },
+          },
+          standard: {
+            source: "tiers",
+            tiers: {
+              acceptable: { rules: [] },
+              fallback: { entries: [] },
+              notAcceptable: { rules: [] },
+            },
+          },
+          check: {
+            kind: "constraint",
+            condition: {
+              type: "group",
+              combinator: "and",
+              children: [
+                {
+                  type: "compare",
+                  left: {
+                    type: "property",
+                    propertyId: paymentTermsSourceId,
+                  },
+                  op: "lte",
+                  right: { type: "literal", value: 30 },
+                },
+              ],
+            } satisfies ConditionNode,
+          },
+          guidance: "Splatnost nad 30 dnů zhoršuje cash flow.",
+          enabled: true,
+        },
+        {
+          mode: "graded",
+          sourceId: seedId("playbook-cz-pos-mlcenlivost"),
+          issue: "Mlčenlivost",
+          severity: "high",
+          ask: {
+            mode: "manual",
+            question:
+              "Cituj ustanovení smlouvy o mlčenlivosti / ochraně důvěrných informací, je-li ve smlouvě obsaženo.",
+            content: { version: 1, type: "text" },
+          },
+          standard: {
+            source: "tiers",
+            tiers: {
+              acceptable: { rules: [] },
+              fallback: { entries: [] },
+              notAcceptable: { rules: [] },
+            },
+          },
+          check: { kind: "presence", expectation: "required" },
+          guidance: "Smlouva musí obsahovat závazek mlčenlivosti.",
+          enabled: true,
+        },
+        {
+          mode: "graded",
+          sourceId: seedId("playbook-cz-pos-change-of-control"),
+          issue: "Změna ovládání (change of control)",
+          severity: "high",
+          ask: {
+            mode: "manual",
+            question:
+              "Cituj ustanovení vyžadující souhlas druhé strany při změně ovládání (change of control) jedné ze stran, existuje-li.",
+            content: { version: 1, type: "text" },
+          },
+          standard: {
+            source: "tiers",
+            tiers: {
+              acceptable: { rules: [] },
+              fallback: { entries: [] },
+              notAcceptable: { rules: [] },
+            },
+          },
+          check: { kind: "presence", expectation: "restricted" },
+          guidance:
+            "Požadavek na souhlas při change of control je riziko pro akvizici – nutno označit.",
+          enabled: true,
+        },
+        {
+          mode: "extract",
+          sourceId: seedId("playbook-cz-pos-vypovedni-doba"),
+          issue: "Výpovědní doba",
+          ask: {
+            question: "Jaká je výpovědní doba pro ukončení smlouvy?",
+            content: { version: 1, type: "text" },
+          },
+          enabled: true,
+        },
+        {
+          mode: "extract",
+          sourceId: seedId("playbook-cz-pos-doba-trvani"),
+          issue: "Doba trvání a automatické prodloužení",
+          ask: {
+            question:
+              "Na jakou dobu je smlouva uzavřena a obsahuje doložku o automatickém prodloužení (auto-renewal)?",
+            content: { version: 1, type: "text" },
+          },
+          enabled: true,
+        },
+        {
+          mode: "graded",
+          sourceId: seedId("playbook-cz-pos-reseni-sporu"),
+          issue: "Řešení sporů",
+          severity: "medium",
+          ask: {
+            mode: "manual",
+            question:
+              "Jak se řeší spory ze smlouvy — příslušnými soudy ČR, nebo v rozhodčím řízení?",
+            content: { version: 1, type: "text" },
+          },
+          standard: {
+            source: "tiers",
+            tiers: {
+              acceptable: {
+                rules: [],
+                ideal: {
+                  source: "inline",
+                  text: "Spory z této smlouvy rozhodují věcně a místně příslušné soudy České republiky.",
+                },
+              },
+              fallback: {
+                entries: [
+                  {
+                    id: seedId("playbook-cz-fb-reseni-sporu-rozhodci"),
+                    text: "Spory se řeší v rozhodčím řízení u Rozhodčího soudu při Hospodářské komoře ČR a Agrární komoře ČR.",
+                  },
+                ],
+              },
+              notAcceptable: { rules: [] },
+            },
+          },
+          enabled: true,
+        },
+      ],
+    } satisfies PlaybookPositions,
+  };
 };
 
 export const seedPlaybooks = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
-  // The payment-terms position is graded by a deterministic constraint over its
-  // own extracted value, so the constraint's property operand must point back to
-  // this position's sourceId. Build it once and reuse it for both.
-  const paymentTermsSourceId = seedId("playbook-cz-pos-splatnost-faktur");
-  const definitionId = seedId("playbook-cz-obchodni-smlouva");
+  const czPlaybook = buildCzPlaybookDefinition();
+  const definitionId = czPlaybook.id;
 
   // onConflictDoNothing would keep a stale definition, so reruns must delete the
   // prior seed playbook first to pick up position/scope changes. The
@@ -2384,235 +2653,7 @@ export const seedPlaybooks = async (
     async (tx) =>
       await tx
         .insert(playbookDefinitions)
-        .values({
-          id: definitionId,
-          organizationId,
-          name: "Kontrola obchodní smlouvy (CZ)",
-          description:
-            "Standardní revize obchodních a akvizičních smluv podle českého práva.",
-          scope: {
-            documentTypeKey: SPA_DOCUMENT_TYPE_KEY,
-            perspective: "buyer",
-          },
-          positions: {
-            version: 3,
-            items: [
-              {
-                mode: "graded",
-                sourceId: seedId("playbook-cz-pos-rozhodne-pravo"),
-                issue: "Rozhodné právo",
-                severity: "high",
-                ask: {
-                  mode: "manual",
-                  question: "Jakým právním řádem se smlouva řídí?",
-                  content: { version: 1, type: "text" },
-                },
-                standard: {
-                  source: "tiers",
-                  tiers: {
-                    acceptable: {
-                      rules: [],
-                      ideal: {
-                        source: "inline",
-                        text: "Smlouva se řídí právním řádem České republiky.",
-                      },
-                    },
-                    fallback: {
-                      entries: [
-                        {
-                          id: seedId("playbook-cz-fb-rozhodne-pravo-eu"),
-                          text: "Smlouva se řídí právem jiného členského státu Evropské unie.",
-                        },
-                      ],
-                    },
-                    notAcceptable: { rules: [] },
-                  },
-                },
-                guidance:
-                  "Preferujeme volbu českého práva; jiné právo EU je akceptovatelný ústupek.",
-                enabled: true,
-              },
-              {
-                mode: "graded",
-                sourceId: seedId("playbook-cz-pos-omezeni-odpovednosti"),
-                issue: "Omezení odpovědnosti za škodu",
-                severity: "blocker",
-                ask: {
-                  mode: "manual",
-                  question:
-                    "Je odpovědnost smluvní strany za škodu omezena? Pokud ano, jaká je maximální výše náhrady?",
-                  content: { version: 1, type: "text" },
-                },
-                standard: {
-                  source: "tiers",
-                  tiers: {
-                    acceptable: {
-                      rules: [],
-                      ideal: {
-                        source: "inline",
-                        text: "Odpovědnost za škodu je omezena a její celková výše nepřesahuje cenu plnění sjednanou ve smlouvě.",
-                      },
-                    },
-                    fallback: {
-                      entries: [
-                        {
-                          id: seedId("playbook-cz-fb-omezeni-odpovednosti-2x"),
-                          text: "Odpovědnost za škodu je omezena na dvojnásobek roční hodnoty plnění.",
-                        },
-                      ],
-                    },
-                    notAcceptable: { rules: [] },
-                  },
-                },
-                guidance:
-                  "Neomezená odpovědnost je nepřijatelná; vyžaduje eskalaci.",
-                enabled: true,
-              },
-              {
-                mode: "graded",
-                sourceId: paymentTermsSourceId,
-                issue: "Splatnost faktur (dny)",
-                severity: "medium",
-                ask: {
-                  mode: "manual",
-                  question:
-                    "Jaká je splatnost faktur ve dnech? Odpověz pouze číslem.",
-                  content: { version: 1, type: "int" },
-                },
-                standard: {
-                  source: "tiers",
-                  tiers: {
-                    acceptable: { rules: [] },
-                    fallback: { entries: [] },
-                    notAcceptable: { rules: [] },
-                  },
-                },
-                check: {
-                  kind: "constraint",
-                  condition: {
-                    type: "group",
-                    combinator: "and",
-                    children: [
-                      {
-                        type: "compare",
-                        left: {
-                          type: "property",
-                          propertyId: paymentTermsSourceId,
-                        },
-                        op: "lte",
-                        right: { type: "literal", value: 30 },
-                      },
-                    ],
-                  } satisfies ConditionNode,
-                },
-                guidance: "Splatnost nad 30 dnů zhoršuje cash flow.",
-                enabled: true,
-              },
-              {
-                mode: "graded",
-                sourceId: seedId("playbook-cz-pos-mlcenlivost"),
-                issue: "Mlčenlivost",
-                severity: "high",
-                ask: {
-                  mode: "manual",
-                  question:
-                    "Cituj ustanovení smlouvy o mlčenlivosti / ochraně důvěrných informací, je-li ve smlouvě obsaženo.",
-                  content: { version: 1, type: "text" },
-                },
-                standard: {
-                  source: "tiers",
-                  tiers: {
-                    acceptable: { rules: [] },
-                    fallback: { entries: [] },
-                    notAcceptable: { rules: [] },
-                  },
-                },
-                check: { kind: "presence", expectation: "required" },
-                guidance: "Smlouva musí obsahovat závazek mlčenlivosti.",
-                enabled: true,
-              },
-              {
-                mode: "graded",
-                sourceId: seedId("playbook-cz-pos-change-of-control"),
-                issue: "Změna ovládání (change of control)",
-                severity: "high",
-                ask: {
-                  mode: "manual",
-                  question:
-                    "Cituj ustanovení vyžadující souhlas druhé strany při změně ovládání (change of control) jedné ze stran, existuje-li.",
-                  content: { version: 1, type: "text" },
-                },
-                standard: {
-                  source: "tiers",
-                  tiers: {
-                    acceptable: { rules: [] },
-                    fallback: { entries: [] },
-                    notAcceptable: { rules: [] },
-                  },
-                },
-                check: { kind: "presence", expectation: "restricted" },
-                guidance:
-                  "Požadavek na souhlas při change of control je riziko pro akvizici – nutno označit.",
-                enabled: true,
-              },
-              {
-                mode: "extract",
-                sourceId: seedId("playbook-cz-pos-vypovedni-doba"),
-                issue: "Výpovědní doba",
-                ask: {
-                  question: "Jaká je výpovědní doba pro ukončení smlouvy?",
-                  content: { version: 1, type: "text" },
-                },
-                enabled: true,
-              },
-              {
-                mode: "extract",
-                sourceId: seedId("playbook-cz-pos-doba-trvani"),
-                issue: "Doba trvání a automatické prodloužení",
-                ask: {
-                  question:
-                    "Na jakou dobu je smlouva uzavřena a obsahuje doložku o automatickém prodloužení (auto-renewal)?",
-                  content: { version: 1, type: "text" },
-                },
-                enabled: true,
-              },
-              {
-                mode: "graded",
-                sourceId: seedId("playbook-cz-pos-reseni-sporu"),
-                issue: "Řešení sporů",
-                severity: "medium",
-                ask: {
-                  mode: "manual",
-                  question:
-                    "Jak se řeší spory ze smlouvy — příslušnými soudy ČR, nebo v rozhodčím řízení?",
-                  content: { version: 1, type: "text" },
-                },
-                standard: {
-                  source: "tiers",
-                  tiers: {
-                    acceptable: {
-                      rules: [],
-                      ideal: {
-                        source: "inline",
-                        text: "Spory z této smlouvy rozhodují věcně a místně příslušné soudy České republiky.",
-                      },
-                    },
-                    fallback: {
-                      entries: [
-                        {
-                          id: seedId("playbook-cz-fb-reseni-sporu-rozhodci"),
-                          text: "Spory se řeší v rozhodčím řízení u Rozhodčího soudu při Hospodářské komoře ČR a Agrární komoře ČR.",
-                        },
-                      ],
-                    },
-                    notAcceptable: { rules: [] },
-                  },
-                },
-                enabled: true,
-              },
-            ],
-          } satisfies PlaybookPositions,
-        })
+        .values({ ...czPlaybook, organizationId })
         .onConflictDoNothing(),
   );
 
@@ -3100,17 +3141,7 @@ export async function seed(organizationId?: string, userId?: string) {
   );
 
   // 3. Properties
-  const allProperties: PropertySeed[] = [];
-  for (let i = 0; i < seedWorkspaces.length; i++) {
-    allProperties.push(
-      ...buildProperties(at(seedWorkspaces, i).id, at(WS_LABELS, i)),
-    );
-  }
-  for (const mw of MORE_WORKSPACES) {
-    const wsId = seedId(`extra-ws-${mw.reference}`);
-    const label = `extra-ws-${mw.reference}`;
-    allProperties.push(...buildProperties(wsId, label));
-  }
+  const allProperties = buildAllPropertySeeds();
   for (const prop of allProperties) {
     await db.transaction(
       async (tx) =>
@@ -3132,6 +3163,14 @@ export async function seed(organizationId?: string, userId?: string) {
           .onConflictDoNothing(),
     );
   }
+  await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await tx
+        .insert(propertyDependencies)
+        .values(buildPropertySeedDependencies(allProperties))
+        .onConflictDoNothing(),
+  );
   console.log(
     `  Properties: ${allProperties.length} (${allProperties.length / seedWorkspaces.length}/workspace)`,
   );

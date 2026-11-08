@@ -8,12 +8,12 @@ import { assertProperty } from "@stll/property-testing";
 import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
-import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
-  assemblePlSnParagraphs,
-  plSnParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
-import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  assemblePdfParagraphs,
+  pdfParagraphsToHtml,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import type { PdfLine } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
   markupResidueIn,
   markupResidueSweepRules,
@@ -222,7 +222,7 @@ const regionalFulltext = (): string => {
 };
 
 const plSnFulltext = (): string => {
-  const line = (text: string, indented: boolean): PlSnLine => ({
+  const line = (text: string, indented: boolean): PdfLine => ({
     type: "text",
     runs: [{ text, bold: false }],
     indented,
@@ -235,8 +235,8 @@ const plSnFulltext = (): string => {
     decisionType: "wyrok",
     sourceUrl: "https://www.sn.pl/orzeczenia/1",
     documentUrl: "https://www.sn.pl/orzeczenia/1.pdf",
-    content: plSnParagraphsToHtml(
-      assemblePlSnParagraphs([
+    content: pdfParagraphsToHtml(
+      assemblePdfParagraphs([
         line("Sąd Najwyższy rozpoznał sprawę ze skargi kasacyjnej", true),
         line("powoda i skargę oddalił.", false),
         { type: "blank" },

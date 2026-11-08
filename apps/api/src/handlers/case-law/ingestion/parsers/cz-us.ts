@@ -67,6 +67,7 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
   CZ_TAKTO,
   CZ_TAKTO_TAIL_RE,
+  isCzechBareSignatoryName,
   isCzechOpeningFormula,
   isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
@@ -101,7 +102,7 @@ import {
   readHardWrap,
 } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import {
-  collapseLetterSpacing,
+  readInlineLetterSpacing,
   withAttestedLetterSpacing,
 } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
@@ -525,7 +526,7 @@ const reflowUsLines = (
       reading === null ? inlines : mapInlineText(inlines, reading.clean),
     );
   const spelled = (inlines: readonly Inline[]): Inline[] =>
-    mapInlineText(inlines, collapseLetterSpacing);
+    readInlineLetterSpacing(inlines);
 
   const lines: ParsedLine[] = [];
   let paragraph: Inline[] | null = null;
@@ -714,20 +715,12 @@ const DISSENT_HEADING_MAX_CHARS = 120;
  */
 const CLOSING_MAX_CHARS = 80;
 /**
- * A personal name and nothing else: two to four capitalised words, each
- * possibly double-barrelled ("Jan Novák", "Petra Svobodová-Dvořáková").
- * Read as a signature only directly under a closing or another signature.
- */
-const BARE_SIGNATORY_NAME_RE =
-  /^\p{Lu}\p{Ll}+(?:-\p{Lu}\p{Ll}+)?(?:\s+\p{Lu}\p{Ll}+(?:-\p{Lu}\p{Ll}+)?){1,3}$/u;
-
-/**
  * A bare name under the closing, or under the signature lines that follow
  * it, signs the decision or a separate opinion: the Court's judges often sign
  * with no academic title and no "v. r.".
  */
 const signsUnderClosing = (plainText: string, previous: Block | undefined) =>
-  BARE_SIGNATORY_NAME_RE.test(plainText) &&
+  isCzechBareSignatoryName(plainText) &&
   previous?.type === "paragraph" &&
   (previous.role === "closing" || previous.role === "signature");
 /** Longest heading an author continuation can make. */

@@ -242,7 +242,6 @@
     "headnote": "Jogi tétel",
     "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg",
     "openSource": "Eredeti forrás megnyitása",
-    "openFailed": "A hivatkozást nem sikerült megnyitni.",
     "loadFailed": "Az ítélkezési gyakorlatot nem sikerült betölteni.",
     "share": "Megosztás"
   },
@@ -268,8 +267,6 @@
     "newTimer": "Új időzítő",
     "description": "Min dolgozik?",
     "matterTitle": "Ügy",
-    "pause": "Szüneteltetés",
-    "resume": "Folytatás",
     "save": "Mentés",
     "discard": "Elvetés",
     "emptyTitle": "Nincsenek időzítők",
@@ -348,5 +345,11 @@
   "pane": {
     "showList": "Lista megjelenítése",
     "hideList": "Lista elrejtése"
+  },
+  "link": {
+    "open": "Megnyitás",
+    "share": "Megosztás",
+    "cancel": "Mégse",
+    "openFailed": "A hivatkozást nem sikerült megnyitni."
   }
 }
