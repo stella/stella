@@ -149,6 +149,28 @@ export const HANGING_POINT_MARKER_RE =
 /** The number an authority sets before each paragraph: `(12)`, `[12]`. */
 export const AUTHORITY_PARAGRAPH_NUMBER_RE = /^(?:\(\d{1,3}\)|\[\d{1,3}\])\s/u;
 
+// parser-output-unchanged: the label shapes below moved here unchanged from cz-us, cz-nss, sk-us, page furniture and AST validation; a parser that reads only them keeps its output.
+/** A bracketed paragraph number opening a line, and the space after it. */
+export const BRACKET_PARAGRAPH_MARKER_RE = /^\[(?:\d+)\]\s*/u;
+
+/** A word that is only a bracketed paragraph number: `[12]`. */
+export const BRACKET_PARAGRAPH_MARKER_WORD_RE = /^\[\d+\]$/u;
+
+/** A numbered paragraph's marker and the space after it: "1. ", "12. ". */
+export const DOT_PARAGRAPH_MARKER_RE = /^(?:\d+)\.\s+/u;
+
+/** A list item a section title never opens with: `2.`, `a)`, `-`. */
+export const ITEM_OPENING_RE = /^(?:\d{1,3}[.)]|\p{L}\)|[-–•])\s/u;
+
+/** A line opening with a number that numbers it: `4.`, `28.1.`. */
+export const NUMBERED_LINE_RE = /^\d{1,3}(?:\.\d{1,3})*\.\s/u;
+
+/** A line opening with a court paragraph number and a capitalised word. */
+export const COURT_PARAGRAPH_OPENING_RE = /^(?<number>\d{1,3})\.\s+\p{Lu}/u;
+
+/** A list item after a page break: `2.`, `b.`, `-`, whatever case follows. */
+export const PAGE_LIST_ITEM_RE = /^\s*(?:\d{1,4}[.)]|\p{L}[.)]|[-–•])\s/u;
+
 /** A heading's text without the number it opens with (`3. Odlišné …`). */
 export const withoutLeadingNumber = (text: string): string =>
   text.replace(/^\d+[.)]\s*/u, "");

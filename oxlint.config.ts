@@ -3542,8 +3542,14 @@ const config = defineConfig({
         "packages/legal-ast/src/**/*.ts",
         ".oxlint-plugins/__fixtures__/no-local-paragraph-label.fixture.ts",
       ],
+      // Austrian, British, EU and Hungarian parsers print labels the grammar
+      // does not read (it covers Czech, Slovak and Polish decisions).
       excludeFiles: [
         "packages/legal-ast/src/printed-paragraph-labels.ts",
+        "apps/api/src/handlers/case-law/ingestion/parsers/at-*.ts",
+        "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj*.ts",
+        "apps/api/src/handlers/case-law/ingestion/parsers/hu-bhgy*.ts",
+        "apps/api/src/handlers/case-law/ingestion/parsers/uk-fcl*.ts",
         "**/*.test.ts",
       ],
       rules: {

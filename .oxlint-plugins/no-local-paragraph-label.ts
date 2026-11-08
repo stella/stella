@@ -12,7 +12,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { isAstNode } from "./utils.ts";
+import { regexSourceVisitors } from "./utils.ts";
 
 /** A line start, perhaps after spaces, a group and an opening bracket. */
 const OPENING = String.raw`^\^(?:\\s[*+?]?|\[[^\]]*\][*+?]?)?(?:\\\(\??|\\\[)?(?:\(\?:|\((?:\?<\w+>)?)?(?:\\\(\??|\\\[)?`;
@@ -26,22 +26,6 @@ const LABEL_OPENING = new RegExp(`${OPENING}${NUMBER}${CLOSER}`, "u");
 export const readsParagraphLabel = (pattern: string): boolean =>
   LABEL_OPENING.test(pattern);
 
-const regexPattern = (node: unknown): string | null => {
-  if (
-    !isAstNode(node) ||
-    typeof node.regex !== "object" ||
-    node.regex === null ||
-    !("pattern" in node.regex)
-  ) {
-    return null;
-  }
-  const { pattern } = node.regex;
-  return typeof pattern === "string" ? pattern : null;
-};
-
-const isRegExpCallee = (node: unknown): boolean =>
-  isAstNode(node) && node.type === "Identifier" && node.name === "RegExp";
-
 export default eslintCompatPlugin({
   meta: { name: "no-local-paragraph-label" },
   rules: {
@@ -54,35 +38,11 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const check = (node: unknown, pattern: string | null) => {
-          if (
-            pattern !== null &&
-            readsParagraphLabel(pattern) &&
-            isAstNode(node)
-          ) {
+        return regexSourceVisitors((node, pattern) => {
+          if (readsParagraphLabel(pattern)) {
             context.report({ node, messageId: "owner" });
           }
-        };
-        const checkConstruction = (node: unknown) => {
-          if (!isAstNode(node) || !isRegExpCallee(node.callee)) {
-            return;
-          }
-          const [source] = Array.isArray(node.arguments) ? node.arguments : [];
-          if (
-            isAstNode(source) &&
-            source.type === "Literal" &&
-            typeof source.value === "string"
-          ) {
-            check(node, source.value);
-          }
-        };
-        return {
-          Literal(node) {
-            check(node, regexPattern(node));
-          },
-          NewExpression: checkConstruction,
-          CallExpression: checkConstruction,
-        };
+        });
       },
     },
   },

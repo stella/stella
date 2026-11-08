@@ -10,7 +10,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { isAstNode } from "./utils.ts";
+import { regexSourceVisitors } from "./utils.ts";
 
 /** A letter class, perhaps with its combining marks. */
 const LETTER = String.raw`\\p\{L[lu]?\}(?:\\p\{M\}(?:[*+?]|\{\d*,?\d*\}))?`;
@@ -31,22 +31,6 @@ const SPACED_RUN = new RegExp(
 export const readsLetterSpacing = (pattern: string): boolean =>
   JOINED_LETTERS.test(pattern) || SPACED_RUN.test(pattern);
 
-const regexPattern = (node: unknown): string | null => {
-  if (
-    !isAstNode(node) ||
-    typeof node.regex !== "object" ||
-    node.regex === null ||
-    !("pattern" in node.regex)
-  ) {
-    return null;
-  }
-  const { pattern } = node.regex;
-  return typeof pattern === "string" ? pattern : null;
-};
-
-const isRegExpCallee = (node: unknown): boolean =>
-  isAstNode(node) && node.type === "Identifier" && node.name === "RegExp";
-
 export default eslintCompatPlugin({
   meta: { name: "no-local-letter-spacing" },
   rules: {
@@ -59,35 +43,11 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const check = (node: unknown, pattern: string | null) => {
-          if (
-            pattern !== null &&
-            readsLetterSpacing(pattern) &&
-            isAstNode(node)
-          ) {
+        return regexSourceVisitors((node, pattern) => {
+          if (readsLetterSpacing(pattern)) {
             context.report({ node, messageId: "owner" });
           }
-        };
-        const checkConstruction = (node: unknown) => {
-          if (!isAstNode(node) || !isRegExpCallee(node.callee)) {
-            return;
-          }
-          const [source] = Array.isArray(node.arguments) ? node.arguments : [];
-          if (
-            isAstNode(source) &&
-            source.type === "Literal" &&
-            typeof source.value === "string"
-          ) {
-            check(node, source.value);
-          }
-        };
-        return {
-          Literal(node) {
-            check(node, regexPattern(node));
-          },
-          NewExpression: checkConstruction,
-          CallExpression: checkConstruction,
-        };
+        });
       },
     },
   },

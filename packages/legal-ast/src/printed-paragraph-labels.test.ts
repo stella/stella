@@ -96,7 +96,7 @@ describe("printedLabelOpensParagraph", () => {
 
   test("only a label opens a paragraph", () => {
     assertProperty(
-      "a line without a printed label never opens a paragraph by its label",
+      "only a label opens a paragraph",
       fc.property(
         fc.string(),
         fc.stringMatching(/^[\p{Ll}\p{Lu} ,]{1,20}$/u),
@@ -110,7 +110,7 @@ describe("printedLabelOpensParagraph", () => {
 
   test("a label after a finished sentence opens a paragraph, however full the line", () => {
     assertProperty(
-      "a printed label after a finished sentence opens a paragraph",
+      "a label after a finished sentence opens a paragraph, however full the line",
       fc.property(
         fc.constantFrom("12.", "[3]", "5.5.", "(2)", "a)", "IV."),
         fc.constantFrom("Soud zamítl.", "rozhodol takto:", "§ 420 CSP;"),

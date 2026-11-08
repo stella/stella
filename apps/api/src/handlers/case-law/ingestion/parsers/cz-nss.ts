@@ -53,6 +53,7 @@ import type {
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
+import { BRACKET_PARAGRAPH_MARKER_RE } from "@stll/legal-ast/printed-paragraph-labels";
 import {
   collapseLetterSpacing,
   isLetterSpacedEmphasis,
@@ -953,9 +954,6 @@ const separateOpinionHeadingKind = (
     : separateOpinionHeading(plainText, SEPARATE_OPINION_HEADING_MAX_CHARS)
         ?.kind;
 
-/** Numbered paragraph: [1], [2], ... */
-const NUMBERED_PARA_RE = /^\[(?:\d+)\]\s*/u;
-
 const DOCUMENT_PHASE = {
   PREAMBLE: "preamble",
   HOLDING: "holding",
@@ -1524,7 +1522,10 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // A numbered paragraph starts reasoning even when the publisher omitted
     // or misspelled its separator. Keep the phase transition durable so later
     // unnumbered reasoning cannot leak back into the holding section.
-    if (phase === DOCUMENT_PHASE.HOLDING && NUMBERED_PARA_RE.test(plainText)) {
+    if (
+      phase === DOCUMENT_PHASE.HOLDING &&
+      BRACKET_PARAGRAPH_MARKER_RE.test(plainText)
+    ) {
       phase = DOCUMENT_PHASE.REASONING;
     }
 
