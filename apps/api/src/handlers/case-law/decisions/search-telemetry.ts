@@ -1,10 +1,14 @@
 import { panic } from "better-result";
 
 import type { DecisionQueryIntent } from "@stll/api-contract/decision-query-intent";
+import { observeRegistryRequest } from "@stll/business-registries/shared/request-observer";
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 
 import type { CorpusAggregateCacheOutcome } from "@/api/lib/legal-search/corpus-aggregate-cache";
 import type { CorpusHitDispositionCounts } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
+import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
+import { remainingRequestBudgetMs } from "@/api/lib/load/request-latency-budget";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -83,6 +87,9 @@ export const reportCaseLawFunctionWordsExcluded = ({
   excludedTokens,
   hitsReturned,
 }: CaseLawFunctionWordsExcludedEvent): void => {
+  if (excludedTokens === 0) {
+    return;
+  }
   logger.info("case_law.search.function_words_excluded", {
     country,
     queryTokens,
@@ -154,9 +161,11 @@ export type CaseLawSearchDbTimer = {
    */
   record: (read: CaseLawSearchDbRead, ms: number) => void;
   timing: () => CaseLawSearchDbTiming;
+  /** Reads `time` began that never settled, which `timing` cannot count. */
+  unfinished: () => { read: CaseLawSearchDbRead; ms: number }[];
 };
 
-export const createCaseLawSearchDbTimer = (): CaseLawSearchDbTimer => {
+const createCaseLawSearchDbTimer = (): CaseLawSearchDbTimer => {
   const msByRead: Record<CaseLawSearchDbRead, number> = {
     alternates: 0,
     candidates: 0,
@@ -167,6 +176,7 @@ export const createCaseLawSearchDbTimer = (): CaseLawSearchDbTimer => {
     sourceRegistry: 0,
   };
   let reads = 0;
+  const running = new Set<{ read: CaseLawSearchDbRead; startedAt: number }>();
 
   const record = (read: CaseLawSearchDbRead, ms: number): void => {
     msByRead[read] += ms;
@@ -176,13 +186,150 @@ export const createCaseLawSearchDbTimer = (): CaseLawSearchDbTimer => {
   return {
     record,
     time: async (read, run) => {
-      const startedAt = performance.now();
+      const entry = { read, startedAt: performance.now() };
+      running.add(entry);
+      // Left in `running` when `run` rejects: a read the request gave up on
+      // is exactly what a record of an unfinished request has to name.
       const rows = await run();
-      record(read, performance.now() - startedAt);
+      running.delete(entry);
+      record(read, performance.now() - entry.startedAt);
       return rows;
     },
     timing: () => ({ reads, msByRead: { ...msByRead } }),
+    unfinished: () =>
+      [...running].map(({ read, startedAt }) => ({
+        read,
+        ms: performance.now() - startedAt,
+      })),
   };
+};
+
+/**
+ * Flat, one attribute per read, and the total is what those attributes add
+ * up to: a breakdown that does not reconcile with its total is worse than
+ * no breakdown.
+ */
+const dbAttributes = (db: CaseLawSearchDbTiming): LoggerAttributes => {
+  const msByAttribute: LoggerAttributes = {};
+  let dbMs = 0;
+  for (const read of Object.values(CASE_LAW_SEARCH_DB_READ)) {
+    const ms = Math.round(db.msByRead[read]);
+    msByAttribute[DB_READ_ATTRIBUTE[read]] = ms;
+    dbMs += ms;
+  }
+  return { dbReads: db.reads, dbMs, ...msByAttribute };
+};
+
+/**
+ * Where a search has got to. The completed record is written once at the end
+ * of a search that has an answer, so a search that runs out of time writes
+ * nothing and the slowest requests are absent from the data. This is what is
+ * known about one at any moment, written if it never completes.
+ */
+type CaseLawSearchPhase =
+  | "serving_target"
+  | "identity"
+  | "query_resolve"
+  | "scan_and_facets"
+  | "page_rows"
+  | "alternates"
+  | "partial_top_up";
+
+export type CaseLawSearchTrace = {
+  readonly startedAt: number;
+  readonly dbTimer: CaseLawSearchDbTimer;
+  readonly country: string | undefined;
+  phase: CaseLawSearchPhase;
+  queryClass: DecisionQueryClass | null;
+  /** Calls the corpus index was sent, counted when each one is issued. */
+  engineRequests: number;
+  /** Zero until the facet read settles. */
+  facetMs: number;
+  scanSettled: boolean;
+  /** Set once the completed record is written; nothing further is owed. */
+  reported: boolean;
+};
+
+const reportCaseLawSearchIncomplete = (
+  trace: CaseLawSearchTrace,
+  outcome: "failed" | "timed_out",
+): void => {
+  const unfinished = trace.dbTimer.unfinished();
+  const remainingBudgetMs = remainingRequestBudgetMs();
+  logger.warn("case_law.search.incomplete", {
+    outcome,
+    phase: trace.phase,
+    ...(trace.queryClass === null ? {} : { queryClass: trace.queryClass }),
+    ...(trace.country === undefined ? {} : { country: trace.country }),
+    ...dbAttributes(trace.dbTimer.timing()),
+    dbUnfinishedReads: unfinished.map(({ read }) => read).join(","),
+    dbUnfinishedMs: Math.round(Math.max(0, ...unfinished.map(({ ms }) => ms))),
+    engineRequests: trace.engineRequests,
+    scanSettled: trace.scanSettled,
+    facetMs: Math.round(trace.facetMs),
+    totalMs: Math.round(performance.now() - trace.startedAt),
+    ...(remainingBudgetMs === undefined
+      ? {}
+      : { remainingBudgetMs: Math.round(remainingBudgetMs) }),
+  });
+};
+
+type RunTracedCaseLawSearchOptions<TAnswer> = {
+  country: string | undefined;
+  observer: RegistryRequestObservation;
+  run: (
+    trace: CaseLawSearchTrace,
+    observer: RegistryRequestObservation,
+  ) => Promise<TAnswer>;
+};
+
+export const createCaseLawSearchTrace = (
+  country: string | undefined,
+): CaseLawSearchTrace => ({
+  startedAt: performance.now(),
+  dbTimer: createCaseLawSearchDbTimer(),
+  country,
+  phase: "serving_target",
+  queryClass: null,
+  engineRequests: 0,
+  facetMs: 0,
+  scanSettled: false,
+  reported: false,
+});
+
+/**
+ * Runs a search and writes `case_law.search.incomplete` for one that rejects
+ * or answers with its time budget spent. A refusal at the boundary is an
+ * answer, and searched nothing to report.
+ */
+export const runTracedCaseLawSearch = async <TAnswer>({
+  country,
+  observer,
+  run,
+}: RunTracedCaseLawSearchOptions<TAnswer>): Promise<TAnswer> => {
+  const trace = createCaseLawSearchTrace(country);
+  const counted = {
+    onRequest: () => {
+      trace.engineRequests += 1;
+      observeRegistryRequest(observer);
+    },
+    // Unused: `onRequest` above cannot throw, `observeRegistryRequest` having
+    // contained whatever the observer it forwards to does.
+    onError: () => undefined,
+  };
+  let settled = false;
+  try {
+    const answer = await run(trace, counted);
+    settled = true;
+    if (publicReadTimeoutError(answer) !== null && !trace.reported) {
+      reportCaseLawSearchIncomplete(trace, "timed_out");
+    }
+    return answer;
+  } finally {
+    if (!settled && !trace.reported) {
+      reportCaseLawSearchIncomplete(trace, "failed");
+    }
+  }
 };
 
 type CaseLawSearchCompletedEvent = {
@@ -261,17 +408,6 @@ export const reportCaseLawSearchCompleted = ({
   scanAndFacetsMs,
   totalMs,
 }: CaseLawSearchCompletedEvent): void => {
-  // Flat, one attribute per read, and the total is what those attributes add
-  // up to: a breakdown that does not reconcile with its total is worse than
-  // no breakdown.
-  const msByAttribute: LoggerAttributes = {};
-  let dbMs = 0;
-  for (const read of Object.values(CASE_LAW_SEARCH_DB_READ)) {
-    const ms = Math.round(db.msByRead[read]);
-    msByAttribute[DB_READ_ATTRIBUTE[read]] = ms;
-    dbMs += ms;
-  }
-
   logger.info("case_law.search.completed", {
     ...hitDispositions,
     queryClass,
@@ -288,9 +424,7 @@ export const reportCaseLawSearchCompleted = ({
     facetCacheMisses: facetCache.misses,
     facetCacheSharedFlights: facetCache.sharedFlights,
     scanAndFacetsMs: Math.round(scanAndFacetsMs),
-    dbReads: db.reads,
-    dbMs,
-    ...msByAttribute,
+    ...dbAttributes(db),
     totalMs: Math.round(totalMs),
     roundCapHit,
     earlyStopped,
