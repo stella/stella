@@ -453,6 +453,14 @@ const isPrintedSubheading = (text: string): boolean => {
   );
 };
 
+/**
+ * How a finished reasons paragraph ends. A paragraph that ends otherwise ("…
+ * jogszabálysértő, mert") runs on into the next one, so a short capitalised
+ * line after it (`Magyarország Alaptörvénye`) is the rest of that sentence,
+ * not a title.
+ */
+const SENTENCE_FINISHED_END = /[.:;!?…"'”»)\]]$/u;
+
 /** The level-1 section under which the court titles its own parts. */
 const REASONS_HEADING_KEY = "indokolás";
 
@@ -1224,6 +1232,8 @@ export const parseHuBhgyDecision = (
   let region: Region = "front";
   /** Whether the last level-1 heading was the reasons' own (`Indokolás`). */
   let underReasonsHeading = false;
+  /** Whether the last body paragraph stopped mid-sentence. */
+  let previousParagraphRunsOn = false;
   /**
    * Read through a call: the line handlers move `region`, and a direct
    * comparison after them would still see the value narrowed before them.
@@ -1289,6 +1299,7 @@ export const parseHuBhgyDecision = (
       if (heading.level === 1) {
         underReasonsHeading = heading.key === REASONS_HEADING_KEY;
       }
+      previousParagraphRunsOn = false;
       builder.heading({
         type: "heading",
         level: heading.level,
@@ -1412,12 +1423,18 @@ export const parseHuBhgyDecision = (
     );
     const number = numbered?.groups?.["number"];
     const role: ParagraphRole = BODY_ROLE[region];
+    const runsOnFromPrevious = previousParagraphRunsOn;
+    previousParagraphRunsOn = !SENTENCE_FINISHED_END.test(
+      normalized.plainText.trim(),
+    );
     if (
       number === undefined &&
       region === "reasoning" &&
       underReasonsHeading &&
+      !runsOnFromPrevious &&
       isPrintedSubheading(normalized.plainText)
     ) {
+      previousParagraphRunsOn = false;
       builder.heading({
         type: "heading",
         level: 2,

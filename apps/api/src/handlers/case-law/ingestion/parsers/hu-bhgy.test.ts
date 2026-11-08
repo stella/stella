@@ -937,13 +937,15 @@ describe("reading a document folio handed over", () => {
     ]);
   });
 
-  test("a sentence, a cited provision or an applied act is never read as a title", () => {
+  test("a sentence, a cited provision, an applied act or a sentence's continuation is never read as a title", () => {
     const parsed = parse([
       { text: "Indokolás" },
       { text: "A kereset nem alapos." },
       { text: "A Kúria az alábbiakat állapította meg:" },
       { text: "Pp. 346. § (5) bekezdés" },
       { text: "a jogerős ítélet hatályában fenntartandó" },
+      { text: "[5]\tA bíróság az ügyben alkalmazta" },
+      { text: "Magyarország Alaptörvénye" },
       { text: "Alkalmazott jogszabályok" },
       { text: "A polgári perrendtartásról szóló törvény" },
     ]);
@@ -953,6 +955,8 @@ describe("reading a document folio handed over", () => {
       "p:argumentation:A Kúria az alábbiakat állapította meg:",
       "p:argumentation:Pp. 346. § (5) bekezdés",
       "p:argumentation:a jogerős ítélet hatályában fenntartandó",
+      "p:argumentation#5:A bíróság az ügyben alkalmazta",
+      "p:argumentation:Magyarország Alaptörvénye",
       "h1:section-heading:Alkalmazott jogszabályok",
       "p:argumentation:A polgári perrendtartásról szóló törvény",
     ]);
