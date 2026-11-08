@@ -294,7 +294,13 @@ const checkoutDirectory = (step: Record<string, unknown>): string | null => {
   if (typeof destination !== "string" || destination === ".") {
     return "";
   }
-  return destination.replace(/^\.\//u, "").replace(/\/+$/u, "");
+  let directory = destination.startsWith("./")
+    ? destination.slice(2)
+    : destination;
+  while (directory.endsWith("/")) {
+    directory = directory.slice(0, -1);
+  }
+  return directory;
 };
 
 /**
