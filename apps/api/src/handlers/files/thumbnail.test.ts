@@ -9,7 +9,10 @@ import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createSelectQueryMock,
+  toSafeDbMock,
+} from "@/api/tests/scoped-db-mock";
 
 import thumbnailEndpoint from "./thumbnail";
 
@@ -53,8 +56,9 @@ const fileContent = (overrides: Record<string, unknown> = {}) => ({
 });
 
 /**
- * The first scopedDb call is the workspace-bound field lookup: `rows` stands
- * for what that lookup answers. Later calls run the audited presign.
+ * The first scopedDb call is the route's field check. The next runs the
+ * workspace-bound field lookup and the audited presign in one transaction:
+ * `rows` stands for what that lookup answers.
  */
 const scopedDbAnswering = (rows: unknown[]) => {
   let call = 0;
@@ -64,10 +68,7 @@ const scopedDbAnswering = (rows: unknown[]) => {
       if (call === 1) {
         return rows.length === 0 ? [] : [{ id: fieldId }];
       }
-      if (call === 2) {
-        return rows;
-      }
-      return await callback({});
+      return await callback({ select: () => createSelectQueryMock(rows) });
     },
   );
 };
@@ -112,6 +113,13 @@ describe("matter file thumbnail", () => {
     });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toContain(thumbnailKey);
+    const expiresIn = Number(
+      new URL(response.headers.get("location") ?? "").searchParams.get(
+        "X-Amz-Expires",
+      ),
+    );
+    expect(expiresIn).toBeGreaterThan(0);
+    expect(expiresIn).toBeLessThanOrEqual(60);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(events).toEqual([
       expect.objectContaining({
@@ -126,6 +134,41 @@ describe("matter file thumbnail", () => {
         }),
       }),
     ]);
+  });
+
+  test("signs the link in the transaction that found the version live", async () => {
+    const lookupTransactions: object[] = [];
+    const auditTransactions: unknown[] = [];
+    let call = 0;
+    const scopedDb = asTestRaw<ScopedDb>(
+      async (callback: (tx: object) => Promise<unknown>) => {
+        call += 1;
+        if (call === 1) {
+          return [{ id: fieldId }];
+        }
+        const tx = {
+          select: () => {
+            lookupTransactions.push(tx);
+            return createSelectQueryMock([
+              { content: fileContent(), entityId },
+            ]);
+          },
+        };
+        return await callback(tx);
+      },
+    );
+
+    const response = await readFileThumbnail({
+      recordAuditEvent: async (tx) => {
+        auditTransactions.push(tx);
+      },
+      scopedDb,
+    });
+
+    expect(response).toBeInstanceOf(Response);
+    expect(lookupTransactions).toHaveLength(1);
+    expect(auditTransactions).toEqual(lookupTransactions);
+    expect(auditTransactions[0]).toBe(lookupTransactions[0]);
   });
 
   test("answers 404 without auditing for a field outside the workspace", async () => {

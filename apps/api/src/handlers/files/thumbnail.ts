@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { status } from "@/api/http/status";
 import type { HttpStatusResponse } from "@/api/http/status";
@@ -19,9 +20,11 @@ import { callerDownloadSource } from "@/api/lib/s3-presign";
 
 /**
  * Each thumbnail redirect is authorized and audited against the current
- * session. Signed URLs stay short-lived, and redirects are never cached.
+ * session, and redirects are never cached. The client follows the redirect at
+ * once, so the signed URL only has to outlive that hop: a link stops working
+ * shortly after its version does.
  */
-const FILE_THUMBNAIL_URL_EXPIRY_SECONDS = 15 * 60;
+const FILE_THUMBNAIL_URL_EXPIRY_SECONDS = 60;
 
 const config = {
   contract: "patch",
@@ -53,48 +56,51 @@ export default createSafeHandler(
     workspaceId,
   }): SafeHandlerGenerator<Response | HttpStatusResponse<404, string>> {
     const organizationId = session.activeOrganizationId;
-    const rows = yield* Result.await(
-      Result.tryPromise(
-        async () => await fileFieldQuery(scopedDb, fieldId, workspaceId),
-      ),
-    );
-    const row = rows.at(0);
-    if (row?.content.type !== "file") {
-      return Result.ok(status(404));
-    }
-    const content = row.content;
-    const thumbnailFileId = content.thumbnailFileId;
-    if (!thumbnailFileId || content.encrypted) {
-      return Result.ok(status(404));
-    }
-
+    // The lookup and the signature share one transaction: a link is issued
+    // only for a field whose version is live when the URL is signed.
     const presignedUrl = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await scopedDb(
-            async (tx) =>
-              await auditedPresignDownload({
-                readSessionAuthority: ownerSyntheticSessionAuthorityReader,
-                tx,
-                recordAuditEvent,
-                resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-                resourceId: row.entityId,
-                userId: user.id,
-                source: callerDownloadSource(session),
-                s3Key: createFileKey({
-                  organizationId,
-                  workspaceId,
-                  fileId: thumbnailFileId,
-                  mimeType: THUMBNAIL_MIME_TYPE,
-                }),
-                expiresInSeconds: FILE_THUMBNAIL_URL_EXPIRY_SECONDS,
+          await scopedDb(async (tx) => {
+            const inTransaction: ScopedDb = async (read) => await read(tx);
+            const rows = await fileFieldQuery(
+              inTransaction,
+              fieldId,
+              workspaceId,
+            );
+            const row = rows.at(0);
+            if (row?.content.type !== "file") {
+              return null;
+            }
+            const { thumbnailFileId, encrypted } = row.content;
+            if (!thumbnailFileId || encrypted) {
+              return null;
+            }
+            return await auditedPresignDownload({
+              readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+              tx,
+              recordAuditEvent,
+              resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+              resourceId: row.entityId,
+              userId: user.id,
+              source: callerDownloadSource(session),
+              s3Key: createFileKey({
                 organizationId,
                 workspaceId,
-                metadata: { fieldId, variant: "thumbnail" },
+                fileId: thumbnailFileId,
+                mimeType: THUMBNAIL_MIME_TYPE,
               }),
-          ),
+              expiresInSeconds: FILE_THUMBNAIL_URL_EXPIRY_SECONDS,
+              organizationId,
+              workspaceId,
+              metadata: { fieldId, variant: "thumbnail" },
+            });
+          }),
       ),
     );
+    if (presignedUrl === null) {
+      return Result.ok(status(404));
+    }
 
     return Result.ok(
       new Response(null, {
