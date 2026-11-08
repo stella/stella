@@ -368,10 +368,10 @@
     {
       "name": "read_case_law_citations",
       "nameChars": 23,
-      "descriptionChars": 767,
-      "inputSchemaChars": 1140,
-      "totalChars": 1930,
-      "estimatedTokens": 739
+      "descriptionChars": 809,
+      "inputSchemaChars": 1597,
+      "totalChars": 2429,
+      "estimatedTokens": 943
     },
     {
       "name": "read_case_law_decision",
@@ -639,7 +639,7 @@
     }
   ],
   "totals": {
-    "characters": 133905,
-    "estimatedTokens": 53233
+    "characters": 134404,
+    "estimatedTokens": 53437
   }
 }
