@@ -325,17 +325,19 @@ export const scenarioLedgerGrowth = (
 const readNonGatingLedger = (): readonly TestScenario[] =>
   parseScenarioLedger(readJson(NON_GATING_LEDGER));
 
+const GIT_OUTPUT_LIMIT = 16 * 1024 * 1024;
+
 const scenarioLedgerBaseline = (): readonly ScenarioBaseline[] => {
-  const options = { cwd: ROOT, encoding: "utf-8" } as const;
-  const mergeBase = execFileSync(
-    "git",
-    ["merge-base", "origin/main", "HEAD"],
-    options,
-  ).trim();
+  // The ledger is the largest output read here; 16 MiB bounds every call.
+  const mergeBase = execFileSync("git", ["merge-base", "origin/main", "HEAD"], {
+    cwd: ROOT,
+    encoding: "utf-8",
+    maxBuffer: GIT_OUTPUT_LIMIT,
+  }).trim();
   const inBase = execFileSync(
     "git",
     ["ls-tree", "--name-only", mergeBase, "--", NON_GATING_LEDGER],
-    options,
+    { cwd: ROOT, encoding: "utf-8", maxBuffer: GIT_OUTPUT_LIMIT },
   ).trim();
   if (inBase !== NON_GATING_LEDGER) {
     // The initial inventory becomes the merge-base ledger when this guard lands.
@@ -343,7 +345,11 @@ const scenarioLedgerBaseline = (): readonly ScenarioBaseline[] => {
   }
   const reference = mergeBase;
   const value: unknown = JSON.parse(
-    execFileSync("git", ["show", `${reference}:${NON_GATING_LEDGER}`], options),
+    execFileSync("git", ["show", `${reference}:${NON_GATING_LEDGER}`], {
+      cwd: ROOT,
+      encoding: "utf-8",
+      maxBuffer: GIT_OUTPUT_LIMIT,
+    }),
   );
   if (!Array.isArray(value)) {
     panic(`${NON_GATING_LEDGER} baseline must be an array`);
