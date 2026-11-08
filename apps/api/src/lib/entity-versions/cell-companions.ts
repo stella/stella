@@ -91,7 +91,6 @@ const planMetadata = async ({
     [...targetVersionIds.keys()],
     CELL_COMPANION_BATCH,
   )) {
-    // db-await-in-loop: one read per bounded batch of source versions
     const rows = await tx
       .select({
         entityVersionId: cellMetadata.entityVersionId,
@@ -161,7 +160,6 @@ const planJustifications = async ({
     [...fieldClones.keys()],
     CELL_COMPANION_BATCH,
   )) {
-    // db-await-in-loop: one read per bounded batch of cloned cells
     const rows = await tx
       .select({
         fieldId: justifications.fieldId,

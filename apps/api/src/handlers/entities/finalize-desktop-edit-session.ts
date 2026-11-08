@@ -663,7 +663,6 @@ export const finalizeDesktopEditSessionHandler = async ({
         companions.metadata,
         CELL_COMPANION_BATCH,
       )) {
-        // db-await-in-loop: bounded companion batches written with this clone
         await tx.insert(cellMetadata).values(rows);
       }
 

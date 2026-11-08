@@ -1607,14 +1607,12 @@ const writeCopyPlan = async ({
     fieldClones: plan.fieldClones,
   });
   for (const rows of chunkItems(companions.metadata, CELL_COMPANION_BATCH)) {
-    // db-await-in-loop: bounded companion batches written with this clone
     await tx.insert(cellMetadata).values(rows);
   }
   for (const rows of chunkItems(
     companions.justifications,
     CELL_COMPANION_BATCH,
   )) {
-    // db-await-in-loop: bounded companion batches written with this clone
     await tx.insert(justifications).values(rows);
   }
 

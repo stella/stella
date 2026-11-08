@@ -202,11 +202,9 @@ export default createSafeHandler(
           fieldClones,
         });
         for (const rows of chunkItems(metadata, CELL_COMPANION_BATCH)) {
-          // db-await-in-loop: bounded companion batches written with this clone
           await tx.insert(cellMetadata).values(rows);
         }
         for (const rows of chunkItems(cited, CELL_COMPANION_BATCH)) {
-          // db-await-in-loop: bounded companion batches written with this clone
           await tx.insert(justifications).values(rows);
         }
 
