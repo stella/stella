@@ -547,7 +547,52 @@ const czRegionalIdentityItem = (raw: unknown): CzRegionalApiItem | null => {
     jednaciCislo,
     soud,
     ...(typeof raw["odkaz"] === "string" ? { odkaz: raw["odkaz"] } : {}),
+    // The docket's registry spelling comes from the row's ECLI, so the
+    // identity reads it too and keys the row by the same docket.
+    ...(typeof raw["ecli"] === "string" ? { ecli: raw["ecli"] } : {}),
   };
+};
+
+/** `16 CO 179/2022`: senate, registry, number and year of a regional docket. */
+const REGIONAL_DOCKET =
+  /^(?<senate>\d+) (?<registry>\p{L}+) (?<number>\d+)\/(?<year>\d{4})$/u;
+
+/**
+ * The docket and sheet of a listing row, the registry spelled as the court
+ * spells it. The listing prints the registry in capitals (`16 CO 179/2022`)
+ * while the court's own ECLI keeps its spelling (`…:16.Co.179.2022.1`), and
+ * the same court's rows otherwise read both ways. The ECLI's spelling is
+ * taken only when its senate, number and year are this docket's, so an ECLI
+ * filed against another decision never renames the docket. The listing row
+ * and its identity both read through here, so a row is keyed by the docket it
+ * is stored under.
+ */
+export const czRegionalCaseNumberOf = (
+  item: Pick<CzRegionalApiItem, "ecli"> & { jednaciCislo: string },
+): { caseNumber: string; sheetNumber: string | undefined } => {
+  const reference = splitCaseReference(item.jednaciCislo);
+  const docket = REGIONAL_DOCKET.exec(reference.caseNumber)?.groups;
+  const ecliParts = (toOptionalValue(item.ecli) ?? "")
+    .split(":")
+    .at(4)
+    ?.split(".");
+  if (docket === undefined || ecliParts === undefined) {
+    return reference;
+  }
+  const [senate, registry, number, year] = ecliParts;
+  const sameDocket =
+    senate === docket["senate"] &&
+    number === docket["number"] &&
+    year === docket["year"] &&
+    registry !== undefined &&
+    registry.toLocaleLowerCase("cs") ===
+      docket["registry"]?.toLocaleLowerCase("cs");
+  return sameDocket
+    ? {
+        ...reference,
+        caseNumber: `${docket["senate"]} ${registry} ${docket["number"]}/${docket["year"]}`,
+      }
+    : reference;
 };
 
 type CzRegionalListingRead =
@@ -1035,7 +1080,10 @@ export const czRegionalListingIdentity = (raw: unknown): ListingIdentity => {
   }
   return {
     type: "case-number",
-    caseNumber: splitCaseReference(item.jednaciCislo).caseNumber,
+    caseNumber: czRegionalCaseNumberOf({
+      ...item,
+      jednaciCislo: item.jednaciCislo,
+    }).caseNumber,
     language: CZ_REGIONAL_LANGUAGE,
   };
 };
@@ -1177,7 +1225,10 @@ export const assembleCzRegionalDecision = ({
   }
 
   // This source publishes the docket with the sheet number appended.
-  const { caseNumber, sheetNumber } = splitCaseReference(item.jednaciCislo);
+  const { caseNumber, sheetNumber } = czRegionalCaseNumberOf({
+    ...item,
+    jednaciCislo: item.jednaciCislo,
+  });
   const publishedDocumentUrl = toOptionalValue(item.odkaz);
   const documentUrl = publishedDocumentUrl
     ? restrictCzRegionalFinaldocUrl(publishedDocumentUrl)
@@ -1463,7 +1514,10 @@ export const buildCzRegionalDecision = async (
   if (publishedDocumentUrl === undefined) {
     return assembleCzRegionalDecision({ item, document: null, chain: null });
   }
-  const caseNumber = splitCaseReference(item.jednaciCislo).caseNumber;
+  const caseNumber = czRegionalCaseNumberOf({
+    ...item,
+    jednaciCislo: item.jednaciCislo,
+  }).caseNumber;
   const finaldoc = finaldocOf({
     read: await fetchFinaldoc(publishedDocumentUrl, caseNumber, signal),
     caseNumber,
