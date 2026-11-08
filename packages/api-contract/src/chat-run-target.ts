@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import type { AgentHarness } from "./agent-harness";
+import { apiDateTimeSchema } from "./api-date";
 import {
   DESKTOP_RUNNER_ANSWER_LIMITS,
   DESKTOP_RUNNER_APPROVAL_MODES,
@@ -237,6 +238,35 @@ export type ChatLocalRunComputerEvent = v.InferOutput<
 >;
 
 /**
+ * The run-finished metadata key under which a turn that ran on the member's
+ * computer reports how full the harness's context was after its last model
+ * request, against the model's context window, as the harness reported both.
+ * The chat's context meter shows it for a thread whose turns run there.
+ */
+export const CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY = "localRunContext";
+
+/** No model context window is anywhere near this. */
+const MAX_CONTEXT_TOKENS = 100_000_000;
+
+export const chatLocalRunContextSchema = v.strictObject({
+  usedTokens: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(MAX_CONTEXT_TOKENS),
+  ),
+  windowTokens: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(MAX_CONTEXT_TOKENS),
+  ),
+});
+export type ChatLocalRunContext = v.InferOutput<
+  typeof chatLocalRunContextSchema
+>;
+
+/**
  * What a turn on a computer tells the chat about the files it handed back, as
  * metadata on the answer: every stream processor merges it and a rejoin's
  * snapshot keeps it, so a live answer and a rejoined one read the same. The
@@ -300,3 +330,15 @@ export const chatLocalRunFilePartsOf = (
     .filter(({ url }) => !present.has(url))
     .map(chatLocalRunFilePart);
 };
+
+/**
+ * The run-error metadata key under which a turn that ended on the harness's
+ * usage limit says when the limit resets, as the harness reported it. The
+ * chat shows the time; a limit without a known reset carries none.
+ */
+export const CHAT_LOCAL_RUN_LIMIT_METADATA_KEY = "localRunLimit";
+
+export const chatLocalRunLimitSchema = v.strictObject({
+  resetsAt: v.pipe(apiDateTimeSchema, v.maxLength(32)),
+});
+export type ChatLocalRunLimit = v.InferOutput<typeof chatLocalRunLimitSchema>;

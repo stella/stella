@@ -4197,6 +4197,99 @@ test("marketing screenshots are planned only for ready same-repository releases 
   }
 });
 
+test("a merge group trusts a fork pull request only when its head passed a pull request run", () => {
+  const plan = v.parse(
+    v.object({
+      steps: v.array(
+        v.object({ name: v.optional(v.string()), run: v.optional(v.string()) }),
+      ),
+    }),
+    ciJobs["ci-plan"],
+  );
+  const command = v.parse(
+    v.string(),
+    plan.steps.find(({ name }) => name === "Check if PR is trusted")?.run,
+  );
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "merge-group-trust-"));
+  const output = nodePath.join(directory, "output");
+  const retry = nodePath.join(directory, "gh-retry.sh");
+  // Pull request 7 comes from this repository, 8 and 9 from a fork; only the
+  // fork head of 8 has a successful pull_request run.
+  writeFileSync(
+    retry,
+    [
+      "set -euo pipefail",
+      'echo "$*" >> "$(dirname "$0")/calls"',
+      'case "$2" in',
+      '  repos/stella/stella/pulls/7) echo "stella/stella aaa7" ;;',
+      '  repos/stella/stella/pulls/8) echo "contributor/stella bbb8" ;;',
+      '  repos/stella/stella/pulls/9) echo "contributor/stella ccc9" ;;',
+      '  "repos/stella/stella/actions/workflows/ci.yml/runs?event=pull_request&status=success&head_sha=bbb8") echo 1 ;;',
+      '  "repos/stella/stella/actions/workflows/ci.yml/runs?event=pull_request&status=success&head_sha=ccc9") echo 0 ;;',
+      "  *) exit 3 ;;",
+      "esac",
+    ].join("\n"),
+  );
+  const cases = [
+    { event: "pull_request", head: "", trusted: true, calls: 0 },
+    {
+      event: "merge_group",
+      head: "refs/heads/gh-readonly-queue/main/no-pull-request",
+      trusted: false,
+      calls: 0,
+    },
+    {
+      event: "merge_group",
+      head: "refs/heads/gh-readonly-queue/main/pr-7-abcdef",
+      trusted: true,
+      calls: 1,
+    },
+    {
+      event: "merge_group",
+      head: "refs/heads/gh-readonly-queue/main/pr-8-abcdef",
+      trusted: true,
+      calls: 2,
+    },
+    {
+      event: "merge_group",
+      head: "refs/heads/gh-readonly-queue/main/pr-9-abcdef",
+      trusted: false,
+      calls: 2,
+    },
+  ] as const;
+  try {
+    for (const { event, head, trusted, calls } of cases) {
+      writeFileSync(output, "");
+      rmSync(nodePath.join(directory, "calls"), { force: true });
+      const result = Bun.spawnSync(["bash", "-eu", "-c", command], {
+        cwd: nodePath.resolve(import.meta.dir, ".."),
+        env: {
+          PATH: Bun.env["PATH"] ?? "",
+          EVENT_NAME: event,
+          BASE_REPO: "stella/stella",
+          MERGE_GROUP_HEAD_REF: head,
+          GH_RETRY_SCRIPT: retry,
+          GITHUB_OUTPUT: output,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
+      expect(readFileSync(output, "utf-8"), `${event} ${head}`).toBe(
+        `trusted=${String(trusted)}\n`,
+      );
+      const made = existsSync(nodePath.join(directory, "calls"))
+        ? readFileSync(nodePath.join(directory, "calls"), "utf-8")
+            .split("\n")
+            .filter(Boolean)
+        : [];
+      expect(made.length, `${event} ${head}`).toBe(calls);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("spec-tree PRs plan production shards and their web build at fast depth", () => {
   for (const file of [
     "apps/web/e2e/specs/new.spec.ts",

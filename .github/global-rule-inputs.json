@@ -318,6 +318,10 @@
       "reason": "Runs under published_exports_required in ci-checks-generated; package sources, manifests and packing inputs select that scope."
     },
     {
+      "path": "scripts/fork-contributor-commands.sh",
+      "reason": "Runs as the fork contributor commands root check in ci-checks-rest; its declared inputs in scripts/ci-root-check-inputs.json, which include this script, select it."
+    },
+    {
       "path": "scripts/generate-main-heavy-infrastructure-steps.ts",
       "reason": "Runs from the generated files manifest guard; ci.yml and the generator's declared inputs select that scope."
     },

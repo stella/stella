@@ -9,7 +9,13 @@ import {
 import { panic } from "better-result";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
-import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
+  CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_QUESTION_TOOL,
+  type ChatLocalRunContext,
+  type ChatLocalRunLimit,
+} from "@stll/api-contract/chat-run-target";
 
 import {
   approvalMessage,
@@ -179,7 +185,10 @@ class ChunkMapper {
         // The harness continues on its own; its next output opens a new
         // segment. A transient retry leaves nothing to persist.
         return;
-      case "turn.completed":
+      case "turn.completed": {
+        // How full the context is, for the chat's meter.
+        const context: ChatLocalRunContext | null =
+          event.usage?.context ?? null;
         this.ensureSegment();
         this.terminate(
           this.runFinished({
@@ -187,9 +196,15 @@ class ChunkMapper {
             ...(event.usage === null
               ? {}
               : { usage: toTokenUsage(event.usage) }),
+            ...(context === null
+              ? {}
+              : {
+                  metadata: { [CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY]: context },
+                }),
           }),
         );
         return;
+      }
       case "turn.interrupted":
         this.ensureSegment();
         this.terminate(
@@ -247,6 +262,7 @@ class ChunkMapper {
   private runFinished(fields: {
     finishReason: "stop" | "tool_calls";
     usage?: TokenUsage;
+    metadata?: Record<string, unknown>;
     outcome?: NonNullable<
       Extract<StreamChunk, { type: EventType.RUN_FINISHED }>["outcome"]
     >;
@@ -272,6 +288,16 @@ class ChunkMapper {
       message: failure.message,
       code,
       error: { message: failure.message, code },
+      // When a usage limit resets, so the chat can say when to try again.
+      ...(failure.type === "usage_limit" && failure.resetsAt !== null
+        ? {
+            metadata: {
+              [CHAT_LOCAL_RUN_LIMIT_METADATA_KEY]: {
+                resetsAt: failure.resetsAt,
+              } satisfies ChatLocalRunLimit,
+            },
+          }
+        : {}),
     };
   }
 

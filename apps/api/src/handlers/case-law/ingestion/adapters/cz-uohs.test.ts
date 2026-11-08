@@ -21,9 +21,9 @@ import {
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
-  extractPlPdfSeparatedContent,
-  PL_PDF_PARAGRAPH_START,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
@@ -230,6 +230,125 @@ describe("ÚOHS JSON-LD", () => {
     },
   );
 
+  describe("a decision set with the docket as its running header", () => {
+    const read = async (fixture: string) =>
+      await parseCzUohsDocumentPdf(
+        new Uint8Array(
+          await Bun.file(
+            new URL(`__fixtures__/${fixture}`, import.meta.url),
+          ).arrayBuffer(),
+        ),
+        { caseNumber: fixture, sourceUrl: fixture },
+      );
+    const bodyOf = (ast: Awaited<ReturnType<typeof read>>) =>
+      ast.blocks.filter(
+        (block) => !(block.type === "paragraph" && block.note !== undefined),
+      );
+    const notesOf = (ast: Awaited<ReturnType<typeof read>>) =>
+      ast.blocks.flatMap((block) =>
+        block.type === "paragraph" && block.note !== undefined ? [block] : [],
+      );
+
+    test.each([
+      [
+        "cz-uohs-2015-S0569.pdf",
+        "Č.j.: ÚOHS-S0569/2015/KD-42098/2016/852/MAd",
+        "UOHSX008YFQ5",
+      ],
+      [
+        "cz-uohs-2018-R0003.pdf",
+        "Č.j.: ÚOHS-R0003/2018/HS-31751/310/MHf",
+        "UOHSX00BKPME",
+      ],
+    ] as const)(
+      "%s keeps the running header and the barcode out of the text, and the barcode's payload in it",
+      async (fixture, header, payload) => {
+        const body = bodyOf(await read(fixture));
+        const text = body.map(({ plainText }) => plainText).join("\n");
+        expect(text).not.toContain(header);
+        expect(text).not.toContain(`*${payload}*`);
+        expect(body.at(0)?.plainText).toBe(payload);
+        // The letterhead's own docket line, printed once, stays.
+        expect(text).toContain(header.replace("Č.j.:", "Č. j.:"));
+      },
+    );
+
+    test("a paragraph the running header cut at a page break reads whole", async () => {
+      const text = bodyOf(await read("cz-uohs-2015-S0569.pdf"))
+        .map(({ plainText }) => plainText)
+        .join("\n");
+      expect(text).toContain(
+        "Praha 4, IČO 22671617, tím že, schválil dokument nazvaný",
+      );
+      expect(text).toContain(
+        "o právním posouzení šetřeného případu Úřadem a předal mu také informace",
+      );
+    });
+
+    test("every footnote is a note, in order, and none is left in the text", async () => {
+      const ast = await read("cz-uohs-2018-R0003.pdf");
+      const notes = notesOf(ast);
+      expect(notes.map(({ note }) => note?.label)).toEqual(
+        Array.from({ length: 69 }, (_, index) => String(index + 1)),
+      );
+      // Set in two type sizes on one line, and once read as text.
+      expect(notes.at(26)?.plainText).toBe(
+        "Rozhodnutí Nejvyššího správního soudu ze dne 7. 4. 2006, č.j. 6 As 23/2005-66.",
+      );
+      const text = bodyOf(ast)
+        .map(({ plainText }) => plainText)
+        .join("\n");
+      for (const { plainText } of notes) {
+        expect(text).not.toContain(plainText);
+      }
+    });
+
+    test("the footnotes are searchable text of the decision", async () => {
+      const bytes = new Uint8Array(
+        await Bun.file(
+          new URL("__fixtures__/cz-uohs-2018-R0003.pdf", import.meta.url),
+        ).arrayBuffer(),
+      );
+      testFetchState.set(asFetchMock(async () => new Response(bytes)));
+      const decision = await buildCzUohsDecision((await records())[0]!);
+      expect(decision.fulltext).toContain(
+        "Rozhodnutí Nejvyššího správního soudu ze dne 7. 4. 2006, č.j. 6 As 23/2005-66.",
+      );
+    });
+
+    test("a footnote's mark is a linked superscript, not a digit glued to its word", async () => {
+      const body = bodyOf(await read("cz-uohs-2018-R0003.pdf"));
+      expect(body.map(({ plainText }) => plainText)).toContain("II. ROZKLAD");
+      const appeal = body.find(({ plainText }) =>
+        plainText.startsWith("Účastník řízení podal proti všem výrokům"),
+      );
+      expect(
+        appeal?.type === "paragraph" ? appeal.inlines.slice(0, 2) : [],
+      ).toEqual([
+        {
+          type: "text",
+          text: "Účastník řízení podal proti všem výrokům napadeného rozhodnutí včas rozklad",
+        },
+        {
+          type: "link",
+          href: "#footnote-2",
+          children: [
+            { type: "superscript", children: [{ type: "text", text: "2" }] },
+          ],
+        },
+      ]);
+    });
+
+    test("the head matter's printed lines join into its paragraphs", async () => {
+      const text = bodyOf(await read("cz-uohs-2018-R0003.pdf"))
+        .map(({ plainText }) => plainText)
+        .join("\n");
+      expect(text).toContain(
+        "č. j. ÚOHS-S0595/2016/VS-37308/2017/830/ESk ze dne 20. 12. 2017 podalo statutární město Karlovy Vary,",
+      );
+    });
+  });
+
   test("keeps a raised reference immediately after its claim inside a line", async () => {
     const pdf = PDF.create();
     const page = pdf.addPage({ size: "letter" });
@@ -284,7 +403,7 @@ describe("ÚOHS JSON-LD", () => {
     ]);
   });
 
-  test("keeps an unlabelled page-top continuation in the previous footnote until body resumes", async () => {
+  test("keeps a small unlabelled line atop the next page as text, never filed under a note", async () => {
     const pdf = PDF.create();
     const first = pdf.addPage({ size: "letter" });
     first.drawText("First body paragraph with a reference", {
@@ -321,13 +440,18 @@ describe("ÚOHS JSON-LD", () => {
     if (saved.status !== "saved") {
       return;
     }
-    const separated = await extractPlPdfSeparatedContent(
+    const separated = await extractPdfBodyAndNotes(
       saved.bytes,
-      PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+      PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
     );
+    // The note's number on a line of its own, then its one line of text.
     expect(separated.notes).toMatchObject([
       { type: "text", footnote: { label: "1", noteId: "footnote-1" } },
-      { type: "text", footnote: { label: "1", noteId: "footnote-1" } },
+      {
+        type: "text",
+        footnote: { label: "1", noteId: "footnote-1" },
+        runs: [{ text: "Note begins on the first page" }],
+      },
     ]);
     const ast = await parseCzUohsDocumentPdf(saved.bytes, {
       caseNumber: "synthetic-continuation",
@@ -339,15 +463,16 @@ describe("ÚOHS JSON-LD", () => {
     expect(notes).toHaveLength(1);
     expect(notes.at(0)).toMatchObject({
       note: { type: "footnote", label: "1", noteId: "footnote-1" },
-      plainText:
-        "Note begins on the first page and continues at the next page top.",
+      plainText: "Note begins on the first page",
     });
     const bodyText = ast.blocks
       .filter((block) => block.type === "paragraph" && block.note === undefined)
       .map(({ plainText }) => plainText)
       .join(" ");
     expect(bodyText).not.toContain("Note begins");
-    expect(bodyText).not.toContain("and continues at the next page top.");
+    // Small type atop a page shows no note it continues: the reader keeps it
+    // in the text rather than guess which note it belongs to.
+    expect(bodyText).toContain("and continues at the next page top.");
     expect(bodyText).toContain("Small body text after the body resumes.");
   });
 

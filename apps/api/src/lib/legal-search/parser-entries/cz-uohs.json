@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "CZ_UOHS",
   "key": "cz-uohs",
-  "parserVersion": 10,
+  "parserVersion": 11,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Re-derive the file number with its year from the export record (older rows state only the serial), the issue date from the reference-number letterhead line, and the decision type from the printed title; the identifiers and the case number have no separate feature storage."
+    "reason": "Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. Re-read the body and footnotes from stored PDF bytes through the shared PDF band reader: running headers, barcodes and page numbers leave the body by their shape, footnotes are read off each page's foot with their raised references as linked superscripts, and printed lines join into paragraphs across page breaks; the AST has no separate feature storage. Re-derive the file number with its year from the export record (older rows state only the serial), the issue date from the reference-number letterhead line, and the decision type from the printed title; the identifiers and the case number have no separate feature storage."
   }
 }
