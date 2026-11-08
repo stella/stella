@@ -76,6 +76,9 @@ export const LocalRunApprovalCeilingCard = () => {
           ),
       ),
     invalidate: organizationSettingsKeys.all,
+    // A save another administrator beat is refused; the stored ceiling is
+    // read again so the selector shows it before the next choice.
+    invalidateOn: "settled",
     onSuccess: () => {
       // The Run on menu reads the ceiling with the member's computers.
       detached(
