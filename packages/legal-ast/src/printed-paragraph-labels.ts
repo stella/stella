@@ -36,10 +36,10 @@ export const PRINTED_LABEL_KIND = {
   BULLET: "bullet",
 } as const;
 
-export type PrintedLabelKind =
+type PrintedLabelKind =
   (typeof PRINTED_LABEL_KIND)[keyof typeof PRINTED_LABEL_KIND];
 
-export type PrintedLabel = {
+type PrintedLabel = {
   readonly kind: PrintedLabelKind;
   /** The label as printed, without the space after it. */
   readonly marker: string;
