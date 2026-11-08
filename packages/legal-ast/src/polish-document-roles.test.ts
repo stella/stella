@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   containsPlOperativeVerb,
   isPlAppealInstruction,
+  isPlAuthorityDecisionTitle,
   isPlBenchMemberLine,
   isPlCompositionLine,
   isPlDecisionDateLine,
@@ -330,5 +331,29 @@ describe("a Polish head-matter line", () => {
         "po rozpoznaniu na rozprawie w dniu 1 lutego 2022 roku",
       ),
     ).toBe(false);
+  });
+});
+
+describe("a Polish authority's decision title", () => {
+  test.each([
+    "DECYZJA RGD - 1/2026",
+    "DECYZJA DIH-1/48/2017",
+    "DECYZJA NR RBG - 11/2018",
+    "DECYZJA Nr RWA-26/2009",
+    "DECYZJA nr RPZ 6/2011",
+    "Decyzja nr 12",
+  ])("%p is a decision title", (line) => {
+    expect(isPlAuthorityDecisionTitle(line)).toBe(true);
+  });
+
+  test.each([
+    "DECYZJA",
+    "decyzja Prezesa Urzędu z dnia 3 marca 2020 r.",
+    "Decyzja ta jest ostateczna.",
+    "Decyzja nr 5 z dnia 3 marca 2020 r. została uchylona.",
+    "Decyzja nr 5 z dnia 3 marca 2020",
+    "Decyzja nr DOK-9/2011 jest prawomocna",
+  ])("%p is not one", (line) => {
+    expect(isPlAuthorityDecisionTitle(line)).toBe(false);
   });
 });
