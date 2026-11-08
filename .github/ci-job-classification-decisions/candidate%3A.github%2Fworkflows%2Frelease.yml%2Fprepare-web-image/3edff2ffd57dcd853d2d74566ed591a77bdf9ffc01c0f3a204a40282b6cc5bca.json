@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Reuses a verified web receipt or builds, publishes and attests the resolved release web image.",
+  "reviewedDigest": "3edff2ffd57dcd853d2d74566ed591a77bdf9ffc01c0f3a204a40282b6cc5bca"
+}
