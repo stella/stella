@@ -34,6 +34,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -268,9 +269,7 @@ if (!databaseUrl || !runPostgresTests) {
             }),
           ).toBe(0);
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });
@@ -436,9 +435,7 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           ).toBe(1);
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });

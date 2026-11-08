@@ -17,6 +17,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 // timeout: Account deletion runs every erasure step against real PostgreSQL.
 setDefaultTimeout(120_000);
@@ -202,9 +203,7 @@ describe.skipIf(!enabled)("reader-answer account deletion", () => {
         { answerId: sharedAnswerId },
       ]);
     } finally {
-      await rootDb
-        .delete(organization)
-        .where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(rootDb, [organizationId]);
     }
   });
 });

@@ -32,6 +32,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -228,9 +229,7 @@ describe.skipIf(!runPostgresTests)("file accounting during a rollout", () => {
           } finally {
             release.resolve(undefined);
             envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-            await setup.db
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(setup.db, [organizationId]);
             await setup.db.delete(user).where(eq(user.id, userId));
             await setup.db
               .delete(usagePolicies)

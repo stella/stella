@@ -34,6 +34,7 @@ import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-q
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -244,9 +245,7 @@ describe.skipIf(!runPostgresTests)("concurrent duplication", () => {
         } finally {
           envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorLimits;
           storage.stop();
-          await setup.db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(setup.db, [organizationId]);
           await setup.db.delete(user).where(eq(user.id, userId));
         }
       },

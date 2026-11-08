@@ -29,6 +29,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import type { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type FileContentMeasurementOptions = {
@@ -215,7 +216,7 @@ export const fileContentScalingScenario = {
         };
       });
     } finally {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(eq(user.id, userId));
     }
   },

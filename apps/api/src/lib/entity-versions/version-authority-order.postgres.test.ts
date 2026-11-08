@@ -30,6 +30,7 @@ import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -290,9 +291,7 @@ describe.skipIf(!runPostgresTests)("delayed version authority", () => {
           expect(Result.isError(outcome)).toBe(true);
           expect(await currentVersion()).toBe(currentBefore);
         } finally {
-          await setup.db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(setup.db, [organizationId]);
           await setup.db.delete(user).where(eq(user.id, userId));
         }
       },

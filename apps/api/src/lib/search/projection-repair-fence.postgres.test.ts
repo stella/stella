@@ -23,6 +23,7 @@ import {
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -175,9 +176,7 @@ if (!databaseUrl || !runPostgresTests) {
         } finally {
           releaseOld.resolve(undefined);
           await Promise.allSettled(oldDrain ? [oldDrain] : []);
-          await currentRepair.db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(currentRepair.db, [organizationId]);
         }
       });
     },
