@@ -982,19 +982,25 @@ const PLACEHOLDER_STEMS = [
   "telefonszám",
 ] as const;
 
-/** `név1`, `Terhelt1`, `Gyanúsított 1.`, `cég12` */
+/**
+ * `név1`, `Terhelt1`, `Gyanúsított 1.`, `cég12`. The token's number ends the
+ * token: a number that runs on into a larger one ("a felperes 2007. évi",
+ * "Felperes 5.300.000.-forint", "felperes 925.-Ft/db") is the court's own text
+ * about that party, and so is a stem inside a longer word.
+ */
 const NUMBERED_PLACEHOLDER = new RegExp(
-  String.raw`\b(?:${PLACEHOLDER_STEMS.join("|")})\s?\d{1,3}\.?`,
+  String.raw`(?<![\p{L}\p{N}])(?:${PLACEHOLDER_STEMS.join("|")})\s?\d{1,3}(?![\p{L}\p{N}]|[.,]\p{N}|\.-)\.?`,
   "giu",
 );
 
 /**
  * `alperes neve (címe)`, `I.rendű felperes neve`, `város neve`,
  * `terhelt születési helye`: the legacy era spells the field out in the
- * possessive instead of numbering it.
+ * possessive instead of numbering it. The field word ends the token, so
+ * "a felperes nevezett Rt." stays text.
  */
 const SPELLED_PLACEHOLDER =
-  /\b(?:[IVX]+\.\s?rendű\s+)?(?:felperes|alperes|terhelt|vádlott|gyanúsított|kérelmező|kérelmezett|tanú|sértett|város|község|utca|munkáltató|védő)\s+(?:születési\s+)?(?:neve|címe|helye|ideje|lakcíme|székhelye|anyja\s+neve)/giu;
+  /(?<![\p{L}\p{N}])(?:[IVX]+\.\s?rendű\s+)?(?:felperes|alperes|terhelt|vádlott|gyanúsított|kérelmező|kérelmezett|tanú|sértett|város|község|utca|munkáltató|védő)\s+(?:születési\s+)?(?:neve|címe|helye|ideje|lakcíme|székhelye|anyja\s+neve)(?![\p{L}\p{N}])/giu;
 
 type AnonSpan = { readonly start: number; readonly end: number };
 
