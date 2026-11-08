@@ -5,7 +5,7 @@
  * inputs. This module imports nothing, so the classification tooling's sparse
  * checkout can load it on its own.
  */
-export const REPOSITORY_CHECKOUT_ACTIONS = [
+const REPOSITORY_CHECKOUT_ACTIONS = [
   "actions/checkout@",
   "stella/.github/actions/partial-clone-checkout@",
 ] as const;
