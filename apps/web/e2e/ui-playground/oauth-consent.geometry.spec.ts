@@ -50,7 +50,7 @@ const readGeometry = async (page: Page): Promise<CardGeometry> => {
       const body = document.querySelector(bodySelector);
       const bar = document.querySelector(barSelector);
       if (!(body instanceof HTMLElement) || !(bar instanceof HTMLElement)) {
-        throw new Error("consent card is missing its body or decision bar");
+        throw new TypeError("consent card is missing its body or decision bar");
       }
       const barBox = bar.getBoundingClientRect();
       return {
@@ -91,8 +91,8 @@ for (const [name, viewport] of Object.entries(VIEWPORTS)) {
       await card.evaluate((element) => {
         element.closest("main")?.scrollIntoView({ block: "start" });
       });
-      await page.locator(`${PERMISSIONS} > summary`).click();
-      await expect(page.locator(PERMISSIONS)).toHaveAttribute("open", "");
+      await page.locator(`${PERMISSIONS} button[aria-expanded]`).click();
+      await expect(page.locator(PERMISSIONS)).toHaveAttribute("data-open", "");
 
       const geometry = await readGeometry(page);
       expect(

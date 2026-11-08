@@ -23,6 +23,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { importHandler } from "./import";
 import type {
@@ -113,14 +114,10 @@ const withFixture = async (run: (fixture: VariantFixture) => Promise<void>) => {
             fixture.otherOrganizationId,
           ]),
         );
-      await db
-        .delete(organization)
-        .where(
-          inArray(organization.id, [
-            fixture.organizationId,
-            fixture.otherOrganizationId,
-          ]),
-        );
+      await deleteOrganizationsForTest(db, [
+        fixture.organizationId,
+        fixture.otherOrganizationId,
+      ]);
       await db.delete(user).where(eq(user.id, fixture.userId));
     }
   });

@@ -68,6 +68,18 @@ test("a heading splits into the label a reader navigates by and its title", () =
   });
 });
 
+test("only the line a provision number opens gives the number up", () => {
+  // A later line that opens with a longer number, or the same one, keeps it.
+  expect(splitReaderHeading("§ 5\n§ 50 Přechodná ustanovení")).toEqual({
+    label: "§ 5",
+    title: "§ 50 Přechodná ustanovení",
+  });
+  expect(splitReaderHeading("§ 5 Lhůty\n§ 5 odst. 2 se nepoužije")).toEqual({
+    label: "§ 5",
+    title: "Lhůty § 5 odst. 2 se nepoužije",
+  });
+});
+
 // ČÁST PRVNÍ / HLAVA III / § 7, each with a long title.
 const crumbs = [
   { label: 80, full: 300 },
@@ -83,6 +95,8 @@ const fit = (available: number, hiddenCount = 0) =>
     menuWidth: 44,
     minimumTitleWidth: 80,
     maximumAncestorLabelWidth: 160,
+    // "§ 7" is narrower than a touch target.
+    minimumCurrentWidth: 44,
   });
 
 test("reader breadcrumb gives way in order: outer titles, current title, outer levels, menu, current label", () => {
@@ -115,12 +129,12 @@ test("reader breadcrumb gives way in order: outer titles, current title, outer l
     ],
     showMenu: true,
   });
-  // Too narrow for any title: the current label alone.
+  // Too narrow for any title: the current label alone, a full touch target.
   expect(fit(120)).toEqual({
     fits: [
       { type: "folded" },
       { type: "folded" },
-      { type: "label", width: 30 },
+      { type: "label", width: 44 },
     ],
     showMenu: true,
   });
@@ -129,27 +143,38 @@ test("reader breadcrumb gives way in order: outer titles, current title, outer l
     fits: [
       { type: "folded" },
       { type: "folded" },
-      { type: "label", width: 30 },
+      { type: "label", width: 44 },
     ],
     showMenu: false,
   });
-  // Narrower still: the current label itself is cut.
-  expect(fit(20).fits.at(-1)).toEqual({ type: "label", width: 20 });
+  // Narrower still: the bar clips the control rather than shrink it.
+  expect(fit(20)).toEqual({
+    fits: [
+      { type: "folded" },
+      { type: "folded" },
+      { type: "label", width: 44 },
+    ],
+    showMenu: false,
+  });
 });
 
-test("reader breadcrumb never overflows and keeps the current heading longest", () => {
+test("reader breadcrumb fits the bar, folds outermost first and keeps the current heading a full touch target", () => {
   for (const hiddenCount of [0, 2]) {
     for (let available = 1; available <= 2100; available += 1) {
       const { fits, showMenu } = fit(available, hiddenCount);
       const shown = fits.filter((entry) => entry.type !== "folded").length;
       const items = shown + (showMenu ? 1 : 0);
+      const current = fits.at(-1);
+      expect(current?.type).not.toBe("folded");
+      // The contents control is the one way to the folded levels once the
+      // menu has left, so it never shrinks below a touch target; only a bar
+      // narrower than that is overflowed, by the control alone.
+      expect(fitWidth(current)).toBeGreaterThanOrEqual(44);
       expect(
         fits.reduce((sum, entry) => sum + fitWidth(entry), 0) +
           (showMenu ? 44 : 0) +
           (items - 1) * 16,
-      ).toBeLessThanOrEqual(available);
-      const current = fits.at(-1);
-      expect(current?.type).not.toBe("folded");
+      ).toBeLessThanOrEqual(Math.max(available, 44));
       // Folding takes the outermost level first.
       const folded = fits.map((entry) => entry.type === "folded");
       expect(
@@ -166,11 +191,8 @@ test("reader breadcrumb never overflows and keeps the current heading longest", 
       const levelsOffBar = hiddenCount > 0 || folded.some(Boolean);
       expect(showMenu).toBe(
         levelsOffBar &&
-          !(current?.type === "label" && 30 + 44 + 16 > available),
+          !(current?.type === "label" && 44 + 44 + 16 > available),
       );
-      if (current?.type === "label" && current.width < 30) {
-        expect(showMenu).toBe(false);
-      }
     }
   }
 });
@@ -187,9 +209,36 @@ test("an outer label without a title is capped, the current one is not", () => {
     menuWidth: 44,
     minimumTitleWidth: 80,
     maximumAncestorLabelWidth: 160,
+    minimumCurrentWidth: 44,
   });
   expect(fits).toEqual([
     { type: "label", width: 160 },
     { type: "label", width: 500 },
   ]);
+});
+
+test("the current label is cut to its minimum at most, never past it", () => {
+  const currentFit = (
+    available: number,
+    label: number,
+    minimumCurrentWidth: number,
+  ) =>
+    fitReaderPath({
+      available,
+      crumbs: [
+        { label: 80, full: 80 },
+        { label, full: label },
+      ],
+      hiddenCount: 1,
+      separatorWidth: 16,
+      menuWidth: 44,
+      minimumTitleWidth: 80,
+      maximumAncestorLabelWidth: 160,
+      minimumCurrentWidth,
+    }).fits.at(-1);
+  // A heading without a number is cut, down to a touch target.
+  expect(currentFit(120, 200, 44)).toEqual({ type: "label", width: 120 });
+  expect(currentFit(30, 200, 44)).toEqual({ type: "label", width: 44 });
+  // A provision number wider than a touch target stays whole.
+  expect(currentFit(30, 60, 60)).toEqual({ type: "label", width: 60 });
 });

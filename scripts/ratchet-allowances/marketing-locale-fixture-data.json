@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 18,
+  "reason": "The English, Czech and Slovak development content packs declare independently reviewed translated fixture data against the same total SeedLocaleContent shape. Blanking string literals makes their corresponding records identical token blocks (en:4,cs:7,sk:7). Sharing those values would mix one locale into another; positional builder arguments would discard named-field type checks. Seed control flow and document builders remain shared."
+}

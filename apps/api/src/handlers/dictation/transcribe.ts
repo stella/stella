@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import type * as v from "valibot";
 
 import {
+  defaultTranscriptionModelId,
   isTranscriptionModelId,
   TRANSCRIPTION_MODELS,
 } from "@stll/ai-catalog/transcription";
@@ -12,6 +13,7 @@ import {
   TRANSCRIPTION_AUDIO_MEDIA_TYPES,
   TRANSCRIPTION_DURATION_TOLERANCE_MS,
 } from "@stll/api-contract/transcription";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { classifyFailure } from "@stll/errors";
 
 import type { SafeDbError } from "@/api/db/safe-db";
@@ -50,7 +52,7 @@ import {
 const config = {
   contract: "patch",
   description:
-    "Transcribe one audio chunk without storing the audio or transcript. Upload file, modelId, optional ISO 639-1 language, a JSON array of vocabulary terms, and an optional matterId. Available through REST multipart upload; generic JSON capability transports cannot upload audio.",
+    "Transcribe one audio chunk without storing the audio or transcript. Upload file, an optional modelId (absent: the cheapest model offered in the organization's region), optional ISO 639-1 language, a JSON array of vocabulary terms, and an optional matterId. Available through REST multipart upload; generic JSON capability transports cannot upload audio.",
   permissions: { workspace: ["read"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   access: "write",
@@ -229,7 +231,7 @@ export const executeDictation = async (
             ),
         }),
       );
-      if (access === null || access.status === "deleting") {
+      if (access === null || !workspaceIsVisible(access.status)) {
         return Result.err(
           new HandlerError({
             status: 404,
@@ -240,18 +242,29 @@ export const executeDictation = async (
       }
     }
     const residency = ctx.managedAIResidency;
+    const regionalDefault =
+      residency === null ? undefined : defaultTranscriptionModelId(residency);
+    const modelId =
+      residency === null ? undefined : (body.modelId ?? regionalDefault);
     if (
       residency === null ||
-      TRANSCRIPTION_MODELS[body.modelId].residency[residency].status !==
-        "available"
+      modelId === undefined ||
+      TRANSCRIPTION_MODELS[modelId].residency[residency].status !== "available"
     ) {
       return Result.err(
         classifyFailure(
           new HandlerError({
             status: 503,
             code: "transcription_model_unavailable",
-            message: "This transcription model is not available in your region",
-            hint: "Choose a transcription model available in your region.",
+            message:
+              body.modelId === undefined
+                ? "No transcription model is available in your region"
+                : "This transcription model is not available in your region",
+            // Leaving the model out helps only where the region has a default.
+            hint:
+              regionalDefault === undefined
+                ? "Transcription is not offered in your organization's region yet."
+                : "Choose a transcription model available in your region, or leave the model out.",
           }),
           "model_unavailable",
         ),
@@ -291,7 +304,7 @@ export const executeDictation = async (
         caller: usageCaller,
         isByok,
         required: transcriptionUsageUnits({
-          modelId: body.modelId,
+          modelId,
           residency,
           durationMs: maximumDurationMs,
           isByok,
@@ -306,7 +319,7 @@ export const executeDictation = async (
     const { transcript: result, admittedDurationMs } = yield* Result.await(
       dependencies.transcribe({
         audio: body.file,
-        modelId: body.modelId,
+        modelId,
         language: body.language,
         vocabulary: body.vocabulary,
         apiKey: credential.apiKey,
@@ -323,7 +336,7 @@ export const executeDictation = async (
       result.durationMs >
       admittedDurationMs + TRANSCRIPTION_DURATION_TOLERANCE_MS;
     if (durationMismatch) {
-      emitTranscriptionDurationMismatchMetric(body.modelId);
+      emitTranscriptionDurationMismatchMetric(modelId);
     }
     yield* Result.await(
       dependencies.settle({

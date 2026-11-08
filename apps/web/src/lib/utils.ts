@@ -1,3 +1,5 @@
+import { stripDirectionalControls } from "@stll/ui/bidi-text";
+
 /**
  * Type-narrowing `.includes()` that avoids
  * `as readonly string[]` at every call site.
@@ -14,7 +16,7 @@ export const downloadFile = (blob: Blob, fileName: string) => {
 
   const link = document.createElement("a");
   link.href = url;
-  link.download = fileName;
+  link.download = stripDirectionalControls(fileName);
 
   document.body.append(link);
   link.click();

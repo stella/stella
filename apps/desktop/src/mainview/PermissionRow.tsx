@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Label } from "@stll/ui/label";
 import { Switch } from "@stll/ui/switch";
 
 import type { Permission, PermissionRow as Row } from "../shared/permissions";
@@ -52,9 +53,7 @@ export const PermissionRow = ({
     <div className="flex items-start justify-between gap-4 px-4 py-3">
       <div className="min-w-0 flex-1">
         {usesSwitch ? (
-          <label className="text-sm font-medium" htmlFor={switchId}>
-            {t(copy.label)}
-          </label>
+          <Label htmlFor={switchId}>{t(copy.label)}</Label>
         ) : (
           <p className="text-sm font-medium">{t(copy.label)}</p>
         )}

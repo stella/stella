@@ -319,20 +319,19 @@ export const useRenameEntity = (
     },
     onError: (error, { workspaceId, entityId, name }, context) => {
       const rolledBack = Result.try(() => {
-        if (context?.previousLabel === undefined) {
-          return;
-        }
-        const store = inspectorStore
-          ? inspectorStore.getState()
-          : useInspectorTabsStore.getState();
-        for (const tab of store.tabs) {
-          if (
-            tab.type === "pdf" &&
-            tab.workspaceId === workspaceId &&
-            tab.entityId === entityId &&
-            tab.label === name
-          ) {
-            store.updateLabel(tab.id, context.previousLabel);
+        if (context?.previousLabel !== undefined) {
+          const store = inspectorStore
+            ? inspectorStore.getState()
+            : useInspectorTabsStore.getState();
+          for (const tab of store.tabs) {
+            if (
+              tab.type === "pdf" &&
+              tab.workspaceId === workspaceId &&
+              tab.entityId === entityId &&
+              tab.label === name
+            ) {
+              store.updateLabel(tab.id, context.previousLabel);
+            }
           }
         }
       });

@@ -16,10 +16,16 @@ import {
   MAX_CONTACT_NATIONALITY_CODES,
   updateContactBodySchema,
 } from "@stll/api-contract/contact-write";
+import { displayNameSchema } from "@stll/api-contract/display-name";
+import { DEFAULT_FILE_PROPERTY_NAME } from "@stll/api-contract/property-policy";
 import {
   organizationMemberSelectorSchema,
   taskDescriptionSchema,
 } from "@stll/api-contract/task-write";
+import {
+  WORKSPACE_STATUS,
+  workspaceAcceptsWrites,
+} from "@stll/api-contract/workspace-status";
 import { isCountryCode } from "@stll/country-codes";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -107,6 +113,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceContactId,
 } from "@/api/lib/safe-id-boundaries";
+import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { TASK_ASSIGNEE_FILTERS } from "@/api/lib/tasks/assigned";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import {
@@ -124,6 +131,13 @@ import { providerFromMcpWebSearchAvailability } from "@/api/mcp/context";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
+  countryInputSchema,
+  countryNormalization,
+  cursorInput,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
+import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
   runTextFieldSpecs,
@@ -138,9 +152,6 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  countryInputSchema,
-  countryNormalization,
-  cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
   entityIdInputSchema,
@@ -149,10 +160,8 @@ import {
   internalFailureResult,
   invalidCursorResult,
   notFoundResult,
-  nullAsAbsent,
   structuredEgressPlan,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -175,7 +184,10 @@ type MatterToolName =
   | "link_matter_contact";
 
 /** Statuses a matter can be flipped to through save_matter. */
-const MATTER_STATUSES = ["active", "archived"] as const;
+const MATTER_STATUSES = [
+  WORKSPACE_STATUS.active,
+  WORKSPACE_STATUS.archived,
+] as const;
 
 /**
  * Entity kinds save_task will link a task to. Mirrors link_entity_id's
@@ -183,13 +195,6 @@ const MATTER_STATUSES = ["active", "archived"] as const;
  * target check rejects a non-linkable kind before any mutation runs.
  */
 const LINKABLE_ENTITY_KINDS = ["document", "folder", "task"] as const;
-
-/**
- * System file-column name for a matter created via MCP. Mirrors the web
- * client's default (`_protected.workspaces/-mutations.ts`) so an
- * agent-created matter and a UI-created matter start with the same column.
- */
-const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
 // --- list_tasks text-field specs -----------------------------------------
 
@@ -309,9 +314,7 @@ const saveMatterArgsSchema = nullAsAbsent(
       ),
       name: v.optional(
         v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(256),
+          displayNameSchema(),
           v.description("Matter name; required when creating"),
         ),
       ),
@@ -466,15 +469,15 @@ const handleSaveMatterTool: TypedMcpToolHandler<
   // (mirrors the HTTP unarchive route, which is the sole mutation mounted
   // outside the active-only workspace group). Any field edit, or re-archiving an
   // already-archived matter, is rejected before touching the backing handlers.
-  if (getWorkspaceStatus({ context, workspaceId }) !== "active") {
+  if (!workspaceAcceptsWrites(getWorkspaceStatus({ context, workspaceId }))) {
     const isPureUnarchive =
-      input.status === "active" &&
+      input.status === WORKSPACE_STATUS.active &&
       input.name === undefined &&
       input.client_id === undefined &&
       input.reference === undefined &&
       input.billing_reference === undefined;
     if (!isPureUnarchive) {
-      if (input.status === "archived") {
+      if (input.status === WORKSPACE_STATUS.archived) {
         return errorResult("Matter is already archived");
       }
       return errorResult("Matter is archived; unarchive it first");
@@ -517,7 +520,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     }
   }
 
-  if (input.status === "archived") {
+  if (input.status === WORKSPACE_STATUS.archived) {
     const archived = await Result.gen(() =>
       archiveWorkspaceHandler({
         safeDb: context.safeDb,
@@ -531,7 +534,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
         "mcp.handleSaveMatterTool.archived_error",
       );
     }
-  } else if (input.status === "active") {
+  } else if (input.status === WORKSPACE_STATUS.active) {
     const unarchived = await Result.gen(() =>
       unarchiveWorkspaceHandler({
         safeDb: context.safeDb,
@@ -829,27 +832,25 @@ const saveContactArgsSchema = nullAsAbsent(
       ),
       display_name: v.optional(
         v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(512),
+          displayNameSchema({ maxLength: 512 }),
           v.description("Defaults to person or organization name"),
         ),
       ),
       first_name: v.optional(
         v.pipe(
-          v.nullable(v.pipe(v.string(), v.maxLength(256))),
+          v.nullable(displayNameSchema({ maxLength: 256, allowEmpty: true })),
           v.description("Given name"),
         ),
       ),
       last_name: v.optional(
         v.pipe(
-          v.nullable(v.pipe(v.string(), v.maxLength(256))),
+          v.nullable(displayNameSchema({ maxLength: 256, allowEmpty: true })),
           v.description("Family name"),
         ),
       ),
       organization_name: v.optional(
         v.pipe(
-          v.nullable(v.pipe(v.string(), v.maxLength(512))),
+          v.nullable(displayNameSchema({ maxLength: 512, allowEmpty: true })),
           v.description("Organization"),
         ),
       ),
@@ -1104,7 +1105,6 @@ const handleSaveContactTool: TypedMcpToolHandler<
         userId: context.userId,
         recordAuditEvent: context.recordAuditEvent,
         body: {
-          id: createSafeId<"contact">(),
           type,
           displayName,
           ...projectContactCreateFields(input),
@@ -1189,6 +1189,7 @@ const handleDeleteContactTool: TypedMcpToolHandler<
       organizationId: context.organizationId,
       contactId: brandPersistedContactId(parsed.output.contact_id),
       recordAuditEvent: context.recordAuditEvent,
+      flushWorkspaceSearchRepairs,
     }),
   );
   if (Result.isError(deleted)) {

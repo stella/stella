@@ -36,6 +36,7 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { testModelActionAdmitter } from "@/api/tests/helpers/model-dispatch-admission";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { DOCUMENT_TYPE_NOT_FOUND_MESSAGE } from "./assert-document-type";
 import { createPlaybookDefinitionHandler } from "./create-shared";
@@ -541,9 +542,9 @@ if (!databaseUrl || !runPostgresTests) {
                   .where(
                     eq(propertyDependencies.workspaceId, fixture.workspaceId),
                   );
-                await saveDb
-                  .delete(organization)
-                  .where(eq(organization.id, fixture.organizationId));
+                await deleteOrganizationsForTest(saveDb, [
+                  fixture.organizationId,
+                ]);
               }
             }
           });

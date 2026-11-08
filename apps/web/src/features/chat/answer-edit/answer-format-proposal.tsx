@@ -19,7 +19,11 @@ import { useQueryViewError } from "@/lib/use-query-view";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 import type { AnswerEditProposal } from "./answer-edit-api";
-import { AnswerEditNotice, AnswerEditPanel } from "./answer-edit-panel";
+import {
+  AnswerEditFrame,
+  AnswerEditNotice,
+  AnswerEditPanel,
+} from "./answer-edit-panel";
 import type { AnswerFormatPanelProps } from "./answer-format-panel";
 import { formatAnswerSpan } from "./markdown-format.logic";
 import type { AnswerFormatAction } from "./markdown-format.logic";
@@ -59,10 +63,8 @@ export const AnswerFormatProposal = ({
       "answer-format.refresh",
     );
   const staleNotice = (
-    <div
-      role="dialog"
+    <AnswerEditFrame
       aria-label={t("chat.answerEdit.textStyle")}
-      tabIndex={-1}
       ref={(node) => {
         if (node === null) {
           return undefined;
@@ -80,7 +82,7 @@ export const AnswerFormatProposal = ({
       }}
     >
       <AnswerEditNotice status="stale" onCancel={cancelStale} />
-    </div>
+    </AnswerEditFrame>
   );
   const focusCancelablePanel = (node: HTMLDivElement | null) => {
     if (node === null) {
@@ -133,18 +135,16 @@ export const AnswerFormatProposal = ({
   useQueryViewError(view, "AnswerFormatProposal:snapshot");
   if (refreshError) {
     return (
-      <div
+      <AnswerEditFrame
         className="w-80 p-2"
         ref={focusCancelablePanel}
-        role="dialog"
         aria-label={t("chat.answerEdit.textStyle")}
-        tabIndex={-1}
       >
         <p role="alert">{t("errors.actionFailed")}</p>
         <Button size="sm" onClick={cancelStale}>
           {t("common.retry")}
         </Button>
-      </div>
+      </AnswerEditFrame>
     );
   }
   if (result.status === "unchanged") {
@@ -152,44 +152,38 @@ export const AnswerFormatProposal = ({
   }
   if (result.status === "unsupported") {
     return (
-      <div
+      <AnswerEditFrame
         className="w-80 space-y-2 p-2"
         ref={focusCancelablePanel}
-        role="dialog"
         aria-label={t("chat.answerEdit.textStyle")}
-        tabIndex={-1}
       >
         <p role="alert">{t(UNSUPPORTED_FORMAT_LABEL_KEYS[result.reason])}</p>
         <Button size="sm" variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
-      </div>
+      </AnswerEditFrame>
     );
   }
   switch (view.type) {
     case "pending":
       return (
-        <div
+        <AnswerEditFrame
           className="w-80 p-2"
           ref={focusCancelablePanel}
-          role="dialog"
           aria-label={t("chat.answerEdit.textStyle")}
-          tabIndex={-1}
         >
           <p role="status">{t("common.loading")}</p>
           <Button size="sm" variant="ghost" onClick={onCancel}>
             {t("common.cancel")}
           </Button>
-        </div>
+        </AnswerEditFrame>
       );
     case "error":
       return (
-        <div
+        <AnswerEditFrame
           className="w-80 space-y-2 p-2"
           ref={focusCancelablePanel}
-          role="dialog"
           aria-label={t("chat.answerEdit.textStyle")}
-          tabIndex={-1}
         >
           <p role="alert">{t("errors.actionFailed")}</p>
           <Button
@@ -202,7 +196,7 @@ export const AnswerFormatProposal = ({
           <Button size="sm" variant="ghost" onClick={onCancel}>
             {t("common.cancel")}
           </Button>
-        </div>
+        </AnswerEditFrame>
       );
     case "empty":
       return staleNotice;

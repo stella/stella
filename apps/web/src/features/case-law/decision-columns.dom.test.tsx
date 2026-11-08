@@ -1,11 +1,12 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type {
   Decision,
   DecisionRenderContext,
 } from "@/features/case-law/components/decision-cells";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/eu/cases" });
 

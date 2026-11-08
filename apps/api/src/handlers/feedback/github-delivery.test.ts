@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
 import { FEEDBACK_LIMITS } from "@stll/api-contract/feedback";
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
@@ -10,7 +10,10 @@ import {
   composeGithubIssueTitle,
 } from "@/api/handlers/feedback/report-body";
 import { GITHUB_TITLE_MAX_LENGTH } from "@/api/lib/github/outbound-text";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const report: FeedbackReportInput = {
   kind: "bug",
@@ -42,15 +45,19 @@ const fileReport = async (
   sent: SentIssue[];
 }> => {
   const sent: SentIssue[] = [];
-  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
-      sent.push({
-        url: requestUrl(input),
-        body: JSON.parse(typeof init?.body === "string" ? init.body : "null"),
-      });
-      return response;
-    }),
+  const fetchSpy = Object.assign(
+    mock(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
+        sent.push({
+          url: requestUrl(input),
+          body: JSON.parse(typeof init?.body === "string" ? init.body : "null"),
+        });
+        return response;
+      }),
+    ),
+    { preconnect: globalThis.fetch.preconnect },
   );
+  testFetchState.set(fetchSpy);
   try {
     const result = await createGithubFeedbackIssue({
       config: { repo: "o/r", token: "t" },
@@ -66,7 +73,7 @@ const fileReport = async (
     });
     return { result, sent };
   } finally {
-    fetchSpy.mockRestore();
+    testFetchState.restore();
   }
 };
 

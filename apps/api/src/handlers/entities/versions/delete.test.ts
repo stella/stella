@@ -304,6 +304,20 @@ describe("delete-version chain-of-custody guard", () => {
             "Window-cache provenance reads only the newest version ID across tombstones; matching it to the admitted live current version prevents a rollback from reusing stale extracted text.",
         },
       ],
+      "handlers/entities/copy-utils.ts": [
+        {
+          anchor: "movedVersionRows(sourceWorkspaceId, sourceIds)",
+          reason:
+            "A move carries every version, tombstones included: its limit check and row lock read exactly the rows the move snapshot carries, as IDs and counts only, and serve no content.",
+        },
+      ],
+      "lib/entity-versions/insert-entity-version.ts": [
+        {
+          anchor: "tombstoned version moves with its tombstone",
+          reason:
+            "A move carries each version's verification code with it, a tombstoned version's included, so the code keeps resolving to nothing on the target; reads ID and code only under FOR UPDATE.",
+        },
+      ],
       "mcp/document-tools.ts": [
         {
           anchor: "Provenance fence: include tombstones",
@@ -467,6 +481,11 @@ describe("delete-version chain-of-custody guard", () => {
       string,
       { anchor: string; reason: string }
     > = {
+      "lib/entity-versions/insert-entity-version.ts": {
+        anchor: "verificationCode: null",
+        reason:
+          "A move clears the codes it just read and locked FOR UPDATE, tombstoned versions included, because each code travels with its version; it touches verificationCode only.",
+      },
       "lib/entity-versions/compute-version-diff.ts": {
         anchor: "diffWordsAdded",
         reason:

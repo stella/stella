@@ -4,11 +4,11 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
 
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
 import type { OrganizationSettings } from "@/queries/organization-settings";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, fireEvent, render, waitFor } =

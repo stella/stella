@@ -35,6 +35,8 @@ const commandCost = (command: BrowserControlCommand): CommandCost => {
     case BROWSER_CONTROL_ACTION.goBack:
     case BROWSER_CONTROL_ACTION.open:
       return { actions: 1, navigations: 1 };
+    // Switching moves control to a page already loaded; nothing navigates.
+    case BROWSER_CONTROL_ACTION.switchTab:
     case BROWSER_CONTROL_ACTION.click:
     case BROWSER_CONTROL_ACTION.fill:
     case BROWSER_CONTROL_ACTION.pressKey:

@@ -1,5 +1,60 @@
 # @stll/chat
 
+## 0.4.0
+
+### Minor Changes
+
+- [#7427](https://github.com/stella/stella/pull/7427) [`d05a124`](https://github.com/stella/stella/commit/d05a124a296d0426288f86684f0c77c1b1072db4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ChatModelSelector` now renders the `@stll/ui` select (a button and a popup list) instead of a native `<select>`: a host must load the `@stll/ui` stylesheet (`@stll/ui/theme.css` with Tailwind scanning `@stll/ui`) for it to draw. `ChatLink` shows its new-tab notice or source title as a tooltip and as the link's accessible description. The condition builder's number fields use `NumberInput` without locale grouping.
+
+### Patch Changes
+
+- [#7855](https://github.com/stella/stella/pull/7855) [`f68c520`](https://github.com/stella/stella/commit/f68c52006a9d18719b5850d35a9dd2ab42ba50ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ChatLink` takes a `fullLabel` option for tray chips whose label should keep the available width instead of the compact 20-character cap, and a tray chip's site icon is now centred on the label.
+
+- [#7199](https://github.com/stella/stella/pull/7199) [`84ac48f`](https://github.com/stella/stella/commit/84ac48f7bc54f170b72491c21c1c45dc6fb88c2b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible editor dependencies.
+- Updated dependencies [[`21f18d7`](https://github.com/stella/stella/commit/21f18d7eae6c328149c77ebf2a1baff624de33c6), [`e5ee9a9`](https://github.com/stella/stella/commit/e5ee9a9c120441b0bea4476df78e1432ace3146d), [`254bf05`](https://github.com/stella/stella/commit/254bf058b481c2ea137f8e37664a37b80c537190), [`72b68c8`](https://github.com/stella/stella/commit/72b68c8fc423618a9e060ead157dc3f2f30e1583)]:
+  - @stll/ui@0.66.0
+
+## 0.3.5
+
+### Patch Changes
+
+- [#7838](https://github.com/stella/stella/pull/7838) [`a8c6d13`](https://github.com/stella/stella/commit/a8c6d133b99d6f7440bc90f864501ff2a60bb8b5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Bare file names whose extension is also a top-level domain (for example `memo.md`, `smlouva.pl`, `build.sh`) are no longer detected as links. Such a name becomes a link only when it carries a scheme, a `www.` prefix or a path.
+
+- [#7418](https://github.com/stella/stella/pull/7418) [`68eeb7e`](https://github.com/stella/stella/commit/68eeb7e7dadeeca9efdd6458472a6a3b9187e173) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `htmlToMarkdown` loads HTML through `@stll/html` instead of Cheerio's main entry, so the chat package no longer bundles Cheerio's byte decoders or HTTP client.
+- Updated dependencies [[`68eeb7e`](https://github.com/stella/stella/commit/68eeb7e7dadeeca9efdd6458472a6a3b9187e173), [`14ae497`](https://github.com/stella/stella/commit/14ae497b31a86e96931d734fd3441c4bbe8aac29), [`b94d282`](https://github.com/stella/stella/commit/b94d282e58eb483f7abf6cc7e81b859c7709ce3b)]:
+  - @stll/html@0.1.0
+  - @stll/ai-catalog@0.10.1
+  - @stll/ui@0.65.0
+
+## 0.3.4
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/ui@0.64.0
+
+## 0.3.3
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/ai-catalog@0.10.0
+  - @stll/ui@0.63.0
+
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [[`adf1c80`](https://github.com/stella/stella/commit/adf1c80ebf26167d25ca898c5a84ab2ec7f3f7df), [`8c6d81b`](https://github.com/stella/stella/commit/8c6d81bce91505c9adb7a4ce110e59ca9f14d995), [`1a9cfef`](https://github.com/stella/stella/commit/1a9cfefef3dffb7d7dd7b719b274a3a17038a7d3), [`2d19088`](https://github.com/stella/stella/commit/2d19088ff7e50ef7c05626cb0acea99d833ee040), [`9a630f2`](https://github.com/stella/stella/commit/9a630f22434730827a062f801da6dba99c1ff470), [`d606df6`](https://github.com/stella/stella/commit/d606df66432d07b47ffac383ef63489f7a3d881f), [`18d7fab`](https://github.com/stella/stella/commit/18d7fabf3c8b36d91f3520e327a4ebae17f5cee0), [`d9f4906`](https://github.com/stella/stella/commit/d9f49066d72b5e611e7ab38b3d041a87bb252d28), [`e88b3ff`](https://github.com/stella/stella/commit/e88b3fff72fa8bcf7c81a66c54b58c425ab1fee7)]:
+  - @stll/ui@0.62.0
+
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`a2ff7a7`](https://github.com/stella/stella/commit/a2ff7a75f1f1f0d1cc9e64517449fe2462a2e636)]:
+  - @stll/ui@0.61.0
+
 ## 0.3.0
 
 ### Minor Changes
