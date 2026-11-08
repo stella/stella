@@ -104,13 +104,14 @@ const MAX_MODEL_PAGES = 20;
 const USER_AGENT_VERSION = /^[^/\s]+\/(\S+)/u;
 
 /** What this adapter does with Codex. */
-const CODEX_CAPABILITIES = {
+// Typed, not literal: every row could turn off, so each is a real check.
+const CODEX_CAPABILITIES: Readonly<Record<HarnessCapability, boolean>> = {
   approvals: true,
   interrupt: true,
   resume: true,
   // The turn's images open `turn/start` as image items.
   image_input: true,
-} as const satisfies Record<HarnessCapability, boolean>;
+};
 
 /** Codex takes images as input; a PDF stays a path the agent opens. */
 const CODEX_INPUT_FILE_TYPES = [

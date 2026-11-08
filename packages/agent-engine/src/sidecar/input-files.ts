@@ -31,7 +31,7 @@ export const MAX_INPUT_IMAGE_BYTES = (5 * 1024 * 1024 * 3) / 4;
  * take about a third of that once encoded. They also stay below the 16 MiB
  * line the adapters read back when Codex echoes the user message.
  */
-export const MAX_INPUT_PDF_BYTES = 8 * 1024 * 1024;
+const MAX_INPUT_PDF_BYTES = 8 * 1024 * 1024;
 export const MAX_INPUT_TURN_BYTES = 8 * 1024 * 1024;
 /** Claude reads at most 100 PDF pages per request. */
 export const MAX_INPUT_PDF_PAGES = 100;
@@ -39,7 +39,7 @@ export const MAX_INPUT_PDF_PAGES = 100;
 export const MAX_INPUT_FILES = 20;
 
 /** Why a named file stays a path only; logged without its name. */
-export type InputFileSkip =
+type InputFileSkip =
   | WorkspaceFileRefusal
   | "unsupported_type"
   | "not_accepted"
@@ -86,8 +86,8 @@ const namedIn = (
 type Sniffed =
   { type: "image"; mediaType: HarnessImageMediaType } | { type: "pdf" };
 
-const ascii = (text: string) =>
-  [...text].map((character) => character.codePointAt(0) ?? 0);
+/** The bytes of a signature written in ASCII. */
+const ascii = (text: string) => [...new TextEncoder().encode(text)];
 
 const PNG_SIGNATURE = [0x89, ...ascii("PNG"), 0x0d, 0x0a, 0x1a, 0x0a];
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];

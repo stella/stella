@@ -101,13 +101,14 @@ export type ClaudeCodeHarnessAdapterOptions = {
 };
 
 /** What this adapter does with Claude Code. */
-const CLAUDE_CODE_CAPABILITIES = {
+// Typed, not literal: every row could turn off, so each is a real check.
+const CLAUDE_CODE_CAPABILITIES: Readonly<Record<HarnessCapability, boolean>> = {
   approvals: true,
   interrupt: true,
   resume: true,
   // The turn's images and PDFs open the user message as content blocks.
   image_input: true,
-} as const satisfies Record<HarnessCapability, boolean>;
+};
 
 /** Claude reads images and PDFs as model input. */
 const CLAUDE_CODE_INPUT_FILE_TYPES = [
