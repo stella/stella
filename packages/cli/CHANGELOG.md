@@ -1,5 +1,23 @@
 # @stll/cli
 
+## 6.8.3
+
+### Patch Changes
+
+- [#7940](https://github.com/stella/stella/pull/7940) [`ad81543`](https://github.com/stella/stella/commit/ad81543e9c85c79cc921caa5b72d7ee39cde94c3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `properties create` and `properties batch-create` accept `toolType: "ai-model"` for a money column, and `properties prompt-suggest` accepts the `money` content type. An AI money column requires the `table-analysis` feature.
+
+- [#7948](https://github.com/stella/stella/pull/7948) [`f0bb587`](https://github.com/stella/stella/commit/f0bb587b3b56b0f59c2e366c6fbf844a1d85a123) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `fields cell-metadata-update` accepts `overrideReason`: why a person replaced the value a run produced in a cell. It is refused with `cell_override_absent` on a cell that holds no such replacement.
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible runtime dependencies: `@stll/time` 0.4.2, `temporal-polyfill` 1.0.6, `lucide-react` 1.65.0, Tiptap 3.32.1 and the MCP client 2.4.0.
+
+- [#8045](https://github.com/stella/stella/pull/8045) [`f89caa2`](https://github.com/stella/stella/commit/f89caa2e730c7da753ccd0efe2e67785e77732cf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law read --query` says which words a query with no match could not find together, and which query to try next. It still returns no paragraph unless one holds every word.
+
+- [#8046](https://github.com/stella/stella/pull/8046) [`34d9234`](https://github.com/stella/stella/commit/34d923482605050a0c62be2e17b3e820886cea0d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law search`, `stella legislation search` and `stella legislation read` results carry the publisher link once, as `source_url`. The duplicate `sourceUrl` field is gone.
+
+- [#8041](https://github.com/stella/stella/pull/8041) [`72ba870`](https://github.com/stella/stella/commit/72ba8701d59996f51b43a4f77b3aa42411f355f1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law resolve` returns a decision's identity and whether its text can be read, not the text. Read the text with `stella case-law read`.
+- Updated dependencies [[`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88)]:
+  - @stll/agent-input@0.4.2
+
 ## 6.8.2
 
 ### Patch Changes
