@@ -44,6 +44,7 @@ import {
   isTag,
   isText,
 } from "@stll/html/nodes";
+import { isTableOfContentsEntry } from "@stll/legal-ast/contents-entry";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
 import type {
@@ -53,17 +54,24 @@ import type {
   ParagraphRole,
   TableCell,
 } from "@stll/legal-ast/document-ast";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import {
+  hasInlineChildren,
+  startsDecisionBody,
+} from "@stll/legal-ast/document-ast";
+import {
+  containsPlOperativeVerb,
   isPlClosingLine,
+  isPlCompositionLine,
   isPlHoldingHeading,
+  isPlLegalBasisRuling,
   isPlNumberedReasonsHeading,
   isPlOpeningRecital,
   isPlReasonsHeading,
   isPlSignatureBlank,
   isPlSignatureLine,
+  namesPlDocumentType,
+  opensPlRuling,
   opensWithPlSignatureTitle,
-  startsWithPlOperativeVerb,
 } from "@stll/legal-ast/polish-document-roles";
 import { collapseLetterSpacing } from "@stll/text-normalize";
 
@@ -118,6 +126,13 @@ type ParsePlDecisionInput = {
    * the unwrapped reading their stored documents were made with.
    */
   superscripts?: boolean | undefined;
+  /**
+   * Read a short line set wholly in bold between paragraphs of the reasons
+   * as a subheading. A PDF's text layer prints its subheadings so; a
+   * publisher's markup marks its headings itself and sets names and
+   * signatures in bold too.
+   */
+  boldSubheadings?: boolean | undefined;
   /** IDs of footnotes actually parsed from this document; all other links keep URL sanitization. */
   footnoteIds?: readonly string[] | undefined;
   /**
@@ -175,8 +190,33 @@ const DECISION_TITLES: ReadonlySet<string> = new Set(
 );
 const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt[:\s]/iu;
 const DECISION_ITEM_PREFIX_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
+const DECISION_ITEM_MARKER_RE =
+  /^(?<marker>[IVXLCDM]+|\d+|[a-z])[.)](?:\s+|$)/iu;
+
+/** How a list numbers its points: `1)`, `I.`, `a)`. */
+type ItemFamily = "arabic" | "roman" | "letter";
+
+const itemFamilyOf = (text: string): ItemFamily | undefined => {
+  const marker = DECISION_ITEM_MARKER_RE.exec(text)?.groups?.["marker"];
+  if (marker === undefined) {
+    return undefined;
+  }
+  if (/^\d+$/u.test(marker)) {
+    return "arabic";
+  }
+  // One lowercase letter is a letter point; `ii`, `I`, `IV` are Roman.
+  return /^[IVXLCDM]+$/u.test(marker) || /^[ivxlcdm]{2,}$/u.test(marker)
+    ? "roman"
+    : "letter";
+};
+/**
+ * A one-letter marker other than a list's first (`a)`, `i.`): in the head
+ * matter it is an abbreviation (`s. J. urodz.`, "son of"; `c.`, "daughter
+ * of"), not a ruling point, since a ruling's lettered points start at `a`.
+ * Numbered and multi-letter Roman points are never read this way.
+ */
+const LETTER_ABBREVIATION_PREFIX_RE = /^[b-hj-z][.)](?:\s+|$)/iu;
 const AUTHORITY_DECISION_TITLE_RE = /^decyzja\s+nr\b/iu;
-const COMPOSITION_LINE_RE = /\bw składzie\s*:/iu;
 const PANEL_MEMBER_RE = /^(?:SSN|SSA|SSO|SSR)\b|\(ławnik[^)]*\)$/iu;
 const CLERK_MARK_RE = /^\[(?:\p{L}{2,3}|\p{L}\.(?:\p{L}\.?){1,3})\]$/u;
 const CLERK_INITIALS_RE = /^(?:\p{Lu}\.){1,4}$/u;
@@ -198,10 +238,19 @@ type ParserState = {
   sawDecisionTitle: boolean;
   decisionTitle: string | undefined;
   fallbackDecisionTitle: string | undefined;
+  /** The document's type as its publisher declares it, which its title names. */
+  declaredType: string | undefined;
   normalizedCaseNumber: string;
   panelNames: string[];
   superscripts: boolean;
+  boldSubheadings: boolean;
   markup: PlDecisionMarkup | undefined;
+  /**
+   * How the list a recital announced numbers its points (`… o zbadanie:`
+   * then `1)`, `2)`, `a)`): its points, and the points nested under them,
+   * stay in the recital; a point numbered otherwise opens the ruling.
+   */
+  recitalList: ItemFamily | undefined;
   /** A list item's marker, waiting to open the item's first paragraph. */
   pendingMarker: Inline[] | undefined;
   listMarkers: WeakMap<Element, WeakMap<Element, string | null>>;
@@ -254,18 +303,22 @@ const normalizeDecisionTitle = (
 
 type CreateStateOptions = {
   superscripts: boolean;
+  boldSubheadings: boolean;
   markup: PlDecisionMarkup | undefined;
   caseNumber: string;
   fallbackDecisionTitle: string | undefined;
+  declaredType: string | undefined;
   footnoteIds: readonly string[] | undefined;
 };
 
 const createState = ({
   footnoteIds,
   superscripts,
+  boldSubheadings,
   markup,
   caseNumber,
   fallbackDecisionTitle,
+  declaredType,
 }: CreateStateOptions): ParserState => ({
   blocks: [],
   blockIndex: 0,
@@ -277,11 +330,14 @@ const createState = ({
   sawDecisionTitle: false,
   decisionTitle: undefined,
   fallbackDecisionTitle,
+  declaredType,
   normalizedCaseNumber: caseNumber.replace(/\s+/gu, " ").trim(),
   panelNames: [],
   footnoteHrefs: new Set(footnoteIds?.map((noteId) => `#${noteId}`)),
   superscripts,
+  boldSubheadings,
   markup,
+  recitalList: undefined,
   pendingMarker: undefined,
   listMarkers: new WeakMap(),
   listItemBoundaries: new WeakMap(),
@@ -648,6 +704,53 @@ const orderedListMarker = (
   return marker ?? undefined;
 };
 
+/**
+ * A recital line that announces a list of its own (`… o zbadanie:`): the
+ * points under it are the provisions or claims the recital names, not the
+ * ruling, which a line that rules (`… orzeka:`) would open. The bench line
+ * (`w składzie:`) announces its members, and the ruling follows it.
+ */
+const announcesRecitalList = (previous: Block | undefined): boolean =>
+  previous?.type === "paragraph" &&
+  previous.role === "intro" &&
+  previous.plainText.trimEnd().endsWith(":") &&
+  !containsPlOperativeVerb(previous.plainText);
+
+const WORD_CHAR_RE = /[\p{L}\p{N}]/u;
+/**
+ * A block of marks alone (`-`, `.`, `<■`): noise of the text layer or the
+ * publisher's export. An elision the publisher printed (`(...)`) stands for
+ * the court's words and keeps its place.
+ */
+const MARKS_ONLY_RE = /^[-–—.,;:·•*_<>■□▪]+$/u;
+
+/** Longest line a subheading set in bold runs to. */
+const BOLD_SUBHEADING_MAX_CHARS = 120;
+const TERMINAL_MARK_RE = /[.,;:!?…]$/u;
+/** The outline number a subheading may open with (`2.1.`, `5.2.1.2`). */
+const OUTLINE_NUMBER_RE = /^\d{1,2}(?:\.\d{1,2}){0,4}\.? /u;
+const DIGIT_RE = /\p{N}/u;
+
+/**
+ * A short line set wholly in bold between paragraphs of the reasons, with no
+ * ruling number, no closing mark and no figures past its outline number
+ * (`Platforma i jej uczestnicy`, `2.1. Katalog produktów`): the PDF's
+ * subheading, which its text layer prints as a paragraph of its own. A bold
+ * row of a table carries its figures and stays a paragraph.
+ */
+const isBoldSubheading = (inlines: readonly Inline[], plainText: string) =>
+  plainText.length <= BOLD_SUBHEADING_MAX_CHARS &&
+  WORD_CHAR_RE.test(plainText) &&
+  !TERMINAL_MARK_RE.test(plainText) &&
+  !DECISION_ITEM_PREFIX_RE.test(plainText) &&
+  !DIGIT_RE.test(plainText.replace(OUTLINE_NUMBER_RE, "")) &&
+  inlines.some((inline) => inline.type === "bold") &&
+  inlines.every(
+    (inline) =>
+      inline.type === "bold" ||
+      (inline.type === "text" && inline.text.trim() === ""),
+  );
+
 /** The blank a signing label leaves for the signature, under that label. */
 const signsBlank = (state: ParserState, plainText: string): boolean => {
   const previous = state.blocks.at(-1);
@@ -669,13 +772,23 @@ const inferParagraphRole = (
 
   const numbered = DECISION_ITEM_PREFIX_RE.test(normalizedText);
   const previous = state.blocks.at(-1);
+  // A point that rules on its own legal basis (`I. Na podstawie art. 27 …
+  // uznaje …`) opens the ruling wherever the head matter ends, with or
+  // without a line that names the ruling's verb first.
   const isStructuredHolding =
     numbered &&
-    (state.section === "composition" ||
-      state.section === "recital" ||
-      (previous?.type === "heading" && previous.role === "decision-title"));
+    (((state.section === "composition" || state.section === "recital") &&
+      !LETTER_ABBREVIATION_PREFIX_RE.test(normalizedText)) ||
+      (previous?.type === "heading" && previous.role === "decision-title") ||
+      opensPlRuling(normalizedText) ||
+      isPlLegalBasisRuling(
+        normalizedText.replace(DECISION_ITEM_PREFIX_RE, ""),
+      ));
+  // The ruling also opens on its legal basis when the same sentence rules
+  // (`Na podstawie art. 14b … stwierdza, że …`).
   const isUnnumberedOperative =
-    !numbered && startsWithPlOperativeVerb(normalizedText);
+    !numbered &&
+    (opensPlRuling(normalizedText) || isPlLegalBasisRuling(normalizedText));
   const signatureText = normalizedText.replace(/\[[\p{L}]{1,3}\]$/u, "").trim();
   const panelTokens = state.panelNames
     .flatMap((name) => name.split(/\s+/u))
@@ -749,20 +862,75 @@ const rememberPanelMember = (
   }
 };
 
+/**
+ * The family of a point that belongs to the list its recital announced, or
+ * nothing when the point is not one: a point under a recital line ending
+ * `:` with no operative verb starts the list, and a point of the same
+ * family, or a letter point nested under one, goes on with it.
+ */
+const recitalListItem = (
+  state: ParserState,
+  plainText: string,
+): ItemFamily | undefined => {
+  if (state.section !== "recital") {
+    return undefined;
+  }
+  const family = itemFamilyOf(plainText.replace(/\s+/gu, " ").trim());
+  if (family === undefined) {
+    return undefined;
+  }
+  if (announcesRecitalList(state.blocks.at(-1))) {
+    return family;
+  }
+  return state.recitalList !== undefined &&
+    (family === state.recitalList || family === "letter")
+    ? state.recitalList
+    : undefined;
+};
+
 const classifyParagraph = (
   state: ParserState,
   plainText: string,
 ): ParagraphRole | undefined => {
+  const listed = recitalListItem(state, plainText);
+  if (listed !== undefined) {
+    // The list goes on across the recital's own lines between its points.
+    state.recitalList = listed;
+    return "intro";
+  }
+  // A printed table of contents is the document's navigation: apparatus
+  // in the head matter, a publisher's note once the decision's body has
+  // begun, since head matter never follows the body.
+  if (isTableOfContentsEntry(plainText)) {
+    return state.blocks.some(startsDecisionBody)
+      ? "publisher-note"
+      : "apparatus";
+  }
   const role = inferParagraphRole(state, plainText);
+  // A block of marks alone (`-`, `.`) is no part of the decision's text,
+  // unless it is the blank a signature is written on.
+  if (
+    role !== "signature" &&
+    MARKS_ONLY_RE.test(plainText.replaceAll(" ", ""))
+  ) {
+    return undefined;
+  }
   rememberPanelMember(state, plainText, role);
+  // The bench signs under its ruling: what follows the signatures is not
+  // the ruling, but the reasons, whether or not they carry a heading.
+  if (state.section === "holding" && role === "signature") {
+    state.section = "reasoning";
+    return role;
+  }
   if (role === "holding") {
     state.section = "holding";
+    state.recitalList = undefined;
     return role;
   }
   if (state.section === "preamble" || state.section === "composition") {
     if (isPlOpeningRecital(plainText)) {
       state.section = "recital";
-    } else if (COMPOSITION_LINE_RE.test(plainText)) {
+    } else if (isPlCompositionLine(plainText)) {
       state.section = "composition";
     }
   }
@@ -793,6 +961,21 @@ const handleHeadingText = (
   ) {
     pushHeading(state, 2, plainText, "section-heading", inlines);
     state.section = "reasoning";
+    return true;
+  }
+
+  // A document titled by its own type (`INTERPRETACJA INDYWIDUALNA`) has
+  // that title, whatever the type: the reasons heading after it is a
+  // section of the document, not its title.
+  if (
+    !state.sawDecisionTitle &&
+    state.declaredType !== undefined &&
+    !isDecisionTitleText(plainText) &&
+    namesPlDocumentType(plainText, state.declaredType)
+  ) {
+    pushHeading(state, 1, plainText, "decision-title", inlines);
+    state.sawDecisionTitle = true;
+    state.decisionTitle = plainText;
     return true;
   }
 
@@ -872,6 +1055,16 @@ const parseParagraphElement = (
     itemMarker === undefined &&
     handleHeadingText(state, plainText, inlines)
   ) {
+    return true;
+  }
+
+  if (
+    itemMarker === undefined &&
+    state.boldSubheadings &&
+    state.section === "reasoning" &&
+    isBoldSubheading(inlines, plainText)
+  ) {
+    pushHeading(state, 3, plainText, "section-heading", inlines);
     return true;
   }
 
@@ -1151,6 +1344,7 @@ const parseNode = (
       isPlSignatureLine(plainText)
     ) {
       pushParagraph(state, plainText, inlines, "signature");
+      state.section = "reasoning";
       return;
     }
 
@@ -1600,9 +1794,11 @@ export const parsePlDecisionContent = (
   const state = createState({
     footnoteIds: input.footnoteIds,
     superscripts: input.superscripts === true,
+    boldSubheadings: input.boldSubheadings === true,
     markup: input.markup,
     caseNumber: input.caseNumber,
     fallbackDecisionTitle: normalizeDecisionTitle(input.decisionType),
+    declaredType: input.decisionType,
   });
 
   if (hasHtmlTags(input.content)) {

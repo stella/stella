@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-uodo] only adds the ruling, composition, legal-basis ruling and document-type predicates, which the data-protection reader does not call; its recital reading is unchanged.
 /**
  * How a Polish decision names its own parts: the operative verbs its ruling
  * opens with, the reasons heading, the recital before the ruling, the closing
@@ -13,6 +14,16 @@
 import { panic } from "better-result";
 
 import { collapseSpacedLetters } from "@stll/text-normalize";
+
+/**
+ * A line as the grammar reads it: spaced letters joined, whitespace single.
+ * A gap wider than one space, or a line break, separates words, so spaced
+ * letters are joined before the whitespace collapses.
+ */
+const grammarLine = (text: string): string =>
+  collapseSpacedLetters(text.replaceAll(/[^\S ]+/gu, "  "))
+    .replaceAll(/\s+/gu, " ")
+    .trim();
 
 /** Third-person and infinitive forms used at the opening of Polish rulings. */
 type PolishVerbInflection =
@@ -74,7 +85,7 @@ const POLISH_OPERATIVE_LEMMAS = [
   { lemma: "odrzucać", inflection: "final-ć" },
   { lemma: "odrzucić", inflection: "final-ć" },
   { lemma: "ustalać", inflection: "final-ć" },
-  { lemma: "ustalić", inflection: "final-ć" },
+  { lemma: "ustalić", inflection: "final-ć", holdingHeading: "past" },
   { lemma: "przyjmować", inflection: "ować-to-uje" },
   { lemma: "przyjąć", inflection: "ąć-to-mie" },
   { lemma: "przyznawać", inflection: "awać-to-aje" },
@@ -161,7 +172,19 @@ const POLISH_OPERATIVE_START = new RegExp(
 
 /** Whether text begins with a listed Polish operative verb form. */
 export const startsWithPlOperativeVerb = (text: string): boolean =>
-  POLISH_OPERATIVE_START.test(text.trimStart());
+  POLISH_OPERATIVE_START.test(grammarLine(text));
+
+const POLISH_OPERATIVE_WORD = new RegExp(
+  `(?<!\\p{L})(?:${POLISH_OPERATIVE_FORMS.join("|")})(?!\\p{L})`,
+  "iu",
+);
+
+/**
+ * Whether a line rules: it holds a listed operative verb form anywhere, as
+ * a ruling point does that opens on its object ("I. powództwo oddala").
+ */
+export const containsPlOperativeVerb = (text: string): boolean =>
+  POLISH_OPERATIVE_WORD.test(grammarLine(text));
 
 const holdingHeadingForms = POLISH_OPERATIVE_LEMMAS.flatMap((entry) => {
   if (!("holdingHeading" in entry)) {
@@ -183,22 +206,34 @@ const POLISH_HOLDING_HEADING = new RegExp(
 
 /** Whether text is a bare Polish operative section heading. */
 export const isPlHoldingHeading = (text: string): boolean =>
-  POLISH_HOLDING_HEADING.test(text.trim());
-
-/**
- * A line as the grammar reads it: spaced letters joined, whitespace single.
- * A gap wider than one space, or a line break, separates words, so spaced
- * letters are joined before the whitespace collapses.
- */
-const grammarLine = (text: string): string =>
-  collapseSpacedLetters(text.replaceAll(/[^\S ]+/gu, "  "))
-    .replaceAll(/\s+/gu, " ")
-    .trim();
+  POLISH_HOLDING_HEADING.test(grammarLine(text));
 
 const REASONS_HEADING_RE = /^uzasadnienie\b/iu;
 // The editor numbers the reasons on from the operative points when they
 // share one outline ("V. UZASADNIENIE" after point IV).
 const NUMBERED_REASONS_HEADING_RE = /^[IVXLC]+\s*[.)]\s*uzasadnienie$/iu;
+
+/** A ruling point's number, set apart or run on to its verb (`I.zmienia`). */
+const RULING_POINT_MARKER_RE = /^(?:[IVXLCDM]+|\d+|[a-z])[.)] ?/u;
+
+/**
+ * Whether a line opens a ruling: a holding heading (`postanawia:`), or an
+ * operative verb, alone or after the point's number (`1. zasądza`,
+ * `I.zmienia`).
+ */
+export const opensPlRuling = (text: string): boolean => {
+  const line = grammarLine(text);
+  return (
+    isPlHoldingHeading(line) ||
+    startsWithPlOperativeVerb(line.replace(RULING_POINT_MARKER_RE, ""))
+  );
+};
+
+const COMPOSITION_LINE_RE = /\bw składzie(?: następującym)?\s?:/iu;
+
+/** Whether a line opens the bench (`w składzie:`, `w składzie następującym:`). */
+export const isPlCompositionLine = (text: string): boolean =>
+  COMPOSITION_LINE_RE.test(grammarLine(text));
 
 /** Whether a line opens the reasons (`Uzasadnienie`, `U z a s a d n i e n i e`). */
 export const isPlReasonsHeading = (text: string): boolean =>
@@ -209,11 +244,48 @@ export const isPlNumberedReasonsHeading = (text: string): boolean =>
   NUMBERED_REASONS_HEADING_RE.test(grammarLine(text));
 
 const OPENING_RECITAL_RE =
-  /^(?:po rozpoznaniu|po rozpatrzeniu|na posiedzeniu|na rozprawie|w sprawie)\b/iu;
+  /^(?:po rozpoznaniu|po rozpatrzeniu|po przeprowadzeniu|na posiedzeniu|na rozprawie|w sprawie)\b/iu;
 
 /** Whether a line opens the recital that names the hearing and the case. */
 export const isPlOpeningRecital = (text: string): boolean =>
   OPENING_RECITAL_RE.test(grammarLine(text));
+
+const LEGAL_BASIS_RE = /^na podstawie\b/iu;
+
+/**
+ * Whether a line is the head matter before the ruling: the recital, or the
+ * legal basis the authority decides on (`Na podstawie art. 104 § 1 …`),
+ * with no operative verb of its own. The same words inside a ruling point
+ * that also rules ("na podstawie art. 4 … umorzyć") are the ruling.
+ */
+export const isPlRecitalLine = (text: string): boolean => {
+  const line = grammarLine(text);
+  return (
+    (OPENING_RECITAL_RE.test(line) || LEGAL_BASIS_RE.test(line)) &&
+    !POLISH_OPERATIVE_WORD.test(line)
+  );
+};
+
+/**
+ * Whether a line is the authority's ruling sentence on its legal basis:
+ * the basis, then the operative verb (`Na podstawie art. 14b § 1 … Dyrektor
+ * … stwierdza, że stanowisko … jest nieprawidłowe.`). The basis alone is the
+ * head matter before the ruling.
+ */
+export const isPlLegalBasisRuling = (text: string): boolean => {
+  const line = grammarLine(text);
+  return LEGAL_BASIS_RE.test(line) && POLISH_OPERATIVE_WORD.test(line);
+};
+
+/**
+ * Whether a line names the document's own declared type, as a title does
+ * (`INTERPRETACJA INDYWIDUALNA` for an individual tax interpretation).
+ */
+export const namesPlDocumentType = (text: string, type: string): boolean => {
+  const key = (value: string) =>
+    grammarLine(value).replace(/[.:]$/u, "").toLocaleLowerCase("pl-PL");
+  return key(type) !== "" && key(text) === key(type);
+};
 
 const CLOSING_RE =
   /^[A-ZĄĆĘŁŃÓŚŹŻ][\p{L} .-]+,\s+dnia\s+\d{1,2}\s+\p{L}+\s+\d{4}\s*r?\.?$/u;

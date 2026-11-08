@@ -450,6 +450,7 @@ export const TAGGED_FAILURE_REASON = {
   SkDocumentRawMissingError: "tagged_failure",
   SkDocumentRawStorageError: "tagged_failure",
   SkillFileError: "tagged_failure",
+  SkillPluginFailed: "tagged_failure",
   SkillRequiredToolsError: "tagged_failure",
   SnapshotReconciliationError: "tagged_failure",
   SnippetCompareFileError: "tagged_failure",

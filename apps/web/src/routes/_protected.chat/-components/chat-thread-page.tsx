@@ -681,7 +681,12 @@ export const ChatThreadPage = ({
               <Tooltip
                 content={t("inspector.moveToSide")}
                 render={
-                  <Button onClick={moveToSide} size="icon-sm" variant="ghost">
+                  <Button
+                    className="hidden md:inline-flex"
+                    onClick={moveToSide}
+                    size="icon-sm"
+                    variant="ghost"
+                  >
                     <Minimize2Icon className="size-4" />
                   </Button>
                 }
@@ -1039,9 +1044,9 @@ const NewChatButton = ({
   // /chat/new (or workspace-scoped) redirect helper.
   if (!hasMessages) {
     return (
-      <Button disabled size="sm" variant="ghost">
+      <Button disabled size="sm" tooltip={t("chat.newChat")} variant="ghost">
         <NewChatIcon />
-        {t("chat.newChat")}
+        <span className="sr-only md:not-sr-only">{t("chat.newChat")}</span>
       </Button>
     );
   }
@@ -1053,7 +1058,7 @@ const NewChatButton = ({
         to="/chat/workspaces/$workspaceId/new"
       >
         <NewChatIcon />
-        {t("chat.newChat")}
+        <span className="sr-only md:not-sr-only">{t("chat.newChat")}</span>
       </Link>
     );
   }
@@ -1063,7 +1068,7 @@ const NewChatButton = ({
       to="/chat/new"
     >
       <NewChatIcon />
-      {t("chat.newChat")}
+      <span className="sr-only md:not-sr-only">{t("chat.newChat")}</span>
     </Link>
   );
 };

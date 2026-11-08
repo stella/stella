@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The chat app bundle handler serves an in-memory bundle, so the async generator every safe handler must be has no await; it follows the repository's existing directive for handlers without an await."
+}

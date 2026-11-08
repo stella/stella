@@ -119,6 +119,46 @@ const PLAN_ENV_BUDGET_BYTES = 64 * 1024;
 // measure selector cases rather than charging its cold scan to the first case.
 markdownReaders();
 
+// Every job the desktop release's completion check waits for, with every
+// output it declares set, so the whole needs context is at its largest.
+const desktopReleaseCompleteNeeds = () => {
+  const release = v.parse(
+    v.object({
+      jobs: v.record(
+        v.string(),
+        v.looseObject({
+          needs: v.optional(v.union([v.string(), v.array(v.string())])),
+          outputs: v.optional(v.record(v.string(), v.string())),
+        }),
+      ),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/release-desktop.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  const needs = [
+    release.jobs["release-complete"]?.needs ??
+      panic("Missing desktop release completion"),
+  ].flat();
+  return Object.fromEntries(
+    needs.map((job) => [
+      job,
+      {
+        result: "success",
+        outputs: Object.fromEntries(
+          Object.keys(release.jobs[job]?.outputs ?? {}).map((name) => [
+            name,
+            "x".repeat(256),
+          ]),
+        ),
+      },
+    ]),
+  );
+};
+
 const publishReleaseSummaryNeeds = () => {
   const publish = v.parse(
     v.object({
@@ -235,6 +275,7 @@ test("whole workflow contexts stay below the per-variable environment budget", (
     ),
     // Every release job of the npm workflow, with pack selecting every one.
     "publish-npm release-summary needs": publishReleaseSummaryNeeds(),
+    "release-desktop release-complete needs": desktopReleaseCompleteNeeds(),
     API_TEST_FILES_ENCODED: plan["api_test_files_encoded"],
   };
   for (const name of new Set(

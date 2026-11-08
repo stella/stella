@@ -628,6 +628,49 @@ describe("subscribe: already-aborted signal", () => {
   });
 });
 
+describe("subscribe: streams per session", () => {
+  test("a session keeps at most the limit of streams on one workspace, newest first", async () => {
+    startTestSse();
+    stopSse();
+    await settlePendingWork();
+
+    const opened = Array.from(
+      { length: LIMITS.sseStreamsPerSession + 2 },
+      () => {
+        const controller = new AbortController();
+        return {
+          controller,
+          reader: subscribeToWorkspace(controller.signal).getReader(),
+        };
+      },
+    );
+    const otherSession = new AbortController();
+    const otherReader = subscribeToWorkspace(
+      otherSession.signal,
+      toSafeId<"user">("user_other_session"),
+    ).getReader();
+
+    broadcastTestEvent(workspaceId, testEvent("within-limit"));
+
+    const results = await Promise.all(
+      opened.map(async ({ reader }) => await reader.read()),
+    );
+    expect(results.slice(0, 2).every(({ done }) => done)).toBe(true);
+    for (const { done, value } of results.slice(2)) {
+      expect(done).toBe(false);
+      expect(new TextDecoder().decode(value)).toContain("within-limit");
+    }
+    const other = await otherReader.read();
+    expect(new TextDecoder().decode(other.value)).toContain("within-limit");
+
+    for (const { controller } of opened) {
+      controller.abort();
+    }
+    otherSession.abort();
+    await settlePendingWork();
+  });
+});
+
 describe("broadcast: local delivery without an attached subscriber", () => {
   test("broadcast delivers locally when no Redis subscriber is attached", async () => {
     // With no attached subscriber, a published event never loops back.

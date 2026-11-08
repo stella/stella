@@ -211,6 +211,12 @@
       }
     },
     {
+      "id": "deepseek/deepseek-v4.1-flash-1017:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "deepseek/deepseek-v4.1-flash:batch",
       "reasoning": {
         "default_effort": "high"
@@ -1142,6 +1148,12 @@
     },
     {
       "id": "z-ai/glm-5.2",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.2:batch",
       "reasoning": {
         "default_effort": "high"
       }

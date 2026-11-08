@@ -115,6 +115,10 @@
       "types": "./src/closed-quotation-paragraphs.ts",
       "import": "./src/closed-quotation-paragraphs.ts"
     },
+    "./contents-entry": {
+      "types": "./src/contents-entry.ts",
+      "import": "./src/contents-entry.ts"
+    },
     "./court-paragraph-numbers": {
       "types": "./src/court-paragraph-numbers.ts",
       "import": "./src/court-paragraph-numbers.ts"
