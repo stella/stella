@@ -349,6 +349,7 @@ const startRun = (
     threadId: "thread-1",
     attachments: [],
     skillFolders: [],
+    toolPath: [],
     ...launch,
     configDir,
     launch: PLAIN_LAUNCH,
@@ -1243,6 +1244,7 @@ describe("harness holder over its socket", () => {
       messages: [{ role: "user", content: "Find the lease decision." }],
       attachments: [],
       skillFolders: [],
+      toolPath: [],
       harnessSessionId: null,
       policy: { network: "open", fs: "workspace", approvals: "ask" },
       mcp: {
@@ -1329,6 +1331,7 @@ describe("harness holder over its socket", () => {
         messages: [{ role: "user", content: "Write the report." }],
         attachments: [],
         skillFolders: [],
+        toolPath: [],
         harnessSessionId: null,
         policy: { network: "open", fs: "workspace", approvals: "ask" },
         mcp: {
