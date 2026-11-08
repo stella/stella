@@ -1405,18 +1405,31 @@ const pageBandsOf = (
     }
     const printed =
       printedByHeight.at(0) ?? panic("The first page has its printed lines");
-    const end = printed.findIndex(
-      (line) => !inEdgeZone(line, first.height) || !setSmall(line, bodySize),
-    );
-    // A page of nothing but small type has no footer apart from its text.
-    if (end <= 0) {
-      return new Set();
+    // The page's own number may stand below the footer.
+    const from = isPageNumber(normalizeSpanText(printed.at(0)?.text ?? ""), 1)
+      ? 1
+      : 0;
+    // The footer's lines follow each other closely; a line set apart above
+    // them is the text's, small type or not.
+    const block: PdfTextLine[] = [];
+    for (const line of printed.slice(from)) {
+      const below = block.at(-1);
+      if (
+        !inEdgeZone(line, first.height) ||
+        !setSmall(line, bodySize) ||
+        (below !== undefined && setApart(line, below))
+      ) {
+        break;
+      }
+      block.push(line);
     }
-    const block = printed.slice(0, end);
-    return setApart(
-      block.at(-1) ?? panic("A footer block has a top line"),
-      printed.at(end),
-    ) && block.some((line) => CONTACT_LINE.test(normalizeSpanText(line.text)))
+    const top = block.at(-1);
+    const above = printed.at(from + block.length);
+    // A page of nothing but its footer has no text to set it apart from.
+    return top !== undefined &&
+      above !== undefined &&
+      setApart(top, above) &&
+      block.some((line) => CONTACT_LINE.test(normalizeSpanText(line.text)))
       ? new Set(block)
       : new Set();
   })();

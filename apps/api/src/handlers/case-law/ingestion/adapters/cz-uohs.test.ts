@@ -301,6 +301,19 @@ describe("ÚOHS JSON-LD", () => {
       }
     });
 
+    test("the footnotes are searchable text of the decision", async () => {
+      const bytes = new Uint8Array(
+        await Bun.file(
+          new URL("__fixtures__/cz-uohs-2018-R0003.pdf", import.meta.url),
+        ).arrayBuffer(),
+      );
+      testFetchState.set(asFetchMock(async () => new Response(bytes)));
+      const decision = await buildCzUohsDecision((await records())[0]!);
+      expect(decision.fulltext).toContain(
+        "Rozhodnutí Nejvyššího správního soudu ze dne 7. 4. 2006, č.j. 6 As 23/2005-66.",
+      );
+    });
+
     test("a footnote's mark is a linked superscript, not a digit glued to its word", async () => {
       const body = bodyOf(await read("cz-uohs-2018-R0003.pdf"));
       expect(body.map(({ plainText }) => plainText)).toContain("II. ROZKLAD");

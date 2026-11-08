@@ -193,7 +193,7 @@ export const czUohsDecisionIdentifiers = (
 };
 
 type CzUohsPdf = {
-  /** The text layer line by line, letterhead first. */
+  /** The text layer line by line, letterhead first, its footnotes last. */
   text: string;
   /** The typeset lines joined back into the paragraphs they were broken from. */
   paragraphs: PdfRun[][];
@@ -206,19 +206,23 @@ const readCzUohsPdf = async (bytes: Uint8Array): Promise<CzUohsPdf> => {
     bytes,
     PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
   );
+  const read = pdfNotesOf(notes).map(({ label, noteId, lines }) => ({
+    label,
+    noteId,
+    runs: assemblePdfParagraphs(lines).flat(),
+  }));
+  const textOf = (runs: readonly PdfRun[]) =>
+    runs.map(({ text }) => text).join("");
   return {
-    text: body
-      .map((line) =>
-        line.type === "blank" ? "" : line.runs.map(({ text }) => text).join(""),
-      )
+    // The notes are the decision's text too, so search finds them.
+    text: [
+      ...body.map((line) => (line.type === "blank" ? "" : textOf(line.runs))),
+      ...read.map(({ runs }) => textOf(runs).trim()),
+    ]
       .join("\n")
       .trim(),
     paragraphs: assemblePdfParagraphs(body),
-    notes: pdfNotesOf(notes).map(({ label, noteId, lines }) => ({
-      label,
-      noteId,
-      runs: assemblePdfParagraphs(lines).flat(),
-    })),
+    notes: read,
   };
 };
 

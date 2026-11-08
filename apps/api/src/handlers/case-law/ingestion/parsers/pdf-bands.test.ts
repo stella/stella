@@ -160,6 +160,42 @@ describe("the first page's letterhead footer", () => {
     ).toBe(true);
   });
 
+  test("it goes with the page's own number printed below it", async () => {
+    const { text } = await read([
+      [
+        ...runningText(BODY),
+        ...footer([
+          "Competition Office tel. 52 345 56 44",
+          "office@example.gov www.example.gov",
+        ]),
+        { text: "1", x: 300, y: 30, size: 12 },
+      ],
+      runningText(BODY),
+    ]);
+    expect(text).not.toContain("office@example.gov");
+  });
+
+  test("small text set apart above the footer is the decision's and stays", async () => {
+    const { text } = await read([
+      [
+        ...runningText(BODY),
+        {
+          text: "A small citation set at the foot of the text.",
+          x: 72,
+          y: 110,
+          size: 7,
+        },
+        ...footer([
+          "Competition Office tel. 52 345 56 44",
+          "office@example.gov www.example.gov",
+        ]),
+      ],
+      runningText(BODY),
+    ]);
+    expect(text).toContain("A small citation set at the foot of the text.");
+    expect(text).not.toContain("office@example.gov");
+  });
+
   test("small type at the foot without a contact line stays", async () => {
     const { text } = await read([
       [
