@@ -1,14 +1,26 @@
 import * as v from "valibot";
 
 import {
-  CITATION_READ_DETAILS,
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
+import type { ConstantMap } from "@/api/lib/constant-map";
 import { LIMITS } from "@/api/lib/limits";
 
 import { cursorInput, nullAsAbsent, uuidInputSchema } from "./input-schemas";
+
+/**
+ * How much of each citation a read returns: the whole row, or a compact one
+ * whose passage is cut to a cue, for reading many citations in one reply.
+ */
+export const CITATION_READ_DETAILS = ["full", "compact"] as const;
+type CitationReadDetail = (typeof CITATION_READ_DETAILS)[number];
+
+export const CITATION_READ_DETAIL = {
+  FULL: "full",
+  COMPACT: "compact",
+} as const satisfies ConstantMap<CitationReadDetail>;
 
 // Shared by the tool definition and the citation graph app input contract,
 // so the app contract loads no handlers.

@@ -76,7 +76,6 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { CITATION_READ_DETAIL } from "@/api/lib/case-law/citation-vocabulary";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
 import {
@@ -257,7 +256,10 @@ import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority
 import { openMcpRead } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-import { readCaseLawCitationsArgsSchema } from "./case-law-citations-input";
+import {
+  CITATION_READ_DETAIL,
+  readCaseLawCitationsArgsSchema,
+} from "./case-law-citations-input";
 import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
 import { searchNotesForCall } from "./search-notes";
 import { MCP_NOTE_AUDIENCE } from "./tool-note-audience";

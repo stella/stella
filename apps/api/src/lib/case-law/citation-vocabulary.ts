@@ -7,8 +7,6 @@
  * domain to each other in both directions, so neither can move alone.
  */
 
-import type { ConstantMap } from "../constant-map";
-
 /**
  * One side of the citation graph, seen from a decision: the decisions it
  * cites (`outgoing`) or the decisions that cite it (`incoming`). Citing is
@@ -31,18 +29,6 @@ export const GRAPH_DIRECTION = {
   cites: "outgoing",
   cited_by: "incoming",
 } as const satisfies Record<CitationReadDirection, CitationDirection>;
-
-/**
- * How much of each citation a read returns: the whole row, or a compact one
- * whose passage is cut to a cue, for reading many citations in one reply.
- */
-export const CITATION_READ_DETAILS = ["full", "compact"] as const;
-export type CitationReadDetail = (typeof CITATION_READ_DETAILS)[number];
-
-export const CITATION_READ_DETAIL = {
-  FULL: "full",
-  COMPACT: "compact",
-} as const satisfies ConstantMap<CitationReadDetail>;
 
 /**
  * How the citing text treats the cited decision, as the display reads it.
