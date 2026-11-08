@@ -401,6 +401,7 @@ type TierMatchPromptItem = Pick<
 
 export const buildTierMatchPrompt = (
   items: readonly TierMatchPromptItem[],
+  numbering: "numbered" | "unnumbered",
 ): string => {
   const { unique, labeled } = sharePassages(items);
   const parts = labeled.map(({ item: { askValue, tiers }, labels }, index) => {
@@ -409,9 +410,9 @@ export const buildTierMatchPrompt = (
       askValue,
       passageLabels: labels,
     });
-    return items.length === 1
-      ? message
-      : `Item ${String(index + 1)}:\n${message}`;
+    return numbering === "numbered"
+      ? `Item ${String(index + 1)}:\n${message}`
+      : message;
   });
   return [
     ...(unique.length > 0 ? [buildPassageListMessage(unique)] : []),
@@ -502,7 +503,10 @@ export const gradeTierMatch = async ({
         }),
         serviceTier,
         system: TIER_MATCH_SYSTEM_PROMPT,
-        prompt: buildTierMatchPrompt([{ askValue, tiers, passages }]),
+        prompt: buildTierMatchPrompt(
+          [{ askValue, tiers, passages }],
+          "unnumbered",
+        ),
         abortSignal,
         outputSchema: tierMatchSchema,
       });
@@ -642,7 +646,7 @@ export const gradeTierMatches = async ({
         }),
         serviceTier,
         system: TIER_MATCH_BATCH_SYSTEM_PROMPT,
-        prompt: buildTierMatchPrompt(pending),
+        prompt: buildTierMatchPrompt(pending, "numbered"),
         abortSignal,
         outputSchema: tierMatchBatchSchema,
       });
