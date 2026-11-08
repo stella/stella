@@ -184,6 +184,7 @@ export const parsePlUokikDocument = async (
     documentUrl: input.documentUrl ?? "",
     content: pdfParagraphsToHtml(paragraphs),
     superscripts: true,
+    boldSubheadings: true,
     footnoteIds: noteBlocks.map(({ note }) => note.noteId),
     keywords: input.keywords,
     statutes: [],
