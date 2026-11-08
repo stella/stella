@@ -72,6 +72,11 @@ export const STRUCTURE_FIDELITY_RULES = {
    * block: the parser read the ruling as head matter or as reasons.
    */
   RULING_WITHOUT_HOLDING: "ruling-without-holding",
+  /**
+   * The instruction on the remedy against the decision, read as its ruling:
+   * the parser carried the operative part on past the ruling's end.
+   */
+  INSTRUCTION_AS_HOLDING: "instruction-as-holding",
 } as const;
 
 type StructureFidelityRule =
@@ -205,6 +210,9 @@ const holdingRoleRules = (
     : []),
   ...(!ruled && grammar?.isRecitalLine?.(text) === true
     ? [STRUCTURE_FIDELITY_RULES.RECITAL_AS_HOLDING]
+    : []),
+  ...(grammar?.isAppealInstruction?.(text) === true
+    ? [STRUCTURE_FIDELITY_RULES.INSTRUCTION_AS_HOLDING]
     : []),
 ];
 

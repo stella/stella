@@ -2,11 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import {
   containsPlOperativeVerb,
+  isPlAppealInstruction,
   isPlCompositionLine,
   isPlHoldingHeading,
+  isPlInstructionHeading,
   isPlLegalBasisRuling,
   isPlReasonsHeading,
   isPlRecitalLine,
+  isPlRemedyFilingLine,
   isPlSignatureBlank,
   isPlSignatureLine,
   namesPlDocumentType,
@@ -251,5 +254,41 @@ describe("the opening of a Polish ruling", () => {
       namesPlDocumentType("INTERPRETACJA INDYWIDUALNA", "interpretacja ogólna"),
     ).toBe(false);
     expect(namesPlDocumentType("", "")).toBe(false);
+  });
+});
+
+describe("a Polish instruction on appeal", () => {
+  test.each([
+    "Na orzeczenie - w terminie 14 dni od jego doręczenia - przysługuje skarga za pośrednictwem Prezesa Krajowej Izby Odwoławczej do Sądu Okręgowego w Warszawie.",
+    "Stosownie do art. 198a i 198b ustawy z dnia 29 stycznia 2004 r. Prawo zamówień publicznych na niniejszy wyrok - w terminie 7 dni od dnia jego doręczenia - przysługuje skarga.",
+    "Stosownie do treści art. 81 ust. 1 ustawy o ochronie konkurencji i konsumentów od niniejszej decyzji przysługuje stronie odwołanie do Sądu Okręgowego w Warszawie.",
+    "Stronie przysługuje prawo do wniesienia skargi na niniejszą interpretację przepisów prawa podatkowego z powodu jej niezgodności z prawem.",
+  ])("%p instructs on the remedy against this decision", (text) => {
+    expect(isPlAppealInstruction(text)).toBe(true);
+  });
+
+  test.each([
+    "Odwołującemu przysługuje prawo do skorzystania ze środka ochrony prawnej, gdyż wypełniono przesłankę interesu.",
+    "Od decyzji organu pierwszej instancji przysługuje odwołanie, z którego strona skorzystała.",
+    "Korekta kosztów wynagrodzenia pracowników przysługuje nam również w roku 2022.",
+    "oddala skargę",
+  ])("%p is not an instruction", (text) => {
+    expect(isPlAppealInstruction(text)).toBe(false);
+  });
+
+  test("its heading and where the remedy is filed", () => {
+    expect(isPlInstructionHeading("Pouczenie")).toBe(true);
+    expect(isPlInstructionHeading("POUCZENIA:")).toBe(true);
+    expect(isPlInstructionHeading("14. Pouczenie")).toBe(true);
+    expect(isPlInstructionHeading("P o u c z e n i e")).toBe(true);
+    expect(
+      isPlInstructionHeading("Pouczenie o prawie do odwołania jest zbędne."),
+    ).toBe(false);
+    expect(
+      isPlRemedyFilingLine("Skargę wnosi się za pośrednictwem organu."),
+    ).toBe(true);
+    expect(isPlRemedyFilingLine("Skarga została wniesiona w terminie.")).toBe(
+      false,
+    );
   });
 });
