@@ -130,9 +130,11 @@ test(
       actual: census,
       expected: baseline.findings,
     });
-    // A new finding is a parser storing printed-page layout as structure:
-    // fix the parser through the shared owners (hard-wrapped-lines.ts,
-    // page-furniture.ts, letter-spacing.ts), never by raising the baseline.
+    // A new finding is a parser storing printed-page layout as structure, or
+    // a role its language's grammar reads otherwise: fix the parser through
+    // the shared owners (hard-wrapped-lines.ts, page-furniture.ts,
+    // letter-spacing.ts, the `@stll/legal-ast` role grammars), never by
+    // raising the baseline.
     expect(added).toEqual([]);
     // A finding the parsers no longer produce leaves the baseline, so the
     // ratchet keeps the gain.

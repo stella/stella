@@ -1502,6 +1502,8 @@ export const TOOLING_ENV_KEYS = new Set([
   // file their tests name; the fake Codex app server also logs its CODEX_HOME.
   "FAKE_HARNESS_LOG",
   "CODEX_HOME",
+  // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
+  "FAKE_SKILL_PATH",
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",
@@ -1596,6 +1598,9 @@ export const TOOLING_ENV_KEYS = new Set([
   // The release resolve job exports the network retry helper's path, staged
   // from the workflow's own revision, for its git fetches.
   "NETWORK_RETRY_SCRIPT",
+  // The promote names the repository whose deployment names the deploy
+  // contract check reads (scripts/check-deploy-env-contract.ts).
+  "DEPLOY_ENV_CONTRACT_INFRA_REPOSITORY",
   // The release rehearsal workflow provides its deployment-repository target.
   "STAGING_DEPLOY_REPOSITORY",
   // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):

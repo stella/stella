@@ -122,6 +122,7 @@ const SIDECAR_SECRET_HEX_LENGTH = 64;
 const MAX_MESSAGE_TYPE_LENGTH = 64;
 const MAX_MODELS = 100;
 const MAX_RUN_MESSAGES = 1000;
+const MAX_RUN_SKILL_FOLDERS = 32;
 const MAX_LAUNCH_ENTRIES = 32;
 /** Process ids are unsigned 32-bit on every platform the desktop runs on. */
 const MAX_PID = 4_294_967_295;
@@ -293,6 +294,19 @@ export const sidecarHostMessageSchema = v.variant("type", [
     attachments: v.pipe(
       v.array(desktopRunnerAttachmentSchema),
       v.maxLength(MAX_RUN_ATTACHMENTS),
+    ),
+    /**
+     * The skill folders the member listed on this computer. The desktop adds
+     * them to a run the API started, and never tells the API about them.
+     */
+    skillFolders: v.pipe(
+      v.array(
+        v.object({
+          name: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+          path: absolutePathSchema,
+        }),
+      ),
+      v.maxLength(MAX_RUN_SKILL_FOLDERS),
     ),
     /** The native session to resume; `null` starts fresh. */
     harnessSessionId: v.nullable(
@@ -505,6 +519,8 @@ export type SidecarHostLine =
         "too_large" | "not_json" | "unknown_type" | "invalid"
       >;
       messageType: string | null;
+      /** The run a known message was for, when it named one validly. */
+      runId?: string | null;
     };
 
 const HOST_MESSAGE_TYPES: ReadonlySet<string> = new Set(
@@ -544,9 +560,17 @@ export const parseSidecarHostLine = (line: string): SidecarHostLine => {
     return { type: "rejected", reason: "unknown_type", messageType };
   }
   const parsed = v.safeParse(sidecarHostMessageSchema, json.value);
-  return parsed.success
-    ? { type: "message", message: parsed.output }
-    : { type: "rejected", reason: "invalid", messageType };
+  if (parsed.success) {
+    return { type: "message", message: parsed.output };
+  }
+  // The run the line was for, so the host can end it instead of waiting.
+  const run = v.safeParse(v.object({ runId: runIdSchema }), json.value);
+  return {
+    type: "rejected",
+    reason: "invalid",
+    messageType,
+    runId: run.success ? run.output.runId : null,
+  };
 };
 
 /**

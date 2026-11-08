@@ -39,19 +39,31 @@
 
 import { SecurityError } from "@libpdf/core";
 
-import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DocumentAst,
+  Inline,
+  ParagraphRole,
+} from "@stll/legal-ast/document-ast";
 import { plainTextOf } from "@stll/legal-ast/document-ast";
-import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
+import {
+  rewriteInlineWhitespace,
+  stripInlinePrefix,
+  stripInlineSuffix,
+} from "@stll/legal-ast/inline-line";
 import { LINE_JOIN, splitsDate } from "@stll/legal-ast/line-wrap";
 import {
   isSkDecisionTitle,
   isSkHoldingMarker,
   isSkInstructionMarker,
+  isSkOpeningFormula,
+  isSkPortalMetadataRow,
   isSkReasoningMarker,
   isSkStandaloneInstructionMarker,
   SK_CLOSING_RE,
   SK_JUDGE_TITLE_RE,
   skSectionHeading,
+  skTitleFormulaStart,
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 import { collapseLetterSpacing } from "@stll/text-normalize";
@@ -423,7 +435,7 @@ function isStructuralStart(line: PdfLine, section: Section): boolean {
   ) {
     return true;
   }
-  if (isSkDecisionTitle(line.text)) {
+  if (isSkDecisionTitle(line.text) || isSkOpeningFormula(line.text)) {
     return true;
   }
   // Closing formula and signature always start a new block
@@ -741,6 +753,60 @@ const readLetterSpacing = (line: PdfLine): ReadPdfLine => {
 };
 
 /**
+ * Read the formula off a title it was set in one run with: the title keeps
+ * its words, and the formula follows as the court's opening words, each with
+ * the inline formatting it was printed in.
+ */
+const separateOpeningFormula = ({
+  blocks,
+  makeId,
+  makeAnchor,
+}: Omit<AppendDecisionTitleOptions, "line">): void => {
+  const title = blocks.at(-1);
+  if (title?.type !== "heading" || title.role !== "decision-title") {
+    return;
+  }
+  const text = plainTextOf(title.inlines);
+  const start = skTitleFormulaStart(text);
+  if (start === undefined) {
+    return;
+  }
+  const formulaInlines = stripInlinePrefix(title.inlines, start);
+  title.inlines = stripInlineSuffix(title.inlines, text.length - start);
+  title.plainText = plainTextOf(title.inlines).trim();
+  blocks.push({
+    id: makeId(),
+    anchorId: makeAnchor("p-formula"),
+    type: "paragraph",
+    role: "intro",
+    inlines: formulaInlines,
+    plainText: plainTextOf(formulaInlines).trim(),
+  });
+};
+
+/**
+ * A plain paragraph's role by its section: the holding's, the portal's
+ * metadata box as front matter (one role for every row, kept as printed and
+ * never the decision's body), and the opening paragraph's intro.
+ */
+const paragraphRoleOf = (
+  section: Section,
+  text: string,
+  blocks: readonly Block[],
+): ParagraphRole | undefined => {
+  if (section === "holding") {
+    return "holding";
+  }
+  if (section !== "preamble") {
+    return undefined;
+  }
+  if (isSkPortalMetadataRow(text)) {
+    return "front-matter";
+  }
+  return blocks.length <= 1 ? "intro" : undefined;
+};
+
+/**
  * Classify extracted PDF lines into AST blocks.
  *
  * Bold and font size come directly from PDF font metadata;
@@ -756,12 +822,27 @@ const classifyLines = (lines: readonly ReadPdfLine[]): Block[] => {
   for (const line of lines) {
     const { text, bold, fontSize } = line;
 
+    // The formula the court decides under is set in the title's type but
+    // is the court's opening words, not part of the title.
+    if (section === "preamble" && isSkOpeningFormula(text)) {
+      blocks.push({
+        id: makeId(),
+        anchorId: makeAnchor(`p${++blockCount}`),
+        type: "paragraph",
+        role: "intro",
+        inlines: line.inlines,
+        plainText: text,
+      });
+      continue;
+    }
+
     // Decision title: large font or matching decision type
     if (
       section === "preamble" &&
       (fontSize > TITLE_FONT_SIZE || isSkDecisionTitle(text))
     ) {
       appendDecisionTitle({ blocks, line, makeId, makeAnchor });
+      separateOpeningFormula({ blocks, makeId, makeAnchor });
       continue;
     }
 
@@ -909,10 +990,9 @@ const classifyLines = (lines: readonly ReadPdfLine[]): Block[] => {
       plainText: text,
     };
 
-    if (section === "holding") {
-      block.role = "holding";
-    } else if (section === "preamble" && blocks.length <= 1) {
-      block.role = "intro";
+    const role = paragraphRoleOf(section, text, blocks);
+    if (role !== undefined) {
+      block.role = role;
     }
 
     blocks.push(block);

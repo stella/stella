@@ -42,6 +42,7 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   "src-tauri/capabilities/default.json": [
     "src/mainview/App.tsx",
     "src/mainview/AgentSubscriptionsSection.tsx",
+    "src/mainview/LocalSkillFoldersSection.tsx",
     "src/mainview/PermissionsSection.tsx",
     "src/mainview/ShortcutSetting.tsx",
     "src/shared/ShortcutRecorder.tsx",
