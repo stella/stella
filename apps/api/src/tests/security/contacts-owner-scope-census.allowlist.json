@@ -248,8 +248,9 @@
     }
   },
   "apps/api/src/lib/db/aggregate-lock.ts::names-contacts-table": {
-    "reason": "Matter creation client lock: its only caller, matter creation, holds the request's organization-scoped `safeDb` transaction. Bulk contact delete lock: its only caller, the bulk contact delete handler, holds the request's organization-scoped `safeDb` transaction.",
+    "reason": "Matter creation client lock: its only caller, matter creation, holds the request's organization-scoped `safeDb` transaction. Bulk contact delete lock: its only caller, the bulk contact delete handler, holds the request's organization-scoped `safeDb` transaction. Contact row lock (`auxiliaryRowResource`): its only caller, the contact search repair, takes it inside `withOwnerOrganizationScope` with the organization stored on the claimed queue row.",
     "sites": {
+      "auxiliaryRowResource": 1,
       "lockMatterCreationClient": 1,
       "lockOwnedContactsForBulkDelete": 1
     }
@@ -371,9 +372,9 @@
   "apps/api/src/lib/search/projection-repair-queue.ts::names-contacts-table": {
     "reason": "Enqueues repairs inside the caller's organization-scoped transaction; the drain rebuilds contact and matter projections inside `withOwnerOrganizationScope` with organizationId, the organization stored on the claimed queue row.",
     "sites": {
-      "createSearchProjectionRepairDeps.repair.contact#withOwnerOrganizationScope(organizationId)": 1,
       "createSearchProjectionRepairDeps.repair.workspace#withOwnerOrganizationScope(organizationId)": 1,
-      "enqueueContactSearchRepairs": 1
+      "enqueueContactSearchRepairs": 1,
+      "repairContactProjection#withOwnerOrganizationScope(organizationId)": 1
     }
   },
   "apps/api/src/lib/template-binding/build-binding-context.ts::names-contacts-table": {

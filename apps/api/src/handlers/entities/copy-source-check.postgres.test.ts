@@ -17,6 +17,7 @@ import {
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createDatabase } from "@/api/db/sql-client";
 import { createSafeId } from "@/api/lib/branded-types";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { lockDesktopEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -201,6 +202,7 @@ if (!databaseUrl || !runPostgresTests) {
             [targetSnapshot],
             [
               {
+                cleanupIntentIds: [],
                 sourceEntityId: documentId,
                 sourceFileId: sourceFile.id,
                 newFileId: allocateFileObject(),
@@ -343,6 +345,7 @@ if (!databaseUrl || !runPostgresTests) {
                   await releaseFirst.promise;
                   if (owner === "version-write") {
                     const written = await writeFileVersion({
+                      authority: CALLER_AUTHORIZED,
                       tx: asTestRaw<Transaction>(tx),
                       organizationId,
                       workspaceId: sourceWorkspaceId,
@@ -591,6 +594,7 @@ if (!databaseUrl || !runPostgresTests) {
                 writerStarted.resolve(undefined);
                 if (owner === "version-write") {
                   const outcome = await writeFileVersion({
+                    authority: CALLER_AUTHORIZED,
                     tx: asTestRaw<Transaction>(tx),
                     organizationId,
                     workspaceId: sourceWorkspaceId,

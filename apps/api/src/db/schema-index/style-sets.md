@@ -7,16 +7,18 @@ One line per column: `table.column  builder  flags  file:line  first sentence of
 ## style_sets · `styleSets` · style-sets.ts:15 · rls
 
 ```text
-style_sets.id               pUuid                pk,not null       style-sets.ts:18
-style_sets.organization_id  safeOrganizationId   fk,not null       style-sets.ts:19
-style_sets.name             varchar              not null          style-sets.ts:22
-style_sets.file_name        varchar              not null          style-sets.ts:23
-style_sets.s3_key           varchar              not null          style-sets.ts:24
-style_sets.scanState        storedFileScanState  null              style-sets.ts:25
-style_sets.cleanup_s3_key   varchar              null              style-sets.ts:26
-style_sets.size_bytes       integer              not null          style-sets.ts:27
-style_sets.created_by       text                 fk,not null       style-sets.ts:28
-style_sets.created_at       timestamptz          default,not null  style-sets.ts:32
-style_sets.updated_at       timestamptz          default,not null  style-sets.ts:33
-style_sets.deleted_at       timestamptz          null              style-sets.ts:34
+style_sets.id                                pUuid                pk,not null       style-sets.ts:18
+style_sets.organization_id                   safeOrganizationId   fk,not null       style-sets.ts:19
+style_sets.name                              varchar              not null          style-sets.ts:22
+style_sets.file_name                         varchar              not null          style-sets.ts:23
+style_sets.s3_key                            varchar              not null          style-sets.ts:24
+style_sets.scanState                         storedFileScanState  null              style-sets.ts:25
+style_sets.cleanup_s3_key                    varchar              null              style-sets.ts:26
+style_sets.size_bytes                        integer              not null          style-sets.ts:27
+style_sets.created_by                        text                 fk,not null       style-sets.ts:28
+style_sets.created_at                        timestamptz          default,not null  style-sets.ts:32
+style_sets.updated_at                        timestamptz          default,not null  style-sets.ts:33
+style_sets.deleted_at                        timestamptz          null              style-sets.ts:34
+style_sets.deletion_cleanup_attempt_count    integer              default,not null  style-sets.ts:36  Retry count for storage cleanup after this row becomes a tombstone.
+style_sets.deletion_cleanup_next_attempt_at  timestamptz          null              style-sets.ts:41  Earliest time the tombstone cleanup may run again after a failure.
 ```

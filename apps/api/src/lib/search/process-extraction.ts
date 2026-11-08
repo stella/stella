@@ -438,6 +438,7 @@ export const executeNativeExtraction = async ({
     key: FileKey;
     mimeType: string;
     signal: AbortSignal;
+    maxBytes?: number;
   }) => Promise<ScannedFile>;
   run: NativeExtractionRun;
   dependencies?: ExecuteNativeExtractionDependencies | undefined;
@@ -459,7 +460,14 @@ export const executeNativeExtraction = async ({
   });
   const stored = await withTimeout(
     async (signal) =>
-      await readSource({ key, mimeType: source.extractionMimeType, signal }),
+      await readSource({
+        key,
+        mimeType: source.extractionMimeType,
+        signal,
+        ...(source.fileId === fileField.pdfFileId
+          ? { maxBytes: LIMITS.fileDerivativePdfMaxBytes }
+          : {}),
+      }),
     {
       label: "native extraction source read",
       signal: lifecycleSignal,

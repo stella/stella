@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { withAggregateParentBatch } from "@/api/lib/db/aggregate-lock";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type { WriteFileVersionResult } from "@/api/lib/entity-versions/write-file-version";
@@ -232,7 +233,6 @@ export const finalizeEntityVersion = async function* ({
   organizationId,
   workspaceId,
   userId,
-  fileBuffer: _fileBuffer,
   declaredName,
   declaredMime,
   declaredSize,
@@ -304,6 +304,7 @@ export const finalizeEntityVersion = async function* ({
       }
 
       const versionResult = await writeFileVersion({
+        authority: CALLER_AUTHORIZED,
         tx,
         organizationId,
         workspaceId,

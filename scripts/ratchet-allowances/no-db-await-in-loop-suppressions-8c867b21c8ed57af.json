@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/style-set-package-cleanup-queue.ts",
+  "delta": 1,
+  "reason": "A claimed style-set deletion removes at most two stored packages for its row before recording the outcome, inside a claim batch the queue already bounds."
+}

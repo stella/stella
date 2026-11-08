@@ -20,7 +20,11 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
+import {
+  documentReviewFindings,
+  documentReviewRuns,
+  entities,
+} from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
@@ -51,25 +55,35 @@ let testDb: TestDatabase;
 let ids: TestIds;
 
 const seededRunIds: SafeId<"documentReviewRun">[] = [];
+const seededTargetEntityIds: SafeId<"entity">[] = [];
 
 const REFERENCE_POSITION_ID = "44444444-4444-4444-8444-444444444444";
 const POSITION_ID = "11111111-1111-4111-8111-111111111111";
 const REFERENCE_PASSAGE_ID = "66666666-6666-4666-8666-666666666666";
 const CONTENT_SHA256 = "a".repeat(64);
 
-/** The reviewed document a case owns. Runs pin these by value (no foreign
- *  keys), so each case can claim its own document without seeding entities. */
+/** Give each persistence case its own real target entity. */
 type ReviewTarget = {
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
 };
 
-const reviewTarget = (): ReviewTarget => ({
-  entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
-  fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
-  entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
-});
+const reviewTarget = async (): Promise<ReviewTarget> => {
+  const entityId = toSafeId<"entity">(Bun.randomUUIDv7());
+  seededTargetEntityIds.push(entityId);
+  await testDb.insert(entities).values({
+    id: entityId,
+    workspaceId: ids.wsA1,
+    name: `review-target-${entityId}`,
+    createdBy: ids.userA1,
+  });
+  return {
+    entityId,
+    fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
+    entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
+  };
+};
 
 /** The pinned reference document every fixture finding cites. */
 const REFERENCE_FILE_FIELD_ID = toSafeId<"field">(Bun.randomUUIDv7());
@@ -297,6 +311,11 @@ afterAll(async () => {
         .delete(documentReviewRuns)
         .where(inArray(documentReviewRuns.id, seededRunIds));
     }
+    if (seededTargetEntityIds.length > 0) {
+      await testDb
+        .delete(entities)
+        .where(inArray(entities.id, seededTargetEntityIds));
+    }
   } finally {
     await releaseRlsFixture();
   }
@@ -304,7 +323,7 @@ afterAll(async () => {
 
 describe("document review run persistence", () => {
   test("refuses a second unfinished run for the same document", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const first = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId: first, status: "queued", target });
 
@@ -330,7 +349,7 @@ describe("document review run persistence", () => {
   });
 
   test("allows a new run once the previous one is terminal", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const previous = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId: previous, status: "queued", target });
     await testDb
@@ -356,7 +375,7 @@ describe("document review run persistence", () => {
   });
 
   test("converges on one finding per position when a job replays", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
 
@@ -377,7 +396,7 @@ describe("document review run persistence", () => {
   });
 
   test("recounts durable progress after interleaved pass commits", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target, total: 2 });
     const positionIds = [
@@ -443,7 +462,7 @@ describe("document review run persistence", () => {
   });
 
   test("refuses an outcome outside the one vocabulary", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
 
@@ -477,7 +496,7 @@ describe("document review run persistence", () => {
   });
 
   test("keeps a decision and its moment inseparable", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
 
@@ -528,7 +547,7 @@ describe("document review run persistence", () => {
   });
 
   test("keeps an applied edit and its moment inseparable", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
 
@@ -593,7 +612,7 @@ describe("document review run persistence", () => {
    * that it copies the right rows and leaves the rest alone.
    */
   test("carries a decision onto a re-run that repeats the finding", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const decidedAt = new Date();
 
     const firstRun = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
@@ -646,7 +665,7 @@ describe("document review run persistence", () => {
   });
 
   test("defaults a committed finding to undecided", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
     await upsertReferenceFinding(runId, target, "Undecided by default");
@@ -666,7 +685,7 @@ describe("document review run persistence", () => {
   });
 
   test("records the model the run grades with, provider included", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
 

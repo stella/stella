@@ -9,7 +9,6 @@ import {
   entityDeletionEffectChunks,
 } from "@/api/db/schema";
 import {
-  ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
   claimNextAccountDeletionEffectChunk,
   completeAccountDeletionEffectChunk,
   ensureAccountDeletionEffectChunks,
@@ -33,6 +32,7 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 const requestId = toSafeId<"entityDeletionCleanupRequest">(
   "00000000-0000-4000-8000-000000000101",
 );
+const PRIOR_ACCOUNT_DELETION_RETRY_CEILING = 20;
 const organizationId = toSafeId<"organization">("org_effect_lease_test");
 const workspaceId = toSafeId<"workspace">(
   "00000000-0000-4000-8000-000000000102",
@@ -233,7 +233,7 @@ describe("destructive-effect lease fencing", () => {
     );
   });
 
-  test("an expired final account lease becomes terminally failed", async () => {
+  test("an expired account lease remains recoverable beyond the former retry ceiling", async () => {
     const exhaustedRequestId = toSafeId<"accountDeletionRequest">(
       "00000000-0000-4000-8000-000000000113",
     );
@@ -258,7 +258,7 @@ describe("destructive-effect lease fencing", () => {
     await testDb.insert(accountDeletionEffectChunks).values({
       chunkIndex: chunk.chunkIndex,
       effectType: chunk.effectType,
-      attemptCount: ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
+      attemptCount: PRIOR_ACCOUNT_DELETION_RETRY_CEILING,
       id: exhaustedChunkId,
       leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z"),
       leaseToken: exhaustedLeaseToken,
@@ -271,14 +271,21 @@ describe("destructive-effect lease fencing", () => {
     expect(
       await listRecoverableAccountDeletionEffectRequestIds(accountEffectDb()),
     ).toContain(exhaustedRequestId);
-    expect(
-      await claimNextAccountDeletionEffectChunk(
-        exhaustedRequestId,
-        accountEffectDb(),
-      ),
-    ).toBeNull();
+    const recovered = await claimNextAccountDeletionEffectChunk(
+      exhaustedRequestId,
+      accountEffectDb(),
+    );
+    if (recovered === null) {
+      throw new TypeError("Expected the exhausted chunk to be reclaimed");
+    }
+    expect(recovered).toMatchObject({
+      attemptCount: PRIOR_ACCOUNT_DELETION_RETRY_CEILING + 1,
+      chunkId: exhaustedChunkId,
+      requestId: exhaustedRequestId,
+      s3Keys: chunk.s3Keys,
+    });
 
-    const exhausted = (
+    const retried = (
       await testDb
         .select({
           errorMessage: accountDeletionEffectChunks.errorMessage,
@@ -290,11 +297,11 @@ describe("destructive-effect lease fencing", () => {
         .where(eq(accountDeletionEffectChunks.id, exhaustedChunkId))
         .limit(1)
     ).at(0);
-    expect(exhausted).toEqual({
-      errorMessage: "Deletion effect lease expired after final attempt",
-      leaseToken: null,
-      nextAttemptAt: expect.any(Date),
-      status: "failed",
+    expect(retried).toEqual({
+      errorMessage: null,
+      leaseToken: recovered.lease.token,
+      nextAttemptAt: null,
+      status: "processing",
     });
   });
 
@@ -307,7 +314,7 @@ describe("destructive-effect lease fencing", () => {
     );
     await testDb.insert(accountDeletionRequests).values([
       {
-        attemptCount: ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
+        attemptCount: PRIOR_ACCOUNT_DELETION_RETRY_CEILING,
         id: exhaustedRequestId,
         organizationIds: [],
         status: "failed",
@@ -328,14 +335,14 @@ describe("destructive-effect lease fencing", () => {
     const recoverable =
       await listRecoverableAccountDeletionEffectRequestIds(accountEffectDb());
 
-    expect(recoverable).not.toContain(exhaustedRequestId);
+    expect(recoverable).toContain(exhaustedRequestId);
     expect(recoverable).not.toContain(activeRequestId);
     expect(
       await ensureAccountDeletionEffectChunks(
         exhaustedRequestId,
         accountEffectDb(),
       ),
-    ).toBe(0);
+    ).toBe(1);
     expect(
       await ensureAccountDeletionEffectChunks(
         activeRequestId,

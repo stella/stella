@@ -19,6 +19,7 @@ import { safeDbFromScoped, type ScopedDb } from "@/api/db/safe-db";
 import {
   correspondenceAttachments,
   entities,
+  entityVersions,
   fields,
   workspaces,
 } from "@/api/db/schema";
@@ -170,16 +171,22 @@ type ReadUploadedSourceOptions = {
   sourceFileId: string;
 };
 
-// Membership scopes uploader attribution; the immutable file id fences stale jobs.
+// The current version's author files its email; an entity without versions
+// falls back to its creator. Membership scopes that attribution, and the
+// immutable file id fences stale jobs.
 const readUploader = async ({
   database,
   scope: { entityId, workspaceId, organizationId },
   sourceFileId,
 }: ReadUploadedSourceOptions) =>
   await withAggregateTransaction(database, async (tx) => {
+    const uploaderId = sql<string | null>`CASE
+      WHEN ${entities.currentVersionId} IS NULL THEN ${entities.createdBy}
+      ELSE ${entityVersions.createdBy}
+    END`;
     const [file] = await tx
       .select({
-        createdBy: entities.createdBy,
+        createdBy: uploaderId,
         createdAt: entities.createdAt,
         currentVersionId: entities.currentVersionId,
         sourceMatches: sql<boolean>`EXISTS (
@@ -200,9 +207,16 @@ const readUploader = async ({
         ),
       )
       .leftJoin(
+        entityVersions,
+        and(
+          eq(entityVersions.id, entities.currentVersionId),
+          eq(entityVersions.workspaceId, workspaceId),
+        ),
+      )
+      .leftJoin(
         member,
         and(
-          eq(member.userId, entities.createdBy),
+          eq(member.userId, uploaderId),
           eq(member.organizationId, organizationId),
         ),
       )

@@ -1,11 +1,12 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import {
   fields,
+  FILE_USAGE_RECONCILIATION_STATE,
   organizationFileObjects,
   organizationFileUsage,
 } from "@/api/db/schema";
@@ -17,7 +18,10 @@ import {
   reconcileOrganizationFileObject,
   reserveOrganizationFileBytes,
 } from "@/api/lib/files/organization-file-usage";
-import { reconcileAbandonedOrganizationFileReservations } from "@/api/lib/files/organization-file-usage-reconcile";
+import {
+  ORGANIZATION_FILE_MISMATCH_QUARANTINE_AFTER_ATTEMPTS,
+  reconcileAbandonedOrganizationFileReservations,
+} from "@/api/lib/files/organization-file-usage-reconcile";
 import { createReconcileOrganizationFileReservationsTask } from "@/api/lib/scheduler/tasks/organization-file-reservation-reconcile";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -34,6 +38,9 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 let testDb: TestDatabase;
 let ids: TestIds;
 let fake: FakeS3;
+/** The database's clock in epoch milliseconds; reconciliation reads its now(). */
+const databaseNowMs =
+  sql<number>`(extract(epoch from now()) * 1000)::float8`.mapWith(Number);
 const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
 const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
 const db = () =>
@@ -58,8 +65,14 @@ afterAll(async () => {
     .delete(organizationFileObjects)
     .where(eq(organizationFileObjects.organizationId, ids.orgA));
   await testDb
+    .delete(organizationFileObjects)
+    .where(eq(organizationFileObjects.organizationId, ids.orgB));
+  await testDb
     .delete(organizationFileUsage)
     .where(eq(organizationFileUsage.organizationId, ids.orgA));
+  await testDb
+    .delete(organizationFileUsage)
+    .where(eq(organizationFileUsage.organizationId, ids.orgB));
   await releaseTestDb();
 });
 
@@ -67,7 +80,7 @@ const ageReservation = async (objectKey: string) => {
   const old = new Date(Date.now() - 2 * 60 * 60_000);
   await testDb
     .update(organizationFileObjects)
-    .set({ reservationStartedAt: old, updatedAt: old })
+    .set({ reconcileAfter: old, reservationStartedAt: old, updatedAt: old })
     .where(eq(organizationFileObjects.objectKey, objectKey));
 };
 
@@ -364,6 +377,102 @@ describe("abandoned organization file reservations", () => {
         .set({ content: original.content })
         .where(eq(fields.id, ids.fileFieldA1));
     }
+  });
+
+  test("backs off and quarantines a repeated referenced mismatch without releasing its bytes", async () => {
+    const key = `${ids.orgB}/${ids.wsB1}/quarantined-overwrite.pdf`;
+    const expectedBytes = new Uint8Array([1, 2, 3, 4, 5, 6, 7]);
+    (
+      await reconcileOrganizationFileObject(
+        { organizationId: ids.orgB, objectKey: key, sizeBytes: 5 },
+        db(),
+      )
+    ).unwrap();
+    const overwrite = await reserveOrganizationFileBytes(
+      {
+        organizationId: ids.orgB,
+        objectKey: key,
+        sizeBytes: expectedBytes.byteLength,
+        contentSha256Hex: hashSha256Hex(expectedBytes),
+      },
+      db(),
+    );
+    expect(Result.isOk(overwrite)).toBe(true);
+    // The overwrite lands now on the database's clock, which stamps the
+    // reservation it is matched against.
+    const [databaseClock] = await testDb
+      .select({ epochMs: databaseNowMs })
+      .from(sql`(SELECT 1) AS database_clock`);
+    fake.put(
+      envBase.S3_BUCKET,
+      key,
+      new Uint8Array([7, 6, 5, 4, 3, 2, 1]),
+      undefined,
+      new Date(databaseClock?.epochMs ?? panic("Database clock missing")),
+    );
+
+    for (
+      let attempt = 1;
+      attempt <= ORGANIZATION_FILE_MISMATCH_QUARANTINE_AFTER_ATTEMPTS;
+      attempt++
+    ) {
+      await ageReservation(key);
+      const result = (
+        await reconcileAbandonedOrganizationFileReservations({
+          db: db(),
+          organizationId: ids.orgB,
+        })
+      ).unwrap();
+      expect(result.mismatched).toBe(1);
+      const row = await testDb
+        .select({
+          databaseNowMs,
+          attemptCount: organizationFileObjects.reconciliationAttemptCount,
+          reconcileAfter: organizationFileObjects.reconcileAfter,
+          reconciliationState: organizationFileObjects.reconciliationState,
+          writeId: organizationFileObjects.writeId,
+        })
+        .from(organizationFileObjects)
+        .where(eq(organizationFileObjects.objectKey, key))
+        .then((rows) => rows.at(0));
+      expect(row?.attemptCount).toBe(attempt);
+      expect(row?.writeId).toBeTruthy();
+      if (attempt < ORGANIZATION_FILE_MISMATCH_QUARANTINE_AFTER_ATTEMPTS) {
+        expect(row?.reconciliationState).toBe(
+          FILE_USAGE_RECONCILIATION_STATE.ACTIVE,
+        );
+        expect(row?.reconcileAfter?.getTime()).toBeGreaterThan(
+          row?.databaseNowMs ?? panic("Database clock missing"),
+        );
+      } else {
+        expect(row?.reconciliationState).toBe(
+          FILE_USAGE_RECONCILIATION_STATE.QUARANTINED,
+        );
+        expect(row?.reconcileAfter).toBeNull();
+      }
+    }
+
+    expect(
+      (
+        await reconcileAbandonedOrganizationFileReservations({
+          db: db(),
+          organizationId: ids.orgB,
+        })
+      ).unwrap().scanned,
+    ).toBe(0);
+    const usage = await testDb
+      .select({ reservedBytes: organizationFileUsage.reservedBytes })
+      .from(organizationFileUsage)
+      .where(eq(organizationFileUsage.organizationId, ids.orgB))
+      .then((rows) => rows.at(0));
+    expect(usage?.reservedBytes).toBe(2n);
+    const replacement = await reserveOrganizationFileBytes(
+      { organizationId: ids.orgB, objectKey: key, sizeBytes: 7 },
+      db(),
+    );
+    expect(replacement).toMatchObject({
+      error: { reason: "reservation_busy" },
+    });
   });
 
   test("the periodic reservation sweep runs only when file usage is enabled", async () => {

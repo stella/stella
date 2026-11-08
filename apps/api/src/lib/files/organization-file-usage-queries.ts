@@ -1,7 +1,10 @@
 import { and, asc, eq, isNotNull, lte, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { organizationFileObjects } from "@/api/db/schema";
+import {
+  FILE_USAGE_RECONCILIATION_STATE,
+  organizationFileObjects,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export type OrganizationFileLedgerCursor = {
@@ -44,16 +47,16 @@ export const organizationFileLedgerPageQuery = ({
 type FileReservationCandidatesOptions = {
   db: Pick<Transaction, "select">;
   organizationId?: SafeId<"organization"> | undefined;
+  reconcileBefore: Date;
   staleBefore: Date;
-  retryBefore: Date;
   limit: number;
 };
 
 export const organizationFileReservationCandidatesQuery = ({
   db,
   organizationId,
+  reconcileBefore,
   staleBefore,
-  retryBefore,
   limit,
 }: FileReservationCandidatesOptions) =>
   db
@@ -73,13 +76,17 @@ export const organizationFileReservationCandidatesQuery = ({
           ),
         ),
         isNotNull(organizationFileObjects.writeId),
+        eq(
+          organizationFileObjects.reconciliationState,
+          FILE_USAGE_RECONCILIATION_STATE.ACTIVE,
+        ),
+        lte(
+          organizationFileObjects.reconcileAfter,
+          sql`${reconcileBefore}::timestamptz`,
+        ),
         lte(
           organizationFileObjects.reservationStartedAt,
           sql`${staleBefore}::timestamptz`,
-        ),
-        lte(
-          organizationFileObjects.updatedAt,
-          sql`${retryBefore}::timestamptz`,
         ),
         organizationId === undefined
           ? undefined
@@ -87,7 +94,7 @@ export const organizationFileReservationCandidatesQuery = ({
       ),
     )
     .orderBy(
-      asc(organizationFileObjects.updatedAt),
+      asc(organizationFileObjects.reconcileAfter),
       asc(organizationFileObjects.objectKey),
     )
     .limit(limit);

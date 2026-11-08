@@ -7,11 +7,12 @@
  * Driven against a real (PGlite) database with a stubbed queue.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import { dbClock } from "@stll/test-kit/db";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import { documentProcessingRuns, extractedContent } from "@/api/db/schema";
@@ -254,6 +255,7 @@ test("a scan skipped for an exhausted period is not dispatched before the period
   const periodEnd = new Date(claimedAt.getTime() + 60 * 60 * 1000);
 
   await skipDeadlineScan({
+    claimedAt,
     db: asTestRaw<typeof rootDb>(testDb),
     runId,
     skippedUntil: periodEnd,
@@ -289,6 +291,41 @@ test("a scan skipped for an exhausted period is not dispatched before the period
     .where(eq(documentProcessingRuns.id, runId));
   expect((await sweep()).count).toBe(1);
   expect(added.map(({ data }) => data)).toEqual([{ sourceRunId: runId }]);
+});
+
+test("an expired worker cannot settle a replacement claim", async () => {
+  const runId = await insertExpiredScoutClaim();
+  const [expired] = await testDb
+    .select({ claimedAt: documentProcessingRuns.deadlineScoutClaimedAt })
+    .from(documentProcessingRuns)
+    .where(eq(documentProcessingRuns.id, runId));
+  const expiredClaimedAt =
+    expired?.claimedAt ?? panic("Expired claim fixture is missing its lease");
+  // The replacement claim is live on the database's clock.
+  const [replacement] = await testDb
+    .update(documentProcessingRuns)
+    .set({ deadlineScoutClaimedAt: dbClock.now() })
+    .where(eq(documentProcessingRuns.id, runId))
+    .returning({ claimedAt: documentProcessingRuns.deadlineScoutClaimedAt });
+  const replacementClaimedAt =
+    replacement?.claimedAt ?? panic("Replacement claim fixture is missing");
+
+  await skipDeadlineScan({
+    claimedAt: expiredClaimedAt,
+    db: asTestRaw<typeof rootDb>(testDb),
+    runId,
+    skippedUntil: new Date(replacementClaimedAt.getTime() + 60_000),
+  });
+
+  const [row] = await testDb
+    .select({
+      claimedAt: documentProcessingRuns.deadlineScoutClaimedAt,
+      status: documentProcessingRuns.deadlineScoutStatus,
+    })
+    .from(documentProcessingRuns)
+    .where(eq(documentProcessingRuns.id, runId));
+  expect(row?.status).toBe("running");
+  expect(row?.claimedAt?.getTime()).toBe(replacementClaimedAt.getTime());
 });
 
 test("a period refusal inside the scout run skips the scan until the period ends, keeping its attempt", async () => {
@@ -374,7 +411,18 @@ test("a period refusal inside the scout run skips the scan until the period ends
 
 test("a skip applies only to a running scan, and only a pending scan may carry one", async () => {
   const runId = await insertPendingScoutRun();
+  // A live claim instant on the database's clock.
+  const [databaseClock] = await testDb
+    .select({
+      epochMs: sql<number>`(extract(epoch from now()) * 1000)::float8`.mapWith(
+        Number,
+      ),
+    })
+    .from(sql`(SELECT 1) AS database_clock`);
   await skipDeadlineScan({
+    claimedAt: new Date(
+      databaseClock?.epochMs ?? panic("Database clock missing"),
+    ),
     db: asTestRaw<typeof rootDb>(testDb),
     runId,
     skippedUntil: new Date(Date.now() + 60_000),

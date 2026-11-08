@@ -568,6 +568,41 @@ describe("processExtraction", () => {
     expect(fake.requests).toEqual([]);
   });
 
+  test("bounds native reads of generated PDF derivatives", async () => {
+    const imageWithDerivative = {
+      ...fileContent,
+      fileName: "scan.png",
+      mimeType: "image/png",
+      pdfFileId: "derived_pdf_1",
+    } satisfies FieldContent;
+    const readSource = mock(
+      async ({ mimeType }: { mimeType: string; maxBytes?: number }) =>
+        testScannedFile({ bytes: new ArrayBuffer(8), mimeType }),
+    );
+
+    await executeNativeExtraction({
+      fileField: imageWithDerivative,
+      lifecycleSignal: new AbortController().signal,
+      readSource,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: fileContent.id,
+        sourceSha256Hex: fileContent.sha256Hex,
+        workspaceId,
+      },
+    });
+
+    expect(readSource).toHaveBeenCalledWith({
+      key: `${organizationId}/${workspaceId}/derived_pdf_1.pdf`,
+      mimeType: PDF_MIME_TYPE,
+      signal: expect.any(AbortSignal),
+      maxBytes: LIMITS.fileDerivativePdfMaxBytes,
+    });
+  });
+
   test("propagates lifecycle cancellation to the caller-provided storage reader", async () => {
     const controller = new AbortController();
     const started = Promise.withResolvers<undefined>();
