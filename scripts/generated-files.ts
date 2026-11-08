@@ -189,6 +189,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     // runtime, whose generator derives the catalog from the handler graph.
     "apps/api/scripts/*",
     "apps/api/scripts/lib/*",
+    "apps/api/scripts/seed-content/*",
     "apps/api/src/agent-auth/*",
     "apps/api/src/lib/auth/feature-access/route.ts",
     "apps/api/src/lib/bbox/*",
