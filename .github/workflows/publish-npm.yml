@@ -179,9 +179,17 @@ jobs:
           fi
           eligible=false
           if [[ "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            if bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$release_ref" "$release_sha"; then
-              eligible=true
-            fi
+            receipt_status=0
+            bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$release_ref" "$release_sha" || receipt_status=$?
+            case "$receipt_status" in
+              0) eligible=true ;;
+              1) ;;
+              *)
+                # An unreadable receipt must not pass as an ineligible release.
+                echo "::error::The production promotion receipt for $release_ref could not be read"
+                exit 1
+                ;;
+            esac
           fi
           # The receipt is data. Before a publish, the tag must exist in this
           # repository and point at release_sha; a tag push must also have run
