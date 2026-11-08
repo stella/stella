@@ -112,8 +112,10 @@ fn local_document_path(value: &str) -> Option<String> {
   if !authority.is_empty() && !authority.eq_ignore_ascii_case("localhost") {
     return None;
   }
+  // A raw backslash is ambiguous: URL parsing reads it as a separator, so the
+  // path would name another document. A literal one arrives encoded (%5C).
   if remainder[slash..].starts_with("//")
-    || remainder[slash..].contains(['?', '#'])
+    || remainder[slash..].contains(['?', '#', '\\'])
     || value.chars().any(char::is_control)
   {
     return None;
@@ -185,6 +187,10 @@ mod tests {
       local_document_path("file://localhost/Volumes/Matters/Matter.docx").as_deref(),
       Some("/Volumes/Matters/Matter.docx")
     );
+    assert_eq!(
+      local_document_path("file:///Users/me/Matter%5Cnotes.docx").as_deref(),
+      Some("/Users/me/Matter\\notes.docx")
+    );
     for value in [
       "https://example.test/Matter.docx",
       "file://server/share/Matter.docx",
@@ -196,6 +202,7 @@ mod tests {
       "file:////server/share/Matter.docx",
       "file:///%2Fserver/share/Matter.docx",
       "file:relative.docx",
+      "file:///Users/me/Matter\\notes.docx",
     ] {
       assert_eq!(local_document_path(value), None);
     }
