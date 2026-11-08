@@ -735,7 +735,17 @@ const MARKS_ONLY_RE = /^[-–—.,;:·•*_<>■□▪]+$/u;
 /** Longest line a subheading set in bold runs to. */
 const BOLD_SUBHEADING_MAX_CHARS = 120;
 const TERMINAL_MARK_RE = /[.,;:!?…]$/u;
-const DIGIT_RE = /\p{N}/u;
+/**
+ * A figure a table row prints, which a subheading never does: an amount with
+ * its decimals (`149,00`), a number of three digits or more, or a currency
+ * or percent sign. A subheading may number itself (`Przykład nr 12`).
+ */
+const TABLE_FIGURE_RE =
+  /\d,\d{2}(?!\d)|\d{3,}|(?<!\p{L})(?:USD|EUR|PLN|CHF|zł|%)(?!\p{L})/u;
+/** A word a heading names its part with: an abbreviation (`a/a`) is none. */
+const HEADING_WORD_RE = /\p{L}{3,}/u;
+/** A ruling's own point number (`I.`, `a)`), which never heads the reasons. */
+const RULING_POINT_PREFIX_RE = /^(?:[IVXLCDM]+|[a-z])[.)](?:\s|$)/iu;
 
 /**
  * A short line set wholly in bold between paragraphs of the reasons, with no
@@ -748,8 +758,9 @@ const isBoldSubheading = (inlines: readonly Inline[], plainText: string) =>
   plainText.length <= BOLD_SUBHEADING_MAX_CHARS &&
   WORD_CHAR_RE.test(plainText) &&
   !TERMINAL_MARK_RE.test(plainText) &&
-  !DECISION_ITEM_PREFIX_RE.test(plainText) &&
-  !DIGIT_RE.test(plainText.replace(SUBHEADING_OUTLINE_NUMBER_RE, "")) &&
+  !RULING_POINT_PREFIX_RE.test(plainText) &&
+  !TABLE_FIGURE_RE.test(plainText.replace(SUBHEADING_OUTLINE_NUMBER_RE, "")) &&
+  HEADING_WORD_RE.test(plainText) &&
   inlines.some((inline) => inline.type === "bold") &&
   inlines.every(
     (inline) =>

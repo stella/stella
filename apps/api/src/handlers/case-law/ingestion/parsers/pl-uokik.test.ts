@@ -480,6 +480,30 @@ describe("a UOKiK decision read as the office sets its pages", () => {
   });
 });
 
+describe("a UOKiK decision's numbered subheadings", () => {
+  const subheadings = (blocks: readonly Block[]): string[] =>
+    blocks.flatMap((block) =>
+      block.type === "heading" && block.level === 3 ? [block.plainText] : [],
+    );
+
+  test("DDK-2/2017: a subheading numbered in the outline heads its part", async () => {
+    const { blocks } = await parsedOf(DDK_2_2017);
+    expect(subheadings(blocks)).toEqual(
+      expect.arrayContaining([
+        "1. Status przedsiębiorcy",
+        "2. Zbiorowy interes konsumentów",
+        "3. Bezprawność działań",
+        "Działanie Spółki opisane w pkt I.1 sentencji decyzji",
+      ]),
+    );
+  });
+
+  test("RGD-9/2026: a bold abbreviation in the distribution list heads nothing", async () => {
+    const { blocks } = await parsedOf(RGD_9_2026);
+    expect(subheadings(blocks)).not.toContain("2. a/a");
+  });
+});
+
 // ── Each rule that drops a line, on a PDF built for it ───
 
 describe("a UOKiK decision whose first page carries the office's letterhead footer", () => {
