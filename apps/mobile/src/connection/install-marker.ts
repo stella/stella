@@ -7,7 +7,7 @@ import { Result } from "better-result";
 
 import type { SessionPersistence, StoredSession } from "./session";
 
-export type InstallMarkerRead =
+type InstallMarkerRead =
   | { readonly type: "present"; readonly signInId: string }
   | { readonly type: "missing" };
 
@@ -16,7 +16,8 @@ export type InstallMarker = {
   readonly read: () => Promise<InstallMarkerRead>;
   /** Holds the sign-in's local id only, never a credential. */
   readonly write: (signInId: string) => Promise<void>;
-  readonly remove: () => Promise<void>;
+  /** Deleting a file is synchronous on the device; a failure throws. */
+  readonly remove: () => void;
 };
 
 /**
@@ -60,8 +61,8 @@ export const withInstallMarker = (
     // The keychain no longer holds the session, so the sign-out stands
     // whether or not the marker goes: a marker left behind names a sign-in
     // nothing holds, and every sign-in has a new random id.
-    (await Result.tryPromise(async () => await marker.remove())).unwrapOr(
-      undefined,
-    );
+    Result.try(() => {
+      marker.remove();
+    }).unwrapOr(undefined);
   },
 });

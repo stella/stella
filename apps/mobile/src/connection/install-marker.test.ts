@@ -57,7 +57,7 @@ const device = ({
       }
       state.marker = signInId;
     },
-    remove: async () => {
+    remove: () => {
       const failed = failure("remove");
       if (failed !== undefined) {
         throw failed;

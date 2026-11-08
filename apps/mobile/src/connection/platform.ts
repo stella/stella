@@ -50,7 +50,7 @@ export const deviceInstallMarker: InstallMarker = {
   write: async (signInId) => {
     await installMarkerFile().write(signInId);
   },
-  remove: async () => {
+  remove: () => {
     const file = installMarkerFile();
     if (file.exists) {
       file.delete();

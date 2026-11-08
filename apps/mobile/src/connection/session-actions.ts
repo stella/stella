@@ -119,15 +119,18 @@ export const restoreSession = async ({
   if (session === undefined || (await madeByThisInstall(marker, session))) {
     return session;
   }
-  // Nothing shows the session yet, so there is nothing to publish; a
-  // keychain that keeps it is cleared on the next launch instead.
-  await signOutSession({
-    store,
-    session,
-    beforeEnd,
-    revoke,
-    publish: () => undefined,
-    kept: () => undefined,
-  });
+  // Nothing shows the session yet, so there is nothing to publish. The
+  // launch starts signed out either way: a keychain that kept the session
+  // is cleared on a later launch, since the marker still does not name it.
+  (
+    await signOutSession({
+      store,
+      session,
+      beforeEnd,
+      revoke,
+      publish: () => undefined,
+      kept: () => undefined,
+    })
+  ).unwrapOr(undefined);
   return undefined;
 };

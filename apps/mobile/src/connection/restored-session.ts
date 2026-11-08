@@ -47,6 +47,9 @@ export const revokeSession = async (session: StoredSession) => {
   ).unwrapOr(undefined);
 };
 
+/** How long a reinstalled app's first launch waits for the old grant's revocation. */
+const REINSTALL_REVOKE_WAIT_MS = 2000;
+
 /**
  * The session a previous run kept, read once as the app starts. A keychain
  * that cannot be read (the device locked during a background launch) starts
@@ -65,16 +68,23 @@ const restoredSession: Promise<StoredSession | undefined> = Result.tryPromise(
       // The server drops this phone's push and timer registrations on its
       // own, as after any sign-out whose requests fail.
       beforeEnd: async (session) => {
-        const boundary = createDeviceSessionEnd();
-        boundary.register(async () => {
+        await createDeviceSessionEnd().run("signed-out", session);
+        // Best effort, as every session-end handler is.
+        Result.try(() => {
           clearTimerActions();
-        });
-        await boundary.run("signed-out", session);
+        }).unwrapOr(undefined);
       },
-      // The launch does not wait on the network: the revocation, which
-      // never rejects, carries on while the sign-in screen opens.
+      // The launch waits on the network only briefly: a slower revocation,
+      // which never rejects, carries on while the sign-in screen opens.
       revoke: async (session) => {
-        void revokeSession(session);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([
+          revokeSession(session),
+          new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, REINSTALL_REVOKE_WAIT_MS);
+          }),
+        ]);
+        clearTimeout(timer);
       },
     }),
 ).then((read) => (Result.isOk(read) ? read.value : undefined));
