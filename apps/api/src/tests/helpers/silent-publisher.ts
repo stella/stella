@@ -28,7 +28,7 @@ export const createSilentPublisher = ({ timeoutMs }: { timeoutMs: number }) => {
     const url = new URL(options.url);
     requested.push({
       url: url.href,
-      timeoutMs: options.timeoutMs ?? options.timeout?.ms,
+      timeoutMs: options.timeoutMs,
     });
     const transportUrl = new URL(url);
     transportUrl.protocol = "http:";
