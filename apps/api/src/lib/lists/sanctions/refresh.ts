@@ -829,21 +829,24 @@ export const refreshSanctionsSource = async ({
 
   // The deadline bounds the publisher's part only. Staging rows afterwards
   // answers to the caller's signal alone and resumes on the next run.
+  const deadline = AbortSignal.timeout(fetchDeadlineMs);
   const fetched = await fetchCurrentEdition({
     source,
     activeMarkerKey: snapshot.markerKey,
     hasActiveEdition: snapshot.activeEditionId !== null,
     fetchOptions: {
       permit,
-      signal: AbortSignal.any([signal, AbortSignal.timeout(fetchDeadlineMs)]),
+      signal: AbortSignal.any([signal, deadline]),
       euXmlUrlOverride,
       userAgent,
     },
     fetchMarker,
     fetchEdition,
   });
+  // A publisher that outlived its deadline failed to deliver; an abort that
+  // came from the caller alone stays an abort.
   const current: CurrentEditionResult =
-    fetched.status === "aborted" && !signal.aborted
+    fetched.status === "aborted" && deadline.aborted
       ? { status: "failed", code: "fetch-failed" }
       : fetched;
   switch (current.status) {
