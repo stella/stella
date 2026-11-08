@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -9,6 +10,7 @@ import {
   pluginProgressPrefix,
   progressTailLines,
   runLintPass,
+  tailwindEntryPoints,
 } from "./generate-tailwind-classes";
 
 test("a lint pass's large report is read while the pass runs", async () => {
@@ -76,5 +78,57 @@ test("a stalled lint pass reports its last plugin progress and the cache directo
     expect(message).toContain("Cache directory:\nsnapshot.lock 0 bytes");
   } finally {
     await rm(cacheDirectory, { recursive: true, force: true });
+  }
+});
+
+const turboTasks = v.object({
+  tasks: v.record(
+    v.string(),
+    v.looseObject({ dependsOn: v.optional(v.array(v.string()), []) }),
+  ),
+});
+const repositoryRoot = path.resolve(import.meta.dirname, "..");
+
+test("only workspaces the Tailwind rules lint wait for the Tailwind cache", async () => {
+  const { tasks } = v.parse(
+    turboTasks,
+    Bun.JSONC.parse(
+      await readFile(path.join(repositoryRoot, "turbo.json"), "utf-8"),
+    ),
+  );
+  const tailwindWorkspaces = await Promise.all(
+    [...new Set(tailwindEntryPoints.map(({ root }) => root))].map(
+      async (root) =>
+        v.parse(
+          v.object({ name: v.string() }),
+          JSON.parse(
+            await readFile(
+              path.join(repositoryRoot, root, "package.json"),
+              "utf-8",
+            ),
+          ),
+        ).name,
+    ),
+  );
+  const generation = "//#generate:tailwind-cache";
+  // Waiting on generation directly would put its hash, and so every Tailwind
+  // source, into every lint that has no Tailwind rules.
+  expect(
+    Object.entries(tasks)
+      .filter(([, { dependsOn }]) => dependsOn.includes(generation))
+      .map(([taskId]) => taskId)
+      .toSorted(),
+  ).toEqual(
+    tailwindWorkspaces.map((name) => `${name}#tailwind-cache`).toSorted(),
+  );
+  expect(tasks["tailwind-cache"]?.dependsOn).toEqual([]);
+  expect(tasks["lint"]?.dependsOn).toContain("tailwind-cache");
+  // A workspace lint override replaces the shared lint definition, so it has
+  // to name its workspace's cache node itself.
+  for (const name of tailwindWorkspaces) {
+    const override = tasks[`${name}#lint`];
+    if (override !== undefined) {
+      expect(override.dependsOn, name).toContain("tailwind-cache");
+    }
   }
 });
