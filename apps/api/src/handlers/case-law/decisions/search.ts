@@ -172,7 +172,6 @@ import { publicRowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { readOnlineIndexesReady } from "@/api/lib/db/online-index-readiness";
 import type { OnlineIndexName } from "@/api/lib/db/online-index-readiness";
 import { POSTGRES_INTEGER_MAX } from "@/api/lib/db/postgres-integer";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
@@ -286,10 +285,6 @@ import {
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import { readPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
 import {
-  publicReadTimeoutError,
-  publicReadTimeoutResponse,
-} from "@/api/lib/legal-search/public-read-timeout";
-import {
   blendStableCitationAuthority,
   courtTierSignal,
   DEFAULT_AUTHORITY_WEIGHT,
@@ -300,14 +295,12 @@ import type {
   RankedHit,
   ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
-import {
-  isSearchIndexUnavailable,
-  searchIndexUnavailableResponse,
-} from "@/api/lib/legal-search/search-index-unavailable";
+import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { runBoundedRequestStep } from "@/api/lib/load/request-latency-budget";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
-import { observedStatus } from "@/api/lib/observability/server-error-answer";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -328,7 +321,10 @@ import {
   readTermCoverage,
   type RelaxedExclusions,
   relaxedFetchLimit,
+  type RelaxedTopUpOutcome,
+  relaxedTopUpOutcome,
   shouldRelaxCaseLawSearch,
+  termsForCoverage,
 } from "./search-relaxed";
 import { projectCaseLawSearchResponse } from "./search-response";
 
@@ -2911,29 +2907,48 @@ const decodeCaseLawCorpusCursor = (
   return parsedCursor;
 };
 
-const TERM_COVERAGE_FAILURE_SINK = failureSink({
-  event: "case_law.search_term_coverage.failed",
+const RELAXED_TOP_UP_SKIPPED_SINK = failureSink({
+  event: "case_law.search_relaxed_top_up.skipped",
   expected: [],
 });
 
 /**
- * The answer to a failed term coverage read. A refusal the corpus index read
- * answered with (an expired request budget, an unavailable index) is returned
- * as its own envelope, which every route and tool reads with its own code;
- * any other failure is the coverage read's. Each 5xx answer observes its
- * cause on the request itself.
+ * The share of a request's budget the relaxed top-up may spend. It starts
+ * with a strict page in hand and repeats a whole search, so it never gets
+ * everything that is left.
  */
-const termCoverageFailure = (error: HandlerError<400 | 502 | 503>) => {
-  // An expired budget is read first: it is never the index being down.
-  const timedOut = publicReadTimeoutError(error) !== null;
-  if (!timedOut && isSearchIndexUnavailable(error)) {
-    // The index refusal observes its own cause.
-    return searchIndexUnavailableResponse(error);
+const CASE_LAW_RELAXED_TOP_UP_BUDGET_MS = 4000;
+
+/** The request's signal, ended early by the top-up's own budget. */
+const topUpSignal = (
+  signal: AbortSignal | undefined,
+  stepSignal: AbortSignal,
+): AbortSignal =>
+  signal === undefined ? stepSignal : AbortSignal.any([signal, stepSignal]);
+
+/** The top-up's hits; a top-up that did not finish is reported and adds none. */
+const settledRelaxedTopUp = <Hits>(
+  outcome: RelaxedTopUpOutcome<Hits> | null,
+  none: Hits,
+): Hits => {
+  if (outcome === null) {
+    return none;
   }
-  const answer = { sink: TERM_COVERAGE_FAILURE_SINK, cause: error };
-  return timedOut
-    ? publicReadTimeoutResponse(answer)
-    : observedStatus(answer, error.status, { message: error.message });
+  switch (outcome.type) {
+    case "read":
+      return outcome.value;
+    case "skipped":
+      observeFailure(outcome.error, { sink: RELAXED_TOP_UP_SKIPPED_SINK });
+      reportCaseLawIncompleteAnswer({
+        surface: "search",
+        reason: "relaxed_top_up_skipped",
+        count: 1,
+      });
+      return none;
+    default:
+      outcome satisfies never;
+      return panic("Unhandled relaxed top-up outcome");
+  }
 };
 
 /**
@@ -3314,14 +3329,15 @@ export const searchCorpusIndexDecisions = async ({
   const indexRanking = caseLawIndexRanking({ body, generation, indexId });
 
   // The strict page and the relaxed top-up are the same scan over different
-  // queries; `omit` names decisions the relaxed one must leave out.
+  // queries; `omit` names decisions the relaxed one must leave out, and its
+  // signal ends the scan when the top-up's own budget runs out.
   const readTextPage = async (
     query: string,
     pageLimit: number,
-    omit: RelaxedExclusions | null,
+    relaxed: { omit: RelaxedExclusions; signal: AbortSignal } | null,
   ) =>
     readCorpusIndexSearchPage({
-      signal,
+      signal: relaxed === null ? signal : topUpSignal(signal, relaxed.signal),
       hitDispositions,
       observer,
       cluster: serving.cluster,
@@ -3374,14 +3390,14 @@ export const searchCorpusIndexDecisions = async ({
           timeDbRead: async (run) =>
             await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
         });
-        return omit === null
+        return relaxed === null
           ? ranking
           : {
               ...ranking,
               ranked: ranking.ranked.filter(
                 (hit) =>
-                  !omit.ids.has(hit.id) &&
-                  !omit.languageGroupKeys.has(
+                  !relaxed.omit.ids.has(hit.id) &&
+                  !relaxed.omit.languageGroupKeys.has(
                     hydrated.get(hit.id)?.languageGroupKey ?? "",
                   ),
               ),
@@ -3482,7 +3498,7 @@ export const searchCorpusIndexDecisions = async ({
     interpretation.functionWords,
   ).required;
   // The strict hits stay first and untouched; partial matches only follow.
-  const readRelaxedHits = async () => {
+  const readRelaxedHits = async (stepSignal: AbortSignal) => {
     const relaxedQuery = await resolveCorpusIndexQuery({
       body,
       generation,
@@ -3501,13 +3517,16 @@ export const searchCorpusIndexDecisions = async ({
       relaxedQuery.resolved.query,
       relaxedFetchLimit(needed),
       {
-        ids: new Set(pageRanked.map((hit) => hit.id)),
-        languageGroupKeys: new Set(
-          pageRanked.flatMap((hit) => {
-            const key = hydrated.get(hit.id)?.languageGroupKey;
-            return key === null || key === undefined ? [] : [key];
-          }),
-        ),
+        signal: stepSignal,
+        omit: {
+          ids: new Set(pageRanked.map((hit) => hit.id)),
+          languageGroupKeys: new Set(
+            pageRanked.flatMap((hit) => {
+              const key = hydrated.get(hit.id)?.languageGroupKey;
+              return key === null || key === undefined ? [] : [key];
+            }),
+          ),
+        },
       },
     );
     const revisionField = requireCorpusIndexManifest("case_law", generation)
@@ -3528,10 +3547,11 @@ export const searchCorpusIndexDecisions = async ({
       )
       .join(" OR ");
     const coverageStartedAt = performance.now();
-    const queries = relaxedQuery.termQueries(requiredTerms);
+    const queries = relaxedQuery.termQueries(termsForCoverage(requiredTerms));
     const coverageById = await readTermCoverage({
       aggregate: getCorpusIndexClient(serving.cluster).aggregate,
       observer,
+      signal: stepSignal,
       indexId,
       ids: candidates.map(({ id }) => id),
       queries: queries.map((query) => `(${query}) AND (${candidateQuery})`),
@@ -3577,22 +3597,27 @@ export const searchCorpusIndexDecisions = async ({
       scan: sumCorpusIndexScans(relaxedPage.scan, coverageScan),
     });
   };
-  const relaxed = shouldRelaxCaseLawSearch({
-    body,
-    intentType: intent.type,
-    isFirstPage,
-    requiredTermCount: requiredTerms.length,
-    sort,
-    strictHitCount: page.hits.length,
-    limit,
-    strictEnd: searchPageEnd(searchPage),
-  })
-    ? await readRelaxedHits()
-    : Result.ok({ hits: [], scan: emptyCorpusIndexScan() });
-  if (Result.isError(relaxed)) {
-    return termCoverageFailure(relaxed.error);
-  }
-  const relaxedHits = relaxed.value.hits;
+  const relaxed = settledRelaxedTopUp(
+    shouldRelaxCaseLawSearch({
+      body,
+      intentType: intent.type,
+      isFirstPage,
+      requiredTermCount: requiredTerms.length,
+      sort,
+      strictHitCount: page.hits.length,
+      limit,
+      strictEnd: searchPageEnd(searchPage),
+    })
+      ? relaxedTopUpOutcome(
+          await runBoundedRequestStep(readRelaxedHits, {
+            label: "case-law-relaxed-top-up",
+            budgetMs: CASE_LAW_RELAXED_TOP_UP_BUDGET_MS,
+          }),
+        )
+      : null,
+    { hits: [], scan: emptyCorpusIndexScan() },
+  );
+  const relaxedHits = relaxed.hits;
   const servedIds = new Set(page.hits.map((hit) => String(hit.decisionId)));
   const dispositions = hitDispositions.snapshot();
   reportCaseLawIncompleteAnswer({
@@ -3624,7 +3649,7 @@ export const searchCorpusIndexDecisions = async ({
   });
   const hits = [...page.hits, ...relaxedHits];
   // An unrelaxed request adds the empty scan, which changes nothing.
-  report(hits.length, sumCorpusIndexScans(scan, relaxed.value.scan));
+  report(hits.length, sumCorpusIndexScans(scan, relaxed.scan));
   if (interpretation.droppedFunctionWords.length > 0) {
     reportCaseLawFunctionWordsExcluded({
       country: body.country,
