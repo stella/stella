@@ -71,8 +71,5 @@
   ],
   "packages/typescript-config/bun-test-each.test.ts": [
     "no-classified-reachability"
-  ],
-  "scripts/check-cli-contract-changeset.test.ts": [
-    "local-export-collision:runCliContractGuard"
   ]
 }

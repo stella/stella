@@ -6,11 +6,12 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { borrowDependencies } from "./borrowed-dependencies";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CATALOG_DIRECTORY = "packages/cli/capabilities";
@@ -163,11 +164,10 @@ test.skipIf(!process.env["CI"])(
         "user.email",
         "capability-merge-test@example.invalid",
       ]);
-      symlinkSync(
-        path.join(REPO_ROOT, "node_modules"),
-        path.join(checkout, "node_modules"),
-        "dir",
-      );
+      // The handler graph embeds the clone's own MCP App bundles, so they are
+      // built from its workspace packages before the first export.
+      borrowDependencies(REPO_ROOT, checkout);
+      await succeed([process.execPath, "scripts/prepare-mcp-apps.ts"]);
 
       // Clone uses committed files. Include the entry point under test when
       // validating an uncommitted change to its public invocation options.
@@ -206,7 +206,8 @@ test.skipIf(!process.env["CI"])(
 import { exportCapabilityCatalog } from ${JSON.stringify(path.join(checkout, EXPORTER))};
 for await (const mode of createInterface({ input: process.stdin })) {
   if (mode !== "write" && mode !== "check") throw new TypeError("Invalid export mode");
-  process.send(await exportCapabilityCatalog(mode));
+  const shards = await exportCapabilityCatalog(mode, true);
+  process.send(mode === "write" && shards === 0 ? await exportCapabilityCatalog(mode) : shards);
 }
 process.exit(0);`,
           ],
@@ -293,16 +294,27 @@ process.exit(0);`,
         expect(generatedDispatch).toContain('featureId: "time-billing"');
         expect(generatedDispatch).toContain('featureAccess: "required"');
         expectedDispatch.set(dispatch, generatedDispatch);
-        await succeed(["git", "add", fixture, ROUTES_PATH, CATALOG_DIRECTORY]);
+        // Shards and dispatch modules are derived, never committed: a branch
+        // carries only the handler and its route.
+        await succeed(["git", "add", "--all", "--", "."]);
         const staged = await succeed([
           "git",
           "diff",
           "--cached",
           "--name-only",
+          "--",
+          ".",
+          ":!docs/capability-coverage.md",
         ]);
         expect(staged.split("\n").toSorted()).toEqual(
-          [fixture, ROUTES_PATH, catalog].toSorted(),
+          [fixture, ROUTES_PATH].toSorted(),
         );
+        await succeed([
+          "git",
+          "restore",
+          "--staged",
+          "docs/capability-coverage.md",
+        ]);
         await succeed([
           "git",
           "commit",
@@ -330,11 +342,18 @@ process.exit(0);`,
       }
       await succeed(["git", "read-tree", "--reset", "-u", tree]);
       await restartExporter();
-      const mergedCatalogBytes = shardBytes(checkout, [CATALOG_DIRECTORY]);
       await regenerate();
-      expect(shardBytes(checkout, [CATALOG_DIRECTORY])).toEqual(
-        mergedCatalogBytes,
-      );
+      for (const probe of PROBES) {
+        expect(
+          existsSync(
+            path.join(
+              checkout,
+              CATALOG_DIRECTORY,
+              `${capabilityId(probe)}.json`,
+            ),
+          ),
+        ).toBe(true);
+      }
       for (const [dispatch, source] of expectedDispatch) {
         expect(readFileSync(path.join(checkout, dispatch), "utf-8")).toBe(
           source,

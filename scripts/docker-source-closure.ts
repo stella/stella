@@ -2262,6 +2262,33 @@ type HydrateStageSourcesOptions = {
   production: "guaranteed" | "conditional";
   producers: ReturnType<typeof sourceProducers>;
 };
+/**
+ * A producer may import the outputs it derives: it seeds a static import
+ * target before loading it and reads the rest lazily. Its own outputs are
+ * therefore never prerequisites of the RUN that executes it.
+ */
+const producerOwnOutputs = (
+  root: string,
+  entry: SourceCommandEntry,
+  producers: ReturnType<typeof sourceProducers>,
+): SourceTree =>
+  new Map(
+    producers
+      .filter(({ entries }) =>
+        entries.some(
+          (producer) =>
+            producer.file === entry.file &&
+            JSON.stringify(producer.args) === JSON.stringify(entry.args),
+        ),
+      )
+      .flatMap(({ generator }) =>
+        generator.outputs.flatMap((pattern) => [
+          ...new Bun.Glob(pattern).scanSync({ cwd: root, onlyFiles: true }),
+        ]),
+      )
+      .map((output) => [absolute("/app", output), output] as const),
+  );
+
 const hydrateStageSources = ({
   root,
   stage,
@@ -2452,11 +2479,22 @@ export const checkDockerSource = (
             if (isPackagedArtifact(runStage, entry.file)) {
               return;
             }
-            const closure = stageClosureProblems({
-              root,
-              stage: runStage,
-              entries: [entry.file],
-            });
+            const ownOutputs = producerOwnOutputs(root, entry, producers);
+            const closure =
+              ownOutputs.size === 0
+                ? stageClosureProblems({
+                    root,
+                    stage: runStage,
+                    entries: [entry.file],
+                  })
+                : stageClosureProblems({
+                    root,
+                    stage: {
+                      ...createStage(runStage),
+                      files: new Map([...runStage.files, ...ownOutputs]),
+                    },
+                    entries: [entry.file],
+                  });
             problems.push(...closure);
             if (closure.length > 0) {
               return;

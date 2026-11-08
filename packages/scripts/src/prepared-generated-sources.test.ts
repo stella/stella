@@ -58,10 +58,15 @@ const fixture = () => {
     JSON.stringify({ version: "test-oxc" }),
   );
   write("input.ts", "export const input = 1;\n");
-  write("packages/cli/capabilities/fixture.read.json", '{"id":"fixture.read"}');
+  write(
+    "apps/api/src/mcp/generated/capability-dispatch.ts",
+    'import { CAPABILITY_DISPATCH as dispatch0 } from "./capability-dispatch/fixture.read";\n',
+  );
   write("packages/mcp-apps/src/fixture/app.html", "<!doctype html>");
   for (const file of ciGeneratedFiles(root)) {
-    write(file, `prepared:${file}\n`);
+    if (file !== "apps/api/src/mcp/generated/capability-dispatch.ts") {
+      write(file, `prepared:${file}\n`);
+    }
   }
   // Ignored and never committed: generation names these files.
   write(TAILWIND_SNAPSHOT, "{}\n");
@@ -70,9 +75,13 @@ const fixture = () => {
     [
       "add",
       "input.ts",
-      "packages/cli/capabilities/fixture.read.json",
       "packages/mcp-apps/src/fixture/app.html",
-      ...ciGeneratedFiles(root),
+      // Per-capability outputs are ignored, untracked files in a checkout.
+      ...ciGeneratedFiles(root).filter(
+        (file) =>
+          !file.startsWith("apps/api/src/mcp/generated/capability-dispatch/") &&
+          !file.startsWith("packages/cli/capabilities/"),
+      ),
     ],
     [
       "-c",
@@ -135,7 +144,7 @@ test("every prepared output has required identity and byte coverage", () => {
           Object.entries(manifest.files).filter(([output]) => output !== file),
         ),
       };
-      expect(() => validatePreparedManifest(root, missing)).toThrow(
+      expect(() => validatePreparedManifest({ root, raw: missing })).toThrow(
         "incomplete output inventory",
       );
       const original = readFileSync(path.join(root, file), "utf-8");
@@ -147,9 +156,12 @@ test("every prepared output has required identity and byte coverage", () => {
       write(file, original);
     }
     expect(() =>
-      validatePreparedManifest(root, {
-        ...manifest,
-        files: { ...manifest.files, extra: generatedFileHash("extra") },
+      validatePreparedManifest({
+        root,
+        raw: {
+          ...manifest,
+          files: { ...manifest.files, extra: generatedFileHash("extra") },
+        },
       }),
     ).toThrow("incomplete output inventory");
   } finally {
@@ -157,7 +169,7 @@ test("every prepared output has required identity and byte coverage", () => {
   }
 }, 30_000);
 
-test("CLI runtime preparation consumes a verified artifact without invoking generation", () => {
+test("CLI runtime preparation preserves verified modules and generates npm catalog shards", () => {
   const { root, manifest, write } = fixture();
   try {
     for (const file of [
@@ -191,8 +203,21 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
       mkdirSync(path.dirname(destination), { recursive: true });
       symlinkSync(directory, destination);
     }
+    for (const file of [
+      "scripts/prepare-mcp-apps.ts",
+      "apps/api/scripts/generate-capability-runtime.ts",
+    ]) {
+      write(
+        file,
+        'process.stderr.write("fixture producer invoked\\n"); process.exit(0);',
+      );
+    }
     write(
-      "packages/cli/src/codegen.ts",
+      "apps/api/scripts/export-capability-catalog.ts",
+      'import { mkdirSync, writeFileSync } from "node:fs"; mkdirSync("packages/cli/capabilities", { recursive: true }); writeFileSync("packages/cli/capabilities/widgets.list.json", JSON.stringify({ id: "widgets.list" })); process.stderr.write("fixture catalog generated\\n");',
+    );
+    write(
+      "packages/cli/scripts/codegen.ts",
       'process.stderr.write("fixture generator invoked"); process.exit(81);',
     );
     write(
@@ -208,6 +233,18 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
       { cwd: root, env },
     );
     expect(prepared.exitCode, prepared.stderr.toString()).toBe(0);
+    expect(prepared.stderr.toString()).toContain("fixture catalog generated");
+    expect(
+      JSON.parse(
+        readFileSync(
+          path.join(root, "packages/cli/capabilities/widgets.list.json"),
+          "utf-8",
+        ),
+      ),
+    ).toEqual({ id: "widgets.list" });
+    expect(prepared.stderr.toString()).not.toContain(
+      "fixture producer invoked",
+    );
     expect(prepared.stderr.toString()).not.toContain(
       "fixture generator invoked",
     );
@@ -234,13 +271,13 @@ test("source and toolchain changes invalidate prepared sources while output writ
       compilerVersion: "different",
     })) {
       const mutation = { ...manifest, [field]: value };
-      expect(() => validatePreparedManifest(root, mutation)).toThrow(
+      expect(() => validatePreparedManifest({ root, raw: mutation })).toThrow(
         "does not match this source and toolchain",
       );
     }
     write("input.ts", "export const input = 2;\n");
     expect(generatedInputIdentity(root).inputHash).not.toBe(manifest.inputHash);
-    expect(() => validatePreparedManifest(root, manifest)).toThrow(
+    expect(() => validatePreparedManifest({ root, raw: manifest })).toThrow(
       "does not match this source and toolchain",
     );
   } finally {
@@ -265,7 +302,9 @@ test("restore validates the whole artifact before any writes and restores every 
       const original = readFileSync(path.join(source, "files", file), "utf-8");
       write(`artifact/files/${file}`, "incomplete artifact");
       expect(() => restorePreparedGeneratedSources(root, source)).toThrow(
-        `Generated source artifact differs: ${file}`,
+        file === "apps/api/src/mcp/generated/capability-dispatch.ts"
+          ? "incomplete output inventory"
+          : `Generated source artifact differs: ${file}`,
       );
       for (const output of Object.keys(manifest.files)) {
         expect(readFileSync(path.join(root, output), "utf-8")).toBe(
@@ -281,6 +320,56 @@ test("restore validates the whole artifact before any writes and restores every 
         JSON.parse(readFileSync(preparedManifestPath(root), "utf-8")),
       ),
     ).toEqual(manifest);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a clean checkout restores every dispatch module with its capability shard", () => {
+  const { root, manifest, write } = fixture();
+  const source = path.join(root, "artifact");
+  const outputs = ciGeneratedFiles(root);
+  const module =
+    "apps/api/src/mcp/generated/capability-dispatch/fixture.read.ts";
+  const shard = "packages/cli/capabilities/fixture.read.json";
+  try {
+    expect(outputs).toContain(module);
+    expect(outputs).toContain(shard);
+    write("artifact/manifest.json", JSON.stringify(manifest));
+    // The artifact carries every manifest file, generated-directory files
+    // (such as the Tailwind class cache) included.
+    for (const file of Object.keys(manifest.files)) {
+      write(
+        `artifact/files/${file}`,
+        readFileSync(path.join(root, file), "utf-8"),
+      );
+      rmSync(path.join(root, file));
+    }
+    expect(ciGeneratedFiles(root)).not.toContain(module);
+    const escaped = {
+      ...manifest,
+      files: Object.fromEntries(
+        Object.entries(manifest.files).map(([file, hash]) => [
+          file === module ? "../outside.ts" : file,
+          hash,
+        ]),
+      ),
+    };
+    write("artifact/manifest.json", JSON.stringify(escaped));
+    expect(() => restorePreparedGeneratedSources(root, source)).toThrow(
+      "incomplete output inventory",
+    );
+    expect(() => readFileSync(path.join(root, module))).toThrow("ENOENT");
+    write("artifact/manifest.json", JSON.stringify(manifest));
+    restorePreparedGeneratedSources(root, source);
+    expect(ciGeneratedFiles(root)).toEqual(outputs);
+    expect(verifyPreparedGeneratedFiles(root, manifest)).toEqual(manifest);
+    expect(readFileSync(path.join(root, module), "utf-8")).toBe(
+      `prepared:${module}\n`,
+    );
+    expect(readFileSync(path.join(root, shard), "utf-8")).toBe(
+      `prepared:${shard}\n`,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -341,7 +430,9 @@ test("a prepared file is offered only for the recorded inputs and bytes", () => 
     // Bytes on disk no longer those the producer recorded.
     write(file, "rewritten\n");
     expect(preparedGeneratedFile(root, file)).toBeUndefined();
-    write(file, `prepared:${file}\n`);
+    if (file !== "apps/api/src/mcp/generated/capability-dispatch.ts") {
+      write(file, `prepared:${file}\n`);
+    }
     expect(preparedGeneratedFile(root, file)).toBeDefined();
     // Source inputs changed since the producer ran.
     write("input.ts", "export const input = 2;\n");
@@ -398,7 +489,7 @@ test("a generated directory travels by file name and bytes and is required", () 
       manifest.files;
     expect(snapshotHash).toBe(generatedFileHash("{}\n"));
     expect(() =>
-      validatePreparedManifest(root, withFiles(withoutCache)),
+      validatePreparedManifest({ root, raw: withFiles(withoutCache) }),
     ).toThrow("incomplete output inventory");
     for (const name of [
       `${TAILWIND_CLASS_CACHE.directory}/../input.ts`,
@@ -408,10 +499,13 @@ test("a generated directory travels by file name and bytes and is required", () 
     ]) {
       expect(
         () =>
-          validatePreparedManifest(
+          validatePreparedManifest({
             root,
-            withFiles({ ...manifest.files, [name]: generatedFileHash("{}") }),
-          ),
+            raw: withFiles({
+              ...manifest.files,
+              [name]: generatedFileHash("{}"),
+            }),
+          }),
         name,
       ).toThrow("incomplete output inventory");
     }
@@ -511,8 +605,13 @@ test("API runtime generation works with only packaged sources and rejects a root
       path.join(root, "node_modules"),
     );
     write(
-      "packages/cli/capabilities/widgets.list.json",
-      JSON.stringify({ id: "widgets.list", featureId: "fixture-feature" }),
+      "generate.ts",
+      `import { hasPreparedGeneratedSources } from "./packages/scripts/src/prepared-generated-sources";
+import { writeCapabilityRuntime } from "./apps/api/scripts/lib/write-capability-runtime";
+const root = new URL("./", import.meta.url);
+if (hasPreparedGeneratedSources(root.pathname)) throw new TypeError("Fixture must generate its runtime");
+await writeCapabilityRuntime([{ id: "widgets.list", featureId: "fixture-feature" }], root);
+process.exit(0);\n`,
     );
     symlinkSync(
       new URL("../../../apps/api/scripts/lib", import.meta.url).pathname,
@@ -525,10 +624,7 @@ test("API runtime generation works with only packaged sources and rejects a root
       ),
     );
     const run = () =>
-      Bun.spawnSync(
-        [process.execPath, "apps/api/scripts/generate-capability-runtime.ts"],
-        { cwd: root, env },
-      );
+      Bun.spawnSync([process.execPath, "generate.ts"], { cwd: root, env });
     const generated = run();
     expect(generated.exitCode, generated.stderr.toString()).toBe(0);
     expect(
@@ -536,13 +632,20 @@ test("API runtime generation works with only packaged sources and rejects a root
         path.join(root, "apps/api/src/mcp/generated/capability-catalog.ts"),
         "utf-8",
       ),
-    ).toContain("widgets.list.json");
+    ).toContain('"id":"widgets.list"');
     expect(
       readFileSync(
         path.join(root, "apps/api/src/mcp/generated/capability-dispatch.ts"),
         "utf-8",
       ),
     ).toContain("widgets.list");
+    expect(
+      ciGeneratedFiles(root).filter((file) =>
+        file.startsWith("apps/api/src/mcp/generated/capability-dispatch/"),
+      ),
+    ).toEqual([
+      "apps/api/src/mcp/generated/capability-dispatch/widgets.list.ts",
+    ]);
     expect(
       readFileSync(
         path.join(

@@ -22,6 +22,8 @@ import type {
   RouteNode,
 } from "./route-types.js";
 
+const repositoryCapabilityCatalog = readCapabilityCatalog();
+
 const objectSchema = (
   properties: Record<string, unknown>,
   required: readonly string[] = [],
@@ -44,7 +46,7 @@ const entry = (
 });
 
 test("catalog confirmation requirements survive generated leaf projection", () => {
-  const parsed = parseCapabilityCatalog(readCapabilityCatalog());
+  const parsed = parseCapabilityCatalog(repositoryCapabilityCatalog);
   expect(parsed).not.toBeNull();
   const guarded =
     parsed?.filter((candidate) => candidate.confirmation === "required") ?? [];
@@ -663,7 +665,7 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
       "generated/registry-snapshot.json",
       import.meta.url,
     );
-    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
     if (catalog === null) {
       throw new TypeError("Invalid capability catalog");
     }
@@ -681,7 +683,7 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
   });
 
   test("agent workflow capabilities generate their commands and flags", async () => {
-    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
     if (catalog === null) {
       throw new TypeError("Invalid capability catalog");
     }
@@ -742,7 +744,7 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
     // for, never a string|scalar union. A union surviving here
     // would give the generated command an opaque `--input` where the MCP
     // surface advertises a bounded flag.
-    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
     if (catalog === null) {
       throw new TypeError("Invalid capability catalog");
     }
@@ -790,7 +792,7 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
     // read as a plain JSON capability by anything less strict than
     // `parseCapabilityCatalog`, which is exactly the silent default this
     // field replaced.
-    const catalog = readCapabilityCatalog();
+    const catalog = repositoryCapabilityCatalog;
     expect(catalog.length).toBeGreaterThan(0);
     expect(parseCapabilityCatalog(catalog)).not.toBeNull();
     for (const capability of catalog) {
@@ -833,7 +835,7 @@ describe("curated commands must not shadow capability commands", () => {
   };
 
   test("every generated capability stays at one fixed-depth namespace", async () => {
-    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
     if (catalog === null) {
       throw new TypeError("Invalid capability catalog");
     }
@@ -900,7 +902,7 @@ describe("every capability flag maps to a real path in its wrapper schema", () =
   };
 
   test("no flag targets a path absent from the wrapper schema", async () => {
-    const raw = readCapabilityCatalog();
+    const raw = repositoryCapabilityCatalog;
     const entries = parseCapabilityCatalog(raw);
     expect(entries).not.toBeNull();
 

@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/feature-access/registry";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -34,9 +35,7 @@ const MEMORY_FEATURE_FLAG =
   FEATURE_REGISTRY[AI_MEMORY_FEATURE_ID].deploymentFeature;
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
 const { parseCatalog } = await import("@/api/mcp/capability-tools");
-const { readCapabilityCatalog } =
-  await import("@stll/cli/capability-catalog-data");
-const catalog = parseCatalog(readCapabilityCatalog());
+const catalog = parseCatalog(repositoryCapabilityCatalog);
 
 const MATTER = "00000000-0000-4000-8000-0000000000a1";
 const ARCHIVED_MATTER = "00000000-0000-4000-8000-0000000000a2";

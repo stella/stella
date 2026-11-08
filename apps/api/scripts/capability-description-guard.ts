@@ -25,11 +25,8 @@
 // exception" tier. It ends empty, at which point `description` becomes a
 // required field on HandlerConfig and this guard retires.
 //
-// Reads the committed catalog rather than importing the handler graph: no env,
-// no module loading, and the artifact is already pinned to the live
-// handlers by the capability-catalog drift guard
-// (`export-capability-catalog.ts --check`), which runs beside this one. A stale
-// artifact therefore cannot hide debt from this guard without failing that one.
+// Builds the catalog from the live handlers so the guard also works before
+// packaging has written the npm capability shards.
 //
 // Modes:
 //   bun apps/api/scripts/capability-description-guard.ts               CI gate (exit 1 on failure)
@@ -41,18 +38,15 @@
 
 import { panic } from "better-result";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
-import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
 import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
+import { buildCapabilityCatalog } from "./export-capability-catalog";
 import { REPO_ROOT } from "./lib/enumerate-safe-handlers";
 
 const LEDGER_PATH = path.resolve(
   REPO_ROOT,
   "apps/api/capability-description-ledger.json",
 );
-
-const CATALOG_PATH = "packages/cli/capabilities/";
 
 type CatalogEntry = { id: string; description?: string };
 
@@ -120,13 +114,12 @@ export const computeLedgerDiff = ({
   return { unledgered, described, unknown, malformed };
 };
 
-const readCatalog = (relativePath: string): CatalogEntry[] => {
-  const absolute = path.resolve(REPO_ROOT, relativePath);
-  const raw = readCapabilityCatalog(pathToFileURL(`${absolute}/`));
+const readCatalog = async (): Promise<CatalogEntry[]> => {
+  const raw = await buildCapabilityCatalog();
   const parsed = parseCapabilityCatalog(raw);
   if (parsed === null) {
     return panic(
-      `capability-description-guard: ${relativePath} is not a valid capability catalog.`,
+      `capability-description-guard: generated catalog is not a valid capability catalog.`,
     );
   }
   return parsed.map(({ id, description }) =>
@@ -167,8 +160,8 @@ type Loaded = {
   undescribed: string[];
 };
 
-const loadCatalog = (): Loaded => {
-  const entries = readCatalog(CATALOG_PATH);
+const loadCatalog = async (): Promise<Loaded> => {
+  const entries = await readCatalog();
   return {
     catalogIds: entries.map(({ id }) => id).toSorted(),
     undescribed: findUndescribedIds(entries),
@@ -176,7 +169,7 @@ const loadCatalog = (): Loaded => {
 };
 
 const runCheck = async (): Promise<number> => {
-  const { catalogIds, undescribed } = loadCatalog();
+  const { catalogIds, undescribed } = await loadCatalog();
 
   if (catalogIds.length === 0) {
     console.error(
@@ -242,7 +235,7 @@ const runCheck = async (): Promise<number> => {
 };
 
 const runWriteLedger = async (): Promise<number> => {
-  const { undescribed } = loadCatalog();
+  const { undescribed } = await loadCatalog();
   await writeLedger(undescribed);
   console.log(
     `capability-description-guard --write-ledger: wrote ${undescribed.length} capability ids to apps/api/capability-description-ledger.json`,

@@ -69,12 +69,49 @@ for (const [job, shards] of Object.entries(TEST_JOB_SHARDS)) {
   );
 }
 
+// A derived output is never committed, so a change reaches its owner only
+// through the generator's declared inputs. Resolved here from the manifest,
+// to a fixed point, independently of the selector's own expansion.
+const derivedOwners = (file: string): ReadonlySet<string> => {
+  const derived = GENERATORS.filter(
+    ({ outputKind }) => outputKind === "derived",
+  );
+  const changed = new Set([file]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const { inputs, outputs } of derived) {
+      const selected = [...changed].some((candidate) =>
+        inputs.some(
+          (input) =>
+            candidate === input || new Bun.Glob(input).match(candidate),
+        ),
+      );
+      for (const output of selected ? outputs : []) {
+        if (!changed.has(output)) {
+          changed.add(output);
+          grew = true;
+        }
+      }
+    }
+  }
+  changed.delete(file);
+  return new Set(
+    [...changed].flatMap((output) =>
+      [...graph.packages]
+        .filter(([, { directory }]) => output.startsWith(`${directory}/`))
+        .map(([owner]) => owner),
+    ),
+  );
+};
+
 const assertEnumeration = (table: CheckInputs) => {
   expect([...table.keys()].toSorted()).toEqual(
     [...oracleInputs.keys()].toSorted(),
   );
   for (const [name, { directory }] of graph.packages) {
     const file = `${directory}/src/__affected_probe__.ts`;
+    const owners = derivedOwners(file);
     const { selected } = selectChecks({
       changed: [file],
       graph,
@@ -85,6 +122,7 @@ const assertEnumeration = (table: CheckInputs) => {
         (input) =>
           input === "**" ||
           reaches(input, name) ||
+          [...owners].some((owner) => reaches(input, owner)) ||
           (graph.inputs.get(input) ?? []).some((pattern) =>
             new Bun.Glob(pattern).match(file),
           ),
@@ -139,7 +177,7 @@ test("leaf and shared core changes follow actual dependencies", () => {
 test("derived generator inputs select their output owners even before output files exist", () => {
   const generator = GENERATORS.find(({ id }) => id === "capability-runtime");
   expect(generator).toBeDefined();
-  expect(generator?.inputs).toContain("packages/cli/capabilities/**");
+  expect(generator?.inputs).toContain("packages/api-contract/assets/**");
   expect(
     generator?.outputs.some((output) => output.startsWith("apps/api/")),
   ).toBe(true);
@@ -154,7 +192,7 @@ test("derived generator inputs select their output owners even before output fil
     inputs: new Map<string, readonly string[]>(),
   };
   expect(
-    affectedPackages(["packages/cli/capabilities/probe.json"], isolated).has(
+    affectedPackages(["packages/api-contract/assets/probe.json"], isolated).has(
       "@stll/api",
     ),
   ).toBe(true);

@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
-
 import { isRecord } from "@/api/lib/type-guards";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
-const capabilityCatalog = readCapabilityCatalog().map((entry) => {
+const capabilityCatalog = repositoryCapabilityCatalog.map((entry) => {
   if (!isRecord(entry)) {
     throw new TypeError("Invalid capability catalog entry");
   }

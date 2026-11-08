@@ -133,11 +133,15 @@ test("a derived module is followed through its generator inputs, never its ignor
   expect(graph.dependencies).toContain(
     "apps/api/scripts/generate-capability-runtime.ts",
   );
+  // The runtime derives the catalog from the handler graph, not CLI shards.
+  expect(graph.dependencies).toContain(
+    "apps/api/scripts/export-capability-catalog.ts",
+  );
   expect(
     [...graph.dependencies].some((file) =>
       file.startsWith("packages/cli/capabilities/"),
     ),
-  ).toBe(true);
+  ).toBe(false);
 });
 
 test("a newly added transitive import is picked up without editing the detector", () => {
@@ -233,7 +237,7 @@ test("a concrete path selected by a derived output glob follows generator inputs
         .map((input) => [input, ""]),
     ),
     ...DETECTOR_SOURCES,
-    "packages/cli/capabilities/lists.verifications.get.json": "{}",
+    "apps/api/src/handlers/lists/verifications/get.ts": "",
     "apps/api/package.json": readFileSync(
       new URL("../apps/api/package.json", import.meta.url),
       "utf-8",
@@ -261,11 +265,9 @@ test("a concrete path selected by a derived output glob follows generator inputs
     expect(graph.dependencies).toContain(
       "apps/api/scripts/generate-capability-runtime.ts",
     );
-    expect(
-      [...graph.dependencies].some((file) =>
-        file.startsWith("packages/cli/capabilities/"),
-      ),
-    ).toBe(true);
+    expect(graph.dependencies).toContain(
+      "apps/api/src/handlers/lists/verifications/get.ts",
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

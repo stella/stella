@@ -56,8 +56,12 @@ COPY --from=install-inputs /app/apps/web/src/fonts.css /app/apps/web/src/fonts.c
 COPY --from=install-inputs /app/apps/web/src/i18n/langs/ /app/apps/web/src/i18n/langs/
 COPY --from=install-inputs /app/apps/web/public/fonts/ /app/apps/web/public/fonts/
 COPY --from=install-inputs /app/scripts/generated-artifacts.ts /app/scripts/generated-artifacts.ts
-RUN bun apps/api/scripts/generate-capability-runtime.ts
 RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/scripts/build-mcp-apps.ts
+# The capability runtime derives its catalog from the handler graph, which
+# embeds the MCP App bundles built above and validates the API environment
+# when it loads. The committed example environment supplies static
+# validation defaults; no runtime configuration enters the derived catalog.
+RUN NODE_ENV=test bun --env-file=apps/api/.env.example apps/api/scripts/generate-capability-runtime.ts
 # The server and collab are bundles run by the image's Bun, not --compile
 # binaries: each compiled binary embeds another full copy of the runtime.
 # Every bundle sets --public-path to the directory it lands in on the runner.

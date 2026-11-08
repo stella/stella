@@ -27,7 +27,9 @@ import type { CurrentRegistry } from "./registry-refresh.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
 import type { RouteNode } from "./route-types.js";
 
-const rawCatalog = readCapabilityCatalog();
+const repositoryCapabilityCatalog = readCapabilityCatalog();
+
+const rawCatalog = repositoryCapabilityCatalog;
 const catalog = parseCapabilityCatalog(rawCatalog);
 if (catalog === null) {
   panic("Invalid committed deployment projection catalog");

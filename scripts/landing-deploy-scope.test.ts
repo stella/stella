@@ -175,19 +175,17 @@ test("the repository declares the landing build's outside reads", () => {
   );
 });
 
-test("CLI runtime generator inputs trigger deployment through the real build declarations", () => {
+test("committed CLI documentation triggers deployment through the real build declarations", () => {
   const rootInputs = landingBuildRootInputs(
     Bun.JSONC.parse(
       readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
     ),
   );
-  const runtime = GENERATORS.find(({ id }) => id === "cli-runtime");
-  if (runtime === undefined) {
-    throw new TypeError("CLI runtime generator is missing");
+  const reference = GENERATORS.find(({ id }) => id === "cli-tool-reference");
+  if (reference === undefined) {
+    throw new TypeError("CLI documentation generator is missing");
   }
-  const cliInputs = runtime.inputs.filter((input) =>
-    input.startsWith("packages/cli/"),
-  );
+  const cliInputs = reference.outputs;
   expect(cliInputs.length).toBeGreaterThan(0);
   const base = revision(lockfile());
   const head = revision(lockfile());

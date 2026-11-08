@@ -109,8 +109,10 @@ jobs:
           RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
         run: git checkout --detach "$RELEASE_SHA"
 
-      # Only the dependency audit needs the install; a failed install leaves
-      # that gate unrun (the verdict reports it) while the others still run.
+      # The dependency audit needs the install, and so does the CLI coupling
+      # gate when it derives the capability catalog to compare. A failed
+      # install leaves the audit unrun and fails that comparison closed (the
+      # verdict reports both) while the others still run.
       - name: Install dependencies for the release audit
         id: install
         continue-on-error: true
@@ -150,8 +152,9 @@ jobs:
       # only after production serves it. A stable tag is refused while a
       # pending changeset still names the CLI (its coupled version does not
       # exist yet) or while the commit's CLI is behind, or drifted from, the
-      # version users install. Runs without an install: the script uses only
-      # Bun and Node built-ins plus npm on the runner.
+      # version users install. The script uses only Bun and Node built-ins
+      # plus npm on the runner; its drift comparison derives the generated
+      # capability catalog from the installed sources.
       - name: Refuse a stable tag whose CLI release is not settled
         continue-on-error: true
         env:

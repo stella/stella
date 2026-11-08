@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 
-import { readCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-data";
 import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-defs";
+import { repositoryCapabilityCatalog } from "../../src/tests/helpers/repository-capability-catalog";
 import {
   inputSchemaByteSize,
   MAX_CAPABILITY_SCHEMA_BYTES,
@@ -17,19 +16,18 @@ import { compactSchemaDefs, recompactSchemaDefs } from "./compact-schema-defs";
 // even slightly more than its source is a schema the CLI accepts and the
 // handler then rejects; one that admits less is a command the CLI refuses to
 // send at all. Either way the failure is silent, so the property is asserted
-// over every capability in the committed catalog rather than spot-checked on
+// over every capability in the live catalog rather than spot-checked on
 // the recursive view schemas that motivated the pass.
 //
 // The exporter runs the same check against the LIVE handler schemas before it
 // writes anything (`compactInputSchemaGuarded`), which is what establishes
 // `expand(compact(source)) === source`. This file pins the property on the
-// committed artifact, where it holds with no handler graph, no env, and no
-// database, and where it also catches a hand-edit of the generated JSON.
+// exported entries before any npm shards are written.
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const catalogEntries = readCapabilityCatalog().map((entry) => {
+const catalogEntries = repositoryCapabilityCatalog.map((entry) => {
   if (!isRecord(entry)) {
     throw new TypeError("Expected capability catalog object");
   }
@@ -55,7 +53,7 @@ const compactedById = new Map(
   ),
 );
 
-describe("committed capability catalog", () => {
+describe("exported capability catalog", () => {
   test("holds every capability, so the properties below are not vacuous", () => {
     expect(compactedById.size).toBeGreaterThan(300);
   });
@@ -118,8 +116,7 @@ describe("compact/expand round trip over every catalog entry", () => {
         mismatches.push(`${id}: recompaction failed: ${recompacted.reason}`);
         continue;
       }
-      // Deterministic down to the byte, in a different process than the one
-      // that wrote the artifact.
+      // Recompaction must preserve the exporter's complete serialized entry.
       const recompactedEntry = {
         ...entry,
         id,
@@ -127,13 +124,7 @@ describe("compact/expand round trip over every catalog entry", () => {
       };
       if (
         serializeCapabilityShard(recompactedEntry) !==
-        readFileSync(
-          new URL(
-            `../../../../packages/cli/capabilities/${id}.json`,
-            import.meta.url,
-          ),
-          "utf-8",
-        )
+        serializeCapabilityShard({ ...entry, id })
       ) {
         mismatches.push(`${id}: recompaction did not reproduce the artifact`);
         continue;

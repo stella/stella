@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -171,6 +172,24 @@ test("web sources generate once across compiler tasks and restore until source i
         },
       }),
     );
+    write(
+      "packages/cli/package.json",
+      JSON.stringify({
+        name: "@stll/cli",
+        scripts: {
+          "codegen:runtime": "bun scripts/codegen.ts",
+          "generate:capabilities": "bun scripts/generate-capabilities.ts",
+        },
+      }),
+    );
+    write(
+      "packages/cli/scripts/codegen.ts",
+      "console.log('CLI runtime generated');",
+    );
+    write(
+      "packages/cli/scripts/generate-capabilities.ts",
+      "await Bun.write('capabilities/fixture.list.json', JSON.stringify({ id: 'fixture.list' }));",
+    );
     const apiTask = tasks["@stll/api#generate:capability-runtime"];
     if (
       !isRecord(apiTask) ||
@@ -221,7 +240,7 @@ test("web sources generate once across compiler tasks and restore until source i
     );
     write(
       ".gitignore",
-      `node_modules/\n.turbo/\napps/web/src/generated/api-routes.gen.ts\napps/web/src/routeTree.gen.ts\napps/web/src/route-templates.gen.ts\nruns.log\ntask-hash\n${apiTask[
+      `node_modules/\n.turbo/\napps/web/src/generated/api-routes.gen.ts\napps/web/src/routeTree.gen.ts\napps/web/src/route-templates.gen.ts\npackages/cli/capabilities/\nruns.log\ntask-hash\n${apiTask[
         "outputs"
       ]
         .map((output) => `apps/api/${output}\n`)
@@ -260,6 +279,8 @@ test("web sources generate once across compiler tasks and restore until source i
         tasks: {
           "@stll/api#generate:capability-runtime": apiTask,
           "@stll/mcp-apps#build": mcpTask,
+          "@stll/cli#generate:capabilities":
+            tasks["@stll/cli#generate:capabilities"],
           "@stll/api#generate:typecheck-declarations": {
             inputs: ["src/**"],
             outputs: [],
@@ -283,6 +304,7 @@ test("web sources generate once across compiler tasks and restore until source i
           "apps/api": { name: "@stll/api" },
           "apps/web": { name: "@stll/web" },
           "packages/mcp-apps": { name: "@stll/mcp-apps" },
+          "packages/cli": { name: "@stll/cli" },
         },
         packages: {},
       }),
@@ -298,6 +320,13 @@ test("web sources generate once across compiler tasks and restore until source i
       path.join(directory, ".turbo/cache"),
     ];
     run([...command.slice(0, 2), ...consumers, ...command.slice(3)]);
+    // Web compilers read the in-memory capability catalog, so a web run does
+    // not produce the CLI's capability manifests.
+    expect(
+      existsSync(
+        path.join(directory, "packages/cli/capabilities/fixture.list.json"),
+      ),
+    ).toBe(false);
     const executions = readFileSync(path.join(directory, "runs.log"), "utf-8");
     expect(executions.trim().split("\n")).toHaveLength(3);
     run([process.execPath, "--cwd=apps/api", "run", "gen:web-api-types"]);
@@ -395,17 +424,6 @@ test("web sources generate once across compiler tasks and restore until source i
       path.join(root, "packages/scripts/src"),
       path.join(directory, "packages/scripts/src"),
       "dir",
-    );
-    write(
-      "packages/cli/package.json",
-      JSON.stringify({
-        name: "@stll/cli",
-        scripts: { "codegen:runtime": "bun scripts/codegen.ts" },
-      }),
-    );
-    write(
-      "packages/cli/scripts/codegen.ts",
-      "console.log('CLI runtime generated');",
     );
     write("apps/web/scripts/typegen.ts", "console.log('messages generated');");
     write(

@@ -1,0 +1,22 @@
+[
+  "clauses.export",
+  "clauses.import",
+  "contacts.export",
+  "dictation.transcribe",
+  "entities.stamps.check",
+  "entities.upload",
+  "entities.versions.upload",
+  "entities.zip.download",
+  "skills.resources.upload",
+  "skills.upload",
+  "style-sets.create",
+  "style-sets.replace",
+  "templates.create",
+  "templates.document.update",
+  "templates.fill",
+  "templates.fills.download",
+  "templates.from-styles.create",
+  "templates.prepare",
+  "time-entries.pdf.export",
+  "views.table.export"
+]
