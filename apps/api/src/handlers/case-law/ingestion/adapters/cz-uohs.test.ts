@@ -283,6 +283,30 @@ describe("ÚOHS JSON-LD", () => {
       );
     });
 
+    test.each([
+      [
+        "cz-uohs-2018-R0003.pdf",
+        "uvedených v její Příloze č. 1, a s účinností od",
+        "11. února 2015",
+      ],
+      [
+        "cz-uohs-2015-S0569.pdf",
+        "jednání konaném v rámci správního řízení ve dnech",
+        "29. 4. 2016",
+      ],
+    ] as const)(
+      "%s: a date wrapped after its day goes on in its paragraph",
+      async (fixture, sentence, date) => {
+        const body = bodyOf(await read(fixture));
+        expect(
+          body.filter(({ plainText }) => plainText.startsWith(date)),
+        ).toEqual([]);
+        expect(
+          body.find(({ plainText }) => plainText.includes(sentence))?.plainText,
+        ).toContain(date);
+      },
+    );
+
     test("every footnote is a note, in order, and none is left in the text", async () => {
       const ast = await read("cz-uohs-2018-R0003.pdf");
       const notes = notesOf(ast);

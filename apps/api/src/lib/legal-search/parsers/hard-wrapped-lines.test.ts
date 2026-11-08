@@ -5,7 +5,6 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   LINE_JOINS,
-  PDF_LINE_KIND,
   type PdfPrintedLine,
   readPdfLineJoins,
   reflowPrintedText,
@@ -323,7 +322,6 @@ describe("PDF line joins", () => {
 
   /** One body line on page 0, `row` lines down, starting at `x`. */
   const pdfLine = (text: string, row: number, x: number): PdfPrintedLine => ({
-    kind: PDF_LINE_KIND.BODY,
     text,
     layout: {
       x,
@@ -401,7 +399,6 @@ describe("PDF line joins", () => {
     y: number,
     height: number,
   ): PdfPrintedLine => ({
-    kind: PDF_LINE_KIND.BODY,
     text,
     layout: { x: LEFT, y, height, width: RIGHT - LEFT, pageIndex: 0 },
   });

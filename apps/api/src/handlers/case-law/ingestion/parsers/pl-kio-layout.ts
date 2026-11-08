@@ -51,6 +51,11 @@ import {
   isTag,
   isText,
 } from "@stll/html/nodes";
+import {
+  HANGING_POINT_MARKER_RE,
+  OUTLINE_POINT_RE,
+  takesANumber,
+} from "@stll/legal-ast/printed-paragraph-labels";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -58,10 +63,10 @@ import {
   INDENT_THRESHOLD_PT,
   opensBlockParagraph,
   opensNumberedPoint,
-  type PrintedLine,
+  type PositionedLine,
   ranOutOfRoom,
-  takesANumber,
-} from "./pl-printed-lines";
+} from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
+
 import { isExcludedHtmlTag } from "./shared-inlines";
 
 const BIDI_MARK = /[\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu;
@@ -524,7 +529,7 @@ const removeBidiMarks = (node: AnyNode): void => {
   }
 };
 
-type BlockLine = PrintedLine & {
+type BlockLine = PositionedLine & {
   readonly right: number;
   /** The `<br>` the converter closed this line with; none on a block's last. */
   readonly end: Element | undefined;
@@ -706,22 +711,9 @@ const LINE_JOINS = {
 
 type LineJoin = (typeof LINE_JOINS)[keyof typeof LINE_JOINS];
 
-/**
- * A point the chamber numbers by outline: `2.1.`, `2.2.1`, or Word's `2.1`
- * label. Its first line hangs left of the text under it.
- */
-const OUTLINE_POINT = /^\d{1,3}(?:\.\d{1,3})+\.?\s/u;
-
-/**
- * Where a point's text starts on its first line, so the lines under it hang:
- * a number or a letter in any outline (`2.1.`, `A.`, `b)`), or a bullet.
- */
-const POINT_MARKER =
-  /^(?:\d{1,3}(?:\.\d{1,3})*[.)]?|[IVXLC]{1,6}[.)]|\p{L}[.)]|[-–•])\s/u;
-
 const opensPoint = (previous: BlockLine, line: BlockLine): boolean =>
   opensNumberedPoint(previous, line) ||
-  (OUTLINE_POINT.test(line.text) && !takesANumber(previous.text));
+  (OUTLINE_POINT_RE.test(line.text) && !takesANumber(previous.text));
 
 /**
  * How `line` goes on from the line above it.
@@ -751,7 +743,7 @@ const joinOf = (
   }
   const indented =
     line.x - previous.x >= INDENT_THRESHOLD_PT &&
-    !POINT_MARKER.test(previous.text);
+    !HANGING_POINT_MARKER_RE.test(previous.text);
   if (opensBlockParagraph({ previous, line, indented, rightEdge })) {
     return LINE_JOINS.PARAGRAPH;
   }

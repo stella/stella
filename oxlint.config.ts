@@ -2341,6 +2341,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-adhoc-email-fold.ts",
     "./.oxlint-plugins/no-local-letter-spacing.ts",
+    "./.oxlint-plugins/no-local-paragraph-label.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
@@ -3528,6 +3529,25 @@ const config = defineConfig({
       ],
       rules: {
         "no-local-letter-spacing/no-local-letter-spacing": "error",
+      },
+    },
+    {
+      // Printed paragraph labels (`12.`, `[12]`, `5.5.`, `a)`) are read by one
+      // grammar, packages/legal-ast/src/printed-paragraph-labels.ts, which
+      // also decides where a label opens a paragraph. Tests may match labels
+      // to assert what a parser produced.
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        "packages/legal-ast/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-local-paragraph-label.fixture.ts",
+      ],
+      excludeFiles: [
+        "packages/legal-ast/src/printed-paragraph-labels.ts",
+        "**/*.test.ts",
+      ],
+      rules: {
+        "no-local-paragraph-label/no-local-paragraph-label": "error",
       },
     },
     {
