@@ -307,28 +307,13 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-7",
-          "excerpt": "otorových vozidel a doprava, trvale bytem Adresa obviněného, ⏎ je vinen, že"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-12",
           "excerpt": "becného zájmu a spáchal takový čin vůči úřední osobě (ad 1), ⏎ jednak poskytl jinému úplatek v souvislosti s obstarávání"
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-13",
-          "excerpt": "becného zájmu a spáchal takový čin vůči úřední osobě (ad 2), ⏎ čímž spáchal"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-15",
           "excerpt": " 1 alinea první, odst. 2 písm. b) trestního zákoníku (ad 1), ⏎ jednak zločin podplacení podle § 332 odst. 1 alinea první"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-16",
-          "excerpt": " 1 alinea první, odst. 2 písm. b) trestního zákoníku (ad 2), ⏎ a odsuzuje se"
         }
       ]
     },

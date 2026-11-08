@@ -12,6 +12,7 @@
 import {
   isCzechReasonsHeading,
   isCzechSignatureLine,
+  isCzechVerdictFormulaLine,
 } from "./czech-document-roles.js";
 import {
   containsPlOperativeVerb,
@@ -22,7 +23,10 @@ import {
   isPlSignatureLine,
   opensPlRuling,
 } from "./polish-document-roles.js";
-import { isSkReasoningMarker } from "./slovak-document-roles.js";
+import {
+  isSkReasoningMarker,
+  isSkVerdictFormulaLine,
+} from "./slovak-document-roles.js";
 
 export type DecisionRoleGrammar = {
   /** A line that opens the reasons: after it, nothing is the ruling. */
@@ -39,6 +43,12 @@ export type DecisionRoleGrammar = {
    * where the language has one to read: it is never the ruling.
    */
   readonly isAppealInstruction?: (text: string) => boolean;
+  /**
+   * A line a criminal verdict prints on its own between the parts of its
+   * ruling (`uznáva sa za vinného, že`, `teda`): the ruling's sentence runs
+   * on across it by the court's layout, not where a line or a page ended.
+   */
+  readonly isVerdictFormulaLine?: (text: string) => boolean;
   /** A line that rules: it holds an operative verb. */
   readonly isOperativeLine?: (text: string) => boolean;
   /**
@@ -59,6 +69,7 @@ const DECISION_ROLE_GRAMMARS: ReadonlyMap<string, DecisionRoleGrammar> =
       {
         isReasonsHeading: isCzechReasonsHeading,
         isSignatureLine: isCzechSignatureLine,
+        isVerdictFormulaLine: isCzechVerdictFormulaLine,
       },
     ],
     [
@@ -72,7 +83,13 @@ const DECISION_ROLE_GRAMMARS: ReadonlyMap<string, DecisionRoleGrammar> =
         opensRuling: opensPlRuling,
       },
     ],
-    ["sk", { isReasonsHeading: isSkReasoningMarker }],
+    [
+      "sk",
+      {
+        isReasonsHeading: isSkReasoningMarker,
+        isVerdictFormulaLine: isSkVerdictFormulaLine,
+      },
+    ],
   ]);
 
 /** The grammar of a decision's language, or none where no owner reads it. */

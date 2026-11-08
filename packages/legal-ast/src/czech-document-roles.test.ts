@@ -14,6 +14,7 @@ import {
   isCzechSignatoryName,
   isCzechSignatureLine,
   isCzechTaktoLine,
+  isCzechVerdictFormulaLine,
   normalizeCzechJudgeName,
   withInferredCzechSignatureRoles,
 } from "./czech-document-roles";
@@ -279,4 +280,24 @@ describe("an authority's decision headings", () => {
     expect(isCzechInstructionHeading("P o u č e n í :")).toBe(true);
     expect(isCzechInstructionHeading("Poučení: Proti rozhodnutí")).toBe(false);
   });
+});
+
+describe("a Czech criminal verdict's formula lines", () => {
+  test.each([
+    "je vinen, že",
+    "čímž spáchal",
+    "tím spáchala",
+    "a odsuzuje se",
+    "přičemž",
+    "tedy",
+  ])("%p is a formula line", (line) => {
+    expect(isCzechVerdictFormulaLine(line)).toBe(true);
+  });
+
+  test.each(["Tedyho návrh", "Soud dospěl k závěru, že", "jeho vina"])(
+    "%p is not",
+    (line) => {
+      expect(isCzechVerdictFormulaLine(line)).toBe(false);
+    },
+  );
 });

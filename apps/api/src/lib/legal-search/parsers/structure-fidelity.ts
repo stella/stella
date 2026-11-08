@@ -120,6 +120,29 @@ const separatesLabelledLines = (
   afterNext?.type === "paragraph" &&
   OPENS_ON_LABEL_RE.test(afterNext.plainText.trim());
 
+/**
+ * A point of a list the sentence runs on into, opening on its marker
+ * (`2.) jak postupovat …`, `b) …`, `v bode 2) …`): the list's own
+ * paragraph, not the rest of a cut sentence.
+ */
+const OPENS_LIST_POINT_RE = /^(?:\d{1,3}\.?\)|\p{Ll}\)|v bode \d{1,3}\))\s/u;
+
+/**
+ * Whether a paragraph break inside a criminal verdict's ruling falls at one
+ * of the verdict's formula lines (`uznáva sa za vinného, že`, `teda`), which
+ * the court prints on lines of their own.
+ */
+const breaksAtVerdictFormula = (
+  grammar: DecisionRoleGrammar | undefined,
+  role: string | undefined,
+  text: string,
+  nextText: string,
+): boolean =>
+  role === "holding" &&
+  grammar?.isVerdictFormulaLine !== undefined &&
+  (grammar.isVerdictFormulaLine(text) ||
+    grammar.isVerdictFormulaLine(nextText));
+
 /** Units a table row prints beside its figures, compared lowercased. */
 const TABLE_UNITS: ReadonlySet<string> = new Set([
   "%",
@@ -296,6 +319,8 @@ export const structureFidelityIn = (
       !isTableRow(text) &&
       !isTableRow(nextText) &&
       !separatesLabelledLines(nextText, blocks[index + 2]) &&
+      !OPENS_LIST_POINT_RE.test(nextText) &&
+      !breaksAtVerdictFormula(reading.grammar, block.role, text, nextText) &&
       continuesAcrossPageBreak(text, nextText)
     ) {
       finding(

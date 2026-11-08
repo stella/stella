@@ -285,6 +285,68 @@ test("the instruction on appeal under the ruling is not the ruling", () => {
   ).toEqual([]);
 });
 
+test("a list point the sentence runs on into is the list's paragraph, not a cut", () => {
+  const cut = (blocks: readonly RoledBlock[]) =>
+    structureFidelityIn(roled(blocks), "cs")
+      .filter(({ rule }) => rule === STRUCTURE_FIDELITY_RULES.SENTENCE_CUT)
+      .map(({ anchorId }) => anchorId);
+  expect(
+    cut([
+      [
+        undefined,
+        "1.) jak posoudit zásah okamžikový, avšak se zásahem trvajícím a s trvajícími důsledky,",
+      ],
+      [undefined, "2.) jak postupovat při kvalifikaci tvrzeného zásahu"],
+    ]),
+  ).toEqual([]);
+  expect(
+    cut([
+      [
+        undefined,
+        "1.) jak posoudit zásah okamžikový, avšak se zásahem trvajícím a s trvajícími důsledky,",
+      ],
+      [undefined, "jak postupovat při kvalifikaci tvrzeného zásahu"],
+    ]),
+  ).toEqual(["p-0"]);
+});
+
+test("a verdict's formula lines are its layout, not cuts", () => {
+  const cut = (blocks: readonly RoledBlock[], language: string) =>
+    structureFidelityIn(roled(blocks), language)
+      .filter(({ rule }) => rule === STRUCTURE_FIDELITY_RULES.SENTENCE_CUT)
+      .map(({ anchorId }) => anchorId);
+  expect(
+    cut(
+      [
+        [
+          "holding",
+          "A. D., nar. XX.XX.XXXX v Lučenci, trvale bytom E. G. XXXX/XX, D.,",
+        ],
+        ["holding", "uznáva sa za vinného, že"],
+        [
+          "holding",
+          "v bode 1) dňa 30.12.2016 spôsobil škodu vo výške 1.600,- eur,",
+        ],
+        ["holding", "teda"],
+      ],
+      "sk",
+    ),
+  ).toEqual([]);
+  // Outside the ruling the same break is a cut.
+  expect(
+    cut(
+      [
+        [
+          undefined,
+          "v bode 1) dňa 30.12.2016 spôsobil škodu vo výške 1.600,- eur,",
+        ],
+        [undefined, "teda"],
+      ],
+      "sk",
+    ),
+  ).toEqual(["p-0"]);
+});
+
 test("a decision that opens a ruling before its reasons holds it", () => {
   expect(
     roleFindings(
