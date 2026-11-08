@@ -2,7 +2,10 @@ import { Panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { propertyToolSchema } from "@/api/db/schema-validators";
-import type { PlaybookVerdictTool } from "@/api/db/schema-validators";
+import type {
+  PlaybookVerdictTool,
+  PropertyContent,
+} from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildDependencyGraph,
@@ -11,10 +14,12 @@ import {
   getPropertyExecutionPlan as getPropertyExecutionPlanResult,
 } from "@/api/lib/workflow/get-execution-plan";
 import type {
+  AIBatchProperty,
   BatchPropertyDependency,
   ExecutionPlanProperty,
   PropertyDependencyEdge,
 } from "@/api/lib/workflow/get-execution-plan";
+import { splitPropertiesForSystemOne } from "@/api/lib/workflow/system-one-batch";
 
 const getPropertyExecutionPlan = (
   input: Parameters<typeof getPropertyExecutionPlanResult>[0],
@@ -736,4 +741,62 @@ describe("answer shape of an ask column", () => {
     expect(shapeOfSharedAsk([tierMatch, presence])).toEqual(["value"]);
     expect(shapeOfSharedAsk([presence, tierMatch])).toEqual(["value"]);
   });
+
+  // Only a text answer changes with the shape, so a typed ask can keep the
+  // value a check reads and still get every citation a tier match needs.
+  const typedAsks: [string, PropertyContent][] = [
+    [
+      "select",
+      { version: 1, type: "single-select", options: [], fallback: null },
+    ],
+    ["integer", { version: 1, type: "int" }],
+  ];
+  test.each(typedAsks)(
+    "a shared %s ask read by a tier match and a value check skips System One, in any order",
+    (_label, content) => {
+      const ask = { ...askOf("shared"), content };
+      const tierMatch = {
+        ...verdictOf("shared", { kind: "positionMatch" }),
+        id: propertyId("verdict-shared-tier-match"),
+      };
+      const presence = {
+        ...verdictOf("shared", { kind: "presence", expectation: "required" }),
+        id: propertyId("verdict-shared-presence"),
+      };
+      const planned = (verdicts: ExecutionPlanProperty[]) =>
+        getPropertyExecutionPlan({
+          properties: [
+            {
+              id: propertyId("file"),
+              status: "fresh",
+              content: textContent,
+              tool: { version: 1, type: "manual-input" },
+            },
+            ask,
+            ...verdicts,
+          ],
+          dependencies: [
+            propertyDependency("shared", "file"),
+            ...verdicts.map(({ id }) => propertyDependency(id, "shared")),
+          ],
+        })
+          .flat()
+          .flatMap(({ properties: batch }) => batch)
+          .filter(
+            (property): property is AIBatchProperty =>
+              property.tool.type === "ai-model",
+          );
+
+      for (const verdicts of [
+        [tierMatch, presence],
+        [presence, tierMatch],
+      ]) {
+        const asks = planned(verdicts);
+        expect(asks.map(({ answerShape }) => answerShape)).toEqual([
+          "clause-summary",
+        ]);
+        expect(splitPropertiesForSystemOne(asks).systemOne).toEqual([]);
+      }
+    },
+  );
 });

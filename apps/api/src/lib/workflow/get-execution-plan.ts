@@ -219,8 +219,15 @@ export const buildDependencyGraph = ({
     dependents.get(edge.dependsOnPropertyId)?.push(edge.propertyId);
   }
 
-  // An ask read by several verdicts answers in the shape they all accept: one
-  // that reads the answer itself needs the value, not a summary of it.
+  // An ask read by several verdicts answers in the shape they all accept. A
+  // text answer cannot be both a summary and the value a check reads, so it
+  // stays the value. Any other type answers in that type on every shape, so it
+  // takes the shape that cites every block a tier match needs.
+  const textPropertyIds = new Set<string>(
+    properties
+      .filter(({ content }) => content.type === "text")
+      .map(({ id }) => id),
+  );
   const answerShapeByAskId = new Map<string, AnswerShape>();
   for (const { tool } of properties) {
     if (tool.type !== "playbook-verdict") {
@@ -228,9 +235,12 @@ export const buildDependencyGraph = ({
     }
     const shape = answerShapeForRule(tool.rule);
     const shared = answerShapeByAskId.get(tool.askPropertyId);
+    const sharedByBoth = textPropertyIds.has(tool.askPropertyId)
+      ? "value"
+      : "clause-summary";
     answerShapeByAskId.set(
       tool.askPropertyId,
-      shared === undefined || shared === shape ? shape : "value",
+      shared === undefined || shared === shape ? shape : sharedByBoth,
     );
   }
 
