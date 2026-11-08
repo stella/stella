@@ -113,6 +113,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `contacts.bulk.delete` | write, destructive | stella:contacts_write | — | generic invoke → `stella capability contacts bulk-delete` |
 | `contacts.business-registries.check` | read | stella:read | — | curated tool `check_counterparty` |
 | `contacts.business-registries.lookup` | read | stella:read | — | curated tool `lookup_business_registry` |
 | `contacts.create` | write | stella:contacts_write | — | curated tool `save_contact` |
@@ -401,11 +402,16 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.ai-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings ai-availability-get` |
 | `organization-settings.anonymization-blacklist.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings anonymization-blacklist-get` |
 | `organization-settings.anonymization-blacklist.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings anonymization-blacklist-update` |
+| `organization-settings.billing-drafts.get` | read | stella:admin_read | FEATURE_TIME_BILLING | generic invoke → `stella capability organization-settings billing-drafts-get` |
+| `organization-settings.billing-drafts.update` | write | stella:admin_write | FEATURE_TIME_BILLING | generic invoke → `stella capability organization-settings billing-drafts-update` |
 | `organization-settings.correspondence.allowed-senders.create` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-create` |
 | `organization-settings.correspondence.allowed-senders.delete` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-delete` |
 | `organization-settings.correspondence.allowed-senders.list` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-list` |
 | `organization-settings.correspondence.allowed-senders.scope.add` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-scope-add` |
 | `organization-settings.correspondence.allowed-senders.scope.remove` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-scope-remove` |
+| `organization-settings.correspondence.data-boxes.create` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-create` |
+| `organization-settings.correspondence.data-boxes.delete` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-delete` |
+| `organization-settings.correspondence.data-boxes.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-get` |
 | `organization-settings.deepl-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings deepl-availability-get` |
 | `organization-settings.document-ocr-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings document-ocr-availability-get` |
 | `organization-settings.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings get` |
@@ -760,18 +766,18 @@ mechanics, and similar), not gaps in coverage.
 
 | Reason | Count |
 | --- | --- |
-| account_lifecycle | 4 |
-| assistant_chat | 15 |
-| auth_plumbing | 33 |
-| billing_ui | 2 |
-| chat_thread_ui | 18 |
+| account_lifecycle | 6 |
+| assistant_chat | 16 |
+| auth_plumbing | 38 |
+| billing_ui | 1 |
+| chat_thread_ui | 19 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 26 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
-| native_device | 2 |
+| native_device | 5 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
 | public_indexing | 9 |
@@ -779,5 +785,5 @@ mechanics, and similar), not gaps in coverage.
 | search_ui | 20 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 21 |
+| upload_mechanics | 22 |
 | url_preview | 2 |

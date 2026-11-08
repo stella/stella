@@ -10,7 +10,7 @@ import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
   type DocumentationSite,
   readDocumentationOwner,
-} from "./dated-waiver-probes";
+} from "./dated-waiver-owners";
 import {
   type DatedWaiver,
   DAY_MS,

@@ -4,13 +4,13 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type {
   AnalysisQueryResult,
   DecisionAnalysisKey,
 } from "@/features/case-law/queries/decision-analysis";
 import type { Analytics } from "@/lib/analytics/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { StrictMode } = await import("react");
@@ -433,6 +433,7 @@ describe("shared lazy decision analysis", () => {
     expect(new URL(requests[1]?.url ?? "").searchParams.get("retry")).toBe(
       "true",
     );
+    // real-time: the hook polls the analysis status on its own interval
     await waitFor(() => expect(result.current.state.status).toBe("done"), {
       timeout: 5000,
     });
@@ -494,6 +495,7 @@ describe("shared lazy decision analysis", () => {
             new URL(request.url).searchParams.get("retry") === "true",
         ),
     ).toBe(true);
+    // real-time: the hook polls the analysis status on its own interval
     await waitFor(() => expect(result.current.state.status).toBe("done"), {
       timeout: 5000,
     });

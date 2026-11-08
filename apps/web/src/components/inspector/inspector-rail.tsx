@@ -46,6 +46,7 @@ import type {
   InspectorTab,
 } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
+import { taskTabDetailOptions } from "@/components/inspector/task-tab-query";
 import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu";
 import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
@@ -60,7 +61,6 @@ import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
-import { taskDetailOptions } from "@/lib/workspaces/queries/tasks";
 
 export const InspectorRail = ({
   activeId,
@@ -536,13 +536,13 @@ const TaskVerticalTab = ({
   ...props
 }: VerticalTabProps & { tab: Extract<InspectorTab, { type: "task" }> }) => {
   const t = useTranslations();
-  const taskQuery = useQuery(taskDetailOptions(tab.workspaceId, tab.id));
+  const taskQuery = useQuery(taskTabDetailOptions(tab));
   const taskView = queryView(taskQuery);
   useQueryViewError(taskView, "TaskVerticalTab:query");
   const label =
     taskView.type === "items"
       ? taskView.items.name || t("tasks.untitled")
-      : t("common.loading");
+      : (tab.creationStatus === "pending" && tab.label) || t("common.loading");
   return <VerticalTabCell {...props} tab={{ ...tab, label }} />;
 };
 

@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 import { Worker } from "node:worker_threads";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
-import { createDetached } from "@stll/errors";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 
 import {
@@ -61,7 +60,19 @@ export type MatcherPoolOptions = {
   clock?: MatcherDeadlineClock;
   reportFailure: typeof reportSanctionsScreeningFailure;
   reportUnownedFailure?: typeof reportSanctionsScreeningFailure;
+  /**
+   * Starts work nobody awaits. The API binding passes the shared `detached`
+   * helper; the core stays free of its telemetry imports so the image smoke
+   * can load it without the API environment.
+   */
+  detach: DetachWork;
 };
+
+export type DetachWork = (
+  work: () => Promise<unknown>,
+  context: `${string}.${string}`,
+  onRejection: (error: unknown) => void,
+) => void;
 
 type Slot = {
   worker: Worker | null;
@@ -115,18 +126,24 @@ const retireMatcherSlot = async (
   await slot.termination;
 };
 
+/** Starts retirement work detached; its failures stay diagnostic. */
+type DetachRetirement = (
+  work: () => Promise<unknown>,
+  context: `sanctions.${string}`,
+) => void;
+
 const drainMatcherReply = async ({
   slot,
   worker,
   clock,
   reportFailure,
-  detached,
+  detachRetirement,
 }: {
   slot: Slot;
   worker: Worker;
   clock: MatcherDeadlineClock;
   reportFailure: typeof reportSanctionsScreeningFailure;
-  detached: ReturnType<typeof createDetached>;
+  detachRetirement: DetachRetirement;
 }): Promise<void> =>
   await new Promise((resolve) => {
     const finish = () => {
@@ -140,8 +157,8 @@ const drainMatcherReply = async ({
     };
     const cancelGrace = clock.schedule(() => {
       worker.off("message", drain);
-      detached(
-        retireMatcherSlot(slot, reportFailure).then(resolve),
+      detachRetirement(
+        async () => retireMatcherSlot(slot, reportFailure).then(resolve),
         "sanctions.matcher-reply-grace",
       );
     }, SANCTIONS_MATCHER_REPLY_GRACE_MS);
@@ -156,7 +173,7 @@ type MatcherExitOptions = {
   error?: unknown;
   reportFailure: typeof reportSanctionsScreeningFailure;
   reportUnownedFailure: typeof reportSanctionsScreeningFailure;
-  detached: ReturnType<typeof createDetached>;
+  detachRetirement: DetachRetirement;
 };
 
 const handleMatcherExit = ({
@@ -167,7 +184,7 @@ const handleMatcherExit = ({
   error,
   reportFailure,
   reportUnownedFailure,
-  detached,
+  detachRetirement,
 }: MatcherExitOptions) => {
   if (slot.worker !== worker) {
     return;
@@ -184,12 +201,13 @@ const handleMatcherExit = ({
   // The idle exit owns this incident; retirement fallout stays diagnostic.
   reportUnownedFailure({ stage: "matcher-pool", reason, error });
   slot.busy = true;
-  detached(
-    retireMatcherSlot(slot, reportFailure).then(() => {
-      slot.busy = false;
-      notify();
-      return undefined;
-    }),
+  detachRetirement(
+    async () =>
+      retireMatcherSlot(slot, reportFailure).then(() => {
+        slot.busy = false;
+        notify();
+        return undefined;
+      }),
     "sanctions.matcher-retire",
   );
 };
@@ -402,7 +420,7 @@ type EnsureMatcherWorkerOptions = {
   notify: () => void;
   reportFailure: typeof reportSanctionsScreeningFailure;
   reportUnownedFailure: typeof reportSanctionsScreeningFailure;
-  detached: ReturnType<typeof createDetached>;
+  detachRetirement: DetachRetirement;
   fail: NonNullable<Slot["fail"]>;
 };
 
@@ -413,7 +431,7 @@ const ensureMatcherWorker = ({
   notify,
   reportFailure,
   reportUnownedFailure,
-  detached,
+  detachRetirement,
   fail,
 }: EnsureMatcherWorkerOptions): Worker | null => {
   if (slot.worker !== null) {
@@ -435,7 +453,7 @@ const ensureMatcherWorker = ({
       error,
       reportFailure,
       reportUnownedFailure,
-      detached,
+      detachRetirement,
     });
   });
   worker.on("exit", () => {
@@ -446,7 +464,7 @@ const ensureMatcherWorker = ({
       reason: "worker-exit",
       reportFailure,
       reportUnownedFailure,
-      detached,
+      detachRetirement,
     });
   });
   // An idle cache must not keep tests or the API process alive.
@@ -480,15 +498,18 @@ export const createSanctionsMatcherPoolCore = ({
   clock = matcherDeadlineClock,
   reportFailure,
   reportUnownedFailure = reportFailure,
+  detach,
 }: MatcherPoolOptions) => {
   validateMatcherPoolConfig({ size, deadlineMs });
-  const detached = createDetached((error) => {
-    reportUnownedFailure({
-      stage: "matcher-pool",
-      reason: "worker-retire",
-      error,
+  const detachRetirement: DetachRetirement = (work, context) => {
+    detach(work, context, (error) => {
+      reportUnownedFailure({
+        stage: "matcher-pool",
+        reason: "worker-retire",
+        error,
+      });
     });
-  });
+  };
   const slots: Slot[] = Array.from({ length: size }, () => ({
     worker: null,
     busy: false,
@@ -575,7 +596,7 @@ export const createSanctionsMatcherPoolCore = ({
               worker,
               clock,
               reportFailure,
-              detached,
+              detachRetirement,
             });
           } else if (cause !== "deadline") {
             lease.retirement = retireMatcherSlot(lease.slot, reportFailure);
@@ -606,7 +627,7 @@ export const createSanctionsMatcherPoolCore = ({
           notify,
           reportFailure,
           reportUnownedFailure,
-          detached,
+          detachRetirement,
           fail: signalFailure,
         });
         if (worker === null) {
@@ -649,14 +670,15 @@ export const createSanctionsMatcherPoolCore = ({
             notify();
             return undefined;
           };
-          detached(
-            Promise.all([
-              pendingWork.then(
-                () => undefined,
-                () => undefined,
-              ),
-              lease.retirement ?? Promise.resolve(),
-            ]).then(release),
+          detachRetirement(
+            async () =>
+              Promise.all([
+                pendingWork.then(
+                  () => undefined,
+                  () => undefined,
+                ),
+                lease.retirement ?? Promise.resolve(),
+              ]).then(release),
             "sanctions.matcher-retire",
           );
         }

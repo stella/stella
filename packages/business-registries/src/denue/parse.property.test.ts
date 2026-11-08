@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   expectNullableString,
@@ -47,7 +47,8 @@ const establishment = fc
   .map((raw) => raw satisfies DenueRawEstablishment);
 
 test("establishments preserve identities and finite coordinates across projections", () => {
-  fc.assert(
+  assertProperty(
+    "establishments preserve identities and finite coordinates across projections",
     fc.property(establishment, (raw) => {
       const output = expectRegistryOutcome(() => parseEstablishment(raw));
       if (output === undefined) {
@@ -84,7 +85,7 @@ test("establishments preserve identities and finite coordinates across projectio
       expect(search.address).toBe(output.address?.textAddress ?? null);
       expect(search.registryUrl).toBe(output.registryUrl);
     }),
-    propertyConfig({ seed: propertySeed() }),
+    { seed: propertySeed() },
   );
 });
 
@@ -113,7 +114,8 @@ const expectTypedOutput = (output: DenueEstablishment) => {
 };
 
 test("establishment response mutations retain typed addresses or registry failures", async () => {
-  await fc.assert(
+  await assertProperty(
+    "establishment response mutations retain typed addresses or registry failures",
     fc.asyncProperty(
       establishment,
       fc.nat(),
@@ -140,7 +142,7 @@ test("establishment response mutations retain typed addresses or registry failur
         expectTypedOutput(output);
       },
     ),
-    propertyConfig({ seed: propertySeed(), numRuns: 20 }),
+    { seed: propertySeed(), numRuns: 20 },
   );
 });
 

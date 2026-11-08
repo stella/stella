@@ -1,5 +1,17 @@
 # @stll/auth-model
 
+## 0.7.0
+
+### Minor Changes
+
+- [#7920](https://github.com/stella/stella/pull/7920) [`668938a`](https://github.com/stella/stella/commit/668938a1fad9d45c6cc6bb211daf52e3bec16558) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align the schema contract version with Better Auth 1.7.16 after confirming the core and organization schemas are unchanged. `BETTER_AUTH_CONTRACT_VERSION` and `BETTER_AUTH_PARITY_MANIFEST.betterAuthVersion` now carry the literal `"1.7.16"`; no entrypoints are removed.
+
+## 0.6.0
+
+### Minor Changes
+
+- Export the opaque organization slug pattern next to its generator.
+
 ## 0.5.0
 
 ### Minor Changes

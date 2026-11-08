@@ -17,6 +17,7 @@ import {
   type BrowserObservedTab,
   isReadOnlyBrowserCommand,
   parseBrowserControlCommand,
+  parseBrowserExtensionPeerVersion,
   parseBrowserExtensionResponse,
 } from "@stll/api-contract/browser-control";
 
@@ -48,6 +49,14 @@ const BROWSER_EXTENSION_STATES = {
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     status: "not-paired",
   },
+  "extension-outdated": {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "extension-outdated",
+  },
+  "stella-outdated": {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "stella-outdated",
+  },
   "unsupported-browser": {
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     status: "unsupported-browser",
@@ -77,6 +86,11 @@ type BrowserExtensionBridgeRuntime = {
   announcementDeadline: ReturnType<typeof setTimeout> | null;
   announced: boolean;
   controllerId: string | null;
+  /**
+   * The protocol version the extension last spoke when it differs from this
+   * tab's; null while the two match or nothing has been heard yet.
+   */
+  extensionProtocolVersion: number | null;
   /** Unset until the extension first reports; the first report changes nothing. */
   identity: ExtensionIdentity | null;
   mountCount: number;
@@ -101,6 +115,7 @@ const getBridgeRuntime = (): BrowserExtensionBridgeRuntime => {
     announcementDeadline: null,
     announced: false,
     controllerId: null,
+    extensionProtocolVersion: null,
     identity: null,
     mountCount: 0,
     observedTab: null,
@@ -171,6 +186,14 @@ const observeIdentity = (
   resetBrowserApproval();
 };
 
+const markAnnounced = (runtime: BrowserExtensionBridgeRuntime): void => {
+  runtime.announced = true;
+  if (runtime.announcementDeadline !== null) {
+    clearTimeout(runtime.announcementDeadline);
+    runtime.announcementDeadline = null;
+  }
+};
+
 const handleMessage = ({ data, origin, source }: MessageEvent): void => {
   if (source !== window || origin !== window.location.origin) {
     return;
@@ -178,16 +201,25 @@ const handleMessage = ({ data, origin, source }: MessageEvent): void => {
 
   const response = parseBrowserExtensionResponse(data);
   if (!response) {
+    // An extension on another protocol version is installed, not missing:
+    // which side is older decides whether Chrome's update or a reload helps.
+    const peerVersion = parseBrowserExtensionPeerVersion(data);
+    if (
+      peerVersion !== null &&
+      peerVersion !== BROWSER_CONTROL_PROTOCOL_VERSION
+    ) {
+      const runtime = getBridgeRuntime();
+      markAnnounced(runtime);
+      runtime.extensionProtocolVersion = peerVersion;
+      notifyConnectionListeners();
+    }
     return;
   }
 
   const runtime = getBridgeRuntime();
   if (response.type === "pong") {
-    runtime.announced = true;
-    if (runtime.announcementDeadline !== null) {
-      clearTimeout(runtime.announcementDeadline);
-      runtime.announcementDeadline = null;
-    }
+    markAnnounced(runtime);
+    runtime.extensionProtocolVersion = null;
     runtime.allSitesGranted = response.allSitesGranted;
     runtime.controllerId = response.controllerId;
     notifyConnectionListeners();
@@ -329,7 +361,8 @@ export const browserExtensionSupport = (
  * The single live state of the extension for this stella tab. Unsupported means
  * the browser (or the whole device) cannot run the Chrome extension; checking
  * lasts until the first announcement or deadline; not-installed follows one
- * missed announcement deadline; access and pairing are reported by the
+ * missed announcement deadline; an extension on another protocol version is
+ * outdated on whichever side is older; access and pairing are reported by the
  * extension; connected means stella can execute commands from this tab.
  */
 export const getBrowserExtensionState = (): BrowserExtensionCapability => {
@@ -348,6 +381,13 @@ export const getBrowserExtensionState = (): BrowserExtensionCapability => {
   }
   if (!runtime.announced) {
     return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.checking];
+  }
+  if (runtime.extensionProtocolVersion !== null) {
+    return BROWSER_EXTENSION_STATES[
+      runtime.extensionProtocolVersion < BROWSER_CONTROL_PROTOCOL_VERSION
+        ? BROWSER_EXTENSION_STATUS.extensionOutdated
+        : BROWSER_EXTENSION_STATUS.stellaOutdated
+    ];
   }
   if (!runtime.allSitesGranted) {
     return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.needsSiteAccess];

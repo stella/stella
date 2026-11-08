@@ -30,7 +30,7 @@ import {
   huDecisionDateFrom,
   huDecisionTypeFrom,
   huDocketFrom,
-  parseHuBhgyDecision,
+  parseHuBhgyDecision as uncheckedParseHuBhgyDecision,
 } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import {
   readRtf as readRtfDocument,
@@ -41,6 +41,7 @@ import {
   VISIBLE_RUN_CASES,
   visibleRunDocument,
 } from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {
   assertNotePath,
@@ -52,6 +53,8 @@ import {
 } from "./document-note-paths.fixtures";
 import { assertRtfLineParity } from "./rtf-line-parity.fixtures";
 import { inlinesToPlainText } from "./shared-inlines";
+
+const parseHuBhgyDecision = guardParser(uncheckedParseHuBhgyDecision);
 
 const readRtf = (input: Uint8Array) => {
   const document = readRtfDocument(input);

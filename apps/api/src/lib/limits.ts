@@ -271,10 +271,19 @@ export const LIMITS = {
   oauthConnectionsPageSizeMax: 100,
   /** Default/max page sizes for the MCP `list_matters`-style list tools. */
   mcpListPageSizeDefault: 25,
+  mcpListPageSizeMin: 1,
   mcpListPageSizeMax: 100,
   /** Default/max page sizes for the MCP search tools. */
   mcpSearchPageSizeDefault: 10,
   mcpSearchPageSizeMax: 20,
+  /** Smallest page an MCP list or search tool takes. */
+  mcpPageSizeMin: 1,
+  /** Shortest value a required MCP text or list input takes: not empty. */
+  mcpNonEmptyMin: 1,
+  /** Characters of a language code an MCP filter takes (`cs`, `pt-BR`). */
+  mcpLanguageCodeMaxChars: 8,
+  /** Characters of an ISO calendar date an MCP filter takes (YYYY-MM-DD). */
+  mcpIsoDateMaxChars: 10,
   /** Default page size for the OpenAI-compatible MCP search tool. */
   mcpCompatSearchPageSizeDefault: 8,
   /**
@@ -636,6 +645,12 @@ export const LIMITS = {
    * their pages; past a handful the merged page stops being one question.
    */
   caseLawSearchQueriesMax: 5,
+  /** Characters of one court name a case-law search filter takes. */
+  caseLawCourtNameMaxChars: 512,
+  /** Courts one case-law search may filter by at once. */
+  caseLawCourtsFilterMax: 16,
+  /** Characters of a publisher category or decision type filter value. */
+  caseLawFilterValueMaxChars: 128,
   /** Decisions one batch read may ask for. */
   caseLawDecisionBatchMax: 20,
   /**
@@ -762,6 +777,10 @@ export const LIMITS = {
    * legislation tools and the compat id vocabulary) reads it from here.
    */
   legislationEliMaxChars: 512,
+  /** Characters of a publisher provision anchor (`par_1729-odst_2-pism_a`). */
+  legislationAnchorMaxChars: 256,
+  /** Characters of the shortest consolidation language code (`cs`). */
+  legislationLanguageMinChars: 2,
   /**
    * Characters of one provision's text. A provision is a section, not a
    * statute, so this sits far below the document text window: a batch read
@@ -821,6 +840,22 @@ export const LIMITS = {
   corpusIndexSearchMaxRounds: 3,
   /** Bound per-document passage searches and their per-split fan-out. */
   corpusIndexHighlightConcurrency: 8,
+  /**
+   * Corpus search reads one API process sends the engine at once
+   * (`corpus-index-admission.ts`). Sized to the search node's cores across
+   * the API replicas: past that, reads only slow each other down.
+   */
+  corpusIndexSearchConcurrency: 3,
+  /**
+   * Reads one process holds queued behind those; a read past this is
+   * refused at once as the index being unavailable, retryable, rather than
+   * left to wait out a queue it would not reach the front of in time. Ten
+   * agent searches' worth of first rounds (five phrasings, a scan and an
+   * aggregation each).
+   */
+  corpusIndexSearchQueueMax: 100,
+  /** Longest any queued read waits; its own timeout normally ends it first. */
+  corpusIndexSearchQueueMaxWaitMs: 30_000,
   /**
    * Folded groups (the acts of a legislation search) a cursor may carry past
    * capped scan windows, so none is shown again from a deeper member. A
@@ -887,6 +922,10 @@ export const LIMITS = {
   chatThreadListPageSizeDefault: 50,
   /** Max page size for the user's chat thread history. */
   chatThreadListPageSizeMax: 100,
+  /** Default page size for the caller's unfinished chat runs. */
+  chatActiveRunsPageSizeDefault: 100,
+  /** Max page size for the caller's unfinished chat runs. */
+  chatActiveRunsPageSizeMax: 100,
   /** Default page size for one chat thread's message history. The reader
    *  loads the most recent page first and fetches older pages on demand
    *  as the user scrolls up, so a long conversation never loads in full. */
