@@ -98,7 +98,7 @@ for (const failure of ["thrown", "returned", "provision lookup"] as const) {
     }
     expect(JSON.parse(content.text)).toEqual({
       error: {
-        code: "upstream_unavailable",
+        code: "public_read_timeout",
         message: "Case-law search exceeded its time budget.",
         hint: "Retry search_case_law with fewer queries or a narrower court, date range or provision filter. If it still times out, retry shortly.",
         retryable: true,

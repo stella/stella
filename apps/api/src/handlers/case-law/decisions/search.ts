@@ -148,7 +148,7 @@ import {
   provisionLinkMatchSql,
   type ProvisionLinkReadOutcome,
   provisionLinkReadOutcomeSql,
-  readCaseLawProvisionScope,
+  readCaseLawProvisionScopeWithinBudget,
   readProvisionCitingSentences,
 } from "@/api/lib/case-law/provision-filter";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
@@ -473,13 +473,10 @@ export const searchDecisionsHandler = async ({
       scopedBody.provisionScope ??
       (provision === undefined
         ? null
-        : await caseLawDb(
-            async (tx) =>
-              await readCaseLawProvisionScope(tx, {
-                jurisdiction: country,
-                provision,
-              }),
-          ));
+        : await readCaseLawProvisionScopeWithinBudget(caseLawDb, {
+            jurisdiction: country,
+            provision,
+          }));
     return await searchCorpusIndexDecisions({
       body:
         provisionScope?.type === "decisions"
@@ -4392,14 +4389,19 @@ export const listCaseLawProvisionDecisions = async ({
   }
   const candidateBudget =
     dependencies.candidateBudget ?? LIMITS.caseLawProvisionCandidateBudget;
-  // The page, citing sentences and hydrated rows share one snapshot.
-  const read = await caseLawDb(async (tx) => {
-    const provisionScope = await readCaseLawProvisionScope(tx, {
+  // Read outside the page's snapshot: it only chooses the path, and the page
+  // re-checks every row it emits against that snapshot.
+  const provisionScope = await readCaseLawProvisionScopeWithinBudget(
+    caseLawDb,
+    {
       ...scope,
       ...(dependencies.provisionIdSetMax === undefined
         ? {}
         : { idSetMax: dependencies.provisionIdSetMax }),
-    });
+    },
+  );
+  // The page, citing sentences and hydrated rows share one snapshot.
+  const read = await caseLawDb(async (tx) => {
     // Without its index the walk sorts the whole country per request, the
     // unbounded read it replaces; it waits for the online build instead.
     if (

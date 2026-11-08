@@ -82,7 +82,7 @@ import {
   type CaseLawProvisionFilter,
   caseLawProvisionFilterOf,
   type CaseLawProvisionScope,
-  readCaseLawProvisionScope,
+  readCaseLawProvisionScopeWithinBudget,
   readProvisionWorkLinked,
 } from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
@@ -2536,9 +2536,7 @@ const readSearchProvision = async ({
   const readScope =
     context.testDependencies?.readCaseLawProvisionScope ??
     (async (scope) =>
-      await caseLawPublicReadDb(
-        async (tx) => await readCaseLawProvisionScope(tx, scope),
-      ));
+      await readCaseLawProvisionScopeWithinBudget(caseLawPublicReadDb, scope));
   const provisionScope = await readScope({ jurisdiction: country, provision });
   return {
     type: "read",

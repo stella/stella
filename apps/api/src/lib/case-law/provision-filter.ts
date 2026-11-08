@@ -8,13 +8,18 @@ import {
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import {
   orderedProvisionAnchorSubtreeSql,
   provisionAnchorSubtreeSql,
 } from "@/api/lib/case-law/provision-anchor-lineage";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
 import { LIMITS } from "@/api/lib/limits";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
 const pathValueSchema = v.optional(
   v.pipe(v.string(), v.minLength(1), v.maxLength(8)),
@@ -406,8 +411,9 @@ export const provisionScopeLinksQuery = (
  * The decisions citing a provision in the requested country, or `broad` when
  * a complete set would not fit. Two budgets, each counting what it bounds:
  *
- * - `linkScanMax` bounds the physical links read. An anchor subtree with more
- *   links is broad without further reads, whatever they cite.
+ * - `linkScanMax` bounds the physical links read, once: an anchor subtree
+ *   with more links is broad on that one walk, with no count before it and
+ *   no second walk after it.
  * - `idSetMax` counts only citing decisions the request could list: links
  *   whose named levels match, from published, redistributable decisions of
  *   the requested country. Links of other countries (an EU act is cited
@@ -422,20 +428,21 @@ export const readCaseLawProvisionScope = async (
     ...scope
   }: ProvisionScopeReadOptions,
 ): Promise<CaseLawProvisionScope> => {
-  const examined = provisionScopeLinksQuery(tx, {
+  const links = await provisionScopeLinksQuery(tx, {
     ...scope,
     linkScanMax,
-  }).as("examined");
-  const [counted] = await tx
-    .select({ links: sql<number>`count(*)::int` })
-    .from(examined);
-  if ((counted?.links ?? 0) > linkScanMax) {
+  });
+  if (links.length > linkScanMax) {
     return { type: "broad" };
   }
-  const citing = provisionScopeLinksQuery(tx, {
-    ...scope,
-    linkScanMax,
-  }).as("citing");
+  const citing = [
+    ...new Set(
+      links.filter(({ matches }) => matches).map((link) => link.decisionId),
+    ),
+  ];
+  if (citing.length === 0) {
+    return { type: "decisions", decisionIds: [] };
+  }
   const rows = await tx
     .select({ decisionId: publishedCaseLawDecisions.id })
     .from(publishedCaseLawDecisions)
@@ -445,13 +452,7 @@ export const readCaseLawProvisionScope = async (
     )
     .where(
       and(
-        inArray(
-          publishedCaseLawDecisions.id,
-          tx
-            .select({ decisionId: citing.decisionId })
-            .from(citing)
-            .where(sql`${citing.matches}`),
-        ),
+        inArray(publishedCaseLawDecisions.id, citing),
         eq(publishedCaseLawDecisions.country, scope.jurisdiction),
         redistributableCaseLawSource,
       ),
@@ -464,6 +465,33 @@ export const readCaseLawProvisionScope = async (
         decisionIds: rows.map(({ decisionId }) => decisionId),
       };
 };
+
+/**
+ * {@link readCaseLawProvisionScope} in a transaction of its own, each
+ * statement capped by `LIMITS.caseLawProvisionScopeStatementBudgetMs`. A
+ * statement the cap cancels reads as `broad`: that path needs no set, answers
+ * correctly and says it is not exhaustive, so a slow scope read costs the
+ * request its cap and not the budget of the search it was only choosing a
+ * path for. Any other failure stays the failure it was.
+ *
+ * Its own transaction because a cancelled statement ends the transaction it
+ * ran in, which must not be the one a page is read from.
+ */
+export const readCaseLawProvisionScopeWithinBudget = async (
+  caseLawDb: CaseLawPublicReadDb,
+  options: ProvisionScopeReadOptions,
+): Promise<CaseLawProvisionScope> =>
+  await runWithPublicReadStatementTimeout(
+    { budgetMs: LIMITS.caseLawProvisionScopeStatementBudgetMs },
+    async () =>
+      await caseLawDb(
+        async (tx) => await readCaseLawProvisionScope(tx, options),
+      ),
+  ).catch(async (error: unknown) =>
+    getPgErrorCode(error) === PG_ERROR.QUERY_CANCELED
+      ? ({ type: "broad" } as const)
+      : await Promise.reject(error),
+  );
 
 /**
  * The first sentence of each decision that cites the provision, in text
