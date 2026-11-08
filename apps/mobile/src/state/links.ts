@@ -93,11 +93,7 @@ export const openableLink = (
       [ACCEPTED]: true,
     };
   }
-  if (
-    appScheme !== undefined &&
-    scheme === appScheme.toLowerCase() &&
-    !isRedirect(rest)
-  ) {
+  if (scheme === appScheme?.toLowerCase() && !isRedirect(rest)) {
     return { kind: "app", url: `${scheme}:${rest}`, [ACCEPTED]: true };
   }
   return undefined;

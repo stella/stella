@@ -150,17 +150,8 @@ describe("blocks", () => {
 });
 
 const spansOf = (block: Block): Span[] => {
-  switch (block.type) {
-    case "heading":
-    case "paragraph":
-    case "quote": {
-      return block.spans;
-    }
-    case "list": {
-      return block.items.flat();
-    }
-    case "code": {
-      return [];
-    }
+  if (block.type === "code") {
+    return [];
   }
+  return block.type === "list" ? block.items.flat() : block.spans;
 };
