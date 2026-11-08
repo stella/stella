@@ -15,7 +15,7 @@ import { normalizeJustification } from "@/api/lib/workflow/parse-justifications"
 describe("sharePassages", () => {
   test("every passage is sent once and every item can name its own", () => {
     assertProperty(
-      "cited-passages/unique-and-recoverable",
+      "every passage is sent once and every item can name its own",
       fc.property(
         fc.array(fc.array(fc.string({ minLength: 1 }).filter(hasVisibleText))),
         (passagesByItem) => {

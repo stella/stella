@@ -307,7 +307,7 @@ describe("encodeDocxBlockLine", () => {
 
   test("any block is one line and gives back its id and text", () => {
     assertProperty(
-      "docx-block-line/one-line-round-trip",
+      "any block is one line and gives back its id and text",
       fc.property(anyText, anyText, (id, text) => {
         const line = encodeDocxBlockLine({
           id,
