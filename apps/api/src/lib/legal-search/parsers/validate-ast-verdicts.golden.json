@@ -3439,9 +3439,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 17,
-          "paragraph-intro": 1,
-          "paragraph-holding": 2
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 15
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -3531,9 +3531,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 16,
-          "paragraph-intro": 1,
-          "paragraph-holding": 2
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 14
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -3575,9 +3575,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 18,
-          "paragraph-intro": 1,
-          "paragraph-holding": 2
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 16
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -3613,9 +3613,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 17,
-          "paragraph-intro": 1,
-          "paragraph-holding": 2
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 15
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -3651,9 +3651,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 17,
-          "paragraph-intro": 1,
-          "paragraph-holding": 2
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 15
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -3868,9 +3868,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
         },
@@ -3971,9 +3971,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 13
         },
@@ -4018,9 +4018,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 15
         },
@@ -4059,9 +4059,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
         },
@@ -4100,9 +4100,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
         },
