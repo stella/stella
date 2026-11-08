@@ -301,6 +301,8 @@ describe("a Polish head-matter line", () => {
     "Przewodnicząca: Agnieszka Trojanowska",
     "Protokolant: Aldona Karpińska",
     "Członkowie: Katarzyna Prowadzisz",
+    "Protokolant: stażysta Anna Kosowska",
+    "Przewodniczący: SSO Katarzyna Banko",
   ])("%p names who sat", (line) => {
     expect(isPlBenchMemberLine(line)).toBe(true);
   });
@@ -309,7 +311,9 @@ describe("a Polish head-matter line", () => {
     "Przewodniczący:…………………………",
     "Przewodniczący:",
     "Skład orzekający Izby:",
-  ])("%p is a signing label, not a name", (line) => {
+    "Prokurator: zarzuty wobec oskarżonego",
+    "Członkowie: zarzuty wobec członków zarządu",
+  ])("%p is a signing label or a heading, not a name", (line) => {
     expect(isPlBenchMemberLine(line)).toBe(false);
   });
 
@@ -320,6 +324,7 @@ describe("a Polish head-matter line", () => {
     );
     expect(isPlDecisionDateLine("Dnia 31 grudnia 2019 r.")).toBe(true);
     expect(isPlDecisionDateLine("z dnia 12.03.2021 r.")).toBe(true);
+    expect(isPlDecisionDateLine("z dnia 4 lutego 2022 r.,")).toBe(true);
     expect(
       isPlDecisionDateLine(
         "po rozpoznaniu na rozprawie w dniu 1 lutego 2022 roku",

@@ -1376,20 +1376,15 @@ const parseHeadingElement = (
 
   // A layout that sets a line of the head matter apart as a heading (the
   // decision's date, who sat on the bench) still prints the head matter:
-  // the line heads no part of the decision.
+  // the line heads no part of the decision and opens no ruling, wherever
+  // the head matter stands to the title.
   if (
-    state.sawDecisionTitle &&
     (state.section === "preamble" ||
       state.section === "composition" ||
       state.section === "recital") &&
     (isPlBenchMemberLine(plainText) || isPlDecisionDateLine(plainText))
   ) {
-    pushParagraph(
-      state,
-      plainText,
-      inlines,
-      classifyParagraph(state, plainText),
-    );
+    pushParagraph(state, plainText, inlines, "intro");
     return;
   }
 

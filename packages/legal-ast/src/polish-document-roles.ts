@@ -434,7 +434,7 @@ export const isPlRemedyFilingLine = (text: string): boolean =>
  * after it. The same label with a blank after it signs the decision.
  */
 const BENCH_MEMBER_LINE_RE =
-  /^(?:przewodnicząc[ya]|sędzi(?:a|owie)|członk(?:owie|inie)|protokolant(?:ka)?|ławni(?:k|cy|czka|czki)|prokurator) ?: ?\p{L}/iu;
+  /^(?:[Pp]rzewodnicząc[ya]|[Ss]ędzi(?:a|owie)|[Cc]złonk(?:owie|inie)|[Pp]rotokolant(?:ka)?|[Łł]awni(?:k|cy|czka|czki)) ?: ?(?:(?:SS[AONR]|SN|\p{Ll}+\.?) ){0,3}\p{Lu}\p{Ll}/u;
 
 /** Whether a head-matter line names a member of the bench or its clerk. */
 export const isPlBenchMemberLine = (text: string): boolean =>
@@ -445,7 +445,7 @@ export const isPlBenchMemberLine = (text: string): boolean =>
  * 2022 r.`, `Warszawa, dnia 1 września 2025 roku`).
  */
 const DECISION_DATE_LINE_RE =
-  /^(?:\p{Lu}\p{Ll}+, )?(?:z )?dnia \d{1,2}(?:\. ?\d{1,2}\. ?| \p{Ll}+ )\d{4}(?: r\.| roku)?$/iu;
+  /^(?:\p{Lu}\p{Ll}+, )?(?:z )?dnia \d{1,2}(?:\. ?\d{1,2}\. ?| \p{Ll}+ )\d{4}(?: r\.| roku)?[,;:]?$/iu;
 
 /** Whether a line gives the date of the decision and nothing else. */
 export const isPlDecisionDateLine = (text: string): boolean =>

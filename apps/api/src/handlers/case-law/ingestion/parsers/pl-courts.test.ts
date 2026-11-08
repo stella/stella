@@ -1156,3 +1156,27 @@ describe("navigation, subheadings and stray marks in an authority's PDF", () => 
     expect(blocks).toContain("argumentation 2.1. Katalog produktów");
   });
 });
+
+describe("head matter a layout sets as headings", () => {
+  test("a date and the bench set as headings are head matter, before or after the title, and open no ruling", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<h2>Oddala, dnia 1 marca 2020 r.</h2><p>WYROK</p><h3>Przewodniczący: Ewa Sikorska</h3><h3>Prokurator: zarzuty wobec oskarżonego</h3><p>orzeka:</p><p>1. oddala apelację,</p>",
+      ),
+    );
+
+    expect(
+      documentAst.blocks.map(
+        (block) =>
+          `${block.type} ${"role" in block ? (block.role ?? "-") : "-"} ${block.plainText}`,
+      ),
+    ).toEqual([
+      "paragraph intro Oddala, dnia 1 marca 2020 r.",
+      "heading decision-title WYROK",
+      "paragraph intro Przewodniczący: Ewa Sikorska",
+      "heading section-heading Prokurator: zarzuty wobec oskarżonego",
+      "heading section-heading orzeka:",
+      "paragraph holding 1. oddala apelację,",
+    ]);
+  });
+});
