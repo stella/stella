@@ -763,5 +763,30 @@
         "storage": "{name} salvestamine sellesse arvutisse ebaõnnestus. Kontrollige, kas kettal on vaba ruumi."
       }
     }
+  },
+  "localSkills": {
+    "title": "Kohalikud oskused",
+    "description": "Oskuste kaustad selles arvutis. Selle arvuti kohalikud käivitused saavad neid kasutada ja nende sisust ei laadita midagi üles.",
+    "add": "Lisa kaust",
+    "remove": "Eemalda",
+    "removeFolder": "Eemalda {path}",
+    "unusable": "Pole kasutatav",
+    "notice": {
+      "action_failed": "See ei õnnestunud. Proovige uuesti.",
+      "too_many": "Selles arvutis on juba nii palju oskuste kaustu, kui saab kasutada. Eemaldage esmalt üks.",
+      "already_listed": "See kaust on juba loendis.",
+      "missing": "Seda kausta enam pole.",
+      "not_a_folder": "See pole enam kaust.",
+      "no_skill_file": "Selles kaustas pole faili SKILL.md.",
+      "skill_file_not_regular": "SKILL.md peab olema tavaline fail, mitte link.",
+      "skill_file_too_large": "SKILL.md on lugemiseks liiga suur.",
+      "unreadable": "Seda kausta ei õnnestunud lugeda.",
+      "no_name": "SKILL.md päises pole nime.",
+      "invalid_name": "SKILL.md-s olev nimi tohib sisaldada ainult tähti, numbreid, punkte, sidekriipse ja allkriipse ning peab algama tähe või numbriga.",
+      "duplicate_name": "Teises loendis olevas kaustas on sama nimega oskus.",
+      "runs_can_write": "Kohalikud käivitused saavad sellesse kausta kirjutada, seega ei saa selles oskust hoida.",
+      "network_folder": "See kaust asub võrguketta jagatud alal. Oskused peavad olema selle arvuti enda kettal.",
+      "path_changed": "Ülemkaust on muutunud. Eemaldage see kaust ja lisage see uuesti."
+    }
   }
 }
