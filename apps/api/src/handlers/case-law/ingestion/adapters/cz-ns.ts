@@ -142,6 +142,8 @@ type CzNsRawPart = (typeof CZ_NS_RAW_PART)[keyof typeof CZ_NS_RAW_PART];
 
 /** The Domino universal id as every NS listing and detail URL states it. */
 const CZ_NS_DOCUMENT_ID_PATTERN = /^[0-9a-f]{32}$/iu;
+/** The marker the court appends to a docket's later documents: "- II.". */
+const CZ_NS_SIBLING_DOCKET_SUFFIX = /\s*-\s*[IVXLC]+\.?$/u;
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
@@ -596,6 +598,16 @@ const czNsIdentityFields = ({
  * HTML listings carry separate aliases. Preserve every docket while the
  * publisher's universal id continues to identify the document.
  */
+/**
+ * The docket a row was stored under before the court published a further
+ * decision under it and suffixed this one ("22 Cdo 120/2026- I."); undefined
+ * when the docket carries no suffix.
+ */
+const docketBeforeSiblingSuffix = (caseNumber: string): string | undefined => {
+  const bare = caseNumber.replace(CZ_NS_SIBLING_DOCKET_SUFFIX, "");
+  return bare === caseNumber ? undefined : bare;
+};
+
 const caseNumbersOf = ({
   caseNumber,
   additionalCaseNumbers,
@@ -715,7 +727,8 @@ const buildCzNsDecisionFromPages = ({
           identifiers: [firstPublisherIdentifier, ...otherPublisherIdentifiers],
         }),
     sourceDocumentId: unid,
-    legacySourceUrls: [webUrl],
+    legacyIdentityUrls: [webUrl],
+    legacyCaseNumber: docketBeforeSiblingSuffix(caseNumber),
     ecli: meta["ecli"],
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_NS].country,
@@ -1157,8 +1170,8 @@ const parseListingRows = (html: string): CzNsListingRow[] =>
  * collapses those rows into one.
  *
  * Rows written before the adapter stated an id are re-keyed by the
- * deterministic `WebSearch/{unid}` URL they carry — see `legacySourceUrls` in
- * the build. The two must state one rule: a walk that keyed rows differently
+ * deterministic `WebSearch/{unid}` URL they carry — see `legacyIdentityUrls`
+ * in the build. The two must state one rule: a walk that keyed rows differently
  * from the ingest would read stored decisions as missing and re-fetch them
  * forever.
  *

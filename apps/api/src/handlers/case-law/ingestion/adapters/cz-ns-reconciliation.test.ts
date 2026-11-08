@@ -751,9 +751,28 @@ describe("cz-ns buildDecision", () => {
     }
     // The hint the pipeline re-keys an existing null-id row by: it must be the
     // URL that row carries, which is the one this build stores as `sourceUrl`.
-    expect(built.decision.legacySourceUrls).toEqual([
+    expect(built.decision.legacyIdentityUrls).toEqual([
       built.decision.sourceUrl ?? "",
     ]);
+  });
+
+  test("a docket the court later suffixed names the row stored before it", async () => {
+    mockFetch({ printStatus: 404 });
+
+    const suffixed = await reconciliation.buildDecision({
+      unid: UNID.FIRST,
+      caseNumber: `${DOCKET.FIRST}- II.`,
+    });
+    const plain = await reconciliation.buildDecision({
+      unid: UNID.FIRST,
+      caseNumber: DOCKET.FIRST,
+    });
+    if (suffixed.type !== "built" || plain.type !== "built") {
+      throw new Error("expected both listing rows to build");
+    }
+    expect(String(suffixed.decision.caseNumber)).toBe(`${DOCKET.FIRST}- II.`);
+    expect(String(suffixed.decision.legacyCaseNumber)).toBe(DOCKET.FIRST);
+    expect(plain.decision.legacyCaseNumber).toBeUndefined();
   });
 
   /** The court's own words, as it writes them under `Právní věta:`. */

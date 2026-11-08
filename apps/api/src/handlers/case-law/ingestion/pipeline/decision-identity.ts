@@ -597,7 +597,10 @@ const findExistingDecisionTx = async (
       !legacyEcliContradicts &&
       legacy.sourceUrl !== null &&
       observed.legacySourceUrls?.includes(legacy.sourceUrl) === true;
-    return ecliMatches || sourceUrlMatches;
+    const identityUrlMatches =
+      legacy.sourceUrl !== null &&
+      observed.legacyIdentityUrls?.includes(legacy.sourceUrl) === true;
+    return ecliMatches || sourceUrlMatches || identityUrlMatches;
   };
   const { existing, ecliIdentity } = await settleEcliIdentityTx(tx, {
     resolved:

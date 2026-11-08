@@ -202,6 +202,14 @@ export type RawIngestionResult = {
    */
   legacySourceUrls?: readonly string[] | undefined;
   /**
+   * Source URLs that carry the publisher's own document id, so a legacy
+   * null-id row stored at one is this document whatever docket or ECLI it was
+   * stored under. Unlike `legacySourceUrls`, which only rules out siblings
+   * under one docket, it proves the row over a contradicting ECLI: a publisher
+   * can reissue an ECLI when it later adds a sibling to the docket.
+   */
+  legacyIdentityUrls?: readonly string[] | undefined;
+  /**
    * The ECLI an older adapter version derived for this same publisher
    * document, where it differs from `ecli` in more than case or punctuation
    * (for example a counter segment the publisher's own spelling omits). Like
