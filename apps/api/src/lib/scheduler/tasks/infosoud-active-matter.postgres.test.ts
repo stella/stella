@@ -16,6 +16,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { createSyncInfoSoudTrackedCasesTask } from "./infosoud";
@@ -106,9 +107,7 @@ const withTrackedCase = async (
     });
     await run({ organizationId, trackedCaseId, workspaceId });
   } finally {
-    await rootDb
-      .delete(organization)
-      .where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(rootDb, [organizationId]);
   }
 };
 

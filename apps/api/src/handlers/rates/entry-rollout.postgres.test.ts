@@ -26,6 +26,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -176,9 +177,7 @@ const withRolloutFixture = async (
           holdLegacyCreate,
         });
       } finally {
-        await setup.db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(setup.db, [organizationId]);
         await setup.db.delete(user).where(eq(user.id, userId));
       }
     },

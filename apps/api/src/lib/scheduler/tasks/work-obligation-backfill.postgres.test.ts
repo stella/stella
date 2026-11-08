@@ -22,6 +22,7 @@ import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -191,9 +192,7 @@ if (!databaseUrl || !runPostgresTests) {
             .where(eq(workObligations.entityId, taskId)),
         ).toEqual([{ ownerUserId: keptId }]);
       } finally {
-        await writerDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(writerDb, [organizationId]);
         await writerDb.delete(user).where(inArray(user.id, [formerId, keptId]));
       }
     });
