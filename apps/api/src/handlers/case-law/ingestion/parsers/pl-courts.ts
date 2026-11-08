@@ -78,6 +78,8 @@ import {
   opensPlRuling,
   opensWithPlSignatureTitle,
 } from "@stll/legal-ast/polish-document-roles";
+// parser-output-unchanged: the subheading outline number moved unchanged into the printed-label grammar.
+import { SUBHEADING_OUTLINE_NUMBER_RE } from "@stll/legal-ast/printed-paragraph-labels";
 import { collapseLetterSpacing } from "@stll/text-normalize";
 
 import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
@@ -733,8 +735,6 @@ const MARKS_ONLY_RE = /^[-–—.,;:·•*_<>■□▪]+$/u;
 /** Longest line a subheading set in bold runs to. */
 const BOLD_SUBHEADING_MAX_CHARS = 120;
 const TERMINAL_MARK_RE = /[.,;:!?…]$/u;
-/** The outline number a subheading may open with (`2.1.`, `5.2.1.2`). */
-const OUTLINE_NUMBER_RE = /^\d{1,2}(?:\.\d{1,2}){0,4}\.? /u;
 const DIGIT_RE = /\p{N}/u;
 
 /**
@@ -749,7 +749,7 @@ const isBoldSubheading = (inlines: readonly Inline[], plainText: string) =>
   WORD_CHAR_RE.test(plainText) &&
   !TERMINAL_MARK_RE.test(plainText) &&
   !DECISION_ITEM_PREFIX_RE.test(plainText) &&
-  !DIGIT_RE.test(plainText.replace(OUTLINE_NUMBER_RE, "")) &&
+  !DIGIT_RE.test(plainText.replace(SUBHEADING_OUTLINE_NUMBER_RE, "")) &&
   inlines.some((inline) => inline.type === "bold") &&
   inlines.every(
     (inline) =>

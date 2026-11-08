@@ -212,6 +212,27 @@ describe("a UOKiK decision PDF", () => {
     );
   });
 
+  test("the authority's bracketed paragraph numbers [1] to [61] are block numbers", async () => {
+    const parsed = await parsePlUokikDocument(
+      inputOf([await bytesOf(RGD_16_2024)]),
+    );
+    const blocks = parsed?.documentAst.blocks ?? [];
+    expect(
+      blocks.flatMap((block) =>
+        block.type === "paragraph" && block.number !== undefined
+          ? [block.number]
+          : [],
+      ),
+    ).toEqual(Array.from({ length: 61 }, (_, index) => index + 1));
+    expect(
+      blocks.filter(
+        (block) =>
+          block.type === "paragraph" && /^\[\d{1,3}\]/u.test(block.plainText),
+      ),
+    ).toEqual([]);
+    expect(parsed?.fulltext).not.toMatch(/(?:^|\n)\[1\] /u);
+  });
+
   test("states the decision it is", async () => {
     const parsed = await parsePlUokikDocument(
       inputOf([await bytesOf(DOK_9_2011)]),

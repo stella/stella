@@ -1,4 +1,3 @@
-// parser-output-unchanged: Existing typescript reflow is unchanged; the new PDF join reader is used only by sk-courts.
 import { panic } from "better-result";
 
 import {
@@ -8,6 +7,16 @@ import {
   lineJoinOf,
   PRENOMINAL_TITLE_END_RE,
 } from "@stll/legal-ast/line-wrap";
+import {
+  HANGING_ITEM_MARKER_RE,
+  LIST_ITEM_OPENING_RE,
+  LIST_POINT_RE,
+  NUMBERED_POINT_RE,
+  opensWithDate,
+  printedLabelOpensParagraph,
+  splitsDate,
+  takesANumber,
+} from "@stll/legal-ast/printed-paragraph-labels";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 /**
@@ -170,15 +179,8 @@ const hardWrapMarginOf = (
     : null;
 };
 
-/**
- * Where the text of a list item starts on its first line: continuation lines
- * of the item are indented to it, which is not a paragraph's indent.
- */
-const ITEM_MARKER_RE =
-  /^(?:\d{1,3}[.)]|\p{L}[.)]|\(\d{1,3}\)|\(\p{L}\)|[-–•])[ \t]+/u;
-
 const hangingIndentOf = (line: PrintedLine): number => {
-  const marker = ITEM_MARKER_RE.exec(line.text)?.[0];
+  const marker = HANGING_ITEM_MARKER_RE.exec(line.text)?.[0];
   return line.indent + (marker?.length ?? 0);
 };
 
@@ -195,8 +197,6 @@ const SPACED_DISPLAY_LINE_RE = /^\S(?:\s+\S){3,}$/u;
  * name (`v Praze 5` / `- Stodůlky`), and a letter after a line that ended
  * on one goes on citing points of a provision (`písm. b), c),` / `d) …`).
  */
-const LIST_ITEM_OPENING_RE =
-  /^(?:\d{1,3}[.)]|\p{L}\)|\(\d{1,3}\)|\(\p{L}\)|[-–•])[ \t]+(?=\p{L})/u;
 const CLOSES_ITEM_RE = /[.,;:]$/u;
 const CITES_POINT_RE = /(?:^|[\s(])(?:\p{L}|\d{1,3})\)[,;]?$/u;
 
@@ -243,7 +243,7 @@ const opensParagraph = (
   (line.indent > above.indent && line.indent > hangingIndentOf(above));
 
 /** The sentence goes on: no closing punctuation above, a lowercase word below. */
-const continuesSentence = (
+const typescriptRunsOn = (
   above: PrintedLine,
   line: PrintedLine,
   margin: number,
@@ -338,7 +338,7 @@ const joinOf = (
     above.text === "" ||
     line.text === "" ||
     opensParagraph(above, line, margin) ||
-    !(endsAtMargin(above, margin) || continuesSentence(above, line, margin))
+    !(endsAtMargin(above, margin) || typescriptRunsOn(above, line, margin))
   ) {
     return LINE_JOINS.BREAK;
   }
@@ -463,14 +463,12 @@ const PDF_PARAGRAPH = {
   shortLineGapHeightShare: 2,
 } as const;
 
-export const PDF_LINE_KIND = {
-  BODY: "body",
-  PARAGRAPH_START: "paragraph-start",
-} as const;
-
-/** PDF geometry is in points; page coordinates restart on each page. */
+/**
+ * PDF geometry is in points; page coordinates restart on each page. Whether
+ * a line's printed label opens a paragraph is the label grammar's call, made
+ * here with the layout, so a caller passes text and geometry only.
+ */
 export type PdfPrintedLine = {
-  readonly kind: (typeof PDF_LINE_KIND)[keyof typeof PDF_LINE_KIND];
   readonly text: string;
   readonly layout?: {
     readonly x: number;
@@ -681,9 +679,10 @@ export const readPdfLineJoins = (lines: readonly (PdfPrintedLine | null)[]) => {
               firstX: layout.x,
             };
       if (
-        SENTENCE_END_RE.test(above.text) &&
-        OPENS_SENTENCE_RE.test(line.text) &&
-        !PRENOMINAL_TITLE_END_RE.test(above.text)
+        printedLabelOpensParagraph({ above: above.text, line: line.text }) ||
+        (SENTENCE_END_RE.test(above.text) &&
+          OPENS_SENTENCE_RE.test(line.text) &&
+          !PRENOMINAL_TITLE_END_RE.test(above.text))
       ) {
         return LINE_JOIN.BREAK;
       }
@@ -722,7 +721,11 @@ export const readPdfLineJoins = (lines: readonly (PdfPrintedLine | null)[]) => {
       page.right - previousLayout.x - previousLayout.width >
         height * PDF_PARAGRAPH.shortLineGapHeightShare;
     if (
-      line.kind === PDF_LINE_KIND.PARAGRAPH_START ||
+      printedLabelOpensParagraph({
+        above: above.text,
+        line: line.text,
+        aboveFilled: !shortFinalLine,
+      }) ||
       paragraphGap ||
       opensByIndent({
         above: above.text,
@@ -765,4 +768,199 @@ export const readPdfLineJoins = (lines: readonly (PdfPrintedLine | null)[]) => {
     }
     return LINE_JOIN.SPACE;
   });
+};
+
+// ── Positioned lines ──────────────────────────────────────
+
+/*
+ * Paragraphs read back from positioned printed lines.
+ *
+ * A decision that reaches a publisher as a printed page keeps one signal a
+ * reader can trust: where each line starts and where it stops. A first line
+ * sits past the body margin, a list point opens on its marker, and a line
+ * that stopped short of the right edge ended its paragraph. A PDF reader
+ * measures both edges from the text layer; a converter's pages state the
+ * start and leave the end to be estimated. Both decide paragraphs here, with
+ * the labels read by the one printed-label grammar.
+ */
+
+/** Where a printed line starts and, when known, where it stops, in points. */
+export type PositionedLine = {
+  readonly text: string;
+  readonly x: number;
+  readonly right?: number | undefined;
+};
+
+/**
+ * How far past the body margin a first line has to sit to read as an indent.
+ *
+ * The observed step is a full tab (72pt body, 108pt indent). Half of that is
+ * comfortably above the sub-point jitter the extractor reports for lines that
+ * begin at the same margin, and comfortably below a real indent.
+ */
+export const INDENT_THRESHOLD_PT = 18;
+
+/**
+ * Whether the line above runs into the number `line` opens with: it ends on
+ * a word the number belongs to (`art.`, `lit.`), or the number is a date
+ * (`11. února 2015`) or a date wrapped after its day (`dnia 22.` / `10. 2003`).
+ */
+const runsIntoNumber = (
+  previous: PositionedLine,
+  line: PositionedLine,
+): boolean =>
+  takesANumber(previous.text) ||
+  opensWithDate(line.text) ||
+  splitsDate(previous.text.trimEnd(), line.text.trimStart());
+
+/**
+ * Whether `line` opens a numbered point of its own. A numbered point opens
+ * its own paragraph however full the line above ran, unless that line ended
+ * on a word the number belongs to (`art.`).
+ */
+export const opensNumberedPoint = (
+  previous: PositionedLine,
+  line: PositionedLine,
+): boolean =>
+  NUMBERED_POINT_RE.test(line.text.trimStart()) &&
+  !runsIntoNumber(previous, line);
+
+/** How a publisher marks the points and paragraphs a line can open. */
+export type PointMarkers = {
+  /** A list point's own number or bullet. */
+  readonly list: RegExp;
+  /** A number no wrapped sentence starts with. */
+  readonly numbered: RegExp;
+  /**
+   * The number a publisher hangs out left of each paragraph: it opens one
+   * where the line below starts further right. A sentence can wrap onto the
+   * same characters (`w pkt 3 podpkt.` / `(1) i (2) pisma`), set flush with
+   * the lines around it, so the characters alone are not a point.
+   */
+  readonly paragraphNumber?: RegExp | undefined;
+};
+
+export const POINT_MARKERS: PointMarkers = {
+  list: LIST_POINT_RE,
+  numbered: NUMBERED_POINT_RE,
+};
+
+/** A line ending a sentence or a list point, closing quotes included. */
+const ENDS_SENTENCE = /[.;:!?…]["”')\]]*$/u;
+/** A capital, or an opening bracket or quote: also how a clerk's mark (`[SOP]`) starts. */
+const STARTS_SENTENCE = /^[\p{Lu}[(„"]/u;
+
+/**
+ * Whether the line above ended only because `line`'s first word no longer
+ * fit on it. A line that stopped short of that ended its paragraph.
+ *
+ * A short first word fits almost any gap, so a line that ended a sentence
+ * before a capital or a list point is taken as the paragraph's end: two
+ * paragraphs merged would hide the structure, where a missed continuation
+ * only leaves the line break the reading had before.
+ */
+type RanOutOfRoomOptions = {
+  previous: PositionedLine;
+  line: PositionedLine;
+  rightEdge: number;
+  markers?: PointMarkers | undefined;
+};
+
+export const ranOutOfRoom = ({
+  previous,
+  line,
+  rightEdge,
+  markers = POINT_MARKERS,
+}: RanOutOfRoomOptions): boolean => {
+  const opening = line.text.trimStart();
+  if (
+    previous.right === undefined ||
+    line.right === undefined ||
+    (ENDS_SENTENCE.test(previous.text.trimEnd()) &&
+      (STARTS_SENTENCE.test(opening) || markers.list.test(opening)))
+  ) {
+    return false;
+  }
+  const firstWord = opening.split(/\s/u, 1).at(0) ?? "";
+  const characterWidth = (line.right - line.x) / Math.max(1, line.text.length);
+  return rightEdge - previous.right < (firstWord.length + 1) * characterWidth;
+};
+
+/**
+ * Whether the sentence on the line above goes on in `line`: it closes on no
+ * punctuation, `line` opens on a lower-case word or a number, and the line
+ * above fills at least half its measure, so it is no heading or label.
+ *
+ * A reader that knows line ends only roughly needs this beside
+ * {@link ranOutOfRoom}: a ragged or estimated line end can look short where
+ * the sentence plainly runs on.
+ */
+export const continuesSentence = (
+  previous: PositionedLine,
+  line: PositionedLine,
+  rightEdge: number,
+): boolean =>
+  previous.right !== undefined &&
+  previous.right - previous.x >= (rightEdge - previous.x) / 2 &&
+  !ENDS_SENTENCE.test(previous.text.trimEnd()) &&
+  /^[\p{Ll}\d]/u.test(line.text.trimStart());
+
+/**
+ * Whether `line` opens a paragraph, where the indent alone misreads blocks
+ * and lists.
+ *
+ * An indented line carries on the full line above it when it sits no
+ * deeper than that line, or when that line is a list point's first line
+ * set with a hanging indent. A short line above ended its paragraph, which
+ * is what keeps two one-line points of an operative part apart. A list
+ * point opens a paragraph wherever it starts, though nothing indents it.
+ */
+type PrintedParagraphOptions = {
+  previous: PositionedLine | undefined;
+  line: PositionedLine;
+  next?: PositionedLine | undefined;
+  indented: boolean;
+  rightEdge: number;
+  markers?: PointMarkers | undefined;
+};
+
+export const opensBlockParagraph = ({
+  previous,
+  line,
+  next,
+  indented,
+  rightEdge,
+  markers = POINT_MARKERS,
+}: PrintedParagraphOptions): boolean => {
+  if (previous === undefined || previous.text.length === 0) {
+    return indented;
+  }
+  // A numbered point opens its own paragraph however full the line above
+  // ran, unless that line ended on a word the number belongs to (`art.`).
+  // Dashes, initials (`C. B.`) and abbreviations (`w. z`) wrap inside
+  // sentences, so only the full-line test reads those.
+  if (
+    (markers.numbered.test(line.text.trimStart()) &&
+      !runsIntoNumber(previous, line)) ||
+    (markers.paragraphNumber?.test(line.text.trimStart()) === true &&
+      next !== undefined &&
+      next.text.length > 0 &&
+      next.x - line.x >= INDENT_THRESHOLD_PT)
+  ) {
+    return true;
+  }
+  const full = ranOutOfRoom({ previous, line, rightEdge, markers });
+  if (!indented) {
+    return (
+      !full &&
+      markers.list.test(line.text.trimStart()) &&
+      !runsIntoNumber(previous, line)
+    );
+  }
+  return !(
+    full &&
+    (line.x - previous.x < INDENT_THRESHOLD_PT ||
+      markers.list.test(previous.text.trimStart()) ||
+      markers.paragraphNumber?.test(previous.text.trimStart()) === true)
+  );
 };
