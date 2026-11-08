@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { isRepositoryCheckoutAction } from "./workflow-steps";
+
 const read = (path: string) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf-8");
 const field = (value: unknown, key: string): unknown =>
@@ -22,7 +24,7 @@ const dispatcherProblems = (source: string) => {
   const dispatch = steps(workflow, "dispatch");
   const problems: string[] = [];
   const checkout = dispatch.find((step) =>
-    String(field(step, "uses")).startsWith("actions/checkout@"),
+    isRepositoryCheckoutAction(field(step, "uses")),
   );
   if (field(field(checkout, "with"), "ref") !== "main") {
     problems.push("trusted main checkout required");

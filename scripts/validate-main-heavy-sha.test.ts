@@ -12,6 +12,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { isRepositoryCheckoutAction } from "./workflow-steps";
+
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
   if: v.optional(v.string()),
@@ -234,7 +236,7 @@ const trustedCheckouts = (
   }[],
 ) =>
   steps.filter((step) => {
-    if (!step.uses?.startsWith("actions/checkout@")) {
+    if (!isRepositoryCheckoutAction(step.uses)) {
       return false;
     }
     if (step.with?.["path"] !== ".network-retry") {

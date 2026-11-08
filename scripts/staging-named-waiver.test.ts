@@ -14,6 +14,7 @@ import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { evaluate } from "./github-expression";
+import { isRepositoryCheckoutAction } from "./workflow-steps";
 
 const stepSchema = v.looseObject({
   name: v.string(),
@@ -275,7 +276,7 @@ test("the sole named waiver validates before checkout and derives its downstream
   // The network retry helper checkout reads only the workflow's own revision.
   const candidateCheckoutIndex = resolveSteps.findIndex(
     (step) =>
-      step.uses?.startsWith("actions/checkout@") &&
+      isRepositoryCheckoutAction(step.uses) &&
       step.with?.["ref"] !== `\${{ github.workflow_sha }}`,
   );
   expect(waiverIndex).toBeGreaterThanOrEqual(0);

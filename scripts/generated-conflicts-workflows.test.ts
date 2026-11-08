@@ -7,7 +7,11 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { GENERATED_MERGE_HEADLINE } from "./generated-conflicts";
 import { MAIN_ONLY_BUN_CACHE_SAVE } from "./workflow-cache-policy";
-import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
+import {
+  isRepositoryCheckoutAction,
+  workflowJobSteps,
+  workflowStepByName,
+} from "./workflow-steps";
 
 const read = (name: string) =>
   readFileSync(
@@ -1046,7 +1050,7 @@ describe("publish", () => {
       "run-id": githubExpression("steps.select.outputs.run"),
     });
     const checkouts = steps.filter((step) =>
-      step.uses?.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(step.uses),
     );
     expect(checkouts).toHaveLength(1);
     expect(checkouts[0]?.with).toMatchObject({

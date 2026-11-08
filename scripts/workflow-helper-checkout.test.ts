@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { isRepositoryCheckoutAction } from "./workflow-steps";
+
 // Jobs check helper scripts out into .gh-retry, then check the source out
 // into the workspace root, which removes .gh-retry. A helper that a later
 // step still needs is copied to RUNNER_TEMP first; this finds any step that
@@ -28,7 +30,7 @@ const helperReadsAfterRootCheckout = (source: string, file: string) => {
     let removed = false;
     for (const value of list(record(definition)["steps"])) {
       const step = record(value);
-      if (text(step["uses"]).startsWith("actions/checkout@")) {
+      if (isRepositoryCheckoutAction(step["uses"])) {
         const checkoutPath = record(step["with"])["path"];
         if (checkoutPath === helperPath) {
           helper = true;

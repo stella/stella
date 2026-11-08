@@ -377,6 +377,11 @@ test.each([
     `jobs: {check: {steps: [{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test one}]}}`,
     `jobs: {check: {steps: [{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test two}]}}`,
   ],
+  [
+    "untrusted checkouts through the shared retrying checkout",
+    `jobs: {check: {steps: [{uses: stella/.github/actions/partial-clone-checkout@9095c76cb8d5cb06bdd103aece6d9515393fa810, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test one}]}}`,
+    `jobs: {check: {steps: [{uses: stella/.github/actions/partial-clone-checkout@9095c76cb8d5cb06bdd103aece6d9515393fa810, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test two}]}}`,
+  ],
 ] as const)(
   "privilege source: %s requires approval for an ordinary run change",
   (_, before, after) => {

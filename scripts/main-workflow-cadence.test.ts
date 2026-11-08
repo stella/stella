@@ -13,6 +13,8 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { isRepositoryCheckoutAction } from "./workflow-steps";
+
 const schema = v.looseObject({
   on: v.record(v.string(), v.unknown()),
   jobs: v.record(
@@ -311,7 +313,7 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
       Object.values(job.permissions ?? {}).every((value) => value === "read"),
     ).toBe(true);
     for (const step of job.steps ?? []) {
-      if (!step.uses?.startsWith("actions/checkout@")) {
+      if (!isRepositoryCheckoutAction(step.uses)) {
         continue;
       }
       expect(step.with).toMatchObject({

@@ -11,6 +11,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { type Context, contextFromNested, evaluate } from "./github-expression";
+import { isRepositoryCheckoutAction } from "./workflow-steps";
 
 const evaluateInput = (input: unknown, context: Context) => {
   if (typeof input !== "string") {
@@ -457,7 +458,7 @@ const assertImageBindings = (workflow: Record<string, unknown>) => {
       .find(
         (step) =>
           typeof step["uses"] === "string" &&
-          step["uses"].startsWith("actions/checkout@") &&
+          isRepositoryCheckoutAction(step["uses"]) &&
           record(step["with"])["ref"] === SOURCE,
       );
     expect(checkout).toBeDefined();
@@ -477,7 +478,7 @@ const assertImageBindings = (workflow: Record<string, unknown>) => {
       .find(
         (step) =>
           typeof step["uses"] === "string" &&
-          step["uses"].startsWith("actions/checkout@") &&
+          isRepositoryCheckoutAction(step["uses"]) &&
           record(step["with"])["path"] === ".workflow-actions",
       );
     if (!trustedCheckout) {

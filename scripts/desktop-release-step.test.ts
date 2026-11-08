@@ -10,6 +10,7 @@ import {
   stampCargoPackageVersion,
   stampDesktopRelease,
 } from "./desktop-release-step";
+import { isRepositoryCheckoutAction } from "./workflow-steps";
 
 const githubExpression = (body: string): string => `\${{ ${body} }}`;
 
@@ -159,7 +160,7 @@ test("release script steps follow source checkout and Bun setup", () => {
       const inputs = record(step["with"]) ? step["with"] : undefined;
       if (
         typeof uses === "string" &&
-        uses.startsWith("actions/checkout@") &&
+        isRepositoryCheckoutAction(uses) &&
         inputs?.["path"] === undefined
       ) {
         sourceCheckout = true;

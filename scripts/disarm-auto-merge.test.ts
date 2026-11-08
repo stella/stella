@@ -5,6 +5,8 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { isRepositoryCheckoutAction } from "./workflow-steps";
+
 const workflow = v.parse(
   v.looseObject({
     on: v.record(v.string(), v.object({ types: v.array(v.string()) })),
@@ -320,7 +322,7 @@ test("workflow limits its trigger, token and executable code", () => {
   });
   expect(
     workflow.jobs.disarm.steps.some(({ uses }) =>
-      uses.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(uses),
     ),
   ).toBe(false);
   expect(workflow.concurrency).toEqual({

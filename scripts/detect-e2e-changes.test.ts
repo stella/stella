@@ -25,7 +25,11 @@ import { rootCheckGate } from "./ci-root-check-gate";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
 import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
-import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
+import {
+  isRepositoryCheckoutAction,
+  workflowJobSteps,
+  workflowStepByName,
+} from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
 const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
@@ -226,8 +230,7 @@ const evaluateExpression = (expression: string, context: object) =>
 const checkoutRefs = Object.values(ciContract.jobs).flatMap((job) =>
   (job.steps ?? []).filter(
     (step) =>
-      step.uses?.startsWith("actions/checkout@") &&
-      step.with?.["ref"] !== undefined,
+      isRepositoryCheckoutAction(step.uses) && step.with?.["ref"] !== undefined,
   ),
 );
 const marketingCheckout = (job: string) => {

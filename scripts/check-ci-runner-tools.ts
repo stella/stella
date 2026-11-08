@@ -17,6 +17,7 @@ import {
 import { readStringLiterals } from "./test-input-readers";
 import {
   flattenWorkflowSteps,
+  isRepositoryCheckoutAction,
   mergeWorkflowParallelProofs,
   synchronizeWorkflowBackgroundSteps,
 } from "./workflow-steps";
@@ -1427,7 +1428,7 @@ export const runnerToolProblems = ({
       const inputs = step["with"];
       if (
         typeof step["uses"] !== "string" ||
-        !step["uses"].startsWith("actions/checkout@") ||
+        !isRepositoryCheckoutAction(step["uses"]) ||
         !isRecord(inputs)
       ) {
         continue;

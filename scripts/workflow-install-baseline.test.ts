@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { validateWorkspaceAppBoundaries } from "../packages/scripts/src/workspace-app-boundaries";
+import { isRepositoryCheckoutAction } from "./workflow-steps";
 
 // An install that runs lifecycle scripts runs the workspace hygiene check,
 // which in CI reads the app-boundary ledger at the merge base with
@@ -75,7 +76,7 @@ const installingJobs = () =>
         const checkout = steps.find(
           (step) =>
             typeof step["uses"] === "string" &&
-            step["uses"].startsWith("actions/checkout@"),
+            isRepositoryCheckoutAction(step["uses"]),
         );
         const inputs = isRecord(checkout?.["with"]) ? checkout["with"] : {};
         return [

@@ -13,6 +13,7 @@ import * as v from "valibot";
 
 import { prDepthJobs, prHeavyJobs, QUICK_GATED_CLAUSE } from "./ci-pr-jobs";
 import { evaluate } from "./github-expression";
+import { isRepositoryCheckoutAction } from "./workflow-steps";
 
 const readWorkflow = (name: string) =>
   v.parse(
@@ -240,7 +241,7 @@ const checkoutRef = (job: string) => {
         step,
       ),
     )
-    .find(({ uses }) => uses?.startsWith("actions/checkout@"));
+    .find(({ uses }) => isRepositoryCheckoutAction(uses));
   return checkout?.with?.["ref"] ?? null;
 };
 

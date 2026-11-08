@@ -13,7 +13,11 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
+import {
+  isRepositoryCheckoutAction,
+  workflowJobSteps,
+  workflowStepByName,
+} from "./workflow-steps";
 
 const read = (name: string) =>
   readFileSync(
@@ -153,7 +157,7 @@ describe("screenshot regeneration trust boundary", () => {
     // The dispatch on main runs no branch code: it only starts the capture.
     for (const step of stepsOf(updateWorkflow, "update")) {
       expect(step.uses?.startsWith("./") ?? false).toBe(false);
-      expect(step.uses?.startsWith("actions/checkout@") ?? false).toBe(false);
+      expect(isRepositoryCheckoutAction(step.uses)).toBe(false);
     }
     // The comparison workflow no longer regenerates anything.
     expect(Object.keys(jobsOf(reusable))).toEqual(["check"]);
@@ -197,7 +201,7 @@ describe("screenshot regeneration trust boundary", () => {
       }
     }
     const checkout = publish.find((step) =>
-      step.uses?.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(step.uses),
     );
     expect(checkout?.with?.["persist-credentials"]).toBe(false);
     expect(checkout?.with?.["submodules"]).toBeUndefined();

@@ -7,6 +7,8 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { isRepositoryCheckoutAction } from "./workflow-steps";
+
 const workflow = v.parse(
   v.looseObject({
     name: v.string(),
@@ -252,7 +254,7 @@ describe("required dependency review workflow boundary", () => {
       step.uses?.startsWith("oven-sh/setup-bun@"),
     );
     const checkout = job.steps.find((step) =>
-      step.uses?.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(step.uses),
     );
     const review = job.steps.find((step) =>
       step.uses?.startsWith("actions/dependency-review-action@"),
