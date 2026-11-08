@@ -220,6 +220,8 @@ export const CODEX_NOTIFICATIONS = {
         outputTokens: v.number(),
         reasoningOutputTokens: v.number(),
       }),
+      /** The model's context window; absent or null when Codex knows none. */
+      modelContextWindow: v.nullish(v.number()),
     }),
   }),
   "serverRequest/resolved": v.object({

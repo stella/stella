@@ -636,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "Stawka godzinowa nie może być ujemna",
     "hours": "Godziny",
+    "invalidNumberFormat": "Sprawdź format liczby",
     "invoiceComposer": {
       "addSellerProfile": "Dodaj profil sprzedawcy w ustawieniach rozliczeń",
       "billedHours": "Rozliczane godziny",
@@ -1584,6 +1585,8 @@
       "full": "{percent}% zapełnienia",
       "instructions": "Instrukcje systemowe",
       "percent": "{percent}%",
+      "reported": "Według agenta programistycznego na Twoim komputerze po jego ostatniej odpowiedzi. Agent sam zarządza swoim kontekstem.",
+      "reportedTokens": "{used} / {total} tokenów",
       "summary": "Podsumowanie starszych wiadomości",
       "summaryWithCount": "Podsumowanie {count} starszych wiadomości",
       "title": "Kontekst rozmowy",

@@ -636,6 +636,7 @@
     },
     "hourlyRateMustBeNonNegative": "La tarifa por hora no puede ser negativa",
     "hours": "Horas",
+    "invalidNumberFormat": "Compruebe el formato del número",
     "invoiceComposer": {
       "addSellerProfile": "Añada un perfil de vendedor en la configuración de facturación",
       "billedHours": "Horas facturadas",
@@ -1584,6 +1585,8 @@
       "full": "{percent}% lleno",
       "instructions": "Instrucciones del sistema",
       "percent": "{percent}%",
+      "reported": "Según lo indicó el agente de programación de tu ordenador tras su última respuesta. El agente gestiona su propio contexto.",
+      "reportedTokens": "{used} de {total} tokens",
       "summary": "Resumen de los mensajes más antiguos",
       "summaryWithCount": "Resumen de {count} mensajes más antiguos",
       "title": "Contexto de la conversación",
