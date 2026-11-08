@@ -176,4 +176,43 @@ describe("establishJourneyPrerequisites", () => {
 
     expect(String(thrown)).toContain("answered an unexpected shape");
   });
+
+  test("the state decides, so a failure without a detail still fails", async () => {
+    const { options } = deployment([
+      { prerequisites: [{ jobId: JOB_ID, state: "failed", detail: "" }] },
+    ]);
+
+    let thrown: unknown;
+    try {
+      await establishJourneyPrerequisites(options);
+    } catch (error: unknown) {
+      thrown = error;
+    }
+
+    expect(String(thrown)).toContain(`scheduled jobs failed: ${JOB_ID}`);
+  });
+
+  test("a pending job without a detail keeps the journey waiting", async () => {
+    const { calls, options } = deployment([
+      { prerequisites: [{ jobId: JOB_ID, state: "pending", detail: "" }] },
+      ready,
+    ]);
+
+    await establishJourneyPrerequisites(options);
+
+    expect(calls.filter(({ method }) => method === "GET")).toHaveLength(2);
+  });
+
+  test("a report that names no job is not proof", async () => {
+    const { options } = deployment([{ prerequisites: [] }]);
+
+    let thrown: unknown;
+    try {
+      await establishJourneyPrerequisites(options);
+    } catch (error: unknown) {
+      thrown = error;
+    }
+
+    expect(String(thrown)).toContain("answered an unexpected shape");
+  });
 });

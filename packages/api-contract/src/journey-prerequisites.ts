@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "./api-date";
+
 /**
  * Deployed user journeys whose outcome depends on a scheduled job having run
  * recently. A staging deployment that was powered off for longer than a
@@ -33,7 +35,7 @@ export const JOURNEY_PREREQUISITE_STATE = {
 
 export const journeyPrerequisitesForwardSchema = v.object({
   /** Runs that finish at or after this instant count; pass it back as `since`. */
-  dueAt: v.pipe(v.string(), v.isoTimestamp()),
+  dueAt: apiDateTimeSchema,
   jobIds: v.array(v.string()),
 });
 
@@ -62,7 +64,11 @@ export type JourneyPrerequisiteReport = v.InferOutput<
 >;
 
 export const journeyPrerequisitesReportSchema = v.object({
-  prerequisites: v.array(journeyPrerequisiteReportSchema),
+  /** Every journey declares at least one job; an empty report proves nothing. */
+  prerequisites: v.pipe(
+    v.array(journeyPrerequisiteReportSchema),
+    v.minLength(1),
+  ),
 });
 
 export type JourneyPrerequisitesReport = v.InferOutput<

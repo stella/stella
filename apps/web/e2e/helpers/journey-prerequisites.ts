@@ -65,14 +65,22 @@ const readJson = async <TSchema extends v.GenericSchema>(
   return parsed.output;
 };
 
-const details = (
+type BlockingReport = Exclude<JourneyPrerequisiteReport, { state: "ready" }>;
+
+/** The reports in `state`; the state decides, the detail only explains. */
+const reportsIn = (
   reports: readonly JourneyPrerequisiteReport[],
-  state:
-    | typeof JOURNEY_PREREQUISITE_STATE.pending
-    | typeof JOURNEY_PREREQUISITE_STATE.failed,
-) =>
+  state: BlockingReport["state"],
+): BlockingReport[] =>
+  reports.flatMap((report) =>
+    report.state !== JOURNEY_PREREQUISITE_STATE.ready && report.state === state
+      ? [report]
+      : [],
+  );
+
+const describeReports = (reports: readonly BlockingReport[]) =>
   reports
-    .flatMap((report) => (report.state === state ? [report.detail] : []))
+    .map(({ jobId, detail }) => (detail === "" ? jobId : detail))
     .join("; ");
 
 /**
@@ -110,19 +118,22 @@ export const establishJourneyPrerequisites = async ({
       journeyPrerequisitesReportSchema,
       `GET ${JOURNEY_PREREQUISITES_PATH}`,
     );
-    const failed = details(prerequisites, JOURNEY_PREREQUISITE_STATE.failed);
-    if (failed !== "") {
+    const failed = reportsIn(prerequisites, JOURNEY_PREREQUISITE_STATE.failed);
+    if (failed.length > 0) {
       throw new Error(
-        `The ${journey} journey's scheduled jobs failed: ${failed}`,
+        `The ${journey} journey's scheduled jobs failed: ${describeReports(failed)}`,
       );
     }
-    const pending = details(prerequisites, JOURNEY_PREREQUISITE_STATE.pending);
-    if (pending === "") {
+    const pending = reportsIn(
+      prerequisites,
+      JOURNEY_PREREQUISITE_STATE.pending,
+    );
+    if (pending.length === 0) {
       return;
     }
     if (now() >= deadline) {
       throw new Error(
-        `The ${journey} journey's scheduled jobs did not run within ${String(timeoutMs / 1000)} s: ${pending}`,
+        `The ${journey} journey's scheduled jobs did not run within ${String(timeoutMs / 1000)} s: ${describeReports(pending)}`,
       );
     }
     await sleep(intervalMs);
