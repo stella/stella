@@ -9,8 +9,14 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { DocumentTooLargeError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
-import { buildDocxBlocksMessage, buildExtractedFileMessage } from "@/api/lib/workflow/ai-prompts";
-import type { PreparedDocxFile, PreparedInputFile } from "@/api/lib/workflow/generate-batch";
+import {
+  buildDocxBlocksMessage,
+  buildExtractedFileMessage,
+} from "@/api/lib/workflow/ai-prompts";
+import type {
+  PreparedDocxFile,
+  PreparedInputFile,
+} from "@/api/lib/workflow/generate-batch";
 import {
   fitDocxFilesToRequestBudget,
   fitFilesToRequestBudget,
@@ -32,7 +38,9 @@ const docx = (index: number, texts: readonly string[]): PreparedDocxFile => ({
   fileFieldId: toSafeId<"field">(`field-${String(index)}`),
   fileId: `file-${String(index)}`,
   simplifiedName: `F${String(index)}`,
-  blocks: texts.map((text, position) => block(`seq-${String(index)}-${String(position)}`, text)),
+  blocks: texts.map((text, position) =>
+    block(`seq-${String(index)}-${String(position)}`, text),
+  ),
 });
 
 const fileMessage = (file: PreparedInputFile): string => {
@@ -85,7 +93,7 @@ const budget = fc.integer({ min: 2000, max: 300_000 });
 describe("fitting documents to a request budget", () => {
   test("output never exceeds the budget", () => {
     assertProperty(
-      "request-budget-never-exceeded",
+      "output never exceeds the budget",
       fc.property(documents, budget, (texts, budgetBytes) => {
         const fit = fitFilesToRequestBudget({
           files: texts.map((blocks, index) => docx(index, blocks)),
@@ -100,7 +108,7 @@ describe("fitting documents to a request budget", () => {
 
   test("files within budget come back untouched", () => {
     assertProperty(
-      "request-budget-whole-when-within",
+      "files within budget come back untouched",
       fc.property(documents, (texts) => {
         const files = texts.map((blocks, index) => docx(index, blocks));
         const fit = fitFilesToRequestBudget({
@@ -116,14 +124,14 @@ describe("fitting documents to a request budget", () => {
 
   test("every block id survives", () => {
     assertProperty(
-      "request-budget-block-ids-survive",
+      "every block id survives",
       fc.property(documents, budget, (texts, budgetBytes) => {
         const files = texts.map((blocks, index) => docx(index, blocks));
         const fit = fitDocxFilesToRequestBudget({ files, budgetBytes });
         if (Result.isOk(fit)) {
-          expect(fit.value.files.map((file) => file.blocks.map(({ id }) => id))).toEqual(
-            files.map((file) => file.blocks.map(({ id }) => id)),
-          );
+          expect(
+            fit.value.files.map((file) => file.blocks.map(({ id }) => id)),
+          ).toEqual(files.map((file) => file.blocks.map(({ id }) => id)));
         }
       }),
     );
@@ -131,7 +139,7 @@ describe("fitting documents to a request budget", () => {
 
   test("the same input gives the same bytes", () => {
     assertProperty(
-      "request-budget-deterministic",
+      "the same input gives the same bytes",
       fc.property(documents, budget, (texts, budgetBytes) => {
         const files = texts.map((blocks, index) => docx(index, blocks));
 
@@ -144,7 +152,7 @@ describe("fitting documents to a request budget", () => {
 
   test("a short block is never cut while a longer one keeps more", () => {
     assertProperty(
-      "request-budget-one-cap",
+      "a short block is never cut while a longer one keeps more",
       fc.property(documents, budget, (texts, budgetBytes) => {
         const files = texts.map((blocks, index) => docx(index, blocks));
         const fit = fitDocxFilesToRequestBudget({ files, budgetBytes });
@@ -157,12 +165,15 @@ describe("fitting documents to a request budget", () => {
             kept: fit.value.files[fileIndex]?.blocks[blockIndex]?.text ?? "",
           })),
         );
-        const size = (text: string) => Buffer.byteLength(JSON.stringify(text)) - 2;
+        const size = (text: string) =>
+          Buffer.byteLength(JSON.stringify(text)) - 2;
         const cut = pairs.filter(({ original, kept }) => original !== kept);
         const whole = pairs.filter(({ original, kept }) => original === kept);
 
         expect(cut.length).toBeGreaterThan(0);
-        const shortestCutOriginal = Math.min(...cut.map(({ original }) => size(original)));
+        const shortestCutOriginal = Math.min(
+          ...cut.map(({ original }) => size(original)),
+        );
         for (const { original } of whole) {
           expect(size(original)).toBeLessThan(shortestCutOriginal);
         }
@@ -182,12 +193,17 @@ describe("fitting documents to a request budget", () => {
       throw new Error("Expected a cut");
     }
     const [shortBlock, cutBlock] = fit.value.files.at(0)?.blocks ?? [];
-    const [{ passagesCut, charactersWithheld, charactersTotal }] = fit.value.withheld;
+    const [{ passagesCut, charactersWithheld, charactersTotal }] =
+      fit.value.withheld;
 
     expect(shortBlock?.text).toBe("Short clause.");
     expect(cutBlock?.text.startsWith("start start")).toBe(true);
-    expect(cutBlock?.text.endsWith("provided that notice is given.")).toBe(true);
-    expect(cutBlock?.text).toContain(`[… ${String(charactersWithheld)} characters withheld …]`);
+    expect(cutBlock?.text.endsWith("provided that notice is given.")).toBe(
+      true,
+    );
+    expect(cutBlock?.text).toContain(
+      `[… ${String(charactersWithheld)} characters withheld …]`,
+    );
     expect(passagesCut).toBe(1);
     expect(charactersTotal).toBe(text.length + "Short clause.".length);
     expect(charactersWithheld).toBeGreaterThan(0);
@@ -215,9 +231,13 @@ describe("fitting documents to a request budget", () => {
     if (Result.isError(fit) || fit.value.type !== "cut") {
       throw new Error("Expected a cut");
     }
-    expect(fit.value.withheld.map(({ fileFieldId }) => fileFieldId)).toEqual(["field-2"]);
+    expect(fit.value.withheld.map(({ fileFieldId }) => fileFieldId)).toEqual([
+      "field-2",
+    ]);
     expect(fit.value.files.at(0)?.blocks.at(0)?.text).toBe("small");
-    expect(fit.value.files.at(2)?.blocks.at(0)?.text.length).toBeGreaterThan(30_000);
+    expect(fit.value.files.at(2)?.blocks.at(0)?.text.length).toBeGreaterThan(
+      30_000,
+    );
   });
 
   test("extracted text counts as one long block", () => {
@@ -273,7 +293,9 @@ describe("fitting documents to a request budget", () => {
       budgetBytes,
     });
 
-    expect(Result.isError(fit) && DocumentTooLargeError.is(fit.error)).toBe(true);
+    expect(Result.isError(fit) && DocumentTooLargeError.is(fit.error)).toBe(
+      true,
+    );
   });
 
   test("a PDF reserves room per page and is never altered", () => {

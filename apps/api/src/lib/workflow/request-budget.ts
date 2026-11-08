@@ -29,7 +29,7 @@ const RESERVED_PROMPT_TOKENS = 16_000;
 const PDF_PAGE_TOKEN_ESTIMATE = 1500;
 /** Past this share withheld, an answer would describe a document the model
  *  mostly did not read, so the request is refused instead. */
-export const MAX_WITHHELD_TEXT_SHARE = 0.5;
+const MAX_WITHHELD_TEXT_SHARE = 0.5;
 
 const withheldMarker = (characters: number): string =>
   `[… ${String(characters)} characters withheld …]`;

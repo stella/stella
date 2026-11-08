@@ -105,7 +105,7 @@ type AskCell = {
  * tells these apart. No cell at all stays gradable: a failed extraction always
  * leaves a cell.
  */
-export const askCellStanding = (
+const askCellStanding = (
   cell: AskCell | undefined,
 ): "gradable" | "unfinished" | "cutUnanswered" => {
   if (cell === undefined) {
