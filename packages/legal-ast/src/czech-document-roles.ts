@@ -127,9 +127,10 @@ export const isCzechBareSignatoryName = (text: string): boolean =>
 
 /** One academic degree printed before a Czech signatory's name. */
 const DEGREE_BEFORE_NAME_RE =
-  /^(?:JUDr|Mgr|doc|prof|PhDr|Ing|Bc|RNDr|MUDr|ThDr|PaedDr)\. ?/u;
+  /^(?:JUDr|Mgr|MgA|doc|prof|PhDr|Ing|Bc|BcA|RNDr|MUDr|ThDr|PaedDr|Dr)\. ?/u;
 /** One degree printed after the name, with its comma. */
-const DEGREE_AFTER_NAME_RE = /,? ?(?:Ph\. ?D\.|LL\. ?M\.|CSc\.|DrSc\.|MBA)$/u;
+const DEGREE_AFTER_NAME_RE =
+  /,? ?(?:Ph\. ?D\.|Th\. ?D\.|LL\. ?M\.|M\. ?A\.|CSc\.|DrSc\.|MSc\.|MBA)$/u;
 /** Longest line a signed name with its degrees takes. */
 const SIGNATURE_NAME_MAX_CHARS = 80;
 /** More degrees than any signatory carries on one side of a name. */
@@ -165,7 +166,12 @@ const COPY_CERTIFICATION_RE = /^Za správnost vyhotovení(?!\p{L})/iu;
 
 /** Whether a line opens the certification of a decision's copy. */
 export const isCzechCopyCertification = (text: string): boolean =>
-  COPY_CERTIFICATION_RE.test(collapseSpacedLetters(text.trim()));
+  COPY_CERTIFICATION_RE.test(
+    // Spaced letters are joined while the wider word gap still shows.
+    collapseSpacedLetters(
+      normalizeUnicode(text, "NFC").replaceAll("\u00a0", " ").trim(),
+    ).replaceAll(/\s+/gu, " "),
+  );
 
 /** An office printed beside a signed name in Czech public documents. */
 const CZ_PUBLIC_OFFICE_TITLE_RE = /^(?:vice)?guvernér(?:ka)?\s*:?$/iu;

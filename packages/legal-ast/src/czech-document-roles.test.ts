@@ -97,6 +97,8 @@ describe("the office a Czech judge signs under", () => {
     "Mgr. Miroslav Hromada, Ph.D.",
     "JUDr. František B a l á k, v.r.",
     "doc. JUDr. Jan Novák, CSc.",
+    "Dr. Jan Novák",
+    "Mgr. Petra Svobodová, MSc.",
     "Josef Baxa",
   ])("%p signs as a name with its degrees", (line) => {
     expect(isCzechSignatoryName(line)).toBe(true);
@@ -116,6 +118,13 @@ describe("the office a Czech judge signs under", () => {
       isCzechCopyCertification("Za správnost vyhotovení: Ivana Svobodová"),
     ).toBe(true);
     expect(isCzechCopyCertification("Za správnost vyhotovení:")).toBe(true);
+    // Decomposed letters and a no-break space read the same.
+    expect(
+      isCzechCopyCertification("Za\u00a0spra\u0301vnost vyhotovení:"),
+    ).toBe(true);
+    expect(
+      isCzechCopyCertification("Z a  s p r á v n o s t  vyhotovení:"),
+    ).toBe(true);
     expect(
       isCzechCopyCertification("Za správnost výpočtu odpovídá žalobce."),
     ).toBe(false);

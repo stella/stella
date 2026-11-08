@@ -689,22 +689,25 @@ const isSectionHeading = (plainText: string): boolean => {
 
 // ── Merge pass ────────────────────────────────────────────
 
-/** Lines a copy's certification takes: its label and the clerk's name. */
-const COPY_CERTIFICATION_MAX_BLOCKS = 2;
+/** Longest line of the closing: the label, a clerk's name, a date. */
+const CLOSING_BLOCK_MAX_CHARS = 80;
 
 /**
  * Where the office's certification of the copy (`Za správnost vyhotovení:`
- * and the clerk's name) starts among the closing blocks, or the end of the
- * document when it carries none.
+ * and what it prints after: the clerk's name, a date) starts among the
+ * short blocks that close the document, or the end of the document when it
+ * carries none.
  */
 const copyCertificationStart = (blocks: readonly Block[]): number => {
-  const earliest = Math.max(0, blocks.length - COPY_CERTIFICATION_MAX_BLOCKS);
-  for (let index = blocks.length - 1; index >= earliest; index -= 1) {
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks.at(index);
     if (
-      block?.type === "paragraph" &&
-      isCzechCopyCertification(block.plainText)
+      block?.type !== "paragraph" ||
+      block.plainText.length >= CLOSING_BLOCK_MAX_CHARS
     ) {
+      return blocks.length;
+    }
+    if (isCzechCopyCertification(block.plainText)) {
       return index;
     }
   }
@@ -715,14 +718,31 @@ const copyCertificationStart = (blocks: readonly Block[]): number => {
  * The bench recital the ruling follows (`Nejvyšší soud rozhodl v senátě
  * složeném z … takto:`) introduces it: the lead-in paragraph and the
  * role-less paragraphs of the same recital before it, back to the title.
+ * Only a recital that runs back to the decision's head matter (its title,
+ * docket or opening formula) is one; a `takto:` the reasons quote is not.
  */
 const markBenchRecital = (blocks: readonly Block[], leadIn: number): void => {
-  for (let index = leadIn; index >= 0; index -= 1) {
-    const block = blocks.at(index);
-    if (block?.type !== "paragraph" || block.role !== undefined) {
-      return;
+  let start = leadIn;
+  while (start > 0) {
+    const previous = blocks.at(start - 1);
+    if (previous?.type !== "paragraph" || previous.role !== undefined) {
+      break;
     }
-    block.role = "intro";
+    start -= 1;
+  }
+  const head = blocks.at(start - 1);
+  const followsHeadMatter =
+    head !== undefined &&
+    ((head.type === "heading" && head.role === "decision-title") ||
+      (head.type === "paragraph" &&
+        (head.role === "case-number" || head.role === "intro")));
+  if (!followsHeadMatter) {
+    return;
+  }
+  for (const block of blocks.slice(start, leadIn + 1)) {
+    if (block.type === "paragraph") {
+      block.role = "intro";
+    }
   }
 };
 
