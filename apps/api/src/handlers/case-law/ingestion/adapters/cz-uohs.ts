@@ -193,9 +193,15 @@ export const czUohsFileNumber = (
   if (/\/\d{4}(?:\/|$)/u.test(stated) || !reference.startsWith(`${stated}/`)) {
     return `ÚOHS-${stated}`;
   }
-  const serialEnd = reference.indexOf("-");
-  return `ÚOHS-${serialEnd === -1 ? reference : reference.slice(0, serialEnd)}`;
+  // After the serial the reference states the year and, when the file has
+  // one, its section letters; whatever follows (the decision's own number,
+  // set off by a hyphen, a space or nothing) belongs to the decision.
+  const head = FILE_NUMBER_TAIL.exec(reference.slice(stated.length))?.[0];
+  return `ÚOHS-${stated}${head ?? ""}`;
 };
+
+/** `/2018/HS` in `R0003/2018/HS-31751/…`, `/2014/VZ` in `S817/2014/VZ 26112/…`. */
+const FILE_NUMBER_TAIL = /^\/\d{4}(?:\/\p{Lu}+)?/u;
 
 /**
  * The decision's citable identifiers: the file number, then the reference
@@ -400,7 +406,7 @@ export const czUohsPrintedDecisionType = (text: string): string | undefined =>
     .slice(0, LETTERHEAD_SPAN)
     .split("\n")
     .map((line) => line.trim())
-    .find((line) => PRINTED_DECISION_TYPES.has(line))
+    .find((line) => PRINTED_DECISION_TYPES.has(line.toLocaleUpperCase("cs")))
     ?.toLocaleLowerCase("cs");
 
 /**

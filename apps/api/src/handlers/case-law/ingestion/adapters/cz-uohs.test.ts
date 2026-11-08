@@ -553,6 +553,31 @@ describe("ÚOHS JSON-LD", () => {
       číslo_jednací: "R0003/2017/VZ-12345/2017/321/ABc",
     });
     expect(first.value).not.toBe(second.value);
+    // The decision's own number may follow without a hyphen.
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S817,818,819",
+        číslo_jednací: "S817,818,819/2014/VZ 26112/2014/533/ZPr",
+      }),
+    ).toBe("ÚOHS-S817,818,819/2014/VZ");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "R4",
+        číslo_jednací: "R4/2016/VZ29770/2016/321/TNo",
+      }),
+    ).toBe("ÚOHS-R4/2016/VZ");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "R449,450",
+        číslo_jednací: "R449,450/2015/38132/2016/321/EDy/HBa",
+      }),
+    ).toBe("ÚOHS-R449,450/2015");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S0049",
+        číslo_jednací: "S0049/2013",
+      }),
+    ).toBe("ÚOHS-S0049/2013");
     // A serial the reference does not extend is kept as stated.
     expect(
       czUohsFileNumber({
@@ -593,6 +618,7 @@ describe("ÚOHS JSON-LD", () => {
       ),
     ).toBe("rozhodnutí");
     expect(czUohsPrintedDecisionType("USNESENÍ\n")).toBe("usnesení");
+    expect(czUohsPrintedDecisionType(" Rozhodnutí \n")).toBe("rozhodnutí");
     expect(
       czUohsPrintedDecisionType("Úřad vydal rozhodnutí ve věci"),
     ).toBeUndefined();
