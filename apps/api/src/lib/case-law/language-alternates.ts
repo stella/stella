@@ -16,6 +16,7 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * One language version of a decision, with everything its own public route
@@ -208,7 +209,12 @@ export const readPreferredLanguageVersionIds = async ({
           languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
         })
         .from(publishedCaseLawDecisions)
-        .where(inArray(publishedCaseLawDecisions.id, [...decisionIds]))
+        .where(
+          inArray(
+            publishedCaseLawDecisions.id,
+            decisionIds.map((id) => brandPersistedCaseLawDecisionId(id)),
+          ),
+        )
         .limit(decisionIds.length),
   );
   const alternates = await readPublicDecisionLanguageAlternatesByGroup({
