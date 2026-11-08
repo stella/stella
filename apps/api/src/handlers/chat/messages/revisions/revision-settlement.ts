@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
+
 import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
 import type { NormalizedChatMessageParts } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatPart } from "@/api/handlers/chat/types";
@@ -12,7 +14,7 @@ export const isRevisionToolCallSettled = (part: ChatToolCallPart): boolean => {
     case "error":
       return true;
     case "approval-responded":
-      return "approval" in part && part.approval.approved === false;
+      return isDeclinedChatToolCall(part);
     case "awaiting-input":
     case "input-streaming":
     case "input-complete":

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { isOwnKey } from "@stll/api-contract/own-key";
+
 import {
   getSpawnSubagentsCallStatus,
   keySpawnSubagents,
@@ -154,5 +156,22 @@ describe("spawn subagents call status", () => {
         state: "approval-responded",
       }),
     ).toBe(SPAWN_SUBAGENTS_CALL_STATUS.declined);
+  });
+
+  // A declined call is stored settled as an error; it never ran, so it must
+  // not read as a failed run.
+  test("reads a declined call as declined in every state it can hold", () => {
+    const states = Object.keys(EXPECTED_CALL_STATUS).filter((state) =>
+      isOwnKey(EXPECTED_CALL_STATUS, state),
+    );
+    expect(states).toEqual(Object.keys(SPAWN_SUBAGENTS_CALL_STATUS_BY_STATE));
+    for (const state of states) {
+      expect(
+        getSpawnSubagentsCallStatus({ approval: { approved: false }, state }),
+      ).toBe(SPAWN_SUBAGENTS_CALL_STATUS.declined);
+    }
+    expect(getSpawnSubagentsCallStatus({ state: "error" })).toBe(
+      SPAWN_SUBAGENTS_CALL_STATUS.failed,
+    );
   });
 });
