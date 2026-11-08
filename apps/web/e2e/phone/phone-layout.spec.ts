@@ -19,6 +19,7 @@ import {
   type SmokeRouteDef,
   type SmokeWorld,
 } from "../helpers/smoke-route-defs";
+import { createBrowserErrorCollector } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import { createTestWorkspace } from "../helpers/workspace";
 
@@ -97,6 +98,12 @@ test.describe("pages fit a phone", () => {
       // WebKit has no Chromium protocol session, so the byte-measuring
       // collector cannot attach here; settling only needs page events.
       const network = watchApiActivity(page);
+      // Kept for the failure message only: a route that renders its error
+      // page names the error it caught.
+      const browserErrors = createBrowserErrorCollector({
+        tolerateColdMountWarning: true,
+      });
+      const detachErrors = browserErrors.trackPage(page);
       try {
         await page.goto(def.path(world), { waitUntil: "domcontentloaded" });
         await expect(page).not.toHaveURL(/\/auth(?:\/|$)/u);
@@ -110,12 +117,14 @@ test.describe("pages fit a phone", () => {
         });
         await expect(
           page.getByRole("heading", { name: ROUTE_ERROR_HEADING }),
+          `${def.template} rendered the route error page\n\n${browserErrors.entries().join("\n\n")}`,
         ).toHaveCount(0);
         expect(
           await findPhoneLayoutProblems(page),
           `${def.template} breaks the phone layout rules`,
         ).toEqual([]);
       } finally {
+        detachErrors();
         network.detach();
       }
     });
