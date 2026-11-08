@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { createDetached } from "@stll/errors";
 
 import { startHarnessProcess } from "../src/harness/harness-process";
@@ -18,7 +20,7 @@ if (cli === undefined || scenario === undefined || log === undefined) {
   process.exit(2);
 }
 
-startHarnessProcess<number, Error>({
+const started = startHarnessProcess<number, Error>({
   command: [process.execPath, cli, scenario],
   cwd: process.cwd(),
   env: { FAKE_HARNESS_LOG: log, PATH: process.env["PATH"] ?? "" },
@@ -41,3 +43,7 @@ startHarnessProcess<number, Error>({
   violation: () => undefined,
   exit: () => undefined,
 });
+if (Result.isError(started)) {
+  process.stderr.write(`${started.error.message}\n`);
+  process.exit(1);
+}

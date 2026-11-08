@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -80,7 +80,7 @@ const fakeLog = () => {
 /** The fake harness, leaving processes the ways agents' commands do. */
 const startLeaving = (root: string, log: string) => {
   const ready = Promise.withResolvers<undefined>();
-  const harness = startHarnessProcess<number, Error>({
+  const started = startHarnessProcess<number, Error>({
     command: [process.execPath, FAKE_SERVER, "leaves_processes"],
     cwd: root,
     env: { FAKE_HARNESS_LOG: log, PATH: process.env["PATH"] ?? "" },
@@ -105,6 +105,9 @@ const startLeaving = (root: string, log: string) => {
     },
     exit: () => undefined,
   });
+  const harness = Result.isOk(started)
+    ? started.value
+    : panic("the fake harness did not start");
   return { harness, ready: ready.promise };
 };
 
@@ -187,22 +190,21 @@ describe.skipIf(process.platform === "win32")(
 
     test("a missing CLI is refused when it is started", () => {
       const { root } = fakeLog();
-      expect(() =>
-        startHarnessProcess<number, Error>({
-          command: [path.join(root, "no-such-cli")],
-          cwd: root,
-          env: { PATH: process.env["PATH"] ?? "" },
-          detached: createDetached((error) => {
-            backgroundErrors.push(error);
-          }),
-          deadlines: { requestMs: 1000, terminateMs: 300 },
-          name: "missing",
-          unanswered: (_reason, message) => new Error(message),
-          message: () => undefined,
-          violation: () => undefined,
-          exit: () => undefined,
+      const started = startHarnessProcess<number, Error>({
+        command: [path.join(root, "no-such-cli")],
+        cwd: root,
+        env: { PATH: process.env["PATH"] ?? "" },
+        detached: createDetached((error) => {
+          backgroundErrors.push(error);
         }),
-      ).toThrow("Executable not found");
+        deadlines: { requestMs: 1000, terminateMs: 300 },
+        name: "missing",
+        unanswered: (_reason, message) => new Error(message),
+        message: () => undefined,
+        violation: () => undefined,
+        exit: () => undefined,
+      });
+      expect(Result.isError(started) && started.error.reason).toBe("not_found");
     });
   },
 );

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { dlopen, FFIType } from "bun:ffi";
 import { closeSync, readdirSync, readFileSync } from "node:fs";
 
@@ -72,34 +72,47 @@ type SpawnHarnessProcessTreeOptions = {
   terminateMs: number;
 };
 
-/** A spawn refusal, thrown as `Bun.spawn` throws one. */
-const notFound = (executable: string) =>
-  Object.assign(new Error(`Executable not found: ${executable}`), {
-    code: "ENOENT",
-  });
+/** Why a harness process could not be started. */
+export class HarnessSpawnError extends TaggedError("HarnessSpawnError")<{
+  reason: "not_found" | "refused";
+  message: string;
+  cause?: unknown;
+}> {}
 
 /**
  * The executable as `Bun.spawn` would find it with this environment, so a
- * missing CLI is still refused when it is started, not later by the shell
- * that would run it.
+ * missing CLI is refused when it is started, not later by the shell that
+ * would run it.
  */
 const resolveExecutable = (
   executable: string | undefined,
   { cwd, env }: { cwd: string; env: Readonly<Record<string, string>> },
-) => {
-  if (executable === undefined || executable === "") {
-    throw notFound(String(executable));
-  }
+): Result<string, HarnessSpawnError> => {
   const path = env["PATH"];
-  const resolved = Bun.which(
-    executable,
-    path === undefined ? { cwd } : { cwd, PATH: path },
-  );
-  if (resolved === null) {
-    throw notFound(executable);
-  }
-  return resolved;
+  const resolved =
+    executable === undefined || executable === ""
+      ? null
+      : Bun.which(
+          executable,
+          path === undefined ? { cwd } : { cwd, PATH: path },
+        );
+  return resolved === null
+    ? Result.err(
+        new HarnessSpawnError({
+          reason: "not_found",
+          message: "Executable not found",
+        }),
+      )
+    : Result.ok(resolved);
 };
+
+/** A spawn the operating system refused. */
+const refused = (cause: unknown) =>
+  new HarnessSpawnError({
+    reason: "refused",
+    message: "The harness process could not be started.",
+    cause,
+  });
 
 /** Waits until `alive` says no, or `ms` passes; true when it said no. */
 const goneWithin = async (
@@ -121,9 +134,9 @@ const goneWithin = async (
 
 const once = (work: () => Promise<void>) => {
   const started: { ending: Promise<void> | null } = { ending: null };
-  return () => {
+  return async () => {
     started.ending ??= work();
-    return started.ending;
+    await started.ending;
   };
 };
 
@@ -263,29 +276,42 @@ const spawnSession = ({
   cwd,
   env,
   terminateMs,
-}: SpawnHarnessProcessTreeOptions): HarnessProcessTree => {
+}: SpawnHarnessProcessTreeOptions): Result<
+  HarnessProcessTree,
+  HarnessSpawnError
+> => {
   const [executable, ...args] = command;
+  const resolved = resolveExecutable(executable, { cwd, env });
+  if (Result.isError(resolved)) {
+    return resolved;
+  }
   const graceSeconds = Math.max(1, Math.ceil(terminateMs / 1000));
-  const spawned = Bun.spawn(
-    [
-      "/bin/sh",
-      "-c",
-      GROUP_WATCH_SCRIPT,
-      "stella-harness",
-      String(graceSeconds),
-      resolveExecutable(executable, { cwd, env }),
-      ...args,
-    ],
-    {
-      cwd,
-      env: { ...env },
-      // `setsid`: the CLI leads a new session and process group.
-      detached: true,
-      // Harness logs may carry account details, so stderr is dropped. Fd 3
-      // is the watcher's pipe.
-      stdio: ["pipe", "pipe", "ignore", "pipe"],
-    },
+  const started = Result.try(() =>
+    Bun.spawn(
+      [
+        "/bin/sh",
+        "-c",
+        GROUP_WATCH_SCRIPT,
+        "stella-harness",
+        String(graceSeconds),
+        resolved.value,
+        ...args,
+      ],
+      {
+        cwd,
+        env: { ...env },
+        // `setsid`: the CLI leads a new session and process group.
+        detached: true,
+        // Harness logs may carry account details, so stderr is dropped. Fd 3
+        // is the watcher's pipe.
+        stdio: ["pipe", "pipe", "ignore", "pipe"],
+      },
+    ),
   );
+  if (Result.isError(started)) {
+    return Result.err(refused(started.error.cause));
+  }
+  const spawned = started.value;
   const child: HarnessChild = spawned;
   const watch = spawned.stdio[3];
   // The session's id and the group's are the CLI's pid.
@@ -327,7 +353,7 @@ const spawnSession = ({
       });
     }
   });
-  return { child, end };
+  return Result.ok({ child, end });
 };
 
 const spawnWindowsTree = ({
@@ -335,16 +361,25 @@ const spawnWindowsTree = ({
   cwd,
   env,
   terminateMs,
-}: SpawnHarnessProcessTreeOptions): HarnessProcessTree => {
-  const child = Bun.spawn([...command], {
-    cwd,
-    env: { ...env },
-    stdin: "pipe",
-    stdout: "pipe",
-    // Harness logs may carry account details.
-    stderr: "ignore",
-    windowsHide: true,
-  });
+}: SpawnHarnessProcessTreeOptions): Result<
+  HarnessProcessTree,
+  HarnessSpawnError
+> => {
+  const started = Result.try(() =>
+    Bun.spawn([...command], {
+      cwd,
+      env: { ...env },
+      stdin: "pipe",
+      stdout: "pipe",
+      // Harness logs may carry account details.
+      stderr: "ignore",
+      windowsHide: true,
+    }),
+  );
+  if (Result.isError(started)) {
+    return Result.err(refused(started.error.cause));
+  }
+  const child = started.value;
   const running = () => child.exitCode === null && child.signalCode === null;
   const end = once(async () => {
     if (!running()) {
@@ -366,13 +401,13 @@ const spawnWindowsTree = ({
     child.kill("SIGKILL");
     await goneWithin(running, terminateMs);
   });
-  return { child, end };
+  return Result.ok({ child, end });
 };
 
 /** Start `command` as the root of a tree that is ended as one. */
 export const spawnHarnessProcessTree = (
   options: SpawnHarnessProcessTreeOptions,
-): HarnessProcessTree =>
+): Result<HarnessProcessTree, HarnessSpawnError> =>
   process.platform === "win32"
     ? spawnWindowsTree(options)
     : spawnSession(options);

@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 
 import { createLineReader } from "./json-lines";
-import { spawnHarnessProcessTree } from "./process-tree";
+import {
+  type HarnessSpawnError,
+  spawnHarnessProcessTree,
+} from "./process-tree";
 import type { Detached, HarnessExit } from "./turn-lifecycle";
 
 /**
@@ -70,6 +73,7 @@ type HarnessProcess<TId, TError> = {
   kill: () => Promise<HarnessExit>;
 };
 
+/** Start the harness; refused when its executable is missing or cannot run. */
 export const startHarnessProcess = <TId, TError>({
   command,
   cwd,
@@ -81,13 +85,20 @@ export const startHarnessProcess = <TId, TError>({
   message,
   violation,
   exit,
-}: StartHarnessProcessOptions<TError>): HarnessProcess<TId, TError> => {
-  const tree = spawnHarnessProcessTree({
+}: StartHarnessProcessOptions<TError>): Result<
+  HarnessProcess<TId, TError>,
+  HarnessSpawnError
+> => {
+  const spawned = spawnHarnessProcessTree({
     command,
     cwd,
     env,
     terminateMs: deadlines.terminateMs,
   });
+  if (Result.isError(spawned)) {
+    return spawned;
+  }
+  const tree = spawned.value;
   const { child } = tree;
   const pending = new Map<TId, (result: Result<unknown, TError>) => void>();
   const state = { closed: false, terminating: false };
@@ -183,7 +194,7 @@ export const startHarnessProcess = <TId, TError>({
     return ended;
   })();
 
-  return {
+  return Result.ok({
     pid: child.pid,
     write,
     request: async (id, label, outgoing) => {
@@ -234,5 +245,5 @@ export const startHarnessProcess = <TId, TError>({
       terminate();
       return exited;
     },
-  };
+  });
 };
