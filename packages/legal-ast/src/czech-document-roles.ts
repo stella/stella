@@ -373,7 +373,9 @@ export const czechBenchRecitalStart = (
       ? opensAfterHeadMatter
       : (head.type === "heading" && head.role === "decision-title") ||
         (head.type === "paragraph" &&
-          (head.role === "case-number" || head.role === "intro"));
+          (head.role === "case-number" ||
+            head.role === "intro" ||
+            head.role === "apparatus"));
   const recital = blocks.slice(start, end);
   return followsHeadMatter &&
     recital.length > 0 &&

@@ -337,6 +337,23 @@ describe("a Czech bench recital", () => {
     ).toBe(0);
   });
 
+  test("runs back to the head matter's apparatus", () => {
+    const note: Block = {
+      id: "n",
+      anchorId: "n",
+      type: "paragraph",
+      role: "apparatus",
+      inlines: inlineText("Sbírka nálezů a usnesení"),
+      plainText: "Sbírka nálezů a usnesení",
+    };
+    expect(
+      czechBenchRecitalStart(
+        [title, note, recitalLine("Ústavní soud rozhodl v senátě")],
+        3,
+      ),
+    ).toBe(2);
+  });
+
   test("states the bench's decision", () => {
     expect(
       czechBenchRecitalStart([recitalLine("IV. ÚS 35/96")], 1, {
