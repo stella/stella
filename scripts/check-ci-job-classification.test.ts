@@ -9,17 +9,76 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { withoutCiEventContext } from "../packages/scripts/src/without-ci-event-context";
+import { checkMergeGroupJobClassification } from "./check-ci-job-classification";
 import {
   readDecisions,
   writeDecision,
 } from "./ci-job-classification/decisions";
 import {
+  generateClassification,
+  readClassificationInputs,
+  readClassificationInputsAtRevision,
+} from "./ci-job-classification/generate";
+import {
   CLASSIFICATION_DECISIONS_PATH,
   CLASSIFICATION_INPUT_GLOBS,
+  CLASSIFICATION_INPUT_PATHS,
   decisionPathForKey,
+  isClassificationInput,
 } from "./ci-job-classification/inputs";
+import { ReviewRequiredError } from "./ci-job-classification/review";
+import { writeClassificationFixtureInputs } from "./ci-job-classification/test-fixtures";
 import { AdmissionError, parseDocument } from "./ci-job-classification/yaml";
 import { GENERATORS } from "./generated-files";
+
+const repositoryRoot = path.resolve(import.meta.dir, "..");
+
+const classificationReads = () => {
+  const reads = new Set<string>();
+  const inputs = readClassificationInputs(repositoryRoot, {
+    observeRead: (file) => {
+      reads.add(file);
+    },
+  });
+  generateClassification(inputs);
+  return reads;
+};
+
+const covers = (input: string, file: string) =>
+  file === input || file.startsWith(`${input}/`);
+
+test("every repository file read by classification is an input", () => {
+  const uncovered = [...classificationReads()].filter(
+    (file) => !isClassificationInput(file),
+  );
+  expect(uncovered).toEqual([]);
+});
+
+test("every classification input is read by the real program", async () => {
+  const runtimeReads = classificationReads();
+  const build = await Bun.build({
+    entrypoints: [path.join(import.meta.dir, "check-ci-job-classification.ts")],
+    target: "bun",
+    metafile: true,
+  });
+  expect(
+    build.success,
+    build.logs.map(({ message }) => message).join("\n"),
+  ).toBe(true);
+  const executableReads = new Set(
+    Object.values(build.metafile?.outputs ?? {}).flatMap((output) =>
+      Object.keys(output.inputs),
+    ),
+  );
+  const unread = CLASSIFICATION_INPUT_PATHS.filter(
+    (input) =>
+      ![...runtimeReads, ...executableReads].some((file) =>
+        covers(input, file),
+      ),
+  );
+  expect(unread).toEqual([]);
+});
 
 test("the classification generator reads and writes every input it owns", () => {
   const generator = GENERATORS.find(
@@ -66,6 +125,49 @@ test("the classification input paths load alone, without packages or siblings", 
   }
 });
 
+test("a revision from before the global rule manifest still classifies, and records it", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "classification-revision-"));
+  try {
+    writeClassificationFixtureInputs(root);
+    // The base a branch forked from before the manifest existed.
+    rmSync(path.join(root, ".github/global-rule-inputs.json"));
+    const workflow = "jobs: {check: {steps: []}}";
+    writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
+    for (const [key, decision] of Object.entries(reviewed(workflow, "check"))) {
+      writeDecision(root, key, decision);
+    }
+    const git = (...args: string[]) =>
+      Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.name=Classification Test",
+          "-c",
+          "user.email=classification-test@example.invalid",
+          "-c",
+          "commit.gpgsign=false",
+          "-C",
+          root,
+          ...args,
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+    expect(git("init", "--quiet").exitCode).toBe(0);
+    expect(git("add", ".").exitCode).toBe(0);
+    expect(git("commit", "--quiet", "-m", "base").exitCode).toBe(0);
+    const reads = new Set<string>();
+    const inputs = readClassificationInputsAtRevision(root, "HEAD", {
+      observeRead: (file) => {
+        reads.add(file);
+      },
+    });
+    expect(generateClassification(inputs).isOk()).toBe(true);
+    expect(reads.has(".github/global-rule-inputs.json")).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 const SCRIPT = path.join(import.meta.dir, "check-ci-job-classification.ts");
 const decoder = new TextDecoder();
 const roots: string[] = [];
@@ -102,6 +204,7 @@ const reviewed = (workflow: string, job: string, kind = "ordinary") => ({
 const repository = (base: Fixture, head: Fixture, commit = false) => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-refresh-"));
   roots.push(root);
+  writeClassificationFixtureInputs(root);
   mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
   const write = ({ workflow, decisions }: Fixture) => {
     writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
@@ -148,10 +251,6 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
       message,
     );
   };
-  writeFileSync(
-    path.join(root, ".github/ci-job-classification-sources.json"),
-    "{}",
-  );
   write(base);
   git("init", "--quiet");
   commitAll("base");
@@ -166,6 +265,7 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
 const run = (root: string, ...args: string[]) => {
   const result = Bun.spawnSync([process.execPath, SCRIPT, ...args], {
     cwd: root,
+    env: withoutCiEventContext(),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -582,6 +682,355 @@ test("independent privileged approvals merge without conflict", () => {
   });
 });
 
+type CompositionOptions = {
+  kind?: string;
+  secondKind?: string;
+  jobPermissions?: string;
+  actionDirectory?: string;
+};
+
+const compositionRepository = ({
+  kind = "ordinary",
+  secondKind = kind,
+  jobPermissions,
+  actionDirectory = "check",
+}: CompositionOptions = {}) => {
+  const permissions =
+    jobPermissions === undefined ? "" : `permissions: ${jobPermissions}, `;
+  const baseWorkflow = `jobs: {check: {${permissions}steps: [{uses: ./.github/actions/${actionDirectory}}, {uses: acme/workflow@0000000000000000000000000000000000000000}]}}`;
+  const workflowChange = baseWorkflow.replace(
+    "0000000000000000000000000000000000000000",
+    "2222222222222222222222222222222222222222",
+  );
+  const baseAction =
+    "name: check\nruns: {using: composite, steps: [{uses: acme/check@0000000000000000000000000000000000000000}]}\n";
+  const actionChange = baseAction.replace(
+    "0000000000000000000000000000000000000000",
+    "1111111111111111111111111111111111111111",
+  );
+  const root = mkdtempSync(path.join(tmpdir(), "classification-compose-"));
+  roots.push(root);
+  writeClassificationFixtureInputs(root);
+  mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
+  mkdirSync(path.join(root, ".github/actions", actionDirectory), {
+    recursive: true,
+  });
+  mkdirSync(path.join(root, CLASSIFICATION_DECISIONS_PATH), {
+    recursive: true,
+  });
+  writeFileSync(
+    path.join(root, ".github/ci-job-classification-decisions.json"),
+    "{}",
+  );
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), baseWorkflow);
+  writeFileSync(
+    path.join(root, ".github/actions", actionDirectory, "action.yml"),
+    baseAction,
+  );
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.name=Classification Test",
+        "-c",
+        "user.email=classification-test@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "-C",
+        root,
+        ...args,
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
+  };
+  const commit = (message: string) => {
+    git("add", ".");
+    git("commit", "--quiet", "-m", message);
+  };
+  git("init", "--quiet");
+  commit("base inputs");
+  const actualDigest = () => {
+    const checked = run(root, "--check", "--base", "HEAD");
+    const digest = /\/([a-f0-9]{64})\.json/u.exec(checked.stderr)?.[1];
+    if (!digest) {
+      throw new AdmissionError({
+        message: `fixture digest missing: ${checked.stderr}`,
+      });
+    }
+    return digest;
+  };
+  writeDecision(root, keyOf("check"), {
+    kind,
+    qualifier: "Reviewed checks",
+    reviewedDigest: actualDigest(),
+  });
+  git("add", ".");
+  git("commit", "--quiet", "--amend", "--no-edit");
+  const base = gitOutput(root, "rev-parse", "HEAD");
+  git("switch", "-c", "workflow-change");
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflowChange);
+  writeDecision(root, keyOf("check"), {
+    kind,
+    qualifier: "Reviewed checks",
+    reviewedDigest: actualDigest(),
+  });
+  commit("workflow change");
+  const first = gitOutput(root, "rev-parse", "HEAD");
+  git("switch", "-c", "action-change", base);
+  writeFileSync(
+    path.join(root, ".github/actions", actionDirectory, "action.yml"),
+    actionChange,
+  );
+  if (secondKind !== kind) {
+    // A member that reclassified the job carries only approvals of its kind.
+    rmSync(
+      path.join(
+        root,
+        CLASSIFICATION_DECISIONS_PATH,
+        encodeURIComponent(keyOf("check")),
+      ),
+      { recursive: true, force: true },
+    );
+  }
+  writeDecision(root, keyOf("check"), {
+    kind: secondKind,
+    qualifier: "Reviewed checks",
+    reviewedDigest: actualDigest(),
+  });
+  commit("action change");
+  const second = gitOutput(root, "rev-parse", "HEAD");
+  git("merge", "--no-edit", "workflow-change");
+  if (secondKind !== kind) {
+    // The merged tree keeps the reviewed kind and drops the member's approval
+    // recorded under the other kind; only the member's head differs.
+    const directory = path.join(
+      root,
+      CLASSIFICATION_DECISIONS_PATH,
+      encodeURIComponent(keyOf("check")),
+    );
+    for (const file of new Bun.Glob("*.json").scanSync({ cwd: directory })) {
+      const approval: unknown = JSON.parse(
+        readFileSync(path.join(directory, file), "utf-8"),
+      );
+      if (
+        file !== "decision.json" &&
+        typeof approval === "object" &&
+        approval !== null &&
+        "kind" in approval &&
+        approval.kind !== kind
+      ) {
+        rmSync(path.join(directory, file));
+      }
+    }
+    writeFileSync(
+      path.join(directory, "decision.json"),
+      `${JSON.stringify({ kind, qualifier: "Reviewed checks" }, null, 2)}\n`,
+    );
+    commit("restore the reviewed kind");
+  }
+  return { root, base, first, second };
+};
+
+const gitOutput = (root: string, ...args: string[]) => {
+  const result = Bun.spawnSync(["git", "-C", root, ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
+  return decoder.decode(result.stdout).trim();
+};
+
+test("ordinary job approvals compose across a merge group", () => {
+  const { root, base, first, second } = compositionRepository();
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    readMergeGroup: () => ({
+      members: [
+        { number: 41, head: first },
+        { number: 42, head: second },
+      ],
+    }),
+  });
+  expect(result.isOk()).toBe(true);
+});
+
+test("ordinary composition refuses content from no approving pull request", () => {
+  const { root, base, first, second } = compositionRepository();
+  writeFileSync(
+    path.join(root, ".github/workflows/ci.yml"),
+    "jobs: {check: {steps: [{uses: ./.github/actions/check}, {uses: acme/workflow@3333333333333333333333333333333333333333}]}}",
+  );
+  const decisionDirectory = path.join(
+    root,
+    CLASSIFICATION_DECISIONS_PATH,
+    encodeURIComponent(keyOf("check")),
+  );
+  for (const file of new Bun.Glob("*.json").scanSync({
+    cwd: decisionDirectory,
+  })) {
+    if (file !== "decision.json") {
+      rmSync(path.join(decisionDirectory, file));
+    }
+  }
+  writeFileSync(
+    path.join(decisionDirectory, "decision.json"),
+    `${JSON.stringify({ kind: "ordinary", qualifier: "Reviewed checks" }, null, 2)}\n`,
+  );
+  expect(decisionsIn(root)[keyOf("check")]).toEqual({
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    approvedDigests: [],
+  });
+  gitOutput(root, "add", ".");
+  gitOutput(
+    root,
+    "-c",
+    "user.name=Classification Test",
+    "-c",
+    "user.email=classification-test@example.invalid",
+    "commit",
+    "-m",
+    "unreviewed input",
+  );
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    readMergeGroup: () => ({
+      members: [
+        { number: 41, head: first },
+        { number: 42, head: second },
+      ],
+    }),
+  });
+  expect(result.isErr() && result.error instanceof ReviewRequiredError).toBe(
+    true,
+  );
+});
+
+test("composition sees a changed input whose name Git would quote", () => {
+  // Line-separated Git output quotes non-ASCII names, so the stale action
+  // would not match a classification input and composition would pass.
+  const actionDirectory = "kontrola-č";
+  const { root, base, first, second } = compositionRepository({
+    actionDirectory,
+  });
+  writeFileSync(
+    path.join(root, ".github/actions", actionDirectory, "action.yml"),
+    "name: check\nruns: {using: composite, steps: [{uses: acme/check@3333333333333333333333333333333333333333}]}\n",
+  );
+  const decisionDirectory = path.join(
+    root,
+    CLASSIFICATION_DECISIONS_PATH,
+    encodeURIComponent(keyOf("check")),
+  );
+  for (const file of new Bun.Glob("*.json").scanSync({
+    cwd: decisionDirectory,
+  })) {
+    if (file !== "decision.json") {
+      rmSync(path.join(decisionDirectory, file));
+    }
+  }
+  gitOutput(root, "add", ".");
+  gitOutput(
+    root,
+    "-c",
+    "user.name=Classification Test",
+    "-c",
+    "user.email=classification-test@example.invalid",
+    "commit",
+    "-m",
+    "unreviewed action",
+  );
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    readMergeGroup: twoMemberGroup(first, second),
+  });
+  expect(result.isErr() && result.error instanceof ReviewRequiredError).toBe(
+    true,
+  );
+});
+
+test("sensitive job composition names the later pull request for re-approval", () => {
+  const { root, base, first, second } = compositionRepository({
+    kind: "priority",
+  });
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    readMergeGroup: () => ({
+      members: [
+        { number: 41, head: first },
+        { number: 42, head: second },
+      ],
+    }),
+  });
+  if (!result.isErr() || !(result.error instanceof ReviewRequiredError)) {
+    throw new AdmissionError({ message: "expected a review refusal" });
+  }
+  expect(result.error.refusal).toBe(
+    "classification needs re-approval after #42",
+  );
+  expect(result.error.message).toContain(
+    "classification needs re-approval after #42",
+  );
+});
+
+const twoMemberGroup = (first: string, second: string) => () => ({
+  members: [
+    { number: 41, head: first },
+    { number: 42, head: second },
+  ],
+});
+
+test("a job privileged by its permissions never composes, whatever its kind", () => {
+  const { root, base, first, second } = compositionRepository({
+    jobPermissions: "{contents: write}",
+  });
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    readMergeGroup: twoMemberGroup(first, second),
+  });
+  if (!result.isErr() || !(result.error instanceof ReviewRequiredError)) {
+    throw new AdmissionError({ message: "expected a review refusal" });
+  }
+  expect(result.error.refusal).toBe(
+    "classification needs re-approval after #42",
+  );
+});
+
+test("a member whose decision has another kind is not an approver", () => {
+  const { root, base, first, second } = compositionRepository({
+    secondKind: "support",
+  });
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    readMergeGroup: twoMemberGroup(first, second),
+  });
+  expect(result.isErr() && result.error instanceof ReviewRequiredError).toBe(
+    true,
+  );
+});
+
+test("a group that passes on its own digests never reads the queue", () => {
+  // A single member's own head carries the approval of its exact digest.
+  const { root, base, first } = compositionRepository();
+  gitOutput(root, "checkout", "--quiet", first);
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    readMergeGroup: () => {
+      throw new AdmissionError({ message: "queue read must not happen" });
+    },
+  });
+  expect(result.isOk()).toBe(true);
+});
+
 test("conflicting modes are rejected", () => {
   const decisions = reviewed(BEFORE, "check");
   const { root } = repository(
@@ -591,4 +1040,65 @@ test("conflicting modes are rejected", () => {
   const result = run(root, "--write", "--check");
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain("usage:");
+});
+
+const jsonRun = (root: string, ...args: string[]) => {
+  const result = run(root, "--check", ...args, "--json");
+  return { exitCode: result.exitCode, report: JSON.parse(result.stdout) };
+};
+
+test("--group checks a composed tree like its merge group, before it is queued", () => {
+  const { root, base, first, second } = compositionRepository();
+  const exact = jsonRun(root, "--base", base);
+  expect(exact.exitCode).toBe(1);
+  expect(exact.report.status).toBe("stale");
+  expect(exact.report.stale.length).toBeGreaterThan(0);
+  expect(
+    jsonRun(root, "--base", base, "--group", `41:${first},42:${second}`),
+  ).toEqual({ exitCode: 0, report: { status: "ok", privileged: [] } });
+});
+
+test("--group refuses to run when a member head is missing", () => {
+  const { root, base, first } = compositionRepository();
+  const missing = "f".repeat(40);
+  const result = jsonRun(
+    root,
+    "--base",
+    base,
+    "--group",
+    `41:${first},42:${missing}`,
+  );
+  expect(result.exitCode).toBe(2);
+  expect(result.report.status).toBe("error");
+  expect(result.report.message).toContain(`#42 ${missing}`);
+});
+
+test("--group and --json reject malformed input and other modes", () => {
+  const decisions = reviewed(BEFORE, "check");
+  const { root } = repository(
+    { workflow: BEFORE, decisions },
+    { workflow: BEFORE, decisions },
+  );
+  for (const args of [
+    ["--check", "--group", "41:abc", "--json"],
+    ["--check", "--group", "41", "--json"],
+    ["--write", "--json"],
+  ]) {
+    const result = run(root, ...args);
+    expect(result.exitCode, args.join(" ")).toBe(2);
+    expect(JSON.parse(result.stdout).status).toBe("error");
+  }
+});
+
+test("--json lists the stale candidates a refresh records without review", () => {
+  const decisions = reviewed(BEFORE, "check");
+  const { root } = repository(
+    { workflow: BEFORE, decisions },
+    { workflow: AFTER, decisions },
+    true,
+  );
+  const result = jsonRun(root);
+  expect(result.exitCode).toBe(1);
+  expect(result.report.stale).toEqual(result.report.mechanical);
+  expect(result.report.mechanical).toHaveLength(1);
 });

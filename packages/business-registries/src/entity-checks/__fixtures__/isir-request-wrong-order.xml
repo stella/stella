@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:typ="http://isirws.cca.cz/types/"><soapenv:Header/><soapenv:Body><typ:getIsirWsCuzkDataRequest><ic>26863154</ic><maxRelevanceVysledku>2</maxRelevanceVysledku><maxPocetVysledku>50</maxPocetVysledku></typ:getIsirWsCuzkDataRequest></soapenv:Body></soapenv:Envelope>

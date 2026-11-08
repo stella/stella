@@ -1,14 +1,32 @@
+// parser-output-unchanged: the text-layer read moved here unchanged from the pl-sn and sk-courts readers: the same load, the same pages, the same extraction.
 /**
  * Shared utilities for parsers using libpdf/core.
  *
  * libpdf/core extracts PDF text with per-span font info
- * (bold, size, position). These helpers handle common
- * quirks: non-breaking spaces, word-splitting across spans,
- * and bold range mapping.
+ * (bold, size, position). This module is the one place a
+ * court parser reads a PDF's text layer
+ * (`scripts/ownership/court-pdf-text-layer.ts`); its helpers
+ * handle common quirks: non-breaking spaces, word-splitting
+ * across spans, and bold range mapping.
  */
+
+import { PDF } from "@libpdf/core";
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
+
+/** One page's text layer: its lines with spans, fonts and positions. */
+export type PdfTextPage = ReturnType<
+  ReturnType<PDF["getPages"]>[number]["extractText"]
+>;
+
+/** Every page's text layer, in page order. */
+export const readPdfTextPages = async (
+  pdfBytes: Uint8Array,
+): Promise<PdfTextPage[]> => {
+  const pdf = await PDF.load(pdfBytes);
+  return pdf.getPages().map((page) => page.extractText());
+};
 
 // ── Types ────────────────────────────────────────────────
 

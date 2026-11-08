@@ -13,14 +13,18 @@ import { compareCodeUnit } from "@stll/collation";
  */
 export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
+    "src/db/contacts-rls-maintenance.postgres.test.ts",
     "src/db/entity-feature-gate-maintenance.postgres.test.ts",
     "src/db/entity-feature-search-budget.postgres.test.ts",
+    "src/handlers/case-law/decisions/coverage-counts.postgres.test.ts",
     "src/handlers/case-law/ingestion/background-replay-store.postgres.test.ts",
     "src/handlers/case-law/ingestion/reconciliation-listing-revisions.postgres.test.ts",
     "src/handlers/entities/versions/list.postgres.test.ts",
     "src/lib/account-export/store.postgres.test.ts",
     "src/lib/business-registries/desktop/proof.postgres.test.ts",
     "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
+    "src/lib/email/correspondence/concurrent-filing.postgres.test.ts",
+    "src/lib/email/correspondence/source-race.postgres.test.ts",
     "src/lib/hosted-usage-provider/replay.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",
@@ -157,13 +161,24 @@ const isMigrationRunnerModule = (testPath: string, specifier: string) => {
 // `require` calls and dynamic `import()`, never type-only imports.
 const runtimeImports = new Bun.Transpiler({ loader: "ts" });
 
-/** Migration bundles can change roles shared by every database in the cluster. */
-export const clusterExclusiveMigrationTests = (
+// Snapshot visibility depends on transactions across the entire cluster.
+const CLUSTER_VISIBILITY_TESTS = new Set([
+  "src/lib/case-law/sitemap-fairness-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
+  "src/lib/case-law/sitemap-shard-refresh.postgres.test.ts",
+  "src/db/case-law-sitemap-packing-enrollment.postgres.test.ts",
+  "src/lib/case-law/sitemap-backlog-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
+]);
+
+/** Migration roles and visibility proofs require every other cluster worker to finish. */
+export const clusterExclusivePostgresTests = (
   sources: ReadonlyMap<string, string>,
 ): Set<string> => {
   const paths = new Set<string>();
   for (const [testPath, source] of sources) {
     if (
+      CLUSTER_VISIBILITY_TESTS.has(testPath) ||
       runtimeImports
         .scanImports(source)
         .some(({ path: specifier }) =>
@@ -196,11 +211,37 @@ export const classifyPostgresTestIsolation = async (
     sharedTables: readSharedTableNames(apiRoot),
   });
   if (violations.length === 0) {
-    return clusterExclusiveMigrationTests(sources);
+    return clusterExclusivePostgresTests(sources);
   }
   return panic(
     `PostgreSQL tests that run DDL on shared tables require an exclusive test process:\n${violations
       .map(({ testPath, tables }) => `  ${testPath}: ${tables.join(", ")}`)
       .join("\n")}\nAdd each path to EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS.`,
   );
+};
+
+// Importing one of these boots the shared PGlite test database. Without a
+// snapshot, each boot builds the whole schema in-process (drizzle-kit push and
+// every PGlite install) inside the suite's setup hook.
+const PGLITE_TEST_DATABASE_MODULES = [
+  "tests/pglite-test-db",
+  "tests/security/rls-fixture",
+  "tests/security/test-utils",
+] as const;
+
+/** Whether a test file boots the shared PGlite test database. */
+export const bootsPgliteTestDatabase = (source: string): boolean =>
+  PGLITE_TEST_DATABASE_MODULES.some((module) => source.includes(module));
+
+/** Whether any selected Postgres suite also boots the PGlite test database. */
+export const anyBootsPgliteTestDatabase = async (
+  apiRoot: string,
+  testPaths: readonly string[],
+): Promise<boolean> => {
+  const sources = await Promise.all(
+    testPaths.map(
+      async (testPath) => await Bun.file(path.join(apiRoot, testPath)).text(),
+    ),
+  );
+  return sources.some(bootsPgliteTestDatabase);
 };

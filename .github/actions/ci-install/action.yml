@@ -162,7 +162,7 @@ runs:
         fi
         end=$(bun -e 'console.log(Date.now())')
         echo "milliseconds=$((end - START_MS))" >> "$GITHUB_OUTPUT"
-    - name: Register designated non-fatal store save after job work
+    - name: Save newly sealed install store
       if: ${{ github.ref == 'refs/heads/main' && inputs.cache-write == 'save' && steps.install-time.outcome == 'success' && steps.compression.outcome == 'success' && steps.cache.outputs.cache-hit != 'true' }}
       continue-on-error: true
       uses: $/.github/actions/ci-store-save

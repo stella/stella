@@ -29,15 +29,16 @@ import { createSha256 } from "@stll/sha256/bun";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawDecisionSupplements } from "@/api/db/schema";
+import { composedMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
+import type { SafeId } from "@/api/lib/branded-types";
+import { supplementAnchorPrefix } from "@/api/lib/case-law/decision-absorption";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
+import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import type {
   DecisionSupplementTarget,
   EmptyAst,
   IngestionResult,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { composedMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
-import type { SafeId } from "@/api/lib/branded-types";
-import { supplementAnchorPrefix } from "@/api/lib/case-law/decision-absorption";
-import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 
@@ -453,14 +454,27 @@ export const detachSupplement = async (
   { sourceId, sourceDocumentId, decisionId }: DetachSupplementOptions,
 ): Promise<boolean> => {
   // audit: skip — background case-law ingestion; public case-law data
+  const write = replayWrite(
+    caseLawDecisionSupplements,
+    { decisionId: null, mergedSourceHash: null },
+    {
+      modifiedAt: {
+        column: caseLawDecisionSupplements.updatedAt,
+        value: new Date(),
+      },
+    },
+  );
   const detached = await tx
     .update(caseLawDecisionSupplements)
-    .set({ decisionId: null, mergedSourceHash: null, updatedAt: new Date() })
+    .set(write.set)
     .where(
       and(
-        eq(caseLawDecisionSupplements.sourceId, sourceId),
-        eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
-        eq(caseLawDecisionSupplements.decisionId, decisionId),
+        write.setWhere,
+        and(
+          eq(caseLawDecisionSupplements.sourceId, sourceId),
+          eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+          eq(caseLawDecisionSupplements.decisionId, decisionId),
+        ),
       ),
     )
     .returning({
@@ -490,15 +504,25 @@ export const markSupplementsMerged = async (
   // The versions are the current ones: the caller compared them under the
   // docket lock this transaction holds.
   // audit: skip — background case-law ingestion; public case-law data
-  await tx
-    .update(caseLawDecisionSupplements)
-    .set({
+  const write = replayWrite(
+    caseLawDecisionSupplements,
+    {
       decisionId,
       mergedSourceHash: sql`${caseLawDecisionSupplements.sourceHash}`,
-      updatedAt: new Date(),
-    })
+    },
+    {
+      modifiedAt: {
+        column: caseLawDecisionSupplements.updatedAt,
+        value: new Date(),
+      },
+    },
+  );
+  await tx
+    .update(caseLawDecisionSupplements)
+    .set(write.set)
     .where(
       and(
+        write.setWhere,
         eq(caseLawDecisionSupplements.sourceId, sourceId),
         inArray(
           caseLawDecisionSupplements.sourceDocumentId,
@@ -521,16 +545,29 @@ export const detachSupplementsLeftOut = async (
 ): Promise<void> => {
   const kept = supplements.map(({ sourceDocumentId }) => sourceDocumentId);
   // audit: skip — background case-law ingestion; public case-law data
+  const write = replayWrite(
+    caseLawDecisionSupplements,
+    { decisionId: null, mergedSourceHash: null },
+    {
+      modifiedAt: {
+        column: caseLawDecisionSupplements.updatedAt,
+        value: new Date(),
+      },
+    },
+  );
   await tx
     .update(caseLawDecisionSupplements)
-    .set({ decisionId: null, mergedSourceHash: null, updatedAt: new Date() })
+    .set(write.set)
     .where(
       and(
-        eq(caseLawDecisionSupplements.sourceId, sourceId),
-        eq(caseLawDecisionSupplements.decisionId, decisionId),
-        kept.length === 0
-          ? undefined
-          : notInArray(caseLawDecisionSupplements.sourceDocumentId, kept),
+        write.setWhere,
+        and(
+          eq(caseLawDecisionSupplements.sourceId, sourceId),
+          eq(caseLawDecisionSupplements.decisionId, decisionId),
+          kept.length === 0
+            ? undefined
+            : notInArray(caseLawDecisionSupplements.sourceDocumentId, kept),
+        ),
       ),
     );
 };
@@ -564,14 +601,14 @@ const supplementBlocks = (supplement: StoredSupplement): Block[] => {
           ...block,
           id: `${prefix}${block.id}`,
           anchorId: `${prefix}${block.anchorId}`,
-          ...(block.note?.noteId === undefined
-            ? {}
-            : {
+          ...(block.note?.noteId !== undefined
+            ? {
                 note: {
                   ...block.note,
                   noteId: `${prefix}${block.note.noteId}`,
                 },
-              }),
+              }
+            : {}),
         };
       case "table":
       case "image":

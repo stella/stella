@@ -11,6 +11,7 @@ import {
   attachTerminalTurnOutcome,
   cancelPendingChatToolCalls,
   chatMessageFromPersisted,
+  continueStoredChatPart,
   createChatAttachmentPart,
   getAwaitingUserInteractions,
   getChatAttachmentFilename,
@@ -29,7 +30,11 @@ import type {
   ChatPart,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -199,12 +204,15 @@ const remapChatAttachmentPart = (
   }
   const filename = getChatAttachmentFilename(part);
   const placeholder = getChatAttachmentPlaceholder(part);
-  return createChatAttachmentPart({
-    mimeType: getChatAttachmentMimeType(part),
-    url: toUserFileUrl(copiedFileId),
-    ...(filename === undefined ? {} : { filename }),
-    ...(placeholder === undefined ? {} : { placeholder }),
-  });
+  return continueStoredChatPart(
+    part,
+    createChatAttachmentPart({
+      mimeType: getChatAttachmentMimeType(part),
+      url: toUserFileUrl(copiedFileId),
+      ...(filename === undefined ? {} : { filename }),
+      ...(placeholder === undefined ? {} : { placeholder }),
+    }),
+  );
 };
 
 /**
@@ -532,7 +540,9 @@ const copyUserFiles = async ({
  */
 class ChatForkAttachmentRowMissingError extends TaggedError(
   "ChatForkAttachmentRowMissingError",
-)<{ message: string }> {}
+)<{
+  message: string;
+}> {}
 
 /**
  * A `user_files` row of the copied prefix points at a storage object (or a
@@ -617,6 +627,7 @@ export const createForkThread = ({
       }
 
       const scope = yield* resolveChatScope({
+        admitted: "active",
         getWorkspaceAccess,
         workspaceId,
       });
@@ -935,14 +946,17 @@ export const createForkThread = ({
                 // compaction all read (createdAt, id), so a re-stamped copy
                 // would reorder the fork against its own history.
                 createdAt: row.createdAt,
-                content: toPersistedChatMessageContentV3({
-                  data: message.parts.map((part) =>
-                    remapChatAttachmentPart(part, copiedFileIds),
-                  ),
-                  ...(message.metadata === undefined
-                    ? {}
-                    : { metadata: message.metadata }),
-                }),
+                content: toPersistedChatMessageContentV3(
+                  {
+                    data: message.parts.map((part) =>
+                      remapChatAttachmentPart(part, copiedFileIds),
+                    ),
+                    ...(message.metadata === undefined
+                      ? {}
+                      : { metadata: message.metadata }),
+                  },
+                  row.id,
+                ),
                 id: createSafeId<"chatMessage">(),
                 memoryExtractionEligible: row.memoryExtractionEligible,
                 role: row.role,
@@ -1026,10 +1040,14 @@ export const createForkThread = ({
       // Fire-and-forget after the fork commits: indexing must never block or
       // fail it. Rebuilds both the thread and message search documents for the
       // new thread. Mirrors rename-thread.ts and send-message.ts.
-      indexChatThread(newThreadId).catch(
-        createErrorCapture(
-          handlerErrorContext("createForkThread.indexChatThread"),
-        ),
+      detached(
+        async () =>
+          indexChatThread(newThreadId).catch(
+            createErrorCapture(
+              handlerErrorContext("createForkThread.indexChatThread"),
+            ),
+          ),
+        "fork-create.index-chat-thread",
       );
 
       return Result.ok({

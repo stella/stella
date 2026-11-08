@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract/legislation-expression";
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
+import type { StatuteListSort } from "@stll/api-contract/statute-list-sort";
 
 import { DEFAULT_PUBLIC_LAW_PAGE_SIZE } from "@/components/public-law-table/public-law-pagination.logic";
 import type { PublicLawPageSize } from "@/components/public-law-table/public-law-pagination.logic";
@@ -41,6 +42,8 @@ export type StatuteListFilters = {
   /** An act number, `<number>/<year>`: the list resolves that work. */
   number?: string;
   query?: string;
+  /** A column order; the API serves one only with `year`. */
+  sort?: StatuteListSort;
   /** Works in force, or works no longer in force; both when absent. */
   validity?: LegislationListValidity;
   year?: string;
@@ -72,6 +75,7 @@ export const statuteKeys = {
       number: key.number,
       pageSize: key.pageSize,
       query: key.query,
+      sort: key.sort,
       validity: key.validity,
       year: key.year,
     },
@@ -124,6 +128,7 @@ const readStatutesPage = async ({
       ...(filters.language !== undefined && { language: filters.language }),
       ...(filters.number !== undefined && { number: filters.number }),
       ...(filters.query !== undefined && { query: filters.query }),
+      ...(filters.sort !== undefined && { sort: filters.sort }),
       ...(filters.validity !== undefined && { validity: filters.validity }),
       ...(filters.year !== undefined && { year: Number(filters.year) }),
     },

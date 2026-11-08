@@ -96,6 +96,7 @@ const decisionAst = (texts = ["Text"], numbered = false) =>
 const readableDecision: typeof readDecisionReaderSource = async () => ({
   status: "read",
   decision: {
+    extractionWarnings: [],
     id: row().id,
     caseNumber: row().caseNumber,
     caseNumberType: row().caseNumberType,
@@ -131,27 +132,6 @@ const readableDecisionWith =
     }
     return { ...base, ast };
   };
-
-const readableResult = (
-  result: Awaited<ReturnType<typeof resolveDecision>>,
-  source: DocumentAst,
-) => {
-  if (
-    result.status !== "resolved" ||
-    result.document.kind !== "decision" ||
-    result.document.text.status !== "readable"
-  ) {
-    return panic("Expected readable decision fixture");
-  }
-  const ast = parseCaseLawDecisionAst({
-    ...source,
-    blocks: result.document.text.blocks,
-  });
-  if (ast === null) {
-    return panic("Resolved decision blocks are not a case-law AST");
-  }
-  return { ast, text: result.document.text };
-};
 
 const missingDecision: typeof readDecisionReaderSource = async () => null;
 
@@ -219,7 +199,7 @@ describe("decision legal resolution", () => {
     });
   });
 
-  test("returns readable blocks for an exact identity", async () => {
+  test("returns identity and text status for an exact identity, never the text", async () => {
     const result = await resolveDecision({
       admission,
       country: "CZE",
@@ -231,11 +211,7 @@ describe("decision legal resolution", () => {
       document: {
         kind: "decision",
         decisionId: expect.any(String),
-        text: {
-          status: "readable",
-          blocks: decisionAst().blocks,
-          extent: { type: "complete" },
-        },
+        text: { status: "readable", charCount: expect.any(Number) },
       },
     });
     if (result.status === "resolved" && result.document.kind === "decision") {
@@ -253,78 +229,21 @@ describe("decision legal resolution", () => {
     }
   });
 
-  test("bounds large decisions at whole blocks", async () => {
-    const ast = decisionAst([
-      "a".repeat(MCP_CONTENT_MAX_CHARS - 2),
-      "second block",
-    ]);
-    const result = await resolveDecision({
-      admission,
-      country: "CZE",
-      identifier: "3 Afs 41/2008 - 98",
-      dependencies: {
-        lookup: lookupRows([row()]),
-        read: readableDecisionWith(ast),
-      },
-    });
-    expect(result).toMatchObject({
-      status: "resolved",
-      document: {
-        kind: "decision",
-        decisionId: expect.any(String),
-        readerUrl: expect.any(String),
-        text: {
-          status: "readable",
-          blocks: [ast.blocks.at(0)],
-          extent: {
-            type: "partial",
-            returnedChars: MCP_CONTENT_MAX_CHARS - 2,
-            totalChars: MCP_CONTENT_MAX_CHARS + "second block".length,
-          },
-        },
-      },
-    });
-  });
-
-  test("cuts an oversized first block without splitting a surrogate pair", async () => {
-    const text = `${"a".repeat(MCP_CONTENT_MAX_CHARS - 1)}😀tail`;
-    const result = await resolveDecision({
-      admission,
-      country: "CZE",
-      identifier: "3 Afs 41/2008 - 98",
-      dependencies: {
-        lookup: lookupRows([row()]),
-        read: readableDecisionWith(decisionAst([text])),
-      },
-    });
-    const readable = readableResult(result, decisionAst([text]));
-    const returned = readable.ast.blocks.at(0);
-    expect(returned?.plainText).toBe("a".repeat(MCP_CONTENT_MAX_CHARS - 1));
-    expect(returned?.plainText.length).toBeGreaterThan(0);
-    expect(readable.text.extent).toEqual({
-      type: "partial",
-      returnedChars: MCP_CONTENT_MAX_CHARS - 1,
-      totalChars: text.length,
-    });
-  });
-
-  test("legal-resolve.decision-readable-extent-bound", async () => {
+  test("legal-resolve.decision-identity-carries-no-text", async () => {
     await assertProperty(
-      "legal-resolve.decision-readable-extent-bound",
+      "legal-resolve.decision-identity-carries-no-text",
       fc.asyncProperty(
         fc.array(
           fc.string({ minLength: 1, maxLength: MCP_CONTENT_MAX_CHARS + 20 }),
           { minLength: 1, maxLength: 4 },
         ),
         // Court-numbered paragraphs are served with their number, which the
-        // extent has to count like the text does.
+        // count has to include the way read_case_law_decision's charCount does.
         fc.boolean(),
         async (texts, numbered) => {
           const source = decisionAst(texts, numbered);
-          const fullBlocks = parseCaseLawDecisionAst(source)?.blocks ?? [];
-          const totalChars =
-            toPlainCorpusText({ blocks: fullBlocks, fulltext: null })?.length ??
-            0;
+          const parsed = parseCaseLawDecisionAst(source)?.blocks ?? [];
+          const served = toPlainCorpusText({ blocks: parsed, fulltext: null });
           const result = await resolveDecision({
             admission,
             country: "CZE",
@@ -334,24 +253,17 @@ describe("decision legal resolution", () => {
               read: readableDecisionWith(source),
             },
           });
-          const readable = readableResult(result, source);
-          const returnedChars =
-            toPlainCorpusText({
-              blocks: readable.ast.blocks,
-              fulltext: null,
-            })?.length ?? 0;
-          expect(returnedChars).toBeLessThanOrEqual(MCP_CONTENT_MAX_CHARS);
-          switch (readable.text.extent.type) {
-            case "complete":
-              expect(returnedChars).toBe(totalChars);
-              break;
-            case "partial":
-              expect(readable.text.extent.returnedChars).toBe(returnedChars);
-              expect(readable.text.extent.totalChars).toBe(totalChars);
-              break;
-            default:
-              readable.text.extent satisfies never;
+          if (
+            result.status !== "resolved" ||
+            result.document.kind !== "decision"
+          ) {
+            panic("Expected a resolved decision");
           }
+          expect(result.document.text).toEqual(
+            served === null
+              ? { status: "unavailable" }
+              : { status: "readable", charCount: served.length },
+          );
         },
       ),
     );
@@ -779,6 +691,38 @@ describe("a docket at other courts", () => {
     "OS Kolín 65 A 3/2025",
     "os Kolín 65 A 3/2025",
   ])(
+    "a court no decision of the docket is stored under is another court: %s",
+    async (identifier) => {
+      const [budejovice] = regionalHolders();
+      if (budejovice === undefined) {
+        panic("Missing regional fixture");
+      }
+      const result = await resolveDecision({
+        admission,
+        country: "CZ",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([budejovice]),
+          read: async () => panic("Another court must not fetch text"),
+        },
+      });
+      expect(v.safeParse(legalResolveResponseSchema, result).success).toBe(
+        true,
+      );
+      expect(result).toMatchObject({
+        status: "not_found",
+        reason: "not_at_this_court",
+        otherCourtCandidates: [
+          { court: "Krajský soud v Českých Budějovicích" },
+        ],
+      });
+    },
+  );
+  test.each([
+    "Okresní soud v Neznámově 65 A 3/2025",
+    "rozsudek Okresního soudu v Neznámově 65 A 3/2025-12",
+    "OS Neznámov 65 A 3/2025",
+  ])(
     "a named court the corpus does not know never resolves another court's holder: %s",
     async (identifier) => {
       const [budejovice] = regionalHolders();
@@ -967,6 +911,115 @@ describe("a docket at other courts", () => {
       otherCourtCandidates: [
         { court: "Krajský soud v Hradci Králové", subjectSummary: null },
       ],
+    });
+  });
+});
+
+// A district-court docket held by one court only, cited with another
+// court's name, alias or ECLI code. Synthetic dockets; the court shapes are
+// the ones citations write.
+const districtRow = (
+  court: string,
+  ecliCode: string,
+  caseNumber: string,
+): DecisionIdentityRow => ({
+  ...row(caseNumber),
+  court,
+  courtAbbreviation: "OS",
+  ecli: `ECLI:CZ:${ecliCode}:2025:${caseNumber.replace(/[ /]/gu, ".")}.1`,
+  decisionDate: "2025-03-04",
+});
+
+describe("a district court named around the docket", () => {
+  const elsewhere = () =>
+    districtRow("Okresní soud v Kladně", "OSKD", "8 C 123/2024");
+  test.each([
+    "8 C 123/2024 Obvodní soud pro Prahu 6",
+    "8 C 123/2024 OS Praha 6",
+    "8 C 123/2024 OS P6",
+    "8 C 123/2024 OS pro Prahu 6",
+    "8 C 123/2024 Obvodní soud Praha 6",
+    "8 C 123/2024 OSPH06",
+    "Obvodní soud pro Prahu 6 8 C 123/2024",
+    "OS Praha 6 8 C 123/2024",
+    "rozsudek Obvodního soudu pro Prahu 6 sp. zn. 8 C 123/2024",
+  ])(
+    "never resolves the docket's only holder at another court: %s",
+    async (identifier) => {
+      const holder = elsewhere();
+      const result = await resolveDecision({
+        admission,
+        country: "CZE",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([holder]),
+          read: async () => panic("Another court must not fetch text"),
+        },
+      });
+      expect(v.safeParse(legalResolveResponseSchema, result).success).toBe(
+        true,
+      );
+      expect(result).toEqual({
+        status: "not_found",
+        reason: "not_at_this_court",
+        otherCourtCandidates: [
+          expect.objectContaining({
+            decisionId: holder.id,
+            court: "Okresní soud v Kladně",
+          }),
+        ],
+      });
+    },
+  );
+  test.each([
+    "20 C 45/2026 Obvodní soud pro Prahu 6",
+    "20 C 45/2026 OS Praha 6",
+    "20 C 45/2026 OS P6",
+    "20 C 45/2026 OSPH06",
+    "OS pro Prahu 6 20 C 45/2026",
+  ])(
+    "resolves the holder at the named court and lists the other: %s",
+    async (identifier) => {
+      const prague = districtRow(
+        "Obvodní soud pro Prahu 6",
+        "OSPH06",
+        "20 C 45/2026",
+      );
+      const olomouc = districtRow(
+        "Okresní soud v Olomouci",
+        "OSOL",
+        "20 C 45/2026",
+      );
+      const result = await resolveDecision({
+        admission,
+        country: "CZE",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([olomouc, prague]),
+          read: readableDecision,
+        },
+      });
+      expect(result).toMatchObject({
+        status: "resolved",
+        document: {
+          decisionId: prague.id,
+          court: "Obvodní soud pro Prahu 6",
+        },
+        otherCourtCandidates: [{ decisionId: olomouc.id }],
+      });
+    },
+  );
+  test("a court code the directory lacks is compared with the decision's ECLI", async () => {
+    const holder = elsewhere();
+    const named = await resolveDecision({
+      admission,
+      country: "CZE",
+      identifier: "OSXQ 8 C 123/2024",
+      dependencies: { lookup: lookupRows([holder]) },
+    });
+    expect(named).toMatchObject({
+      status: "not_found",
+      reason: "not_at_this_court",
     });
   });
 });

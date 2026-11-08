@@ -35,6 +35,11 @@ pub use system_permissions::{
 };
 
 #[cfg(target_os = "macos")]
+mod text_input;
+#[cfg(target_os = "macos")]
+pub use text_input::{TypeTextError, type_text};
+
+#[cfg(target_os = "macos")]
 mod window_bounds;
 #[cfg(target_os = "macos")]
 pub use window_bounds::{WindowBounds, largest_window_bounds};

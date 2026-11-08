@@ -114,10 +114,17 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   };
 
   const handleSetClient = (contact: { id: string; displayName: string }) => {
+    if (!workspace) {
+      return;
+    }
     updateWorkspace.mutate(
       {
         workspaceId,
-        update: { type: "clientId", value: contact.id },
+        update: {
+          type: "clientId",
+          value: contact.id,
+          expectedClientId: workspace.client?.id ?? null,
+        },
       },
       {
         onSuccess: () => {
@@ -426,6 +433,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
         update: {
           type: "clientId",
           value: selectedContact.id,
+          expectedClientId: null,
         },
       },
       {

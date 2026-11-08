@@ -41,7 +41,9 @@ const measure = async (page: Page, name: string): Promise<CaseGeometry> =>
     const viewport = frame.querySelector('[data-slot="scroll-area-viewport"]');
     const root = viewport?.parentElement;
     if (!(root instanceof HTMLElement) || !(viewport instanceof HTMLElement)) {
-      throw new Error("scroll area fixture case is missing its scroll area");
+      throw new TypeError(
+        "scroll area fixture case is missing its scroll area",
+      );
     }
     const footer = frame.querySelector('[data-slot="case-footer"]');
     const button = footer?.querySelector("button") ?? null;
@@ -151,6 +153,28 @@ for (const [name, height] of [
     await scrollsToLastLine(page, name);
   });
 }
+
+test("a scroll area keeps what is positioned inside it from scrolling a positioned frame around it", async ({
+  page,
+}) => {
+  const viewports = page.locator(
+    '[data-case="positioned-frame"] [data-slot="scroll-area-viewport"]',
+  );
+  const extent = async (index: number) =>
+    await viewports.nth(index).evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+    }));
+  const [outer, inner] = await Promise.all([extent(0), extent(1)]);
+  expect(
+    inner.scrollHeight,
+    "the rows overflow, so the inner scroll area scrolls",
+  ).toBeGreaterThan(inner.clientHeight);
+  expect(
+    outer.scrollHeight,
+    "the outer scroll has nothing past its bottom to scroll to",
+  ).toBeLessThanOrEqual(outer.clientHeight + TOLERANCE_PX);
+});
 
 test("a scroll area with no bound is as tall as its content", async ({
   page,

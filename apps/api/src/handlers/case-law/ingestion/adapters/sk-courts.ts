@@ -1,3 +1,7 @@
+// parser-output-unchanged: source-fields-sk: Inventory targets describe already retained source values without changing parsed decisions.
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: legacy wrappers nested by deferred capture produce the same metadata as their original raw shape; existing raw shapes are unchanged.
 // parser-output-unchanged: Deferred document raw storage is declared without changing metadata or document parsing.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
@@ -21,37 +25,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-  UnreadListedItem,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
@@ -111,10 +84,46 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_RAW_CAPTURE } from "@/api/lib/legal-search/document-raw-capture";
-import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
+import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  DOCUMENT_DELIVERY,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  StoredRawReparseValue,
+  SyncPage,
+  UnreadListedItem,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
+import { parsePendingDocument } from "@/api/lib/legal-search/sk-document-parser";
+import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
+import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl, toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -259,11 +268,13 @@ const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
 /**
  * A courthouse's map position.
  *
- * Named but not read into: the inventory excludes both coordinates, so the
- * guard accepts the object the schema promises rather than asserting a shape
- * nothing depends on.
+ * The publisher uses numeric and textual coordinate spellings. Naming both
+ * leaves makes a schema addition require an inventory disposition.
  */
-type SkSuradnice = Readonly<Record<string, unknown>>;
+type SkSuradnice = {
+  zemepisnaDlzka?: number | string | null;
+  zemepisnaSirka?: number | string | null;
+};
 
 /**
  * A court as this service's `BaseSud` schema declares it, excluded registry
@@ -821,6 +832,21 @@ const skCourtsSourceRaw = ({
   };
 };
 
+// parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
+/** A missing list stays as stated: `null` and absent are kept apart. */
+const decodeReferencedLegislation = (
+  references: SkOdkazovanyPredpis[] | null | undefined,
+) => {
+  if (references === null || references === undefined) {
+    return references;
+  }
+  return references.map((reference) => ({
+    ...reference,
+    nazov: decodeSkCourtText(reference.nazov),
+    url: toMetadataUrl(reference.url, "transport-json"),
+  }));
+};
+
 /**
  * Build one decision from the two responses already in hand, without
  * contacting the publisher, or `null` for an item nothing can key.
@@ -946,15 +972,9 @@ export const assembleSkCourtsDecision = ({
           decisionNature: decodeSkCourtTextList(item.povaha),
           area: decodeSkCourtTextList(detail?.oblast),
           subArea: decodeSkCourtTextList(detail?.podOblast),
-          referencedLegislation:
-            detail?.odkazovanePredpisy === null ||
-            detail?.odkazovanePredpisy === undefined
-              ? detail?.odkazovanePredpisy
-              : detail.odkazovanePredpisy.map((reference) => ({
-                  ...reference,
-                  nazov: decodeSkCourtText(reference.nazov),
-                  url: toMetadataUrl(reference.url, "transport-json"),
-                })),
+          referencedLegislation: decodeReferencedLegislation(
+            detail?.odkazovanePredpisy,
+          ),
           documentName: decodeSkCourtText(detail?.dokument?.name),
           documentExtension: toOptionalValue(detail?.dokument?.fileExtension),
           documentSize: detail?.dokument?.size,
@@ -1652,6 +1672,7 @@ const collectFrontierPage = async (
   if (day === null) {
     return Result.ok({
       decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.NONE,
       nextCursor: encodeFrontierCursor({
         verifiedThrough: frontier.verifiedThrough,
         page: 0,
@@ -1722,6 +1743,7 @@ const collectFrontierPage = async (
     decisions,
     itemBuildFailures: { type: "item_build_failed", count: failed },
     ...(unreadItems.length === 0 ? {} : { unreadItems }),
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor:
       nextPage * PAGE_SIZE < total
         ? encodeFrontierCursor({
@@ -1789,10 +1811,9 @@ const listSkCourtsSourceFields = (parts: SourceRawParts): readonly string[] => {
  * either reaches `listSourceFields` as an undeclared field rather than as
  * silence.
  *
- * The three court-registry paths are excluded twice over, once for the
- * deciding court and once for the transferring one: they describe a
- * courthouse rather than a decision, and repeat unchanged on every decision
- * that court has ever issued.
+ * Court-registry fields are retained in the listing and detail responses,
+ * including the transferring court. Repetition across decisions does not
+ * justify excluding a publisher field.
  */
 const SK_COURTS_SOURCE_FIELDS = {
   guid: { disposition: "stored", target: { type: "identity" } },
@@ -1812,15 +1833,33 @@ const SK_COURTS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "court" },
   },
-  "sud.adresaString": excludedSourceField(
-    "the courthouse's postal address, identical on every decision that court issues; it describes the court register, not the decision",
-  ),
-  "sud.suradnice.zemepisnaDlzka": excludedSourceField(
-    "the courthouse's map position, as for its address",
-  ),
-  "sud.suradnice.zemepisnaSirka": excludedSourceField(
-    "the courthouse's map position, as for its address",
-  ),
+  "sud.adresaString": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["sud", "adresaString"],
+      reason: "Publisher field retained verbatim in the listing response",
+    },
+  },
+  "sud.suradnice.zemepisnaDlzka": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["sud", "suradnice", "zemepisnaDlzka"],
+      reason: "Publisher field retained verbatim in the listing response",
+    },
+  },
+  "sud.suradnice.zemepisnaSirka": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["sud", "suradnice", "zemepisnaSirka"],
+      reason: "Publisher field retained verbatim in the listing response",
+    },
+  },
   "sudca.registreGuid": {
     disposition: "stored",
     target: { type: "metadata", key: "judgeRegistreGuid" },
@@ -1841,9 +1880,15 @@ const SK_COURTS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "decisionDate" },
   },
-  zvyraznenie: excludedSourceField(
-    "fragments of the decision highlighted against a search term the request carried; the crawl sends none, so it is a property of the query rather than of the decision",
-  ),
+  zvyraznenie: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["zvyraznenie"],
+      reason: "Publisher field retained verbatim in the listing response",
+    },
+  },
   ecli: { disposition: "stored", target: { type: "result", key: "ecli" } },
   oblast: { disposition: "stored", target: { type: "metadata", key: "area" } },
   podOblast: {
@@ -1890,20 +1935,41 @@ const SK_COURTS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "originCourt" },
   },
-  "povodnySud.adresaString": excludedSourceField(
-    "the transferring courthouse's postal address, as for the deciding court's",
-  ),
-  "povodnySud.suradnice.zemepisnaDlzka": excludedSourceField(
-    "the transferring courthouse's map position, as for the deciding court's",
-  ),
-  "povodnySud.suradnice.zemepisnaSirka": excludedSourceField(
-    "the transferring courthouse's map position, as for the deciding court's",
-  ),
+  "povodnySud.adresaString": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["povodnySud", "adresaString"],
+      reason: "Publisher field retained verbatim in the detail response",
+    },
+  },
+  "povodnySud.suradnice.zemepisnaDlzka": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["povodnySud", "suradnice", "zemepisnaDlzka"],
+      reason: "Publisher field retained verbatim in the detail response",
+    },
+  },
+  "povodnySud.suradnice.zemepisnaSirka": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["povodnySud", "suradnice", "zemepisnaSirka"],
+      reason: "Publisher field retained verbatim in the detail response",
+    },
+  },
   povodnaSpisovaZnacka: {
     disposition: "stored",
     target: { type: "metadata", key: "originCaseNumber" },
   },
-} as const satisfies Record<string, SourceFieldDisposition>;
+} as const satisfies Record<
+  SourceRecordPaths<SkDetailItem>,
+  SourceFieldDisposition
+>;
 
 /** The paths the inventory decides about, for the schema diff in the tests. */
 export const SK_COURTS_SOURCE_FIELD_PATHS = Object.keys(
@@ -1999,7 +2065,7 @@ const skCourtsStoredDocketMatch = ({
  * are recoverable without asking the publisher again precisely because that
  * record was kept, which is the whole argument for storing it.
  */
-const reparseStoredRaw = (
+export const reparseSkCourtsStoredMetadata = (
   stored: StoredRawReparseInput,
 ): StoredRawReparseOutcome => {
   if (
@@ -2097,6 +2163,71 @@ const reparseStoredRaw = (
     type: "parsed",
     result: decision,
     legacyCaseNumber: stored.caseNumber,
+  };
+};
+
+const reparseStoredRaw = async (
+  stored: StoredRawReparseInput,
+): Promise<StoredRawReparseValue> => {
+  const metadata = reparseSkCourtsStoredMetadata(stored);
+  if (metadata.type !== "parsed") {
+    return metadata;
+  }
+  const readObject = await readStoredDocumentObject(
+    stored,
+    DOCUMENT_RAW_CAPTURE[ADAPTER_KEYS.SK_COURTS].objectPart,
+  );
+  if (Result.isError(readObject)) {
+    return readObject;
+  }
+  const bytes = readObject.value;
+  if (bytes === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+      detail:
+        "Stored PDF capture is required to apply the current document parser; refresh the PDF capture explicitly",
+    };
+  }
+  const { result } = metadata;
+  const parsed = await parsePendingDocument(
+    {
+      caseNumber: result.caseNumber,
+      court: result.court,
+      ecli: result.ecli ?? null,
+      decisionDate: result.decisionDate ?? null,
+      decisionType: result.decisionType ?? null,
+    },
+    bytes,
+  );
+  if (parsed.isErr()) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: `${parsed.error.code}: ${parsed.error.paths.join(", ")}`,
+    };
+  }
+  const document = parsed.value;
+  if (document === undefined || document.documentAst.blocks.length === 0) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: "Stored PDF parsed without document layout",
+    };
+  }
+  return {
+    type: "parsed",
+    result: {
+      ...result,
+      ...document,
+      sourceRaw: new TextDecoder().decode(stored.raw),
+      sourceRawContentType:
+        stored.contentType ?? SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    ...(metadata.legacyCaseNumber === undefined
+      ? {}
+      : { legacyCaseNumber: metadata.legacyCaseNumber }),
   };
 };
 

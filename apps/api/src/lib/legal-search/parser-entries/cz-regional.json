@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "CZ_REGIONAL",
+  "key": "cz-regional",
+  "parserVersion": 21,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Recompute the instructions from stored raw so the court's own Poučení label, alone or opening the first instruction, is printed once under the synthesized heading; AST blocks have no separate feature storage. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own. Signature roles are recomputed from the stored decision through the shared Czech role grammar, which reads the office a judge signs under (the president or a member of an extended or grand chamber, the President of a top court); they have no feature storage of their own."
+  }
+}

@@ -7,6 +7,12 @@ import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { readDecisions } from "./decisions";
 import { approvalPathForKey, decisionPathForKey } from "./inputs";
+import {
+  deriveJobPrivileges,
+  expectedJobDigest,
+  jobDependencyDigests,
+  reachableJobDocuments,
+} from "./job-digests";
 import { verifyPublicMetadata } from "./public-metadata";
 import type { MetadataReader, PublicMetadata } from "./public-metadata";
 import {
@@ -17,11 +23,7 @@ import {
   sameMetadataOrigin,
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
-import {
-  isPrivilegedJobClosure,
-  isRepositoryWritingJob,
-  ReviewRequiredError,
-} from "./review";
+import { isRepositoryWritingJob, ReviewRequiredError } from "./review";
 import { AdmissionError, parseDocument } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
@@ -35,6 +37,9 @@ const DECISIONS = v.record(
 );
 // The decision shape the generator accepts, as readDecisions produces it.
 export type ClassificationDecisionsInput = v.InferInput<typeof DECISIONS>;
+type ReadClassificationInputsOptions = {
+  observeRead?: (file: string) => void;
+};
 const REVISION_DECISIONS = v.record(
   v.string(),
   v.strictObject({
@@ -52,9 +57,20 @@ const SNAPSHOTS = v.record(
     documents: v.record(v.string(), v.string()),
   }),
 );
-export const readClassificationInputs = (root: string) => {
-  const read = (file: string): unknown =>
-    JSON.parse(readFileSync(path.resolve(root, ".github", file), "utf-8"));
+export const readClassificationInputs = (
+  root: string,
+  { observeRead }: ReadClassificationInputsOptions = {},
+) => {
+  const read = (file: string): unknown => {
+    const repositoryPath = `.github/${file}`;
+    observeRead?.(repositoryPath);
+    return JSON.parse(
+      readFileSync(path.resolve(root, repositoryPath), "utf-8"),
+    );
+  };
+  // This manifest generates conditions in ci.yml. Recording it here keeps a
+  // source edit in the same selection set as the workflow digests it changes.
+  read("global-rule-inputs.json");
   const snapshots = v.parse(
     SNAPSHOTS,
     read("ci-job-classification-sources.json"),
@@ -74,6 +90,7 @@ export const readClassificationInputs = (root: string) => {
         ) {
           throw new AdmissionError({ message: "unsafe metadata path" });
         }
+        observeRead?.(file);
         return readFileSync(path.resolve(root, file), "utf-8");
       }
       const text = snapshots[repository]?.documents[file];
@@ -88,7 +105,7 @@ export const readClassificationInputs = (root: string) => {
   return {
     decisions: v.parse(
       DECISIONS,
-      readDecisions({ type: "working-tree", root }),
+      readDecisions({ type: "working-tree", root }, { observeRead }),
     ),
     snapshots,
     reader,
@@ -124,15 +141,22 @@ const gitText = (root: string, args: string[]) => {
 export const readClassificationInputsAtRevision = (
   root: string,
   revision: string,
+  { observeRead }: ReadClassificationInputsOptions = {},
 ) => {
-  const readCandidate = (file: string) =>
-    gitText(root, ["show", `${revision}:${file}`]);
+  const readCandidate = (file: string) => {
+    observeRead?.(file);
+    return gitText(root, ["show", `${revision}:${file}`]);
+  };
   const readGithubJson = (file: string): unknown =>
     JSON.parse(readCandidate(`.github/${file}`));
   const snapshots = v.parse(
     SNAPSHOTS,
     readGithubJson("ci-job-classification-sources.json"),
   );
+  // The manifest reaches the digests only through the ci.yml conditions it
+  // generates, so its content is not read here. It is recorded as an input
+  // without a read: a revision from before it existed still classifies.
+  observeRead?.(".github/global-rule-inputs.json");
   const reader: MetadataReader = {
     workflows: () =>
       gitText(root, [
@@ -167,7 +191,7 @@ export const readClassificationInputsAtRevision = (
   };
   const revisionDecisions = v.parse(
     REVISION_DECISIONS,
-    readDecisions({ type: "git-revision", root, revision }),
+    readDecisions({ type: "git-revision", root, revision }, { observeRead }),
   );
   return {
     decisions: v.parse(
@@ -261,7 +285,7 @@ type DocumentDigestOptions = {
 };
 // A document digest binds its own shape and every metadata document it
 // reaches, so editing a callee changes the digest of each caller.
-const createDocumentDigest = ({
+export const createDocumentDigest = ({
   nodes,
   parsedDocuments,
 }: DocumentDigestOptions) => {
@@ -307,36 +331,7 @@ type ReviewJobsOptions = DocumentDigestOptions & {
   documentDigest: (id: string) => string;
   observeJobs?: (jobs: ReadonlyMap<string, DerivedJob>) => void;
 };
-type ReachableDocumentsOptions = DocumentDigestOptions & {
-  initialTargets: string[];
-};
-const reachableDocuments = ({
-  initialTargets,
-  nodes,
-  parsedDocuments,
-}: ReachableDocumentsOptions) => {
-  const documents: ParsedDocument[] = [];
-  const visited = new Set<string>();
-  const visit = (id: string) => {
-    if (visited.has(id)) {
-      return;
-    }
-    visited.add(id);
-    const node = nodes.get(id);
-    const parsed = parsedDocuments.get(id);
-    if (!node || node.type !== "metadata" || !parsed) {
-      return;
-    }
-    documents.push(parsed);
-    for (const target of Object.values(node.edges)) {
-      visit(target);
-    }
-  };
-  for (const target of initialTargets) {
-    visit(target);
-  }
-  return documents;
-};
+
 const reviewJobs = ({
   nodes,
   parsedDocuments,
@@ -351,6 +346,13 @@ const reviewJobs = ({
   const privilegedJobs: string[] = [];
   const observedJobs = new Set<string>();
   const derivedJobs = new Map<string, DerivedJob>();
+
+  const { jobPrivileges, inheritedGrants } = deriveJobPrivileges({
+    nodes,
+    parsedDocuments,
+    decisions,
+  });
+
   for (const node of nodes.values()) {
     if (node.type !== "metadata") {
       continue;
@@ -362,41 +364,29 @@ const reviewJobs = ({
     node.jobs = Object.entries(parsed.jobs).flatMap(([jobId, job]) => {
       const key = `${node.repository}:${node.path}/${jobId}`;
       observedJobs.add(key);
-      const dependencyDigests = Object.fromEntries(
-        Object.keys(job.dependencies)
-          .toSorted(compareCodeUnit)
-          .flatMap((reference) => {
-            const target = node.edges[reference];
-            return target && nodes.get(target)?.type === "metadata"
-              ? [[reference, documentDigest(target)]]
-              : [];
-          }),
-      );
+      const dependencyDigests = jobDependencyDigests({
+        definition: job,
+        edges: node.edges,
+        isMetadata: (target) => nodes.get(target)?.type === "metadata",
+        documentDigest,
+      });
       const decision = decisions[key];
       const targets = Object.keys(job.dependencies).flatMap((reference) => {
         const target = node.edges[reference];
         return target ? [target] : [];
       });
-      const reachable = reachableDocuments({
+      const reachable = reachableJobDocuments({
         initialTargets: targets,
         nodes,
         parsedDocuments,
       });
-      const privileged = isPrivilegedJobClosure({
-        kind: decision?.kind,
-        privileged: job.privileged,
-        shape: job.shape,
-        reachableDocuments: reachable,
+      const privileged = jobPrivileges.get(key) ?? false;
+      const digest = expectedJobDigest({
+        definition: job,
+        privileged,
+        inheritedGrants: inheritedGrants.get(key),
+        dependencyDigests,
       });
-      const surfaceDigest = privileged ? job.privilegedDigest : job.digest;
-      const digest = Object.keys(dependencyDigests).length
-        ? sha256(
-            JSON.stringify({
-              digest: surfaceDigest,
-              dependencies: dependencyDigests,
-            }),
-          )
-        : surfaceDigest;
       derivedJobs.set(key, {
         digest,
         privileged,
@@ -449,6 +439,7 @@ const reviewJobs = ({
         )
         .join("\n")}`,
       privilegedJobs,
+      staleJobs: Object.keys(entries).toSorted(compareCodeUnit),
     });
   }
 };

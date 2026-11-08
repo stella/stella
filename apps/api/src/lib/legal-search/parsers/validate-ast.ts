@@ -1,3 +1,6 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: Aspose writes `-aw-headerfooter-type` only as a nonempty declaration, which the former substring selector and the declaration read select alike.
+// parser-output-unchanged: delegates validation text to the shared owner with the same raw digits, text-node newlines, space breaks and zero-width page anchors.
 // parser-output-unchanged: Opt-in publisher-fragment comparison changes retention diagnostics only; parser output and default comparisons are unchanged.
 // parser-output-unchanged: hyphenatedLineBreaks is a new option no parser passes; every existing verdict is computed exactly as before.
 // parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.
@@ -15,12 +18,15 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, isTag } from "domhandler";
 
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import { type AnyNode, isTag } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
+import { flattenInlineText } from "@stll/legal-ast/inline";
 
+import { inlineStyleDeclaresProperty } from "@/api/lib/legal-search/document-builders/inline-style";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import type { MarkupResidue } from "@/api/lib/legal-search/parsers/markup-residue";
 import { logger } from "@/api/lib/observability/logger";
@@ -370,22 +376,8 @@ const hasContentDescendant = (nodes: readonly AnyNode[]): boolean => {
 };
 
 /** Flatten inline nodes to text (line-break → space). */
-export const validationInlineText = (inlines: readonly Inline[]): string => {
-  let text = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      text += node.text;
-    } else if (node.type === "line-break") {
-      text += " ";
-    } else if (node.type === "page-anchor") {
-      // Typography, not content — no characters.
-    } else {
-      // Every remaining kind is a container: its text is its children's.
-      text += validationInlineText(node.children);
-    }
-  }
-  return text;
-};
+export const validationInlineText = (inlines: readonly Inline[]): string =>
+  flattenInlineText(inlines, "validation");
 
 export const collapseValidationWhitespace = (text: string): string =>
   text.replace(/\s+/gu, " ").trim();
@@ -472,8 +464,12 @@ export const validateAst = (
       }
     }
   } else {
-    const $ = options?.document ?? cheerio.load(source);
-    $("div[style*='-aw-headerfooter-type']").remove();
+    const $ = options?.document ?? load(source);
+    $("div")
+      .filter((_, el) =>
+        inlineStyleDeclaresProperty(el, "-aw-headerfooter-type"),
+      )
+      .remove();
     // <br> is a word boundary in the rendered document, but cheerio's
     // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →
     // "wrazz") and producing phantom MISSING_WORDS reports against a

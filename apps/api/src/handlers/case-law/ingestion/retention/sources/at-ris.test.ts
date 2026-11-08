@@ -58,6 +58,16 @@ const CAPTURED_DOCUMENTS = [
   { adapter: ADAPTER_KEYS.AT_VWGH, file: "at-ris-vwgh-headnote.xml" },
   { adapter: ADAPTER_KEYS.AT_UBAS, file: "at-ris-ubas-text.xml" },
   { adapter: ADAPTER_KEYS.AT_UMSE, file: "at-ris-umse-text.xml" },
+  { adapter: ADAPTER_KEYS.AT_COURTS, file: "at-ris-ogh-sachwalter.xml" },
+  { adapter: ADAPTER_KEYS.AT_COURTS, file: "at-ris-ogh-strafsache.xml" },
+  { adapter: ADAPTER_KEYS.AT_VWGH, file: "at-ris-vwgh-randnummern.xml" },
+  { adapter: ADAPTER_KEYS.AT_LVWG, file: "at-ris-lvwg-noe.xml" },
+  { adapter: ADAPTER_KEYS.AT_LVWG, file: "at-ris-lvwg-kaernten.xml" },
+  { adapter: ADAPTER_KEYS.AT_BVWG, file: "at-ris-bvwg-beschluss.xml" },
+  { adapter: ADAPTER_KEYS.AT_VERG, file: "at-ris-verg-liste.xml" },
+  { adapter: ADAPTER_KEYS.AT_VERG, file: "at-ris-verg-bva.xml" },
+  { adapter: ADAPTER_KEYS.AT_UMSE, file: "at-ris-umse-abstand.xml" },
+  { adapter: ADAPTER_KEYS.AT_BKS, file: "at-ris-bks-gesperrt.xml" },
 ] as const;
 
 const firstListedItem = async (
@@ -81,7 +91,9 @@ const expectRetained = async (decision: IngestionResult) => {
   expect(hasUsableAst(ast)).toBe(true);
   const projection =
     atRisRetention.type === "checked"
-      ? await atRisRetention.project(decision.sourceRaw ?? "")
+      ? await atRisRetention.project(decision.sourceRaw ?? "", {
+          sourceRawObjects: decision.sourceRawObjects ?? {},
+        })
       : undefined;
   if (projection?.type !== "source") {
     throw new Error(
@@ -128,7 +140,9 @@ describe("RIS retention projection", () => {
     );
     const projection =
       atRisRetention.type === "checked"
-        ? await atRisRetention.project(decision.sourceRaw ?? "")
+        ? await atRisRetention.project(decision.sourceRaw ?? "", {
+            sourceRawObjects: decision.sourceRawObjects ?? {},
+          })
         : undefined;
     if (projection?.type !== "source") {
       throw new Error("the recorded decision projects publisher text");
@@ -146,6 +160,29 @@ describe("RIS retention projection", () => {
     ).toBe(false);
   });
 
+  test("stores a decision whose reading differs from print, with a typed marker", async () => {
+    const xml = (
+      await Bun.file(new URL("at-ris-vwgh-randnummern.xml", PARSERS_DIR)).text()
+    ).replace(
+      "</abschnitt></nutzdaten>",
+      "<abstand>verloren</abstand></abschnitt></nutzdaten>",
+    );
+    const decision = assembleAtRisDecision(
+      AT_RIS_SOURCES[ADAPTER_KEYS.AT_VWGH],
+      await firstListedItem(ADAPTER_KEYS.AT_VWGH),
+      { documentXml: xml },
+    );
+    expect(decision.isListingOnly).not.toBe(true);
+    expect(hasUsableAst(decision.documentAst)).toBe(true);
+    const fidelity: unknown = decision.metadata["textFidelity"];
+    expect(fidelity).toEqual({
+      status: "mismatch",
+      missingChars: "verloren".length,
+      extraChars: 0,
+      firstDifferenceAt: expect.any(Number),
+    });
+  });
+
   test("leaves the page header and footer out of the publisher text", async () => {
     const xml = await Bun.file(
       new URL("at-ris-vfgh-text.xml", PARSERS_DIR),
@@ -154,6 +191,7 @@ describe("RIS retention projection", () => {
       atRisRetention.type === "checked"
         ? await atRisRetention.project(
             encodeSourceRawEnvelope({ listing: "{}", "document-xml": xml }),
+            { sourceRawObjects: {} },
           )
         : undefined;
     if (
@@ -179,12 +217,16 @@ describe("RIS retention projection", () => {
     if (atRisRetention.type !== "checked") {
       throw new Error("RIS decisions are checked");
     }
-    expect(await atRisRetention.project("not an envelope")).toEqual({
+    expect(
+      await atRisRetention.project("not an envelope", { sourceRawObjects: {} }),
+    ).toEqual({
       type: "unreadable",
       reason: "unreadable-envelope",
     });
     expect(
-      await atRisRetention.project(encodeSourceRawEnvelope({ listing: "{}" })),
+      await atRisRetention.project(encodeSourceRawEnvelope({ listing: "{}" }), {
+        sourceRawObjects: {},
+      }),
     ).toEqual({ type: "no-text", reason: "not-published" });
     expect(
       await atRisRetention.project(
@@ -192,6 +234,7 @@ describe("RIS retention projection", () => {
           listing: "{}",
           "document-xml": "<risdok><metadaten/></risdok>",
         }),
+        { sourceRawObjects: {} },
       ),
     ).toEqual({ type: "unreadable", reason: "missing-text-part" });
   });

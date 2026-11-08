@@ -14,11 +14,14 @@ import {
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
 } from "./case-law-identifier-retry-constraint-validation";
+import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
+import { CORPUS_PROJECTION_CLEANUP_STALL_REPAIR } from "./corpus-projection-cleanup-stall-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import {
   createDecisionDateCeilingRepair,
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
+import { IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS } from "./import-provenance-constraint-validation";
 import type { MigrationTimingRecord } from "./migration-timing";
 import type { OnlineIndexDeclaration } from "./online-ddl";
 import { declaresOnlineBuild } from "./online-ddl";
@@ -29,6 +32,8 @@ import type {
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
+import { assertOnlineRepairRehearsalCoverage } from "./online-migration-rehearsal-guard";
+import type { OnlineRepairRehearsalRecord } from "./online-migration-rehearsal-guard";
 import {
   ensureOnlineIndexValid,
   ONLINE_CONSTRAINT_VALIDATIONS,
@@ -106,7 +111,7 @@ const reserveHealthyObserver =
   });
 const runOnlineMigrations = async (
   pool: Parameters<typeof runOnlineMigrationsWithGate>[0],
-  options: Partial<OnlineRepairOptions> = {},
+  options: Partial<OnlineRepairOptions> & Pick<OnlineRepairOptions, "repairs">,
 ) =>
   await runOnlineMigrationsWithGate(pool, {
     indexGate: healthyIndexGate,
@@ -217,7 +222,9 @@ describe("online migrations", () => {
         newestAppliedMigration: startupMigration,
         indexStates: { [startupIndex.name]: [state] },
       });
-      expect(await reportOnlineMigrations(pendingNewest.pool)).toEqual({
+      expect(
+        await reportOnlineMigrations(pendingNewest.pool, { repairs: [] }),
+      ).toEqual({
         newestAppliedMigration: startupMigration,
         pending: [
           {
@@ -244,7 +251,9 @@ describe("online migrations", () => {
         indexStates: { [startupIndex.name]: [state] },
       });
       expect(
-        await rejectionOf(reportOnlineMigrations(pendingOlder.pool)),
+        await rejectionOf(
+          reportOnlineMigrations(pendingOlder.pool, { repairs: [] }),
+        ),
       ).toMatchObject({
         message: expect.stringContaining(
           `Online index ${startupIndex.name} introduced by ${startupMigration} is not complete`,
@@ -268,7 +277,9 @@ describe("online migrations", () => {
         },
       });
       expect(
-        await rejectionOf(reportOnlineMigrations(harness.pool)),
+        await rejectionOf(
+          reportOnlineMigrations(harness.pool, { repairs: [] }),
+        ),
       ).toMatchObject({
         message: expect.stringContaining(
           `Required migration index ${startupIndex.name} has an unexpected definition`,
@@ -290,7 +301,7 @@ describe("online migrations", () => {
       },
     });
     expect(
-      await rejectionOf(reportOnlineMigrations(harness.pool)),
+      await rejectionOf(reportOnlineMigrations(harness.pool, { repairs: [] })),
     ).toMatchObject({
       message: `Required migration index ${index.name} owned by ${index.introducedBy.owner} has a valid reindex artifact`,
     });
@@ -308,12 +319,16 @@ describe("online migrations", () => {
       });
       if (isValid) {
         expect(
-          await rejectionOf(reportOnlineMigrations(newest.pool)),
+          await rejectionOf(
+            reportOnlineMigrations(newest.pool, { repairs: [] }),
+          ),
         ).toMatchObject({
           message: expect.stringContaining("has a valid reindex artifact"),
         });
       } else {
-        expect((await reportOnlineMigrations(newest.pool)).pending).toEqual([
+        expect(
+          (await reportOnlineMigrations(newest.pool, { repairs: [] })).pending,
+        ).toEqual([
           {
             kind: "index",
             name: startupIndex.name,
@@ -323,7 +338,7 @@ describe("online migrations", () => {
       }
       const older = createHarness({ artifacts });
       expect(
-        await rejectionOf(reportOnlineMigrations(older.pool)),
+        await rejectionOf(reportOnlineMigrations(older.pool, { repairs: [] })),
       ).toMatchObject({
         message: expect.stringContaining(
           isValid
@@ -334,8 +349,51 @@ describe("online migrations", () => {
     },
   );
 
+  test("boots beside an older repair's durable pending checkpoint", async () => {
+    const introducedBy = startupMigration;
+    const repair = {
+      name: "older-pending-fixture",
+      introducedBy,
+      readCompletion: async () =>
+        ({
+          type: "pending",
+          reason: "checkpoint remains",
+          cursor: "0190",
+          holdUntil: null,
+          heldSince: null,
+        }) as const,
+      repair: async () => {
+        throw new TypeError("Startup must never repair");
+      },
+    } satisfies OnlineRepair;
+    const newer = createHarness();
+    expect(
+      await reportOnlineMigrations(newer.pool, { repairs: [repair] }),
+    ).toEqual({
+      newestAppliedMigration: "99999999999999_later_release",
+      pending: [{ kind: "repair", name: repair.name, introducedBy }],
+    });
+    expect(newer.released()).toBe(true);
+    const codeOwned = {
+      ...repair,
+      introducedBy: {
+        type: "code",
+        owner: "src/db/better-auth-oauth-resource-repair.ts",
+      },
+    } satisfies OnlineRepair;
+    expect(
+      await rejectionOf(
+        reportOnlineMigrations(createHarness().pool, { repairs: [codeOwned] }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "owned by src/db/better-auth-oauth-resource-repair.ts is not complete",
+      ),
+    });
+  });
+
   test.each(["pending", "incomplete"] as const)(
-    "reports newest-set repair %s and rejects the older step",
+    "reports newest-set repair %s; an older one boots only with a checkpoint",
     async (type) => {
       const introducedBy = startupMigration;
       const completion: OnlineRepairCompletion =
@@ -361,6 +419,16 @@ describe("online migrations", () => {
         (await reportOnlineMigrations(newest.pool, { repairs: [repair] }))
           .pending,
       ).toEqual([{ kind: "repair", name: repair.name, introducedBy }]);
+      if (type === "pending") {
+        expect(
+          (
+            await reportOnlineMigrations(createHarness().pool, {
+              repairs: [repair],
+            })
+          ).pending,
+        ).toEqual([{ kind: "repair", name: repair.name, introducedBy }]);
+        return;
+      }
       expect(
         await rejectionOf(
           reportOnlineMigrations(createHarness().pool, { repairs: [repair] }),
@@ -422,6 +490,49 @@ describe("online migrations", () => {
     });
   });
 
+  test("walks only the repairs it is passed, never the registry", async () => {
+    const { name } = ACCOUNT_AUDIT_CONSTRAINT_VALIDATION;
+    expect(ONLINE_MIGRATION_REPAIRS).toContain(
+      ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
+    );
+    // An older newest revision: any incomplete repair walked here panics.
+    const harness = createHarness({
+      newestAppliedMigration: startupMigration,
+      unvalidatedConstraints: [name],
+    });
+    expect(await reportOnlineMigrations(harness.pool, { repairs: [] })).toEqual(
+      {
+        newestAppliedMigration: startupMigration,
+        pending: [],
+      },
+    );
+    expect(await runOnlineMigrations(harness.pool, { repairs: [] })).toEqual({
+      type: "complete",
+    });
+    expect(
+      indexOfStatement(harness.statements, `VALIDATE CONSTRAINT "${name}"`),
+    ).toBe(-1);
+    const unregistered = {
+      name: "unregistered-fixture",
+      introducedBy: "20260101000000_unregistered_fixture",
+      readCompletion: async () =>
+        ({ type: "incomplete", reason: "fixture postcondition" }) as const,
+      repair: async () => {
+        throw new TypeError("Startup must never repair");
+      },
+    } satisfies OnlineRepair;
+    expect(ONLINE_MIGRATION_REPAIRS.map((repair) => repair.name)).not.toContain(
+      unregistered.name,
+    );
+    expect(
+      await rejectionOf(
+        reportOnlineMigrations(harness.pool, { repairs: [unregistered] }),
+      ),
+    ).toMatchObject({
+      message: `Online repair ${unregistered.name} introduced by ${unregistered.introducedBy} is not complete: fixture postcondition`,
+    });
+  });
+
   test("reports a newest-set cutover and rejects its older pending state", async () => {
     const cutover = FILTER_INDEX_CUTOVER;
     const newest = createHarness({
@@ -431,7 +542,9 @@ describe("online migrations", () => {
         [cutover.staged.name]: [true],
       },
     });
-    expect((await reportOnlineMigrations(newest.pool)).pending).toEqual([
+    expect(
+      (await reportOnlineMigrations(newest.pool, { repairs: [] })).pending,
+    ).toEqual([
       {
         kind: "cutover",
         name: cutover.final.name,
@@ -443,6 +556,7 @@ describe("online migrations", () => {
         reportOnlineMigrations(
           createHarness({ indexStates: { [cutover.final.name]: [undefined] } })
             .pool,
+          { repairs: [] },
         ),
       ),
     ).toMatchObject({
@@ -467,16 +581,18 @@ describe("online migrations", () => {
       },
     });
 
-    expect(await reportOnlineMigrations(harness.pool)).toEqual({
-      newestAppliedMigration: cutover.introducedBy,
-      pending: [
-        {
-          kind: "cutover",
-          name: cutover.final.name,
-          introducedBy: cutover.introducedBy,
-        },
-      ],
-    });
+    expect(await reportOnlineMigrations(harness.pool, { repairs: [] })).toEqual(
+      {
+        newestAppliedMigration: cutover.introducedBy,
+        pending: [
+          {
+            kind: "cutover",
+            name: cutover.final.name,
+            introducedBy: cutover.introducedBy,
+          },
+        ],
+      },
+    );
   });
 
   test("rejects an unexpected final index definition during a newest-set cutover", async () => {
@@ -496,7 +612,7 @@ describe("online migrations", () => {
     });
 
     expect(
-      await rejectionOf(reportOnlineMigrations(harness.pool)),
+      await rejectionOf(reportOnlineMigrations(harness.pool, { repairs: [] })),
     ).toMatchObject({
       message: expect.stringContaining(
         `Required migration index ${cutover.final.name} has an unexpected definition`,
@@ -514,10 +630,12 @@ describe("online migrations", () => {
       },
     });
 
-    expect(await reportOnlineMigrations(harness.pool)).toEqual({
-      newestAppliedMigration: cutover.introducedBy,
-      pending: [],
-    });
+    expect(await reportOnlineMigrations(harness.pool, { repairs: [] })).toEqual(
+      {
+        newestAppliedMigration: cutover.introducedBy,
+        pending: [],
+      },
+    );
   });
 
   test("reports publisher identity indexes and their legacy retirements as newest-set work", async () => {
@@ -540,21 +658,23 @@ describe("online migrations", () => {
       ),
     });
 
-    expect(await reportOnlineMigrations(harness.pool)).toEqual({
-      newestAppliedMigration: introducedBy,
-      pending: [
-        ...missingIndexes.map((name) => ({
-          kind: "index" as const,
-          name,
-          introducedBy,
-        })),
-        ...legacyNames.map((name) => ({
-          kind: "replacement_drop" as const,
-          name,
-          introducedBy,
-        })),
-      ],
-    });
+    expect(await reportOnlineMigrations(harness.pool, { repairs: [] })).toEqual(
+      {
+        newestAppliedMigration: introducedBy,
+        pending: [
+          ...missingIndexes.map((name) => ({
+            kind: "index" as const,
+            name,
+            introducedBy,
+          })),
+          ...legacyNames.map((name) => ({
+            kind: "replacement_drop" as const,
+            name,
+            introducedBy,
+          })),
+        ],
+      },
+    );
   });
 
   test("reports newest-set retirement work and rejects an older leftover", async () => {
@@ -569,7 +689,9 @@ describe("online migrations", () => {
       newestAppliedMigration: replacement.introducedBy,
       indexStates: states,
     });
-    expect((await reportOnlineMigrations(newest.pool)).pending).toEqual([
+    expect(
+      (await reportOnlineMigrations(newest.pool, { repairs: [] })).pending,
+    ).toEqual([
       {
         kind: "replacement_drop",
         name: replacement.legacyName,
@@ -578,7 +700,9 @@ describe("online migrations", () => {
     ]);
     expect(
       await rejectionOf(
-        reportOnlineMigrations(createHarness({ indexStates: states }).pool),
+        reportOnlineMigrations(createHarness({ indexStates: states }).pool, {
+          repairs: [],
+        }),
       ),
     ).toMatchObject({
       message: expect.stringContaining(
@@ -609,10 +733,12 @@ describe("online migrations", () => {
 
   test("startup validation never waits on the online lock and bounds its own statements", async () => {
     const harness = createHarness();
-    expect(await reportOnlineMigrations(harness.pool)).toEqual({
-      newestAppliedMigration: "99999999999999_later_release",
-      pending: [],
-    });
+    expect(await reportOnlineMigrations(harness.pool, { repairs: [] })).toEqual(
+      {
+        newestAppliedMigration: "99999999999999_later_release",
+        pending: [],
+      },
+    );
     expect(harness.statements.at(1)).toBe("SET statement_timeout = '5s'");
     expect(harness.statements.at(-1)).toBe(RESTORED_SESSION_TIMEOUT);
     expect(
@@ -628,7 +754,9 @@ describe("online migrations", () => {
       missingIndexes: ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
       onlineLockHeld: true,
     });
-    expect(await reportOnlineMigrationsWithOwnership(harness.pool)).toEqual({
+    expect(
+      await reportOnlineMigrationsWithOwnership(harness.pool, { repairs: [] }),
+    ).toEqual({
       type: "migrator_active",
     });
     expect(
@@ -642,11 +770,17 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
-  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
-    "validates monitoring constraint $name once and rejects incomplete startup",
-    async ({ name }) => {
+  test.each([
+    ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
+    ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  ])(
+    "validates registered constraint $name once and rejects incomplete startup",
+    async (validation) => {
+      const { name } = validation;
       const harness = createHarness({ unvalidatedConstraints: [name] });
-      const rejection = await reportOnlineMigrations(harness.pool).then(
+      const rejection = await reportOnlineMigrations(harness.pool, {
+        repairs: [validation],
+      }).then(
         () => null,
         (error: unknown) => error,
       );
@@ -659,9 +793,9 @@ describe("online migrations", () => {
         ),
       });
       const beforeRepair = harness.statements.length;
-      await runOnlineMigrations(harness.pool);
-      await reportOnlineMigrations(harness.pool);
-      await runOnlineMigrations(harness.pool);
+      await runOnlineMigrations(harness.pool, { repairs: [validation] });
+      await reportOnlineMigrations(harness.pool, { repairs: [validation] });
+      await runOnlineMigrations(harness.pool, { repairs: [validation] });
       const validations = harness.statements
         .slice(beforeRepair)
         .filter((statement) =>
@@ -675,7 +809,9 @@ describe("online migrations", () => {
   test("validates the account audit event check once and rejects incomplete startup", async () => {
     const { name } = ACCOUNT_AUDIT_CONSTRAINT_VALIDATION;
     const harness = createHarness({ unvalidatedConstraints: [name] });
-    const rejection = await reportOnlineMigrations(harness.pool).then(
+    const rejection = await reportOnlineMigrations(harness.pool, {
+      repairs: [ACCOUNT_AUDIT_CONSTRAINT_VALIDATION],
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -683,9 +819,15 @@ describe("online migrations", () => {
       message: `Online repair ${name} introduced by ${ACCOUNT_AUDIT_CONSTRAINT_VALIDATION.introducedBy} is not complete: constraint ${name} is not validated`,
     });
     const beforeRepair = harness.statements.length;
-    await runOnlineMigrations(harness.pool);
-    await reportOnlineMigrations(harness.pool);
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, {
+      repairs: [ACCOUNT_AUDIT_CONSTRAINT_VALIDATION],
+    });
+    await reportOnlineMigrations(harness.pool, {
+      repairs: [ACCOUNT_AUDIT_CONSTRAINT_VALIDATION],
+    });
+    await runOnlineMigrations(harness.pool, {
+      repairs: [ACCOUNT_AUDIT_CONSTRAINT_VALIDATION],
+    });
     expect(
       harness.statements
         .slice(beforeRepair)
@@ -708,10 +850,16 @@ describe("online migrations", () => {
         ({ constraintName }) => constraintName,
       ),
     });
-    expect(await runOnlineMigrations(harness.pool)).toEqual({
+    expect(
+      await runOnlineMigrations(harness.pool, {
+        repairs: ONLINE_MIGRATION_REPAIRS,
+      }),
+    ).toEqual({
       type: "complete",
     });
-    await reportOnlineMigrations(harness.pool);
+    await reportOnlineMigrations(harness.pool, {
+      repairs: ONLINE_MIGRATION_REPAIRS,
+    });
     expect(
       harness.statements
         .filter((statement) => statement.includes("VALIDATE CONSTRAINT"))
@@ -722,7 +870,7 @@ describe("online migrations", () => {
   test("accepts an already valid index without rebuilding it", async () => {
     const harness = createHarness();
 
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, { repairs: [] });
 
     expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
       -1,
@@ -737,6 +885,7 @@ describe("online migrations", () => {
     let now = 0;
 
     await runOnlineMigrations(harness.pool, {
+      repairs: ONLINE_MIGRATION_REPAIRS,
       timing: {
         clock: () => (now += 5),
         emit: (record) => {
@@ -780,6 +929,7 @@ describe("online migrations", () => {
     const records: MigrationTimingRecord[] = [];
 
     const outcome = await runOnlineMigrations(harness.pool, {
+      repairs: [],
       indexGate: {
         ...healthyIndexGate,
         ebs: {
@@ -819,7 +969,7 @@ describe("online migrations", () => {
     )) {
       const harness = createHarness({ missingIndexes: [name] });
 
-      await runOnlineMigrations(harness.pool);
+      await runOnlineMigrations(harness.pool, { repairs: [] });
 
       expect(
         indexOfStatement(harness.statements, `INDEX CONCURRENTLY "${name}"`),
@@ -883,6 +1033,7 @@ describe("online migrations", () => {
     const waits: number[] = [];
 
     const held = await runOnlineMigrations(harness.pool, {
+      repairs: ONLINE_MIGRATION_REPAIRS,
       indexGate: {
         ...healthyIndexGate,
         ebs: {
@@ -930,7 +1081,11 @@ describe("online migrations", () => {
     // The next run resumes at the held index once the gate admits it, and
     // only then reaches the steps after it.
     const resumedAt = harness.statements.length;
-    expect(await runOnlineMigrations(harness.pool)).toEqual({
+    expect(
+      await runOnlineMigrations(harness.pool, {
+        repairs: ONLINE_MIGRATION_REPAIRS,
+      }),
+    ).toEqual({
       type: "complete",
     });
     const resumed = harness.statements.slice(resumedAt);
@@ -961,6 +1116,7 @@ describe("online migrations", () => {
         const waits: number[] = [];
         expect(
           await runOnlineMigrations(harness.pool, {
+            repairs: ONLINE_MIGRATION_REPAIRS,
             indexGate: {
               ...heldIndexGate,
               wait: async (milliseconds) => {
@@ -1008,7 +1164,7 @@ describe("online migrations", () => {
     };
     const run = async () => {
       expect(
-        await runOnlineMigrations(harness.pool, { indexGate }),
+        await runOnlineMigrations(harness.pool, { indexGate, repairs: [] }),
       ).toMatchObject({
         type: "deferred",
         step: REPORT_EXPORT_INDEX,
@@ -1038,7 +1194,7 @@ describe("online migrations", () => {
       indexStates: { [CREDENTIAL_INDEX]: [false, false, true] },
     });
 
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, { repairs: [] });
 
     expect(
       indexOfStatement(
@@ -1065,7 +1221,7 @@ describe("online migrations", () => {
         indexStates: { [name]: [readyInvalid, readyInvalid, true] },
       });
 
-      await runOnlineMigrations(harness.pool);
+      await runOnlineMigrations(harness.pool, { repairs: [] });
 
       expect(
         indexOfStatement(
@@ -1097,7 +1253,7 @@ describe("online migrations", () => {
       indexStates: { [CREDENTIAL_INDEX]: [false, false, true] },
     });
 
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, { repairs: [] });
 
     const drop = indexOfStatement(
       harness.statements,
@@ -1124,7 +1280,7 @@ describe("online migrations", () => {
       indexStates: { [CHAT_RUN_INDEX]: [false, false, true] },
     });
 
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, { repairs: [] });
 
     const drop = indexOfStatement(
       harness.statements,
@@ -1151,7 +1307,9 @@ describe("online migrations", () => {
       },
     });
 
-    const rejection: unknown = await runOnlineMigrations(harness.pool).then(
+    const rejection: unknown = await runOnlineMigrations(harness.pool, {
+      repairs: [],
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -1166,7 +1324,9 @@ describe("online migrations", () => {
       indexStates: { [CREDENTIAL_INDEX]: [false] },
     });
 
-    const rejection: unknown = await reportOnlineMigrations(harness.pool).then(
+    const rejection: unknown = await reportOnlineMigrations(harness.pool, {
+      repairs: [],
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -1190,7 +1350,7 @@ describe("online migrations", () => {
       ).filter((name) => name !== retirementName),
     });
     expect(
-      await rejectionOf(reportOnlineMigrations(harness.pool)),
+      await rejectionOf(reportOnlineMigrations(harness.pool, { repairs: [] })),
     ).toMatchObject({
       message: `Online replacement_drop ${retirementName} owned by src/db/online-migrations.ts is not complete: retired index remains`,
     });
@@ -1199,7 +1359,7 @@ describe("online migrations", () => {
   test("retires a legacy index only after both replacements validate", async () => {
     const harness = createHarness({ retiredIndexes: [] });
 
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, { repairs: [] });
 
     const dropOffset = indexOfStatement(
       harness.statements,
@@ -1219,7 +1379,7 @@ describe("online migrations", () => {
       missingIndexes: [DOCUMENT_DATE_INDEX],
     });
 
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, { repairs: [] });
 
     const createOffset = indexOfStatement(
       harness.statements,
@@ -1239,7 +1399,9 @@ describe("online migrations", () => {
       indexStates: { [DOCUMENT_DATE_INDEX]: [true, false] },
     });
 
-    const rejection: unknown = await runOnlineMigrations(harness.pool).then(
+    const rejection: unknown = await runOnlineMigrations(harness.pool, {
+      repairs: [],
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -1258,7 +1420,7 @@ describe("online migrations", () => {
   test("retires the account issuer index only after its replacement validates", async () => {
     const harness = createHarness({ retiredIndexes: [] });
 
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, { repairs: [] });
 
     expect(
       indexOfStatement(
@@ -1278,7 +1440,9 @@ describe("online migrations", () => {
       indexStates: { [ACCOUNT_INDEX]: [true, false] },
     });
 
-    const rejection: unknown = await runOnlineMigrations(harness.pool).then(
+    const rejection: unknown = await runOnlineMigrations(harness.pool, {
+      repairs: [],
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -1303,7 +1467,9 @@ describe("online migrations", () => {
       indexStates: { [SOURCE_CASE_INDEX]: [true, false] },
     });
 
-    const rejection: unknown = await runOnlineMigrations(harness.pool).then(
+    const rejection: unknown = await runOnlineMigrations(harness.pool, {
+      repairs: [],
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -1330,6 +1496,7 @@ describe("online migrations", () => {
     }
 
     const outcome = await runOnlineMigrations(harness.pool, {
+      repairs: ONLINE_MIGRATION_REPAIRS,
       indexGate: heldIndexGate,
       timing: {
         clock: () => 0,
@@ -1367,14 +1534,18 @@ describe("online migrations", () => {
     });
 
     expect(
-      await runOnlineMigrations(harness.pool, { indexGate: heldIndexGate }),
+      await runOnlineMigrations(harness.pool, {
+        indexGate: heldIndexGate,
+        repairs: [],
+      }),
     ).toEqual({ type: "complete" });
     expect(indexOfStatement(harness.statements, DROP_INDEX_FRAGMENT)).toBe(-1);
   });
 
   test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
     "defers at validation $name while the gate holds it, then validates it on a healthy run",
-    async ({ name }) => {
+    async (validation) => {
+      const { name } = validation;
       const harness = createHarness({
         unvalidatedConstraints: [name],
         retiredIndexes: ONLINE_INDEX_REPLACEMENTS.map(
@@ -1385,6 +1556,7 @@ describe("online migrations", () => {
 
       expect(
         await runOnlineMigrations(harness.pool, {
+          repairs: [validation],
           indexGate: heldIndexGate,
           timing: {
             clock: () => 0,
@@ -1411,18 +1583,27 @@ describe("online migrations", () => {
       ).toBe(-1);
       // Deferred, not deployable: startup still refuses the NOT VALID check.
       expect(
-        String(await rejectionOf(reportOnlineMigrations(harness.pool))),
+        String(
+          await rejectionOf(
+            reportOnlineMigrations(harness.pool, { repairs: [validation] }),
+          ),
+        ),
       ).toContain(`Online repair ${name} introduced by`);
 
-      expect(await runOnlineMigrations(harness.pool)).toEqual({
+      expect(
+        await runOnlineMigrations(harness.pool, { repairs: [validation] }),
+      ).toEqual({
         type: "complete",
       });
-      await reportOnlineMigrations(harness.pool);
+      await reportOnlineMigrations(harness.pool, { repairs: [validation] });
       const validated = harness.statements.length;
       // A validated constraint costs one catalog read, so a held gate never
       // defers over it again.
       expect(
-        await runOnlineMigrations(harness.pool, { indexGate: heldIndexGate }),
+        await runOnlineMigrations(harness.pool, {
+          indexGate: heldIndexGate,
+          repairs: [validation],
+        }),
       ).toEqual({ type: "complete" });
       expect(
         harness.statements
@@ -1436,12 +1617,15 @@ describe("online migrations", () => {
   test("a second run after every drop is a fixed point", async () => {
     const harness = createHarness({ retiredIndexes: [] });
 
-    expect(await runOnlineMigrations(harness.pool)).toEqual({
+    expect(await runOnlineMigrations(harness.pool, { repairs: [] })).toEqual({
       type: "complete",
     });
     const afterFirstRun = harness.statements.length;
     expect(
-      await runOnlineMigrations(harness.pool, { indexGate: heldIndexGate }),
+      await runOnlineMigrations(harness.pool, {
+        indexGate: heldIndexGate,
+        repairs: [],
+      }),
     ).toEqual({ type: "complete" });
     expect(
       indexOfStatement(
@@ -1456,7 +1640,9 @@ describe("online migrations", () => {
       indexStates: { [CREDENTIAL_INDEX]: [undefined] },
     });
 
-    const rejection: unknown = await runOnlineMigrations(harness.pool).then(
+    const rejection: unknown = await runOnlineMigrations(harness.pool, {
+      repairs: [],
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -1474,7 +1660,7 @@ describe("online migrations", () => {
       },
     });
 
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, { repairs: [] });
 
     expect(
       indexOfStatement(
@@ -1501,7 +1687,7 @@ describe("online migrations", () => {
       },
     });
 
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, { repairs: [] });
 
     expect(
       indexOfStatement(
@@ -1528,7 +1714,7 @@ describe("online migrations", () => {
       },
     });
 
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, { repairs: [] });
 
     expect(
       indexOfStatement(
@@ -1553,7 +1739,7 @@ describe("online migrations", () => {
       },
     });
 
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, { repairs: [] });
 
     const reindexOffset = indexOfStatement(
       harness.statements,
@@ -1579,11 +1765,13 @@ describe("online migrations", () => {
     });
     const pending: unknown[] = [];
     await runOnlineMigrations(harness.pool, {
+      repairs: [DECISION_DATE_CEILING_REPAIR],
       log: (record) => {
         pending.push(record);
       },
     });
     const startup = await reportOnlineMigrations(harness.pool, {
+      repairs: [DECISION_DATE_CEILING_REPAIR],
       log: (record) => {
         pending.push(record);
       },
@@ -1622,8 +1810,12 @@ describe("online migrations", () => {
       unvalidatedConstraints: CLEANUP_STALL_CONSTRAINTS,
     });
 
-    await runOnlineMigrations(harness.pool);
-    await reportOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, {
+      repairs: [CORPUS_PROJECTION_CLEANUP_STALL_REPAIR],
+    });
+    await reportOnlineMigrations(harness.pool, {
+      repairs: [CORPUS_PROJECTION_CLEANUP_STALL_REPAIR],
+    });
 
     for (const constraint of CLEANUP_STALL_CONSTRAINTS) {
       expect(
@@ -1646,7 +1838,9 @@ describe("online migrations", () => {
     const [constraint] = CLEANUP_STALL_CONSTRAINTS;
     const harness = createHarness({ unvalidatedConstraints: [constraint] });
 
-    const rejection: unknown = await reportOnlineMigrations(harness.pool).then(
+    const rejection: unknown = await reportOnlineMigrations(harness.pool, {
+      repairs: [CORPUS_PROJECTION_CLEANUP_STALL_REPAIR],
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -1676,11 +1870,13 @@ describe("online migrations", () => {
     });
     const pending: unknown[] = [];
     await runOnlineMigrations(harness.pool, {
+      repairs: [CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR],
       log: (record) => {
         pending.push(record);
       },
     });
     const startup = await reportOnlineMigrations(harness.pool, {
+      repairs: [CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR],
       log: (record) => {
         pending.push(record);
       },
@@ -1878,7 +2074,12 @@ describe("online migrations", () => {
         DELETE_RECEIPT_CONSTRAINT,
       ],
     });
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, {
+      repairs: [
+        DECISION_DATE_CEILING_REPAIR,
+        CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
+      ],
+    });
     expect(
       indexOfStatement(harness.statements, VALIDATE_CONSTRAINT_FRAGMENT),
     ).toBeGreaterThan(-1);
@@ -1901,7 +2102,9 @@ describe("online migrations", () => {
   test("skips a repair whose completion already holds", async () => {
     const harness = createHarness();
 
-    await runOnlineMigrations(harness.pool);
+    await runOnlineMigrations(harness.pool, {
+      repairs: ONLINE_MIGRATION_REPAIRS,
+    });
 
     // Every repair reports itself complete, so none of them opens a
     // transaction: no walk over the intents, no decision-date selection, and
@@ -1930,7 +2133,9 @@ describe("online migrations", () => {
       unvalidatedConstraints: [DELETE_RECEIPT_CONSTRAINT],
     });
 
-    const rejection: unknown = await reportOnlineMigrations(harness.pool).then(
+    const rejection: unknown = await reportOnlineMigrations(harness.pool, {
+      repairs: [CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR],
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -1954,7 +2159,9 @@ describe("online migrations", () => {
       unvalidatedConstraints: [DECISION_DATE_CONSTRAINT],
     });
 
-    const rejection: unknown = await reportOnlineMigrations(harness.pool).then(
+    const rejection: unknown = await reportOnlineMigrations(harness.pool, {
+      repairs: [DECISION_DATE_CEILING_REPAIR],
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -2185,6 +2392,12 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          // Maintenance admission: the population owner is not installed.
+          if (
+            query.includes("to_regclass('public.case_law_population_deltas')")
+          ) {
+            return [{ installed: false }];
+          }
           if (query.includes("FROM drizzle.__drizzle_migrations")) {
             return [{ name: newestAppliedMigration }];
           }
@@ -2225,9 +2438,19 @@ const createHarness = ({
           if (query.startsWith("SELECT set_config(")) {
             return [];
           }
-          // The contact VAT ID repair's movable-contact probe: none left, so
-          // its completion holds and the phase skips it.
-          if (query.startsWith('SELECT 1 FROM public."contacts"')) {
+          // The contact VAT ID repair walks organizations before it validates
+          // its check; a fresh database has none, so it validates at once.
+          if (
+            query.startsWith(
+              "SELECT id::text AS organization_id FROM public.organization",
+            )
+          ) {
+            return emptyRepairTables
+              ? []
+              : [{ organization_id: "online-migration-organization" }];
+          }
+          // The source config repair's probe: no legacy string config left.
+          if (query.startsWith("SELECT 1 FROM public.case_law_sources")) {
             return [];
           }
           if (query.startsWith("SELECT 1 FROM public.chat_run_log_entries")) {
@@ -2248,7 +2471,13 @@ const createHarness = ({
             return [{ installed: false }];
           }
           if (query.includes("database_backfill_states")) {
+            if (params.at(0) === CASE_LAW_SITEMAP_PACKING_ENROLLMENT.name) {
+              return [{ last_country: "complete" }];
+            }
             return queryBackfillCheckpoint(query, params);
+          }
+          if (query.includes("transaction_isolation")) {
+            return [{ isolation: "read committed" }];
           }
           if (query.includes("pg_constraint")) {
             const constraintName = params.at(2);
@@ -2288,6 +2517,10 @@ const createHarness = ({
           if (query.includes("corpus_index_projection_intents")) {
             return [];
           }
+          // The population seed's completion: already seeded.
+          if (query.includes("case_law_population_seed_state")) {
+            return [{ phase: "complete" }];
+          }
           // The OAuth-policy repair's completion census: a complete policy.
           // Checked before the table branch below, because the census names
           // both its own CTE and the tables.
@@ -2305,6 +2538,10 @@ const createHarness = ({
           // The finding decision backfill's probe: no decided finding is
           // without history, so its completion holds.
           if (query.includes("document_review_finding_decisions event")) {
+            return [];
+          }
+          // The list source decision backfill's probe, likewise.
+          if (query.includes("legal_list_item_source_decisions event")) {
             return [];
           }
           if (
@@ -2345,3 +2582,188 @@ const indexRow = (
 
 const indexOfStatement = (statements: string[], fragment: string): number =>
   statements.findIndex((statement) => statement.includes(fragment));
+
+describe("online repair observations", () => {
+  test("records the actual completion census and only the repairs it invokes", async () => {
+    const harness = createHarness();
+    const records: OnlineRepairRehearsalRecord[] = [];
+    const calls: string[] = [];
+    const pending = {
+      type: "pending",
+      reason: "checkpoint",
+      cursor: "1",
+      holdUntil: 1,
+      heldSince: 0,
+    } as const;
+    const repairs = (["complete", "incomplete", "pending"] as const).map(
+      (initial) => {
+        let attempted = false;
+        return {
+          name: initial,
+          introducedBy: "20260101000000_rehearsal_fixture",
+          readCompletion: async (): Promise<OnlineRepairCompletion> => {
+            if (
+              initial === "complete" ||
+              (attempted && initial === "incomplete")
+            ) {
+              return { type: "complete" };
+            }
+            return initial === "pending"
+              ? pending
+              : { type: "incomplete", reason: "upgrade" };
+          },
+          repair: async () => {
+            expect(records.slice(-2)).toEqual([
+              { type: "checked", name: initial, completion: initial },
+              { type: "attempted", name: initial },
+            ]);
+            calls.push(initial);
+            attempted = true;
+            return { type: "complete" } as const;
+          },
+        } satisfies OnlineRepair;
+      },
+    );
+    await runOnlineMigrations(harness.pool, {
+      repairs,
+      log: () => undefined,
+      observeRepair: (record) => {
+        records.push(record);
+      },
+    });
+    expect(records).toEqual([
+      { type: "checked", name: "complete", completion: "complete" },
+      { type: "checked", name: "incomplete", completion: "incomplete" },
+      { type: "attempted", name: "incomplete" },
+      { type: "checked", name: "pending", completion: "pending" },
+      { type: "attempted", name: "pending" },
+    ]);
+    expect(calls).toEqual(["incomplete", "pending"]);
+    assertOnlineRepairRehearsalCoverage({ records, repairs });
+    expect(harness.released()).toBe(true);
+  });
+
+  test("a deferred repair resumes with fresh checks without certifying skipped later repairs", async () => {
+    const records: OnlineRepairRehearsalRecord[] = [];
+    let attempts = 0;
+    const repair = {
+      name: "resume",
+      introducedBy: "20260101000000_rehearsal_fixture",
+      readCompletion: async (): Promise<OnlineRepairCompletion> =>
+        attempts >= 2
+          ? { type: "complete" }
+          : { type: "incomplete", reason: "upgrade" },
+      repair: async () => {
+        attempts += 1;
+        return attempts === 1
+          ? ({ type: "deferred", step: "resume", retryAfterMs: 1 } as const)
+          : ({ type: "complete" } as const);
+      },
+    } satisfies OnlineRepair;
+    const later = {
+      name: "later",
+      introducedBy: "20260101000000_rehearsal_fixture",
+      readCompletion: async () => ({ type: "complete" }) as const,
+      repair: async () => ({ type: "complete" }) as const,
+    } satisfies OnlineRepair;
+    const repairs = [repair, later];
+    const options = {
+      repairs,
+      observeRepair: (record: OnlineRepairRehearsalRecord) => {
+        records.push(record);
+      },
+    };
+    expect(
+      (await runOnlineMigrations(createHarness().pool, options)).type,
+    ).toBe("deferred");
+    expect(() =>
+      assertOnlineRepairRehearsalCoverage({ records, repairs }),
+    ).toThrow("later");
+    expect(
+      (await runOnlineMigrations(createHarness().pool, options)).type,
+    ).toBe("complete");
+    assertOnlineRepairRehearsalCoverage({ records, repairs });
+    expect(records).toEqual([
+      { type: "checked", name: "resume", completion: "incomplete" },
+      { type: "attempted", name: "resume" },
+      { type: "checked", name: "resume", completion: "incomplete" },
+      { type: "attempted", name: "resume" },
+      { type: "checked", name: "later", completion: "complete" },
+    ]);
+    expect(attempts).toBe(2);
+  });
+
+  test("startup validation never supplies repair execution observations", async () => {
+    const records: OnlineRepairRehearsalRecord[] = [];
+    let calls = 0;
+    const repair = {
+      name: "historical",
+      introducedBy: "20260101000000_rehearsal_fixture",
+      readCompletion: async () => ({ type: "complete" }) as const,
+      repair: async () => {
+        calls += 1;
+        return { type: "complete" } as const;
+      },
+    } satisfies OnlineRepair;
+    await reportOnlineMigrations(createHarness().pool, {
+      repairs: [repair],
+      observeRepair: (record: OnlineRepairRehearsalRecord) => {
+        records.push(record);
+      },
+    });
+    expect(records).toEqual([]);
+    expect(calls).toBe(0);
+  });
+
+  test("observations preserve postcondition failures and lock release", async () => {
+    const harness = createHarness();
+    const records: OnlineRepairRehearsalRecord[] = [];
+    const repair = {
+      name: "broken",
+      introducedBy: "20260101000000_rehearsal_fixture",
+      readCompletion: async () =>
+        ({ type: "incomplete", reason: "rows left" }) as const,
+      repair: async () => ({ type: "complete" }) as const,
+    } satisfies OnlineRepair;
+    const failure = await rejectionOf(
+      runOnlineMigrations(harness.pool, {
+        repairs: [repair],
+        observeRepair: (record) => {
+          records.push(record);
+        },
+      }),
+    );
+    expect(String(failure)).toContain("Online repair broken is not complete");
+    expect(records).toEqual([
+      { type: "checked", name: "broken", completion: "incomplete" },
+      { type: "attempted", name: "broken" },
+    ]);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("a failed completion read cannot manufacture an attempted observation", async () => {
+    const harness = createHarness();
+    const records: OnlineRepairRehearsalRecord[] = [];
+    const failure = new TypeError("read unavailable");
+    const repair = {
+      name: "unreadable",
+      introducedBy: "20260101000000_rehearsal_fixture",
+      readCompletion: async () => {
+        throw failure;
+      },
+      repair: async () => ({ type: "complete" }) as const,
+    } satisfies OnlineRepair;
+    expect(
+      await rejectionOf(
+        runOnlineMigrations(harness.pool, {
+          repairs: [repair],
+          observeRepair: (record) => {
+            records.push(record);
+          },
+        }),
+      ),
+    ).toBe(failure);
+    expect(records).toEqual([]);
+    expect(harness.released()).toBe(true);
+  });
+});

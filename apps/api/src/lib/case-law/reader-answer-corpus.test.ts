@@ -31,6 +31,7 @@ const source = ({ decisionId, texts }: FixtureOptions) =>
       country: "CZE",
       decisionDate: "2026-01-01",
       ecli: null,
+      extractionWarnings: [],
       language: "cs",
       languageAlternates: [],
       slug: null,

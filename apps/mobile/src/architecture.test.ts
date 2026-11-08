@@ -20,6 +20,7 @@ import {
   MOBILE_UPDATE_SIGNING_KEY_ID,
   MOBILE_UPDATES_PATH,
 } from "@stll/api-contract/mobile-updates";
+import { UI_LOCALES } from "@stll/locales";
 
 import {
   appConfigFor,
@@ -46,9 +47,12 @@ const DEVICE_MODULES = new Set([
   "session-provider.tsx",
 ]);
 
+/** What a module imports or re-exports, including imports run only for their effect. */
 const importsOf = (source: string): string[] =>
   [
-    ...source.matchAll(/^\s*(?:import|export)[^;]*?from\s+["']([^"']+)["']/gmu),
+    ...source.matchAll(
+      /^\s*(?:(?:import|export)[^;]*?from\s+|import\s+)["']([^"']+)["']/gmu,
+    ),
   ].map((match) => match[1] ?? "");
 
 const connectionModules = readdirSync(path.join(SOURCE_ROOT, "connection"))
@@ -125,6 +129,17 @@ describe("the app's builds", () => {
     },
   );
 
+  // iOS opens an app only in a language its bundle declares, so every build
+  // declares every interface language the app ships, and nothing else.
+  test.each(configs)(
+    "$variant declares every interface language to iOS",
+    ({ config }) => {
+      const declared: unknown =
+        config.ios?.infoPlist?.["CFBundleLocalizations"];
+      expect(declared).toEqual([...UI_LOCALES]);
+    },
+  );
+
   test("a signed release leaves out the Live Activity extension it cannot sign yet", () => {
     const signed = appConfigFor({
       buildNumber: 7,
@@ -168,6 +183,7 @@ describe("the app's builds", () => {
       {
         bundleIdentifier: "app.stll.mobile.preview.widgets",
         groupIdentifier: "group.app.stll.mobile.preview",
+        enablePushNotifications: true,
       },
     ]);
   });
@@ -264,6 +280,32 @@ describe("the app's JavaScript engine", () => {
   );
 });
 
+describe("the app's plurals", () => {
+  // Hermes has no Intl.PluralRules either. Without it use-intl cannot format
+  // an ICU plural and shows the message's key: a scan's page count read
+  // "scan.pages", which looks like a file in Apple's Pages format.
+  test("installs plural rules before the catalogues format a message", () => {
+    expect(
+      importsOf(
+        readFileSync(path.join(SOURCE_ROOT, "i18n", "index.tsx"), "utf-8"),
+      )[0],
+    ).toBe("@/i18n/plural-rules");
+  });
+
+  test("has the plural rules of every UI locale", () => {
+    const loaded = importsOf(
+      readFileSync(path.join(SOURCE_ROOT, "i18n", "plural-rules.ts"), "utf-8"),
+    );
+    expect(loaded).toContain("@formatjs/intl-pluralrules/polyfill.js");
+    expect(
+      UI_LOCALES.map(
+        (locale) =>
+          `@formatjs/intl-pluralrules/locale-data/${locale.split("-")[0] ?? locale}.js`,
+      ).filter((data) => !loaded.includes(data)),
+    ).toEqual([]);
+  });
+});
+
 describe("the app's dates", () => {
   test("finds the app's modules to scan", () => {
     expect(appModules).toContain(path.join("components", "matter-row.tsx"));
@@ -339,6 +381,43 @@ describe("the app's colours", () => {
         [],
     ).toEqual([]);
   });
+});
+
+describe("the app's links", () => {
+  /**
+   * The modules that may hand a link to the system: the opener, which opens
+   * only what `state/links.ts` accepted and shows a web link's host first,
+   * and the decision reader, which opens the court's own web pages through
+   * `isWebUrl` from the same module.
+   */
+  const OPENERS = new Set([
+    path.join("components", "open-link.ts"),
+    path.join("components", "decision-reader.tsx"),
+  ]);
+
+  const opensLinks = (source: string): string[] =>
+    source.match(/\bopenURL\s*\(|\bopenURL\b(?=\s*[,}])/gu) ?? [];
+
+  test("finds the opener, and the scan sees the calls it forbids elsewhere", () => {
+    for (const name of OPENERS) {
+      expect(appModules).toContain(name);
+      expect(
+        opensLinks(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
+      ).not.toEqual([]);
+    }
+    expect(opensLinks("const { openURL } = Linking;")).not.toEqual([]);
+  });
+
+  // A link from an answer or a document can name any scheme: a call, a
+  // message, another app. Opening one anywhere else would skip the rule.
+  test.each(appModules.filter((name) => !OPENERS.has(name)))(
+    "%s opens no link itself",
+    (name) => {
+      expect(
+        opensLinks(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
+      ).toEqual([]);
+    },
+  );
 });
 
 describe("the app's text", () => {

@@ -34,6 +34,7 @@ type DecisionBySlug = Awaited<
 >;
 
 const UNPUBLISHED_DECISION = {
+  extractionWarnings: [],
   citationCount: 0,
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -82,6 +83,7 @@ const UNPUBLISHED_DECISION = {
     name: "Synthetic source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: null,
   textFields: {
     abstract: ABSENT_TEXT_FIELD,

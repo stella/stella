@@ -4,7 +4,6 @@ import { sanitizeErrorForOutput } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import {
   PROCESS_DECISION_RETRY_REASON,
@@ -21,6 +20,7 @@ import {
   enqueueCaseLawRawSweepTx,
   rawSweepSettleAfter,
 } from "@/api/lib/legal-search/case-law-raw-sweeps";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import type {
   RawSourceWriteFailure,
   RawSourceWriteWindow,

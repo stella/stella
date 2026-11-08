@@ -155,7 +155,6 @@ export const AddEntityMenu = ({
     style: StyleSelection,
   ): Promise<boolean> => {
     const input = {
-      queryKey: entitiesKeys.all(workspaceId),
       name,
       parentId: parentId ? toSafeId<"entity">(parentId) : null,
     };

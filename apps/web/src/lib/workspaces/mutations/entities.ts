@@ -206,6 +206,21 @@ export const useRenameEntity = (
   inspectorStore?: StoreApi<InspectorTabsStore>,
 ) => {
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  return useRenameEntityForUser({
+    activeOrganizationId,
+    inspectorStore,
+    userId,
+  });
+};
+
+type RenameEntityForUserOptions = {
+  activeOrganizationId: string;
+  inspectorStore: StoreApi<InspectorTabsStore> | undefined;
+  userId: string;
+};
+
+export const useRenameEntityForUser = (options: RenameEntityForUserOptions) => {
+  const { activeOrganizationId, inspectorStore, userId } = options;
   const analytics = useAnalytics();
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -348,20 +363,19 @@ export const useRenameEntity = (
     },
     onError: (error, { workspaceId, entityId, name }, context) => {
       const rolledBack = Result.try(() => {
-        if (context?.previousLabel === undefined) {
-          return;
-        }
-        const store = inspectorStore
-          ? inspectorStore.getState()
-          : useInspectorTabsStore.getState();
-        for (const tab of store.tabs) {
-          if (
-            tab.type === "pdf" &&
-            tab.workspaceId === workspaceId &&
-            tab.entityId === entityId &&
-            tab.label === name
-          ) {
-            store.updateLabel(tab.id, context.previousLabel);
+        if (context?.previousLabel !== undefined) {
+          const store = inspectorStore
+            ? inspectorStore.getState()
+            : useInspectorTabsStore.getState();
+          for (const tab of store.tabs) {
+            if (
+              tab.type === "pdf" &&
+              tab.workspaceId === workspaceId &&
+              tab.entityId === entityId &&
+              tab.label === name
+            ) {
+              store.updateLabel(tab.id, context.previousLabel);
+            }
           }
         }
       });

@@ -16,6 +16,7 @@ import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
 } from "@stll/api-contract/chat-docx-suggestions";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
@@ -180,7 +181,10 @@ const buildChatToolsForScenario = ({
     },
     // A live extension registers the client-executed browser tool, so its
     // schema also runs through the provider matrix.
-    browserClient: { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION },
+    browserExtension: {
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "connected",
+    },
     docxSuggestionSurface: surface,
     editApplyMode,
     hasActiveDocxEditClient: true,
@@ -229,7 +233,7 @@ const buildChatToolsForScenario = ({
       webSearchProvider: inertWebSearchProvider,
     },
     workspaceId,
-    workspaceStatusById: new Map([[workspaceId, "active"]]),
+    workspaceStatusById: new Map([[workspaceId, WORKSPACE_STATUS.active]]),
   });
 };
 

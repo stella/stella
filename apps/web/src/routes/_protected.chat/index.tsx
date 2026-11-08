@@ -16,6 +16,7 @@ import {
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -102,8 +103,10 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { skillsOptions } from "@/lib/knowledge/queries";
+import type { fetchWorkspaceNavigationPage } from "@/lib/memory-api";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
@@ -373,6 +376,7 @@ function ChatIndex() {
     if (workspaces) {
       for (const workspace of workspaces) {
         workspaceById.set(workspace.id, {
+          status: workspace.status,
           color: workspace.color,
           id: workspace.id,
           lastActivityAt: workspace.lastActivityAt,
@@ -403,6 +407,7 @@ function ChatIndex() {
       )
       .slice(0, 5)
       .map((workspace) => ({
+        status: workspace.status,
         color: workspace.color,
         id: workspace.id,
         lastActivityAt: workspace.lastActivityAt,
@@ -487,7 +492,7 @@ function ChatIndex() {
         getContextMatterIds,
         getSendMode,
       };
-      await startNewThreadCommandHandoff({
+      const handoff = await startNewThreadCommandHandoff({
         activeOrganizationId,
         context: chatThreadContext,
         files: draft.files,
@@ -495,6 +500,10 @@ function ChatIndex() {
         queryClient,
         threadRef,
       });
+      if (handoff.isErr()) {
+        notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
       await navigate({
         to: "/chat/$threadId",
         params: { threadId: threadRef.threadId },
@@ -554,6 +563,10 @@ function ChatIndex() {
         staleTime: "static",
       }),
     ]);
+    if (message.isErr()) {
+      notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+      return CHAT_SEND_KEPT;
+    }
     const chat = acquireChatRuntime({
       activeOrganizationId,
       context: chatThreadContext,
@@ -567,7 +580,7 @@ function ChatIndex() {
     // TanStack boundary fails before appending, this
     // throws here so the composer restores the draft
     // instead of navigating to an empty thread.
-    await chat.startRouteHandoffMessage(message, {
+    await chat.startRouteHandoffMessage(message.value, {
       timingSurface: "chat-thread",
     });
 
@@ -710,6 +723,7 @@ function ChatIndex() {
                   name: matter.name,
                   color: matter.color,
                   client: matter.client,
+                  isArchived: matter.status === WORKSPACE_STATUS.archived,
                 }}
               >
                 <Link
@@ -745,7 +759,9 @@ function ChatIndex() {
                 {t("chat.landing.noMatters")}
                 {canCreateMatter && (
                   <Button
-                    onClick={() => openCreateMatter()}
+                    onClick={(event) =>
+                      openCreateMatter({ opener: event.currentTarget })
+                    }
                     size="sm"
                     variant="outline"
                   >
@@ -920,16 +936,20 @@ type SuggestedSkillRowProps = {
  * the data cannot name (a former member, a system write) shows nothing.
  */
 const SuggestedSkillRow = ({ onSelect, skill }: SuggestedSkillRowProps) => (
-  <button
-    className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
+  <Button
+    className="group/row group flex w-full"
     onClick={onSelect}
-    type="button"
+    variant="plain"
   >
-    <span className="min-w-0 flex-1">
-      <LandingItemText meta={skill.body} title={skill.name} />
+    {/* The landing row's inset, gap and hover tint, so the row lines up and
+        lights like the matter and thread links beside it. */}
+    <span className="group-hover/row:bg-accent/50 flex w-full items-center gap-3 rounded-md px-2 py-1.5">
+      <span className="min-w-0 flex-1">
+        <LandingItemText meta={skill.body} title={skill.name} />
+      </span>
+      <SkillAuthorAvatar author={skillAuthor(skill)} />
     </span>
-    <SkillAuthorAvatar author={skillAuthor(skill)} />
-  </button>
+  </Button>
 );
 
 type SkillAuthor =
@@ -1004,6 +1024,9 @@ const SkillAuthorAvatar = ({ author }: { author: SkillAuthor }) => {
 };
 
 type PinnedMatter = {
+  status: Awaited<
+    ReturnType<typeof fetchWorkspaceNavigationPage>
+  >["workspaces"][number]["status"];
   color: string | null;
   id: string;
   lastActivityAt: Date;

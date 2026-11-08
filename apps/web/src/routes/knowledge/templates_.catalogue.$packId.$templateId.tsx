@@ -83,9 +83,9 @@ export const Route = createFileRoute(
       crawlAllowed: isPublicKnowledgeCrawlAllowed(),
       path: `/knowledge/templates/catalogue/${params.packId}/${params.templateId}`,
       title:
-        loaderData?.displayName === undefined
-          ? pageTitle("navigation.knowledge")
-          : `${loaderData.displayName} · ${pageTitle("navigation.knowledge")}`,
+        loaderData?.displayName !== undefined
+          ? `${loaderData.displayName} · ${pageTitle("navigation.knowledge")}`
+          : pageTitle("navigation.knowledge"),
       type: "article",
     }),
   component: CatalogueTemplatePage,

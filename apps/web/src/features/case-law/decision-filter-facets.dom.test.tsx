@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { CaseLawBrowseFacets } from "./queries/decisions";
 
@@ -294,7 +294,7 @@ test("warm facets survive panel mount and page/sort navigation without another f
   expect(requests).toHaveLength(0);
 });
 
-test("a new country waits for its own search despite previous result placeholder data", async () => {
+test("a new country never offers the previous country’s facets while waiting for its own search", async () => {
   const response = Promise.withResolvers<Response>();
   const requests = installTransport(async () => await response.promise);
   const client = makeClient();
@@ -324,13 +324,13 @@ test("a new country waits for its own search despite previous result placeholder
     await Promise.resolve();
   });
   expect(requests).toHaveLength(0);
-  expect(view.getByTestId("facets").textContent).toBe(JSON.stringify(facets));
+  expect(view.getByTestId("facets").textContent).toBe("null");
   await act(async () => {
     search.resolve({ decisions: [] });
   });
   await waitFor(() => expect(requests).toHaveLength(1));
   assertFacetRequest(requests.at(0), "DE");
-  expect(view.getByTestId("facets").dataset["placeholder"]).toBe("true");
+  expect(view.getByTestId("facets").dataset["placeholder"]).toBe("false");
   response.resolve(
     Response.json({
       country: [],

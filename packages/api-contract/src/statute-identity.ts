@@ -1,5 +1,9 @@
-/** `…/eli/<country>/<collection>/<year>/<number>`, optionally with a tail. */
-const STATUTE_ELI_IDENTITY_PATTERN = String.raw`\/eli\/[a-z]{2}\/([a-z0-9]+)\/([0-9]{4})\/([0-9]{1,5})(?:\/|$)`;
+/**
+ * `…/eli/<country>/<collection>/<year>/<number>`, optionally with a tail; the
+ * groups are the collection, the year and the number. Valid in both
+ * JavaScript and PostgreSQL, which read act numbers with this same pattern.
+ */
+export const STATUTE_ELI_IDENTITY_PATTERN = String.raw`\/eli\/[a-z]{2}\/([a-z0-9]+)\/([0-9]{4})\/([0-9]{1,5})(?:\/|$)`;
 
 const STATUTE_ELI_IDENTITY_RE = new RegExp(STATUTE_ELI_IDENTITY_PATTERN, "u");
 

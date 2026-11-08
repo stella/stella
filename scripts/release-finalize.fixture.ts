@@ -48,6 +48,15 @@ const readFinalizationCommand = () => {
 
 type ProofFixture = {
   states?: Record<string, string>;
+  /** A failed main/heavy run: its conclusion and latest-attempt jobs. */
+  heavyRun?: {
+    conclusion: string;
+    jobs: readonly {
+      name: string;
+      status: string;
+      conclusion: string | null;
+    }[];
+  };
   runSha?: string;
   incidents?: boolean;
   noRc?: boolean;
@@ -72,6 +81,83 @@ const pullState = (pull: ProofFixture["pull"]) => {
     return "MERGED";
   }
   return pull === "closed" ? "CLOSED" : "OPEN";
+};
+
+// The release PR listing the landing step reads.
+const writePullFixture = (root: string, fixture: ProofFixture, sha: string) => {
+  const pull = {
+    number: 123,
+    title: "chore: release v1.2.3",
+    state: pullState(fixture.pull),
+    headRefName: "release/v1.2.3",
+    headRefOid: fixture.pull === "mismatch" ? "f".repeat(40) : sha,
+    isCrossRepository: fixture.pull === "fork",
+    isInMergeQueue: fixture.pull === "queued",
+    autoMergeRequest:
+      fixture.pull === "armed" ? { enabledAt: "2026-01-01T00:00:00Z" } : null,
+  };
+  const pulls = fixture.pull === "none" ? [] : [pull];
+  if (fixture.pull === "multiple") {
+    pulls.push({ ...pull, number: 456 });
+  }
+  if (fixture.pull === "fork-alongside") {
+    pulls.unshift({ ...pull, number: 456, isCrossRepository: true });
+  }
+  writeFileSync(
+    path.join(root, "pulls.json"),
+    JSON.stringify({ nodes: pulls, pageInfo: { hasNextPage: false } }),
+  );
+};
+
+// The main health statuses, their runs and the heavy run's jobs.
+const writeRunFixtures = (root: string, fixture: ProofFixture, sha: string) => {
+  const contexts = [
+    [
+      "staging/verified",
+      "deploy-staging.yml",
+      "Staging release proof v1.2.3-rc.2 ",
+    ],
+    ["main/heavy", "main-heavy.yml", "Main heavy suites "],
+    ["main/pr-depth", "main-pr-depth.yml", "Main PR-depth checks "],
+  ] as const;
+  const statuses = contexts
+    .map(([context], index) => ({
+      context,
+      state: fixture.states?.[context] ?? "success",
+      creator: { login: "github-actions[bot]", type: "Bot" },
+      target_url: `https://github.com/stella/stella/actions/runs/${index + 1}`,
+    }))
+    .filter(({ state }) => state !== "missing");
+  writeFileSync(path.join(root, "statuses.json"), JSON.stringify([statuses]));
+  for (const [index, [, workflow, title]] of contexts.entries()) {
+    writeFileSync(
+      path.join(root, `run-${index + 1}.json`),
+      JSON.stringify({
+        id: index + 1,
+        html_url: `https://github.com/stella/stella/actions/runs/${index + 1}`,
+        repository: { full_name: "stella/stella" },
+        path: `.github/workflows/${workflow}`,
+        head_branch: "main",
+        event: "workflow_dispatch",
+        display_title: `${title}${fixture.runSha ?? sha}`,
+        run_attempt: 1,
+        status: "completed",
+        conclusion:
+          title.startsWith("Main heavy") && fixture.heavyRun
+            ? fixture.heavyRun.conclusion
+            : "success",
+      }),
+    );
+  }
+  writeFileSync(
+    path.join(root, "jobs.json"),
+    JSON.stringify([
+      {
+        total_count: fixture.heavyRun?.jobs.length ?? 0,
+        jobs: fixture.heavyRun?.jobs ?? [],
+      },
+    ]),
+  );
 };
 
 export const finalize = (fixture: ProofFixture = {}) => {
@@ -110,62 +196,8 @@ export const finalize = (fixture: ProofFixture = {}) => {
       path.join(root, "verifier.sh"),
       "#!/usr/bin/env bash\nexit 0\n",
     );
-    const pull = {
-      number: 123,
-      title: "chore: release v1.2.3",
-      state: pullState(fixture.pull),
-      headRefName: "release/v1.2.3",
-      headRefOid: fixture.pull === "mismatch" ? "f".repeat(40) : sha,
-      isCrossRepository: fixture.pull === "fork",
-      isInMergeQueue: fixture.pull === "queued",
-      autoMergeRequest:
-        fixture.pull === "armed" ? { enabledAt: "2026-01-01T00:00:00Z" } : null,
-    };
-    const pulls = fixture.pull === "none" ? [] : [pull];
-    if (fixture.pull === "multiple") {
-      pulls.push({ ...pull, number: 456 });
-    }
-    if (fixture.pull === "fork-alongside") {
-      pulls.unshift({ ...pull, number: 456, isCrossRepository: true });
-    }
-    writeFileSync(
-      path.join(root, "pulls.json"),
-      JSON.stringify({ nodes: pulls, pageInfo: { hasNextPage: false } }),
-    );
-    const contexts = [
-      [
-        "staging/verified",
-        "deploy-staging.yml",
-        "Staging release proof v1.2.3-rc.2 ",
-      ],
-      ["main/heavy", "main-heavy.yml", "Main heavy suites "],
-      ["main/pr-depth", "main-pr-depth.yml", "Main PR-depth checks "],
-    ] as const;
-    const statuses = contexts
-      .map(([context], index) => ({
-        context,
-        state: fixture.states?.[context] ?? "success",
-        creator: { login: "github-actions[bot]", type: "Bot" },
-        target_url: `https://github.com/stella/stella/actions/runs/${index + 1}`,
-      }))
-      .filter(({ state }) => state !== "missing");
-    writeFileSync(path.join(root, "statuses.json"), JSON.stringify([statuses]));
-    for (const [index, [, workflow, title]] of contexts.entries()) {
-      writeFileSync(
-        path.join(root, `run-${index + 1}.json`),
-        JSON.stringify({
-          id: index + 1,
-          html_url: `https://github.com/stella/stella/actions/runs/${index + 1}`,
-          repository: { full_name: "stella/stella" },
-          path: `.github/workflows/${workflow}`,
-          head_branch: "main",
-          event: "workflow_dispatch",
-          display_title: `${title}${fixture.runSha ?? sha}`,
-          status: "completed",
-          conclusion: "success",
-        }),
-      );
-    }
+    writePullFixture(root, fixture, sha);
+    writeRunFixtures(root, fixture, sha);
     writeFileSync(
       path.join(root, "incidents.json"),
       JSON.stringify([fixture.incidents ? [{ id: 1 }] : []]),
@@ -186,6 +218,7 @@ case "$*" in
     ${fixture.mergeFails || fixture.pull === "queued" ? 'echo "merge failed" >&2; exit 1' : 'printf \'%s\\n\' "$*" >> "$TEST_ROOT/merges"'} ;;
   'release view '*) printf '%s\\n' '${fixture.rcPublication !== "published"}' ;;
   *statuses?*) cat "$TEST_ROOT/statuses.json" ;;
+  *actions/runs/*/jobs?*) cat "$TEST_ROOT/jobs.json" ;;
   *actions/runs/*) run="\u0024{!#}"; cat "$TEST_ROOT/run-\u0024{run##*/}.json" ;;
   *issues?*) cat "$TEST_ROOT/incidents.json" ;;
   'release edit '*)

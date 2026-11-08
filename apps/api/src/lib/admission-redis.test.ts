@@ -33,19 +33,9 @@ for (const policy of ["noeviction", "allkeys-lru", "unknown"]) {
       await store.ready();
       expect(lines).toHaveLength(1);
       expect(JSON.parse(lines.at(0) ?? "")).toMatchObject({
-        _aws: {
-          CloudWatchMetrics: [
-            {
-              Namespace: "Stella/Api",
-              Dimensions: [[]],
-              Metrics: [
-                { Name: "AdmissionStoreEvictionPolicyRefused", Unit: "Count" },
-              ],
-            },
-          ],
-        },
         AdmissionStoreEvictionPolicyRefused: policy === "allkeys-lru" ? 1 : 0,
       });
+      expect(JSON.parse(lines.at(0) ?? "")).not.toHaveProperty("_aws");
       if (policy === "noeviction") {
         expect(messages).toEqual([]);
       } else {

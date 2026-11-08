@@ -1,18 +1,19 @@
-import { Suspense, use, useState, useTransition } from "react";
+import { Suspense, use, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useRouter } from "expo-router";
 import { ActivityIndicator, RefreshControl, ScrollView } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { useChanged, useRevision } from "@/components/changes";
-import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
-import { RetryButton } from "@/components/retry-button";
+import { useChanged, useRevisedLoad } from "@/components/changes";
+import { EmptyCard, emptyListProps } from "@/components/empty-state-screen";
+import { LoadFailedCard } from "@/components/load-failure";
 import { TimerCard } from "@/components/timer-card";
 import { barGlyph } from "@/components/ui/bar-glyph";
 import { useNow } from "@/components/use-now";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
+import { needsConsent } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 import { listMatters } from "@/state/matters";
 import { listTimers } from "@/state/timers";
@@ -32,7 +33,6 @@ type TimersLoad = {
  */
 const TimersScreen = () => {
   const { state } = useSession();
-  const revision = useRevision("timers");
   const t = useTranslations("timers");
   const router = useRouter();
 
@@ -50,7 +50,7 @@ const TimersScreen = () => {
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
       {state.status === "signed-in" ? (
-        <TimersLoader key={revision} source={state.source} />
+        <TimersLoader source={state.source} />
       ) : null}
     </>
   );
@@ -76,7 +76,7 @@ const TimersLoader = ({ source }: { source: AccessTokenSource }) => {
       ),
     };
   };
-  const [load, setLoad] = useState(loadTimers);
+  const [load, setLoad] = useRevisedLoad(loadTimers, ["timers"]);
   const [refreshing, startRefresh] = useTransition();
   const reload = () => {
     startRefresh(() => {
@@ -125,7 +125,7 @@ const LoadedTimers = ({
   return (
     <ScrollView
       className="bg-background flex-1"
-      contentContainerStyle={screenStyles.content}
+      {...emptyListProps(!Result.isOk(timers) || timers.value.length === 0)}
       contentInsetAdjustmentBehavior="automatic"
       refreshControl={
         <RefreshControl
@@ -169,15 +169,20 @@ const TimersBody = ({
 
   if (Result.isError(timers)) {
     // An organization without time billing answers the timers as forbidden
-    // or missing; anything else may pass on a retry.
+    // or missing; a sign-in without the scope is forbidden too, but asks for
+    // consent. Anything else may pass on a retry.
     const { error } = timers;
     return error._tag === "ApiRequestError" &&
+      !needsConsent(error) &&
       (error.status === 403 || error.status === 404) ? (
       <EmptyCard description={t("unavailable")} title={t("emptyTitle")} />
     ) : (
-      <EmptyCard description={t("loadFailed")} title={t("emptyTitle")}>
-        <RetryButton label={t("retry")} onPress={onReload} />
-      </EmptyCard>
+      <LoadFailedCard
+        error={error}
+        onRetry={onReload}
+        retryLabel={t("retry")}
+        title={t("loadFailed")}
+      />
     );
   }
   if (timers.value.length === 0) {

@@ -9,7 +9,6 @@ import type { FolioUIComponents } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ColorPicker } from "@stll/ui/color-picker";
-import type { ColorPickerProps } from "@stll/ui/color-picker";
 import {
   Dialog,
   DialogBackdrop,
@@ -46,12 +45,19 @@ import {
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { retainOutlinePageNumbers } from "@/components/docx/folio-outline-items.logic";
 
-const LocalizedColorPicker = (props: Omit<ColorPickerProps, "moreLabel">) => {
+const LocalizedColorPicker = ({
+  children,
+  ...props
+}: ComponentProps<FolioUIComponents["ColorPicker"]>) => {
   const t = useTranslations();
 
+  // Folio's contract types the trigger as any node and its toolbar button
+  // does not forward trigger props, so the trigger stays a wrapper here.
   return createElement(ColorPicker, {
     ...props,
     moreLabel: t("common.showMore"),
+    nativeButton: false,
+    trigger: createElement("span", { className: "inline-flex" }, children),
   });
 };
 

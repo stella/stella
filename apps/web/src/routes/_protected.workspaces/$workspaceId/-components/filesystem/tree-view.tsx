@@ -19,22 +19,24 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
-import { BidiText } from "@stll/ui/bidi-text";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
+import { Button } from "@stll/ui/button";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
   EyeOffIcon,
   FileIcon,
 } from "@stll/ui/icons";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
+import { MiddleTruncate } from "@stll/ui/middle-truncate";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
+import { RecordFieldValue } from "@stll/workspace-ui/field-value";
 
 import { DocumentIcon } from "@/components/document-icon";
 import {
@@ -49,7 +51,6 @@ import type { DragPreviewData } from "@/components/drag-preview";
 import { FileTreeNameCell } from "@/components/file-tree/file-tree";
 import { InlineEdit } from "@/components/inline-edit";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
-import Tooltip from "@/components/tooltip";
 import { ActiveEditBadge } from "@/components/workspaces/active-edit-badge";
 import { resolveAncestorIds } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
@@ -801,24 +802,20 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <Tooltip
-                    content={t("workspaces.copyToMatter.rootFolder")}
-                    render={
-                      <button
-                        aria-label={t("workspaces.copyToMatter.rootFolder")}
-                        className="text-muted-foreground hover:text-foreground text-xs"
-                        onClick={() => {
-                          detached(
-                            navigateToFolder(),
-                            "tree-view.navigate-to-folder",
-                          );
-                        }}
-                        type="button"
-                      />
-                    }
+                  <Button
+                    aria-label={t("workspaces.copyToMatter.rootFolder")}
+                    onClick={() => {
+                      detached(
+                        navigateToFolder(),
+                        "tree-view.navigate-to-folder",
+                      );
+                    }}
+                    size="inline"
+                    tooltip={t("workspaces.copyToMatter.rootFolder")}
+                    variant="muted"
                   >
                     <EntityKindIcon className="size-3.5" kind="folder" />
-                  </Tooltip>
+                  </Button>
                 </BreadcrumbItem>
                 {breadcrumbs.map((crumb, i) => {
                   const isLast = i === breadcrumbs.length - 1;
@@ -850,8 +847,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                           }
                           if (isLast) {
                             return (
-                              <button
-                                className="text-xs font-medium whitespace-pre"
+                              <Button
                                 onClick={() => {
                                   detached(
                                     navigateToFolder(),
@@ -863,25 +859,28 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                                   setBreadcrumbEditValue(crumb.name);
                                   setEditingEntityId(crumb.id);
                                 }}
-                                type="button"
+                                size="inline"
+                                variant="link"
                               >
-                                {crumb.name}
-                              </button>
+                                <span className="text-xs font-medium whitespace-pre">
+                                  {crumb.name}
+                                </span>
+                              </Button>
                             );
                           }
                           return (
-                            <button
-                              className="text-muted-foreground hover:text-foreground text-xs"
+                            <Button
                               onClick={() => {
                                 detached(
                                   navigateToFolder(crumb.id),
                                   "tree-view.navigate-to-folder",
                                 );
                               }}
-                              type="button"
+                              size="inline"
+                              variant="muted"
                             >
-                              {crumb.name}
-                            </button>
+                              <span className="text-xs">{crumb.name}</span>
+                            </Button>
                           );
                         })()}
                       </BreadcrumbItem>
@@ -895,7 +894,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       </div>
       <div
         className={cn(
-          "text-muted-foreground mt-1 flex items-center gap-2 rounded border border-dashed px-3 py-1.5 text-xs",
+          "text-muted-foreground mt-1 flex items-center gap-2 rounded-sm border border-dashed px-3 py-1.5 text-xs",
           isDragActive ? "visible" : "hidden",
           isRootDropTarget
             ? "border-primary bg-primary/10 text-foreground"
@@ -1043,11 +1042,11 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         parentId={currentFolderId}
         showTaskOption={false}
         render={
-          <button
+          <Button
             aria-label={t("common.add")}
             className="sr-only"
             tabIndex={-1}
-            type="button"
+            variant="plain"
           />
         }
         workspaceId={workspaceId}
@@ -1132,18 +1131,27 @@ const ColumnHeaderCell = ({
       onContextMenu={containedEventHandler(handleContextMenu)}
       ref={containerRef}
     >
-      <button
+      <Button
         className={cn(
-          "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5",
-          align === "end" ? "justify-end text-end" : "justify-start text-start",
-          isActive && "text-foreground",
+          "flex min-w-0 shrink",
+          align === "end" ? "justify-end" : "justify-start",
         )}
         onClick={() => onSort(propertyId)}
-        type="button"
+        variant="plain"
       >
-        <span className="truncate">{label}</span>
-        {isActive && <SortIcon className="size-3 shrink-0" />}
-      </button>
+        <span
+          className={cn(
+            "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5",
+            align === "end"
+              ? "justify-end text-end"
+              : "justify-start text-start",
+            isActive && "text-foreground",
+          )}
+        >
+          <span className="truncate font-medium">{label}</span>
+          {isActive && <SortIcon className="size-3 shrink-0" />}
+        </span>
+      </Button>
       <div
         aria-hidden="true"
         className="absolute -end-2 top-0 z-10 h-full w-2 cursor-col-resize touch-none select-none"
@@ -1160,16 +1168,7 @@ const ColumnHeaderCell = ({
           }}
           open={isContextOpen}
         >
-          <MenuTrigger
-            render={
-              <button
-                aria-label={t("common.options")}
-                className="sr-only"
-                tabIndex={-1}
-                type="button"
-              />
-            }
-          />
+          <MenuAnchor />
           <MenuPopup anchor={contextAnchor ?? undefined}>
             <MenuItem
               onClick={() => {
@@ -1603,13 +1602,7 @@ export const FilesystemRow = ({
         />
       ) : (
         <span className="flex min-w-0 items-center gap-1.5">
-          <BidiText
-            as="span"
-            className="overflow-hidden text-ellipsis whitespace-pre"
-            title={name}
-          >
-            {name}
-          </BidiText>
+          <MiddleTruncate value={name} />
           {folderStatistics && formattedFolderSize && (
             <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs tabular-nums">
               <span>
@@ -1648,12 +1641,12 @@ export const FilesystemRow = ({
   ));
 
   const gridCls = cn(
-    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded px-2 text-start text-sm",
+    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded-sm px-2 text-start text-sm",
     (isFolderDropTarget || isExternalDropTarget) && "bg-accent",
     isSelected && "bg-accent",
   );
   const rowButtonCls =
-    "min-w-0 rounded text-start outline-none focus-visible:bg-muted/70";
+    "min-w-0 rounded-sm text-start outline-none focus-visible:bg-muted/70";
 
   // Content area: Name + Type + extras (interactive, clickable)
   // gridColumn spans all content columns (excluding the actions column)
@@ -1722,8 +1715,8 @@ export const FilesystemRow = ({
       {contentCells}
     </div>
   ) : (
-    <button
-      className={rowButtonCls}
+    <Button
+      className="min-w-0"
       onClick={(event) => {
         if (!isFolder) {
           const intent = getFileRowClickIntent({
@@ -1779,11 +1772,12 @@ export const FilesystemRow = ({
         }
         openInInspector();
       }}
+      focusRing="inside"
       style={contentSpanStyle}
-      type="button"
+      variant="plain"
     >
       {contentCells}
-    </button>
+    </Button>
   );
 
   return (
@@ -1855,6 +1849,16 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
     return (
       <span className="text-muted-foreground truncate text-xs">
         {formatted || "-"}
+      </span>
+    );
+  }
+
+  // A record's state (candidates to choose, a count, review) is part of
+  // what it says; the flat text would hide it behind "-".
+  if (field?.content.type === "record") {
+    return (
+      <span className="text-muted-foreground truncate text-xs">
+        <RecordFieldValue content={field.content} variant="table" />
       </span>
     );
   }

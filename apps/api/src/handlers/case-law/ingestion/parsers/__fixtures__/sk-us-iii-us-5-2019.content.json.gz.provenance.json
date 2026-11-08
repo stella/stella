@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "74db54fd8853fd8f385b7e82050f50513953755b277566ab3476eedfc0337825",
+  "sourceUrl": "https://www.ustavnysud.sk/o/v1/dms/content",
+  "capturedAt": "2026-10-29T19:50:40.000Z",
+  "note": "POST body: {\"highlightText\":\"\",\"documentId\":\"8a26621c-8c88-41a8-a7e1-a4930b263c2c\",\"docType\":\"USSR_DECISION_MK\"}; III. ÚS 5/2019, the response body verbatim (sha256 6ca9ba998263dd5ca5b65b20a9d57674853e13465bdc138d43469132cd0236d5), gzipped."
+}

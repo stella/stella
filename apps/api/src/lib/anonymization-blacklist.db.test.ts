@@ -10,6 +10,7 @@ import {
 } from "@/api/lib/anonymization-blacklist";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -167,10 +168,8 @@ afterAll(async () => {
   await testDb.transaction(async (tx) => {
     await tx.execute(sql.raw("RESET ROLE"));
     await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await tx
-      .delete(organization)
-      .where(eq(organization.id, otherOrganizationId));
-    await tx.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(tx, [otherOrganizationId]);
+    await deleteOrganizationsForTest(tx, [organizationId]);
     await tx.delete(user).where(eq(user.id, userId));
     await tx.delete(user).where(eq(user.id, originalAuthorId));
   });

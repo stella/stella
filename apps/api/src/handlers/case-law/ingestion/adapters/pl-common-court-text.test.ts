@@ -14,20 +14,23 @@ import { describe, expect, test } from "bun:test";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildPlDecision,
   normalizeSaosDumpItem,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import {
-  assemblePlNcourtDecision,
+  assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision,
   readPlNcourtListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@/api/lib/case-law/decision-text";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 

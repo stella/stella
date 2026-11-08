@@ -23,6 +23,10 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./agent-input-readers": {
+      "types": "./src/agent-input-readers.ts",
+      "import": "./src/agent-input-readers.ts"
+    },
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
@@ -30,6 +34,10 @@
     "./corpus": {
       "types": "./src/corpus.ts",
       "import": "./src/corpus.ts"
+    },
+    "./act-titles": {
+      "types": "./src/act-titles.ts",
+      "import": "./src/act-titles.ts"
     },
     "./cz-provision-citation-profile": {
       "types": "./src/cz-provision-citation-profile.ts",
@@ -98,6 +106,14 @@
     "./us-code-citations": {
       "types": "./src/us-code-citations.ts",
       "import": "./src/us-code-citations.ts"
+    },
+    "./link-recall-reference": {
+      "types": "./src/link-recall-reference.ts",
+      "import": "./src/link-recall-reference.ts"
+    },
+    "./link-recall": {
+      "types": "./src/link-recall.ts",
+      "import": "./src/link-recall.ts"
     }
   },
   "scripts": {
@@ -116,7 +132,7 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },

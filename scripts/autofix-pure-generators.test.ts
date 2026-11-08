@@ -25,11 +25,15 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  // Emits export lines from committed entry filenames; values stay in their owners.
+  "online-migration-entries": "scripts/generate-online-migration-entries.ts",
+  "db-registry-entries": "scripts/db-registry-entries.ts",
+  // Reads canonical source-entry JSON; Git staging never changes the literal maps.
+  "parser-registry": "scripts/generate-parser-registry.ts",
   "withdrawn-decision-labels":
     "apps/web/scripts/sync-withdrawn-decision-labels.ts",
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and
   // contents use content hashes and never consult the network, clock, or env.
-  "tailwind-class-cache": "scripts/generate-tailwind-classes.ts",
   // Toolchain pins are read from committed manifests; temporary git state
   // merely exposes those files to the pinned cloud-setup renderer.
   "cloud-setup": "scripts/generate-cloud-setup.ts",
@@ -37,6 +41,9 @@ const PURE_AUTOFIX = {
   "api-image-install-tooling": "scripts/docker-source-closure.ts",
   // Serializes package.json's packageManager pin.
   "bun-toolchain": "scripts/generate-bun-toolchain.ts",
+  // Parses the committed CI workflow and formats a deterministic JSON map.
+  "main-heavy-infrastructure-steps":
+    "scripts/generate-main-heavy-infrastructure-steps.ts",
   // Parses schema source without opening a database connection.
   "status-tables": "apps/api/scripts/generate-status-tables.ts",
   "account-export-tables": "apps/api/scripts/generate-account-export-tables.ts",
@@ -66,6 +73,8 @@ const PURE_AUTOFIX = {
   // and copies lucide-static's outlines, pinned by the lockfile, into the
   // app's asset catalog folder; reads only committed and installed files.
   "mobile-icons": "scripts/generate-mobile-icons.ts",
+  // Reads the installed @stll/folio-fonts catalogue, pinned by the lockfile.
+  "mobile-folio-fonts": "scripts/generate-mobile-folio-fonts.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
   // Reads glossary data, normalizes Unicode and formats fixed Markdown tables.
@@ -106,6 +115,8 @@ const EXCLUDED_AUTOFIX = {
     "Device descriptors are refreshed explicitly from the installed SDK",
   "ci-job-classification-digests":
     "Protected workflow metadata is refreshed outside pull-request autofix",
+  "merge-group-parser":
+    "Workflow script blocks are refreshed outside pull-request autofix",
   "failure-tags": "Generated census is excluded by the current owner policy",
   "migration-lock-baseline": "Migration lock decisions require human review",
   "model-catalog-inputs": "Fetches upstream model catalogs",
@@ -128,6 +139,8 @@ const EXCLUDED_AUTOFIX = {
   "chat-transcripts": "Runs service-backed chat recording suites",
   "case-law-publication-migration":
     "Migration SQL requires review rather than automatic rewriting",
+  "package-api-reports":
+    "API changes require explicit review and release intent",
 } as const;
 
 test("every committed generator has an explicit autofix purity decision", () => {

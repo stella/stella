@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, ne, sql } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -155,6 +156,8 @@ export const prepareTimeEntryInsert = async function* ({
     return yield* Result.err(
       new HandlerError({
         status: 400,
+        code: TIME_ENTRY_RATE_REQUIRED_CODE,
+        hint: "Add an effective matter rate for this person and date, or set billable to false.",
         message: "Billable time entries need an effective rate",
       }),
     );

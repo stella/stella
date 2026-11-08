@@ -108,7 +108,8 @@ describe("DataTable", () => {
     expect(markup).toContain("focus-visible:ring-2");
     expect(markup).toContain("pointer-coarse:h-11");
     expect(markup).toContain('data-slot="button"');
-    expect(markup).toContain("Open Northwind</button>");
+    // The label may sit in the button's cut-to-fit span.
+    expect(markup).toMatch(/>Open Northwind<\/(?:span><\/)?button>/u);
     expect(markup).toContain("caller-row");
     expect(markup).not.toContain('role="button"');
     expect(markup).not.toContain('tabindex="0"');

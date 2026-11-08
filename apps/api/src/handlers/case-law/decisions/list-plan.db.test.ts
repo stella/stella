@@ -27,6 +27,7 @@ import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
+import { orderedIndexScanHeader } from "@/api/tests/query-plans/plan-walker";
 
 const DECISIONS = 5000;
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -79,8 +80,8 @@ afterAll(async () => {
  * does not compile until it states the direction its plan must show.
  */
 const WALK_SCAN_NODE = {
-  newest: "Index Scan Backward",
-  oldest: "Index Scan",
+  newest: orderedIndexScanHeader("backward"),
+  oldest: orderedIndexScanHeader("forward"),
 } as const satisfies Record<DecisionListSort, string>;
 
 /**
@@ -146,7 +147,7 @@ test.each(ORDERS_BY_BAND)(
       expect(plan.slice(0, plan.indexOf(`${scan} using`))).not.toMatch(
         /\b(Sort|Bitmap Heap Scan)\b/u,
       );
-      expect(plan).toContain("case_law_decisions_lang_group_idx");
+      expect(plan).toContain("case_law_decisions_language_group_published_idx");
       expect(plan).toMatch(/Index Cond: .*language_group_key/u);
       expect(plan).not.toContain("Seq Scan on case_law_decisions");
     }
@@ -238,6 +239,12 @@ const FILTER_ACCESS = {
     type: "walk-range",
     query: { country: "CZE", language: "en" },
     indexCond: /\(language\)::text = 'en'::text/u,
+  },
+  readingLanguages: {
+    type: "walk-filter",
+    query: { country: "CZE", readingLanguages: "en,cs,fr" },
+    reason:
+      "an order among one decision's versions, read in the per-row version check, not a filter",
   },
   sourceId: {
     type: "walk-filter",

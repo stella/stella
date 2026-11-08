@@ -2,6 +2,8 @@ import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
+import { classifyFailure, readFailureBrand } from "@stll/errors";
 
 import {
   getChatAttachmentFilename,
@@ -142,6 +144,12 @@ export type ThreadContextUsage = {
     attachmentTokens: number;
     conversationTokens: number;
   };
+  /**
+   * For a thread whose turns run on the member's computer: how full the
+   * harness's context was after the latest answer, against its window, as
+   * the harness reported both. The composer shows it instead of the estimate.
+   */
+  reported?: ChatLocalRunContext;
 };
 
 type ComputeThreadContextUsageOptions = {
@@ -396,6 +404,21 @@ type CompactModelMessagesOptions = {
   summarizeTranscript: (transcript: string) => Promise<string>;
   triggerTokens?: number | undefined;
 };
+
+// A grader reads a brand only at the failure node, so the wrapper carries the
+// summarizer's own classification (a deadline, a cancellation) when it has one.
+const summaryFailure = ({
+  cause,
+  message,
+}: {
+  cause: unknown;
+  message: string;
+}): HandlerError<500> => {
+  const error = new HandlerError({ status: 500, message, cause });
+  const brand = readFailureBrand(cause);
+  return brand === undefined ? error : classifyFailure(error, brand.reason);
+};
+
 export const compactChatMessages = async ({
   messages,
   onSummaryError,
@@ -429,11 +452,7 @@ export const compactChatMessages = async ({
   const summaryResult = await Result.tryPromise({
     try: async () => await summarizeTranscript(preparedTranscript.value),
     catch: (cause) =>
-      new HandlerError({
-        status: 500,
-        message: "Failed to compact chat history",
-        cause,
-      }),
+      summaryFailure({ cause, message: "Failed to compact chat history" }),
   });
   if (Result.isError(summaryResult)) {
     onSummaryError?.(summaryResult.error);
@@ -526,10 +545,9 @@ export const compactModelMessages = async ({
   const summaryResult = await Result.tryPromise({
     try: async () => await summarizeTranscript(transcript),
     catch: (cause) =>
-      new HandlerError({
-        status: 500,
-        message: "Failed to compact model step history",
+      summaryFailure({
         cause,
+        message: "Failed to compact model step history",
       }),
   });
   if (Result.isError(summaryResult)) {

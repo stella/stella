@@ -287,17 +287,18 @@ filter for the class that matters. All four carry `caseNumber`,
 a document: a court publishing in 24 languages emits 24 variants under
 one number, and a case can carry both a judgment and an opinion.
 
-| Event                                         | Level | Meaning                                                                                  |
-| --------------------------------------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `case_law.ingestion.decision_empty`           | ERROR | Stored with neither text nor AST. Nothing is readable.                                   |
-| `case_law.ingestion.ast_content_lost`         | ERROR | Source text did not survive into the AST (`CONTENT_LOSS`, `MISSING_WORDS`, `EMPTY_AST`). |
-| `case_law.ingestion.ast_markup_residue`       | ERROR | The source's own markup survived into the text (`MARKUP_RESIDUE`).                       |
-| `case_law.ingestion.text_misdecoded`          | ERROR | The text reads as decoded with the wrong character set (`parsers/text-encoding.ts`).     |
-| `case_law.ingestion.ast_missing`              | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                |
-| `case_law.ingestion.ast_structure_degraded`   | WARN  | Text is complete, structure is imperfect.                                                |
-| `case_law.ingestion.text_encoding_incomplete` | WARN  | The encoding check stopped at a work bound with nothing found (`encodingLimit`).         |
-| `case_law.retention.unverifiable`             | ERROR | A parsed decision whose retention could not be measured; `reason` says why.              |
-| `case_law.retention.unchecked`                | INFO  | Text held in a separately stored document (`separate-document`), a known blind spot.     |
+| Event                                         | Level | Meaning                                                                                                            |
+| --------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------ |
+| `case_law.ingestion.decision_empty`           | ERROR | Stored with neither text nor AST. Nothing is readable.                                                             |
+| `case_law.ingestion.ast_content_lost`         | ERROR | Source text did not survive into the AST (`CONTENT_LOSS`, `MISSING_WORDS`, `EMPTY_AST`, `TEXT_FIDELITY_MISMATCH`). |
+| `case_law.ingestion.ast_markup_residue`       | ERROR | The source's own markup survived into the text (`MARKUP_RESIDUE`).                                                 |
+| `case_law.ingestion.text_misdecoded`          | ERROR | The text reads as decoded with the wrong character set (`parsers/text-encoding.ts`).                               |
+| `case_law.ingestion.ast_missing`              | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                                          |
+| `case_law.ingestion.ast_structure_degraded`   | WARN  | Text is complete, structure is imperfect.                                                                          |
+| `case_law.ingestion.text_encoding_incomplete` | WARN  | The encoding check stopped at a work bound with nothing found (`encodingLimit`).                                   |
+| `case_law.ingestion.ris_unknown_element`      | WARN  | A RIS document printed an element outside `RIS_ELEMENTS`; its text is kept.                                        |
+| `case_law.retention.unverifiable`             | ERROR | A parsed decision whose retention could not be measured; `reason` says why.                                        |
+| `case_law.retention.unchecked`                | INFO  | Text held in a separately stored document (`separate-document`), a known blind spot.                               |
 
 The ERROR events are the ones to act on. Sweep for them to find
 decisions worth re-ingesting after a parser fix; `sourceRaw` in S3
@@ -767,7 +768,15 @@ and nowhere else. Writers validate against the strict schema; the
 persisted reader degrades vocabulary it does not declare instead of
 failing the document — a role becomes the declared fallback, an unknown
 inline kind collapses to the text its children carried, an unknown block
-kind is dropped — and reports each one through `StoredAstDegradedError`.
+kind is dropped, and repeated block identities are re-keyed by
+`withUniqueBlockIdentities`, reporting each degradation through
+`StoredAstDegradedError`. The same persisted schema is used by the writer's
+`prepareCorpusAst` owner, so a repaired document reads as it was written.
+Malformed stored payloads retain `StoredCorpusValidationError` with its stable
+code and path-only diagnostics. A reader chooses recovery through the typed
+`readCorpusForRecovery` result after trying its usable row copy. A write or
+index path may recover absent structure only beside usable text; otherwise
+it propagates the validation failure.
 
 ## Decision analysis
 
@@ -887,3 +896,28 @@ deliberate operation rather than as part of a deploy.
 `apps/api/scripts/record-eu-ecj-fixtures.ts` reaches individual decisions by
 CELEX number through the same adapter path, which is the quicker way
 to re-ingest a specific case.
+
+## Source exclusion policy
+
+Store publisher fields and references by default. An exclusion uses
+`excludedSourceField({ reason, justification, pointer })`, where `reason` is
+one of `duplicate_of`, `personal_data_minimisation`, `publisher_noise`,
+`licence_restriction`, or `unsupported_format_tracked`. The justification
+explains the decision; the pointer names the stored duplicate field,
+minimisation rule, publisher layout element, licence term, or tracked issue.
+Procedural history, missing destination fields, and lack of current use are
+not exclusion reasons.
+
+Publisher record schemas own the inventory keys. Mappings use an exhaustive
+`Record<keyof PublisherRecord, SourceFieldDisposition>` (nested JSON uses
+`SourceRecordPaths`), checked with `satisfies`. Keep whole publisher payloads
+in raw envelopes before projecting fields. Live fields absent from the mapping
+stay in raw storage and raise a per-source drift signal. Do not filter raw
+publisher records at write time.
+
+The legacy exclusion census exists only to separate contract enforcement from
+source migrations. Remove entries as their source migrates; never add entries
+or call `legacyExcludedSourceField` in new code. The exact census and snapshots
+make every remaining exclusion visible in review. Source flips bump the parser
+version and backfill through normal stored-raw reparse; missing historical raw
+surfaces require a re-crawl, not an invented backfill.

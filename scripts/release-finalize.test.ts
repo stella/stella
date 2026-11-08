@@ -203,3 +203,34 @@ test("release landing waits for finalization and uses trusted tooling with a sep
     'bash scripts/land-release-pr.sh "$GITHUB_REPOSITORY" "$RELEASE_SHA"',
   ]);
 });
+
+const heavyJob = (name: string, conclusion: string) => ({
+  name,
+  status: "completed",
+  conclusion,
+});
+
+// The screenshots job fails only on a functional capture failure (a
+// difference alone passes it with a warning), so it blocks like any job.
+test("a heavy run that failed only in marketing screenshots creates no final tag or publication", () => {
+  const proof = finalize({
+    states: { "main/heavy": "failure" },
+    heavyRun: {
+      conclusion: "failure",
+      jobs: [
+        heavyJob("suites / web-tests", "success"),
+        heavyJob("suites / marketing-screenshots / check", "failure"),
+        heavyJob("suites / ci-result", "failure"),
+        heavyJob("status", "failure"),
+      ],
+    },
+  });
+  expect(proof.result.exitCode).not.toBe(0);
+  expect(proof.result.stderr.toString()).toContain(
+    "RELEASE_HEAVY_NOT_GREEN: trusted main/heavy success is required",
+  );
+  expect(proof.result.stderr.toString()).not.toContain("::warning::");
+  expect(proof.finalSha).toBeNull();
+  expect(proof.pushes).toBe("");
+  expect(proof.publications).toBe("");
+});

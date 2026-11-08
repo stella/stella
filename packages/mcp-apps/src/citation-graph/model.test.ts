@@ -51,6 +51,7 @@ const citation = ({
   citationId,
   citationText,
   textWithheldReason,
+  extractionWarnings: [],
   polarity,
   doctrine: null,
   decision: decision

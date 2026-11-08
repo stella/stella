@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 
@@ -25,8 +25,8 @@ import { planCorpusDocumentWrite } from "@/api/lib/legal-search/corpus-storage";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { runJob } from "@/api/lib/scheduler/runner";
@@ -37,6 +37,7 @@ import {
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const SOURCE_ID = toSafeId<"legislationSource">(
@@ -226,7 +227,7 @@ export const registerExpressionBackfillCases = ({
     await db.insert(schedulerJobs).values({
       description: "legislation expression id backfill test",
       id: JOB_ID,
-      lockedBy: LEASE,
+      ...heldSchedulerLease(LEASE),
       nextRunAt: new Date("2026-09-28T00:00:00.000Z"),
       schedule: { type: "interval", everyMs: 60_000 },
       task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
@@ -398,15 +399,14 @@ export const registerExpressionBackfillCases = ({
         await db.transaction(async (tx) => await callback(asTestRaw(tx)));
       const corpus = {
         mode: "off",
-        write: async (input) =>
-          await Promise.resolve(
-            (() => {
-              const plan = planCorpusDocumentWrite(input);
-              return plan.type === "put"
-                ? { type: "written" as const, written: plan.written }
-                : plan;
-            })(),
-          ),
+        write: async (input) => {
+          const plan = planCorpusDocumentWrite(input);
+          return Result.ok(
+            plan.type === "put"
+              ? { type: "written" as const, written: plan.written }
+              : plan,
+          );
+        },
       } satisfies LegislationCorpusDependencies;
       const result = await processLegislationDocument(
         {
@@ -492,7 +492,7 @@ export const registerExpressionBackfillCases = ({
         name: SCHEDULER_BACKFILL_IDS.expressionIds,
         cursor: documentId(15),
         batch: {
-          ...initialBatchState(SCHEDULER_BACKFILL_CONFIG),
+          ...initialBatchState(schedulerBackfillConfig()),
           size: 1,
           sleepMs: 10_000,
         },

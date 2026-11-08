@@ -9,7 +9,6 @@ import { SearchField } from "@stll/ui/search-field";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { AssistantSetup } from "@/components/assistant-setup";
-import { SettingsPageHeader } from "@/components/settings-page-header";
 import { externalApiOrigin } from "@/lib/api-origins";
 import {
   mcpConnectionsOptions,
@@ -21,11 +20,13 @@ import {
   AppsGroup,
   useConnectedApps,
 } from "@/routes/_protected.settings/-components/account/connections/apps-group";
+import { BrowserExtensionGroup } from "@/routes/_protected.settings/-components/account/connections/browser-extension-group";
 import { ClientSetupGroups } from "@/routes/_protected.settings/-components/account/connections/client-setup-groups";
 import {
   IntegrationsGroup,
   useIntegrations,
 } from "@/routes/_protected.settings/-components/account/connections/integrations-group";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 
 export const Route = createFileRoute(
@@ -86,6 +87,7 @@ function ConnectionsPage() {
       {!isSearching && <AssistantSetup />}
       {showIntegrations && <IntegrationsGroup integrations={integrations} />}
       {showApps && <AppsGroup apps={apps} />}
+      {!isSearching && <BrowserExtensionGroup />}
       {!isSearching && <ClientSetupGroups apiOrigin={externalApiOrigin()} />}
       {!showIntegrations && !showApps && (
         <div className="text-muted-foreground flex flex-col items-start gap-1 px-1 text-sm">
