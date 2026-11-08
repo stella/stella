@@ -314,7 +314,7 @@ mod tests {
       Some(StoreLoadIssue::InvalidStore)
     ));
 
-    let _ = fs::remove_file(&path).await;
+    fs::remove_file(&path).await.unwrap();
   }
 
   // -- persist + load round-trip --
@@ -365,6 +365,6 @@ mod tests {
       Some("https://selfhost.example")
     );
 
-    let _ = fs::remove_file(&path).await;
+    fs::remove_file(&path).await.unwrap();
   }
 }

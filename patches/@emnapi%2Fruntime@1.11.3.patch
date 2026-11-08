@@ -9,10 +9,10 @@ Browser regression: apps/web/e2e/specs/content-security-policy-surfaces.spec.ts.
 diff --git a/dist/emnapi.esm-bundler.js b/dist/emnapi.esm-bundler.js
 --- a/dist/emnapi.esm-bundler.js
 +++ b/dist/emnapi.esm-bundler.js
-@@ -22,16 +22,7 @@
+@@ -22,16 +22,7 @@ function getExternalValue(external) {
      return externalValue.get(external);
  }
-
+ 
 -var supportNewFunction = /*#__PURE__*/ (function () {
 -    var f;
 -    try {

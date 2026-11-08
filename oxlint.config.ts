@@ -1568,6 +1568,7 @@ const config = defineConfig({
       "error",
       { checksVoidReturn: { attributes: false } },
     ],
+    "typescript/no-unsafe-enum-assignment": "error",
     "typescript/strict-boolean-expressions": [
       "error",
       { allowNullableString: true, allowNullableBoolean: true },
@@ -2339,6 +2340,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-adhoc-email-fold.ts",
+    "./.oxlint-plugins/no-local-letter-spacing.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
@@ -3508,6 +3510,24 @@ const config = defineConfig({
       excludeFiles: ["packages/text-normalize/**/*.{ts,tsx}"],
       rules: {
         "no-direct-unicode-normalize/no-direct-unicode-normalize": "error",
+      },
+    },
+    {
+      // Letter-spaced emphasis is read by one owner,
+      // packages/text-normalize/src/letter-spacing.ts, for parsers, search, the
+      // role vocabularies and the reader alike. Tests may match spaced text to
+      // assert what a parser produced.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-local-letter-spacing.fixture.ts",
+      ],
+      excludeFiles: [
+        "packages/text-normalize/src/letter-spacing.ts",
+        "**/*.test.{ts,tsx}",
+      ],
+      rules: {
+        "no-local-letter-spacing/no-local-letter-spacing": "error",
       },
     },
     {

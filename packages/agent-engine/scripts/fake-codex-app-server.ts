@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { PACKAGE_CACHE_FOLDERS } from "../src/harness/package-cache";
@@ -34,6 +35,13 @@ type FakeStep =
   | { awaitResponse: true }
   /** Survive SIGTERM, as a server that ignores it would. */
   | { ignoreTerm: true }
+  /**
+   * Start a long-lived process, as an agent's command does, and log its pid.
+   * `in: "own_group"` starts it in a process group of its own, as Codex runs
+   * commands; `in: "orphan"` starts it in the background of a shell that
+   * exits at once, as `command &` does.
+   */
+  | { spawn: readonly string[]; in?: "own_group" | "orphan" }
   | { raw: string }
   | { sleep: number }
   | { exit: number };
@@ -483,6 +491,18 @@ const FAKE_SCENARIOS = {
     { notify: "fake/ready", params: {} },
     { sleep: 60_000 },
   ],
+  /**
+   * Leaves processes running the ways an agent's commands do, says when they
+   * are up, and waits for its client.
+   */
+  leaves_processes: [
+    { spawn: ["/bin/sleep", "600"] },
+    { spawn: ["/bin/sleep", "600"], in: "own_group" },
+    { spawn: ["/bin/sleep", "600"], in: "orphan" },
+    // Signals a process ignores stay ignored across exec.
+    { spawn: ["/bin/sh", "-c", "trap '' TERM; exec /bin/sleep 600"] },
+    { notify: "fake/ready", params: {} },
+  ],
   async_question: [
     ...freshTurn(),
     item(
@@ -761,6 +781,45 @@ const IncomingSchema = v.looseObject({
   method: v.optional(v.string()),
 });
 
+/** Start `argv` the way `placement` says; its pid. */
+const spawnLongLived = async (
+  argv: readonly string[],
+  placement: "own_group" | "orphan" | undefined,
+) => {
+  const quiet = {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  } as const;
+  switch (placement) {
+    case undefined:
+      return Bun.spawn([...argv], quiet).pid;
+    case "own_group":
+      return Bun.spawn(
+        ["perl", "-e", "setpgrp(0, 0); exec @ARGV", ...argv],
+        quiet,
+      ).pid;
+    case "orphan": {
+      const shell = Bun.spawn(
+        [
+          "/bin/sh",
+          "-c",
+          '"$@" </dev/null >/dev/null 2>&1 & echo "$!"',
+          "orphan",
+          ...argv,
+        ],
+        { stdin: "ignore", stdout: "pipe", stderr: "ignore" },
+      );
+      const pid = Number((await new Response(shell.stdout).text()).trim());
+      await shell.exited;
+      return pid;
+    }
+    default:
+      placement satisfies never;
+      return panic("Unknown spawn placement");
+  }
+};
+
 const run = async (
   steps: readonly FakeStep[],
   log: (entry: object) => void,
@@ -813,6 +872,8 @@ const run = async (
       process.on("SIGTERM", () => {
         log({ ignored: "SIGTERM" });
       });
+    } else if ("spawn" in step) {
+      log({ spawned: await spawnLongLived(step.spawn, step.in) });
     } else if ("raw" in step) {
       process.stdout.write(`${step.raw}\n`);
     } else if ("sleep" in step) {

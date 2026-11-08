@@ -374,6 +374,20 @@ const PROBED_WITHOUT_LLMS_TXT = [
     ["https://pglite.dev/llms.txt", "https://pglite.dev/docs/llms.txt"],
   ],
   [
+    "@emnapi/core",
+    [
+      "https://emnapi.netlify.app/llms.txt",
+      "https://raw.githubusercontent.com/toyobayashi/emnapi/main/llms.txt",
+    ],
+  ],
+  [
+    "@emnapi/runtime",
+    [
+      "https://emnapi.netlify.app/llms.txt",
+      "https://raw.githubusercontent.com/toyobayashi/emnapi/main/llms.txt",
+    ],
+  ],
+  [
     "@firecrawl/anydoc",
     ["https://raw.githubusercontent.com/firecrawl/anydoc/HEAD/llms.txt"],
   ],
