@@ -54,6 +54,7 @@ import type {
   TableCell,
 } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import { collapseLetterSpacing } from "@stll/text-normalize";
 
 import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
 import {
@@ -61,6 +62,7 @@ import {
   renderHtmlWhiteSpace,
 } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
@@ -219,13 +221,15 @@ const normalizeWhitespace = (text: string): string =>
     .replace(/(?<![ \t])[ \t]+\n/gu, "\n")
     .trim();
 
+// Each line is read through the letter-spacing owner while the wider gap
+// between two spaced words still marks the word boundary.
 const normalizeLegacyPlainText = (text: string): string =>
   text
     .replace(/\r\n/gu, "\n")
     .replace(/\u00a0/gu, " ")
     .replace(/\t+/gu, " ")
     .split("\n")
-    .map((line) => line.replace(/ {2,}/gu, " ").trim())
+    .map((line) => collapseLetterSpacing(line).replace(/ {2,}/gu, " ").trim())
     .join("\n")
     .replace(/\n{3,}/gu, "\n\n")
     .trim();
@@ -423,14 +427,16 @@ const walkInlines = (
 ): Inline[] =>
   trimLineBreaks(
     lineBreaksOf(
-      readMarkupInlines(
-        state,
-        walkInlinesShared($, el, {
-          sanitizeHref: (href) =>
-            state.footnoteHrefs.has(href) ? href : sanitizeUrl(href),
-          anonymized: false,
-          superscripts: state.superscripts,
-        }),
+      readInlineLetterSpacing(
+        readMarkupInlines(
+          state,
+          walkInlinesShared($, el, {
+            sanitizeHref: (href) =>
+              state.footnoteHrefs.has(href) ? href : sanitizeUrl(href),
+            anonymized: false,
+            superscripts: state.superscripts,
+          }),
+        ),
       ),
     ),
   );
