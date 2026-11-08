@@ -85,21 +85,23 @@ export const readWorkspaceFile = async (
     return refused(isLinkRefusal(opened.error.cause) ? "link" : "unreadable");
   }
   const handle = opened.value;
-  const read = await Result.tryPromise(async () => {
-    const stat = await handle.stat();
-    if (!stat.isFile()) {
-      return refused("not_a_file");
+  // A descriptor that does not close leaves the read in doubt: refused.
+  const read = await Result.tryPromise(async (): Promise<WorkspaceFileRead> => {
+    try {
+      const stat = await handle.stat();
+      if (!stat.isFile()) {
+        return refused("not_a_file");
+      }
+      if (stat.size > maxBytes) {
+        return refused("too_large");
+      }
+      const bytes = await handle.readFile();
+      return bytes.byteLength > maxBytes
+        ? refused("too_large")
+        : { type: "read", bytes };
+    } finally {
+      await handle.close();
     }
-    if (stat.size > maxBytes) {
-      return refused("too_large");
-    }
-    const bytes = await handle.readFile();
-    return bytes.byteLength > maxBytes
-      ? refused("too_large")
-      : { type: "read" as const, bytes };
-  });
-  await Result.tryPromise(async () => {
-    await handle.close();
   });
   return Result.isOk(read) ? read.value : refused("unreadable");
 };
