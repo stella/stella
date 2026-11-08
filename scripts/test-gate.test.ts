@@ -3725,7 +3725,7 @@ context("root test runner coverage", () => {
               step: "Run Playwright shard",
               pin: "e2eProductionShards.planSha256",
               condition:
-                "steps.e2e-stack.outcome == 'success' && matrix.shard != 'network-baseline'",
+                "steps.e2e-stack.outcome == 'success' && matrix.shard != 'network-baseline' && (needs.ci-plan.outputs.e2e_production_mode != 'selected' || needs.ci-plan.outputs.e2e_production_specs != '[]' || needs.ci-plan.outputs.e2e_production_suite_specs == '[]')",
             },
           },
         ],
