@@ -2,7 +2,10 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { load } from "@stll/html";
 import { isTag } from "@stll/html/nodes";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import {
+  hasInlineChildren,
+  headMatterPrecedesBody,
+} from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import {
@@ -1068,5 +1071,88 @@ describe("an authority's ruling points on their legal basis", () => {
       "holding II. Na podstawie art",
       "argumentation [1] Prezes Urzędu ws",
     ]);
+  });
+});
+
+describe("navigation, subheadings and stray marks in an authority's PDF", () => {
+  // The layouts of DOZIK-5/2024 and RGD-1/2026 (Prezes UOKiK), as the PDF
+  // reader hands them on: a lone mark above the letterhead, a printed table
+  // of contents, and subheadings set as short bold lines.
+  const html = [
+    "<p>-</p>",
+    "<p>DECYZJA nr DOZIK-5/2024</p>",
+    "<p>I. Na podstawie art. 26 ust. 1 ustawy o ochronie konkurencji i konsumentów uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie spółki.</p>",
+    "<p>UZASADNIENIE</p>",
+    "<p>Prezes Urzędu ustalił następujący stan faktyczny .......................................... 9</p>",
+    "<p>1. Sprzedawca Amazon EU SARL ................................................ 9</p>",
+    "<p>2. Proces zakupowy ........................................ 10 2.1. Katalog produktów ................. 11</p>",
+    "<p>[1] Prezes Urzędu wszczął postępowanie.</p>",
+    "<p><b>Platforma i jej uczestnicy</b></p>",
+    "<p>[2] Spółka prowadziła platformę.</p>",
+    "<p><b>2.1. Katalog produktów</b></p>",
+    "<p><b>Elite Pack 149,00 USD 99,99 USD</b></p>",
+    "<p><b>Sąd zważył, co następuje:</b></p>",
+  ].join("");
+  const read = (boldSubheadings: boolean) =>
+    parsePlDecisionContent(
+      baseInput(html, {
+        decisionType: "decyzja",
+        court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        boldSubheadings,
+      }),
+    ).documentAst.blocks.map(
+      (block) =>
+        `${block.type === "heading" ? "heading" : (roleOfBlock(block) ?? "-")} ${block.plainText.slice(0, 26)}`,
+    );
+  const ast = (boldSubheadings: boolean) =>
+    parsePlDecisionContent(
+      baseInput(html, {
+        decisionType: "decyzja",
+        court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        boldSubheadings,
+      }),
+    ).documentAst;
+
+  test("the contents after the ruling are a publisher's note, the subheadings headings, the lone mark no text", () => {
+    expect(read(true)).toEqual([
+      "- -",
+      "heading DECYZJA nr DOZIK-5/2024",
+      "holding I. Na podstawie art. 26 us",
+      "heading UZASADNIENIE",
+      "publisher-note Prezes Urzędu ustalił nast",
+      "publisher-note 1. Sprzedawca Amazon EU SA",
+      "publisher-note 2. Proces zakupowy .......",
+      "argumentation [1] Prezes Urzędu wszczął ",
+      "heading Platforma i jej uczestnicy",
+      "argumentation [2] Spółka prowadziła plat",
+      "heading 2.1. Katalog produktów",
+      "argumentation Elite Pack 149,00 USD 99,9",
+      "argumentation Sąd zważył, co następuje:",
+    ]);
+  });
+
+  test("the contents keep head matter ahead of the body", () => {
+    expect(headMatterPrecedesBody(ast(true).blocks)).toBe(true);
+  });
+
+  test("contents printed before the body are apparatus", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>Spis treści ............................................ 2</p><p>WYROK</p><p>1. oddala powództwo.</p>",
+      ),
+    );
+    const contents = documentAst.blocks.find((block) =>
+      block.plainText.startsWith("Spis treści"),
+    );
+    expect(contents === undefined ? undefined : roleOfBlock(contents)).toBe(
+      "apparatus",
+    );
+    expect(headMatterPrecedesBody(documentAst.blocks)).toBe(true);
+  });
+
+  test("a publisher's markup keeps its bold lines as paragraphs", () => {
+    const blocks = read(false);
+    expect(blocks).toContain("argumentation Platforma i jej uczestnicy");
+    expect(blocks).toContain("argumentation 2.1. Katalog produktów");
   });
 });
