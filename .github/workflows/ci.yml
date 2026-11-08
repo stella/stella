@@ -4179,7 +4179,7 @@ jobs:
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Verify shared worker Postgres history and cleanup
-        if: matrix.shard == 1
+        if: ${{ success() && steps.checkout.outcome == 'success' && matrix.shard == 1 }}
         timeout-minutes: 5
         env:
           STELLA_RUN_SHARED_POSTGRES_TESTS: "true"

@@ -17,6 +17,7 @@ on:
       - .github/workflows/visual-preview.yml
       - .github/actions/setup-playwright/**
       - .github/actions/merge-target-base/**
+      - .github/actions/flaky-test-quarantine/**
       - scripts/ci-service-images.ts
       - scripts/ci-service-images.json
       - scripts/retry.sh
