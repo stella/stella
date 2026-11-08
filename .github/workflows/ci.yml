@@ -1969,11 +1969,11 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run protocol and malformed-stream tests
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true') }}
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: protocol
         run: bun --filter @stll/agent-engine test
 
@@ -2060,7 +2060,7 @@ jobs:
           exit 1
 
       - name: Exercise Docker provider isolation and cleanup
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.agent_sandbox_docker_required == 'true') }}
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         id: isolation
         env:
           AGENT_ENGINE_DOCKER_TEST: "1"
