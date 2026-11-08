@@ -2424,107 +2424,82 @@ const preferredLanguageHit = <
       };
 };
 
-const caseLawSearchResult =
-  (preferredLanguage: string | null) =>
-  ({
-    hit: matchedHit,
-    match,
-    matchedQueries,
-  }: ReturnType<typeof mergeCaseLawSearchHits>[number]) => {
-    const { served: hit, matchedLanguage } = preferredLanguageHit(
-      matchedHit,
-      preferredLanguage,
-    );
-    const resource = resourceRef({
-      type: RESOURCE_TYPE.CASE_LAW_DECISION,
-      id: brandPersistedCaseLawDecisionId(hit.decisionId),
-    });
-    return {
-      matchedQueries,
-      ...legalCitationLinkFields({
-        url: buildCaseLawDecisionAppUrl({
-          caseNumber: hit.caseNumber,
-          country: hit.country,
-          court: hit.court,
-          decisionId: hit.decisionId,
-          language: hit.language,
-          languageAlternates: hit.languageAlternates,
-          slug: hit.slug,
-        }),
-        sourceUrl: hit.sourceUrl,
-      }),
-      caseNumber: hit.caseNumber,
-      citationAuthority: hit.citationAuthority,
-      citationCount: hit.citationCount,
-      country: hit.country,
-      ...projectCaseLawCourt(hit),
-      decisionDate: hit.decisionDate,
-      decisionId: hit.decisionId,
-      resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
-      decisionType: hit.decisionType,
-      decisionTypeKind: hit.decisionTypeKind,
-      ecli: hit.ecli,
-      language: hit.language,
-      matchingPassages: hit.matchingPassages,
-      ...(matchedLanguage === undefined ? {} : { matchedLanguage }),
-      textAvailability: hit.textAvailability,
-      match,
-      ...(hit.textWithheldReason === null
-        ? {
-            snippet: toPlainTextSnippet(hit.headline),
-            keywords:
-              hit.keywords === null
-                ? null
-                : { ...hit.keywords, items: [...hit.keywords.items] },
-            headnote:
-              hit.headnote.type === TEXT_FIELD_TYPE.PRESENT
-                ? hit.headnote
-                : null,
-          }
-        : {
-            excerpt: {
-              type: "withheld" as const,
-              reason: hit.textWithheldReason,
-            },
-            // Headnote and classifications are the source's own text: the
-            // licence that withholds the excerpt withholds them too.
-            keywords: null,
-            headnote: null,
-          }),
-    };
-  };
-
-/**
- * The merged page's continuation: null when every query is exhausted, which
- * makes the merged page the last one; otherwise each query's own cursor.
- */
-const mergedCaseLawSearchCursor = (
-  pages: readonly CaseLawQueryOutcome[],
-): string | null => {
-  const subCursors = pages.map((outcome) => {
-    switch (outcome.type) {
-      case "exhausted":
-        return null;
-      case "page":
-        return outcome.page.nextCursor;
-      case "timed_out":
-        // A continuation runs the page again. A first page has no cursor to
-        // carry, and the envelope's `null` would read as ended, so it is
-        // `null` here and its warning names the call that reruns it.
-        return outcome.subCursor ?? null;
-      default:
-        outcome satisfies never;
-        return panic("Unhandled case-law query outcome");
-    }
+const caseLawSearchResult = ({
+  hit: matchedHit,
+  match,
+  matchedQueries,
+  preferredLanguage,
+}: ReturnType<typeof mergeCaseLawSearchHits>[number] & {
+  preferredLanguage: string | null;
+}) => {
+  const { served: hit, matchedLanguage } = preferredLanguageHit(
+    matchedHit,
+    preferredLanguage,
+  );
+  const resource = resourceRef({
+    type: RESOURCE_TYPE.CASE_LAW_DECISION,
+    id: brandPersistedCaseLawDecisionId(hit.decisionId),
   });
-  return subCursors.every((subCursor) => subCursor === null)
-    ? null
-    : encodePaginationCursor(subCursors);
+  return {
+    matchedQueries,
+    ...legalCitationLinkFields({
+      url: buildCaseLawDecisionAppUrl({
+        caseNumber: hit.caseNumber,
+        country: hit.country,
+        court: hit.court,
+        decisionId: hit.decisionId,
+        language: hit.language,
+        languageAlternates: hit.languageAlternates,
+        slug: hit.slug,
+      }),
+      sourceUrl: hit.sourceUrl,
+    }),
+    caseNumber: hit.caseNumber,
+    citationAuthority: hit.citationAuthority,
+    citationCount: hit.citationCount,
+    country: hit.country,
+    ...projectCaseLawCourt(hit),
+    decisionDate: hit.decisionDate,
+    decisionId: hit.decisionId,
+    resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
+    decisionType: hit.decisionType,
+    decisionTypeKind: hit.decisionTypeKind,
+    ecli: hit.ecli,
+    language: hit.language,
+    matchingPassages: hit.matchingPassages,
+    ...(matchedLanguage === undefined ? {} : { matchedLanguage }),
+    textAvailability: hit.textAvailability,
+    match,
+    ...(hit.textWithheldReason === null
+      ? {
+          snippet: toPlainTextSnippet(hit.headline),
+          keywords:
+            hit.keywords === null
+              ? null
+              : { ...hit.keywords, items: [...hit.keywords.items] },
+          headnote:
+            hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
+        }
+      : {
+          excerpt: {
+            type: "withheld" as const,
+            reason: hit.textWithheldReason,
+          },
+          // Headnote and classifications are the source's own text: the
+          // licence that withholds the excerpt withholds them too.
+          keywords: null,
+          headnote: null,
+        }),
+  };
 };
 
 const caseLawSearchResultFor = (
   args: v.InferOutput<typeof searchCaseLawArgs>,
-) => caseLawSearchResult(preferredLanguageOf(args));
+) => {
+  const preferredLanguage = preferredLanguageOf(args);
+  return (entry: ReturnType<typeof mergeCaseLawSearchHits>[number]) =>
+    caseLawSearchResult({ ...entry, preferredLanguage });
+};
 
 /**
  * The merged page's outcome: truncated on the time budget when a phrasing
