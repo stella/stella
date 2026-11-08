@@ -123,12 +123,19 @@ export const seedRedactionTombstoneScenario = async (
         schedule: { type: "interval", everyMs: 60_000 },
         lockedBy: LEASE,
         lockedAt: new Date("2026-01-10T12:00:00Z"),
+        lockedUntil: new Date("2026-01-10T12:05:00Z"),
         nextRunAt: new Date("2026-01-10T12:00:00Z"),
         payload: { cursor: null },
       })
       .onConflictDoUpdate({
         target: schedulerJobs.id,
-        set: { lockedBy: LEASE, payload: { cursor: null }, enabled: true },
+        set: {
+          lockedBy: LEASE,
+          lockedAt: new Date("2026-01-10T12:00:00Z"),
+          lockedUntil: new Date("2026-01-10T12:05:00Z"),
+          payload: { cursor: null },
+          enabled: true,
+        },
       });
   });
   for (const table of [

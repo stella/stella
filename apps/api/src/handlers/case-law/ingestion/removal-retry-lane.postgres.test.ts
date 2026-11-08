@@ -295,6 +295,7 @@ if (!databaseUrl || !runPostgresTests) {
                 nextRunAt: FIXED_NOW,
                 lockedAt: FIXED_NOW,
                 lockedBy: "erasure-fixture",
+                lockedUntil: new Date(FIXED_NOW.getTime() + 60_000),
               })
               .returning()
           ).at(0);
