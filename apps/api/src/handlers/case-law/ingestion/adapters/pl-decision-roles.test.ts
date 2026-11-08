@@ -329,10 +329,13 @@ describe("Polish rulings that open on their legal basis or their verb", () => {
       Array.isArray(payload["dokument"]["fields"])
         ? payload["dokument"]["fields"].filter(isRecord)
         : panic("the recorded interpretation has no fields");
+    const value = fields.find(
+      (field) => field["key"] === "TRESC_INTERESARIUSZ",
+    )?.["value"];
     const html =
-      fields.find((field) => field["key"] === "TRESC_INTERESARIUSZ")?.[
-        "value"
-      ] ?? panic("the recorded interpretation has no text");
+      typeof value === "string"
+        ? value
+        : panic("the recorded interpretation has no text");
     const { documentAst } = parsePlKisDocumentHtml({
       caseNumber: "ITPB1/415-126/07/HDO",
       court: "Dyrektor Izby Skarbowej w Bydgoszczy",
@@ -343,12 +346,12 @@ describe("Polish rulings that open on their legal basis or their verb", () => {
       documentId: "21157",
       keywords: [],
       statutes: [],
-      html: String(html),
+      html,
     });
     const blocks = documentAst.blocks;
     const headings = blocks.flatMap((block) =>
       block.type === "heading"
-        ? [`${block.role} ${block.plainText.trim()}`]
+        ? [`${block.role ?? "-"} ${block.plainText.trim()}`]
         : [],
     );
 
