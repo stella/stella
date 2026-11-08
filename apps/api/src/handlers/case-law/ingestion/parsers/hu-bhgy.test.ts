@@ -916,7 +916,9 @@ describe("reading a document folio handed over", () => {
       { text: "Az alperes döntése" },
       { text: "[1]\tAz alperes a kérelmet elutasította." },
       { text: "Kereset" },
-      { text: "[2]\tA felperes keresetében a határozat megsemmisítését kérte." },
+      {
+        text: "[2]\tA felperes keresetében a határozat megsemmisítését kérte.",
+      },
       { text: "A törvényszék döntése és jogi indokai", bold: true },
       { text: "[3]\tA kereset nem alapos." },
       { text: "Záró rész, perköltség, illeték" },
