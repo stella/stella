@@ -507,7 +507,6 @@ export const TAGGED_FAILURE_REASON = {
   UnsupportedOAuthScopesError: "tagged_failure",
   UploadAppError: "tagged_failure",
   UploadFinalizeError: "tagged_failure",
-  UploadedMailSourceUnresolvedError: "tagged_failure",
   UploadedMailUnavailableError: "tagged_failure",
   UsCitationBundleOverflowError: "tagged_failure",
   UsCitationOccurrenceOverflowError: "tagged_failure",
