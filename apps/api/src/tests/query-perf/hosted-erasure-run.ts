@@ -76,10 +76,18 @@ const STATEMENT_KEYWORDS = new Set([
   "delete",
 ]);
 
-/** Replay the registered writing task's statements in order, then roll back. */
-const measureHostedErasureRun = async (
-  openClient: GatedTestClientScope["openClient"],
-) => {
+type MeasureCapturedRunOptions = {
+  openClient: GatedTestClientScope["openClient"];
+  label: string;
+  execute: (tx: TransactionOf<GatedTestDb>) => Promise<void>;
+};
+
+/** Replay a writing task's statements in order, then roll back. */
+export const measureCapturedRun = async ({
+  openClient,
+  label,
+  execute,
+}: MeasureCapturedRunOptions) => {
   const captured: CapturedStatement[] = [];
   let recording = false;
   const { db } = openClient({
@@ -92,43 +100,11 @@ const measureHostedErasureRun = async (
       },
     },
   });
-  const now = new Date("2026-10-29T00:00:00Z");
-  const task =
-    createSchedulerTaskRegistry(noopTask, noopTask, {
-      hostedCustomerErasureDependencies: {
-        credentials: { apiKey: "fixture", baseUrl: "https://provider.test" },
-        provider: "polar",
-        erase: async ({ externalCustomerRef }) =>
-          await Promise.resolve(
-            externalCustomerRef.endsWith("0")
-              ? Result.err(
-                  new HostedUsageProviderApiError({
-                    message: "Fixture refusal",
-                    status: 503,
-                  }),
-                )
-              : Result.ok(undefined),
-          ),
-        observe: noopTask,
-        now: () => now,
-      },
-    }).get(ERASE_HOSTED_CUSTOMERS_TASK) ??
-    panic("Erasure task is unregistered");
   await rollbackMeasurement({
     database: db,
     run: async (tx) => {
       recording = true;
-      await task(
-        asTestRaw<SchedulerTaskContext>({
-          db: {
-            transaction: async <T>(run: (savepoint: typeof tx) => Promise<T>) =>
-              await withAggregateSavepoint(tx, run),
-          },
-          dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
-          runId: createSafeId<"schedulerJobRun">(),
-          signal: new AbortController().signal,
-        }),
-      );
+      await execute(tx);
       recording = false;
     },
   });
@@ -138,12 +114,12 @@ const measureHostedErasureRun = async (
       return false;
     }
     if (!STATEMENT_KEYWORDS.has(keyword)) {
-      panic(`Unmeasured erasure statement kind: ${keyword}`);
+      panic(`Unmeasured ${label} statement kind: ${keyword}`);
     }
     return true;
   });
   if (statements.length === 0) {
-    panic("Erasure measurement captured no SQL");
+    panic(`${label} measurement captured no SQL`);
   }
   const measured: {
     kind: "read" | "write";
@@ -186,6 +162,50 @@ const measureHostedErasureRun = async (
     ),
     statements: statements.length,
   };
+};
+
+const measureHostedErasureRun = async (
+  openClient: GatedTestClientScope["openClient"],
+) => {
+  const now = new Date("2026-10-29T00:00:00Z");
+  const task =
+    createSchedulerTaskRegistry(noopTask, noopTask, {
+      hostedCustomerErasureDependencies: {
+        credentials: { apiKey: "fixture", baseUrl: "https://provider.test" },
+        provider: "polar",
+        erase: async ({ externalCustomerRef }) =>
+          await Promise.resolve(
+            externalCustomerRef.endsWith("0")
+              ? Result.err(
+                  new HostedUsageProviderApiError({
+                    message: "Fixture refusal",
+                    status: 503,
+                  }),
+                )
+              : Result.ok(undefined),
+          ),
+        observe: noopTask,
+        now: () => now,
+      },
+    }).get(ERASE_HOSTED_CUSTOMERS_TASK) ??
+    panic("Erasure task is unregistered");
+  return await measureCapturedRun({
+    openClient,
+    label: "erasure",
+    execute: async (tx) => {
+      await task(
+        asTestRaw<SchedulerTaskContext>({
+          db: {
+            transaction: async <T>(run: (savepoint: typeof tx) => Promise<T>) =>
+              await withAggregateSavepoint(tx, run),
+          },
+          dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
+          runId: createSafeId<"schedulerJobRun">(),
+          signal: new AbortController().signal,
+        }),
+      );
+    },
+  });
 };
 
 /** Fixed 25-row work batch, with retained terminal history at two sizes. */

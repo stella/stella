@@ -92,6 +92,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATA_INVARIANT_CASE_LAW_CANARIES",
   "DATA_INVARIANT_CASE_LAW_DAILY_BANDS",
   "AGENT_CLIENT_STORAGE_V1_ENABLED",
+  "SOFT_LAW_SYNC_ENABLED",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -383,6 +384,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Retention in days for completed provider event details; unset disables redaction.",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
     "Enable the shared agent client storage format.",
+  SOFT_LAW_SYNC_ENABLED:
+    "Enable the daily regulator guidance sync for sources with a serving decision.",
   ACTION_LIMIT_CONTACT_URL:
     "Public http(s) contact link shown when an action is paused or not enabled.",
   AGENT_SANDBOX_DOCKER_NETWORK:
@@ -802,6 +805,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   ACTION_REQUEST_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_RESPONSE_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_CLIENT_STORAGE_V1_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  SOFT_LAW_SYNC_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_REGISTRATION_DAILY_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_NETWORK: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_SOCKET: ENV_CREDENTIAL_KIND.notCredential,

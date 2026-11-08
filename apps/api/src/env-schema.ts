@@ -913,6 +913,7 @@ export const envApiServerSchema = {
   ),
 
   AGENT_CLIENT_STORAGE_V1_ENABLED: featureFlagSchema,
+  SOFT_LAW_SYNC_ENABLED: featureFlagSchema,
 
   /** Enables agent-sandbox chat runs when true. */
   AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,

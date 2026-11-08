@@ -226,6 +226,12 @@ import {
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
 import {
+  runSoftLawSync,
+  type SoftLawSyncDependencies,
+  SYNC_SOFT_LAW_TASK,
+  syncSoftLawTask,
+} from "@/api/lib/scheduler/tasks/soft-law-sync";
+import {
   REFRESH_STATUTE_SITEMAP_SHARDS_TASK,
   refreshStatuteSitemapShardsTask,
 } from "@/api/lib/scheduler/tasks/statute-sitemap-shard-refresh";
@@ -276,6 +282,7 @@ const SCHEDULER_TASKS = {
   [RECEIVE_EMAIL_DELIVERABILITY_TASK]: receiveEmailDeliverability,
   [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
+  [SYNC_SOFT_LAW_TASK]: syncSoftLawTask,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
   [DISPATCH_NATIVE_EXTRACTION_TASK]: dispatchNativeExtraction,
@@ -346,6 +353,7 @@ type SchedulerTaskRegistryOptions = {
     typeof runHostedCustomerErasures
   >[1];
   resetReviewOrganization?: SchedulerTask;
+  softLawSyncDependencies?: SoftLawSyncDependencies;
 };
 
 const schedulerTasks = (
@@ -399,6 +407,15 @@ export const createSchedulerTaskRegistry = (
                   options.hostedCustomerErasureDependencies,
                 );
                 return undefined;
+              }
+              if (
+                name === SYNC_SOFT_LAW_TASK &&
+                options.softLawSyncDependencies !== undefined
+              ) {
+                return await runSoftLawSync(
+                  context,
+                  options.softLawSyncDependencies,
+                );
               }
               const outcome = await task(context);
               if (outcome === undefined) {
