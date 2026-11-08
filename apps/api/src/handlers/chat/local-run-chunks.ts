@@ -40,12 +40,18 @@ import {
   type DesktopRunnerHarnessReport,
   desktopRunnerOutputEventSchema,
 } from "@stll/api-contract/desktop-runner";
+import type {
+  StellaMcpAppCall,
+  StellaMcpAppPart,
+} from "@stll/api-contract/stella-mcp-app";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chatMcpAppForTool } from "@/api/lib/chat/mcp-app-catalog";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
+import { appCallArgumentsHash } from "@/api/lib/desktop-runner/app-calls";
 import {
   questionPauseOf,
   questionReplyOf,
@@ -87,6 +93,7 @@ type LocalRunControl = Pick<
   | "answerApproval"
   | "answerQuestion"
   | "interruptRun"
+  | "pairAppCall"
   | "readChatRunForRequest"
   | "readChatRunSession"
   | "readEvents"
@@ -95,6 +102,18 @@ type LocalRunControl = Pick<
   | "recordChatReadSeq"
   | "startRun"
 >;
+
+/**
+ * What a turn's resource origin offers a local run: minting the part of a
+ * stella app, which the same origin then accepts when the turn is stored.
+ */
+export type LocalRunAppIssuer = {
+  issueMcpApp: (options: {
+    call: StellaMcpAppCall;
+    toolCallId: string;
+    toolName: string;
+  }) => Result<StellaMcpAppPart, string>;
+};
 
 /** The computer and harness a new turn was routed to before it started. */
 type LocalRunDestination = {
@@ -115,6 +134,12 @@ export type LocalRunContext = {
   mcp: { serverName: string; url: string };
   /** How long a reader waits for a ring before it reads again. */
   pollMs?: number;
+  /**
+   * The turn's ledger of server resources. With it, a call to a tool a chat
+   * app presents shows the app, minted from what the server answered the
+   * run; without it the call shows only its result.
+   */
+  resourceOrigin?: LocalRunAppIssuer | undefined;
 };
 
 type LocalRunStreamInput = {
@@ -148,6 +173,8 @@ export type LocalChatRun = {
   readonly withAttachments: (
     attachments: readonly LocalRunAttachment[],
   ) => LocalChatRun;
+  /** The same run, showing apps the turn's origin mints and accepts. */
+  readonly withResourceOrigin: (origin: LocalRunAppIssuer) => LocalChatRun;
   readonly stream: (
     input: LocalRunStreamInput,
   ) => AsyncIterable<PublicStreamChunk>;
@@ -770,6 +797,140 @@ const computerStatusChunks = (start: () => Generator<PublicStreamChunk>) => {
   };
 };
 
+/** A turn shows at most this many apps from one read of its run. */
+const MAX_APPS_PER_READ = 8;
+
+const APP_PAIR_SINK = failureSink({
+  event: "chat.local_run_app_pair_failed",
+  expected: [],
+});
+
+type ReportedAppCall = { toolName: string; args: string };
+
+/**
+ * A result the harness reported as failed: the chunk normalizer moves the
+ * result's state into its `tanstack` metadata.
+ */
+const failedResult = (chunk: PublicStreamChunk) => {
+  const metadata: unknown = "metadata" in chunk ? chunk.metadata : undefined;
+  const tanstack = isRecord(metadata) ? metadata["tanstack"] : undefined;
+  return isRecord(tanstack) && tanstack["state"] === "output-error";
+};
+
+const isPlainArgs = (value: unknown): value is Record<string, unknown> =>
+  isRecord(value) && !Array.isArray(value);
+
+/**
+ * The stella tool a reported call names, when a chat app presents it: the
+ * registry name the harness reports, or the prefixed name of the run's own
+ * stella server.
+ */
+const presentedTool = (name: string, serverName: string): string | null => {
+  const prefix = `mcp__${serverName}__`;
+  const tool = name.startsWith(prefix) ? name.slice(prefix.length) : name;
+  return chatMcpAppForTool(tool) === undefined ? null : tool;
+};
+
+/**
+ * Show a chat app for each call the run reported to a tool an app presents,
+ * from what stella's MCP server answered this run (`app-calls.ts`). The
+ * report only selects among the server's answers: a call the server never
+ * answered for this run, these arguments and this tool mints nothing, and
+ * neither does any part a desktop sends itself (`LOCAL_RUN_CUSTOM_EVENTS`).
+ */
+const createRunApps = (context: LocalRunContext, runnerRunId: string) => {
+  const reported = new Map<string, ReportedAppCall>();
+  let minted = 0;
+  const apps = {
+    observe: (chunk: PublicStreamChunk) => {
+      if (chunk.type === EventType.TOOL_CALL_START) {
+        const toolName = presentedTool(
+          chunk.toolCallName,
+          context.mcp.serverName,
+        );
+        if (toolName !== null) {
+          reported.set(chunk.toolCallId, { toolName, args: "" });
+        }
+        return;
+      }
+      if (chunk.type === EventType.TOOL_CALL_ARGS) {
+        const call = reported.get(chunk.toolCallId);
+        if (call !== undefined) {
+          call.args += chunk.delta;
+        }
+      }
+    },
+    async *after(chunk: PublicStreamChunk): AsyncGenerator<PublicStreamChunk> {
+      const origin = context.resourceOrigin;
+      if (chunk.type !== EventType.TOOL_CALL_RESULT || origin === undefined) {
+        return;
+      }
+      const call = reported.get(chunk.toolCallId);
+      reported.delete(chunk.toolCallId);
+      // A failed call was answered nothing to show, and must not claim the
+      // row of a retry with the same arguments.
+      if (
+        call === undefined ||
+        failedResult(chunk) ||
+        minted >= MAX_APPS_PER_READ
+      ) {
+        return;
+      }
+      const decoded = Result.try((): unknown =>
+        JSON.parse(call.args === "" ? "{}" : call.args),
+      );
+      if (Result.isError(decoded) || !isPlainArgs(decoded.value)) {
+        return;
+      }
+      const input = decoded.value;
+      const paired = await context.control.pairAppCall({
+        owner: context.owner,
+        runId: runnerRunId,
+        toolName: call.toolName,
+        argumentsHash: appCallArgumentsHash(input),
+        toolCallId: chunk.toolCallId,
+      });
+      if (Result.isError(paired)) {
+        observeFailure(paired.error, { sink: APP_PAIR_SINK });
+        return;
+      }
+      if (paired.value === null) {
+        return;
+      }
+      const part = origin.issueMcpApp({
+        call: { input, result: { structuredContent: paired.value.result } },
+        toolCallId: chunk.toolCallId,
+        toolName: call.toolName,
+      });
+      if (
+        Result.isError(part) ||
+        part.value.resource.uri !== paired.value.resourceUri
+      ) {
+        return;
+      }
+      minted += 1;
+      yield {
+        type: EventType.CUSTOM,
+        name: "ui-resource",
+        value: part.value,
+        timestamp: nowMs(),
+      };
+    },
+  };
+  return {
+    /**
+     * The chunk as read, followed by the app its call shows, if any.
+     *
+     * @yields The chunk, then the app part minted for its call.
+     */
+    async *carry(chunk: PublicStreamChunk): AsyncGenerator<PublicStreamChunk> {
+      apps.observe(chunk);
+      yield chunk;
+      yield* apps.after(chunk);
+    },
+  };
+};
+
 /**
  * The run's chunks after `afterSeq`, until the run finishes or pauses for an
  * approval or a blocking question. A pause records the position, so the
@@ -809,6 +970,7 @@ async function* readRunChunks({
   };
   const computer = computerStatusChunks(start);
   const runOutputChunks = createRunOutputs(context, rewrite);
+  const runApps = createRunApps(context, runnerRunId);
   const fail = function* (
     code: LocalRunFailure,
     message?: string,
@@ -911,7 +1073,7 @@ async function* readRunChunks({
             }
             yield* start();
             if (chunk.type !== EventType.RUN_FINISHED) {
-              yield chunk;
+              yield* runApps.carry(chunk);
               continue;
             }
             if (chunk.outcome?.type === "interrupt") {
@@ -1354,6 +1516,8 @@ const localChatRun = (
 ): LocalChatRun => ({
   harness: plan.type === "start" ? plan.destination.harness : plan.harness,
   withAttachments: (next) => localChatRun(context, plan, next),
+  withResourceOrigin: (resourceOrigin) =>
+    localChatRun({ ...context, resourceOrigin }, plan, attachments),
   stream: (input) => {
     const { resume } = input;
     switch (plan.type) {
