@@ -187,6 +187,11 @@
     }
   },
   "ci-checks-rest": {
+    "Check test execution paths and disabled states": {
+      "minutes": 30,
+      "samples": 0,
+      "peakRssMiB": 4096
+    },
     "Content delivery declarations": {
       "minutes": 9,
       "samples": 18,
@@ -242,6 +247,11 @@
       "p95Seconds": 35,
       "p99Seconds": 35,
       "peakRssMiB": 134
+    },
+    "Test depth repository scripts": {
+      "minutes": 30,
+      "samples": 0,
+      "peakRssMiB": 4096
     },
     "Test remaining repository scripts": {
       "minutes": 35,
@@ -759,6 +769,11 @@
       "p99Seconds": 32,
       "peakRssMiB": 60
     },
+    "Test staging proof readiness": {
+      "minutes": 30,
+      "samples": 0,
+      "peakRssMiB": 55
+    },
     "Test documentation and landing CI scope": {
       "minutes": 5,
       "samples": 19,
@@ -1143,16 +1158,6 @@
       "p95Seconds": 0,
       "p99Seconds": 0,
       "peakRssMiB": 50
-    },
-    "Test staging proof readiness": {
-      "minutes": 30,
-      "samples": 0,
-      "peakRssMiB": 55
-    },
-    "Test depth repository scripts": {
-      "minutes": 30,
-      "samples": 0,
-      "peakRssMiB": 4096
     }
   },
   "code-quality-web-rest": {

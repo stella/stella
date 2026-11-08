@@ -440,6 +440,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   "ci-checks-rest/Test e2e shard budget": [
     "scripts/ci-check-pool-registry.ts",
     "scripts/e2e-shard-budget.test.ts",
+    "scripts/e2e-shard-plan-pin.ts",
     "scripts/e2e-spec-shards-core.ts",
     "scripts/install-free-ci.ts",
   ],

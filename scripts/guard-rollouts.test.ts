@@ -23,6 +23,7 @@ import {
 } from "./guard-rollout-policy.ts";
 import {
   changedLineNumbers,
+  changedLinesForTrackedFiles,
   guardEnforcesLine as productionGuardEnforcesLine,
 } from "./guard-rollouts.ts";
 
@@ -350,4 +351,47 @@ test("a duplicate rollout id panics through the file name contract", () => {
       "b-guard": fullRollout("a-guard"),
     }),
   ).toThrow("guard rollout filename must match id: b-guard.json (a-guard)");
+});
+
+test("one diff reports the same changed lines as a diff per file", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "guard-rollouts-bulk-"));
+  try {
+    const git = (...args: string[]) =>
+      execFileSync("git", ["-c", "commit.gpgsign=false", ...args], {
+        cwd: root,
+        encoding: "utf-8",
+      });
+    git("init", "-q", "--template=");
+    git("config", "user.name", "fixture");
+    git("config", "user.email", "fixture@example.test");
+    const lines = (count: number) =>
+      Array.from({ length: count }, (_, index) => `line ${index}\n`).join("");
+    writeFileSync(path.join(root, "edited.ts"), lines(20));
+    writeFileSync(path.join(root, "same.ts"), lines(5));
+    writeFileSync(path.join(root, "moved.ts"), lines(6));
+    git("add", ".");
+    git("commit", "-qm", "base");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    const edited = lines(20).split("\n");
+    edited[2] = "changed";
+    edited[15] = "changed too";
+    writeFileSync(path.join(root, "edited.ts"), edited.join("\n"));
+    git("mv", "moved.ts", "renamed.ts");
+    writeFileSync(path.join(root, "new file.ts"), lines(3));
+    git("add", ".");
+    git("commit", "-qm", "head");
+    const files = ["edited.ts", "same.ts", "renamed.ts", "new file.ts"];
+    const bulk = changedLinesForTrackedFiles(files, root);
+    for (const file of files) {
+      const single = changedLineNumbers(
+        git("diff", "--no-ext-diff", "--unified=0", "origin/main", "--", file),
+      );
+      expect([...(bulk.get(file) ?? [])], file).toEqual([...single]);
+    }
+    expect([...(bulk.get("edited.ts") ?? [])]).toEqual([3, 16]);
+    expect(bulk.get("same.ts")?.size).toBe(0);
+    expect(bulk.get("renamed.ts")?.size).toBe(6);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

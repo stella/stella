@@ -1,5 +1,6 @@
 {
   "ci-checks-rest": {
+    "Check test execution paths and disabled states": ["**"],
     "Resolve static check receipts": ["**"],
     "Run repository checks": ["**"],
     "Record static check receipts": ["**"],

@@ -6,6 +6,14 @@
 # CPUs) and prints their logs in this order. Workflow guards read these
 # entries as steps of the job (scripts/workflow-steps.ts).
 checks:
+  - name: Check test execution paths and disabled states
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Compares the scenario ledger with the Git merge-base."
+    id: test_gate
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+    run: bun scripts/test-gate.ts
+
   - name: Content delivery declarations
     env:
       CI_CHECK_KIND: STATIC

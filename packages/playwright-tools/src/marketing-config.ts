@@ -3,11 +3,7 @@ import path from "node:path";
 
 import { devices } from "./devices";
 import { playwrightEnv } from "./env";
-
-export const MARKETING_REPO_ROOT = path.resolve(
-  import.meta.dirname,
-  "../../..",
-);
+import { MARKETING_REPO_ROOT } from "./marketing-paths";
 
 export default defineConfig({
   reporter: playwrightEnv.ci
