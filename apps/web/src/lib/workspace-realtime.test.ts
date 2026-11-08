@@ -316,7 +316,10 @@ describe("workspace realtime policy", () => {
     }
     for (const workspaceId of [WORKSPACE_ID, "workspace-2"]) {
       expect(
-        getWorkspaceRealtimeQueryActions(event, workspaceId),
+        getWorkspaceRealtimeQueryActions(event, {
+          workspaceId,
+          queryClient: new QueryClient(),
+        }),
       ).toContainEqual({
         type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
         queryKey: ["correspondence"],

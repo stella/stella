@@ -14,10 +14,10 @@ import {
   RESOURCE_TYPE,
 } from "@stll/api-contract";
 import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import englishMessages from "@/i18n/langs/en.json";
 import type { WorkspaceRealtimeQueryAction } from "@/lib/workspace-realtime";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 // The rename case drives the real rename hook, which renders under React.
 GlobalRegistrator.register({ url: "http://localhost:3000" });
