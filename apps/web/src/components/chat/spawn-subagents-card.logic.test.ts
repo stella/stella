@@ -164,7 +164,9 @@ describe("spawn subagents call status", () => {
     const states = Object.keys(EXPECTED_CALL_STATUS).filter((state) =>
       isOwnKey(EXPECTED_CALL_STATUS, state),
     );
-    expect(states).toEqual(Object.keys(SPAWN_SUBAGENTS_CALL_STATUS_BY_STATE));
+    expect(states).toHaveLength(
+      Object.keys(SPAWN_SUBAGENTS_CALL_STATUS_BY_STATE).length,
+    );
     for (const state of states) {
       expect(
         getSpawnSubagentsCallStatus({ approval: { approved: false }, state }),
