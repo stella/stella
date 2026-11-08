@@ -94,7 +94,7 @@ describe("relaxedTopUpOutcome", () => {
   const failure = new TimeoutError({
     message: "over",
     label: "case-law-relaxed-top-up",
-    timeoutMs: 1,
+    timeoutMs: 1, // timeout: an error fixture, nothing waits on it
   });
 
   test("reads the hits of a finished step", () => {
