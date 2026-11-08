@@ -2,9 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CZ_TAKTO_TAIL_RE,
+  czechAuthorityHeadRoles,
+  isCzechAuthorityDecisionTitle,
+  isCzechAuthoritySignatureLine,
   isCzechBareSignatoryName,
+  isCzechInstructionHeading,
   isCzechOpeningFormula,
   isCzechReasonsHeading,
+  isCzechRulingLeadIn,
   isCzechSignatureLine,
   isCzechTaktoLine,
   normalizeCzechJudgeName,
@@ -163,5 +168,75 @@ describe("judge name", () => {
         /(?:^|\s)\p{L}(?: \p{L}){3,}(?=\s|,|$)/u,
       );
     }
+  });
+});
+
+describe("an authority's decision up to its reasons", () => {
+  test.each([
+    "rozhodl takto:",
+    "… ve znění pozdějších předpisů, rozhodl takto:",
+    "r o z h o d l   t a k t o :",
+    "ROZHODNUTÍ:",
+    "rozhodla:",
+  ])("%j leads in to the operative part", (text) => {
+    expect(isCzechRulingLeadIn(text)).toBe(true);
+  });
+
+  test.each(["ROZHODNUTÍ", "Úřad rozhodl o rozkladu.", "rozhodnutí: viz výše"])(
+    "%j does not",
+    (text) => {
+      expect(isCzechRulingLeadIn(text)).toBe(false);
+    },
+  );
+
+  test("the head matter, the operative part, then nothing from the reasons on", () => {
+    expect(
+      czechAuthorityHeadRoles([
+        "ROZHODNUTÍ",
+        "V řízení o rozkladu … na návrh rozkladové komise",
+        "rozhodl takto:",
+        "Napadené rozhodnutí potvrzuji a rozklad zamítám.",
+        "ODŮVODNĚNÍ",
+        "1. Úřad vydal rozhodnutí.",
+      ]),
+    ).toEqual(["intro", "intro", "intro", "holding", undefined, undefined]);
+    // Without a lead-in or a reasons heading the caller keeps its reading.
+    expect(
+      czechAuthorityHeadRoles(["ROZHODNUTÍ", "ODŮVODNĚNÍ"]),
+    ).toBeUndefined();
+    expect(czechAuthorityHeadRoles(["rozhodl takto:", "I."])).toBeUndefined();
+  });
+
+  test.each([
+    "Ing. Petr Rafaj předseda Úřadu pro ochranu hospodářské soutěže",
+    "I. místopředseda Úřadu",
+    "Mgr. Markéta Dlouhá místopředsedkyně",
+  ])("%j signs under the office", (text) => {
+    expect(isCzechAuthoritySignatureLine(text)).toBe(true);
+  });
+
+  test.each([
+    "Rozklad podaný proti rozhodnutí posoudil předseda Úřadu a dospěl k závěru, že je nedůvodný.",
+    "předsedy Úřadu",
+  ])("%j does not", (text) => {
+    expect(isCzechAuthoritySignatureLine(text)).toBe(false);
+  });
+});
+
+describe("an authority's decision headings", () => {
+  test("the title and the instruction read through their spacing", () => {
+    expect(isCzechAuthorityDecisionTitle("ROZHODNUTÍ")).toBe(true);
+    expect(
+      isCzechAuthorityDecisionTitle(
+        "ROZHODNUTÍ PŘEDSEDY ÚŘADU PRO OCHRANU HOSPODÁŘSKÉ SOUTĚŽE",
+      ),
+    ).toBe(true);
+    expect(isCzechAuthorityDecisionTitle("ROZHODNUTÍ:")).toBe(false);
+    expect(isCzechAuthorityDecisionTitle("Rozhodnutí Úřadu potvrzuji.")).toBe(
+      false,
+    );
+    expect(isCzechInstructionHeading("POUČENÍ")).toBe(true);
+    expect(isCzechInstructionHeading("P o u č e n í :")).toBe(true);
+    expect(isCzechInstructionHeading("Poučení: Proti rozhodnutí")).toBe(false);
   });
 });
