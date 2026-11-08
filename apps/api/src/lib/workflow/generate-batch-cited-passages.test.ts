@@ -214,6 +214,16 @@ describe("which saved answers are graded from their cited passages", () => {
     ).toEqual([]);
   });
 
+  test("an answer gated on free text is graded on the answer", async () => {
+    expect(
+      await gradedPassages({
+        property: ask("clause-summary", DOCUMENT_TYPE_GATE),
+        input: { version: 1, type: "text", value: "NDA" },
+        files: [docxFile],
+      }),
+    ).toEqual([]);
+  });
+
   test.each([
     ["a PDF", pdfFile],
     ["extracted text", extractedFile],

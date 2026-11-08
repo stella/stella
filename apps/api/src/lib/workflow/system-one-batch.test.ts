@@ -158,8 +158,16 @@ describe("sourcesFromPreparedFiles", () => {
 
   test("text inputs are sources without a locator", async () => {
     const textInputs: TextInput[] = [
-      { propertyId: propertyId("col-party"), value: " Acme s.r.o. " },
-      { propertyId: propertyId("col-empty"), value: "   " },
+      {
+        propertyId: propertyId("col-party"),
+        value: " Acme s.r.o. ",
+        valueKind: "content",
+      },
+      {
+        propertyId: propertyId("col-empty"),
+        value: "   ",
+        valueKind: "content",
+      },
     ];
 
     const { sources, locators } = await sourcesFromPreparedFiles(
@@ -203,7 +211,11 @@ describe("sourcesFromPreparedFiles", () => {
   test("files come before text inputs, in prompt order", async () => {
     const files: PreparedInputFile[] = [docxFile, extractedTextFile];
     const { sources } = await sourcesFromPreparedFiles(files, [
-      { propertyId: propertyId("col-party"), value: "Acme s.r.o." },
+      {
+        propertyId: propertyId("col-party"),
+        value: "Acme s.r.o.",
+        valueKind: "content",
+      },
     ]);
 
     expect(sources.map((source) => source.id)).toEqual([

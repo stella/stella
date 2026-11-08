@@ -324,8 +324,8 @@ type ClauseAnswerSources = {
  * A clause summary relies on citations that resolve to exact wording, which
  * only a DOCX block offers. One source without blocks makes the whole batch
  * quote: the citation rules and the prompt are shared across its sources. A
- * value that only gates a column, such as its document type, holds no clause
- * wording, so it is not such a source.
+ * select label that only gates a column, such as its document type, holds no
+ * clause wording, so it is not such a source. Free text can, even as a gate.
  */
 export const resolveClauseAnswerShapes = (
   properties: readonly AIBatchProperty[],
@@ -343,7 +343,10 @@ export const resolveClauseAnswerShapes = (
     );
     const everySourceHasBlocks =
       everyFileHasBlocks &&
-      textInputs.every(({ propertyId }) => gateIds.has(propertyId));
+      textInputs.every(
+        ({ propertyId, valueKind }) =>
+          valueKind === "label" && gateIds.has(propertyId),
+      );
     return everySourceHasBlocks
       ? property
       : { ...property, answerShape: "clause-quote" };

@@ -164,6 +164,7 @@ test("a fully planned workflow batch propagates a generative provider failure", 
       {
         propertyId: property.id,
         value: "The agreement is a purchase agreement.",
+        valueKind: "content",
       },
     ],
     linkedSkillsMessage: null,
@@ -232,7 +233,12 @@ describe("resolveClauseAnswerShapes", () => {
   const textInput = {
     propertyId: toSafeId<"property">("input"),
     value: "A value.",
-  };
+    valueKind: "content",
+  } as const satisfies TextInput;
+  const labelInput = {
+    ...textInput,
+    valueKind: "label",
+  } as const satisfies TextInput;
 
   const shapeFor = (
     files: readonly PreparedInputFile[],
@@ -255,7 +261,7 @@ describe("resolveClauseAnswerShapes", () => {
     expect(shapeFor([docx], [textInput])).toBe("clause-quote");
   });
 
-  test("a value that only gates the column is not a source", () => {
+  describe("an input that gates the column", () => {
     const gated = {
       ...property("clause-summary"),
       dependencies: [
@@ -270,14 +276,23 @@ describe("resolveClauseAnswerShapes", () => {
         },
       ],
     } as const satisfies AIBatchProperty;
-    const gatedShape = (files: readonly PreparedInputFile[]) =>
+    const gatedShape = (
+      files: readonly PreparedInputFile[],
+      input: TextInput,
+    ) =>
       resolveClauseAnswerShapes([gated], {
         files,
-        textInputs: [textInput],
+        textInputs: [input],
       }).at(0)?.answerShape;
 
-    expect(gatedShape([docx])).toBe("clause-summary");
-    expect(gatedShape([docx, pdf])).toBe("clause-quote");
+    test("is not a source when it is a select label", () => {
+      expect(gatedShape([docx], labelInput)).toBe("clause-summary");
+      expect(gatedShape([docx, pdf], labelInput)).toBe("clause-quote");
+    });
+
+    test("is a source when it can hold clause wording", () => {
+      expect(gatedShape([docx], textInput)).toBe("clause-quote");
+    });
   });
 
   test("a value answer is the same whatever the sources", () => {
