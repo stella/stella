@@ -1,3 +1,4 @@
+// parser-output-unchanged: [cz-ns] the legacy identity fields decide which row a document writes to; the parsed output is unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
