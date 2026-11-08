@@ -457,9 +457,10 @@ const isPrintedSubheading = (text: string): boolean => {
  * How a finished reasons paragraph ends. A paragraph that ends otherwise ("…
  * jogszabálysértő, mert") runs on into the next one, so a short capitalised
  * line after it (`Magyarország Alaptörvénye`) is the rest of that sentence,
- * not a title.
+ * not a title. A colon or semicolon introduces what follows, so it does not
+ * finish the paragraph either.
  */
-const SENTENCE_FINISHED_END = /[.:;!?…"'”»)\]]$/u;
+const SENTENCE_FINISHED_END = /[.!?…"'”»)\]]$/u;
 
 /** The level-1 section under which the court titles its own parts. */
 const REASONS_HEADING_KEY = "indokolás";

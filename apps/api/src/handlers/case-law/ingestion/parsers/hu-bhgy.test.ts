@@ -946,6 +946,8 @@ describe("reading a document folio handed over", () => {
       { text: "a jogerős ítélet hatályában fenntartandó" },
       { text: "[5]\tA bíróság az ügyben alkalmazta" },
       { text: "Magyarország Alaptörvénye" },
+      { text: "[6]\tA bíróság a következő jogszabályokat alkalmazta:" },
+      { text: "Az Alaptörvény" },
       { text: "Alkalmazott jogszabályok" },
       { text: "A polgári perrendtartásról szóló törvény" },
     ]);
@@ -957,6 +959,8 @@ describe("reading a document folio handed over", () => {
       "p:argumentation:a jogerős ítélet hatályában fenntartandó",
       "p:argumentation#5:A bíróság az ügyben alkalmazta",
       "p:argumentation:Magyarország Alaptörvénye",
+      "p:argumentation#6:A bíróság a következő jogszabályokat alkalmazta:",
+      "p:argumentation:Az Alaptörvény",
       "h1:section-heading:Alkalmazott jogszabályok",
       "p:argumentation:A polgári perrendtartásról szóló törvény",
     ]);
