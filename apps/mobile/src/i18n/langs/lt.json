@@ -242,7 +242,6 @@
     "headnote": "Santrauka",
     "textUnavailable": "Šiam sprendimui teksto nėra",
     "openSource": "Atverti pirminį šaltinį",
-    "openFailed": "Nepavyko atidaryti nuorodos.",
     "loadFailed": "Nepavyko įkelti teismų praktikos.",
     "share": "Bendrinti"
   },
@@ -346,5 +345,11 @@
   "pane": {
     "showList": "Rodyti sąrašą",
     "hideList": "Slėpti sąrašą"
+  },
+  "link": {
+    "open": "Atidaryti",
+    "share": "Bendrinti",
+    "cancel": "Atšaukti",
+    "openFailed": "Nepavyko atidaryti nuorodos."
   }
 }

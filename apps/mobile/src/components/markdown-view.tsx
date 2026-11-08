@@ -1,25 +1,32 @@
-import { Linking, Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 
+import { MOBILE_REDIRECT_SCHEMES } from "@stll/api-contract/mobile-client";
 import { Text } from "@stll/ui/text";
 
+import { useOpenLink } from "@/components/open-link";
+import { APP_VARIANT } from "@/env";
 import { parseMarkdown } from "@/state/markdown";
 import type { Block, Span } from "@/state/markdown";
 import { useAppColors } from "@/theme";
 
 const MONOSPACE = Platform.select({ ios: "Menlo", default: "monospace" });
 
+/** This build's own scheme, whose links open the app's screens. */
+const APP_SCHEME = MOBILE_REDIRECT_SCHEMES[APP_VARIANT];
+
 const Spans = ({ spans }: { spans: readonly Span[] }) => {
   const colors = useAppColors();
+  const openLink = useOpenLink();
   return spans.map((span, index) => {
     const key = `${index}:${span.text}`;
-    if (span.href !== undefined) {
-      const { href } = span;
+    if (span.link !== undefined) {
+      const { link } = span;
       return (
         <Text
           accessibilityRole="link"
           key={key}
           onPress={() => {
-            void Linking.openURL(href);
+            openLink(link);
           }}
           style={[styles.link, { color: colors.accent }]}
         >
@@ -118,10 +125,13 @@ const BlockView = ({ block }: { block: Block }) => {
   );
 };
 
-/** An assistant answer drawn from its markdown with plain Text views. */
+/**
+ * An assistant answer drawn from its markdown with plain Text views. Its
+ * links open only web pages and this build's own screens.
+ */
 export const MarkdownView = ({ markdown }: { markdown: string }) => (
   <View style={styles.blocks}>
-    {parseMarkdown(markdown).map((block, index) => (
+    {parseMarkdown(markdown, APP_SCHEME).map((block, index) => (
       // oxlint-disable-next-line react/no-array-index-key -- blocks are re-parsed from the same text; position is their identity.
       <BlockView block={block} key={index} />
     ))}
