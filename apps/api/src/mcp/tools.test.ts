@@ -2784,13 +2784,9 @@ describe("OpenAI-compatible MCP tools", () => {
           toolName: "search_case_law",
         });
         expect(result.isError).not.toBe(true);
-        // One aggregation read for a single phrasing (its total is returned)
-        // or for the first phrasing when facets were asked for; none for a
-        // phrasing whose facets and total the response would drop. Before
-        // the opt-out, every phrasing read one.
-        expect(requests).toHaveLength(
-          queries.length === 1 || (facets?.length ?? 0) > 0 ? 1 : 0,
-        );
+        // One aggregation read for the first phrasing when facets were asked
+        // for; a call that names none pays for no read over its result set.
+        expect(requests).toHaveLength((facets?.length ?? 0) > 0 ? 1 : 0);
         expect(
           requests.filter(({ aggs }) =>
             Object.keys(aggs).some((name) => name !== "total"),
@@ -2799,7 +2795,7 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(requests.every(({ aggs }) => !("courtYear" in aggs))).toBe(true);
         expect(parseToolPayload(result)).toMatchObject({
           total:
-            queries.length === 1
+            queries.length === 1 && (facets?.length ?? 0) > 0
               ? countedSearchTotal(SEARCH_TOTAL_TYPE.ESTIMATE, 17)
               : SEARCH_TOTAL_NOT_COUNTED,
         });
