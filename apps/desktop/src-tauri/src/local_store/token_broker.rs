@@ -315,7 +315,10 @@ impl OwnedDirectory {
       || metadata.mode() & 0o777 != 0o700
     {
       if created {
-        let _ = std::fs::remove_dir(&path);
+        crate::logging::best_effort(
+          std::fs::remove_dir(&path),
+          "refused broker directory was not removed",
+        );
       }
       return Err(not_private());
     }
@@ -348,7 +351,10 @@ impl Drop for OwnedDirectory {
     if std::fs::symlink_metadata(&socket)
       .is_ok_and(|bound| bound.dev() == device && bound.ino() == inode)
     {
-      let _ = std::fs::remove_file(socket);
+      crate::logging::best_effort(
+        std::fs::remove_file(socket),
+        "broker socket was not removed",
+      );
     }
   }
 }

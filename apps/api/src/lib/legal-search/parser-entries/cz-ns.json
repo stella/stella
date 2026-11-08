@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "CZ_NS",
   "key": "cz-ns",
-  "parserVersion": 24,
+  "parserVersion": 25,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recompute the signing judge's name from the stored print page: a letter-spaced surname is now joined, and the name has no feature storage of its own."
+    "reason": "Recompute the signing judge's name from the stored print page: a letter-spaced surname is now joined, and the name has no feature storage of its own. Read letter-spaced emphasis through the one shared reading, once a paragraph's lines are joined: a short spaced word in a text that spaces words, a row of one-letter words no sentence writes, and uneven chunks the document prints nowhere else read as the words they spell; only whitespace in block text changes and it has no feature storage of its own."
   }
 }

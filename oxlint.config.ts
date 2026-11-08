@@ -470,6 +470,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-hand-built-date-range-filter.fixture.tsx", [
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter",
   ]),
+  fixtureRuleOverride("no-canonical-money-form-parse.fixture.ts", [
+    "no-canonical-money-form-parse/no-canonical-money-form-parse",
+  ]),
   fixtureRuleOverride("no-ad-hoc-inline-rename.fixture.tsx", [
     "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename",
   ]),
@@ -798,6 +801,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
+  ]),
+  fixtureRuleOverride("no-nullable-join-nested-selection.fixture.ts", [
+    "no-nullable-join-nested-selection/no-nullable-join-nested-selection",
   ]),
   fixtureRuleOverride("legislation-window.fixture.ts", [
     "legislation-window/legislation-window-through-helper",
@@ -1562,6 +1568,7 @@ const config = defineConfig({
       "error",
       { checksVoidReturn: { attributes: false } },
     ],
+    "typescript/no-unsafe-enum-assignment": "error",
     "typescript/strict-boolean-expressions": [
       "error",
       { allowNullableString: true, allowNullableBoolean: true },
@@ -2080,6 +2087,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-in-flow-viewport-popup.ts",
     "./.oxlint-plugins/no-unformatted-number.ts",
     "./.oxlint-plugins/no-literal-minor-unit-scale.ts",
+    "./.oxlint-plugins/no-canonical-money-form-parse.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
@@ -2262,6 +2270,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-hand-rolled-role-set.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
     "./.oxlint-plugins/no-hand-rolled-execute-rows.ts",
+    "./.oxlint-plugins/no-nullable-join-nested-selection.ts",
     "./.oxlint-plugins/require-derived-check-enum.ts",
     "./.oxlint-plugins/require-timestamptz-column.ts",
     "./.oxlint-plugins/no-naive-timestamp-cast.ts",
@@ -2331,6 +2340,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-adhoc-email-fold.ts",
+    "./.oxlint-plugins/no-local-letter-spacing.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
@@ -3243,6 +3253,7 @@ const config = defineConfig({
         "no-raw-colors/no-raw-colors": "error",
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
         "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename": "error",
+        "no-canonical-money-form-parse/no-canonical-money-form-parse": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
         "no-inline-heavy-host-props/no-inline-heavy-host-props": "error",
         "no-physical-properties/no-physical-properties": "error",
@@ -3499,6 +3510,24 @@ const config = defineConfig({
       excludeFiles: ["packages/text-normalize/**/*.{ts,tsx}"],
       rules: {
         "no-direct-unicode-normalize/no-direct-unicode-normalize": "error",
+      },
+    },
+    {
+      // Letter-spaced emphasis is read by one owner,
+      // packages/text-normalize/src/letter-spacing.ts, for parsers, search, the
+      // role vocabularies and the reader alike. Tests may match spaced text to
+      // assert what a parser produced.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-local-letter-spacing.fixture.ts",
+      ],
+      excludeFiles: [
+        "packages/text-normalize/src/letter-spacing.ts",
+        "**/*.test.{ts,tsx}",
+      ],
+      rules: {
+        "no-local-letter-spacing/no-local-letter-spacing": "error",
       },
     },
     {
@@ -6545,6 +6574,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows": "error",
+      },
+    },
+    {
+      // Drizzle reads a nested selection object over a left, right or full
+      // join back as null when its first column is NULL, whatever follows,
+      // so a matched row with a NULL first value looks like no row. The join
+      // key goes first, or the columns are selected flat with the join key
+      // and the object is built after the read.
+      files: ["apps/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts"],
+      rules: {
+        "no-nullable-join-nested-selection/no-nullable-join-nested-selection":
+          "error",
       },
     },
     {

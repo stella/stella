@@ -45,6 +45,7 @@ import {
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
   pluginFixtureModules,
+  prioritizeLeadLint,
   prioritizeWebLint,
   resultBoundaryLintCommand,
   ROOT_SCRIPT_LINT_INPUTS,
@@ -1465,6 +1466,40 @@ describe("parallel code-quality legs", () => {
     expect(codeCheckConcurrency(12 * 1024 ** 3)).toBe(3);
   });
 
+  test("the API lint runs alone, then the other workspaces, then the API typecheck", () => {
+    const command = [
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "lint",
+      "typecheck",
+      "--summarize",
+      "--filter=!./apps/web",
+    ];
+    const api = {
+      workspace: "apps/api",
+      name: "@stll/api",
+      typecheckBesideLint: false,
+    };
+    const [lint, rest, typecheck, ...extra] = prioritizeLeadLint(
+      [command],
+      api,
+    );
+    expect(extra).toEqual([]);
+    expect(lint).toContain("@stll/api#lint");
+    expect(lint).not.toContain("@stll/api#typecheck");
+    expect(lint).not.toContain("lint");
+    expect(rest).toEqual([...command, "--filter=!./apps/api"]);
+    expect(typecheck).toContain("@stll/api#typecheck");
+    expect(typecheck).not.toContain("@stll/api#lint");
+    expect(
+      prioritizeLeadLint([[...command.slice(0, 5), "--summarize"]], api).map(
+        (entry) => entry.filter((argument) => argument.includes("@stll/api")),
+      ),
+    ).toEqual([["@stll/api#lint"], []]);
+  });
+
   test("a container memory limit below the machine's is the limit the checks get", () => {
     const GiB = 1024 ** 3;
     const reads = (files: Record<string, string>) => (file: string) =>
@@ -1912,7 +1947,10 @@ describe("check failure reporting", () => {
       expect(output).toContain("elapsed=");
       expect(output).toContain("Command process tree at SIGTERM");
       expect(output).toContain("Command process tree at SIGKILL");
-      expect(output).toContain("PID PPID PGID STATE COMMAND");
+      expect(output).toContain("PID PPID PGID STATE RSS_KB COMMAND");
+      expect(output).toMatch(
+        /Machine: memory_free_mib=\d+ memory_total_mib=\d+ disk_free_mib=\d+ load=/u,
+      );
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
