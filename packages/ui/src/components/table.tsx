@@ -304,9 +304,13 @@ const SortableHead = ({
     >
       <span className="inline-flex items-center gap-1">
         <Button
+          // The button's inline padding equals the head's, and the negative
+          // margin cancels exactly that: the label lines up with the cells and
+          // the button never reaches past the table's edge, where a scrolling
+          // container could not reveal it.
           className={cn(
-            "min-w-0 gap-1",
-            endAligned ? "-me-3 flex-row-reverse" : "-ms-3",
+            "min-w-0 gap-1 px-2.5",
+            endAligned ? "-me-2.5 flex-row-reverse" : "-ms-2.5",
           )}
           onClick={onSort}
           type="button"

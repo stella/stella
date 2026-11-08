@@ -13,7 +13,9 @@ import {
   czUohsAdapter,
   czUohsCollectionOf,
   czUohsDecisionIdentifiers,
+  czUohsFileNumber,
   czUohsLetterheadDate,
+  czUohsPrintedDecisionType,
   encodeCzUohsCursor,
   parseCzUohsDocumentPdf as uncheckedParseCzUohsDocumentPdf,
   parseCzUohsListing,
@@ -555,6 +557,113 @@ describe("ÚOHS JSON-LD", () => {
     );
   });
 
+  test("the file number keeps its year in both export layouts", () => {
+    // Older export rows state only the serial and carry the whole file
+    // number at the head of the reference number.
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "R0003",
+        číslo_jednací: "R0003/2018/HS-31751/310/MHf",
+      }),
+    ).toBe("ÚOHS-R0003/2018/HS");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S0196/2026/KS",
+        číslo_jednací: "14168/2026/890",
+      }),
+    ).toBe("ÚOHS-S0196/2026/KS");
+    // The same serial in two years names two files.
+    const [first] = czUohsDecisionIdentifiers({
+      spisová_značka: "R0003",
+      číslo_jednací: "R0003/2018/HS-31751/310/MHf",
+    });
+    const [second] = czUohsDecisionIdentifiers({
+      spisová_značka: "R0003",
+      číslo_jednací: "R0003/2017/VZ-12345/2017/321/ABc",
+    });
+    expect(first.value).not.toBe(second.value);
+    // The decision's own number may follow without a hyphen.
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S817,818,819",
+        číslo_jednací: "S817,818,819/2014/VZ 26112/2014/533/ZPr",
+      }),
+    ).toBe("ÚOHS-S817,818,819/2014/VZ");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "R4",
+        číslo_jednací: "R4/2016/VZ29770/2016/321/TNo",
+      }),
+    ).toBe("ÚOHS-R4/2016/VZ");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "R449,450",
+        číslo_jednací: "R449,450/2015/38132/2016/321/EDy/HBa",
+      }),
+    ).toBe("ÚOHS-R449,450/2015");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S0049",
+        číslo_jednací: "S0049/2013",
+      }),
+    ).toBe("ÚOHS-S0049/2013");
+    // A serial the reference does not extend is kept as stated.
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S0904",
+        číslo_jednací: "1/2026/500",
+      }),
+    ).toBe("ÚOHS-S0904");
+  });
+
+  test("reads the date beside the reference number in older letterheads", () => {
+    expect(
+      czUohsLetterheadDate(
+        "PŘEDSEDA ÚŘADU PRO OCHRANU HOSPODÁŘSKÉ SOUTĚŽE\nROZHODNUTÍ\nČ. j.: ÚOHS-R0003/2018/HS-31751/310/MHf Brno 1. listopadu 2018\nV řízení o rozkladu",
+      ),
+    ).toBe("2018-11-01");
+    expect(
+      czUohsLetterheadDate(
+        "Č. j.: ÚOHS-R0007/2017/HS-33348/2017/310/AŠi Brno: 13. listopadu 2017\n",
+      ),
+    ).toBe("2017-11-13");
+    expect(
+      czUohsLetterheadDate(
+        "Č. j.: ÚOHS-S0569/2015/KD-42098/2016/852/MAd Brno: 17. 10. 2016\n",
+      ),
+    ).toBe("2016-10-17");
+    // The 2023 and 2024 letterheads label both references, in either order.
+    expect(
+      czUohsLetterheadDate(
+        "ROZHODNUTÍ\nSpisová značka: ÚOHS-R0145/2024/VZ Číslo jednací: ÚOHS-37007/2024/163 Brno 1. 10. 2024\n",
+      ),
+    ).toBe("2024-10-01");
+    expect(
+      czUohsLetterheadDate(
+        "ROZHODNUTÍ\nSpisová značka: ÚOHS-S0876/2023/KS Brno 8. 1. 2024 Číslo jednací: ÚOHS-00750/2024/873\n",
+      ),
+    ).toBe("2024-01-08");
+    // A cited reference in the body is followed by "ze dne", not the place.
+    expect(
+      czUohsLetterheadDate(
+        "rozhodnutí č. j. ÚOHS-S0595/2016/VS-37308/2017/830/ESk ze dne 20. 12. 2017",
+      ),
+    ).toBeUndefined();
+  });
+
+  test("the type is the decision's printed title", () => {
+    expect(
+      czUohsPrintedDecisionType(
+        "*UOHSX00BKPME*\n PŘEDSEDA ÚŘADU\n\n ROZHODNUTÍ \nČ. j.: ÚOHS-R0003/2018/HS",
+      ),
+    ).toBe("rozhodnutí");
+    expect(czUohsPrintedDecisionType("USNESENÍ\n")).toBe("usnesení");
+    expect(czUohsPrintedDecisionType(" Rozhodnutí \n")).toBe("rozhodnutí");
+    expect(
+      czUohsPrintedDecisionType("Úřad vydal rozhodnutí ve věci"),
+    ).toBeUndefined();
+  });
+
   test("emits citation-shaped authority identifiers", async () => {
     expect(czUohsDecisionIdentifiers((await records())[0]!)).toEqual([
       { type: "authority-decision-number", value: "úohs-r0901/2026/vz" },
@@ -593,8 +702,13 @@ describe("ÚOHS JSON-LD", () => {
     expect(JSON.stringify(decision.metadata["participants"])).toBe(
       JSON.stringify([{ typ: "Osoba", jméno: { cs: "obec Fiktivní Lhota" } }]),
     );
-    expect(String(decision.decisionType)).toBe(
-      "https://uohs.gov.cz/cs/ciselniky/typy-rozhodnuti/36.html",
+    // The synthetic text prints no title, so no type is claimed; the
+    // code-list address the export names stays in metadata.
+    expect(decision.decisionType).toBeUndefined();
+    expect(JSON.stringify(decision.metadata["decisionTypes"])).toBe(
+      JSON.stringify([
+        "https://uohs.gov.cz/cs/ciselniky/typy-rozhodnuti/36.html",
+      ]),
     );
   });
 

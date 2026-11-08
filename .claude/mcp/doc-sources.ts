@@ -54,7 +54,6 @@ export const DOC_SOURCES = {
       "@tanstack/ai-openai",
       "@tanstack/ai-openrouter",
       "@tanstack/ai-persistence",
-      "@tanstack/ai-react",
       "@tanstack/ai-sandbox",
       "@tanstack/charts",
       "@tanstack/devtools-vite",

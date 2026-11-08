@@ -16,11 +16,11 @@ use serde_json::{Value, json};
 use super::harness::{HarnessHost, HarnessReports};
 use super::sidecar_host::{
   HarnessCredentials, HostSettings, InstallSettled, InstalledHarness, LocalHarnesses,
-  SidecarHarnessHost,
+  SidecarHarnessHost, skill_folders_within,
 };
 use super::tests::{Connection, Gateway, Setup};
 use crate::harness_sidecar::tests::Fixture;
-use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar};
+use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar, SkillFolderRef};
 use crate::runner_protocol::{ApprovalDecision, Harness, RunApproval};
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -54,6 +54,7 @@ impl LocalHarnesses for FakeHarnesses {
       version: VERSION.to_owned(),
       executable: self.root.join("harness/codex"),
       config_dir: self.root.join("harness-home/codex"),
+      tool_path: vec![self.root.join("harness/bun/1.4.4/package/bin")],
       lease: Box::new(()),
     })
   }
@@ -68,6 +69,54 @@ impl LocalHarnesses for FakeHarnesses {
   fn on_install_settled(&self, settled: InstallSettled) {
     *self.settled.lock().unwrap() = Some(settled);
   }
+
+  fn skill_folders(&self) -> Vec<SkillFolderRef> {
+    vec![SkillFolderRef {
+      name: "fixture-skill".to_owned(),
+      path: self.root.join("skills/fixture-skill").display().to_string(),
+    }]
+  }
+}
+
+/// Harnesses whose skill folders answer only once `release` fires.
+struct HungFolders {
+  release: Mutex<std::sync::mpsc::Receiver<()>>,
+}
+
+impl LocalHarnesses for HungFolders {
+  fn installed(&self, _harness: Harness) -> Option<InstalledHarness> {
+    None
+  }
+
+  fn credentials(
+    &self,
+    _harness: Harness,
+  ) -> BoxFuture<'_, Option<HarnessCredentials>> {
+    Box::pin(async { None })
+  }
+
+  fn on_install_settled(&self, _settled: InstallSettled) {}
+
+  fn skill_folders(&self) -> Vec<SkillFolderRef> {
+    let _released = self.release.lock().unwrap().recv();
+    vec![SkillFolderRef {
+      name: "late".to_owned(),
+      path: "/late".to_owned(),
+    }]
+  }
+}
+
+#[test]
+fn a_skill_folder_read_that_hangs_leaves_the_run_without_skills_in_time() {
+  let (release, released) = std::sync::mpsc::channel();
+  let harnesses = Arc::new(HungFolders {
+    release: Mutex::new(released),
+  });
+
+  assert!(skill_folders_within(Duration::from_millis(20), harnesses).is_empty());
+
+  // Lets the stuck reader end.
+  release.send(()).unwrap();
 }
 
 /// Every process id a credential authorized, and how many grants are held.
@@ -374,6 +423,22 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
   );
   assert_eq!(start["cacheDir"], place.package_cache().to_str().unwrap());
   assert!(place.package_cache().is_dir());
+  assert_eq!(
+    start["toolPath"],
+    json!([place
+      .fixture
+      .root
+      .join("harness/bun/1.4.4/package/bin")
+      .to_str()
+      .unwrap()])
+  );
+  assert_eq!(
+    start["skillFolders"],
+    json!([{
+      "name": "fixture-skill",
+      "path": place.fixture.root.join("skills/fixture-skill").to_str().unwrap(),
+    }])
+  );
   assert_eq!(
     start["policy"],
     json!({"network": "open", "fs": "workspace", "approvals": "auto"})

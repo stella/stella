@@ -25,6 +25,7 @@ import {
   TEXT_FIELD_TYPE,
   type TextField,
 } from "@/api/lib/case-law/decision-text";
+import { isDocketShapedDecisionType } from "@/api/lib/case-law/decision-type-key";
 import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import {
@@ -104,10 +105,40 @@ export const decisionCourtExceedsStorage = (
 const DECISION_TYPE_NOISE =
   /česk[áa]\s+republik[ay]|jm[ée]nem\s+republik[ay]/giu;
 
-const normalizeDecisionType = (raw: string | undefined): string | undefined =>
-  raw
-    ? raw.replace(DECISION_TYPE_NOISE, "").trim().toLowerCase() || undefined
-    : undefined;
+// An address is a column read out of place (a code-list IRI), never a type.
+const URL_SHAPED = /^[a-z][a-z\d+.-]*:\/\//iu;
+
+/**
+ * A decision type as one value every adapter stores the same way: lowercase,
+ * without the republic formula, and a publisher list folded into one field
+ * ("uznesenie,uznesenie") naming each type once. A value shaped like an
+ * address or a docket is no type at all, so none is stored; the adapter keeps
+ * what the publisher stated in metadata.
+ */
+export const normalizeDecisionType = (
+  raw: string | undefined,
+): string | undefined => {
+  if (!raw) {
+    return undefined;
+  }
+  const stated = raw.replace(DECISION_TYPE_NOISE, "").trim().toLowerCase();
+  const value = [
+    ...new Set(
+      stated
+        .split(",")
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0),
+    ),
+  ].join(", ");
+  if (
+    value.length === 0 ||
+    URL_SHAPED.test(value) ||
+    isDocketShapedDecisionType(value)
+  ) {
+    return undefined;
+  }
+  return value;
+};
 
 const sanitizeDecisionIdentifier = (
   identifier: DecisionIdentifier,

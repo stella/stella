@@ -763,5 +763,30 @@
         "storage": "{name} could not be saved on this computer. Check that the disk has free space."
       }
     }
+  },
+  "localSkills": {
+    "title": "Local skills",
+    "description": "Skill folders on this computer. Local runs on this computer can use them, and nothing in them is uploaded.",
+    "add": "Add folder",
+    "remove": "Remove",
+    "removeFolder": "Remove {path}",
+    "unusable": "Not usable",
+    "notice": {
+      "action_failed": "That did not work. Try again.",
+      "too_many": "This computer already has as many skill folders as it can use. Remove one first.",
+      "already_listed": "This folder is already listed.",
+      "missing": "This folder is gone.",
+      "not_a_folder": "This is no longer a folder.",
+      "no_skill_file": "This folder has no SKILL.md.",
+      "skill_file_not_regular": "SKILL.md must be a regular file, not a link.",
+      "skill_file_too_large": "SKILL.md is too large to read.",
+      "unreadable": "This folder could not be read.",
+      "no_name": "The header of SKILL.md has no name.",
+      "invalid_name": "The name in SKILL.md may use only letters, digits, dots, dashes and underscores, and must start with a letter or digit.",
+      "duplicate_name": "Another listed folder has a skill with this name.",
+      "runs_can_write": "Local runs can write to this folder, so it cannot hold a skill.",
+      "network_folder": "This folder is on a network share. Skills must be on this computer's own disk.",
+      "path_changed": "A folder on the way to this one has changed. Remove it and add it again."
+    }
   }
 }

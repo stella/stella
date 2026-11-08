@@ -425,6 +425,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  "POST /v1/chat/threads/:threadId/mcp-apps/:toolCallId/call": {
+    type: "non-replay",
+    reason: "read",
+  },
   "POST /v1/chat/threads/:threadId/secrets/:toolCallId": {
     type: "non-replay",
     reason: "credential",

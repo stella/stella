@@ -17,6 +17,8 @@ import {
   type HarnessTurnInput,
 } from "../adapter";
 import { packageCacheEnvironment } from "../package-cache";
+import { redactingSkillPaths } from "../skill-redaction";
+import { toolPathEnvironment } from "../tool-path";
 import { buildTurnPrompt } from "../transcript-handoff";
 import { settlesWithin } from "../turn-lifecycle";
 import {
@@ -383,7 +385,10 @@ const startTurn = async (
   const connected = await connect({
     options,
     cwd: input.workspaceDir,
-    environment: packageCacheEnvironment(input.cacheDir),
+    environment: {
+      ...packageCacheEnvironment(input.cacheDir),
+      ...toolPathEnvironment(options.environment, input.toolPath),
+    },
     handlers: session.handlers,
   });
   if (Result.isError(connected)) {
@@ -449,7 +454,12 @@ const startTurn = async (
     startedAt: parsed.output.turn.startedAt ?? null,
     continuation,
   });
-  return Result.ok(session.turn());
+  return Result.ok(
+    redactingSkillPaths(session.turn(), {
+      folders: input.skillFolders,
+      plugin: null,
+    }),
+  );
 };
 
 export const createCodexHarnessAdapter = (

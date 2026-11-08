@@ -1,5 +1,11 @@
 # @stll/scan-engine
 
+## 0.1.3
+
+### Patch Changes
+
+- [#7931](https://github.com/stella/stella/pull/7931) [`f609986`](https://github.com/stella/stella/commit/f609986aec31b5a89f952e39cb5735496d01c5b2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document building the committed WebAssembly on any host with Docker (`build:wasm:container`) and updating crates through the release-age quarantine.
+
 ## 0.1.2
 
 ### Patch Changes
