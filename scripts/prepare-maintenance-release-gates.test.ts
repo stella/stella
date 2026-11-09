@@ -361,6 +361,24 @@ describe("the maintenance cut checks the tag gates first", () => {
     expect(run.npmArguments).toEqual(["--ref", "v1.2.3"]);
   });
 
+  for (const previousRelease of [
+    PUBLISHED_PREVIOUS,
+    { kind: "unpromoted" },
+  ] satisfies PreviousRelease[]) {
+    test(`refuses a VERSION whose final tag landed after the fetch (${previousRelease.kind})`, async () => {
+      const root = releaseTree("1.2.4");
+      write(root, "docs/changelog/v1.2.4.md", "# Maintenance release\n");
+      const before = snapshot(root);
+
+      const run = await runCut(root, {}, [], previousRelease);
+
+      expect(run.error).toBeInstanceOf(MaintenanceReleaseError);
+      expect(String(run.error)).toContain("v1.2.4 gained a final tag");
+      expect(run.gatesRun).toEqual([]);
+      expect(snapshot(root)).toEqual(before);
+    });
+  }
+
   test("refuses when the previous final is promoted but its package is missing from npm", async () => {
     const root = releaseTree("1.2.3", "v1.2.3");
     const before = snapshot(root);

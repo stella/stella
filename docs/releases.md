@@ -161,6 +161,7 @@ by the RC run.
    `VERSION`. When `VERSION` is ahead of every final tag, a release pull request
    merged before its final tag; the cut then takes the next patch after
    `VERSION` and folds that untagged version's notes into the new changelog.
+   If that version's final tag lands during the cut, the cut refuses; run it again.
    `--allow-unproven-main` permits missing heavy evidence at the cut only;
    dependency waivers require `WAIVE_DEPENDENCY_AUDIT=true` and
    `WAIVER_REASON='<reason>'`. There is no `--refresh` path.

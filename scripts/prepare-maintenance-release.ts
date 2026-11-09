@@ -1555,15 +1555,22 @@ export const cutMaintenanceRelease = async (
   // A release pull request merged before its final tag leaves VERSION ahead of
   // every final. Its number cannot be cut again: the changelog already exists
   // and the release tree must change VERSION. The cut supersedes it instead.
-  const current = isVersionAhead(versionOnMain, latestFinal)
-    ? versionOnMain
-    : latestFinal;
+  const supersedesVersionOnMain = isVersionAhead(versionOnMain, latestFinal);
+  const current = supersedesVersionOnMain ? versionOnMain : latestFinal;
   const previousTag = `v${current.value}`;
   const baseSha = effects.resolveHeadSha();
   // GitHub's verdict on the previous release, read before any gate: the npm
   // gate checks against the manifest the release PR will carry, which the
   // preparation writes.
   const previousRelease = await effects.readPreviousRelease(previousTag);
+  // The fetch saw no final tag for VERSION, so any other verdict means one was
+  // pushed since. Cutting on would keep its notes out of the changelog and
+  // check npm against the older final.
+  if (supersedesVersionOnMain && previousRelease.kind !== "superseded") {
+    throw new MaintenanceReleaseError(
+      `${previousTag} gained a final tag after this cut fetched tags; run the cut again`,
+    );
+  }
   const recordedDates = readReleaseManifest(rootDir).releases;
   await assertPreCutGates({
     allowUnprovenMain: options.allowUnprovenMain,
