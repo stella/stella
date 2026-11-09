@@ -2791,12 +2791,6 @@ const config = defineConfig({
             // still fails.
             allowedFiles: [
               {
-                path: "packages/ui/src/components/button.tsx",
-                reason:
-                  "The button cuts its own one-line label in a plain span; a tooltip root in every label would cost screens with many buttons, and the tooltip prop shows the whole text.",
-                utilities: ["truncate"],
-              },
-              {
                 path: "packages/ui/src/components/select.tsx",
                 reason:
                   "Base UI's Select.Value renders the chosen label itself; the open list shows it in full.",
