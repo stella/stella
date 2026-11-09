@@ -48,11 +48,14 @@ import {
  *   `rejected` message naming why.
  * - Run ids, approval request ids, decisions, outcomes and policies use the
  *   desktop runner protocol's vocabulary, so the host relays them unchanged.
+ * - `folder.restore` puts a run's folder back as its checkpoint saved it
+ *   (`checkpoints.ts`) and is answered by one `folder.restored`. It is not a
+ *   run message: it is not numbered and goes to the current connection only.
  *
  * `protocol.fixtures.json` holds valid and rejected examples of every message;
  * the desktop's serde types round-trip the same file.
  */
-export const SIDECAR_PROTOCOL = 3;
+export const SIDECAR_PROTOCOL = 4;
 
 /**
  * Largest line either side writes or accepts, in UTF-8 bytes. A `run.start`
@@ -72,6 +75,7 @@ export const SIDECAR_HOST_MESSAGE = {
   ack: "ack",
   resume: "resume",
   harnessProcessGranted: "harness.process_granted",
+  folderRestore: "folder.restore",
   drain: "drain",
   shutdown: "shutdown",
 } as const;
@@ -83,6 +87,7 @@ export const SIDECAR_MESSAGE = {
   runEvent: "run.event",
   runApprovalRequest: "run.approval_request",
   runFinished: "run.finished",
+  folderRestored: "folder.restored",
   rejected: "rejected",
 } as const;
 
@@ -108,6 +113,20 @@ export const SIDECAR_PROBE_FAILURES = [
   "protocol_violation",
   "unsupported",
 ] as const;
+
+/**
+ * How a folder restore ended: done, no checkpoint for the run, a newer
+ * checkpoint not undone yet, a run using the folder, or a failure that left
+ * the folder as it was before the restore.
+ */
+export const SIDECAR_RESTORE_OUTCOMES = [
+  "restored",
+  "no_checkpoint",
+  "not_newest",
+  "folder_busy",
+  "failed",
+] as const;
+export type SidecarRestoreOutcome = (typeof SIDECAR_RESTORE_OUTCOMES)[number];
 
 /** Whether a holder takes new runs or only finishes the ones it holds. */
 export const SIDECAR_HOLDER_MODES = ["serving", "draining"] as const;
@@ -381,6 +400,16 @@ export const sidecarHostMessageSchema = v.variant("type", [
     type: v.literal(SIDECAR_HOST_MESSAGE.harnessProcessGranted),
     id: requestIdSchema,
   }),
+  /**
+   * Put the run's folder back as it was before the run, from the checkpoint
+   * the run took. Refused while any run uses the folder.
+   */
+  v.object({
+    type: v.literal(SIDECAR_HOST_MESSAGE.folderRestore),
+    requestId: requestIdSchema,
+    workspaceDir: absolutePathSchema,
+    runId: runIdSchema,
+  }),
   /** Take no new runs; exit once every held run is finished and acked. */
   v.object({ type: v.literal(SIDECAR_HOST_MESSAGE.drain) }),
   /** Stop every run and exit. */
@@ -391,6 +420,10 @@ export type SidecarHostHello = Extract<SidecarHostMessage, { type: "hello" }>;
 export type SidecarRunStart = Extract<
   SidecarHostMessage,
   { type: "run.start" }
+>;
+export type SidecarFolderRestore = Extract<
+  SidecarHostMessage,
+  { type: "folder.restore" }
 >;
 
 const probeOutcomeSchema = v.variant("type", [
@@ -492,6 +525,12 @@ export const sidecarMessageSchema = v.variant("type", [
     harnessSessionId: v.nullable(
       v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
     ),
+  }),
+  /** The answer to `folder.restore`; it names no file. */
+  v.object({
+    type: v.literal(SIDECAR_MESSAGE.folderRestored),
+    requestId: requestIdSchema,
+    outcome: v.picklist(SIDECAR_RESTORE_OUTCOMES),
   }),
   v.object({
     type: v.literal(SIDECAR_MESSAGE.rejected),

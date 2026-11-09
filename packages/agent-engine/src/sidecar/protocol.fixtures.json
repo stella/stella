@@ -1,6 +1,6 @@
 {
   "vocabulary": {
-    "protocol": 3,
+    "protocol": 4,
     "maxLineBytes": 8388608,
     "maxHeldRuns": 1000,
     "hostMessageTypes": [
@@ -15,6 +15,7 @@
       "ack",
       "resume",
       "harness.process_granted",
+      "folder.restore",
       "drain",
       "shutdown"
     ],
@@ -25,6 +26,7 @@
       "run.event",
       "run.approval_request",
       "run.finished",
+      "folder.restored",
       "rejected"
     ],
     "rejections": [
@@ -45,13 +47,20 @@
       "protocol_violation",
       "unsupported"
     ],
-    "holderModes": ["serving", "draining"]
+    "holderModes": ["serving", "draining"],
+    "restoreOutcomes": [
+      "restored",
+      "no_checkpoint",
+      "not_newest",
+      "folder_busy",
+      "failed"
+    ]
   },
   "valid": {
     "host": [
       {
         "type": "hello",
-        "protocol": 3,
+        "protocol": 4,
         "secret": "abababababababababababababababababababababababababababababababab",
         "appVersion": "1.4.0",
         "apiOrigin": "https://api.example.test",
@@ -59,7 +68,7 @@
       },
       {
         "type": "hello",
-        "protocol": 3,
+        "protocol": 4,
         "secret": "abababababababababababababababababababababababababababababababab",
         "appVersion": "1.4.0",
         "apiOrigin": "http://127.0.0.1:3000",
@@ -112,7 +121,10 @@
         "attachments": [],
         "cacheDir": "C:\\data\\agent-package-cache",
         "skillFolders": [
-          { "name": "fixture-skill", "path": "C:\\skills\\fixture-skill" }
+          {
+            "name": "fixture-skill",
+            "path": "C:\\skills\\fixture-skill"
+          }
         ],
         "toolPath": ["C:\\data\\harness\\bun\\1.4.4\\package\\bin"],
         "model": "gpt-test",
@@ -228,6 +240,12 @@
         "id": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f"
       },
       {
+        "type": "folder.restore",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "workspaceDir": "/data/runs/0b6f5c8e",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f"
+      },
+      {
         "type": "drain"
       },
       {
@@ -237,14 +255,14 @@
     "sidecar": [
       {
         "type": "hello",
-        "protocol": 3,
+        "protocol": 4,
         "sidecarVersion": "1.4.0",
         "mode": "serving",
         "runs": []
       },
       {
         "type": "hello",
-        "protocol": 3,
+        "protocol": 4,
         "sidecarVersion": "1.3.2",
         "mode": "draining",
         "runs": [
@@ -356,6 +374,16 @@
         "seq": 1,
         "outcome": "failed",
         "harnessSessionId": null
+      },
+      {
+        "type": "folder.restored",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "outcome": "restored"
+      },
+      {
+        "type": "folder.restored",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "outcome": "folder_busy"
       },
       {
         "type": "rejected",
@@ -472,6 +500,16 @@
         "name": "run.start with an unknown approval mode",
         "line": "{\"type\":\"run.start\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"threadId\":\"thread-1\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false},\"workspaceDir\":\"/data/runs/0b6f5c8e\",\"cacheDir\":\"/data/agent-package-cache\",\"model\":\"gpt-test\",\"instructions\":\"\",\"messages\":[{\"role\":\"user\",\"content\":\"First question.\"},{\"role\":\"assistant\",\"content\":\"First answer.\"},{\"role\":\"user\",\"content\":\"Second question.\"}],\"harnessSessionId\":\"thread-old\",\"policy\":{\"network\":\"open\",\"fs\":\"workspace\",\"approvals\":\"bypass\"},\"mcp\":{\"serverName\":\"stella\",\"url\":\"https://api.example.test/mcp\",\"token\":\"run-token-1\",\"expiresAt\":\"2026-10-28T12:00:00.000Z\"}}",
         "reason": "invalid"
+      },
+      {
+        "name": "folder restore with a relative folder",
+        "line": "{\"type\":\"folder.restore\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"workspaceDir\":\"runs/0b6f5c8e\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\"}",
+        "reason": "invalid"
+      },
+      {
+        "name": "folder restore without a run",
+        "line": "{\"type\":\"folder.restore\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"workspaceDir\":\"/data/runs/0b6f5c8e\"}",
+        "reason": "invalid"
       }
     ],
     "sidecar": [
@@ -506,7 +544,7 @@
         "name": "unknown holder mode",
         "message": {
           "type": "hello",
-          "protocol": 3,
+          "protocol": 4,
           "sidecarVersion": "1.4.0",
           "mode": "paused",
           "runs": []
@@ -566,6 +604,21 @@
         "message": {
           "type": "harness.process",
           "pid": 48213
+        }
+      },
+      {
+        "name": "unknown restore outcome",
+        "message": {
+          "type": "folder.restored",
+          "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+          "outcome": "partly"
+        }
+      },
+      {
+        "name": "restore answer without a request",
+        "message": {
+          "type": "folder.restored",
+          "outcome": "restored"
         }
       }
     ]

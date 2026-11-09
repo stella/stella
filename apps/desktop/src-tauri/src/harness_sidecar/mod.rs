@@ -1424,6 +1424,14 @@ impl Supervisor {
           },
         );
       }
+      SidecarMessage::FolderRestored(restored) => {
+        // This desktop sends no restore yet; an answer is only logged.
+        tracing::warn!(
+          target: LOG_TARGET,
+          outcome = restored.outcome.wire_name(),
+          "harness holder answered a folder restore this desktop did not send"
+        );
+      }
       SidecarMessage::Rejected(rejected) => {
         tracing::warn!(
           target: LOG_TARGET,
