@@ -1592,6 +1592,8 @@ const MODEL_OVERRIDES = {
   chat: env.AI_MODEL_CHAT,
   reasoning: env.AI_MODEL_REASONING,
   pdf: env.AI_MODEL_PDF,
+  // Browsing runs on the instance's fast model; no separate setting.
+  browse: env.AI_MODEL_FAST,
 } satisfies Record<ModelOverrideGroup, string | undefined>;
 
 /** The fast tier serves every task with the short-text model. */

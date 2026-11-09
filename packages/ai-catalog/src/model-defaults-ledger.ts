@@ -14,6 +14,7 @@ export const MODEL_TASKS = [
   "search-expand",
   "classify",
   "short-text",
+  "browse",
 ] as const;
 export type ModelTask = (typeof MODEL_TASKS)[number];
 
@@ -22,6 +23,7 @@ export const MODEL_OVERRIDE_GROUPS = [
   "chat",
   "reasoning",
   "pdf",
+  "browse",
 ] as const;
 export type ModelOverrideGroup = (typeof MODEL_OVERRIDE_GROUPS)[number];
 
@@ -33,6 +35,7 @@ export const MODEL_TASK_OVERRIDE_GROUP = {
   "search-expand": "fast",
   classify: "fast",
   "short-text": "fast",
+  browse: "browse",
 } as const satisfies Record<ModelTask, ModelOverrideGroup>;
 
 export const MODEL_OVERRIDE_GROUP_TASK = {
@@ -40,6 +43,7 @@ export const MODEL_OVERRIDE_GROUP_TASK = {
   chat: "chat",
   reasoning: "reasoning",
   pdf: "pdf",
+  browse: "browse",
 } as const satisfies Record<ModelOverrideGroup, ModelTask>;
 
 /** A reasoning request is capability-clamped before it reaches the provider. */
@@ -162,6 +166,7 @@ const DEFAULT_RATIONALE_BY_GROUP = {
     rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
   },
   pdf: { rationaleKey: "organization.aiConfig.defaultRationale.pdf" },
+  browse: { rationaleKey: "organization.aiConfig.defaultRationale.browse" },
 } as const satisfies Record<ModelOverrideGroup, ModelDefaultRationale>;
 
 const CHAT_DEFAULTS = {
@@ -508,6 +513,50 @@ const FAST_DEFAULTS = {
   },
 } as const satisfies TaskProviderDefaults<"short-text">;
 
+/**
+ * Browsing drives the user's browser one step at a time and reads whole
+ * pages, so it runs on each provider's fast model; an admin picks another in
+ * AI settings. Only the rationale differs from the fast defaults.
+ */
+const BROWSE_DEFAULTS = {
+  google: {
+    ...FAST_DEFAULTS.google,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
+  },
+  openrouter: {
+    ...FAST_DEFAULTS.openrouter,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
+  },
+  openai: {
+    ...FAST_DEFAULTS.openai,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
+  },
+  azure_foundry: {
+    ...FAST_DEFAULTS.azure_foundry,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
+  },
+  anthropic: {
+    ...FAST_DEFAULTS.anthropic,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
+  },
+  bedrock: {
+    ...FAST_DEFAULTS.bedrock,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
+  },
+  mistral: {
+    ...FAST_DEFAULTS.mistral,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
+  },
+  openai_compatible: {
+    ...FAST_DEFAULTS.openai_compatible,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
+  },
+  huggingface: {
+    ...FAST_DEFAULTS.huggingface,
+    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
+  },
+} as const satisfies TaskProviderDefaults<"browse">;
+
 export const MODEL_DEFAULTS_LEDGER = {
   chat: CHAT_DEFAULTS,
   reasoning: REASONING_DEFAULTS,
@@ -516,6 +565,7 @@ export const MODEL_DEFAULTS_LEDGER = {
   "search-expand": FAST_DEFAULTS,
   classify: FAST_DEFAULTS,
   "short-text": FAST_DEFAULTS,
+  browse: BROWSE_DEFAULTS,
 } as const satisfies ModelDefaultsLedger;
 
 export type ResolvedDefaultModel<TProvider extends AIProvider = AIProvider> = {
@@ -580,6 +630,12 @@ export const resolveDefaultOverrideModels = <TProvider extends AIProvider>(
     pdf: defaultSelection(
       resolveDefaultModel({
         task: MODEL_OVERRIDE_GROUP_TASK.pdf,
+        orgProviders,
+      }),
+    ),
+    browse: defaultSelection(
+      resolveDefaultModel({
+        task: MODEL_OVERRIDE_GROUP_TASK.browse,
         orgProviders,
       }),
     ),

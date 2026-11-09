@@ -4899,6 +4899,7 @@
       "defaultModel": "Numatytasis: {model}",
       "defaultModelOption": "Numatytasis",
       "defaultRationale": {
+        "browse": "Darbui su svetainėmis naršyklėje.",
         "chat": "Pokalbiams ir kasdieniams klausimams.",
         "fast": "Trumpoms, įprastoms užduotims.",
         "pdf": "PDF dokumentams skaityti ir analizuoti.",
@@ -4950,6 +4951,7 @@
       "replaceKey": "Pakeisti raktą",
       "roleUnavailable": "{provider} nepalaiko šio vaidmens.",
       "roles": {
+        "browse": "Naršymas",
         "chat": "Pokalbis",
         "fast": "Greitas",
         "pdf": "PDF",

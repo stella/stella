@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import {
   BYOK_MODEL_OPTIONS,
   MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
   MODEL_TASK_OVERRIDE_GROUP,
   resolveDefaultModel,
   resolveWorkingBYOKModelForTask,
@@ -225,22 +226,16 @@ const healOverrideModels = (
   if (overrideModels === null) {
     return null;
   }
-  return {
-    ...(overrideModels.fast === undefined
-      ? {}
-      : { fast: healOverrideModel("fast", overrideModels.fast) }),
-    ...(overrideModels.chat === undefined
-      ? {}
-      : { chat: healOverrideModel("chat", overrideModels.chat) }),
-    ...(overrideModels.reasoning === undefined
-      ? {}
-      : {
-          reasoning: healOverrideModel("reasoning", overrideModels.reasoning),
-        }),
-    ...(overrideModels.pdf === undefined
-      ? {}
-      : { pdf: healOverrideModel("pdf", overrideModels.pdf) }),
-  };
+  // Every role, derived from the role list: a hand-written list silently
+  // dropped any role it did not name when the config was read back.
+  return Object.fromEntries(
+    MODEL_OVERRIDE_GROUPS.flatMap((role) => {
+      const selection = overrideModels[role];
+      return selection === undefined
+        ? []
+        : [[role, healOverrideModel(role, selection)] as const];
+    }),
+  );
 };
 
 /** Task defaults stay distinct from persisted override groups. */

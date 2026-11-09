@@ -37,6 +37,7 @@ const MODEL_GROUP_DISPLAY_ORDER = {
   fast: 1,
   reasoning: 2,
   pdf: 3,
+  browse: 4,
 } as const satisfies Record<ModelOverrideGroup, number>;
 export const ROLE_KEYS = MODEL_OVERRIDE_GROUPS.toSorted(
   (left, right) =>
@@ -273,6 +274,7 @@ export const projectDefaultRoleModels = (
     fast: project(defaultModels.fast),
     reasoning: project(defaultModels.reasoning),
     pdf: project(defaultModels.pdf),
+    browse: project(defaultModels.browse),
   };
 };
 
@@ -517,12 +519,13 @@ export const serializeOverrideModels = ({
   const fast = roleModels.fast;
   const reasoning = roleModels.reasoning;
   const pdf = roleModels.pdf;
+  const browse = roleModels.browse;
 
-  if (!(chat && fast && reasoning && pdf)) {
+  if (!(chat && fast && reasoning && pdf && browse)) {
     return null;
   }
 
-  const selections = { chat, fast, reasoning, pdf } satisfies Record<
+  const selections = { chat, fast, reasoning, pdf, browse } satisfies Record<
     RoleValue,
     ModelSelection
   >;
@@ -542,6 +545,7 @@ export const serializeOverrideModels = ({
     fast: normalizeModelSelection(fast),
     reasoning: normalizeModelSelection(reasoning),
     pdf: normalizeModelSelection(pdf),
+    browse: normalizeModelSelection(browse),
   };
 };
 

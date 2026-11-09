@@ -576,6 +576,33 @@ describe("sparse custom model settings", () => {
     );
     expect((await readSaved(reset)).overrideModels).toBeNull();
   });
+  test("a save keeps a selection on every role the catalog defines", async () => {
+    const everyRole = Object.fromEntries(
+      MODEL_OVERRIDE_GROUPS.map((role) => [
+        role,
+        {
+          provider: "google",
+          modelId: BYOK_DEFAULT_MODELS.google[role].modelId,
+        },
+      ]),
+    );
+    // The route parses the body first; a role its schema did not list was
+    // dropped there before the handler ever saw it.
+    const body = v.parse(updateAIConfig.config.body, {
+      providers: [{ provider: "google" }],
+      overrideModels: everyRole,
+    });
+    const db = createSettingsDb();
+    await updateAIConfig.handler(
+      createTestHandlerContext<UpdateContext>({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
+        safeDb: db.safeDb,
+        body,
+      }),
+    );
+    expect((await readSaved(db)).overrideModels).toEqual(everyRole);
+  });
   test("credential-only saves retain custom roles and prune removed providers", async () => {
     const db = createSettingsDb("global", {
       providers: [

@@ -24,6 +24,7 @@
 import { TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { MODEL_OVERRIDE_GROUPS } from "@stll/ai-catalog";
 import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
 import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
@@ -55,7 +56,8 @@ type SmokeCheck = {
 const SMOKE_AI_PROVIDER = "openai";
 export const SMOKE_AI_MODEL_ID = "gpt-6-luna";
 
-const SMOKE_AI_ROLES = ["fast", "chat", "reasoning", "pdf"] as const;
+/** Every role, so a role added to the catalog is configured here too. */
+const SMOKE_AI_ROLES = MODEL_OVERRIDE_GROUPS;
 
 /** An organization-level write that always asks for approval. The smoke
  *  declines it, so it never writes anything. */

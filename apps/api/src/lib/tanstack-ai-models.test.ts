@@ -1090,6 +1090,7 @@ describe("tanStackModelOptionsForTask", () => {
       chat: "routine",
       reasoning: "reasoning",
       pdf: "routine",
+      browse: "fast",
     } as const satisfies Record<
       ModelOverrideGroup,
       keyof typeof baseline.google
@@ -1729,6 +1730,10 @@ describe("managed model tier", () => {
       pdf: {
         provider: "openai",
         modelId: BYOK_DEFAULT_MODELS.openai.pdf.modelId,
+      },
+      browse: {
+        provider: "openai",
+        modelId: BYOK_DEFAULT_MODELS.openai.browse.modelId,
       },
     },
     decision: null,

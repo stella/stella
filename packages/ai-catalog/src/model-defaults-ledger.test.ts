@@ -192,6 +192,8 @@ const SEED_ROLE_BY_TASK = {
   "search-expand": "fast",
   classify: "fast",
   "short-text": "fast",
+  // Browsing has no legacy role: it seeds from each provider's fast model.
+  browse: "fast",
 } as const satisfies Record<ModelTask, LegacyRole>;
 
 const FAST_REPLACEMENTS = {
@@ -254,6 +256,20 @@ describe("task default migration", () => {
         }
         expect(entry.candidate.modelId === oldModel).toBe(true);
         expect(entry.candidate.mode).toEqual(LEGACY_MODES[provider][role]);
+      }
+    }
+  });
+
+  test("explains every default with the rationale of the role that shows it", () => {
+    for (const task of MODEL_TASKS) {
+      for (const provider of AI_PROVIDERS) {
+        const entry = MODEL_DEFAULTS_LEDGER[task][provider];
+        if (entry.kind === "unsupported") {
+          continue;
+        }
+        expect(entry.rationale.rationaleKey).toBe(
+          `organization.aiConfig.defaultRationale.${MODEL_TASK_OVERRIDE_GROUP[task]}`,
+        );
       }
     }
   });

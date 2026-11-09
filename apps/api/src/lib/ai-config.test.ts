@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   BYOK_DEFAULT_MODELS,
   isBYOKProviderRoleSupported,
+  MODEL_OVERRIDE_GROUPS,
   MODEL_TASKS,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
@@ -86,6 +87,30 @@ describe("normalizeOrgAIConfig auto-heal", () => {
     expect(normalizeOrgAIConfig(config).overrideModels).toEqual(
       config.overrideModels,
     );
+  });
+
+  test("keeps the selection of every role the catalog defines", () => {
+    const overrideModels = Object.fromEntries(
+      MODEL_OVERRIDE_GROUPS.map((role) => [
+        role,
+        {
+          provider: "google",
+          modelId: BYOK_DEFAULT_MODELS.google[role].modelId,
+        },
+      ]),
+    );
+    const config: OrgAIConfig = {
+      providers: [googleProvider],
+      overrideModels,
+      decision: null,
+    };
+
+    const healed = normalizeOrgAIConfig(config).overrideModels;
+
+    expect(Object.keys(healed ?? {}).toSorted()).toEqual(
+      MODEL_OVERRIDE_GROUPS.toSorted(),
+    );
+    expect(healed).toEqual(overrideModels);
   });
 
   test("leaves mistral + pdf unhealable selection as-is (no document-capable model)", () => {
@@ -190,6 +215,40 @@ describe("organization catalog defaults", () => {
     expect(resolveOrgAIModelForTask(config, "short-text")).toEqual({
       provider: "google",
       modelId: BYOK_DEFAULT_MODELS.google.fast.modelId,
+    });
+  });
+  test("browsing resolves its own role, apart from the fast one", () => {
+    const fast = { provider: "google", modelId: "gemini-3.8-flash" } as const;
+    const browse = {
+      provider: "google",
+      modelId: BYOK_DEFAULT_MODELS.google.chat.modelId,
+    } as const;
+    expect(
+      resolveOrgAIModelForTask(
+        {
+          providers: [googleProvider],
+          overrideModels: { fast, browse },
+          decision: null,
+        },
+        "browse",
+      ),
+    ).toEqual(browse);
+    // Without a browsing choice it takes the catalog's browsing default, not
+    // the fast role's custom model.
+    expect(
+      resolveOrgAIModelForTask(
+        {
+          providers: [googleProvider],
+          overrideModels: {
+            fast: { provider: "google", modelId: "gemini-3-pro-preview" },
+          },
+          decision: null,
+        },
+        "browse",
+      ),
+    ).toEqual({
+      provider: "google",
+      modelId: BYOK_DEFAULT_MODELS.google.browse.modelId,
     });
   });
   test("defaults use the first configured provider that supports the task", () => {

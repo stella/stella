@@ -542,6 +542,7 @@ const MODEL_TASK_COVERAGE = {
       "No chat-surface builder uses it; document reviews and workflows do.",
   },
   reasoning: { covered: "The chat attempt's fallback (the chat test)." },
+  browse: { neverSent: "No chat-surface builder uses browsing yet." },
 } as const satisfies Record<
   ModelTask,
   { covered: string } | { neverSent: string }
