@@ -95,6 +95,7 @@ import {
   partialMatchesUnreadWarning,
   phrasingTimedOutWarning,
   provisionCitedWidelyWarning,
+  provisionScopeUnreadWarning,
   withFacetValues,
 } from "@/api/lib/case-law/search-warnings";
 import { projectCaseLawCourt } from "@/api/lib/chat/case-law-court-projection";
@@ -2677,15 +2678,25 @@ const readSearchProvision = async ({
   return {
     type: "read",
     body: { provision, provisionScope },
-    warnings:
-      provisionScope.type === "broad"
-        ? [
-            provisionCitedWidelyWarning({
-              provision: text,
-            }),
-          ]
-        : [],
+    warnings: provisionScopeWarnings(provisionScope, text),
   };
+};
+
+const provisionScopeWarnings = (
+  scope: CaseLawProvisionScope,
+  provision: string,
+): AgentCaseLawSearchWarning[] => {
+  switch (scope.type) {
+    case "decisions":
+      return [];
+    case "broad":
+      return [provisionCitedWidelyWarning({ provision })];
+    case "unread":
+      return [provisionScopeUnreadWarning({ provision })];
+    default:
+      scope satisfies never;
+      return panic("Unhandled provision scope");
+  }
 };
 
 type ListSearchCaseLawProvisionOptions = {

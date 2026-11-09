@@ -6665,6 +6665,23 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(warnings[0]?.hint).toContain("subsection");
     });
 
+    test("a scope read that ran out of budget does not claim the provision is widely cited", async () => {
+      readCaseLawProvisionScopeMock.mockResolvedValue({ type: "unread" });
+      const result = await handleMcpToolCall({
+        args: {
+          queries: ["odpovědnost lékaře"],
+          country: "CZE",
+          provision: "§ 2910 OZ",
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+      expect(result.isError).toBeUndefined();
+      const codes = searchWarnings(result).map(({ code }) => code);
+      expect(codes).toContain("provision_scope_unread");
+      expect(codes).not.toContain("provision_cited_widely");
+    });
+
     test("a provision whose citing set fits raises no breadth warning", async () => {
       const result = await handleMcpToolCall({
         args: {

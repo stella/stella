@@ -128,6 +128,9 @@ export const caseLawSearchWarnings = ({
  * - `provision_cited_widely`: the provision filter is cited by more decisions
  *   than one search can filter by, so the page holds the topic's best matches
  *   that cite it rather than every one; the count and the narrowing are said.
+ * - `provision_scope_unread`: the provision's citing decisions could not be
+ *   enumerated within the search's budget, so the page holds the topic's best
+ *   matches that cite it; how widely it is cited was not established.
  * - `phrasing_timed_out`: one of several phrasings ran out of the call's time
  *   budget, so the page holds the phrasings that finished and none of its
  *   hits; the hint names how to run it again.
@@ -140,6 +143,7 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_unread",
   "many_required_terms",
   "provision_cited_widely",
+  "provision_scope_unread",
   "phrasing_timed_out",
   "partial_matches_unread",
 ] as const;
@@ -369,6 +373,17 @@ export const provisionCitedWidelyWarning = ({
   hint: "Add a subsection or letter to the provision, or more topic words, to narrow; or omit queries to list every decision citing it, with pagination.",
 });
 
+export const provisionScopeUnreadWarning = ({
+  provision,
+}: {
+  /** The provision as the caller wrote it. */
+  provision: string;
+}): AgentCaseLawSearchWarning => ({
+  code: "provision_scope_unread",
+  message: `The decisions citing ${provision} could not be enumerated within this search's time budget: these results are the topic's best matches that cite it, not all of them.`,
+  hint: "Repeat this search to try again, or omit queries to list every decision citing it, with pagination.",
+});
+
 export const partialMatchesAppendedWarning = ({
   partial,
   countsStrictSet,
@@ -442,6 +457,10 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
   filter_unread: () => filterUnreadWarning({ filter: "court" }),
   provision_cited_widely: () =>
     provisionCitedWidelyWarning({
+      provision: "§ 2910 OZ",
+    }),
+  provision_scope_unread: () =>
+    provisionScopeUnreadWarning({
       provision: "§ 2910 OZ",
     }),
   many_required_terms: () =>

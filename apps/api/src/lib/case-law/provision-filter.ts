@@ -367,10 +367,15 @@ export const provisionLinkMatchSql = ({
   )`;
 };
 
-/** A complete small set, or a scope that needs candidate-by-candidate probes. */
+/**
+ * A complete small set, a scope too wide to hand over as one, or a scope the
+ * read could not finish within its budget, which says nothing about how widely
+ * the provision is cited. The last two are both read candidate by candidate.
+ */
 export type CaseLawProvisionScope =
   | { type: "decisions"; decisionIds: readonly SafeId<"caseLawDecision">[] }
-  | { type: "broad" };
+  | { type: "broad" }
+  | { type: "unread" };
 
 type ProvisionScopeReadOptions = ProvisionScopeOptions & {
   /** Citing decisions of the requested country handed over as an id set. */
@@ -470,9 +475,9 @@ export const readCaseLawProvisionScope = async (
 /**
  * {@link readCaseLawProvisionScope} in a transaction of its own, each
  * statement capped by `LIMITS.caseLawProvisionScopeStatementBudgetMs`. A
- * statement the cap cancels reads as `broad`: that path needs no set, answers
- * correctly and says it is not exhaustive, so a slow scope read costs the
- * request its cap and not the budget of the search it was only choosing a
+ * statement the cap cancels answers `unread`: the candidate path needs no set,
+ * answers correctly and says it is not exhaustive, so a slow scope read costs
+ * the request its cap and not the budget of the search it was only choosing a
  * path for. Any other failure stays the failure it was.
  *
  * Its own transaction because a cancelled statement ends the transaction it
@@ -490,7 +495,7 @@ export const readCaseLawProvisionScopeWithinBudget = async (
       ),
   ).catch(async (error: unknown) =>
     getPgErrorCode(error) === PG_ERROR.QUERY_CANCELED
-      ? ({ type: "broad" } as const)
+      ? ({ type: "unread" } as const)
       : await Promise.reject(
           error instanceof Error
             ? error

@@ -39,13 +39,13 @@ test("a scope read runs under its own statement budget", async () => {
   expect(answered).toEqual({ type: "decisions", decisionIds: [] });
 });
 
-test("a statement its budget cancelled reads as broad", async () => {
+test("a statement its budget cancelled answers unread, not broad", async () => {
   expect(
     await readCaseLawProvisionScopeWithinBudget(
       dbAnswering(async () => await Promise.reject(postgresError("57014"))),
       scope,
     ),
-  ).toEqual({ type: "broad" });
+  ).toEqual({ type: "unread" });
 });
 
 test("any other failure stays the failure it was", async () => {

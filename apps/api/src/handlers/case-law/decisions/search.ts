@@ -4592,24 +4592,24 @@ export const listCaseLawProvisionDecisions = async ({
     // Without its index the walk sorts the whole country per request, the
     // unbounded read it replaces; it waits for the online build instead.
     if (
-      provisionScope.type === "broad" &&
+      provisionScope.type !== "decisions" &&
       order.walkIndexes.length > 0 &&
       !(await readOnlineIndexesReady(tx, order.walkIndexes))
     ) {
       return { type: "walkIndexNotReady" } as const;
     }
     const page =
-      provisionScope.type === "broad"
-        ? await readBroadProvisionPage(tx, {
+      provisionScope.type === "decisions"
+        ? await readProvisionIdSetPage(tx, {
             body,
-            candidateBudget,
+            decisionIds: provisionScope.decisionIds,
             generation,
             order,
             limit,
           })
-        : await readProvisionIdSetPage(tx, {
+        : await readBroadProvisionPage(tx, {
             body,
-            decisionIds: provisionScope.decisionIds,
+            candidateBudget,
             generation,
             order,
             limit,
