@@ -3714,9 +3714,6 @@
     "cli": {
       "command": ["guidance", "read"],
       "scope": "read",
-      "windowedText": {
-        "textPath": "guidance.text"
-      },
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_guidance",
