@@ -1,3 +1,10 @@
+import {
+  formatReadableInputValue,
+  getReadableInputRows,
+  humanizeIdentifier,
+  truncateReadableValue,
+} from "@stll/api-contract/chat-tool-input-rows";
+import type { ReadableInputRow } from "@stll/api-contract/chat-tool-input-rows";
 import { READER_ANNOTATION_KINDS } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderAnnotationKind } from "@stll/api-contract/legal-reader-annotations";
 
@@ -5,109 +12,11 @@ import type { ApprovalToolName } from "@/components/chat/chat-ui-tools";
 
 /**
  * Pure (no-React) helpers that turn a chat tool's approval input into readable
- * key/value rows for `ToolApprovalCard`. Kept free of React so the row logic is
- * unit-testable (apps/web has no DOM test framework); the card only renders the
+ * key/value rows for `ToolApprovalCard`, on top of the generic rows every
+ * approval surface shares (`@stll/api-contract/chat-tool-input-rows`). Kept
+ * free of React so the row logic is unit-testable; the card only renders the
  * rows these produce.
  */
-
-export type ReadableInputRow = {
-  key: string;
-  label: string;
-  value: string;
-};
-
-/** Longer string values are truncated in the approval summary. */
-const MAX_VALUE_CHARS = 200;
-
-export const humanizeIdentifier = (value: string): string =>
-  value
-    .replaceAll(/[_-]+/gu, " ")
-    .replaceAll(/\s+/gu, " ")
-    .trim()
-    .replace(/^\p{L}/u, (match) => match.toLocaleUpperCase());
-
-const truncate = (value: string): string =>
-  value.length > MAX_VALUE_CHARS
-    ? `${value.slice(0, MAX_VALUE_CHARS)}…`
-    : value;
-
-export const formatReadableInputValue = ({
-  emptyLabel,
-  value,
-}: {
-  emptyLabel: string;
-  value: unknown;
-}): string => {
-  if (value === null || value === undefined) {
-    return emptyLabel;
-  }
-
-  if (typeof value === "string") {
-    return truncate(value);
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-
-  if (Array.isArray(value)) {
-    return truncate(
-      value
-        .map((child) => formatReadableInputValue({ emptyLabel, value: child }))
-        .join(", "),
-    );
-  }
-
-  const parts: string[] = [];
-  for (const [key, child] of Object.entries(value)) {
-    parts.push(
-      `${humanizeIdentifier(key)}: ${formatReadableInputValue({
-        emptyLabel,
-        value: child,
-      })}`,
-    );
-  }
-  return truncate(parts.join("; "));
-};
-
-export const getReadableInputRows = ({
-  emptyLabel,
-  input,
-  requestLabel,
-}: {
-  emptyLabel: string;
-  input: unknown;
-  requestLabel: string;
-}): ReadableInputRow[] => {
-  if (input === undefined || input === null || typeof input !== "object") {
-    return [
-      {
-        key: "request",
-        label: requestLabel,
-        value: formatReadableInputValue({ emptyLabel, value: input }),
-      },
-    ];
-  }
-
-  if (Array.isArray(input)) {
-    return input.map((value, index) => ({
-      key: String(index),
-      label: String(index + 1),
-      value: formatReadableInputValue({ emptyLabel, value }),
-    }));
-  }
-
-  const rows: ReadableInputRow[] = [];
-  for (const [key, value] of Object.entries(input)) {
-    rows.push({
-      key,
-      label: humanizeIdentifier(key),
-      value: formatReadableInputValue({ emptyLabel, value }),
-    });
-  }
-
-  return rows;
-};
 
 /**
  * Approval rows for a credential-backed connector operation. These values
@@ -525,14 +434,14 @@ const buildReaderAnnotationRows = ({
     {
       key: "quote",
       label: labels.passage[mark.kind],
-      value: truncate(mark.quote),
+      value: truncateReadableValue(mark.quote),
     },
   ];
   if (mark.body !== null) {
     rows.push({
       key: "body",
       label: labels.commentText,
-      value: truncate(mark.body),
+      value: truncateReadableValue(mark.body),
     });
   }
   for (const [key, value] of Object.entries(input)) {

@@ -13,9 +13,12 @@ import { sendRefusal } from "@/state/chat-attachments";
 import type { ChatDraft, SendRefusal } from "@/state/chat-attachments";
 import { sentEntry } from "@/state/chat-messages";
 import type { ChatEntry } from "@/state/chat-messages";
+import { continuationOf } from "@/state/chat-pending-input";
+import type { PendingAnswer, PendingInput } from "@/state/chat-pending-input";
 import {
   applyChatEvent,
   cancelChatTurn,
+  continueChatTurn,
   EMPTY_ANSWER,
   joinChatTurn,
   probeChatTurn,
@@ -29,12 +32,20 @@ import type {
   StreamEnd,
 } from "@/state/chat-stream";
 
-/** A turn on screen: the message it answers (when this phone sent it) and the answer so far. */
+/**
+ * A turn on screen: the message it answers (when this phone sent it), the
+ * answer so far, and the stored message it continues, when it resumes a
+ * paused turn. That message stays on screen above what the new run adds.
+ */
 export type LiveTurn = {
   readonly question: ChatEntry | undefined;
   readonly answer: StreamedAnswer;
   readonly startedAt: string;
+  readonly continues: string | undefined;
 };
+
+/** What a paused turn waits for, when this phone can give it. */
+type AnswerablePendingInput = Exclude<PendingInput, { type: "elsewhere" }>;
 
 /** How long a turn the server is still preparing waits before it is asked again. */
 const PREPARING_RETRY_MS = 1000;
@@ -89,19 +100,205 @@ export const useChatTurn = ({
   const { connection } = turn;
   const [sendError, setSendError] = useState<SendRefusal>();
 
-  const finish = async (opened: Connection, status?: AnswerStatus) => {
-    turn.close(status);
-    if (await onSettled()) {
-      turn.clear(opened);
-    }
-  };
-
   const signedOut = (error: ApiError) => {
     if (error._tag !== "SignedOutError") {
       return false;
     }
     end(source);
     return true;
+  };
+
+  const { rejoin, start } = turnStreams({ onSettled, signedOut, thread, turn });
+
+  /**
+   * Sends the draft, unless a turn is still answering. `onRefused` hands the
+   * draft back when the server never took it, so it can be sent again.
+   */
+  const send = (draft: ChatDraft, onRefused: () => void): boolean => {
+    if (connection.current !== null) {
+      return false;
+    }
+    setSendError(undefined);
+    const messageId = randomUUID();
+    const opened = turn.open(
+      sentEntry({ createdAt: nowIso(), draft, messageId }),
+    );
+    start(
+      opened,
+      async () =>
+        await sendChatMessage({
+          ...thread,
+          ...draft,
+          anonymized,
+          fetch: streamingFetch,
+          messageId,
+          onEvent: turn.applyEvent,
+          onTurn: (accepted) => {
+            turn.accept(opened, accepted);
+          },
+          runId: randomUUID(),
+          signal: opened.controller.signal,
+        }),
+      (error) => {
+        setSendError(sendRefusal(error, draft.files.length > 0));
+        onRefused();
+      },
+    );
+    return true;
+  };
+
+  /**
+   * Answers what a paused turn waits for, unless a turn is still answering:
+   * the answer resumes the turn in a new run, streamed like a send.
+   * `onAccepted` runs once the server has taken the answer; `onRefused` when
+   * it did not (the turn was answered elsewhere, or the request failed), so
+   * the thread can be read again to tell which.
+   */
+  const answer = (
+    pending: AnswerablePendingInput,
+    reply: PendingAnswer,
+    {
+      onAccepted,
+      onRefused,
+    }: { readonly onAccepted: () => void; readonly onRefused: () => void },
+  ): boolean => {
+    const settles = continuationOf(pending, reply);
+    if (connection.current !== null || settles === undefined) {
+      return false;
+    }
+    setSendError(undefined);
+    const opened = turn.open(undefined, pending.messageId);
+    start(
+      opened,
+      async () =>
+        await continueChatTurn({
+          ...thread,
+          anonymized,
+          continuation: {
+            messageId: pending.messageId,
+            parentRunId: pending.parentRunId,
+            ...settles,
+          },
+          fetch: streamingFetch,
+          onEvent: turn.applyEvent,
+          onTurn: (accepted) => {
+            turn.accept(opened, accepted);
+            onAccepted();
+          },
+          runId: randomUUID(),
+          runTarget:
+            pending.owner.type === "harness"
+              ? pending.owner.runTarget
+              : undefined,
+          signal: opened.controller.signal,
+        }),
+      onRefused,
+    );
+    return true;
+  };
+
+  /**
+   * Follows a turn the server is running that this phone did not start,
+   * such as the one an answer given elsewhere resumed, which continues the
+   * stored message `continues`.
+   */
+  const follow = (turnId: string, continues: string | undefined) => {
+    if (connection.current !== null) {
+      return;
+    }
+    void rejoin(turn.follow(turnId, continues));
+  };
+
+  /** Asks the server to stop the turn; its stream then ends with the answer stopped. */
+  const stop = () => {
+    const { turnId } = turn;
+    if (turnId === undefined) {
+      return;
+    }
+    void (async () => {
+      const stopped = await cancelChatTurn({
+        ...thread,
+        fetch,
+        turnId,
+      });
+      // Any other failure leaves the answer streaming, so Stop stays offered.
+      if (Result.isError(stopped)) {
+        signedOut(stopped.error);
+      }
+    })();
+  };
+
+  const joinActiveTurn = useEffectEvent(() => {
+    if (activeTurnId === null) {
+      return;
+    }
+    void rejoin(turn.join(activeTurnId));
+  });
+
+  const returnToApp = useEffectEvent(() => {
+    const opened = connection.current;
+    if (opened?.dropped === true) {
+      void rejoin(opened);
+    }
+  });
+
+  const leave = useEffectEvent(() => {
+    connection.current?.controller.abort();
+  });
+
+  useEffect(() => {
+    joinActiveTurn();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        returnToApp();
+      }
+    });
+    return () => {
+      subscription.remove();
+      leave();
+    };
+  }, []);
+
+  return {
+    answer,
+    busy: turn.busy,
+    canStop: turn.turnId !== undefined,
+    follow,
+    live: turn.live,
+    send,
+    sendError,
+    stop,
+  };
+};
+
+/**
+ * The stream side of a turn: settling a stream that ended, rejoining one
+ * that broke or that the app left, and starting a request whose stream
+ * becomes the live turn. A request the server refused before it named a
+ * turn takes the turn off the screen and hands the refusal to `onRefused`.
+ */
+function turnStreams({
+  onSettled,
+  signedOut,
+  thread,
+  turn,
+}: {
+  onSettled: () => Promise<boolean>;
+  signedOut: (error: ApiError) => boolean;
+  thread: {
+    matterId: string | undefined;
+    source: AccessTokenSource;
+    threadId: string;
+  };
+  turn: ReturnType<typeof useLiveTurn>;
+}) {
+  const { connection } = turn;
+
+  const finish = async (opened: Connection, status?: AnswerStatus) => {
+    turn.close(status);
+    if (await onSettled()) {
+      turn.clear(opened);
+    }
   };
 
   const current = (opened: Connection) =>
@@ -181,33 +378,13 @@ export const useChatTurn = ({
     }
   };
 
-  /**
-   * Sends the draft, unless a turn is still answering. `onRefused` hands the
-   * draft back when the server never took it, so it can be sent again.
-   */
-  const send = (draft: ChatDraft, onRefused: () => void): boolean => {
-    if (connection.current !== null) {
-      return false;
-    }
-    setSendError(undefined);
-    const messageId = randomUUID();
-    const opened = turn.open(
-      sentEntry({ createdAt: nowIso(), draft, messageId }),
-    );
+  const start = (
+    opened: Connection,
+    request: () => Promise<Result<StreamEnd, StreamBreak>>,
+    onRefused: (error: ApiError) => void,
+  ) => {
     void (async () => {
-      const read = await sendChatMessage({
-        ...thread,
-        ...draft,
-        anonymized,
-        fetch: streamingFetch,
-        messageId,
-        onEvent: turn.applyEvent,
-        onTurn: (accepted) => {
-          turn.accept(opened, accepted);
-        },
-        runId: randomUUID(),
-        signal: opened.controller.signal,
-      });
+      const read = await request();
       if (
         Result.isError(read) &&
         opened.turnId === undefined &&
@@ -216,75 +393,16 @@ export const useChatTurn = ({
         turn.close();
         turn.clear(opened);
         if (!signedOut(read.error.error)) {
-          setSendError(sendRefusal(read.error.error, draft.files.length > 0));
-          onRefused();
+          onRefused(read.error.error);
         }
         return;
       }
       await settle(opened, read);
     })();
-    return true;
   };
 
-  /** Asks the server to stop the turn; its stream then ends with the answer stopped. */
-  const stop = () => {
-    const { turnId } = turn;
-    if (turnId === undefined) {
-      return;
-    }
-    void (async () => {
-      const stopped = await cancelChatTurn({
-        ...thread,
-        fetch,
-        turnId,
-      });
-      // Any other failure leaves the answer streaming, so Stop stays offered.
-      if (Result.isError(stopped)) {
-        signedOut(stopped.error);
-      }
-    })();
-  };
-
-  const joinActiveTurn = useEffectEvent(() => {
-    if (activeTurnId === null) {
-      return;
-    }
-    void rejoin(turn.join(activeTurnId));
-  });
-
-  const returnToApp = useEffectEvent(() => {
-    const opened = connection.current;
-    if (opened?.dropped === true) {
-      void rejoin(opened);
-    }
-  });
-
-  const leave = useEffectEvent(() => {
-    connection.current?.controller.abort();
-  });
-
-  useEffect(() => {
-    joinActiveTurn();
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
-        returnToApp();
-      }
-    });
-    return () => {
-      subscription.remove();
-      leave();
-    };
-  }, []);
-
-  return {
-    busy: turn.busy,
-    canStop: turn.turnId !== undefined,
-    live: turn.live,
-    send,
-    sendError,
-    stop,
-  };
-};
+  return { rejoin, start };
+}
 
 /**
  * What the screen draws of a turn, and the connection behind it. The
@@ -296,7 +414,12 @@ function useLiveTurn(activeTurnId: string | null) {
   const [live, setLive] = useState<LiveTurn | null>(() =>
     activeTurnId === null
       ? null
-      : { question: undefined, answer: EMPTY_ANSWER, startedAt: nowIso() },
+      : {
+          question: undefined,
+          answer: EMPTY_ANSWER,
+          startedAt: nowIso(),
+          continues: undefined,
+        },
   );
   const [busy, setBusy] = useState(activeTurnId !== null);
   const [turnId, setTurnId] = useState(activeTurnId ?? undefined);
@@ -320,16 +443,41 @@ function useLiveTurn(activeTurnId: string | null) {
     applyEvent: (event: ChatEvent) => {
       showAnswer(applyChatEvent(answer.current, event));
     },
-    /** A new turn for `question`, replacing any still connected. */
-    open: (question: ChatEntry): Connection => {
+    /**
+     * A new turn, replacing any still connected: one answering `question`,
+     * or one that `continues` a paused message.
+     */
+    open: (question: ChatEntry | undefined, continues?: string): Connection => {
       connection.current?.controller.abort();
       const opened = newConnection(undefined);
       connection.current = opened;
       shownFor.current = opened;
       answer.current = EMPTY_ANSWER;
-      setLive({ question, answer: EMPTY_ANSWER, startedAt: nowIso() });
+      setLive({
+        question,
+        answer: EMPTY_ANSWER,
+        startedAt: nowIso(),
+        continues,
+      });
       setBusy(true);
       setTurnId(undefined);
+      return opened;
+    },
+    /** A turn the server is running already, which `continues` a stored message. */
+    follow: (known: string, continues: string | undefined): Connection => {
+      connection.current?.controller.abort();
+      const opened = newConnection(known);
+      connection.current = opened;
+      shownFor.current = opened;
+      answer.current = EMPTY_ANSWER;
+      setLive({
+        question: undefined,
+        answer: EMPTY_ANSWER,
+        startedAt: nowIso(),
+        continues,
+      });
+      setBusy(true);
+      setTurnId(known);
       return opened;
     },
     /** A connection to the turn the thread opened on, which starts out live. */
