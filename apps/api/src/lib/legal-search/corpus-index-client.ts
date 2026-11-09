@@ -866,10 +866,11 @@ type ConsumeResponse<T> = (
 /**
  * Why a queued read was not sent, in the terms a sent one fails in: a wait
  * its timeout ended is that timeout expiring (the request's budget when the
- * budget set it), a caller's cancel is the cancel, and a full queue is the
- * index turning the read away, which a retry can get past.
+ * budget set it), a read the queue estimates cannot start in time is that
+ * budget's expiry too, a caller's cancel is the cancel, and a full queue is
+ * the index turning the read away, which a retry can get past.
  */
-const admissionRefusal = (
+export const admissionRefusal = (
   request: RequestIdentity,
   refused: Extract<CorpusSearchAdmission, { type: "refused" }>,
 ): CorpusIndexError => {
@@ -880,12 +881,19 @@ const admissionRefusal = (
   });
   switch (refused.reason) {
     case "busy":
-    case "deadline":
-      return new CorpusIndexError({
+    case "deadline": {
+      const notQueued = new CorpusIndexError({
         message: `corpus index ${requestLabel(request)} was not queued: ${String(refused.queued)} reads are already waiting`,
         rejection: "transient",
         reach: "unreachable",
       });
+      return refused.reason === "deadline"
+        ? (corpusIndexBudgetExpiry({
+            label: `${requestLabel(request)} before it could start`,
+            cause: notQueued,
+          }) ?? notQueued)
+        : notQueued;
+    }
     case "expired":
     case "aborted":
       return requestFailure({
