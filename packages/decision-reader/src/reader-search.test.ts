@@ -241,12 +241,26 @@ describe("buildSearchResults", () => {
   });
 
   it("finds the short words a reader types", () => {
-    const result = buildSearchResults({
-      pieces: [{ id: "p1", text: "Za to je odpovědný." }],
+    const text = "Za to je odpovědný, a to platí za vše.";
+    const phrase = buildSearchResults({
+      pieces: [{ id: "p1", text }],
       query: "za to",
     });
+    const words = buildSearchResults({
+      pieces: [{ id: "p1", text }],
+      query: "to za",
+    });
 
-    expect(result.matchCount).toBe(2);
+    expect(
+      phrase.rangesByPieceId["p1"]?.map(({ end, start }) =>
+        text.slice(start, end),
+      ),
+    ).toEqual(["Za to"]);
+    expect(
+      words.rangesByPieceId["p1"]?.map(({ end, start }) =>
+        text.slice(start, end),
+      ),
+    ).toEqual(["Za", "to", "to", "za"]);
   });
 
   it("handles contextual lowercasing such as Greek final sigma", () => {
@@ -295,10 +309,10 @@ describe("buildSearchResults", () => {
       query: "خدمه احمد",
     });
 
-    expect(result.matchCount).toBe(2);
+    // Both words fold to the typed spelling, so the phrase is found whole.
+    expect(result.matchCount).toBe(1);
     expect(result.rangesByPieceId["p1"]).toEqual([
-      { type: "search", start: 0, end: 4, matchIndex: 0 },
-      { type: "search", start: 5, end: 9, matchIndex: 1 },
+      { type: "search", start: 0, end: 9, matchIndex: 0 },
     ]);
   });
 
