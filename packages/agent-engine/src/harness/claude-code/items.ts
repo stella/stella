@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 
-import type { ChatLocalRunToolDetail } from "@stll/api-contract/chat-local-run-tool";
+import {
+  type ChatLocalRunToolDetail,
+  chatLocalRunToolResultContent,
+} from "@stll/api-contract/chat-local-run-tool";
 import type { DESKTOP_RUNNER_APPROVAL_KINDS } from "@stll/api-contract/desktop-runner";
 
 import type { HarnessToolCall, HarnessToolResult } from "../events";
@@ -361,26 +364,48 @@ export const toolResultFor = (
   const kind = toolKind(use.name);
   switch (kind) {
     case "command":
+      // The status only: Claude reports no exit code, and the command's
+      // output stays here.
       return {
-        content: JSON.stringify({ aggregated_output: text, status: outcome }),
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.commandExecution,
+          result: { status: outcome },
+        }),
         status: status(failed),
       };
     case "file_change":
       return {
-        content: JSON.stringify({
-          changes: isFileTool(use.name) ? fileChanges(use.name, use.input) : [],
-          status: outcome,
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.fileChange,
+          result: {
+            changes: isFileTool(use.name)
+              ? fileChanges(use.name, use.input)
+              : [],
+            status: outcome,
+          },
         }),
         status: status(failed),
       };
     case "web_search":
       return {
-        content: JSON.stringify({ status: outcome }),
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.webSearch,
+          result: { status: outcome },
+        }),
+        status: status(failed),
+      };
+    case "native":
+      // What a built-in tool returned (a file it read, the lines a search
+      // matched, a fetched page) stays here; only how it ended is shown.
+      return {
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.nativeTool,
+          result: { status: outcome },
+        }),
         status: status(failed),
       };
     case "question":
     case "mcp":
-    case "native":
       return {
         content: text === "" ? JSON.stringify({ status: outcome }) : text,
         status: status(failed),

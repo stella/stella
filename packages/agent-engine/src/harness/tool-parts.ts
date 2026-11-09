@@ -5,8 +5,11 @@ import {
   CHAT_LOCAL_RUN_TOOL_NAMES,
   type ChatLocalRunToolCall,
   type ChatLocalRunToolCallInput,
+  chatLocalRunToolResultContent,
+  chatLocalRunToolStatusContent,
   isChatLocalRunToolName,
   parseChatLocalRunToolCall,
+  parseChatLocalRunToolResult,
 } from "@stll/api-contract/chat-local-run-tool";
 import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
 import {
@@ -167,6 +170,37 @@ const withRunRelativePaths = (
 };
 
 /**
+ * The result content a call is reported with. A harness-native step keeps
+ * only how it ended (`chat-local-run-tool`), with a change's file names
+ * relative to the run's folder as its call names them; any other call's
+ * content is reported as the adapter built it.
+ */
+export const shownToolResult = (
+  call: HarnessToolCall,
+  content: string,
+  failed: boolean,
+  workspaceDir: string,
+): string => {
+  if (!isChatLocalRunToolName(call.name)) {
+    return content;
+  }
+  const shown = parseChatLocalRunToolResult(call.name, content);
+  if (shown === null) {
+    return chatLocalRunToolStatusContent(failed);
+  }
+  if (shown.name !== CHAT_LOCAL_RUN_TOOL_NAMES.fileChange) {
+    return JSON.stringify(shown.result);
+  }
+  return JSON.stringify({
+    ...shown.result,
+    changes: shown.result.changes.map((change) => ({
+      ...change,
+      path: runRelative(change.path, workspaceDir),
+    })),
+  });
+};
+
+/**
  * The input a call is reported with. A harness-native step keeps only the
  * contract's bounded fields, with its file names relative to the run's
  * folder `workspaceDir`; it runs after the skill filter, so a skill's path is
@@ -203,11 +237,10 @@ export const unsupportedItem = (
       input: { itemType: kind },
     },
     result: {
-      content: JSON.stringify({
-        error: {
-          code: "unsupported_item",
-          message: `The harness reported a ${kind} item, which stella cannot show.`,
-        },
+      // The title says stella cannot show the step; nothing of it is sent.
+      content: chatLocalRunToolResultContent({
+        name: HARNESS_TOOL_NAMES.unsupportedItem,
+        result: { status: "failed" },
       }),
       status: "failed",
     },

@@ -436,11 +436,9 @@ describe("Claude Code adapter over stream-json stdio", () => {
           name: "command_execution",
           input: { command: "ls" },
         },
+        // The command's output stays on the computer.
         result: {
-          content: JSON.stringify({
-            aggregated_output: "notes.md\n",
-            status: "completed",
-          }),
+          content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
         },
       },
@@ -619,6 +617,17 @@ describe("Claude Code adapter over stream-json stdio", () => {
       expect(callText).not.toContain(text);
     }
     expect(callText).not.toContain("y".repeat(300));
+    // A result says how the step ended, never what the tool returned.
+    const storedText = JSON.stringify(stored);
+    for (const returned of [
+      "1→lease",
+      "lease.md: termination",
+      "A page.",
+      "Applied 1 edit.",
+      "Web search results",
+    ]) {
+      expect(storedText).not.toContain(returned);
+    }
     expect(terminal(events)).toMatchObject({ type: "turn.completed" });
   });
 
@@ -1621,11 +1630,9 @@ describe("Claude Code skill folders", () => {
       }),
       expect.objectContaining({
         toolCall: expect.objectContaining({ input: { command: "ls" } }),
+        // The command's output stays on the computer.
         result: {
-          content: JSON.stringify({
-            aggregated_output: "notes.md\n",
-            status: "completed",
-          }),
+          content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
         },
       }),

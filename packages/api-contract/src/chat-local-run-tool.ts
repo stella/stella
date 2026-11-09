@@ -1,16 +1,20 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
 /**
  * A step a coding agent took itself on the member's computer (a command, a
  * file it read or changed, a search, a plan), as a chat turn keeps it. Only
  * what the step was about leaves the computer: a command line, file names, a
- * search query or web address, and the titles of a plan. A command's output,
- * a file's contents, a diff and a fetched page are never part of the call.
+ * search query or web address, and the titles of a plan. Its result says
+ * only how it ended: a status, a command's exit code, the files a change
+ * touched. A command's output, a file's contents, a diff, search matches and
+ * a fetched page are never part of the call or its result.
  *
- * The desktop's harness sidecar builds each call through this schema, and the
- * API parses what a desktop sends with it again and keeps only its output, so
- * a desktop that sends more (or longer) fields stores nothing extra. Parsing
- * is idempotent: what the sidecar sends is what the API stores.
+ * The desktop's harness sidecar builds each call and result through these
+ * schemas, and the API parses what a desktop sends with them again and keeps
+ * only their output, so a desktop that sends more (or longer) fields stores
+ * nothing extra. Parsing is idempotent: what the sidecar sends is what the
+ * API stores.
  */
 
 /** Tool names a harness-native step is persisted under. */
@@ -117,6 +121,15 @@ export type ChatLocalRunToolDetail = v.InferOutput<
   typeof chatLocalRunToolDetailSchema
 >;
 
+/** The files one change touched, by name and kind of change. */
+const fileChangesSchema = shownList(
+  v.object({
+    path: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.path),
+    kind: v.picklist(CHAT_LOCAL_RUN_FILE_CHANGE_KINDS),
+  }),
+  CHAT_LOCAL_RUN_TOOL_LIMITS.files,
+);
+
 /** A harness-native step: its tool name and the input chat keeps for it. */
 export const chatLocalRunToolCallSchema = v.variant("name", [
   v.object({
@@ -127,15 +140,7 @@ export const chatLocalRunToolCallSchema = v.variant("name", [
   }),
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.fileChange),
-    input: v.object({
-      changes: shownList(
-        v.object({
-          path: shownText(CHAT_LOCAL_RUN_TOOL_LIMITS.path),
-          kind: v.picklist(CHAT_LOCAL_RUN_FILE_CHANGE_KINDS),
-        }),
-        CHAT_LOCAL_RUN_TOOL_LIMITS.files,
-      ),
-    }),
+    input: v.object({ changes: fileChangesSchema }),
   }),
   v.object({
     name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.webSearch),
@@ -191,4 +196,99 @@ export const parseChatLocalRunToolCall = (
     input: { tool: input.tool },
   });
   return named.success ? named.output : null;
+};
+
+/**
+ * How a step ended, in the harness's words: `declined` when the member
+ * refused it, `interrupted` when its turn ended first.
+ */
+export const CHAT_LOCAL_RUN_TOOL_STATUSES = [
+  "completed",
+  "failed",
+  "declined",
+  "in_progress",
+  "interrupted",
+] as const;
+
+const statusSchema = v.picklist(CHAT_LOCAL_RUN_TOOL_STATUSES);
+const statusOnly = v.object({ status: statusSchema });
+
+/** A harness-native step's result: how it ended, never what it produced. */
+export const chatLocalRunToolResultSchema = v.variant("name", [
+  v.object({
+    name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution),
+    // The cloud translator's field order, so a local turn reads as one.
+    result: v.object({
+      exit_code: v.optional(v.pipe(v.number(), v.safeInteger())),
+      status: statusSchema,
+    }),
+  }),
+  v.object({
+    name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.fileChange),
+    result: v.object({ changes: fileChangesSchema, status: statusSchema }),
+  }),
+  v.object({
+    name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.webSearch),
+    result: statusOnly,
+  }),
+  v.object({
+    name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool),
+    result: statusOnly,
+  }),
+  v.object({
+    name: v.literal(CHAT_LOCAL_RUN_TOOL_NAMES.unsupportedItem),
+    result: statusOnly,
+  }),
+]);
+export type ChatLocalRunToolResult = v.InferOutput<
+  typeof chatLocalRunToolResultSchema
+>;
+/** What an adapter builds a result from, before it is bounded. */
+export type ChatLocalRunToolResultInput = v.InferInput<
+  typeof chatLocalRunToolResultSchema
+>;
+
+/** The JSON of a result an adapter built, as chat keeps it. */
+export const chatLocalRunToolResultContent = (
+  result: ChatLocalRunToolResultInput,
+): string =>
+  JSON.stringify(v.parse(chatLocalRunToolResultSchema, result).result);
+
+const parsedJson = (text: string): unknown => {
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  return parsed.isOk() ? parsed.value : undefined;
+};
+
+/**
+ * The result chat keeps for a harness-native step named `name`, from the
+ * content a harness reported, or `null` when the content is not one.
+ */
+export const parseChatLocalRunToolResult = (
+  name: ChatLocalRunToolName,
+  content: string,
+): ChatLocalRunToolResult | null => {
+  const parsed = v.safeParse(chatLocalRunToolResultSchema, {
+    name,
+    result: parsedJson(content),
+  });
+  return parsed.success ? parsed.output : null;
+};
+
+/**
+ * What a result keeps when its content is not the step's result: whether
+ * the step failed, never the text itself.
+ */
+export const chatLocalRunToolStatusContent = (failed: boolean): string =>
+  JSON.stringify({ status: failed ? "failed" : "completed" });
+
+/** The result content chat keeps for a harness-native step named `name`. */
+export const shownChatLocalRunToolResult = (
+  name: ChatLocalRunToolName,
+  content: string,
+  failed: boolean,
+): string => {
+  const parsed = parseChatLocalRunToolResult(name, content);
+  return parsed === null
+    ? chatLocalRunToolStatusContent(failed)
+    : JSON.stringify(parsed.result);
 };

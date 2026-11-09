@@ -484,7 +484,12 @@ describe("Codex adapter over a stdio app-server", () => {
         content: JSON.stringify({ status: "completed" }),
         status: "succeeded",
       });
-      expect(completed[1]?.result.content).toContain("notes.md");
+      // An unrelated command keeps its own result, which never carries its
+      // output.
+      expect(completed[1]?.result.content).not.toContain("notes.md");
+      expect(JSON.parse(completed[1]?.result.content ?? "")).toMatchObject({
+        status: "completed",
+      });
     });
 
     test("a turn whose skills cannot be established does not run", async () => {
@@ -621,7 +626,8 @@ describe("Codex adapter over a stdio app-server", () => {
     }
     const stored = fold(cloud);
     expect(stored.flatMap(({ parts }) => parts).length).toBeGreaterThan(4);
-    expect(fold(local)).toEqual(stored);
+    expect<unknown>(fold(local)).toEqual(withoutCommandOutput(stored));
+    expect(JSON.stringify(local)).not.toContain("aggregated_output");
   });
 
   test("an approval offers the native decisions and replies with the chosen one verbatim", async () => {
@@ -1148,6 +1154,35 @@ describe("Codex adapter over a stdio app-server", () => {
 });
 
 /** Fold chunks the way persistence does and return what would be stored. */
+/**
+ * A cloud turn's parts as a local turn keeps them: a command's output stays
+ * on the member's computer, so its result keeps only its exit code and
+ * status, in the same order.
+ */
+const withoutCommandOutput = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    if (!value.includes('"aggregated_output"')) {
+      return value;
+    }
+    const { aggregated_output: _output, ...kept } = v.parse(
+      v.record(v.string(), v.unknown()),
+      JSON.parse(value),
+    );
+    return JSON.stringify(kept);
+  }
+  if (Array.isArray(value)) {
+    return value.map(withoutCommandOutput);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "aggregated_output")
+        .map(([key, entry]) => [key, withoutCommandOutput(entry)]),
+    );
+  }
+  return value;
+};
+
 const storedMessages = (chunks: readonly StreamChunk[]) => {
   const processor = new StreamProcessor({ initialMessages: [] });
   for (const chunk of chunks) {
@@ -1368,6 +1403,9 @@ describe("Codex items as chat parts", () => {
         (part) => part.type === "tool-call" && part.id === "call-heredoc",
       ),
     ).toMatchObject({ output: { exit_code: 1, status: "failed" } });
+    // A command's output never leaves, in its call, its result or the part.
+    expect(JSON.stringify(parts)).not.toContain("permission denied");
+    expect(JSON.stringify(parts)).not.toContain("aggregated_output");
     const callText = JSON.stringify(
       parts
         .filter((part) => part.type === "tool-call")

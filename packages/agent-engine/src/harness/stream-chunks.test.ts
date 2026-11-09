@@ -49,6 +49,35 @@ const counter = () => {
   };
 };
 
+/**
+ * A cloud turn's parts as a local turn keeps them: a command's output stays
+ * on the member's computer, so its result keeps only its exit code and
+ * status, in the same order.
+ */
+const withoutCommandOutput = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    if (!value.includes('"aggregated_output"')) {
+      return value;
+    }
+    const { aggregated_output: _output, ...kept } = v.parse(
+      v.record(v.string(), v.unknown()),
+      JSON.parse(value),
+    );
+    return JSON.stringify(kept);
+  }
+  if (Array.isArray(value)) {
+    return value.map(withoutCommandOutput);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "aggregated_output")
+        .map(([key, entry]) => [key, withoutCommandOutput(entry)]),
+    );
+  }
+  return value;
+};
+
 async function* from<T>(items: readonly T[]): AsyncGenerator<T> {
   for (const item of items) {
     yield item;
@@ -224,7 +253,10 @@ describe("local harness chunks", () => {
     const cloudStored = storedParts(fold(await cloudChunks(cloud)));
     const localStream = await localChunks(local);
     expect(cloudStored.flatMap(({ parts }) => parts).length).toBeGreaterThan(3);
-    expect(storedParts(fold(localStream))).toEqual(cloudStored);
+    expect<unknown>(storedParts(fold(localStream))).toEqual(
+      withoutCommandOutput(cloudStored),
+    );
+    expect(JSON.stringify(localStream)).not.toContain("aggregated_output");
 
     // Usage and finish reason match; each stream stamps its own time.
     const finish = (chunks: readonly StreamChunk[]) => {

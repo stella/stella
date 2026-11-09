@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { chatLocalRunToolResultContent } from "@stll/api-contract/chat-local-run-tool";
+
 import type { HarnessToolCall, HarnessToolResult } from "../events";
 import {
   HARNESS_TOOL_NAMES,
@@ -159,7 +161,10 @@ export const planUpdateStep = (
     },
   }),
   result: {
-    content: JSON.stringify({ status: "completed" }),
+    content: chatLocalRunToolResultContent({
+      name: HARNESS_TOOL_NAMES.nativeTool,
+      result: { status: "completed" },
+    }),
     status: "succeeded",
   },
 });
@@ -198,21 +203,27 @@ const mcpResult = (
 export const toolResultForItem = (item: CodexToolItem): HarnessToolResult => {
   switch (item.type) {
     case "commandExecution":
+      // The exit code and status only; the command's output stays here.
       return {
-        content: JSON.stringify({
-          aggregated_output: item.aggregatedOutput ?? "",
-          ...(typeof item.exitCode === "number"
-            ? { exit_code: item.exitCode }
-            : {}),
-          status: EXEC_STATUS[item.status],
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.commandExecution,
+          result: {
+            status: EXEC_STATUS[item.status],
+            ...(typeof item.exitCode === "number"
+              ? { exit_code: item.exitCode }
+              : {}),
+          },
         }),
         status: status(item.status === "failed" || item.status === "declined"),
       };
     case "fileChange":
       return {
-        content: JSON.stringify({
-          changes: fileChanges(item),
-          status: EXEC_STATUS[item.status],
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.fileChange,
+          result: {
+            changes: fileChanges(item),
+            status: EXEC_STATUS[item.status],
+          },
         }),
         status: status(item.status === "failed" || item.status === "declined"),
       };
@@ -220,7 +231,10 @@ export const toolResultForItem = (item: CodexToolItem): HarnessToolResult => {
       return mcpResult(item);
     case "webSearch":
       return {
-        content: JSON.stringify({ status: "completed" }),
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.webSearch,
+          result: { status: "completed" },
+        }),
         status: "succeeded",
       };
     default:

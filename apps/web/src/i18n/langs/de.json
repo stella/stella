@@ -2060,7 +2060,7 @@
       "input": "Eingabe",
       "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
-      "patternInPath": "{pattern} in {path}",
+      "patternInPath": "{pattern} unter {path}",
       "readFile": "Datei wird gelesen",
       "searchFiles": "Dateien werden durchsucht",
       "sourceCode": "Quellcode",

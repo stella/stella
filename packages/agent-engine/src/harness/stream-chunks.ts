@@ -26,7 +26,7 @@ import {
   type HarnessToolCall,
   type HarnessUsage,
 } from "./events";
-import { shownToolInput } from "./tool-parts";
+import { shownToolInput, shownToolResult } from "./tool-parts";
 
 /**
  * The one mapping from harness events to TanStack stream chunks for local
@@ -367,7 +367,16 @@ class ChunkMapper {
     }
     this.ensureSegment();
     this.openToolCall(toolCall);
-    this.resolveToolCall(toolCall.id, result.content, result.status);
+    this.resolveToolCall(
+      toolCall.id,
+      shownToolResult(
+        toolCall,
+        result.content,
+        result.status === "failed",
+        this.context.workspaceDir,
+      ),
+      result.status,
+    );
   }
 
   private text(messageId: string, fullText: string) {

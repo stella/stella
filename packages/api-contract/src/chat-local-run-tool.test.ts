@@ -6,8 +6,10 @@ import { assertProperty } from "@stll/property-testing";
 import {
   CHAT_LOCAL_RUN_TOOL_LIMITS,
   CHAT_LOCAL_RUN_TOOL_NAMES,
+  CHAT_LOCAL_RUN_TOOL_STATUSES,
   chatLocalRunShownText,
   parseChatLocalRunToolCall,
+  shownChatLocalRunToolResult,
 } from "./chat-local-run-tool";
 
 const text = fc.string({ unit: "binary", maxLength: 700 });
@@ -125,5 +127,53 @@ describe("what a local run's native step shows", () => {
         output: "Private text",
       }),
     ).toBeNull();
+  });
+
+  test("a native step's result keeps how it ended and never what it produced", async () => {
+    await assertProperty(
+      "native results keep only their schema's fields",
+      fc.property(
+        fc.constantFrom(...Object.values(CHAT_LOCAL_RUN_TOOL_NAMES)),
+        fc.constantFrom(...CHAT_LOCAL_RUN_TOOL_STATUSES),
+        fc.option(fc.integer({ min: -255, max: 255 }), { nil: undefined }),
+        text,
+        fc.boolean(),
+        (name, status, exitCode, produced, failed) => {
+          const reported = JSON.stringify({
+            status,
+            ...(exitCode === undefined ? {} : { exit_code: exitCode }),
+            changes: [{ path: "a.md", kind: "update", diff: produced }],
+            aggregated_output: produced,
+            content: produced,
+          });
+          const shown = shownChatLocalRunToolResult(name, reported, failed);
+          const kept: unknown = JSON.parse(shown);
+          expect(kept).toMatchObject({ status });
+          expect(Object.keys(kept ?? {})).not.toContain("aggregated_output");
+          expect(Object.keys(kept ?? {})).not.toContain("content");
+          expect(shown).not.toContain("diff");
+          expect(shownChatLocalRunToolResult(name, shown, failed)).toBe(shown);
+        },
+      ),
+    );
+  });
+
+  test("a result that is not the step's keeps only whether it failed", () => {
+    for (const content of ["1→Private settlement terms", '{"status":"done"}']) {
+      expect(
+        shownChatLocalRunToolResult(
+          CHAT_LOCAL_RUN_TOOL_NAMES.nativeTool,
+          content,
+          true,
+        ),
+      ).toBe(JSON.stringify({ status: "failed" }));
+    }
+    expect(
+      shownChatLocalRunToolResult(
+        CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution,
+        JSON.stringify({ aggregated_output: "Private", status: "completed" }),
+        false,
+      ),
+    ).toBe(JSON.stringify({ status: "completed" }));
   });
 });

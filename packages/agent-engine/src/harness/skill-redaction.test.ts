@@ -213,13 +213,10 @@ describe("what a turn reports about its skill folders", () => {
     ]);
   });
 
-  test("a Claude Bash that never names a skill stays as it was", async () => {
+  test("a Claude Bash that never names a skill keeps its command, and its output stays here", async () => {
     const event = await claudeCall("Bash", { command: "ls" }, "notes.md\n");
     expect(event.toolCall.input).toEqual({ command: "ls" });
-    expect(JSON.parse(event.result.content)).toEqual({
-      aggregated_output: "notes.md\n",
-      status: "completed",
-    });
+    expect(JSON.parse(event.result.content)).toEqual({ status: "completed" });
   });
 
   test("a Codex command reading a skill shows the name and reports only the status", async () => {
@@ -246,7 +243,10 @@ describe("what a turn reports about its skill folders", () => {
       ]),
     );
     expect(toolCall.input).toEqual({ command: "grep -r clause /srv/member" });
-    expect(result.content).toBe(STATUS_ONLY);
+    expect(JSON.parse(result.content)).toEqual({
+      exit_code: 0,
+      status: "completed",
+    });
   });
 
   test("a call known to have touched a skill when it started stays status only", async () => {
@@ -316,7 +316,7 @@ describe("what a turn reports about its skill folders", () => {
       tool: "Read",
       detail: { kind: "read", path: `${FOLDER}-old/notes.md` },
     });
-    expect(result.content).toBe("Not a skill.");
+    expect(result.content).toBe(STATUS_ONLY);
   });
 
   test("a path with a space, as a shell writes it, counts too", async () => {

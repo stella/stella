@@ -4548,7 +4548,7 @@ describe("chat turns on a computer", () => {
     );
   });
 
-  test("a native step keeps only its command, file names or search, whatever else a desktop sends, and reloads as streamed", async () => {
+  test("a native step keeps only its command, file names or search and how it ended, whatever else a desktop sends, and reloads as streamed", async () => {
     const chatThreadId = await newThread();
     const { desktopId, desktop } = shared();
     const responseMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
@@ -4648,6 +4648,25 @@ describe("chat turns on a computer", () => {
           },
         ];
       }
+      if (chunk.type === EventType.TOOL_CALL_RESULT) {
+        // A command's output, and a read's file as its whole result.
+        return [
+          {
+            ...chunk,
+            content:
+              chunk.toolCallId === command.id
+                ? JSON.stringify({
+                    aggregated_output: secret,
+                    exit_code: 0,
+                    status: "completed",
+                  })
+                : `1→${secret}`,
+            metadata: {
+              tanstack: { ...tanstackOf(chunk.metadata), output: secret },
+            },
+          },
+        ];
+      }
       return [chunk];
     });
     const run = desktopRun(desktop, start.runId);
@@ -4661,7 +4680,14 @@ describe("chat turns on a computer", () => {
     expect(JSON.stringify(stored.content)).not.toContain(secret);
     const calls = stored.reloaded.parts.flatMap((part): unknown[] =>
       part.type === "tool-call"
-        ? [{ name: part.name, input: part.input, arguments: part.arguments }]
+        ? [
+            {
+              name: part.name,
+              input: part.input,
+              arguments: part.arguments,
+              output: part.output,
+            },
+          ]
         : [],
     );
     const shownCommand = { command: "cat > notes.md <<'EOF'…" };
@@ -4674,11 +4700,13 @@ describe("chat turns on a computer", () => {
         name: "command_execution",
         input: shownCommand,
         arguments: JSON.stringify(shownCommand),
+        output: { exit_code: 0, status: "completed" },
       },
       {
         name: "harness_native_tool",
         input: shownRead,
         arguments: JSON.stringify(shownRead),
+        output: { status: "completed" },
       },
     ]);
     // The page that streamed the turn shows what a reload shows.

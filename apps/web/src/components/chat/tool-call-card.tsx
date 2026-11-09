@@ -493,9 +493,12 @@ const ToolCallCardComponent = ({
     input: getToolInput(part),
     output: part.output,
   });
+  const localRunTitleKey = localRunTool?.titleKey ?? null;
   const label =
     catalogEntry?.brand ??
-    t(localRunTool?.titleKey ?? getChatToolTitleKey(name));
+    (localRunTitleKey === null
+      ? t(getChatToolTitleKey(name))
+      : t(localRunTitleKey));
   const subtitle =
     localRunTool === null
       ? getToolSubtitle({

@@ -20,9 +20,12 @@ export type LocalRunToolSubtitle =
   | { type: "search"; pattern: string; path: string }
   | { type: "command"; command: string; exitCode: number };
 
+type LocalRunToolTitleKey =
+  (typeof DETAIL_TITLE_KEYS)[keyof typeof DETAIL_TITLE_KEYS];
+
 export type LocalRunToolView = {
   /** A title naming the step's kind, or `null` to keep the tool's title. */
-  titleKey: TranslationKey | null;
+  titleKey: LocalRunToolTitleKey | null;
   subtitle: LocalRunToolSubtitle | null;
 };
 

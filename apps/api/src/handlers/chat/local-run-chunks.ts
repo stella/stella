@@ -19,8 +19,10 @@ import {
 import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
 import {
   type ChatLocalRunToolName,
+  chatLocalRunToolStatusContent,
   isChatLocalRunToolName,
   parseChatLocalRunToolCall,
+  shownChatLocalRunToolResult,
 } from "@stll/api-contract/chat-local-run-tool";
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
@@ -55,7 +57,10 @@ import { Temporal } from "@stll/time";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { chatMcpAppForTool } from "@/api/lib/chat/mcp-app-catalog";
-import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
+import type {
+  PublicChunkOfType,
+  PublicStreamChunk,
+} from "@/api/lib/chat/tanstack-chat-runtime";
 import { appCallArgumentsHash } from "@/api/lib/desktop-runner/app-calls";
 import {
   questionPauseOf,
@@ -418,11 +423,142 @@ const reportedModel = (metadata: unknown) => {
 
 /** A native step's streamed arguments, as the JSON they spell. */
 const parsedArguments = (delta: string): unknown => {
-  try {
-    return JSON.parse(delta);
-  } catch {
-    return undefined;
+  const parsed = Result.try((): unknown => JSON.parse(delta));
+  return parsed.isOk() ? parsed.value : undefined;
+};
+
+type CallId = (id: string) => string;
+
+/**
+ * A call's arguments or end. A native step's input is rebuilt from the
+ * contract's fields; any other call's passes under its chat id.
+ */
+type ToolInputChunk =
+  PublicChunkOfType<"TOOL_CALL_ARGS"> | PublicChunkOfType<"TOOL_CALL_END">;
+
+const asToolInputChunk = (
+  chunk: ToolInputChunk,
+  calls: LocalRunToolCalls,
+  callId: CallId,
+): PublicStreamChunk | null => {
+  const call = calls.get(chunk.toolCallId);
+  if (call === undefined) {
+    // A call this read never saw start has no name to check it by.
+    return null;
   }
+  const { name } = call;
+  if (!isChatLocalRunToolName(name)) {
+    return { ...chunk, toolCallId: callId(chunk.toolCallId) };
+  }
+  const stamp =
+    chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp };
+  if (chunk.type === EventType.TOOL_CALL_END) {
+    // The normalised end the harness sends, its input rebuilt; anything
+    // else on the chunk, a top-level input included, is not carried.
+    const reported = tanstackOf(chunk.metadata);
+    return {
+      type: EventType.TOOL_CALL_END,
+      toolCallId: callId(chunk.toolCallId),
+      ...stamp,
+      metadata: {
+        tanstack: {
+          toolCallName: name,
+          toolName: name,
+          input: nativeInput(name, reported["input"]),
+          ...reportedModel(chunk.metadata),
+        },
+      },
+    };
+  }
+  // A harness sends a native step's arguments whole, in one chunk; a
+  // second would append to the first.
+  if (call.argsCarried) {
+    return null;
+  }
+  call.argsCarried = true;
+  const args = JSON.stringify(nativeInput(name, parsedArguments(chunk.delta)));
+  return {
+    type: EventType.TOOL_CALL_ARGS,
+    toolCallId: callId(chunk.toolCallId),
+    delta: args,
+    ...stamp,
+  };
+};
+
+/**
+ * A call's result. A native step's result says how it ended, never what it
+ * produced; a result for a call this run never opened keeps no more than
+ * that. Of the normalised result's metadata, only how it ended is carried.
+ */
+const asToolResultChunk = (
+  chunk: Extract<PublicStreamChunk, { type: EventType.TOOL_CALL_RESULT }>,
+  calls: LocalRunToolCalls,
+  callId: CallId,
+): PublicStreamChunk => {
+  const name = calls.get(chunk.toolCallId)?.name;
+  if (name !== undefined && !isChatLocalRunToolName(name)) {
+    return { ...chunk, toolCallId: callId(chunk.toolCallId) };
+  }
+  // A native step's result says how it ended, never what it produced; a
+  // result for a call this run never opened keeps no more than that. Of
+  // the normalised result's metadata, only how it ended is carried.
+  const reported = tanstackOf(chunk.metadata);
+  const state = reported["state"] === "output-error" ? "output-error" : null;
+  const reportedOutcome = reported["toolResultOutcome"];
+  const outcome =
+    reportedOutcome === "cancelled" || reportedOutcome === "denied"
+      ? reportedOutcome
+      : null;
+  const failed = state !== null || outcome !== null;
+  const tanstack = {
+    ...(state === null ? {} : { state }),
+    ...(outcome === null ? {} : { toolResultOutcome: outcome }),
+    ...reportedModel(chunk.metadata),
+  };
+  return {
+    type: EventType.TOOL_CALL_RESULT,
+    toolCallId: callId(chunk.toolCallId),
+    messageId: chunk.messageId,
+    content:
+      name === undefined || typeof chunk.content !== "string"
+        ? chatLocalRunToolStatusContent(failed)
+        : shownChatLocalRunToolResult(name, chunk.content, failed),
+    ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
+    ...(Object.keys(tanstack).length === 0 ? {} : { metadata: { tanstack } }),
+  };
+};
+
+type ChatInterrupt = Extract<
+  NonNullable<
+    Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>["outcome"]
+  >,
+  { type: "interrupt" }
+>["interrupts"][number];
+
+/** A pause under its chat call id; a paused native step's input is its call's. */
+const asChatInterrupt = (
+  interrupt: ChatInterrupt,
+  calls: LocalRunToolCalls,
+  callId: CallId,
+): ChatInterrupt => {
+  if (interrupt.toolCallId === undefined) {
+    return interrupt;
+  }
+  const name = calls.get(interrupt.toolCallId)?.name;
+  return {
+    ...interrupt,
+    toolCallId: callId(interrupt.toolCallId),
+    ...(name !== undefined &&
+    isChatLocalRunToolName(name) &&
+    interrupt.metadata !== undefined
+      ? {
+          metadata: {
+            ...interrupt.metadata,
+            input: nativeInput(name, interrupt.metadata["input"]),
+          },
+        }
+      : {}),
+  };
 };
 
 /**
@@ -461,50 +597,7 @@ const asChatChunk = (
     chunk.type === EventType.TOOL_CALL_ARGS ||
     chunk.type === EventType.TOOL_CALL_END
   ) {
-    const call = calls.get(chunk.toolCallId);
-    if (call === undefined) {
-      // A call this read never saw start has no name to check it by.
-      return null;
-    }
-    const { name } = call;
-    if (!isChatLocalRunToolName(name)) {
-      return { ...chunk, toolCallId: callId(chunk.toolCallId) };
-    }
-    const stamp =
-      chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp };
-    if (chunk.type === EventType.TOOL_CALL_END) {
-      // The normalised end the harness sends, its input rebuilt; anything
-      // else on the chunk, a top-level input included, is not carried.
-      const reported = tanstackOf(chunk.metadata);
-      return {
-        type: EventType.TOOL_CALL_END,
-        toolCallId: callId(chunk.toolCallId),
-        ...stamp,
-        metadata: {
-          tanstack: {
-            toolCallName: name,
-            toolName: name,
-            input: nativeInput(name, reported["input"]),
-            ...reportedModel(chunk.metadata),
-          },
-        },
-      };
-    }
-    // A harness sends a native step's arguments whole, in one chunk; a
-    // second would append to the first.
-    if (call.argsCarried) {
-      return null;
-    }
-    call.argsCarried = true;
-    const args = JSON.stringify(
-      nativeInput(name, parsedArguments(chunk.delta)),
-    );
-    return {
-      type: EventType.TOOL_CALL_ARGS,
-      toolCallId: callId(chunk.toolCallId),
-      delta: args,
-      ...stamp,
-    };
+    return asToolInputChunk(chunk, calls, callId);
   }
   // Only these name a run, a thread or a call; every other chunk passes as is.
   if (chunk.type === EventType.RUN_STARTED) {
@@ -519,34 +612,16 @@ const asChatChunk = (
         ? {
             outcome: {
               ...chunk.outcome,
-              interrupts: chunk.outcome.interrupts.map((interrupt) => {
-                if (interrupt.toolCallId === undefined) {
-                  return interrupt;
-                }
-                const name = calls.get(interrupt.toolCallId)?.name;
-                return {
-                  ...interrupt,
-                  toolCallId: callId(interrupt.toolCallId),
-                  // A paused native step's input is its call's.
-                  ...(name !== undefined &&
-                  isChatLocalRunToolName(name) &&
-                  interrupt.metadata !== undefined
-                    ? {
-                        metadata: {
-                          ...interrupt.metadata,
-                          input: nativeInput(name, interrupt.metadata["input"]),
-                        },
-                      }
-                    : {}),
-                };
-              }),
+              interrupts: chunk.outcome.interrupts.map((interrupt) =>
+                asChatInterrupt(interrupt, calls, callId),
+              ),
             },
           }
         : {}),
     };
   }
   if (chunk.type === EventType.TOOL_CALL_RESULT) {
-    return { ...chunk, toolCallId: callId(chunk.toolCallId) };
+    return asToolResultChunk(chunk, calls, callId);
   }
   if (chunk.type === EventType.CUSTOM) {
     return LOCAL_RUN_CUSTOM_EVENTS.has(chunk.name) ? chunk : null;
@@ -858,6 +933,11 @@ type ReadRunOptions = {
   context: LocalRunContext;
   runnerRunId: string;
   afterSeq: number;
+  /**
+   * The calls the run opened through `afterSeq` (`openedCalls`); the read
+   * adds the ones it sees open.
+   */
+  toolCalls: LocalRunToolCalls;
   chatRunId: string;
   abortSignal: AbortSignal;
 };
@@ -1040,6 +1120,59 @@ const createRunApps = (context: LocalRunContext, runnerRunId: string) => {
 };
 
 /**
+ * The calls a run opened through `throughSeq`, read again when a resumed turn
+ * continues after a pause: a result for a call opened before the pause is
+ * checked by the name its start gave it.
+ */
+const openedCalls = async (
+  { control, owner }: LocalRunContext,
+  runnerRunId: string,
+  throughSeq: number,
+): Promise<Result<LocalRunToolCalls, DatabaseError>> => {
+  const calls: LocalRunToolCalls = new Map();
+  let after = 0;
+  while (after < throughSeq) {
+    const page = await control.readEvents({
+      owner,
+      runId: runnerRunId,
+      afterSeq: after,
+      limit: EVENT_PAGE,
+    });
+    if (page.isErr()) {
+      return Result.err(page.error);
+    }
+    for (const item of page.value.items) {
+      if (item.seq > throughSeq) {
+        return Result.ok(calls);
+      }
+      after = item.seq;
+      const parsed = v.safeParse(
+        desktopRunnerDesktopMessageSchema,
+        item.message,
+      );
+      const chunk: unknown =
+        parsed.success &&
+        parsed.output.type === DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent
+          ? parsed.output.chunk
+          : null;
+      if (
+        isPublicStreamChunk(chunk) &&
+        chunk.type === EventType.TOOL_CALL_START
+      ) {
+        calls.set(chunk.toolCallId, {
+          name: chunk.toolCallName,
+          argsCarried: true,
+        });
+      }
+    }
+    if (page.value.nextAfterSeq === null) {
+      break;
+    }
+  }
+  return Result.ok(calls);
+};
+
+/**
  * The run's chunks after `afterSeq`, until the run finishes or pauses for an
  * approval or a blocking question. A pause records the position, so the
  * resumed turn continues after it. A computer that is away keeps the turn waiting; a run the gateway
@@ -1051,6 +1184,7 @@ async function* readRunChunks({
   context,
   runnerRunId,
   afterSeq,
+  toolCalls,
   chatRunId,
   abortSignal,
 }: ReadRunOptions): AsyncGenerator<PublicStreamChunk> {
@@ -1079,7 +1213,6 @@ async function* readRunChunks({
   const computer = computerStatusChunks(start);
   const runOutputChunks = createRunOutputs(context, rewrite);
   const runApps = createRunApps(context, runnerRunId);
-  const toolCalls: LocalRunToolCalls = new Map();
   const fail = function* (
     code: LocalRunFailure,
     message?: string,
@@ -1384,6 +1517,7 @@ async function* startLocalRun({
         context,
         runnerRunId: outcome.runId,
         afterSeq: 0,
+        toolCalls: new Map(),
         chatRunId: input.chatRunId,
         abortSignal: input.abortSignal,
       });
@@ -1562,6 +1696,14 @@ async function* resumeLocalRun({
     yield* fail(AI_FAILURE_CODES.local_runner_unavailable);
     return;
   }
+  // Read before the answer goes out, so a store that cannot be read leaves
+  // the run waiting as it was.
+  const calls = await openedCalls(context, run.runId, run.chatReadSeq);
+  if (calls.isErr()) {
+    yield opened;
+    yield* storeUnavailable(calls.error, rewrite);
+    return;
+  }
   const answered = await answerPausedRun(
     context,
     { ...item, interruptId: item.interruptId },
@@ -1604,6 +1746,7 @@ async function* resumeLocalRun({
     context,
     runnerRunId: run.runId,
     afterSeq: run.chatReadSeq,
+    toolCalls: calls.value,
     chatRunId: input.chatRunId,
     abortSignal: input.abortSignal,
   });
