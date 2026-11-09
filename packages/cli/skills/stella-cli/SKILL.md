@@ -126,7 +126,7 @@ requires (request it at `stella auth login --scopes`).
 | document | `stella document save` | documents_write | destructive (needs `--yes` off a TTY) |
 | feedback | `stella feedback prepare` | feedback |  |
 | feedback | `stella feedback submit` | feedback |  |
-| guidance | `stella guidance read` | read | paginated; windowed text |
+| guidance | `stella guidance read` | read | paginated |
 | guidance | `stella guidance search` | search | paginated |
 | invoice | `stella invoice list` | read | paginated |
 | legislation | `stella legislation boe-search` | read | paginated |

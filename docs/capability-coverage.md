@@ -572,7 +572,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
 | `soft-law.get` | read | stella:read | FEATURE_PUBLIC_LAW | curated tool `read_guidance` |
-| `soft-law.search` | read | stella:read | FEATURE_PUBLIC_LAW | curated tool `search_guidance` |
+| `soft-law.search` | read | stella:search | FEATURE_PUBLIC_LAW | curated tool `search_guidance` |
 
 ## style-sets
 
