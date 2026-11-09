@@ -78,7 +78,6 @@ const UNSTORED_BUN_JOBS: Record<string, string> = {
   ".github/workflows/ci.yml#postgres-service-suites":
     "its filtered API/CLI install (8-13 s in run 38089283216) is cheaper than a store restore",
   ".github/workflows/fetch-public-documents.yml#fetch": "installs nothing",
-  ".github/workflows/case-law-search-probe.yml#probe": "installs nothing",
   ".github/workflows/journey-canary.yml#journeys": "installs nothing",
   ".github/workflows/mobile-fingerprint-check.yml#fingerprint":
     "installs the mobile closure of both the merge result and its base",
