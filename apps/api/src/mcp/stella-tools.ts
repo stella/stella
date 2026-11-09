@@ -175,6 +175,7 @@ import {
 } from "@/api/mcp/case-law-decision-read";
 import {
   CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS,
+  caseLawAgentSearchTotal,
   MANY_REQUIRED_TERMS_THRESHOLD,
   searchCaseLawTexts,
 } from "@/api/mcp/case-law-search-guidance";
@@ -2853,19 +2854,18 @@ const timedOutPhrasingNote = ({
 const SEARCH_ADMISSION = { domain: "caseLaw", surface: "search" } as const;
 
 /**
- * What a phrasing reads about its result set. The response carries the first
- * phrasing's facets, and a total only for a single phrasing: every other
- * phrasing's aggregations would be read over its whole result set and
- * dropped, so they are not asked for.
+ * What a phrasing reads about its result set. Aggregations are read over the
+ * whole result set, beside the scan and from the same engine slots, so only a
+ * call that names facets pays for them, on its first phrasing. The total is
+ * read with those facets; a call that names none gets the hits alone.
  */
 const phrasingResultSet = <Facet>(
   index: number,
-  queryCount: number,
   facets: Facet[],
 ): { facets: Facet[]; describeResultSet?: false } =>
-  index === 0 && (queryCount === 1 || facets.length > 0)
+  index === 0 && facets.length > 0
     ? { facets }
-    : { facets: index === 0 ? facets : [], describeResultSet: false };
+    : { facets: [], describeResultSet: false };
 
 type AnsweredPhrasingWarningsOptions = Parameters<
   typeof manyRequiredTermsWarnings
@@ -2993,7 +2993,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     const subCursor = resolved.cursors[index];
     const body = {
       query,
-      ...phrasingResultSet(index, queries.length, parsed.output.facets),
+      ...phrasingResultSet(index, parsed.output.facets),
       sentenceAlignedExcerpt: true,
       headnotePresentation: "expanded" as const,
       limit: perQueryLimit,
@@ -3115,7 +3115,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
     paginationOutcome: mergedCaseLawPaginationOutcome(pages),
     results: merged.map(caseLawSearchResult),
-    total: single?.total ?? SEARCH_TOTAL_NOT_COUNTED,
+    total: caseLawAgentSearchTotal(single?.total ?? SEARCH_TOTAL_NOT_COUNTED),
     ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
   });
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
