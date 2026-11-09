@@ -19,7 +19,9 @@ import { bilingualTranslationsRoute } from "@/api/handlers/bilingual-translation
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { catalogueRoute } from "@/api/handlers/catalogue/routes";
+import { chatMcpAppsRoute } from "@/api/handlers/chat/mcp-apps/routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
+import { chatRunOutputsRoute } from "@/api/handlers/chat/run-outputs/routes";
 import {
   clauseCategoriesRoute,
   clausesRoute,
@@ -29,6 +31,7 @@ import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
+import { desktopRunnerRoute } from "@/api/handlers/desktop-runner/routes";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
 import { dictationRoute } from "@/api/handlers/dictation/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
@@ -71,6 +74,7 @@ import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
+import { organizationsRoute } from "@/api/handlers/organizations/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -100,6 +104,7 @@ import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-que
 import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
+import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { uploadsRoute } from "@/api/handlers/uploads/routes";
@@ -192,6 +197,7 @@ export const apiRoutes = mount([
   timeApprovalQueueRoute,
   internalTimeEntriesRoute,
   myTimeEntriesRoute,
+  timeEntryReportRoute,
   memberTimeTargetsRoute,
   timeTimersRoute,
   servedIfLoaded(localDevRoutes?.devPublicRoute),
@@ -244,6 +250,7 @@ export const apiRoutes = mount([
       sharepointRoute,
       catalogueRoute,
       organizationSettingsRoute,
+      organizationsRoute,
       apiKeysRoute,
       desktopRegistryRoute,
       aiConfigPublicRoute,
@@ -265,6 +272,8 @@ export const apiRoutes = mount([
       legalReaderRoute,
       legalResolveRoute,
       chatRoute,
+      chatMcpAppsRoute,
+      chatRunOutputsRoute,
       dictationRoute,
       userFilesRoute,
       skillsRoute,
@@ -297,4 +306,5 @@ export const apiRoutes = mount([
   desktopPresenceRoute,
   desktopFeatureAccessRoute,
   desktopTimeEntriesRoute,
+  desktopRunnerRoute,
 ]);

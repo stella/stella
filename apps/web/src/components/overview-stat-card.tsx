@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 type StatCardProps = {
@@ -42,13 +43,13 @@ export const StatCard = ({
 
   if (onClick) {
     return (
-      <button
-        className="bg-card hover:bg-muted/50 flex min-w-0 cursor-pointer flex-col items-start gap-1.5 rounded-lg border px-4 py-3 text-start"
-        onClick={onClick}
-        type="button"
-      >
-        {content}
-      </button>
+      // The clickable card draws the same card as the static one below and
+      // only adds a hover tint, so a row of stats reads as one set.
+      <Button className="block min-w-0" onClick={onClick} variant="plain">
+        <span className="bg-card hover:bg-muted/50 flex h-full w-full min-w-0 flex-col items-start gap-1.5 rounded-lg border px-4 py-3">
+          {content}
+        </span>
+      </Button>
     );
   }
 

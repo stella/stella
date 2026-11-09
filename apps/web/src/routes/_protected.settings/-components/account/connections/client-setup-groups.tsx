@@ -178,13 +178,12 @@ const SetupList = ({ rows }: { rows: readonly SetupRow[] }) => (
         </ListItemContent>
         <ListItemActions>
           {row.note !== undefined && (
-            <TruncatedText
+            <code
               className="bg-muted text-muted-foreground hidden max-w-64 rounded-md px-2 py-1 font-mono text-xs md:block"
               dir="ltr"
-              render={<code />}
             >
-              {row.value}
-            </TruncatedText>
+              <TruncatedText>{row.value}</TruncatedText>
+            </code>
           )}
           <CopyActionButton
             iconClassName="size-4"

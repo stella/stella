@@ -78,6 +78,8 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
         owner: "ci",
       },
       "Select changed PR e2e shards": { class: "advisory", owner: "ci" },
+      // "Plan every browser suite spec" runs every spec when it fails.
+      "Plan changed browser suite specs": { class: "advisory", owner: "ci" },
     },
   },
   "docker-checks": {
@@ -268,8 +270,6 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
     steps: {
       "Write required-jobs record": { class: "advisory", owner: "ci" },
       "Upload required-jobs record": { class: "advisory", owner: "ci" },
-      "Write required-violations record": { class: "advisory", owner: "ci" },
-      "Upload required-violations record": { class: "advisory", owner: "ci" },
     },
   },
 };

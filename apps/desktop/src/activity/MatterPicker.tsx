@@ -77,9 +77,17 @@ export const MatterPicker = ({
       }}
     >
       <PopoverTrigger
-        render={<Button size="sm" variant="outline" disabled={disabled} />}
+        render={
+          // A matter name can outrun the card; the trigger stays inside it.
+          <Button
+            className="max-w-full justify-start"
+            size="sm"
+            variant="outline"
+            disabled={disabled}
+          />
+        }
       >
-        {label}
+        <TruncatedText render={<bdi />}>{label}</TruncatedText>
       </PopoverTrigger>
       <PopoverPopup className="w-80" side="bottom" align="start">
         <SearchField

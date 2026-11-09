@@ -10,6 +10,7 @@ import {
 } from "@stll/ui/breadcrumb";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { DocumentSwitcher } from "@/components/breadcrumbs/document-switcher";
 import {
   canRenameDocumentCrumb,
   resolveCrumbRenameShortcut,
@@ -186,6 +187,19 @@ export const PdfBreadcrumb = () => {
             />
           );
         })()}
+        {/* Switching away while pages are being organized would drop the
+            unsaved arrangement, so the caret waits until that ends. */}
+        {rename.state.mode !== "edit" &&
+        pendingName === null &&
+        pdfMode !== "organize" &&
+        entityId.length > 0 ? (
+          <DocumentSwitcher
+            entityId={entityId}
+            fieldId={fieldId}
+            viewId={viewId}
+            workspaceId={workspaceId}
+          />
+        ) : null}
       </BreadcrumbItem>
       {pdfMode === "organize" && (
         <>

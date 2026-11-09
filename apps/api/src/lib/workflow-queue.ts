@@ -21,14 +21,20 @@ import {
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
-import { recordTableRunVerdicts } from "@/api/lib/document-review/table-run-findings";
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import {
+  recordTableRunDocumentRead,
+  recordTableRunVerdicts,
+} from "@/api/lib/document-review/table-run-findings";
+import {
+  DocumentTooLargeError,
+  TimeoutError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   connectionErrorFields,
   errorSystemFields,
@@ -1137,11 +1143,15 @@ export const createWorkflowReconcileRunner = (
       return;
     }
     running = true;
-    reconcile({})
-      .catch(handleWorkflowReconcileFailure)
-      .finally(() => {
-        running = false;
-      });
+    detached(
+      async () =>
+        reconcile({})
+          .catch(handleWorkflowReconcileFailure)
+          .finally(() => {
+            running = false;
+          }),
+      "workflow-queue.reconcile",
+    );
   };
 };
 
@@ -1741,7 +1751,27 @@ const processOneBatch = async ({
           }),
         );
         erroredProperties.push(...aiModelProperties);
+        if (DocumentTooLargeError.is(batchResult.error)) {
+          await recordTableRunDocumentRead({
+            scopedDb: actor.writeDb,
+            workspaceId,
+            entityId,
+            entityVersionId,
+            propertyIds: aiModelProperties.map(({ id }) => id),
+            read: { type: "tooLarge" },
+          });
+        }
       } else {
+        if (batchResult.value.withheld.length > 0) {
+          await recordTableRunDocumentRead({
+            scopedDb: actor.writeDb,
+            workspaceId,
+            entityId,
+            entityVersionId,
+            propertyIds: aiModelProperties.map(({ id }) => id),
+            read: { type: "cut", withheld: batchResult.value.withheld },
+          });
+        }
         aiResults.push(...batchResult.value.aiResults);
         aiJustifications.push(...batchResult.value.aiJustifications);
         skippedPropertyIds.push(...batchResult.value.skippedPropertyIds);
@@ -1761,6 +1791,14 @@ const processOneBatch = async ({
             case "notStated":
               terminalSettlements.set(propertyId, {
                 type: "notStated",
+                runId: requestId,
+                settledAt: now(),
+              });
+              skippedPropertyIds.push(propertyId);
+              break;
+            case "notFoundInCutDocument":
+              terminalSettlements.set(propertyId, {
+                type: "notFoundInCutDocument",
                 runId: requestId,
                 settledAt: now(),
               });
@@ -2314,15 +2352,19 @@ const finishWorkflow = async (
   // failure must never fail (or block) the classification workflow. The
   // recursion guard inside — a playbook run's materialized columns are never the
   // classifier, so they cannot re-trigger routing — keeps this from looping.
-  maybeRouteClassifiedDocuments({
-    actor,
-    planPropertyIds,
-    startSuccessorWorkflow,
-  }).catch((error: unknown) =>
-    captureError(
-      error,
-      handlerErrorContext("workflowFinish.routeDocuments", { workspaceId }),
-    ),
+  detached(
+    async () =>
+      maybeRouteClassifiedDocuments({
+        actor,
+        planPropertyIds,
+        startSuccessorWorkflow,
+      }).catch((error: unknown) =>
+        captureError(
+          error,
+          handlerErrorContext("workflowFinish.routeDocuments", { workspaceId }),
+        ),
+      ),
+    "workflow-queue.maybe-route-classified-documents",
   );
 
   // Grade whatever the workspace still owes: columns created mid-run, and the

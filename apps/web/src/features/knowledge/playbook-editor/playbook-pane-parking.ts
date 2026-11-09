@@ -187,7 +187,10 @@ const removePaneDraft = <T>(
   { tabId, playbookId }: PaneDraftId,
 ): PaneDraftRegistry<T> => {
   const tab = current[tabId];
-  if (tab?.[playbookId] === undefined) {
+  if (tab === undefined) {
+    return current;
+  }
+  if (tab[playbookId] === undefined) {
     return current;
   }
   const remaining = Object.fromEntries(

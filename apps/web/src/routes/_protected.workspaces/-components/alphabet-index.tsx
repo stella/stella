@@ -9,6 +9,7 @@
 import { useCallback, useState } from "react";
 import type { RefObject } from "react";
 
+import { Button } from "@stll/ui/button";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
@@ -159,14 +160,15 @@ export const AlphabetIndex = ({
       {markers.map((m) => {
         const isHovered = hoveredId === m.groupId;
         return (
-          <button
-            className="absolute end-0 flex items-center gap-0.5"
+          <Button
+            className="absolute end-0 flex items-center"
             key={m.groupId}
             onClick={() => scrollTo(m.groupId)}
             onMouseEnter={() => setHoveredId(m.groupId)}
             onMouseLeave={() => setHoveredId(null)}
+            shape="round"
             style={{ top: `${m.pct}%`, transform: "translateY(-50%)" }}
-            type="button"
+            variant="plain"
           >
             <TruncatedText
               className={cn(
@@ -230,7 +232,7 @@ export const AlphabetIndex = ({
                 })(),
               }}
             />
-          </button>
+          </Button>
         );
       })}
     </div>

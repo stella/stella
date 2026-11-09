@@ -1,5 +1,8 @@
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the EU Publications Office gate paces one request per second; request timing only, parsed output is unchanged.
+// parser-output-unchanged: the SÚIP gate entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the Czech ÚOOÚ gate interval changes pacing only; parsed output is unchanged.
+// parser-output-unchanged: the Slovak ÚOOÚ gate entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { DAY_IN_MS } from "@stll/time";
 
 type PublisherGate = {
@@ -41,7 +44,25 @@ const NALUS_REQUEST_BUDGET_SHARE = 0.96;
  * Austrian tribunals is one budget, not ten.
  */
 export const PUBLISHER_GATES = {
-  "uoou-cz": { publisher: "ÚOOÚ", intervalMs: 1000, hosts: ["uoou.gov.cz"] },
+  /**
+   * uoou.gov.cz states no limit. A full walk is about a thousand requests;
+   * a 5 s gap keeps it under two hours across bounded runs.
+   */
+  "uoou-cz": { publisher: "ÚOOÚ", intervalMs: 5000, hosts: ["uoou.gov.cz"] },
+  /**
+   * dataprotection.gov.sk states no limit. A full walk is one index request
+   * plus one per annual report, so a 5 s gap keeps it under two minutes.
+   */
+  "uoou-sk": {
+    publisher: "ÚOOÚ SR",
+    intervalMs: 5000,
+    hosts: ["dataprotection.gov.sk"],
+  },
+  /**
+   * suip.gov.cz states no limit; robots.txt only disallows its REST endpoints.
+   * A full walk is about 120 requests.
+   */
+  "suip-cz": { publisher: "SÚIP", intervalMs: 5000, hosts: ["suip.gov.cz"] },
   "bfdi-de": {
     publisher: "BfDI",
     intervalMs: 30_000,

@@ -20,7 +20,10 @@ import {
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 import Tooltip from "@/components/tooltip";
 import type { KnowledgeToolDetail } from "@/features/knowledge/views/tools/tools-seam";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -47,6 +50,11 @@ export const ToolDetailPanelView = ({
   const isFirstParty = tool.author === "stella";
   const homepageUrl = sanitizeHref(tool.homepage ?? tool.authorUrl);
   const labelKey = nativeToolLabelKey({ slug: tool.slug, kind: tool.kind });
+  const descriptionKey = nativeToolDescriptionKey({
+    slug: tool.slug,
+    kind: tool.kind,
+  });
+  const description = descriptionKey ? t(descriptionKey) : tool.description;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
@@ -89,11 +97,11 @@ export const ToolDetailPanelView = ({
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
-        {tool.description && (
+        {description && (
           <Section title={t("onboarding.catalogueDetailAbout")}>
             {/* Remount per entry so expanded/overflow state starts fresh
                 (the panel itself is not remounted per selection). */}
-            <ExpandableText key={tool.description} text={tool.description} />
+            <ExpandableText key={description} text={description} />
           </Section>
         )}
 

@@ -295,14 +295,16 @@ const GenericExternalReferencePanel = ({
   const storedSource = useExternalSourceStore((state) =>
     safeHref === undefined ? undefined : state.sourcesByUrl[safeHref],
   );
+  // No stored source counts as no stored text.
   const shouldFetchPreview =
-    canPreview &&
-    tab.text === undefined &&
-    storedSource?.text === undefined &&
-    (tab.connectorSlug !== undefined ||
-      tab.sourceToolName !== undefined ||
-      storedSource?.connectorSlug !== undefined ||
-      storedSource?.sourceToolName !== undefined);
+    storedSource?.text !== undefined
+      ? false
+      : canPreview &&
+        tab.text === undefined &&
+        (tab.connectorSlug !== undefined ||
+          tab.sourceToolName !== undefined ||
+          storedSource?.connectorSlug !== undefined ||
+          storedSource?.sourceToolName !== undefined);
   const previewErrorTitle = t("common.somethingWentWrong");
   const fetchedPreviewQuery = useQuery({
     ...externalReferencePreviewOptions({
@@ -491,30 +493,29 @@ const GenericExternalReferencePanel = ({
                   </TruncatedText>
                 )}
                 {connectorSlug && (
-                  <TruncatedText className="bg-muted text-muted-foreground text-3xs max-w-24 rounded px-1.5 py-0.5 font-mono">
+                  <TruncatedText className="bg-muted text-muted-foreground text-3xs max-w-24 rounded-sm px-1.5 py-0.5 font-mono">
                     {connectorSlug}
                   </TruncatedText>
                 )}
                 {sourceToolName && (
-                  <TruncatedText className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5 font-mono">
+                  <TruncatedText className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5 font-mono">
                     {sourceToolName}
                   </TruncatedText>
                 )}
               </div>
             )}
             {canPreview && (
-              <button
-                className={cn(
-                  "text-muted-foreground hover:text-foreground min-w-0 text-start text-xs underline-offset-2 hover:underline",
-                  hasMetadata && "mt-1",
-                )}
+              <Button
+                className={cn("max-w-full min-w-0", hasMetadata && "mt-1")}
                 onClick={() => {
                   requestOpenExternal(safeHref);
                 }}
-                type="button"
+                variant="plain"
               >
-                <TruncatedText>{safeHref}</TruncatedText>
-              </button>
+                <TruncatedText className="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline">
+                  {safeHref}
+                </TruncatedText>
+              </Button>
             )}
           </div>
           <InspectorFindBar find={find} />

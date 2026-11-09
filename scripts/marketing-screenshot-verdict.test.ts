@@ -1,4 +1,13 @@
 import { expect, test } from "bun:test";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { verdictOf } from "./marketing-screenshot-verdict";
 
@@ -119,4 +128,94 @@ test("an unexpected pass beside a screenshot difference still fails", () => {
 
 test("a passing run passes", () => {
   expect(verdictOf(undefined, 0)).toEqual({ kind: "pass" });
+});
+
+// The capture step runs the script itself: its exit code decides the
+// screenshots job, and a failed screenshots job blocks a release.
+const runVerdict = (playwrightReport: unknown, exitCode: number) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "marketing-verdict-"));
+  try {
+    const reportPath = path.join(directory, "report.json");
+    if (playwrightReport !== undefined) {
+      writeFileSync(reportPath, JSON.stringify(playwrightReport));
+    }
+    const summaryPath = path.join(directory, "summary.md");
+    const child = Bun.spawnSync(
+      [
+        process.execPath,
+        path.join(import.meta.dir, "marketing-screenshot-verdict.ts"),
+        reportPath,
+        String(exitCode),
+      ],
+      {
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          GITHUB_STEP_SUMMARY: summaryPath,
+        },
+        stderr: "pipe",
+        stdout: "pipe",
+      },
+    );
+    return {
+      exitCode: child.exitCode,
+      stdout: child.stdout.toString(),
+      summary: existsSync(summaryPath)
+        ? readFileSync(summaryPath, "utf-8")
+        : "",
+    };
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+};
+
+test("the step passes a difference-only report with a warning", () => {
+  const run = runVerdict(
+    report({
+      title: "capture landing product screenshots",
+      status: "failed",
+      messages: [MISMATCH],
+    }),
+    1,
+  );
+  expect(run.exitCode, run.stdout).toBe(0);
+  expect(run.stdout).toContain(
+    "::warning title=Marketing screenshots differ::",
+  );
+  expect(run.stdout).toContain("capture landing product screenshots");
+  expect(run.stdout).not.toContain("::error");
+  expect(run.summary).toContain("Marketing screenshots differ");
+});
+
+test.each([
+  [
+    "a failed assertion",
+    report({
+      title: "capture landing product screenshots",
+      status: "failed",
+      messages: ["Error: expect(locator).toBeVisible() failed"],
+    }),
+  ],
+  [
+    "a timeout",
+    report({ title: "capture", status: "timedOut", messages: [MISMATCH] }),
+  ],
+  ["a crashed page", { ...report(), errors: [{ message: "page crashed" }] }],
+  [
+    "a page that never settled",
+    report({
+      title: "capture landing product screenshots",
+      status: "failed",
+      messages: [
+        "Error: expect(page).toHaveScreenshot(expected) failed\n\n  Timeout 15000ms exceeded.\n  - 2 consecutive screenshots were not stable",
+      ],
+    }),
+  ],
+  ["an unreadable report", undefined],
+])("the step fails on %s", (_label, playwrightReport) => {
+  const run = runVerdict(playwrightReport, 1);
+  expect(run.exitCode, run.stdout).toBe(1);
+  expect(run.stdout).toContain(
+    "::error title=Marketing screenshot check failed::",
+  );
+  expect(run.stdout).not.toContain("::warning");
 });

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 import { useTranslations } from "use-intl";
 
@@ -10,7 +10,10 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { emptyColor, resolveOptionColor } from "./colors";
-import { getClipFieldValueLabel } from "./field-value-logic";
+import {
+  getClipFieldValueLabel,
+  summarizeRecordField,
+} from "./field-value-logic";
 import { useFormatter, useFormattingLocale } from "./formatting";
 import type { GenericProperty, WorkspaceFieldContent } from "./types";
 
@@ -107,7 +110,79 @@ export const FieldValue = ({
     );
   }
 
+  if (content.type === "record") {
+    return <RecordFieldValue content={content} variant={resolvedVariant} />;
+  }
+
   return <ClipFieldValue content={content} variant={resolvedVariant} />;
+};
+
+export const RecordFieldValue = ({
+  content,
+  variant,
+}: {
+  content: Extract<WorkspaceFieldContent, { type: "record" }>;
+  variant: FieldValueVariant;
+}) => {
+  const t = useTranslations();
+  const locale = useFormattingLocale();
+  if (variant === "kanban") {
+    return null;
+  }
+  const summary = summarizeRecordField(
+    content.state,
+    ({ amountMinor, currency }) =>
+      formatMoneyCents({ amountCents: amountMinor, currency, locale }),
+  );
+  const className = variant === "table" ? undefined : "text-sm";
+  switch (summary.type) {
+    case "text":
+      return (
+        <TruncatedText
+          className={className}
+          lines={2}
+          render={<BidiText as="span" />}
+        >
+          {summary.text}
+        </TruncatedText>
+      );
+    case "records":
+      return (
+        <TruncatedText className={className} lines={2}>
+          {t("workspaces.fields.recordCount", { count: summary.count })}
+        </TruncatedText>
+      );
+    case "choose":
+      return (
+        <TruncatedText
+          className={cn(className, "text-warning-foreground italic")}
+          lines={2}
+        >
+          {t("workspaces.fields.recordChoose", { count: summary.count })}
+        </TruncatedText>
+      );
+    case "needs-review":
+      return (
+        <TruncatedText
+          className={cn(className, "text-warning-foreground italic")}
+          lines={2}
+        >
+          {t("workspaces.table.flags.needsReview")}
+        </TruncatedText>
+      );
+    case "not-found":
+      return (
+        <TruncatedText
+          className={cn(className, "text-muted-foreground italic")}
+          lines={2}
+        >
+          {t("workspaces.fields.recordNotFound")}
+        </TruncatedText>
+      );
+    default:
+      summary satisfies never;
+      return panic("Unknown record field summary");
+  }
 };
 
 export const IntFieldValue = ({
@@ -189,7 +264,7 @@ export const PersonFieldValue = ({
       className={cn(
         "flex max-w-full min-w-0 items-center",
         resolvedVariant === "kanban"
-          ? "text-muted-foreground bg-muted/60 gap-1 rounded px-1.5 py-0.5 text-xs leading-none"
+          ? "text-muted-foreground bg-muted/60 gap-1 rounded-sm px-1.5 py-0.5 text-xs leading-none"
           : "gap-1.5 text-sm",
       )}
     >
@@ -444,7 +519,7 @@ const DateFieldValue = ({
 
   if (variant === "kanban") {
     return (
-      <span className="text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none">
+      <span className="text-muted-foreground bg-muted/60 rounded-sm px-1.5 py-0.5 text-xs leading-none">
         {formatted}
       </span>
     );
@@ -472,7 +547,7 @@ const SelectFieldValue = ({
   if (variant === "kanban") {
     return (
       <TruncatedText
-        className="rounded px-1.5 py-0.5 text-xs leading-none font-medium"
+        className="rounded-sm px-1.5 py-0.5 text-xs leading-none font-medium"
         render={<BidiText as="span" />}
         style={{
           backgroundColor: color?.background,
@@ -488,8 +563,8 @@ const SelectFieldValue = ({
     <span
       className={
         variant === "table"
-          ? "flex max-w-full items-center gap-x-1 rounded px-1 py-0.25 font-medium"
-          : "flex w-max max-w-full items-center gap-x-1 rounded px-1 py-0.25 text-sm font-medium"
+          ? "flex max-w-full items-center gap-x-1 rounded-sm px-1 py-0.25 font-medium"
+          : "flex w-max max-w-full items-center gap-x-1 rounded-sm px-1 py-0.25 text-sm font-medium"
       }
       style={{
         backgroundColor: color?.background,
@@ -557,7 +632,7 @@ export const ClipFieldValue = ({
   if (variant === "kanban") {
     return (
       <TruncatedText
-        className="text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none"
+        className="text-muted-foreground bg-muted/60 rounded-sm px-1.5 py-0.5 text-xs leading-none"
         render={<BidiText as="span" />}
       >
         {value}
@@ -650,7 +725,7 @@ export const NumericFieldText = ({
 }) => {
   if (variant === "kanban") {
     return (
-      <span className="text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none tabular-nums">
+      <span className="text-muted-foreground bg-muted/60 rounded-sm px-1.5 py-0.5 text-xs leading-none tabular-nums">
         {children}
       </span>
     );

@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { CheckCircle2Icon, CircleIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
@@ -65,21 +66,19 @@ const SubtaskRow = ({
 }) => {
   const isDone = status === "done";
   return (
-    <button
-      className="hover:bg-muted/50 flex w-full items-center gap-2 rounded px-1 py-0.5 text-start text-sm"
-      onClick={onToggle}
-      type="button"
-    >
-      {isDone ? (
-        <CheckCircle2Icon className="text-success size-3.5" />
-      ) : (
-        <CircleIcon className="text-muted-foreground size-3.5" />
-      )}
-      <TruncatedText
-        className={cn(isDone && "text-muted-foreground line-through")}
-      >
-        {name}
-      </TruncatedText>
-    </button>
+    <Button className="block w-full" onClick={onToggle} variant="plain">
+      <span className="hover:bg-muted/50 flex w-full items-center gap-2 rounded-sm px-1 py-0.5 text-sm">
+        {isDone ? (
+          <CheckCircle2Icon className="text-success size-3.5" />
+        ) : (
+          <CircleIcon className="text-muted-foreground size-3.5" />
+        )}
+        <TruncatedText
+          className={cn(isDone && "text-muted-foreground line-through")}
+        >
+          {name}
+        </TruncatedText>
+      </span>
+    </Button>
   );
 };

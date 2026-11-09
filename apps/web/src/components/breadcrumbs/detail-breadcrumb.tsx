@@ -1,4 +1,5 @@
 import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
+import { Button } from "@stll/ui/button";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { OpenDetail } from "@/components/breadcrumbs/detail-nav-store";
@@ -31,13 +32,9 @@ export const DetailBreadcrumb = ({
   return (
     <>
       <BreadcrumbItem>
-        <button
-          className="hover:text-foreground"
-          onClick={open.exit}
-          type="button"
-        >
+        <Button onClick={open.exit} size="inline" variant="muted">
           {label}
-        </button>
+        </Button>
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
       <BreadcrumbItem

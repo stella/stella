@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DialogFormState } from "@stll/ui/dialog";
+import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { SearchField } from "@stll/ui/search-field";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -102,10 +103,7 @@ export const MatterDocumentPicker = ({
             {documents.map((doc) => {
               const checked = pickedEntityIds.includes(doc.entityId);
               return (
-                <label
-                  className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"
-                  key={doc.entityId}
-                >
+                <Label key={doc.entityId} variant="choice">
                   <Checkbox
                     aria-label={doc.name ?? doc.fileName}
                     checked={checked}
@@ -120,7 +118,7 @@ export const MatterDocumentPicker = ({
                   <TruncatedText render={<BidiText as="span" />}>
                     {doc.name ?? doc.fileName}
                   </TruncatedText>
-                </label>
+                </Label>
               );
             })}
             {documents.length === 0 && (

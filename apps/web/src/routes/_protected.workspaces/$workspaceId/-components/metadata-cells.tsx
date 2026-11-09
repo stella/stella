@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -92,23 +93,23 @@ export const VersionHistoryCell = ({
 
   const label = t("fileDetail.showVersionList");
   return (
-    <Tooltip
-      content={label}
-      render={
-        <button
-          aria-label={label}
-          // The pseudo-element stretches the hit area over the whole cell.
-          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring min-w-0 cursor-pointer rounded-sm text-xs underline-offset-2 outline-none after:absolute after:inset-0 hover:underline focus-visible:ring-2"
-          onClick={() =>
-            useInspectorTabsStore
-              .getState()
-              .openFile({ ...fileTab, facet: "versions" })
-          }
-          type="button"
-        />
+    <Button
+      aria-label={label}
+      // `static` lets the pseudo-element stretch the hit area over the whole
+      // cell instead of the button.
+      className="static after:absolute after:inset-0"
+      onClick={() =>
+        useInspectorTabsStore
+          .getState()
+          .openFile({ ...fileTab, facet: "versions" })
       }
+      size="inline"
+      tooltip={label}
+      variant="muted"
     >
-      <TruncatedText hint={false}>{entity.version}</TruncatedText>
-    </Tooltip>
+      <TruncatedText className="text-xs" hint={false}>
+        {entity.version}
+      </TruncatedText>
+    </Button>
   );
 };

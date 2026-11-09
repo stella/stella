@@ -9,9 +9,9 @@
 
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
+import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 import type {
   Block,
   Inline,
@@ -19,11 +19,14 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import {
-  parsePlUodoDecisionXml,
+  parsePlUodoDecisionXml as uncheckedParsePlUodoDecisionXml,
   plUodoSourceTexts,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import type { ParsePlUodoDecisionOutput } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import { toPlainCorpusText } from "@/api/mcp/tool-utils";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlUodoDecisionXml = guardParser(uncheckedParsePlUodoDecisionXml);
 
 const SHORT_DECISION = new URL(
   "__fixtures__/pl-uodo-zsoss-440-82-2019.xml",
@@ -59,7 +62,7 @@ const paragraphs = (blocks: readonly Block[]): ParagraphBlock[] =>
  * numeric index. Other markup is dropped and whitespace collapsed.
  */
 const xTextsOf = (xml: string, withFootnoteMarks: boolean): string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const labels = new Map(
     $("xGloss")
       .toArray()
@@ -125,7 +128,7 @@ const footnoteMarksOf = (blocks: readonly Block[]): string[] =>
   );
 
 describe("a short decision", () => {
-  test("reads as the portal prints it: form, file mark, operative part, reasons", async () => {
+  test("reads as the portal prints it: form, file mark, lead-in, operative part, reasons", async () => {
     const { documentAst } = await parse(SHORT_DECISION);
     const [title, fileMark] = documentAst.blocks;
 
@@ -145,13 +148,26 @@ describe("a short decision", () => {
     );
     expect(reasonsAt).toBeGreaterThan(2);
     const operative = paragraphs(documentAst.blocks.slice(2, reasonsAt));
-    expect(operative.every((block) => block.role === "holding")).toBe(true);
+    // The legal basis and the recital open the operative branch unmarked;
+    // they introduce the ruling, which follows them.
+    const leadIn = operative.filter((block) => block.role === "intro");
+    expect(leadIn.map((block) => block.plainText.slice(0, 18))).toEqual([
+      "Na podstawie art. ",
+      "po przeprowadzeniu",
+    ]);
+    expect(operative.slice(leadIn.length).map((block) => block.role)).toEqual(
+      operative.slice(leadIn.length).map(() => "holding"),
+    );
     expect(operative.at(-1)?.plainText).toBe("umarzam postępowanie");
+    const reasons = paragraphs(documentAst.blocks.slice(reasonsAt)).filter(
+      (block) => block.note === undefined,
+    );
+    expect(reasons.length).toBeGreaterThan(0);
     expect(
-      paragraphs(documentAst.blocks.slice(reasonsAt)).some(
-        (block) => block.role === "holding",
+      reasons.filter(
+        (block) => block.role !== "argumentation" && block.role !== "quote",
       ),
-    ).toBe(false);
+    ).toEqual([]);
   });
 
   test("keeps every text the source prints, in order", async () => {

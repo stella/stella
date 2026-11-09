@@ -1,6 +1,11 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
-import ts from "typescript6";
+
+import {
+  type Node,
+  parseSource,
+  type VariableDeclaration,
+} from "@stll/scripts/src/syntax-tree";
 
 import {
   formattedLikeRepository,
@@ -9,44 +14,79 @@ import {
 import { REWRITTEN_MIGRATION_INDEXES } from "../src/lib/db/migration-history";
 import type { RequiredMigrationIndex } from "../src/lib/db/migration-history";
 
-const isUniqueInventoryFilter = (node: ts.Expression) => {
+const isUniqueInventoryFilter = (node: Node) => {
   if (
-    !ts.isCallExpression(node) ||
-    !ts.isPropertyAccessExpression(node.expression) ||
-    !ts.isIdentifier(node.expression.expression) ||
-    node.expression.expression.text !== "REWRITTEN_MIGRATION_INDEXES" ||
-    node.expression.name.text !== "filter" ||
+    node.type !== "CallExpression" ||
+    node.callee.type !== "MemberExpression" ||
+    node.callee.computed ||
+    node.callee.object.type !== "Identifier" ||
+    node.callee.object.name !== "REWRITTEN_MIGRATION_INDEXES" ||
+    node.callee.property.type !== "Identifier" ||
+    node.callee.property.name !== "filter" ||
     node.arguments.length !== 1
   ) {
     return false;
   }
   const predicate = node.arguments.at(0);
   if (
-    predicate === undefined ||
-    !ts.isArrowFunction(predicate) ||
-    predicate.parameters.length !== 1 ||
-    !ts.isIdentifier(predicate.body)
+    predicate?.type !== "ArrowFunctionExpression" ||
+    predicate.params.length !== 1 ||
+    predicate.body.type !== "Identifier"
   ) {
     return false;
   }
-  const parameter = predicate.parameters.at(0)?.name;
+  const parameter = predicate.params.at(0);
   if (
-    parameter === undefined ||
-    !ts.isObjectBindingPattern(parameter) ||
-    parameter.elements.length !== 1
+    parameter?.type !== "ObjectPattern" ||
+    parameter.properties.length !== 1
   ) {
     return false;
   }
-  const binding = parameter.elements.at(0);
+  const binding = parameter.properties.at(0);
   return (
-    binding !== undefined &&
-    binding.propertyName === undefined &&
-    binding.dotDotDotToken === undefined &&
-    binding.initializer === undefined &&
-    ts.isIdentifier(binding.name) &&
-    binding.name.text === "isUnique" &&
-    predicate.body.text === "isUnique"
+    binding?.type === "Property" &&
+    binding.shorthand &&
+    binding.value.type === "Identifier" &&
+    binding.value.name === "isUnique" &&
+    predicate.body.name === "isUnique"
   );
+};
+
+/** A top-level variable statement, exported or not. */
+const exportedVariables = (
+  statement: Node,
+): VariableDeclaration | undefined => {
+  if (statement.type === "VariableDeclaration") {
+    return statement;
+  }
+  if (
+    statement.type === "ExportNamedDeclaration" &&
+    statement.declaration?.type === "VariableDeclaration"
+  ) {
+    return statement.declaration;
+  }
+  return undefined;
+};
+
+/** An identifier or string key's name. */
+const propertyKeyName = (key: Node) => {
+  if (key.type === "Identifier") {
+    return key.name;
+  }
+  return key.type === "Literal" && typeof key.value === "string"
+    ? key.value
+    : undefined;
+};
+
+/** A string literal or a template literal without substitutions. */
+const stringLiteralLike = (node: Node) => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
 };
 
 type OnlineUniqueIndexNamesOptions = {
@@ -59,67 +99,69 @@ export const deriveOnlineUniqueIndexNames = ({
   source,
   rewrittenIndexes,
 }: OnlineUniqueIndexNamesOptions) => {
-  const ast = ts.createSourceFile(
-    "online-unique-indexes.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const declarations = new Map<string, ts.Expression>();
-  for (const statement of ast.statements) {
-    if (!ts.isVariableStatement(statement)) {
-      continue;
-    }
-    for (const { name, initializer } of statement.declarationList
-      .declarations) {
-      if (ts.isIdentifier(name) && initializer !== undefined) {
-        declarations.set(name.text, initializer);
+  const ast = parseSource("online-unique-indexes.ts", source).program;
+  const declarations = new Map<string, Node>();
+  for (const statement of ast.body) {
+    const variables = exportedVariables(statement);
+    for (const { id, init } of variables?.declarations ?? []) {
+      if (id.type === "Identifier" && init !== null) {
+        declarations.set(id.name, init);
       }
     }
   }
-  const namesOf = (node: ts.Expression, seen = new Set<string>()): string[] => {
-    if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
+  const namesOf = (node: Node, seen = new Set<string>()): string[] => {
+    if (
+      node.type === "TSAsExpression" ||
+      node.type === "TSSatisfiesExpression"
+    ) {
       return namesOf(node.expression, seen);
     }
-    if (ts.isSpreadElement(node)) {
-      return namesOf(node.expression, seen);
+    if (node.type === "SpreadElement") {
+      return namesOf(node.argument, seen);
     }
-    if (ts.isIdentifier(node)) {
-      if (seen.has(node.text)) {
-        return panic(`Cyclic online index declaration: ${node.text}`);
+    if (node.type === "Identifier") {
+      if (seen.has(node.name)) {
+        return panic(`Cyclic online index declaration: ${node.name}`);
       }
-      const declaration = declarations.get(node.text);
+      const declaration = declarations.get(node.name);
       if (declaration === undefined) {
-        return panic(`Missing online index declaration: ${node.text}`);
+        return panic(`Missing online index declaration: ${node.name}`);
       }
-      return namesOf(declaration, new Set([...seen, node.text]));
+      return namesOf(declaration, new Set([...seen, node.name]));
     }
-    if (ts.isArrayLiteralExpression(node)) {
-      return node.elements.flatMap((element) => namesOf(element, seen));
+    if (node.type === "ArrayExpression") {
+      return node.elements.flatMap((element) =>
+        element === null
+          ? panic("Online index names cannot skip an array element")
+          : namesOf(element, seen),
+      );
     }
     if (isUniqueInventoryFilter(node)) {
       return rewrittenIndexes
         .filter(({ isUnique }) => isUnique)
         .map(({ name }) => name);
     }
-    if (ts.isObjectLiteralExpression(node)) {
-      const name = node.properties.find(
-        (property) =>
-          ts.isPropertyAssignment(property) &&
-          (ts.isIdentifier(property.name) ||
-            ts.isStringLiteral(property.name)) &&
-          property.name.text === "name",
-      );
-      if (
-        name !== undefined &&
-        ts.isPropertyAssignment(name) &&
-        ts.isStringLiteralLike(name.initializer)
-      ) {
-        return [name.initializer.text];
+    if (node.type === "ObjectExpression") {
+      for (const property of node.properties) {
+        if (
+          property.type !== "Property" ||
+          property.kind !== "init" ||
+          property.method ||
+          property.shorthand ||
+          property.computed ||
+          propertyKeyName(property.key) !== "name"
+        ) {
+          continue;
+        }
+        const name = stringLiteralLike(property.value);
+        if (name !== undefined) {
+          return [name];
+        }
+        break;
       }
     }
     return panic(
-      `Online index name must be a declaration literal: ${node.getText(ast)}`,
+      `Online index name must be a declaration literal: ${source.slice(node.start, node.end)}`,
     );
   };
   const declarationNames = (name: string) => {

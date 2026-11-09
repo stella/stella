@@ -20,6 +20,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
+import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
@@ -95,11 +96,13 @@ import { DockedChatStackProvider } from "@/components/chat/docked-chat-stack";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { isInputType } from "@/components/templates/template-field-manifest";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "@/features/chat/chat-query-contract";
-import type { ChatUserMessageInput } from "@/features/chat/chat-runtime";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
-import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import {
+  buildChatRequestMessage,
+  buildChatTextMessage,
+} from "@/features/chat/lib/build-chat-request-message";
 import {
   chatThreadOptions,
   templateChatThreadOptions,
@@ -121,7 +124,6 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
-import { createUuid } from "@/lib/uuid";
 import { inputTypeValueKind } from "@/lib/value-types";
 import { useTemplateStudioStore } from "@/routes/knowledge/-components/template-studio-store";
 import {
@@ -208,11 +210,6 @@ export const TemplateStudioChat = (props: TemplateStudioChatProps) => {
 type ScopedPresetSend = {
   text: string;
 };
-
-const createTextChatMessage = (text: string): ChatUserMessageInput => ({
-  content: text,
-  id: toSafeId<"chatMessage">(createUuid()),
-});
 
 const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
   const t = useTranslations();
@@ -757,9 +754,13 @@ const TemplateStudioChatInner = ({
     lastSentSnapshotRef.current =
       editorRef.current?.createAIEditSnapshot() ?? null;
     setPanelOpen(true);
-    const message = createTextChatMessage(request.text);
-    activeScopedPresetTurnMessageIdRef.current = message.id;
-    await sendMessage(message, {
+    const message = buildChatTextMessage(request.text);
+    if (message.isErr()) {
+      notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+      return;
+    }
+    activeScopedPresetTurnMessageIdRef.current = message.value.id;
+    await sendMessage(message.value, {
       body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE },
     });
   });
@@ -1015,10 +1016,7 @@ const TemplateStudioChatInner = ({
         }
         continue;
       }
-      if (
-        part.state === "approval-responded" &&
-        part.approval?.approved === false
-      ) {
+      if (isDeclinedChatToolCall(part)) {
         discardStreamedPlacements(part.id);
       }
     }
@@ -1405,12 +1403,15 @@ const TemplateStudioChatInner = ({
       // The typed composer submit carries any (+) attachments
       // (reference docs to lift clauses from); the scoped-preset
       // path below stays text-only.
-      await sendMessage(
-        await buildChatRequestMessage({
-          files,
-          html: prompt,
-        }),
-      );
+      const message = await buildChatRequestMessage({
+        files,
+        html: prompt,
+      });
+      if (message.isErr()) {
+        notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
+      await sendMessage(message.value);
       return CHAT_SEND_SENT;
     });
     if (Result.isError(sent)) {
@@ -1470,7 +1471,6 @@ const TemplateStudioChatInner = ({
                 sendNow: sendQueuedMessageNow,
               }}
               queuedMessages={queuedMessages}
-              showThinkingIndicator
               showToolCallDetails={showToolCallDetails}
               streamdownComponents={streamdownComponents}
             />

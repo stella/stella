@@ -6,8 +6,8 @@ import { XIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import { JurisdictionPicker } from "@/components/jurisdiction-picker";
 import Tooltip from "@/components/tooltip";
+import { JurisdictionPicker } from "@/features/organization/components/jurisdiction-picker";
 import { useFormatter } from "@/i18n/formatting-context";
 import {
   COUNTRY_POINTS,
@@ -146,11 +146,10 @@ export const JurisdictionGlobePreview = ({
                 <Tooltip
                   content={t("onboarding.jurisdictionRemove", { name })}
                   render={
-                    <button
+                    <Button
                       aria-label={t("onboarding.jurisdictionRemove", {
                         name,
                       })}
-                      className="text-muted-foreground hover:text-foreground"
                       onClick={() =>
                         onChange(
                           removeJurisdiction(
@@ -159,10 +158,11 @@ export const JurisdictionGlobePreview = ({
                           ),
                         )
                       }
-                      type="button"
+                      size="inline"
+                      variant="muted"
                     >
                       <XIcon className="size-3" />
-                    </button>
+                    </Button>
                   }
                 />
               )}

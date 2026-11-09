@@ -127,11 +127,10 @@ export const DocxEditorTool = () => {
             }}
           />
           {source.kind === "doc" ? (
+            // A long file name truncates; the tooltip gives it back in full.
             <TruncatedText
               className="max-w-[16rem] text-xs"
-              hint={false}
               style={{ color: "var(--foreground)" }}
-              title={source.name}
             >
               {source.name}
             </TruncatedText>
@@ -146,7 +145,7 @@ export const DocxEditorTool = () => {
             <span
               className="text-xs"
               role="alert"
-              style={{ color: "var(--destructive, #dc2626)" }}
+              style={{ color: "var(--destructive)" }}
             >
               {error}
             </span>

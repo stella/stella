@@ -8,7 +8,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Link, useMatch, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
@@ -45,6 +45,7 @@ import {
   InspectorHeaderText,
   InspectorTitle,
 } from "@stll/ui/inspector";
+import { Label } from "@stll/ui/label";
 import { Loader, LoaderState } from "@stll/ui/loader";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
@@ -99,7 +100,6 @@ import {
   saveRunAsPlaybook,
 } from "@/components/ai-suggestions/document-review-queries";
 import type {
-  DecidedReviewDecision,
   DocumentReviewDecision,
   DocumentReviewFindingRow,
   DocumentReviewRunStatus,
@@ -111,12 +111,14 @@ import {
   applyFindingDecision,
   resolveReviewRunFreshness,
   resolveReviewRunRestore,
+  resolveTableRunNotice,
   restoredRunId,
   restoreReviewRun,
   reviewDecisionProgress,
   reviewHistoryPresentation,
   reviewRunView,
   reviewSkeletonCardCount,
+  withheldTextShare,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   PinnedPosition,
@@ -124,6 +126,8 @@ import type {
   RestoredReviewFinding,
   ReviewPlaybookFreshness,
   ReviewRunFreshness,
+  ReviewRunWithheldSource,
+  TableRunNotice,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import {
   reviewSessionKey,
@@ -202,6 +206,7 @@ import {
   buildReviewResultItems,
   buildRunHistoryBasisSentence,
   buildRunSummarySentence,
+  decisionLabel,
   firstSentence,
   isReviewDeviation,
   isUndecidedDeviation,
@@ -1036,9 +1041,13 @@ const useDocumentPaneRouting = ({
   workspaceId,
 }: DocumentPaneRoutingArgs): DocumentPaneRouting => {
   const navigate = useNavigate();
-  const documentMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/document",
-    shouldThrow: false,
+  const documentMatch = useRouterState({
+    select: ({ matches }) =>
+      matches.find(
+        (match) =>
+          match.routeId ===
+          "/_protected/workspaces/$workspaceId/$viewId/document",
+      ),
   });
   const documentSearch = documentMatch?.search;
   const routeSearch =
@@ -1400,7 +1409,11 @@ const ReviewRunPanel = ({
     return (
       <ErrorState
         detail={run.errorCode}
-        message={t("inspector.review.failed")}
+        message={t(
+          run.errorCode === "document_too_large"
+            ? "inspector.review.documentTooLarge"
+            : "inspector.review.failed",
+        )}
         onChangeBasis={onReviewAgain}
         onRetry={() => onRetry(restored.basis)}
       />
@@ -1463,8 +1476,14 @@ const ReviewRunPanel = ({
       runId={run.id}
       saveAsPlaybookPending={saveAsPlaybook.isPending}
       suggestions={suggestions}
+      tableRunNotice={resolveTableRunNotice({
+        shownRun: run,
+        runs: history.runs,
+        currentEntityVersionId,
+      })}
       targetFileFieldId={targetFileFieldId}
       targetName={reviewedVersion?.file?.fileName ?? ""}
+      withheldSources={run.withheldSources}
       targetVersionNumber={reviewedVersion?.versionNumber ?? null}
       workspaceId={workspaceId}
     />
@@ -1743,7 +1762,7 @@ const StartModeToggle = ({
 }) => {
   const t = useTranslations();
   return (
-    <label className="text-muted-foreground flex min-h-11 cursor-pointer items-center gap-2 text-xs">
+    <Label className="flex min-h-11 cursor-pointer">
       <Switch
         checked={mode === REVIEW_START_MODE.confirmFirst}
         className="shrink-0"
@@ -1755,8 +1774,10 @@ const StartModeToggle = ({
           )
         }
       />
-      {t("inspector.review.reviewPositionsFirst")}
-    </label>
+      <span className="text-muted-foreground text-xs font-normal">
+        {t("inspector.review.reviewPositionsFirst")}
+      </span>
+    </Label>
   );
 };
 
@@ -1794,12 +1815,6 @@ const PerspectivePickerSkeleton = () => {
   );
 };
 
-const PERSPECTIVE_CHIP_CLASS = "min-h-8 rounded-full border px-3 text-xs";
-const PERSPECTIVE_CHIP_CHECKED_CLASS =
-  "border-foreground bg-foreground text-background";
-const PERSPECTIVE_CHIP_IDLE_CLASS =
-  "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50";
-
 const partyLabel = (party: ReviewParty): string =>
   party.name === null ? party.role : `${party.role} (${party.name})`;
 
@@ -1814,18 +1829,16 @@ const PerspectiveChip = ({
   label: string;
   onPick: () => void;
 }) => (
-  <button
+  <Button
     aria-checked={checked}
-    className={cn(
-      PERSPECTIVE_CHIP_CLASS,
-      checked ? PERSPECTIVE_CHIP_CHECKED_CLASS : PERSPECTIVE_CHIP_IDLE_CLASS,
-    )}
     onClick={onPick}
     role="radio"
-    type="button"
+    selected={checked}
+    size="chip"
+    variant="outline"
   >
     {label}
-  </button>
+  </Button>
 );
 
 type PerspectivePickerProps = {
@@ -1999,19 +2012,19 @@ const NotComparedDisclosure = ({
   return (
     <>
       <span aria-hidden="true">{SUMMARY_SEPARATOR.trim()}</span>
-      <button
+      <Button
         aria-expanded={open}
-        className="hover:text-foreground"
         onClick={() => setOpen((current) => !current)}
-        type="button"
+        size="inline"
+        variant="muted"
       >
         {t("inspector.review.notComparedCount", { count: skipped.length })}
-      </button>
+      </Button>
       {open && (
         <ul className="mt-1 basis-full space-y-0.5">
           {skipped.map((entry) => (
             <li className="leading-6" key={entry.subject}>
-              <BidiText as="span">{`${entry.subject} — ${reasonText(entry.reason)}`}</BidiText>
+              <BidiText as="span">{`${entry.subject}: ${reasonText(entry.reason)}`}</BidiText>
             </li>
           ))}
         </ul>
@@ -2118,19 +2131,19 @@ const PlaybookPicker = ({
               const checked = playbook.id === selectedId;
               return (
                 <li key={playbook.id}>
-                  <button
+                  <Button
                     aria-checked={checked}
-                    className={cn(
-                      "hover:bg-muted/50 flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-start",
-                      checked && "bg-muted",
-                    )}
+                    className="min-h-11"
                     onClick={() => onSelect(checked ? null : playbook.id)}
                     role="radio"
-                    type="button"
+                    selected={checked}
+                    size="row"
+                    variant="ghost"
                   >
                     <ClipboardCheckIcon className="text-muted-foreground size-3.5 shrink-0" />
+                    {/* Menu rows name their item in regular weight. */}
                     <TruncatedText
-                      className="flex-1 text-sm"
+                      className="flex-1 font-normal"
                       render={<BidiText />}
                     >
                       {playbook.name}
@@ -2143,7 +2156,7 @@ const PlaybookPicker = ({
                         checked ? "opacity-100" : "opacity-0",
                       )}
                     />
-                  </button>
+                  </Button>
                 </li>
               );
             })}
@@ -2250,46 +2263,42 @@ const ReferenceFilePicker = ({
                     {reference.workspaceName}
                   </TruncatedText>
                 )}
-              <Tooltip
-                content={t("inspector.review.removeReference", {
+              <Button
+                aria-label={t("inspector.review.removeReference", {
                   name: reference.name,
                 })}
-                render={
-                  <button
-                    aria-label={t("inspector.review.removeReference", {
-                      name: reference.name,
-                    })}
-                    className="hover:bg-muted relative inline-flex size-8 shrink-0 items-center justify-center rounded-md after:absolute after:min-h-11 after:min-w-11"
-                    onClick={() =>
-                      onChange(
-                        references.filter(
-                          (item) => item.fileFieldId !== reference.fileFieldId,
-                        ),
-                      )
-                    }
-                    type="button"
-                  >
-                    <XIcon className="size-3.5" />
-                  </button>
+                className="shrink-0"
+                onClick={() =>
+                  onChange(
+                    references.filter(
+                      (item) => item.fileFieldId !== reference.fileFieldId,
+                    ),
+                  )
                 }
-              />
+                size="icon-sm"
+                variant="ghost"
+              >
+                <XIcon className="size-3.5" />
+              </Button>
             </li>
           ))}
         </ul>
       )}
       {/* The full search (content, previews, every matter) is the picker;
           a document from another matter is the usual case, not the edge. */}
-      <button
-        className="hover:bg-muted/50 text-muted-foreground hover:text-foreground flex min-h-11 w-full items-center gap-2 rounded-lg border border-dashed px-2.5 text-start text-xs disabled:pointer-events-none disabled:opacity-60"
+      <Button
+        className="group flex w-full"
         disabled={atLimit}
         onClick={() => setPickerOpen(true)}
-        type="button"
+        variant="plain"
       >
-        <SearchIcon className="size-3.5 shrink-0" />
-        {atLimit
-          ? t("inspector.review.referenceLimitReached")
-          : t("inspector.review.referencePlaceholder")}
-      </button>
+        <span className="hover:bg-muted/50 text-muted-foreground hover:text-foreground flex min-h-11 w-full items-center gap-2 rounded-lg border border-dashed px-2.5 text-xs group-disabled:opacity-60">
+          <SearchIcon className="size-3.5 shrink-0" />
+          {atLimit
+            ? t("inspector.review.referenceLimitReached")
+            : t("inspector.review.referencePlaceholder")}
+        </span>
+      </Button>
       <SearchDialog
         mode={{
           type: "pick",
@@ -2313,11 +2322,11 @@ const ReferenceFilePicker = ({
           <ul className="space-y-0.5">
             {suggestedSources.map((source) => (
               <li key={source.fileFieldId}>
-                <button
+                <Button
                   aria-label={t("inspector.review.addReference", {
                     name: source.name,
                   })}
-                  className="hover:bg-muted/50 group flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-start"
+                  className="group flex w-full"
                   onClick={() =>
                     selectReference({
                       ...source,
@@ -2325,20 +2334,22 @@ const ReferenceFilePicker = ({
                       workspaceName: null,
                     })
                   }
-                  type="button"
+                  variant="plain"
                 >
-                  <DocumentIcon
-                    className="size-3.5 shrink-0"
-                    mimeType={DOCX_MIME}
-                  />
-                  <TruncatedText
-                    className="flex-1 text-xs"
-                    render={<BidiText />}
-                  >
-                    {source.name}
-                  </TruncatedText>
-                  <PlusIcon className="text-muted-foreground size-3.5 shrink-0 opacity-60 transition-opacity duration-150 group-hover:opacity-100" />
-                </button>
+                  <span className="hover:bg-muted/50 flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5">
+                    <DocumentIcon
+                      className="size-3.5 shrink-0"
+                      mimeType={DOCX_MIME}
+                    />
+                    <TruncatedText
+                      className="flex-1 text-xs"
+                      render={<BidiText />}
+                    >
+                      {source.name}
+                    </TruncatedText>
+                    <PlusIcon className="text-muted-foreground size-3.5 shrink-0 opacity-60 transition-opacity duration-150 group-hover:opacity-100" />
+                  </span>
+                </Button>
               </li>
             ))}
           </ul>
@@ -2757,6 +2768,8 @@ type ResultsViewProps = {
   decisionCounts: Parameters<typeof reviewDecisionProgress>[0];
   decisionPending: boolean;
   freshness: ReviewRunFreshness;
+  tableRunNotice: TableRunNotice;
+  withheldSources: readonly ReviewRunWithheldSource[];
   history: ReviewRunHistoryView;
   /** Set while the worker is still committing findings; `null` once the run
    *  has settled. */
@@ -2815,6 +2828,8 @@ const ResultsView = ({
   decisionCounts,
   decisionPending,
   freshness,
+  tableRunNotice,
+  withheldSources,
   history,
   progress: runProgress,
   readOnly,
@@ -3042,6 +3057,14 @@ const ResultsView = ({
 
       <ReviewHistorySection history={history} />
 
+      <DocumentCutNotice documentName={targetName} sources={withheldSources} />
+
+      <TableRunNoticeSection
+        notice={tableRunNotice}
+        onOpenRun={history.onSelect}
+        onReviewAgain={onReviewAgain}
+      />
+
       {resultsBody}
     </div>
   );
@@ -3140,19 +3163,25 @@ const ReviewHistorySection = ({
   return (
     <section className="shrink-0 border-b px-3 py-1.5">
       <div className="flex items-center gap-2">
-        <button
+        <Button
           aria-expanded={open}
-          className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1 text-xs"
+          className="inline-flex"
           onClick={() => setOpen((current) => !current)}
-          type="button"
+          size="inline"
+          variant="muted"
         >
-          <DirectionalIcon
-            className={cn("size-3.5 transition-transform", open && "rotate-90")}
-            flip={!open}
-            icon={ChevronRightIcon}
-          />
-          {t("common.history")} ({format.number(history.runs.length)})
-        </button>
+          <span className="inline-flex min-h-11 items-center gap-1 text-xs">
+            <DirectionalIcon
+              className={cn(
+                "size-3.5 transition-transform",
+                open && "rotate-90",
+              )}
+              flip={!open}
+              icon={ChevronRightIcon}
+            />
+            {t("common.history")} ({format.number(history.runs.length)})
+          </span>
+        </Button>
         {viewingHistory && (
           <Button
             className="ms-auto"
@@ -3181,6 +3210,17 @@ const ReviewHistorySection = ({
   );
 };
 
+/** What the History row says about where a run came from. A panel review is
+ *  the default kind and says nothing; a table run says so, because its
+ *  findings carry no citations or proposed changes. */
+const RUN_ORIGIN_LABEL_KEY = {
+  worker: null,
+  table: "inspector.review.history.fromTable",
+} as const satisfies Record<
+  DocumentReviewRunSummary["executor"],
+  TranslationKey | null
+>;
+
 const ReviewHistoryRow = ({
   run,
   shown,
@@ -3194,7 +3234,9 @@ const ReviewHistoryRow = ({
   const format = useFormatter();
   const runBasisLabels = useRunBasisLabels();
   const decisions = reviewDecisionProgress(run.decisionCounts);
+  const originKey = RUN_ORIGIN_LABEL_KEY[run.executor];
   const basis = buildRunHistoryBasisSentence({
+    originLabel: originKey === null ? null : t(originKey),
     playbookName: run.basis.playbookName,
     playbookProposed: run.basis.playbookProvenance === "ephemeral",
     references:
@@ -3207,38 +3249,40 @@ const ReviewHistoryRow = ({
   });
 
   return (
-    <button
+    <Button
       aria-current={shown}
-      className={cn(
-        "hover:bg-muted/60 flex min-h-11 w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-start",
-        shown && "bg-muted",
-      )}
+      className="flex-col"
+      layout="wrap"
       onClick={onSelect}
-      type="button"
+      selected={shown}
+      size="row"
+      variant="ghost"
     >
-      <span className="flex w-full items-baseline gap-2">
-        <span className="text-foreground shrink-0 text-xs tabular-nums">
-          {format.dateTime(new Date(run.createdAt), HISTORY_RUN_DATE_FORMAT)}
+      <span className="flex w-full flex-col items-start gap-0.5 font-normal">
+        <span className="flex w-full items-baseline gap-2">
+          <span className="text-foreground shrink-0 text-xs tabular-nums">
+            {format.dateTime(new Date(run.createdAt), HISTORY_RUN_DATE_FORMAT)}
+          </span>
+          <TruncatedText
+            className="text-muted-foreground flex-1 text-xs"
+            render={<BidiText as="span" />}
+          >
+            {basis}
+          </TruncatedText>
+          <span className="text-muted-foreground shrink-0 text-xs">
+            {t(RUN_STATUS_LABEL_KEYS[run.status])}
+          </span>
         </span>
-        <TruncatedText
-          className="text-muted-foreground flex-1 text-xs"
-          render={<BidiText as="span" />}
-        >
-          {basis}
-        </TruncatedText>
-        <span className="text-muted-foreground shrink-0 text-xs">
-          {t(RUN_STATUS_LABEL_KEYS[run.status])}
-        </span>
+        {decisions.total > 0 && (
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {t("inspector.review.history.decided", {
+              decided: decisions.decided,
+              total: decisions.total,
+            })}
+          </span>
+        )}
       </span>
-      {decisions.total > 0 && (
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {t("inspector.review.history.decided", {
-            decided: decisions.decided,
-            total: decisions.total,
-          })}
-        </span>
-      )}
-    </button>
+    </Button>
   );
 };
 
@@ -3405,6 +3449,127 @@ const ReviewFreshnessNotice = ({
         </Button>
       )}
     </div>
+  );
+};
+
+const TableRunNextStep = ({
+  notice,
+  onOpenRun,
+  onReviewAgain,
+}: {
+  notice: Exclude<TableRunNotice, { type: "none" | "explanation-only" }>;
+  onOpenRun: (runId: string) => void;
+  onReviewAgain: () => void;
+}) => {
+  const t = useTranslations();
+  switch (notice.type) {
+    case "open-full-review":
+      return (
+        <>
+          {t.rich("inspector.review.tableRunNotice.openFullReview", {
+            link: (chunks) => (
+              <Button
+                onClick={() => onOpenRun(notice.runId)}
+                size="inline"
+                variant="link"
+              >
+                {chunks}
+              </Button>
+            ),
+          })}
+        </>
+      );
+    case "run-another-review":
+      return (
+        <>
+          {t.rich("inspector.review.tableRunNotice.runAnotherReview", {
+            label: t("inspector.review.reviewAgain"),
+            action: (chunks) => (
+              <Button onClick={onReviewAgain} size="inline" variant="link">
+                {chunks}
+              </Button>
+            ),
+          })}
+        </>
+      );
+    default:
+      notice satisfies never;
+      return panic("Unhandled table run notice");
+  }
+};
+
+/**
+ * Says the findings rest on part of the document. It sits with the table-run
+ * notice so the margin layout shows it too.
+ */
+const DocumentCutNotice = ({
+  documentName,
+  sources,
+}: {
+  documentName: string;
+  sources: readonly ReviewRunWithheldSource[];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const share = withheldTextShare(sources);
+  if (share === null) {
+    return null;
+  }
+  return (
+    <section
+      className="text-muted-foreground shrink-0 border-b px-3 py-1.5 text-xs"
+      role="note"
+    >
+      <p>
+        {t.rich("inspector.review.documentCutNotice", {
+          documentName,
+          percent: format.number(share, { style: "percent" }),
+          strong: (chunks) => (
+            <strong className="text-foreground font-medium">{chunks}</strong>
+          ),
+        })}
+      </p>
+    </section>
+  );
+};
+
+/**
+ * Why these findings have no links or proposed changes. It sits outside the
+ * findings list so the margin layout shows it too: that is where findings with
+ * nothing to pin to are most puzzling.
+ */
+const TableRunNoticeSection = ({
+  notice,
+  onOpenRun,
+  onReviewAgain,
+}: {
+  notice: TableRunNotice;
+  onOpenRun: (runId: string) => void;
+  onReviewAgain: () => void;
+}) => {
+  const t = useTranslations();
+  if (notice.type === "none") {
+    return null;
+  }
+  return (
+    <section className="text-muted-foreground shrink-0 space-y-1 border-b px-3 py-1.5 text-xs">
+      <p>
+        {t.rich("inspector.review.tableRunNotice.origin", {
+          strong: (chunks) => (
+            <strong className="text-foreground font-medium">{chunks}</strong>
+          ),
+        })}
+      </p>
+      {notice.type !== "explanation-only" && (
+        <p>
+          <TableRunNextStep
+            notice={notice}
+            onOpenRun={onOpenRun}
+            onReviewAgain={onReviewAgain}
+          />
+        </p>
+      )}
+    </section>
   );
 };
 
@@ -3674,17 +3839,19 @@ const FilterTab = ({
 }) => {
   const format = useFormatter();
   return (
-    <button
+    // A segment of the track: the active one is raised on the background.
+    <Button
       aria-pressed={active}
-      className={cn(
-        "text-muted-foreground min-h-11 rounded-md px-2 text-xs font-medium tabular-nums",
-        active && "bg-background text-foreground shadow-xs",
-      )}
+      className="min-h-11"
       onClick={onSelect}
-      type="button"
+      selected={active}
+      size="sm"
+      variant="muted"
     >
-      {label} {format.number(count)}
-    </button>
+      <span className="tabular-nums">
+        {label} {format.number(count)}
+      </span>
+    </Button>
   );
 };
 
@@ -3720,27 +3887,19 @@ const ReviewFlagFilterChips = ({
         const { color, icon: Icon } = REVIEW_FLAG_PRESENTATION[flag];
         const label = getFlagLabel(flag);
         return (
-          <Tooltip
-            content={label}
+          <Button
+            aria-label={label}
+            aria-pressed={active}
             key={flag}
-            render={
-              <button
-                aria-label={label}
-                aria-pressed={active}
-                className={cn(
-                  "text-muted-foreground flex min-h-11 items-center gap-1 rounded-full border px-2.5 text-xs tabular-nums",
-                  active
-                    ? "border-border bg-muted text-foreground"
-                    : "hover:bg-muted/70 border-transparent",
-                )}
-                onClick={() => onSelect(active ? null : flag)}
-                type="button"
-              />
-            }
+            onClick={() => onSelect(active ? null : flag)}
+            selected={active}
+            size="chip"
+            tooltip={label}
+            variant="muted"
           >
             <Icon className="size-3.5 shrink-0" style={{ color }} />
-            {format.number(counts[flag])}
-          </Tooltip>
+            <span className="tabular-nums">{format.number(counts[flag])}</span>
+          </Button>
         );
       })}
     </div>
@@ -3879,52 +4038,59 @@ const ReviewResultCard = ({
       {/* The topic stays in view while a long card scrolls under it, and
           stops with the card, so the reader never loses which finding the
           passages belong to. */}
-      <button
-        aria-controls={detailId}
-        aria-expanded={expanded}
+      <div
         className={cn(
-          "hover:bg-muted/70 w-full rounded-t-lg",
+          // The header's hover fill sits on this wrapper, which the plain
+          // button fills edge to edge.
+          "hover:bg-muted/70 rounded-t-lg",
           // Negative offset by the list's own padding, so the stuck header
           // sits flush with the panel edge instead of a padding-high gap.
-          expanded && "bg-card sticky -top-2 z-10 rounded-b-none shadow-xs",
+          // The card colour keeps the passages from showing through it.
+          expanded && "bg-card sticky -top-2 z-10 shadow-xs",
         )}
-        onClick={onToggle}
-        type="button"
       >
-        <PositionHeader
-          actions={
-            <DirectionalIcon
-              className={cn(
-                "text-muted-foreground size-4 shrink-0 transition-transform",
-                expanded && "rotate-90",
-              )}
-              flip={!expanded}
-              icon={ChevronRightIcon}
-            />
-          }
-          label={
-            <>
-              <ReviewFlagGlyphs
-                className="flex shrink-0 items-center gap-1"
-                flags={item.flags}
+        <Button
+          aria-controls={detailId}
+          aria-expanded={expanded}
+          className="block w-full"
+          onClick={onToggle}
+          variant="plain"
+        >
+          <PositionHeader
+            actions={
+              <DirectionalIcon
+                className={cn(
+                  "text-muted-foreground size-4 shrink-0 transition-transform",
+                  expanded && "rotate-90",
+                )}
+                flip={!expanded}
+                icon={ChevronRightIcon}
               />
-              {item.decision !== REVIEW_DECISION.OPEN && (
-                <span className={POSITION_HEADER_META_CLASS}>
-                  {t(DECISION_LABEL[item.decision])}
+            }
+            label={
+              <>
+                <ReviewFlagGlyphs
+                  className="flex shrink-0 items-center gap-1"
+                  flags={item.flags}
+                />
+                {item.decision !== REVIEW_DECISION.OPEN && (
+                  <span className={POSITION_HEADER_META_CLASS}>
+                    {t(decisionLabel(item.decision))}
+                  </span>
+                )}
+                <span className={cn(POSITION_HEADER_META_CLASS, "text-end")}>
+                  {judgment}
                 </span>
-              )}
-              <span className={cn(POSITION_HEADER_META_CLASS, "text-end")}>
-                {judgment}
-              </span>
-            </>
-          }
-          title={
-            <BidiText as="span" className="text-foreground font-medium">
-              {item.title}
-            </BidiText>
-          }
-        />
-      </button>
+              </>
+            }
+            title={
+              <BidiText as="span" className="text-foreground font-medium">
+                {item.title}
+              </BidiText>
+            }
+          />
+        </Button>
+      </div>
       {expanded && (
         <div className="space-y-2 border-t px-3 py-3" id={detailId}>
           {/* One sentence first: what the finding is. The comparison below
@@ -4080,20 +4246,23 @@ const WhyDisclosure = ({
 
   return (
     <div>
-      <button
+      <Button
         aria-controls={panelId}
         aria-expanded={open}
-        className="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 items-center gap-1 px-1 text-xs"
+        className="-mx-1 flex"
         onClick={() => setOpen(!open)}
-        type="button"
+        size="inline"
+        variant="muted"
       >
-        <DirectionalIcon
-          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-          flip={!open}
-          icon={ChevronRightIcon}
-        />
-        {t("inspector.review.why")}
-      </button>
+        <span className="flex min-h-8 items-center gap-1 px-1 text-xs">
+          <DirectionalIcon
+            className={cn("size-3.5 transition-transform", open && "rotate-90")}
+            flip={!open}
+            icon={ChevronRightIcon}
+          />
+          {t("inspector.review.why")}
+        </span>
+      </Button>
       {/* One voice inside: muted prose, a lead-in in the text colour where a
           paragraph answers a named question. The recommendation is not
           louder than the reasoning; the redline above it is what acts. */}
@@ -4135,14 +4304,6 @@ const WhyDisclosure = ({
     </div>
   );
 };
-
-/** How a recorded decision reads on the card. Total over the decisions a
- *  reviewer can take, so a new disposition must state its label here rather
- *  than rendering as nothing. */
-const DECISION_LABEL = {
-  accepted: "inspector.review.decisions.accepted",
-  dismissed: "inspector.review.decisions.dismissed",
-} as const satisfies Record<DecidedReviewDecision, TranslationKey>;
 
 type ReviewCardActionsProps = {
   item: ReviewResultItem;
@@ -4374,8 +4535,8 @@ const FindingResolution = ({
       />
     );
   }
-  // The run staged a redline for this finding, but the document has not been
-  // opened in this session yet, so the suggestion it lives on is not loaded.
+  // The run staged a redline for this finding, but the suggestion it lives on
+  // is not loaded: the document's editor is not open, or not ready to build it.
   // Deciding here would answer the finding without touching the change it
   // stands for; the reviewer opens the document and resolves it there.
   return (
@@ -4418,7 +4579,7 @@ const FindingDecisionButtons = ({
         size="sm"
       >
         <CheckIcon className="me-1 size-3.5" />
-        {t("common.accept")}
+        {t("inspector.review.acceptFinding")}
       </Button>
       <Button
         className="h-7 px-2.5"
@@ -4428,7 +4589,7 @@ const FindingDecisionButtons = ({
         variant="ghost"
       >
         <XIcon className="me-1 size-3.5" />
-        {t("inspector.review.noChangeNeeded")}
+        {t("inspector.review.dismissFinding")}
       </Button>
     </>
   );
@@ -4483,7 +4644,7 @@ const SuggestionButtons = ({
               : { tooltip: t("inspector.review.noEditor") })}
           >
             <CheckIcon className="me-1 size-3.5" />
-            {t("common.accept")}
+            {t("inspector.review.acceptChange")}
           </Button>
           <Button
             className="h-7 px-2.5"
@@ -4979,33 +5140,31 @@ const ChatSuggestionCard = ({
       )}
       data-suggestion-id={change.id}
     >
-      <button
-        className="hover:bg-muted/70 w-full"
-        onClick={onFocus}
-        type="button"
-      >
-        <PositionHeader
-          label={
-            <>
-              {first.blockLabel !== undefined && (
-                <span className={POSITION_HEADER_META_CLASS}>
-                  {first.blockLabel}
-                </span>
-              )}
-              {first.severity !== "unspecified" && (
-                <span className={cn(POSITION_HEADER_META_CLASS, "text-end")}>
-                  {t(SEVERITY_LABEL_KEY[first.severity])}
-                </span>
-              )}
-            </>
-          }
-          title={
-            <BidiText as="span" className="text-foreground font-medium">
-              {summary}
-            </BidiText>
-          }
-        />
-      </button>
+      <div className="hover:bg-muted/70">
+        <Button className="block w-full" onClick={onFocus} variant="plain">
+          <PositionHeader
+            label={
+              <>
+                {first.blockLabel !== undefined && (
+                  <span className={POSITION_HEADER_META_CLASS}>
+                    {first.blockLabel}
+                  </span>
+                )}
+                {first.severity !== "unspecified" && (
+                  <span className={cn(POSITION_HEADER_META_CLASS, "text-end")}>
+                    {t(SEVERITY_LABEL_KEY[first.severity])}
+                  </span>
+                )}
+              </>
+            }
+            title={
+              <BidiText as="span" className="text-foreground font-medium">
+                {summary}
+              </BidiText>
+            }
+          />
+        </Button>
+      </div>
       <div className="space-y-3 border-t px-3 py-3">
         {comments.map((comment) => (
           <p

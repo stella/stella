@@ -82,6 +82,7 @@ export const useWorkspaceTableSchema = ({
           author: t("common.author"),
           lastUpdated: t("common.lastUpdated"),
           version: t("common.version"),
+          documents: t("common.documents"),
         },
       }),
     [properties, t, view],

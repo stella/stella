@@ -38,7 +38,7 @@
               "runId": "run-recorded-1",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 5,
+                "protocolVersion": 6,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -58,7 +58,7 @@
               "runId": "run-recorded-1",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 5,
+                "protocolVersion": 6,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -271,7 +271,7 @@
               "runId": "run-recorded-2",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 5,
+                "protocolVersion": 6,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -291,7 +291,7 @@
               "runId": "run-recorded-2",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 5,
+                "protocolVersion": 6,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -309,7 +309,7 @@
           },
           "ended": "complete",
           "response": {
-            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225633000}\n\nid: 2\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225634000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 3\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"messages\":[{\"createdAt\":\"2026-01-01T00:00:16.000Z\",\"edited\":false,\"id\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"usage\":{\"totalTokens\":2,\"promptTokens\":1,\"completionTokens\":1},\"turnModel\":{\"model\":\"gpt-5.4-mini\",\"provider\":\"openai\"},\"refContext\":{\"refs\":[],\"version\":2,\"entities\":[],\"workspaceScope\":[],\"unresolvedInputs\":[]},\"refEncoding\":\"persisted-resource-refs-v2\",\"turnOutcome\":{\"type\":\"cancelled\",\"reason\":\"superseded\"},\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}},\"role\":\"assistant\",\"revision\":0,\"parts\":[{\"approval\":{\"id\":\"approval_call-1\",\"approved\":false,\"needsApproval\":true},\"arguments\":\"{\\\"name\\\":\\\"call-1\\\"}\",\"id\":\"call-1\",\"input\":{\"name\":\"call-1\"},\"metadata\":{\"stellaStepId\":\"call-1\",\"stellaToolExecutor\":\"server\"},\"name\":\"mcp__external__delete\",\"state\":\"approval-responded\",\"type\":\"tool-call\"}],\"content\":\"\"}],\"timestamp\":1767225635000}\n\nid: 4\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"role\":\"assistant\",\"timestamp\":1767225636000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:17.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:18.000Z\"}}}\n\nid: 5\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"delta\":\"Drafted\",\"timestamp\":1767225637000}\n\nid: 6\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"timestamp\":1767225638000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 7\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"timestamp\":1767225639000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\nid: 8\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225640000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\",\"finishReason\":\"stop\"}}}\n\n",
+            "body": "id: 1\ndata: {\"type\":\"CUSTOM\",\"name\":\"run.accepted\",\"value\":{},\"timestamp\":1767225633000}\n\nid: 2\ndata: {\"type\":\"RUN_STARTED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225634000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 3\ndata: {\"type\":\"MESSAGES_SNAPSHOT\",\"messages\":[{\"createdAt\":\"2026-01-01T00:00:16.000Z\",\"edited\":false,\"id\":\"00000000-0000-7000-8000-000000000003\",\"metadata\":{\"usage\":{\"totalTokens\":2,\"promptTokens\":1,\"completionTokens\":1},\"turnModel\":{\"model\":\"gpt-5.4-mini\",\"provider\":\"openai\"},\"refContext\":{\"refs\":[],\"version\":2,\"entities\":[],\"workspaceScope\":[],\"unresolvedInputs\":[]},\"refEncoding\":\"persisted-resource-refs-v2\",\"turnOutcome\":{\"type\":\"cancelled\",\"reason\":\"superseded\"},\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}},\"role\":\"assistant\",\"revision\":0,\"parts\":[{\"approval\":{\"id\":\"approval_call-1\",\"approved\":false,\"needsApproval\":true},\"arguments\":\"{\\\"name\\\":\\\"call-1\\\"}\",\"id\":\"call-1\",\"input\":{\"name\":\"call-1\"},\"metadata\":{\"stellaStepId\":\"call-1\",\"stellaToolExecutor\":\"server\"},\"name\":\"mcp__external__delete\",\"output\":{\"error\":\"User declined tool execution\"},\"state\":\"error\",\"type\":\"tool-call\"},{\"content\":\"{\\\"error\\\":\\\"User declined tool execution\\\"}\",\"error\":\"User declined tool execution\",\"outcome\":\"denied\",\"state\":\"error\",\"toolCallId\":\"call-1\",\"type\":\"tool-result\"}],\"content\":\"\"}],\"timestamp\":1767225635000}\n\nid: 4\ndata: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"role\":\"assistant\",\"timestamp\":1767225636000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"},\"turnTiming\":{\"status\":\"running\",\"elapsedMs\":0,\"startedAt\":\"2026-01-01T00:00:17.000Z\",\"durationMs\":0,\"observedAt\":\"2026-01-01T00:00:18.000Z\"}}}\n\nid: 5\ndata: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"delta\":\"Drafted\",\"timestamp\":1767225637000}\n\nid: 6\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"timestamp\":1767225638000,\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\"}}}\n\nid: 7\ndata: {\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"00000000-0000-7000-8000-000000000006\",\"timestamp\":1767225639000,\"metadata\":{\"turnTiming\":{\"status\":\"finished\",\"durationMs\":0}}}\n\nid: 8\ndata: {\"type\":\"RUN_FINISHED\",\"runId\":\"run-recorded-2\",\"threadId\":\"00000000-0000-7000-8000-000000000002\",\"timestamp\":1767225640000,\"usage\":[{\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}],\"metadata\":{\"tanstack\":{\"model\":\"gpt-5.4-mini\",\"finishReason\":\"stop\"}}}\n\n",
             "status": 200,
             "turnId": "00000000-0000-7000-8000-000000000007"
           },
@@ -379,8 +379,19 @@
                       "stellaToolExecutor": "server"
                     },
                     "name": "mcp__external__delete",
-                    "state": "approval-responded",
+                    "output": {
+                      "error": "User declined tool execution"
+                    },
+                    "state": "error",
                     "type": "tool-call"
+                  },
+                  {
+                    "content": "{\"error\":\"User declined tool execution\"}",
+                    "error": "User declined tool execution",
+                    "outcome": "denied",
+                    "state": "error",
+                    "toolCallId": "call-1",
+                    "type": "tool-result"
                   }
                 ]
               },

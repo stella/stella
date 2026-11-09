@@ -213,13 +213,15 @@ export const RunLauncher = ({
             </p>
           )}
           {filteredEntities?.map((entity) => (
-            <label className="flex items-center gap-2 text-sm" key={entity.id}>
+            <Label className="flex" key={entity.id}>
               <Checkbox
                 checked={selectedEntityIds.includes(entity.id)}
                 onCheckedChange={(checked) => toggleEntity(entity.id, checked)}
               />
-              <TruncatedText dir="auto">{entity.name}</TruncatedText>
-            </label>
+              <TruncatedText className="text-sm font-normal" dir="auto">
+                {entity.name}
+              </TruncatedText>
+            </Label>
           ))}
         </div>
         {exceedsInputEntitiesLimit && (

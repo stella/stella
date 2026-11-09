@@ -324,13 +324,11 @@ export const SignalCard = ({
           role="img"
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <button
-            className="text-start text-sm leading-5 font-medium text-balance wrap-anywhere hover:underline"
-            onClick={openEvidence}
-            type="button"
-          >
-            <UserText>{signal.title}</UserText>
-          </button>
+          <Button onClick={openEvidence} variant="plain">
+            <span className="text-sm leading-5 font-medium text-balance wrap-anywhere hover:underline">
+              <UserText>{signal.title}</UserText>
+            </span>
+          </Button>
           <TruncatedText
             className="text-muted-foreground text-xs leading-5 text-pretty wrap-anywhere"
             lines={3}

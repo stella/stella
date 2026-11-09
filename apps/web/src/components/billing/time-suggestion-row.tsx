@@ -60,10 +60,10 @@ export const TimeSuggestionRow = ({
 
   return (
     <li className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2">
-      <button
+      <Button
         aria-keyshortcuts="Enter E Delete Backspace"
         aria-label={timeEntryActionLabel(tCommon("accept"), narrative)}
-        className="focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-3 rounded-md text-start outline-none focus-visible:ring-2 disabled:opacity-50"
+        className="flex min-w-0 flex-1"
         disabled={busy}
         onClick={() => onAccept(suggestion, narrative)}
         onKeyDown={(event) => {
@@ -84,48 +84,51 @@ export const TimeSuggestionRow = ({
             onDismiss(suggestion);
           }
         }}
-        title={t("keyboardHint")}
-        type="button"
+        // The shortcuts this row answers, shown on hover and on focus.
+        tooltip={t("keyboardHint")}
+        variant="plain"
       >
-        <CheckIcon className="text-muted-foreground size-4 shrink-0" />
-        <span className="min-w-0 flex-1">
-          {matterName !== undefined && (
+        <span className="flex min-w-0 flex-1 items-center gap-3">
+          <CheckIcon className="text-muted-foreground size-4 shrink-0" />
+          <span className="min-w-0 flex-1">
+            {matterName !== undefined && (
+              <TruncatedText
+                className="text-muted-foreground text-xs"
+                render={<BidiText as="span" />}
+              >
+                {matterName}
+              </TruncatedText>
+            )}
+            <TruncatedText
+              className="text-sm font-medium"
+              render={<BidiText as="span" />}
+            >
+              {narrative}
+            </TruncatedText>
             <TruncatedText
               className="text-muted-foreground text-xs"
               render={<BidiText as="span" />}
             >
-              {matterName}
+              {format.dateTime(new Date(suggestion.startedAt), {
+                timeStyle: "short",
+              })}
+              {" – "}
+              {format.dateTime(new Date(suggestion.endedAt), {
+                timeStyle: "short",
+              })}
+              {EVIDENCE_SEPARATOR}
+              {evidence}
             </TruncatedText>
-          )}
-          <TruncatedText
-            className="text-sm font-medium"
-            render={<BidiText as="span" />}
-          >
-            {narrative}
-          </TruncatedText>
-          <TruncatedText
-            className="text-muted-foreground text-xs"
-            render={<BidiText as="span" />}
-          >
-            {format.dateTime(new Date(suggestion.startedAt), {
-              timeStyle: "short",
-            })}
-            {" – "}
-            {format.dateTime(new Date(suggestion.endedAt), {
-              timeStyle: "short",
-            })}
-            {EVIDENCE_SEPARATOR}
-            {evidence}
-          </TruncatedText>
-          <span className="text-muted-foreground block text-xs tabular-nums">
-            {suggestion.alreadyCovered
-              ? t("alreadyCovered")
-              : t("engagedTime", {
-                  duration: formatMinutes(suggestion.engagedMinutes),
-                })}
+            <span className="text-muted-foreground block text-xs tabular-nums">
+              {suggestion.alreadyCovered
+                ? t("alreadyCovered")
+                : t("engagedTime", {
+                    duration: formatMinutes(suggestion.engagedMinutes),
+                  })}
+            </span>
           </span>
         </span>
-      </button>
+      </Button>
       <span className="shrink-0 text-sm font-medium tabular-nums">
         {formatMinutes(suggestion.durationMinutes)}
       </span>

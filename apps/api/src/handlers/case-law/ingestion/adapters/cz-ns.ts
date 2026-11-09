@@ -1,3 +1,5 @@
+// parser-output-unchanged: [cz-ns] the legacy identity fields decide which row a document writes to; the parsed output is unchanged.
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -5,6 +7,7 @@
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
+import { normalizeCzechJudgeName } from "@stll/legal-ast/czech-document-roles";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -53,8 +56,8 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
+  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -140,6 +143,8 @@ type CzNsRawPart = (typeof CZ_NS_RAW_PART)[keyof typeof CZ_NS_RAW_PART];
 
 /** The Domino universal id as every NS listing and detail URL states it. */
 const CZ_NS_DOCUMENT_ID_PATTERN = /^[0-9a-f]{32}$/iu;
+/** The marker the court appends to a docket's later documents: "- II.". */
+const CZ_NS_SIBLING_DOCKET_SUFFIX = /-\s*[IVXLC]+\.?$/u;
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
@@ -295,6 +300,8 @@ const CZ_NS_SOURCE_FIELDS = [
 
 type CzNsSourceField = (typeof CZ_NS_SOURCE_FIELDS)[number];
 
+type CzNsPublisherRecord = Readonly<Record<CzNsSourceField, unknown>>;
+
 const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
   Anotace: {
     disposition: "stored",
@@ -325,7 +332,7 @@ const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
     disposition: "stored",
     target: { type: "textField", key: "legalSentence" },
   },
-  "Senátní značka": excludedSourceField(
+  "Senátní značka": legacyExcludedSourceField(
     "The same docket under the label this court prints for its insolvency senate register. The row's docket is the one the listing entry states, which is what the document was fetched by.",
   ),
   /**
@@ -347,7 +354,7 @@ const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
     disposition: "stored",
     target: { type: "metadata", key: "zverejnenoNaWebu" },
   },
-} as const satisfies Record<CzNsSourceField, SourceFieldDisposition>;
+} as const satisfies Record<keyof CzNsPublisherRecord, SourceFieldDisposition>;
 
 /** The label cell of a detail-page row. */
 const CZ_NS_DETAIL_LABEL_RE =
@@ -452,7 +459,7 @@ const extractJudge = (text: string): string | undefined => {
     for (const title of window.matchAll(JUDGE_TITLE_RE)) {
       const name = window.slice(title.index).trim();
       if (JUDGE_NAME_RE.test(name)) {
-        return name;
+        return normalizeCzechJudgeName(name);
       }
     }
   }
@@ -592,6 +599,18 @@ const czNsIdentityFields = ({
  * HTML listings carry separate aliases. Preserve every docket while the
  * publisher's universal id continues to identify the document.
  */
+/**
+ * The docket a row was stored under before the court published a further
+ * decision under it and suffixed this one ("22 Cdo 120/2026- I."); undefined
+ * when the docket carries no suffix.
+ */
+const docketBeforeSiblingSuffix = (caseNumber: string): string | undefined => {
+  const suffix = CZ_NS_SIBLING_DOCKET_SUFFIX.exec(caseNumber);
+  return suffix === null
+    ? undefined
+    : caseNumber.slice(0, suffix.index).trimEnd();
+};
+
 const caseNumbersOf = ({
   caseNumber,
   additionalCaseNumbers,
@@ -712,6 +731,7 @@ const buildCzNsDecisionFromPages = ({
         }),
     sourceDocumentId: unid,
     legacySourceUrls: [webUrl],
+    legacyCaseNumber: docketBeforeSiblingSuffix(caseNumber),
     ecli: meta["ecli"],
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_NS].country,

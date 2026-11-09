@@ -1,8 +1,9 @@
-import { isValidElement, useState } from "react";
-import type { AnchorHTMLAttributes, ReactNode } from "react";
+import { createContext, isValidElement, use, useId, useState } from "react";
+import type { AnchorHTMLAttributes, ReactElement, ReactNode } from "react";
 
 import { GitHubLogoIcon, XLogoIcon } from "@stll/ui/brand-icons";
 import { GlobeIcon } from "@stll/ui/icons";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { normalizeChatLink } from "./link-detection";
@@ -72,36 +73,105 @@ type ChatLinkProps = Omit<
   appearance?: "inline" | "tray";
   iconSource?: ChatLinkIconSource | undefined;
   newTabLabel?: string;
+  /** A tray chip whose label is the whole point (a decision's case number and
+   *  date) keeps it up to the row's width instead of the compact 20ch cap. */
+  fullLabel?: boolean | undefined;
 };
 
-/** A tray chip cuts its label short; an inline link runs with the prose. */
+/** A tray chip cuts its label short; an inline link runs with the prose. A
+ *  tray chip whose label is the whole point keeps it up to the row's width. */
 const ChatLinkLabel = ({
   appearance,
   children,
+  fullLabel,
 }: {
   appearance: ChatLinkProps["appearance"];
   children: ReactNode;
+  fullLabel: boolean;
 }) =>
   appearance === "tray" ? (
-    <TruncatedText className="max-w-[20ch]" render={<bdi />}>
+    <TruncatedText
+      className={fullLabel ? undefined : "max-w-[20ch]"}
+      render={<bdi />}
+    >
       {children}
     </TruncatedText>
   ) : (
     <bdi>{children}</bdi>
   );
 
+const ChatLinkIdContext = createContext<string | undefined>(undefined);
+
+/**
+ * Gives the link rendered inside it fixed ids, so a surface that renders the
+ * same links again (a streamed answer, then the reloaded one) renders the same
+ * ids: `id` names the link's tooltip trigger and `${id}-hint` its hint.
+ * Without a scope, a link generates its ids.
+ */
+export const ChatLinkIdScope = ({
+  children,
+  id,
+}: {
+  children: ReactNode;
+  id: string;
+}) => <ChatLinkIdContext value={id}>{children}</ChatLinkIdContext>;
+
+/**
+ * The hover hint a link carries: the new-tab notice, or the title the source
+ * gave it. A link with neither renders bare, so a long answer does not mount
+ * a tooltip for every link it has nothing to say about. The tooltip is for the
+ * pointer; the same words reach assistive technology as the link's
+ * description, a hidden element beside the link (`hintId`), so the link's own
+ * text stays its label.
+ */
+const LinkHint = ({
+  children,
+  hint,
+  hintId,
+  id,
+}: {
+  children: ReactElement;
+  hint: string | undefined;
+  hintId: string;
+  id: string;
+}) =>
+  hint ? (
+    <>
+      <Tooltip>
+        <TooltipTrigger id={id} render={children} />
+        <TooltipPopup>{hint}</TooltipPopup>
+      </Tooltip>
+      <span hidden id={hintId}>
+        {hint}
+      </span>
+    </>
+  ) : (
+    children
+  );
+
 export const ChatLink = ({
   appearance = "inline",
   children,
+  fullLabel = false,
   href,
   iconSource,
+  id,
   newTabLabel,
   title,
   ...anchorProps
 }: ChatLinkProps) => {
+  const hint = newTabLabel ?? title;
+  const generatedId = useId();
+  const baseId = use(ChatLinkIdContext) ?? generatedId;
+  const hintId = `${baseId}-hint`;
+  // The tooltip trigger owns the anchor's id; a link's own id (a footnote
+  // back-link target) stays its id. Without a tooltip the anchor keeps only
+  // its own id.
+  const triggerId = id ?? baseId;
+  const ownId = hint || id === undefined ? {} : { id };
   const className =
     appearance === "tray"
-      ? "bg-muted/50 hover:bg-muted inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      ? "bg-muted/50 hover:bg-muted inline-flex max-w-full min-w-0 shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       : CHAT_LINK_CLASS_NAME;
   const target = normalizeChatLink(href);
   if (!target) {
@@ -112,7 +182,7 @@ export const ChatLink = ({
     if ((!safeLocal && !safeMail) || /[\p{Cc}\p{Cf}]/u.test(href)) {
       return appearance === "tray" ? (
         <span className={className}>
-          <ChatLinkLabel appearance={appearance}>
+          <ChatLinkLabel appearance={appearance} fullLabel={fullLabel}>
             {children ?? href}
           </ChatLinkLabel>
         </span>
@@ -121,18 +191,21 @@ export const ChatLink = ({
       );
     }
     return (
-      <a
-        {...anchorProps}
-        title={newTabLabel ?? title}
-        className={className}
-        href={href}
-        target={CHAT_LINK_ATTRIBUTES.target}
-        rel={CHAT_LINK_ATTRIBUTES.rel}
-      >
-        <ChatLinkLabel appearance={appearance}>
-          {children ?? href}
-        </ChatLinkLabel>
-      </a>
+      <LinkHint hint={hint} hintId={hintId} id={triggerId}>
+        <a
+          {...anchorProps}
+          {...ownId}
+          aria-describedby={hint ? hintId : anchorProps["aria-describedby"]}
+          className={className}
+          href={href}
+          target={CHAT_LINK_ATTRIBUTES.target}
+          rel={CHAT_LINK_ATTRIBUTES.rel}
+        >
+          <ChatLinkLabel appearance={appearance} fullLabel={fullLabel}>
+            {children ?? href}
+          </ChatLinkLabel>
+        </a>
+      </LinkHint>
     );
   }
   const text = linkText(children).trim();
@@ -148,25 +221,30 @@ export const ChatLink = ({
     icon = bundledIcon;
   }
   return (
-    <a
-      {...anchorProps}
-      title={newTabLabel ?? title}
-      className={className}
-      href={target.href}
-      target={CHAT_LINK_ATTRIBUTES.target}
-      rel={CHAT_LINK_ATTRIBUTES.rel}
-    >
-      <span
-        aria-hidden="true"
-        className={
-          appearance === "tray"
-            ? "inline-block shrink-0"
-            : "me-1 inline-block align-[-0.125em]"
-        }
+    <LinkHint hint={hint} hintId={hintId} id={triggerId}>
+      <a
+        {...anchorProps}
+        {...ownId}
+        aria-describedby={hint ? hintId : anchorProps["aria-describedby"]}
+        className={className}
+        href={target.href}
+        target={CHAT_LINK_ATTRIBUTES.target}
+        rel={CHAT_LINK_ATTRIBUTES.rel}
       >
-        {icon}
-      </span>
-      <ChatLinkLabel appearance={appearance}>{label}</ChatLinkLabel>
-    </a>
+        <span
+          aria-hidden="true"
+          className={
+            appearance === "tray"
+              ? "flex shrink-0"
+              : "me-1 inline-block align-[-0.125em]"
+          }
+        >
+          {icon}
+        </span>
+        <ChatLinkLabel appearance={appearance} fullLabel={fullLabel}>
+          {label}
+        </ChatLinkLabel>
+      </a>
+    </LinkHint>
   );
 };

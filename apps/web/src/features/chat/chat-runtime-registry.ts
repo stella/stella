@@ -9,6 +9,7 @@ import { detached } from "@/lib/detached";
 import { emitDevCanaryError } from "@/lib/dev-canary";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
+import { isClassifiedRunError } from "./chat-provider-diagnostic";
 import type {
   ChatThreadKey,
   ChatThreadOptionsContext,
@@ -632,13 +633,15 @@ export const acquireChatRuntime = ({
     initialMessages: data.messages,
     key,
     onError: (error) => {
-      getAnalytics().captureError(error, {
-        fingerprintKey: "acquireChatRuntime:failure",
-        scope: {
-          type: "handler",
-          handlerId: `chat-runtime.${key.scope}.${getChatRuntimeContextKind(context)}`,
-        },
-      });
+      if (!isClassifiedRunError(error)) {
+        getAnalytics().captureError(error, {
+          fingerprintKey: "acquireChatRuntime:failure",
+          scope: {
+            type: "handler",
+            handlerId: `chat-runtime.${key.scope}.${getChatRuntimeContextKind(context)}`,
+          },
+        });
+      }
       // The server persists a failed terminal outcome before emitting
       // RUN_ERROR. Reconcile the ephemeral TanStack error runtime with that
       // durable message metadata just as a successful finish does.

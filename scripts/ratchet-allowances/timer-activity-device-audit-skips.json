@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 6,
+  "reason": "The Lock Screen timer's phone registry, like push_devices, holds only the person's own Apple delivery addresses and no organization content: registering, signing out, claiming or releasing a start and clearing a dead token are delivery bookkeeping on that address, not actions on anything the person works on."
+}

@@ -77,9 +77,6 @@ type InspectorTabHeaderProps = {
    * (e.g. extension stripped for files, chat title for chats).
    */
   label: string;
-  /** Legal identities wrap; other tab labels keep the compact single-line header. */
-  labelOverflow?: "cut" | "wrap";
-  labelContent?: ReactNode;
   /**
    * Click handler that puts the label into rename mode. When
    * omitted the label is read-only.
@@ -116,8 +113,6 @@ type InspectorTabHeaderProps = {
 
 export const InspectorTabHeader = ({
   label,
-  labelOverflow = "cut",
-  labelContent,
   onStartRename,
   onLabelContextMenu,
   rename,
@@ -132,21 +127,21 @@ export const InspectorTabHeader = ({
 
   return (
     <div
-      className={cn(
-        "flex shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3",
-        labelOverflow === "wrap" ? "min-h-12 py-3" : "h-12",
-      )}
+      className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3"
+      data-slot="inspector-panel-header"
     >
-      {/* Only the label clips: the field's focus ring is drawn outside it. */}
+      {/* Only the label clips: the field's focus ring is drawn outside it.
+          On a phone the box itself starts a little early, so the back
+          button sits optically flush with the edge and is not clipped. */}
       <div
         className={cn(
-          "flex min-w-0 items-center gap-2",
-          !renaming && labelOverflow === "cut" && "overflow-hidden",
+          "flex min-w-0 items-center gap-2 max-md:-ms-1",
+          !renaming && "overflow-hidden",
         )}
       >
         <Button
           aria-label={tCommon("back")}
-          className="-ms-1 md:hidden"
+          className="md:hidden"
           onClick={() => setMinimized(true)}
           size="icon-sm"
           title={tCommon("back")}
@@ -169,21 +164,19 @@ export const InspectorTabHeader = ({
           // Compact layouts stack the matter under the name, the way a
           // sidebar row puts its client under the matter, so the name gets
           // the whole width instead of sharing one line with the chip.
-          <div className="flex min-w-0 flex-col items-start md:flex-row md:items-center md:gap-2">
+          <div className="flex min-w-0 flex-col items-start text-xs font-medium md:flex-row md:items-center md:gap-2">
             <TruncatedText
+              aria-label={label}
               className={cn(
-                "text-xs font-medium",
-                // A cut label keeps its spaces as the rename field shows them.
-                labelOverflow === "wrap"
-                  ? "wrap-anywhere whitespace-normal"
-                  : "whitespace-pre",
+                "max-w-full whitespace-pre",
                 onStartRename !== undefined && "cursor-text",
               )}
-              lines={labelOverflow === "wrap" ? "none" : 1}
               onContextMenu={onLabelContextMenu}
               onDoubleClick={onStartRename}
+              tabIndex={0}
+              tooltip={label}
             >
-              {labelContent ?? <UserText>{label}</UserText>}
+              <UserText>{label}</UserText>
             </TruncatedText>
             {matter !== undefined && (
               <>
@@ -239,12 +232,14 @@ export const MatterOriginLink = ({
   color,
   onClick,
 }: MatterOriginLinkProps) => (
-  <button
-    className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs inline-flex max-w-[220px] items-center gap-1 rounded-md px-1.5 py-0.5"
+  <Button
+    className="flex max-w-[220px] min-w-0 shrink"
     onClick={onClick}
-    type="button"
+    variant="plain"
   >
-    <MatterIcon className="size-3 shrink-0" matter={{ id, color }} />
-    <TruncatedText>{name}</TruncatedText>
-  </button>
+    <span className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5">
+      <MatterIcon className="size-3 shrink-0" matter={{ id, color }} />
+      <TruncatedText>{name}</TruncatedText>
+    </span>
+  </Button>
 );

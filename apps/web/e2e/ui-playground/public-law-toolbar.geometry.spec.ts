@@ -65,7 +65,7 @@ const readGeometry = async (page: Page, width: number) => {
       !(summary instanceof HTMLElement) ||
       !(resultsLine instanceof HTMLElement)
     ) {
-      throw new Error("public-law toolbar bench is not mounted");
+      throw new TypeError("public-law toolbar bench is not mounted");
     }
     const box = (element: Element): Box => {
       const rect = element.getBoundingClientRect();

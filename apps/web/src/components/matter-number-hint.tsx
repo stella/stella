@@ -156,7 +156,7 @@ const MatterNumberHintBody = ({
         </p>
         <Link
           className="text-foreground inline-flex text-xs font-medium hover:underline"
-          to="/admin/matter-numbering"
+          to="/settings/organization/matter-numbering"
         >
           {t("settings.organization.matterNumbering")}
         </Link>

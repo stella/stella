@@ -69,8 +69,28 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
+    "/v1/organization-settings/correspondence/data-boxes",
+    "Organization data-box settings support matter correspondence on every deployment",
+  ],
+  [
+    "/smoke/scheduled-jobs",
+    "Release-proof route gated by the smoke secret and the staging deployment origin, not by a feature flag",
+  ],
+  [
+    "/v1/organizations",
+    "Authenticated account holders can create organizations on every deployment",
+  ],
+  [
     "/v1/dictation/transcribe",
     "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
+  ],
+  [
+    "/v1/organizations/audit-export",
+    "Organization owners export the activity log before deleting the organization on every deployment",
+  ],
+  [
+    "/v1/organizations/slug",
+    "Organization slug settings are available to authorized owners and admins on every deployment",
   ],
   [
     "/v1/workspaces/:workspaceId/vocabulary",
@@ -85,8 +105,28 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
   [
+    "/v1/chat/runs/active",
+    "The member's own unfinished chat runs are readable on every deployment that serves chat",
+  ],
+  [
+    "/v1/chat/local-runners",
+    "The chat computer list is mounted on every deployment and answers hidden unless the member's local-agents feature decision is enabled",
+  ],
+  [
+    "/v1/chat/local-runs",
+    "A run's output upload authenticates the run's agent token on every deployment; a run exists only once the member's local-agents feature let it start",
+  ],
+  [
+    "/v1/organization-settings/local-runs",
+    "An administrator's limit on local run permissions is settable on every deployment; it only narrows turns the member's local-agents feature lets start",
+  ],
+  [
     "/v1/desktop/time-entries",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+  ],
+  [
+    "/v1/contacts",
+    "The organization address book and its contact routes are available on every deployment",
   ],
   [
     "/v1/search-history",
@@ -101,6 +141,14 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Authenticated chat connector receipts are available on every deployment",
   ],
   [
+    "/v1/me/push-devices",
+    "Mobile push device registration is available on every deployment; alerts are sent only where APNs credentials are configured",
+  ],
+  [
+    "/v1/me/timer-activity-devices",
+    "Lock Screen timer registration is available on every deployment; updates are sent only where APNs credentials are configured",
+  ],
+  [
     "/v1/desktop/feature-access",
     "Desktop feature access answers per-caller decisions on every deployment",
   ],
@@ -111,6 +159,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/files/:workspaceId/marked",
     "A PDF downloads with the reader's highlights on every deployment, as the uploaded bytes do",
+  ],
+  [
+    "/v1/desktop/runner",
+    "The desktop runner socket authenticates the desktop account and device on every deployment; runs reach it only when the API assigns them",
   ],
   [
     "/v1/tasks",
@@ -208,13 +260,19 @@ const loadMountedRoutes = async (
     }
   }
   const { apiRoutes } = await import("../src/api-routes");
-  const { deploymentFeatureGateFlag, localDevelopmentGate } =
-    await import("../src/lib/deployment-feature-route");
+  const {
+    deploymentFeatureGateExceptionFlag,
+    deploymentFeatureGateFlag,
+    localDevelopmentGate,
+  } = await import("../src/lib/deployment-feature-route");
   return apiRoutes.map((entry) => ({
     method: entry.method,
     path: entry.path,
+    // A gate with one admitted exception still stands for its flag.
     gateFlags: entry.middleware.flatMap((middleware) => {
-      const flag = deploymentFeatureGateFlag(middleware);
+      const flag =
+        deploymentFeatureGateFlag(middleware) ??
+        deploymentFeatureGateExceptionFlag(middleware);
       return flag === undefined ? [] : [flag];
     }),
     localDevelopment: entry.middleware.includes(localDevelopmentGate),

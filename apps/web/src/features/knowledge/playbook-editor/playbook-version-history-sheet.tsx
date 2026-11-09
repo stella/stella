@@ -170,7 +170,7 @@ const VersionRow = ({
           render={<p />}
         >
           {t("common.versionLabel", { version: String(version.version) })}
-          {" — "}
+          {" · "}
           {version.name}
         </TruncatedText>
         <p className="text-muted-foreground text-xs">

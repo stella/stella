@@ -194,7 +194,7 @@ export const AIConfigProvidersEditor = ({
                     />
                   ) : (
                     <div className="flex min-w-0 items-center gap-2">
-                      <TruncatedText className="bg-muted text-muted-foreground flex-1 rounded border px-2 py-1 font-mono text-xs">
+                      <TruncatedText className="bg-muted text-muted-foreground flex-1 rounded-sm border px-2 py-1 font-mono text-xs">
                         {t("aiConfig.apiKeySaved", { key: savedKey })}
                       </TruncatedText>
                       <Button
@@ -286,7 +286,7 @@ export const AIConfigProvidersEditor = ({
                 <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:pt-6">
                   {hasSavedKey && !providerDraft.replacingKey && (
                     <>
-                      <TruncatedText className="bg-muted text-muted-foreground rounded border px-2 py-1 font-mono text-xs">
+                      <TruncatedText className="bg-muted text-muted-foreground rounded-sm border px-2 py-1 font-mono text-xs">
                         {t("aiConfig.apiKeySaved", {
                           key: savedKey,
                         })}

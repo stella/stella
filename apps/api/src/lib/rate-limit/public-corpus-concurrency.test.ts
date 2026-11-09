@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
@@ -231,16 +230,19 @@ describe("public corpus active request capacity", () => {
       await server.fetch(request({ method: "GET", path: "/v1/law/statutes" }));
       expect(lines).toEqual([]);
       expect((await server.fetch(probeRequest(route))).status).toBe(503);
-      expect(lines).toHaveLength(1);
-      const line = lines.at(0);
-      if (line === undefined) {
-        panic("Capacity refusal must emit a metric line");
-      }
-      expect(JSON.parse(line)).toMatchObject({
-        class: "search",
-        outcome: "refused",
-        PublicCorpusAdmissions: 1,
-      });
+      // The refusal emits its admission line, and the 503 is observed from
+      // its cause as a transient capacity failure.
+      expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
+        expect.objectContaining({
+          class: "search",
+          outcome: "refused",
+          PublicCorpusAdmissions: 1,
+        }),
+        expect.objectContaining({
+          sink: "api.capacity_refused",
+          reason: "work_capacity_unavailable",
+        }),
+      ]);
     } finally {
       completion.resolve("done");
       await Promise.all(running);

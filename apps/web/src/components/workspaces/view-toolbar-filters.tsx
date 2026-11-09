@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import {
   ENTITY_PRIORITIES as PRIORITY_VALUES,
   TASK_STATUSES as STATUS_VALUES,
@@ -31,6 +32,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { NumberInput } from "@stll/ui/number-input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import {
   Select,
@@ -75,6 +77,11 @@ import {
   ADVANCED_FILTER_POPUP_CLASS_NAME,
   AdvancedFilterEditor,
 } from "./advanced-filter-editor";
+
+/** A filter value's text as the number its field shows; empty or unreadable
+ *  text shows an empty field. */
+const leafNumberValue = (value: string): number | null =>
+  parseDecimalToken(value.trim()).unwrapOr(null);
 
 type FilterChipsProps = {
   filters: ConditionNode[];
@@ -404,13 +411,15 @@ const ValueEditor = ({
 
   if (editorKind === "int") {
     return (
-      <Input
-        autoFocus
-        className="h-7! w-full text-xs"
-        onChange={(e) => emit(e.currentTarget.value)}
+      <NumberInput
+        className="w-full"
+        // A year or a registry number reads without grouping, and the
+        // filter compares the digits as typed.
+        format={{ maximumFractionDigits: 20, useGrouping: false }}
+        inputProps={{ autoFocus: true }}
+        onValueChange={(next) => emit(next === null ? "" : String(next))}
         size="sm"
-        type="number"
-        value={leafValueString(node)}
+        value={leafNumberValue(leafValueString(node))}
       />
     );
   }
@@ -736,7 +745,7 @@ const useFilterFields = (properties: WorkspaceProperty[]): FieldOption[] => {
 
   for (const property of properties) {
     const content = property.content;
-    if (content.type === "file") {
+    if (content.type === "file" || content.type === "record") {
       continue;
     }
     if (content.type === "single-select" || content.type === "multi-select") {

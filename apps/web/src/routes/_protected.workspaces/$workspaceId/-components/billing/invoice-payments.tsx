@@ -10,7 +10,7 @@ import {
   INVOICE_PAYMENT_METHODS,
   type InvoicePaymentMethod,
 } from "@stll/api-contract";
-import { tryToMinorUnits } from "@stll/money";
+import { localeInputText, parseLocaleMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
@@ -25,8 +25,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { TruncatedText } from "@stll/ui/truncated-text";
-import { cn } from "@stll/ui/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/table";
 
 import { majorUnitInput } from "@/components/billing/amount-input.logic";
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
@@ -35,7 +41,7 @@ import {
   plainDateEpoch,
 } from "@/components/billing/format-plain-date";
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import { useFormatter } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
@@ -141,62 +147,55 @@ export const InvoicePaymentsSection = ({
         </p>
       ) : (
         <ScrollArea>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-muted-foreground border-b text-start">
-                <th className="px-4 py-2 font-medium">
-                  {t("billing.invoices.payments.paidOn")}
-                </th>
-                <th className="px-4 py-2 font-medium">
-                  {t("billing.invoices.payments.method")}
-                </th>
-                <th className="px-4 py-2 font-medium">
-                  {t("common.reference")}
-                </th>
-                <th className="px-4 py-2 text-end font-medium">
-                  {t("billing.amount")}
-                </th>
-                {canUpdate && <th className="w-10 px-4 py-2" />}
-              </tr>
-            </thead>
-            <tbody>
+          <Table inset="card" scroll="parent">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("billing.invoices.payments.paidOn")}</TableHead>
+                <TableHead>{t("billing.invoices.payments.method")}</TableHead>
+                <TableHead>{t("common.reference")}</TableHead>
+                <TableHead align="end">{t("billing.amount")}</TableHead>
+                {canUpdate && <TableHead className="w-10" />}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {invoice.payments.map((payment) => {
                 const voided = payment.voidedAt !== null;
                 return (
-                  <tr
-                    className={cn(
-                      "border-b last:border-0",
-                      voided && "text-muted-foreground",
-                    )}
+                  <TableRow
                     key={payment.id}
+                    tone={voided ? "muted" : "default"}
                   >
-                    <td className="px-4 py-2 tabular-nums">
+                    <TableCell align="start" numeric>
                       {format.dateTime(
                         plainDateEpoch(payment.paidOn),
                         MEDIUM_DATE,
                       )}
-                    </td>
-                    <td className="px-4 py-2">
+                    </TableCell>
+                    <TableCell>
                       {t(`billing.invoices.payments.methods.${payment.method}`)}
                       {voided && (
                         <span className="ms-2 text-xs">
                           {t("billing.invoices.payments.voided")}
                         </span>
                       )}
-                    </td>
-                    <td className="max-w-xs px-4 py-2" dir="auto">
-                      <TruncatedText>{payment.reference ?? ""}</TruncatedText>
-                    </td>
-                    <td
-                      className={cn(
-                        "px-4 py-2 text-end tabular-nums",
-                        voided && "line-through",
+                    </TableCell>
+                    <TableCell className="max-w-xs" dir="auto" truncate>
+                      {payment.reference ?? ""}
+                    </TableCell>
+                    <TableCell align="end" numeric>
+                      {voided ? (
+                        <s>
+                          {formatCurrencyAmount(
+                            payment.amount,
+                            invoice.currency,
+                          )}
+                        </s>
+                      ) : (
+                        formatCurrencyAmount(payment.amount, invoice.currency)
                       )}
-                    >
-                      {formatCurrencyAmount(payment.amount, invoice.currency)}
-                    </td>
+                    </TableCell>
                     {canUpdate && (
-                      <td className="px-4 py-2">
+                      <TableCell>
                         {!voided && (
                           <ConfirmAction
                             description={t(
@@ -214,13 +213,13 @@ export const InvoicePaymentsSection = ({
                             </Button>
                           </ConfirmAction>
                         )}
-                      </td>
+                      </TableCell>
                     )}
-                  </tr>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </ScrollArea>
       )}
     </section>
@@ -260,6 +259,7 @@ const RecordPaymentForm = ({
   onClose: () => void;
 }) => {
   const t = useTranslations();
+  const locale = useFormattingLocale();
   const invalidate = useInvalidateInvoices();
   const paidOnLabelId = useId();
 
@@ -281,15 +281,20 @@ const RecordPaymentForm = ({
         input: amountInputValue,
         currency,
         outstandingAmount,
+        locale,
       });
       if (check.type !== "ok") {
         addIssue({
-          message:
-            check.type === "more_than_outstanding"
-              ? t("billing.invoices.payments.amountTooHigh", {
-                  amount: formatCurrencyAmount(outstandingAmount, currency),
-                })
-              : t("billing.amountMustBePositive"),
+          message: {
+            invalid_format: t("billing.invalidNumberFormat"),
+            more_than_outstanding: t(
+              "billing.invoices.payments.amountTooHigh",
+              {
+                amount: formatCurrencyAmount(outstandingAmount, currency),
+              },
+            ),
+            not_positive: t("billing.amountMustBePositive"),
+          }[check.type],
           path: [
             {
               type: "object",
@@ -311,7 +316,7 @@ const RecordPaymentForm = ({
       schema,
       submitValues: "schema-output",
       defaultValues: {
-        amountInputValue: majorUnitInput(outstandingAmount, currency),
+        amountInputValue: majorUnitInput(outstandingAmount, currency, locale),
         paidOn: localISODate(),
         method: DEFAULT_PAYMENT_METHOD,
         reference: "",
@@ -380,16 +385,19 @@ const RecordPaymentForm = ({
                   inputMode="decimal"
                   onBlur={() => {
                     field.handleBlur();
-                    const amount = tryToMinorUnits({
+                    const amount = parseLocaleMinorUnits({
                       amount: field.state.value,
                       currency,
+                      locale,
                     });
-                    if (amount !== null && amount > 0) {
-                      field.handleChange(majorUnitInput(amount, currency));
+                    if (amount.isOk() && amount.value > 0) {
+                      field.handleChange(
+                        majorUnitInput(amount.value, currency, locale),
+                      );
                     }
                   }}
                   onChange={(event) =>
-                    field.handleChange(event.currentTarget.value)
+                    field.handleChange(localeInputText(event.currentTarget))
                   }
                   value={field.state.value}
                 />

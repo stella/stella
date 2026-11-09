@@ -28,6 +28,7 @@ import * as v from "valibot";
 
 import { CONTACT_TYPES, type ContactType } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
   Dialog,
@@ -92,6 +93,8 @@ import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { routePresentation } from "@/routes/-route-presentation";
+import { BulkDeleteContacts } from "@/routes/_protected.contacts/-components/bulk-delete";
+import { ContactNameLink } from "@/routes/_protected.contacts/-components/contact-name-link";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
   birthDateDraft,
@@ -131,15 +134,23 @@ function ContactsPage() {
   const t = useTranslations();
   const tContacts = useTranslations("contacts");
   const canCreateContact = usePermissions({ contact: ["create"] });
+  const canDeleteContact = usePermissions({ contact: ["delete"] });
   const [createContactOpen, setCreateContactOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [filter, setFilter] = useState<ContactFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
 
   const updateSearch = useDebouncedCallback((value: string) => {
     setDebouncedQuery(value);
   }, 300);
+
+  // A selection the new filter hides must not be deleted unseen.
+  const changeFilter = (next: ContactFilter) => {
+    setFilter(next);
+    setSelectedIds([]);
+  };
 
   const typeFilter = filter === "all" ? undefined : filter;
   const activeOrganizationId = protectedRouteApi.useRouteContext({
@@ -172,7 +183,11 @@ function ContactsPage() {
   const isFirstUseEmpty =
     view.type === "empty" && searchQuery.trim() === "" && filter === "all";
 
-  const columns = useContactColumns();
+  const columns = useContactColumns({
+    canSelect: canDeleteContact,
+    selectedIds,
+    setSelectedIds,
+  });
 
   const table = useTable({
     features: contactTableFeatures,
@@ -204,6 +219,19 @@ function ContactsPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+      {canDeleteContact && (
+        <BulkDeleteContacts
+          contactIds={selectedIds}
+          onResolved={(resolvedIds) =>
+            setSelectedIds((currentIds) =>
+              currentIds.filter(
+                (contactId) => !resolvedIds.includes(contactId),
+              ),
+            )
+          }
+          organizationId={activeOrganizationId}
+        />
+      )}
       <ResponsiveActionToolbar>
         <ResponsiveActionToolbarItem slot="primary">
           <SearchField
@@ -213,6 +241,8 @@ function ContactsPage() {
             onValueChange={(value) => {
               setSearchQuery(value);
               updateSearch(value);
+              // A selection the new results hide must not be deleted unseen.
+              setSelectedIds([]);
             }}
             placeholder={t("contacts.search")}
             value={searchQuery}
@@ -223,17 +253,17 @@ function ContactsPage() {
             <FilterButton
               active={filter === "all"}
               label={t("common.all")}
-              onClick={() => setFilter("all")}
+              onClick={() => changeFilter("all")}
             />
             <FilterButton
               active={filter === "person"}
               label={t("contacts.filterPersons")}
-              onClick={() => setFilter("person")}
+              onClick={() => changeFilter("person")}
             />
             <FilterButton
               active={filter === "organization"}
               label={t("contacts.filterOrganizations")}
-              onClick={() => setFilter("organization")}
+              onClick={() => changeFilter("organization")}
             />
           </div>
         </ResponsiveActionToolbarItem>
@@ -415,11 +445,43 @@ const columnHelper = createColumnHelper<ContactTableFeatures, ContactItem>();
 
 // Single column source of truth: the page table, its loading skeleton, and the
 // route-level pending shell all derive from this, so none can drift.
-const useContactColumns = () => {
+const useContactColumns = ({
+  canSelect,
+  selectedIds,
+  setSelectedIds,
+}: {
+  /** Selection only feeds bulk delete, so it shows only to who may delete. */
+  canSelect: boolean;
+  selectedIds: readonly string[];
+  setSelectedIds: (ids: readonly string[]) => void;
+}) => {
   const t = useTranslations();
   return useMemo(
     () =>
       columnHelper.columns([
+        ...(canSelect
+          ? [
+              columnHelper.display({
+                id: "select",
+                header: () => null,
+                cell: ({ row }) => (
+                  <Checkbox
+                    aria-label={t("contacts.selectContact", {
+                      name: row.original.displayName,
+                    })}
+                    checked={selectedIds.includes(row.original.id)}
+                    onCheckedChange={(checked) =>
+                      setSelectedIds(
+                        checked
+                          ? [...selectedIds, row.original.id]
+                          : selectedIds.filter((id) => id !== row.original.id),
+                      )
+                    }
+                  />
+                ),
+              }),
+            ]
+          : []),
         columnHelper.display({
           id: "icon",
           header: () => null,
@@ -434,19 +496,10 @@ const useContactColumns = () => {
           id: "name",
           header: t("common.name"),
           cell: ({ row, getValue }) => (
-            <TruncatedText
-              className="max-w-xs font-medium hover:underline"
-              dir="auto"
-              render={
-                <Link
-                  onClick={(event) => event.stopPropagation()}
-                  params={{ contactId: row.original.id }}
-                  to="/contacts/$contactId"
-                />
-              }
-            >
-              {getValue()}
-            </TruncatedText>
+            <ContactNameLink
+              contactId={row.original.id}
+              displayName={getValue()}
+            />
           ),
         }),
         columnHelper.display({
@@ -460,13 +513,13 @@ const useContactColumns = () => {
               return null;
             }
             return (
-              <TruncatedText
+              <a
                 className="text-muted-foreground hover:text-foreground inline-block max-w-xs align-middle hover:underline"
+                href={`mailto:${primaryEmail.address}`}
                 onClick={(event) => event.stopPropagation()}
-                render={<a href={`mailto:${primaryEmail.address}`} />}
               >
-                {primaryEmail.address}
-              </TruncatedText>
+                <TruncatedText>{primaryEmail.address}</TruncatedText>
+              </a>
             );
           },
         }),
@@ -497,7 +550,7 @@ const useContactColumns = () => {
           cell: ({ row }) => <ContactRowActions contact={row.original} />,
         }),
       ]),
-    [t],
+    [canSelect, selectedIds, setSelectedIds, t],
   );
 };
 
@@ -506,8 +559,11 @@ const useContactColumns = () => {
 const renderContactSkeletonCell = (
   column: Column<ContactTableFeatures, ContactItem>,
 ): ReactNode => {
+  if (column.id === "select") {
+    return <Skeleton className="size-4 rounded-sm" />;
+  }
   if (column.id === "icon") {
-    return <Skeleton className="size-4 rounded" />;
+    return <Skeleton className="size-4 rounded-sm" />;
   }
   if (column.id === "matters") {
     return <Skeleton className="ms-auto h-4 w-6" />;
@@ -551,7 +607,8 @@ const ContactTableRow = ({
       tabIndex={0}
     >
       {row.getAllCells().map((cell) => {
-        const stopsRowClick = cell.column.id === "actions";
+        const stopsRowClick =
+          cell.column.id === "select" || cell.column.id === "actions";
         return (
           <TableCell
             key={cell.id}
@@ -782,7 +839,13 @@ const ContactsToolbarPlaceholder = () => {
 };
 
 function ContactsPendingComponent() {
-  const columns = useContactColumns();
+  const canDeleteContact = usePermissions({ contact: ["delete"] });
+  const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
+  const columns = useContactColumns({
+    canSelect: canDeleteContact,
+    selectedIds,
+    setSelectedIds,
+  });
   const table = useTable({
     features: contactTableFeatures,
     data: EMPTY_CONTACTS,

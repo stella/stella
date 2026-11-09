@@ -2,6 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { PlusIcon, RotateCcwIcon, WorkflowIcon } from "@stll/ui/icons";
+import { Skeleton } from "@stll/ui/skeleton";
 import { Switch } from "@stll/ui/switch";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
@@ -15,6 +16,33 @@ import {
   type FlowExampleKey,
 } from "@/routes/knowledge/-components/flow-examples";
 import type { FlowListItem } from "@/routes/knowledge/-components/flow-types";
+
+const FLOW_LIST_CLASS = "flex min-h-0 flex-1 flex-col";
+const FLOW_TOOLBAR_CLASS =
+  "flex items-center justify-end gap-1 border-b px-4 py-2";
+const FLOW_ROW_CLASS = "flex items-center gap-3 px-4 py-3";
+const FLOW_ROW_KEYS = ["a", "b", "c", "d", "e"];
+
+export const FlowListSkeleton = () => (
+  <div aria-hidden="true" className={FLOW_LIST_CLASS}>
+    <div className={FLOW_TOOLBAR_CLASS}>
+      <Skeleton className="h-8 w-8 rounded-md" />
+      <Skeleton className="h-8 w-28 rounded-md" />
+    </div>
+    <ul className="flex-1 divide-y">
+      {FLOW_ROW_KEYS.map((key) => (
+        <li className={FLOW_ROW_CLASS} key={key}>
+          <Skeleton className="size-9 shrink-0 rounded-lg" />
+          <div className="min-w-0 flex-1">
+            <Skeleton className="h-5 w-48 max-w-full" />
+            <Skeleton className="mt-0.5 h-4 w-32 max-w-full" />
+          </div>
+          <Skeleton className="h-5 w-9 rounded-full" />
+        </li>
+      ))}
+    </ul>
+  </div>
+);
 
 type FlowListProps = {
   flows: FlowListItem[];
@@ -40,8 +68,8 @@ export const FlowList = ({
   const canUpdate = usePermissions({ flow: ["update"] });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-end gap-1 border-b px-4 py-2">
+    <div className={FLOW_LIST_CLASS}>
+      <div className={FLOW_TOOLBAR_CLASS}>
         <Button
           aria-label={t("common.refresh")}
           onClick={onRefresh}
@@ -155,18 +183,16 @@ const FlowExampleCard = ({
   const example = buildFlowExample(exampleKey, tExamples);
 
   return (
-    <button
-      className="border-border hover:border-foreground/30 hover:bg-muted/40 flex flex-col items-start gap-1 rounded-lg border p-4 text-start"
-      onClick={onSelect}
-      type="button"
-    >
-      <span className="text-foreground text-sm font-medium">
-        {example.name}
+    <Button onClick={onSelect} variant="plain">
+      <span className="border-border hover:border-foreground/30 hover:bg-muted/40 flex h-full flex-col items-start gap-1 rounded-lg border p-4 text-start">
+        <span className="text-foreground text-sm font-medium">
+          {example.name}
+        </span>
+        <span className="text-muted-foreground text-sm">
+          {example.description}
+        </span>
       </span>
-      <span className="text-muted-foreground text-sm">
-        {example.description}
-      </span>
-    </button>
+    </Button>
   );
 };
 
@@ -186,30 +212,28 @@ const FlowRow = ({
   const t = useTranslations();
 
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
-      <button
-        className="flex min-w-0 flex-1 items-center gap-3 text-start"
-        onClick={onSelect}
-        type="button"
-      >
-        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <WorkflowIcon className="text-muted-foreground size-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <TruncatedText
-            className="text-sm font-medium"
-            dir="auto"
-            render={<p />}
-          >
-            {flow.name}
-          </TruncatedText>
-          <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
-            <FlowTriggerBadge triggerType={flow.triggerType} />
-            <span>{t("common.stepCount", { count: flow.stepCount })}</span>
+    <li className={FLOW_ROW_CLASS}>
+      <Button className="min-w-0 flex-1" onClick={onSelect} variant="plain">
+        <span className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <WorkflowIcon className="text-muted-foreground size-4" />
           </div>
-        </div>
-        <span className="sr-only">{t("common.edit")}</span>
-      </button>
+          <div className="min-w-0 flex-1">
+            <TruncatedText
+              className="text-sm font-medium"
+              dir="auto"
+              render={<p />}
+            >
+              {flow.name}
+            </TruncatedText>
+            <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
+              <FlowTriggerBadge triggerType={flow.triggerType} />
+              <span>{t("common.stepCount", { count: flow.stepCount })}</span>
+            </div>
+          </div>
+          <span className="sr-only">{t("common.edit")}</span>
+        </span>
+      </Button>
       <Switch
         aria-label={
           flow.enabled ? t("flows.disableFlow") : t("flows.enableFlow")

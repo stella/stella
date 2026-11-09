@@ -20,13 +20,14 @@ import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogFooter,
-  DialogFormState,
   DialogHeader,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import { BookmarkIcon, BookmarkPlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -250,16 +251,15 @@ export const SavedTimeNarratives = ({
         open={name !== null}
       >
         <DialogPopup>
-          <DialogFormState
+          <DialogHeader>
+            <DialogTitle>{t("billing.savedNarratives.save")}</DialogTitle>
+          </DialogHeader>
+          <Form
+            density="compact"
             dirty={name !== null && name !== ""}
             onDiscard={() => {
               setName(null);
             }}
-          />
-          <DialogHeader>
-            <DialogTitle>{t("billing.savedNarratives.save")}</DialogTitle>
-          </DialogHeader>
-          <form
             onSubmit={(event) => {
               event.preventDefault();
               const trimmedName = name?.trim();
@@ -268,10 +268,12 @@ export const SavedTimeNarratives = ({
               }
             }}
           >
-            <div className="px-6 pb-6">
-              <label className="sr-only" htmlFor="saved-narrative-name">
+            {/* The compact form's row gap and this inset together keep the
+                footer at its old distance from the field. */}
+            <div className="px-6 pb-4">
+              <Label className="sr-only" htmlFor="saved-narrative-name">
                 {t("common.name")}
-              </label>
+              </Label>
               <Input
                 autoFocus
                 id="saved-narrative-name"
@@ -296,7 +298,7 @@ export const SavedTimeNarratives = ({
                 {t("common.save")}
               </Button>
             </DialogFooter>
-          </form>
+          </Form>
         </DialogPopup>
       </Dialog>
 

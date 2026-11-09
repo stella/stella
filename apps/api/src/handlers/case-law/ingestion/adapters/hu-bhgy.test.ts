@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * hu-bhgy against payloads eakta.birosag.hu actually served.
  *
@@ -8,8 +9,6 @@
  * standing still at the tip — is driven through a stubbed transport, because
  * the behaviour under test is the cursor's, not the network's.
  */
-
-import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
@@ -33,18 +32,22 @@ import {
   readHuBhgySearch,
 } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import {
-  rejectionOf,
-  requireReconciliation,
-} from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  rejectionOf,
+  requireReconciliation,
+} from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -146,20 +149,19 @@ const urlOf = (input: string | URL | Request): string => {
 const stubPublisher = (
   answer: (call: Call) => Response,
 ): { calls: Call[]; restore: () => void } => {
-  const original = globalThis.fetch;
   const calls: Call[] = [];
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const url = urlOf(input);
       const body = typeof init?.body === "string" ? init.body : "";
       calls.push({ url, body });
       return await Promise.resolve(answer({ url, body }));
-    },
+    }),
   );
   return {
     calls,
     restore: () => {
-      globalThis.fetch = original;
+      testFetchState.restore();
     },
   };
 };
@@ -307,6 +309,48 @@ describe("reading a row's own fields", () => {
     });
   });
 });
+
+test.each(["Nem hivatkozható", "Csak a közzétett rész idézhető"])(
+  "publisher citation restrictions survive assembly and stored-raw replay: %s",
+  async (restriction) => {
+    const expectedRestriction = toPlainText(restriction).unwrap();
+    const row = {
+      ...rowAt(0, "2025-01-01T00:00:00+01:00"),
+      NemHivatkozhatoSzoveg: restriction,
+    };
+    const built = await assembleHuBhgyDecision({
+      row: normalizeHuBhgyRow(row),
+      document: undefined,
+      rawParts: huBhgyRawPartsOf(row, undefined),
+    });
+    expect(built.type).toBe("detail-unavailable");
+    if (built.type === "unkeyable") {
+      return;
+    }
+    const stored = built.decision;
+    expect(stored.metadata["citationRestriction"]).toBe(expectedRestriction);
+    const replayed = await huBhgyAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(stored.sourceRaw ?? ""),
+      contentType: stored.sourceRawContentType ?? null,
+      caseNumber: stored.caseNumber,
+      sourceDocumentId: stored.sourceDocumentId ?? null,
+      language: stored.language,
+      court: stored.court,
+      ecli: null,
+      decisionDate: stored.decisionDate ?? null,
+      decisionType: stored.decisionType ?? null,
+      sourceUrl: stored.sourceUrl ?? null,
+      documentUrl: stored.documentUrl ?? null,
+      metadata: stored.metadata,
+    });
+    expect(replayed?.type).toBe("parsed");
+    if (replayed?.type === "parsed") {
+      expect(replayed.result.metadata["citationRestriction"]).toBe(
+        expectedRestriction,
+      );
+    }
+  },
+);
 
 // ── The served document ──────────────────────────────────
 

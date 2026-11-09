@@ -135,7 +135,7 @@ export const RewrittenSearchLine = ({
 
   return (
     <div className="text-muted-foreground flex max-w-full min-w-0 flex-wrap items-baseline gap-x-2 text-xs">
-      <TruncatedText render={<p />}>
+      <TruncatedText render={<p />} tooltip={<BidiText>{rewritten}</BidiText>}>
         {t.rich("caseLaw.rewritten.line", {
           bdi: (chunks) => <BidiText>{chunks}</BidiText>,
           original,

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
+import { GLOBAL_SEARCH_CHAT_COVERAGE } from "@stll/api-contract/search";
 
 import { LIMITS } from "@/api/lib/limits";
 
@@ -19,7 +19,7 @@ test("candidate batches advance their SQL keyset through the entire bounded inpu
       }) satisfies ChatSearchCandidateRow,
   );
   let calls = 0;
-  const rows = await readChatCandidateBatches({
+  const read = await readChatCandidateBatches({
     readBatch: async (cursor) => {
       calls++;
       return source
@@ -34,61 +34,70 @@ test("candidate batches advance their SQL keyset through the entire bounded inpu
         .slice(0, LIMITS.searchChatCandidateThreadsMax + 1);
     },
   });
-  expect(rows.isOk()).toBe(true);
-  if (rows.isOk()) {
-    expect(rows.value).toEqual(source);
-  }
+  expect(read).toEqual({
+    rows: source,
+    coverage: GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE,
+  });
   expect(calls).toBe(3);
 });
 
-test("candidate ranking reports the work limit instead of returning a truncated candidate prefix", async () => {
+test("a window past the batch limit keeps the threads it read and reports partial coverage", async () => {
   let calls = 0;
-  const result = await readChatCandidateBatches({
+  const read = await readChatCandidateBatches({
     readBatch: async () => {
       calls++;
       return Array.from(
         { length: LIMITS.searchChatCandidateThreadsMax + 1 },
-        (_, index) => ({ id: String(index), tier: 1, score: 1 }),
+        (_, index) => ({ id: `${calls}-${index}`, tier: 1, score: 1 }),
       );
     },
   });
-  expect(result.isErr()).toBe(true);
-  if (result.isErr()) {
-    expect(result.error.message).toContain("search work limit");
-  }
+  expect(read.coverage).toBe(GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL);
+  expect(read.rows).toHaveLength(
+    LIMITS.searchChatCandidateBatchesMax * LIMITS.searchChatCandidateThreadsMax,
+  );
   expect(calls).toBe(LIMITS.searchChatCandidateBatchesMax);
 });
 
-test("candidate source bytes share the ranking work limit", async () => {
-  const result = await readChatCandidateBatches({
+test("the byte budget keeps earlier threads of the same batch", async () => {
+  const read = await readChatCandidateBatches({
     readBatch: async () => [
+      { id: "first", tier: 1, score: 2 },
       {
-        id: "one",
+        id: "oversized",
         tier: 1,
         score: 1,
         text: "x".repeat(LIMITS.searchChatCandidateBytesMax),
       },
+      { id: "after", tier: 1, score: 0 },
     ],
   });
-  expect(result.isErr()).toBe(true);
-  if (result.isErr()) {
-    expect(result.error.message).toContain("search work limit");
-  }
+  expect(read.rows.map(({ id }) => id)).toEqual(["first"]);
+  expect(read.coverage).toBe(GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL);
 });
 
-test("source completeness is required before an admitted ranking can be returned", async () => {
-  const result = await readChatCandidateBatches({
+test("a thread past the source limit stays a candidate beside the threads after it", async () => {
+  const read = await readChatCandidateBatches({
     readBatch: async () => [
       {
-        id: "one",
+        id: "long",
+        tier: 1,
+        score: 2,
+        source_messages: [
+          { role: "user", content: "admitted", overflow: false },
+          { role: "user", content: null, overflow: true },
+        ],
+      },
+      {
+        id: "short",
         tier: 1,
         score: 1,
-        source_messages: [{ overflow: true, content: null }],
+        source_messages: [
+          { role: "user", content: "admitted", overflow: false },
+        ],
       },
     ],
   });
-  expect(result.isErr()).toBe(true);
-  if (result.isErr()) {
-    expect(result.error.code).toBe(GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE);
-  }
+  expect(read.rows.map(({ id }) => id)).toEqual(["long", "short"]);
+  expect(read.coverage).toBe(GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL);
 });

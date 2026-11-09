@@ -200,6 +200,14 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     owner: "scoped",
     retention: "cleared",
   },
+  // Whether the organization offers this user time billing: a fetched decision.
+  {
+    area: "local",
+    prefix: "stella.time-billing-access",
+    restoration: "data",
+    owner: "scoped",
+    retention: "cleared",
+  },
   // Dismissed connection breaks belong to the signed-in user's integrations.
   {
     area: "local",

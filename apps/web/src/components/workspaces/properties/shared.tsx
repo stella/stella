@@ -81,7 +81,7 @@ export const SelectColorIcon = ({ color, className }: SelectColorIconProps) => {
 
   return (
     <span
-      className={cn("block size-4 shrink-0 rounded", className)}
+      className={cn("block size-4 shrink-0 rounded-sm", className)}
       style={{ backgroundColor: resolveOptionColor(color).color }}
     />
   );

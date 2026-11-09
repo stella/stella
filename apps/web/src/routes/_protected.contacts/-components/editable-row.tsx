@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
@@ -59,7 +60,7 @@ export const EditableRow = ({
   const rateNeedsCurrency = field === "defaultHourlyRate" && !contact.currency;
   const displayValue =
     field === "defaultHourlyRate"
-      ? contactRateInput(contact.defaultHourlyRate, contact.currency)
+      ? contactRateInput(contact.defaultHourlyRate, contact.currency, locale)
       : value;
   const rename = useInlineRename({
     initial: displayValue ?? "",
@@ -160,22 +161,23 @@ export const EditableRow = ({
       {label && (
         <span className="text-muted-foreground w-32 shrink-0">{label}</span>
       )}
-      <button
-        className="hover:text-foreground min-w-0 cursor-text text-start text-sm"
-        disabled={rateNeedsCurrency}
-        onClick={() => rename.startEditing()}
-        type="button"
-      >
-        <TruncatedText className="whitespace-pre">
-          {rateNeedsCurrency ? (
-            <span className="text-foreground-subtle">
-              {t("contacts.billing.selectCurrencyForRate")}
-            </span>
-          ) : (
-            displayValue || <span className="text-foreground-subtle">—</span>
-          )}
+      {/* Without a currency there is nothing to edit yet: the hint stands as
+          plain text (a disabled Button would dim the already subtle hint). */}
+      {rateNeedsCurrency ? (
+        <TruncatedText className="text-foreground-subtle text-sm">
+          {t("contacts.billing.selectCurrencyForRate")}
         </TruncatedText>
-      </button>
+      ) : (
+        <Button
+          className="min-w-0 overflow-hidden"
+          onClick={() => rename.startEditing()}
+          variant="plain"
+        >
+          <TruncatedText className="hover:text-foreground cursor-text text-sm whitespace-pre">
+            {displayValue || <span className="text-foreground-subtle">—</span>}
+          </TruncatedText>
+        </Button>
+      )}
     </div>
   );
 };

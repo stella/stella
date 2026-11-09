@@ -106,6 +106,7 @@ describe("restricted review account policy", () => {
 
 describe("restricted review account auth endpoints", () => {
   test.each([
+    ["/v1/organizations", "POST", REVIEW_ACCOUNT_OPERATION.createOrganization],
     [
       "/organization/create",
       "POST",

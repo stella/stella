@@ -49,6 +49,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -211,7 +212,7 @@ const seedSchedulerJob = async () => {
       task: RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK,
       schedule: { type: "interval", everyMs: 300_000 },
       nextRunAt: new Date(),
-      lockedBy: "test-style-set-cleanup-lease",
+      ...heldSchedulerLease("test-style-set-cleanup-lease"),
     })
     .returning();
   return job ?? panic("Expected scheduler job");

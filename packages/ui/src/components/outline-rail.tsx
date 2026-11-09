@@ -31,6 +31,7 @@ import { Temporal } from "temporal-polyfill/full";
 import { ChevronRightIcon as ChevronRight } from "../icons";
 import { DOCUMENT_PANEL_SAFE_BOTTOM } from "../lib/panel-inset";
 import { cn } from "../lib/utils";
+import { ReviewAuthorAvatar } from "../review/review-author-avatar";
 import { DirectionalIcon } from "./directional-icon";
 import {
   reconcileOutlineItems,
@@ -69,6 +70,18 @@ export type OutlineItem = {
   color?: string;
   /** How prominently the row reads. Defaults to `primary`. */
   emphasis?: OutlineEmphasis;
+  /** The people the entry is about. Its tick stays a tick and shows them on
+   *  hover or focus; an entry with people stays on the rail however dense the
+   *  outline gets. */
+  portraits?: readonly OutlinePortrait[];
+  /** Where the portraits come from, said under them in the tick's card. */
+  portraitCredit?: string;
+};
+
+/** A person an entry is about; `image` null draws their initials. */
+export type OutlinePortrait = {
+  image: string | null;
+  name: string;
 };
 
 export type OutlineRailProps = {
@@ -130,6 +143,73 @@ const ACTIVE_ROW_ATTRIBUTE = "data-outline-active";
 /** The entry as one line of text: label, then its title when it has one. */
 export const outlineEntryText = (item: OutlineItem): string =>
   item.title === undefined ? item.label : `${item.label} ${item.title}`;
+
+// A bench can write separately together. A panel row is one line, so it stands
+// for them with a few faces; its text and the tick's card name everyone.
+const MAX_ROW_PORTRAITS = 3;
+// A portrait is published head and shoulders or fuller, so a small circle of
+// its centre is clothing. Frame the top of the image, zoomed to the head.
+const HEAD_FRAME_CLASS =
+  "[&_img]:origin-[50%_26%] [&_img]:scale-200 [&_img]:object-top";
+
+/** A row's faces, decorative: the row's text carries the names. */
+const OutlineRowPortraits = ({
+  portraits,
+}: {
+  portraits: readonly OutlinePortrait[];
+}) => (
+  <span
+    aria-hidden
+    className="me-1.5 flex shrink-0 -space-x-1.5 rtl:space-x-reverse"
+  >
+    {portraits.slice(0, MAX_ROW_PORTRAITS).map((portrait) => (
+      <ReviewAuthorAvatar
+        className={cn("ring-background size-6 ring-2", HEAD_FRAME_CLASS)}
+        fallbackClassName="text-[10px]"
+        image={portrait.image}
+        key={portrait.name}
+        name={portrait.name}
+      />
+    ))}
+  </span>
+);
+
+/** What a tick with people opens: each of them, face and name. The tick's
+ *  accessible name already says all this, so the card adds only the faces. */
+const OutlinePeopleCard = ({
+  credit,
+  portraits,
+  title,
+}: {
+  credit: string | undefined;
+  portraits: readonly OutlinePortrait[];
+  title: string | undefined;
+}) => (
+  <span className="flex max-w-64 flex-col gap-2 py-1">
+    {title !== undefined && (
+      <span className="text-muted-foreground">{title}</span>
+    )}
+    <span className="flex flex-col gap-2">
+      {portraits.map((portrait) => (
+        <span
+          className="flex items-center gap-2 font-medium"
+          key={portrait.name}
+        >
+          <ReviewAuthorAvatar
+            aria-hidden
+            className={cn("size-10", HEAD_FRAME_CLASS)}
+            image={portrait.image}
+            name={portrait.name}
+          />
+          {portrait.name}
+        </span>
+      ))}
+    </span>
+    {credit !== undefined && (
+      <span className="text-muted-foreground text-2xs">{credit}</span>
+    )}
+  </span>
+);
 
 const tickWidth = (level: number): number => {
   const clamped = Math.min(Math.max(level, 0), TICK_MAX_LEVEL);
@@ -270,6 +350,9 @@ const OutlineRowView = ({
         className="me-1.5 size-1.5 shrink-0 rounded-full"
         style={{ background: `var(${item.color})` }}
       />
+    )}
+    {item.portraits !== undefined && (
+      <OutlineRowPortraits portraits={item.portraits} />
     )}
     <Tooltip>
       <TooltipTrigger
@@ -748,7 +831,8 @@ export const OutlineRail = ({
 
   const visibleTicks = items.flatMap((item) => {
     const pct = pctById.get(item.id);
-    return pct !== undefined && item.level <= railLevelCap
+    return pct !== undefined &&
+      (item.portraits !== undefined || item.level <= railLevelCap)
       ? [{ item, pct }]
       : [];
   });
@@ -757,8 +841,11 @@ export const OutlineRail = ({
   // outline with one shallow heading and many deeper ones leaves <2 ticks but
   // still has a full, navigable popover, so only hide when there is no outline.
   // A header keeps the panel: `items` is then the caller's filtered view, and
-  // a filter matching nothing must still leave the field that set it.
-  if (items.length < 2 && header === undefined) {
+  // a filter matching nothing must still leave the field that set it. An entry
+  // with people is worth a tick on its own: it says whose text is further down,
+  // and its card says all a list of one would.
+  const hasPanel = items.length >= 2 || header !== undefined;
+  if (!hasPanel && !items.some((item) => item.portraits !== undefined)) {
     return null;
   }
 
@@ -803,24 +890,31 @@ export const OutlineRail = ({
           {visibleTicks.map(({ item, pct }) => {
             const isActive = active === item.id;
             const isHovered = hoveredId === item.id;
+            const portraits = item.portraits;
+            const tickLabel =
+              portraits === undefined ? item.label : outlineEntryText(item);
             return (
               <Tooltip key={item.id}>
                 <TooltipTrigger
                   render={
                     <button
-                      {...(presentation === "popover"
+                      {...(presentation === "popover" && hasPanel
                         ? {
                             "aria-controls": panelId,
                             "aria-expanded": panelOpen,
                           }
                         : {})}
                       aria-current={isActive ? "true" : undefined}
-                      aria-label={item.label}
+                      aria-label={tickLabel}
                       className={cn(
                         "absolute end-0 rounded-full transition-[width,height,opacity] duration-150",
                         isHovered || isActive
                           ? "opacity-100"
                           : "opacity-45 hover:opacity-90",
+                        // Its card is reached by resting on the tick, so the
+                        // tick is a target a pointer can stop on, not 2px.
+                        portraits !== undefined &&
+                          "focus-visible:outline-ring z-10 after:absolute after:-inset-x-2 after:-inset-y-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 pointer-coarse:after:-inset-x-3.5 pointer-coarse:after:-inset-y-5",
                       )}
                       onBlur={(event) => {
                         // Focus moving to another tick or into the panel keeps
@@ -857,7 +951,29 @@ export const OutlineRail = ({
                     />
                   }
                 />
-                <TooltipPopup>{item.label}</TooltipPopup>
+                {portraits === undefined ? (
+                  <TooltipPopup>{item.label}</TooltipPopup>
+                ) : (
+                  <TooltipPopup
+                    side="inline-start"
+                    // The panel opens with the card, and its rows are what the
+                    // reader came to the rail for: the card stands beside them.
+                    sideOffset={
+                      presentation === "popover" && hasPanel
+                        ? RAIL_WIDTH +
+                          PANEL_GAP * 2 +
+                          panelWidth -
+                          tickWidth(item.level)
+                        : undefined
+                    }
+                  >
+                    <OutlinePeopleCard
+                      credit={item.portraitCredit}
+                      portraits={portraits}
+                      title={item.title}
+                    />
+                  </TooltipPopup>
+                )}
               </Tooltip>
             );
           })}
@@ -879,7 +995,7 @@ export const OutlineRail = ({
         </div>
       )}
 
-      {presentation !== "rail" && (
+      {presentation !== "rail" && hasPanel && (
         // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- hover-reveal disclosure on a nav landmark; panel visibility gated by inert/aria-hidden
         <nav
           aria-label={ariaLabel}

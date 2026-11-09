@@ -68,10 +68,6 @@
     "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
   },
   {
-    "command": "[\"bun\",\"scripts/bundle-baseline.ts\",\"--check\"]",
-    "reason": "Existing repository check reads committed files or local build products; retained unchanged by the CI partition contract."
-  },
-  {
     "command": "source:model-catalog-benchmarks-gen.ts",
     "reason": "Benchmark enrichment is an explicit live refresh outside blocking catalog snapshot verification; preserve its existing upstream fetch."
   }

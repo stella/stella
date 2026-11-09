@@ -17,10 +17,12 @@ import {
   resolveReviewRunFreshness,
   resolveReviewRunRestore,
   resolveRunConflictAttachment,
+  resolveTableRunNotice,
   restoreReviewRun,
   reviewDecisionProgress,
   reviewHistoryPresentation,
   reviewSkeletonCardCount,
+  withheldTextShare,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   ReviewRunHistoryEntry,
@@ -364,7 +366,9 @@ const cachedRun = (
   run: {
     id: COMPLETED_RUN_ID,
     status: "completed",
+    executor: "worker",
     errorCode: null,
+    withheldSources: [],
     entityId: toSafeId<"entity">("0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb0"),
     fileFieldId: toSafeId<"field">("0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb1"),
     entityVersionId: REVIEWED_VERSION_ID,
@@ -377,6 +381,7 @@ const cachedRun = (
         definitionSnapshot: {
           name: "Positions confirmed for this review",
           positions: { version: 3, items: [referencePosition()] },
+          scope: null,
         },
       },
       perspective: { type: "party", role: "Buyer", name: null },
@@ -682,5 +687,157 @@ describe("sizing the wait for a run", () => {
         runId: null,
       }),
     ).toBe(12);
+  });
+});
+
+describe("the table-run notice", () => {
+  const OLDER_VERSION_ID = "0198f2c4-7a02-7c31-9a10-3b1d2f4c5e71";
+  const SHOWN_TABLE_RUN_ID = "0198f2c4-7b13-7c31-9a10-3b1d2f4c5e72";
+  const COMPLETED_TABLE_RUN = {
+    id: toSafeId<"documentReviewRun">(SHOWN_TABLE_RUN_ID),
+    executor: "table",
+    status: "completed",
+  } as const;
+
+  type NoticeArgs = Parameters<typeof resolveTableRunNotice>[0];
+
+  const listedRun = ({
+    id = NEWER_COMPLETED_RUN_ID,
+    executor = "worker",
+    status = "completed",
+    entityVersionId = CURRENT_VERSION_ID,
+  }: {
+    id?: string;
+    executor?: NoticeArgs["runs"][number]["executor"];
+    status?: NoticeArgs["runs"][number]["status"];
+    entityVersionId?: string;
+  } = {}): NoticeArgs["runs"][number] => ({
+    id: toSafeId<"documentReviewRun">(id),
+    executor,
+    status,
+    entityVersionId: toSafeId<"entityVersion">(entityVersionId),
+    errorCode: null,
+  });
+
+  const noticeFor = (
+    runs: NoticeArgs["runs"],
+    shownRun: NoticeArgs["shownRun"] = COMPLETED_TABLE_RUN,
+  ) =>
+    resolveTableRunNotice({
+      shownRun,
+      runs,
+      currentEntityVersionId: CURRENT_VERSION_ID,
+    });
+
+  test("links to a completed full review of the current version", () => {
+    expect(
+      noticeFor([
+        listedRun({ id: ACTIVE_RUN_ID, executor: "table" }),
+        listedRun({ id: NEWER_COMPLETED_RUN_ID }),
+        listedRun({ id: OLDER_COMPLETED_RUN_ID }),
+      ]),
+    ).toEqual({ type: "open-full-review", runId: NEWER_COMPLETED_RUN_ID });
+  });
+
+  test("names the button when the only full review read an older version", () => {
+    expect(
+      noticeFor([listedRun({ entityVersionId: OLDER_VERSION_ID })]),
+    ).toEqual({
+      type: "run-another-review",
+    });
+  });
+
+  test("names the button when no full review exists", () => {
+    expect(noticeFor([listedRun({ executor: "table" })])).toEqual({
+      type: "run-another-review",
+    });
+  });
+
+  test("does not count a full review that did not complete", () => {
+    expect(noticeFor([listedRun({ status: "failed" })])).toEqual({
+      type: "run-another-review",
+    });
+  });
+
+  test("does not count a full review while the current version is unknown", () => {
+    expect(
+      resolveTableRunNotice({
+        shownRun: COMPLETED_TABLE_RUN,
+        runs: [listedRun()],
+        currentEntityVersionId: null,
+      }),
+    ).toEqual({ type: "run-another-review" });
+  });
+
+  // The server refuses a second active run for a document, so the panel must
+  // not send the reader to start one.
+  test("suggests nothing to start while the shown table run is executing", () => {
+    expect(
+      noticeFor([listedRun({ executor: "table", status: "running" })], {
+        ...COMPLETED_TABLE_RUN,
+        status: "running",
+      }),
+    ).toEqual({ type: "explanation-only" });
+  });
+
+  // The detail is polled until the run settles; the history list is not, so
+  // it can still call the shown run active after the detail saw it complete.
+  test("trusts the shown run over the list's stale copy of it", () => {
+    expect(
+      noticeFor([
+        listedRun({
+          id: SHOWN_TABLE_RUN_ID,
+          executor: "table",
+          status: "running",
+        }),
+      ]),
+    ).toEqual({ type: "run-another-review" });
+  });
+
+  test("suggests nothing to start while another run is active behind a table run opened from history", () => {
+    expect(
+      noticeFor([
+        listedRun({ id: ACTIVE_RUN_ID, status: "queued" }),
+        listedRun({ id: OLDER_COMPLETED_RUN_ID, executor: "table" }),
+      ]),
+    ).toEqual({ type: "explanation-only" });
+  });
+
+  test("still links to an existing full review while a table run executes", () => {
+    expect(
+      noticeFor(
+        [
+          listedRun({
+            id: ACTIVE_RUN_ID,
+            executor: "table",
+            status: "running",
+          }),
+          listedRun({ id: OLDER_COMPLETED_RUN_ID }),
+        ],
+        { ...COMPLETED_TABLE_RUN, status: "running" },
+      ),
+    ).toEqual({ type: "open-full-review", runId: OLDER_COMPLETED_RUN_ID });
+  });
+
+  // A panel review and a table "Review only" run both have the worker executor.
+  test("shows no notice on a full review or a Review only run", () => {
+    expect(
+      noticeFor([listedRun()], { ...COMPLETED_TABLE_RUN, executor: "worker" }),
+    ).toEqual({ type: "none" });
+  });
+});
+
+describe("withheldTextShare", () => {
+  test("is null when a run read everything", () => {
+    expect(withheldTextShare([])).toBeNull();
+  });
+
+  test("weighs sources by their size", () => {
+    expect(
+      withheldTextShare([
+        { charactersWithheld: 10, charactersTotal: 100 },
+        { charactersWithheld: 30, charactersTotal: 100 },
+      ]),
+    ).toBe(0.2);
   });
 });

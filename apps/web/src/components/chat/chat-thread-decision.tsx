@@ -2,15 +2,14 @@ import type { MouseEvent } from "react";
 
 import { panic } from "better-result";
 
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
-import {
-  createCaseDecisionViewTab,
-  isPlainPrimaryClick,
-} from "@/components/inspector/case-decision-view";
+import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatHistoryItem } from "@/features/chat/queries";
@@ -73,19 +72,22 @@ export const ChatThreadDecisionLabel = ({
       {!drawsCourtBadge ? (
         <BidiText className="shrink-0">{decision.court}</BidiText>
       ) : (
-        <span className="inline-flex shrink-0" title={decision.court}>
-          <DocumentIdentityBadge
-            identity={{
-              kind: "decision",
-              courtAbbreviation: abbreviation,
-              courtTier: decision.courtTier,
-            }}
-            // Sized to the meta line it sits in, so a decision chat's row is
-            // as tall as every other row in the list.
-            size="inline"
-          />
-          <span className="sr-only">{decision.court}</span>
-        </span>
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
+            <DocumentIdentityBadge
+              identity={{
+                kind: "decision",
+                courtAbbreviation: abbreviation,
+                courtTier: decision.courtTier,
+              }}
+              // Sized to the meta line it sits in, so a decision chat's row is
+              // as tall as every other row in the list.
+              size="inline"
+            />
+            <span className="sr-only">{decision.court}</span>
+          </TooltipTrigger>
+          <TooltipPopup>{decision.court}</TooltipPopup>
+        </Tooltip>
       )}
       <TruncatedText render={<BidiText />}>{decision.caseNumber}</TruncatedText>
       {date === null ? null : (

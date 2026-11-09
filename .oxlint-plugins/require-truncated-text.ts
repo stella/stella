@@ -83,6 +83,7 @@ const filenameOf = (context): string =>
 // joins this list; a primitive that only styles its caller's text goes in the
 // `allowedFiles` option instead, with the exact token and a reason.
 const OWNER_FILES: readonly string[] = [
+  "packages/ui/src/components/middle-truncate.tsx",
   "packages/ui/src/components/truncated-text.tsx",
 ];
 

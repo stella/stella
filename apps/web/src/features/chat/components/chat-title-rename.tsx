@@ -10,7 +10,6 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
-import Tooltip from "@/components/tooltip";
 import { useRenameChatThread } from "@/features/chat/hooks/use-rename-chat-thread";
 import { useSuggestChatThreadTitle } from "@/features/chat/hooks/use-suggest-chat-thread-title";
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
@@ -300,22 +299,20 @@ const ChatTitleRenameSession = ({
   }
 
   return (
-    <Tooltip
-      content={t("chat.renameThread")}
-      render={
-        <button
-          className="hover:bg-accent hover:text-accent-foreground -mx-1 flex min-w-0 items-center rounded-sm px-1 py-0.5"
-          onClick={startEditing}
-          type="button"
+    <Button
+      className="group/plain -mx-1 flex min-w-6"
+      onClick={startEditing}
+      tooltip={t("chat.renameThread")}
+      variant="plain"
+    >
+      <span className="group-hover/plain:bg-accent group-hover/plain:text-accent-foreground flex min-w-0 items-center rounded-sm px-1 py-0.5">
+        <TruncatedText
+          className="whitespace-pre"
+          render={<BidiText as="span" />}
         >
-          <TruncatedText
-            className="whitespace-pre"
-            render={<BidiText as="span" />}
-          >
-            {displayTitle}
-          </TruncatedText>
-        </button>
-      }
-    />
+          {displayTitle}
+        </TruncatedText>
+      </span>
+    </Button>
   );
 };

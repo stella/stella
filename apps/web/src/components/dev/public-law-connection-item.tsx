@@ -11,7 +11,6 @@ import { panic } from "better-result";
 import { CableIcon, CircleCheckIcon, TriangleAlertIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MenuItem } from "@stll/ui/menu";
-import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { api } from "@/lib/api";
@@ -145,17 +144,19 @@ export const PublicLawConnectionItem = () => {
       <span className="flex min-w-0 flex-col">
         <span>{view.label}</span>
         {detail !== undefined && (
-          <TruncatedText
+          // The whole detail shows: a menu item cannot host a tooltip
+          // (its popup would act through the item), and a connection error
+          // is worth reading in full in this developer menu.
+          <span
             className={cn(
               "max-w-64 text-xs wrap-break-word",
               view.tone === "destructive" || connect.isError
                 ? "text-destructive-foreground"
                 : "text-muted-foreground",
             )}
-            lines={3}
           >
             {detail}
-          </TruncatedText>
+          </span>
         )}
       </span>
     </MenuItem>

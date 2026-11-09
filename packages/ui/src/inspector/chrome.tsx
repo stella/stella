@@ -1,5 +1,6 @@
 import type * as React from "react";
 
+import { withoutDirectionalControls } from "../components/bidi-text";
 import { TruncatedText } from "../components/truncated-text";
 import { cn } from "../lib/utils";
 import {
@@ -188,10 +189,10 @@ export const InspectorTitle = ({
     data-slot="inspector-title"
     render={
       <h2 dir="auto" {...props}>
-        {children}
+        {withoutDirectionalControls(children)}
       </h2>
     }
-    tooltip={children}
+    tooltip={withoutDirectionalControls(children)}
   />
 );
 

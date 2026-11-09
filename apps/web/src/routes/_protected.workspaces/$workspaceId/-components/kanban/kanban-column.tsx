@@ -630,13 +630,15 @@ export const KanbanColumnTitle = ({
   }
 
   return (
-    <button
-      className="min-w-0 text-start text-sm font-medium"
+    <Button
+      className="flex min-w-0 shrink overflow-hidden"
       onClick={onStartEditing}
-      type="button"
+      variant="plain"
     >
-      <TruncatedText className="whitespace-pre">{title}</TruncatedText>
-    </button>
+      <TruncatedText className="text-sm font-medium whitespace-pre">
+        {title}
+      </TruncatedText>
+    </Button>
   );
 };
 
@@ -674,19 +676,21 @@ export const KanbanColumnSwatch = ({
       moreLabel={t("common.showMore")}
       onSelect={onSelect}
       side="bottom"
+      trigger={
+        <Button
+          aria-label={t("common.changeColor")}
+          className="flex shrink-0"
+          shape="round"
+          variant="plain"
+        >
+          <span
+            className="block size-2.5 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+        </Button>
+      }
       value={optionColor}
-    >
-      <button
-        aria-label={t("common.changeColor")}
-        className="shrink-0 cursor-pointer"
-        type="button"
-      >
-        <span
-          className="block size-2.5 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-      </button>
-    </ColorPicker>
+    />
   );
 };
 

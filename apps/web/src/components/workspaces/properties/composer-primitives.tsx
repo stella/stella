@@ -4,6 +4,7 @@ import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
   AtSignIcon,
+  BanknoteIcon,
   FileTextIcon,
   PlusIcon,
   XIcon,
@@ -18,7 +19,6 @@ import {
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import Tooltip from "@/components/tooltip";
 import type { Capability } from "@/lib/organization/feature-access/action-capabilities.logic";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { contentTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
@@ -32,6 +32,13 @@ const CREATABLE_CONTENT_TYPES = [
 ] as const;
 
 export type CreatableContentType = (typeof CREATABLE_CONTENT_TYPES)[number];
+
+/**
+ * What the single-column composer offers: the shared kinds plus money. Money
+ * stays out of `CREATABLE_CONTENT_TYPES` because the bulk composer shares that
+ * list with case-law question columns, which do not answer in money.
+ */
+export type PropertyComposerContentType = CreatableContentType | "money";
 
 /**
  * One chip: the value it stands for, and how it reads. Parameterised because
@@ -55,8 +62,25 @@ export const useChipDefinitions = (): readonly ChipDefinition[] => {
   });
 };
 
+export const usePropertyComposerChipDefinitions = (
+  offerMoney: boolean,
+): readonly ChipDefinition<PropertyComposerContentType>[] => {
+  const t = useTranslations();
+  const shared = useChipDefinitions();
+  return offerMoney
+    ? [
+        ...shared,
+        {
+          type: "money",
+          icon: BanknoteIcon,
+          label: t("workspaces.properties.money"),
+        },
+      ]
+    : shared;
+};
+
 export const COMPOSER_CARD_CLASS =
-  "bg-card ring-foreground/6 flex flex-col gap-3 rounded-[10px] border border-[var(--input)] p-3 ring-4 shadow-sm";
+  "bg-card ring-foreground/6 flex flex-col gap-3 rounded-lg border border-[var(--input)] p-3 ring-4 shadow-sm";
 
 export type ManualChipOption = {
   active: boolean;
@@ -76,7 +100,7 @@ type TypeChipsRowProps<TType extends string> = {
 };
 
 const CHIP_BASE_CLASS =
-  "inline-flex shrink-0 items-center gap-1.5 rounded-[6px] border px-2 py-1 text-xs font-medium";
+  "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium";
 const CHIP_ACTIVE_CLASS =
   "bg-foreground text-background border-foreground shadow-xs/5";
 const CHIP_IDLE_CLASS =
@@ -116,18 +140,22 @@ export const TypeChipsRow = <TType extends string>({
               key={type}
             >
               {(capabilityProps) => (
-                <button
-                  className={cn(
-                    CHIP_BASE_CLASS,
-                    active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS,
-                  )}
+                <Button
+                  className="shrink-0"
                   onClick={() => onContentTypeChange(type)}
-                  type="button"
+                  variant="plain"
                   {...capabilityProps}
                 >
-                  <Icon className="size-2.5" />
-                  {label}
-                </button>
+                  <span
+                    className={cn(
+                      CHIP_BASE_CLASS,
+                      active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS,
+                    )}
+                  >
+                    <Icon className="size-2.5" />
+                    {label}
+                  </span>
+                </Button>
               )}
             </CapabilityAction>
           );
@@ -135,18 +163,22 @@ export const TypeChipsRow = <TType extends string>({
         {manualChip && (
           <>
             <span aria-hidden className="bg-border mx-1 h-3 w-px shrink-0" />
-            <button
-              className={cn(
-                CHIP_BASE_CLASS,
-                manualChip.active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS,
-              )}
+            <Button
+              className="shrink-0"
               key="manual"
               onClick={manualChip.onClick}
-              type="button"
+              variant="plain"
             >
-              <manualChip.icon className="size-2.5" />
-              {manualChip.label}
-            </button>
+              <span
+                className={cn(
+                  CHIP_BASE_CLASS,
+                  manualChip.active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS,
+                )}
+              >
+                <manualChip.icon className="size-2.5" />
+                {manualChip.label}
+              </span>
+            </Button>
           </>
         )}
       </div>
@@ -249,19 +281,15 @@ const ReadingChip = ({ label, onRemove }: ReadingChipProps) => {
       <FileTextIcon className="size-3" />
       {label}
       {onRemove && (
-        <Tooltip
-          content={t("common.remove")}
-          render={
-            <button
-              aria-label={t("common.remove")}
-              className="text-foreground-placeholder hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
-              onClick={onRemove}
-              type="button"
-            />
-          }
+        <Button
+          aria-label={t("common.remove")}
+          className="group/act ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
+          onClick={onRemove}
+          tooltip={t("common.remove")}
+          variant="plain"
         >
-          <XIcon className="size-2.5" />
-        </Tooltip>
+          <XIcon className="text-foreground-placeholder group-hover/act:text-foreground size-2.5" />
+        </Button>
       )}
     </span>
   );

@@ -10,6 +10,7 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { EllipsisVerticalIcon } from "@stll/ui/icons";
 import { InlineDropIndicator } from "@stll/ui/inline-drop-indicator";
@@ -372,7 +373,10 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
         value={view.id}
       >
         {renderIcon(view)}
-        <TruncatedText className="max-w-36 whitespace-pre">
+        <TruncatedText
+          className="max-w-36 whitespace-pre"
+          render={<BidiText as="span" />}
+        >
           {view.name}
         </TruncatedText>
       </TabsTab>

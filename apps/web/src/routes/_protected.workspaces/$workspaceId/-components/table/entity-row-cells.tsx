@@ -10,6 +10,7 @@ import {
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -20,7 +21,6 @@ import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region
 import { renderDragPreview } from "@/components/drag-preview";
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import {
   getEntityName,
@@ -837,15 +837,11 @@ const FolderCell = ({
         paddingLeft: depth > 0 ? `${depth * 20}px` : undefined,
       }}
     >
-      <Tooltip
-        content={rowToggleLabel}
-        render={
-          <button
-            aria-label={rowToggleLabel}
-            className="flex shrink-0 items-center"
-            type="button"
-          />
-        }
+      <Button
+        aria-label={rowToggleLabel}
+        className="flex shrink-0 items-center"
+        tooltip={rowToggleLabel}
+        variant="plain"
       >
         <DirectionalIcon
           className={cn(
@@ -855,7 +851,7 @@ const FolderCell = ({
           flip={!isExpanded}
           icon={ChevronRightIcon}
         />
-      </Tooltip>
+      </Button>
       <EntityKindIcon
         className="text-muted-foreground size-4 shrink-0"
         folderState={isExpanded ? "expanded" : "collapsed"}
@@ -872,18 +868,20 @@ const FolderCell = ({
           value={editValue}
         />
       ) : (
-        <button
-          className="min-w-0 text-start text-sm"
+        <Button
+          className="flex min-w-0 shrink overflow-hidden"
           dir="auto"
           onDoubleClick={(e) => {
             e.stopPropagation();
             setEditValue(name);
             startEditing();
           }}
-          type="button"
+          variant="plain"
         >
-          <TruncatedText className="whitespace-pre">{name}</TruncatedText>
-        </button>
+          <TruncatedText className="text-sm whitespace-pre">
+            {name}
+          </TruncatedText>
+        </Button>
       )}
     </div>
   );

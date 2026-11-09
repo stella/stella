@@ -56,7 +56,7 @@ export const ExpenseRow = ({
           >
             {matterName}
           </TruncatedText>
-          <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5">
+          <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded-sm px-1.5 py-0.5">
             {
               {
                 filing_fee: t("billing.expenses.categories.filing_fee"),
@@ -69,13 +69,13 @@ export const ExpenseRow = ({
             }
           </span>
           {!expense.billable && (
-            <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5">
+            <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded-sm px-1.5 py-0.5">
               {t("billing.nonBillable")}
             </span>
           )}
           <span
             className={cn(
-              "text-3xs shrink-0 rounded px-1.5 py-0.5",
+              "text-3xs shrink-0 rounded-sm px-1.5 py-0.5",
               STATUS_STYLES[expense.status] ?? STATUS_STYLES["draft"],
             )}
           >

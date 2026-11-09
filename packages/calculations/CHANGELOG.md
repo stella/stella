@@ -1,5 +1,12 @@
 # @stll/calculations
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [[`3978f45`](https://github.com/stella/stella/commit/3978f45cea7b4a37d42882f1be9075ea933d2f39), [`ad81543`](https://github.com/stella/stella/commit/ad81543e9c85c79cc921caa5b72d7ee39cde94c3)]:
+  - @stll/money@0.4.0
+
 ## 0.1.3
 
 ### Patch Changes
