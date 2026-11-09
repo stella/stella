@@ -80,6 +80,8 @@ export const FAILURE_TAGS = [
   "ChatTurnStopRequestedError",
   "ChatTurnUnsettledToolCallError",
   "ChatTurnsUnsettledError",
+  "CheckpointRefused",
+  "CheckpointRestoreFailed",
   "ChunkBudgetError",
   "CitationProbeRecheckListError",
   "CitationProbeS3ReadError",
