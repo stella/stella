@@ -6,12 +6,16 @@ import {
   BYOK_DEFAULT_MODELS,
   DECISION_MODEL_CATALOG,
   DECISION_MODEL_PROVIDERS,
+  MODEL_OVERRIDE_GROUPS,
 } from "@stll/ai-catalog";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { getModelOptionsForRole } from "@/components/ai-config-role-models.logic";
 import messages from "@/i18n/langs/en.json";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
+
+// One row per model role, plus the decision row.
+const MODE_ROW_COUNT = MODEL_OVERRIDE_GROUPS.length + 1;
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/admin",
@@ -577,7 +581,7 @@ test("Advanced shows catalog defaults, saves only explicit overrides and resets 
       .filter((row) =>
         row.textContent.includes(messages.organization.aiConfig.usingDefaults),
       ),
-  ).toHaveLength(5);
+  ).toHaveLength(MODE_ROW_COUNT);
   expect(
     screen.getByText(messages.organization.aiConfig.defaultRationale.chat),
   ).toBeDefined();
@@ -1039,7 +1043,7 @@ const selectDecisionProvider = async (): Promise<"typesafe"> => {
   return provider;
 };
 
-test("Advanced has five mode rows with the default decision in the same table", async () => {
+test("Advanced has a row per model role and the default decision in the same table", async () => {
   await mount({ ...savedConfig, overrideModels: null });
   fireEvent.click(
     screen.getByRole("button", { name: messages.common.advanced }),
@@ -1053,7 +1057,7 @@ test("Advanced has five mode rows with the default decision in the same table", 
   const modeRows = within(table)
     .getAllByRole("group")
     .filter((group) => group.parentElement === table);
-  expect(modeRows).toHaveLength(5);
+  expect(modeRows).toHaveLength(MODE_ROW_COUNT);
   for (const label of Object.values(messages.organization.aiConfig.roles)) {
     expect(within(table).getByRole("group", { name: label })).toBeDefined();
   }
