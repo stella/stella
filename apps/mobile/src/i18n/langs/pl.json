@@ -48,7 +48,7 @@
     "answerNeedsInput": "Ta odpowiedź wymaga Twojej decyzji. Dokończ ją w stelli w przeglądarce.",
     "answerFailed": "Nie udało się dokończyć odpowiedzi.",
     "answerAwaitingInput": "Ta odpowiedź wymaga Twojej decyzji.",
-    "answeredElsewhere": "Odpowiedź została już udzielona gdzie indziej.",
+    "alreadyAnswered": "Odpowiedź została już udzielona.",
     "answerSendFailed": "Nie udało się wysłać odpowiedzi. Spróbuj ponownie.",
     "approvalTitle": "Zezwolić na to działanie?",
     "approvalAllowOnce": "Zezwól raz",

@@ -48,7 +48,7 @@
     "answerNeedsInput": "Šiam atsakymui reikia jūsų įvesties. Tęskite jį stella žiniatinklio programoje.",
     "answerFailed": "Atsakymo užbaigti nepavyko.",
     "answerAwaitingInput": "Šiam atsakymui reikia jūsų įvesties.",
-    "answeredElsewhere": "Į tai jau atsakyta kitur.",
+    "alreadyAnswered": "Į tai jau atsakyta.",
     "answerSendFailed": "Atsakymo išsiųsti nepavyko. Bandykite dar kartą.",
     "approvalTitle": "Leisti šį veiksmą?",
     "approvalAllowOnce": "Leisti vieną kartą",

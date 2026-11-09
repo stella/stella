@@ -48,7 +48,7 @@
     "answerNeedsInput": "Šai atbildei nepieciešama jūsu ievade. Turpiniet to stella tīmekļa lietotnē.",
     "answerFailed": "Atbildi neizdevās pabeigt.",
     "answerAwaitingInput": "Šai atbildei nepieciešama jūsu ievade.",
-    "answeredElsewhere": "Uz šo jau ir atbildēts citur.",
+    "alreadyAnswered": "Uz šo jau ir atbildēts.",
     "answerSendFailed": "Atbildi neizdevās nosūtīt. Mēģiniet vēlreiz.",
     "approvalTitle": "Atļaut šo darbību?",
     "approvalAllowOnce": "Atļaut vienreiz",

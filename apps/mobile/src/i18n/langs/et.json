@@ -48,7 +48,7 @@
     "answerNeedsInput": "See vastus vajab teie sisendit. Jätkake seda stella veebirakenduses.",
     "answerFailed": "Vastust ei õnnestunud lõpetada.",
     "answerAwaitingInput": "See vastus vajab teie sisendit.",
-    "answeredElsewhere": "Sellele on juba mujal vastatud.",
+    "alreadyAnswered": "Sellele on juba vastatud.",
     "answerSendFailed": "Vastust ei õnnestunud saata. Proovige uuesti.",
     "approvalTitle": "Kas lubada see toiming?",
     "approvalAllowOnce": "Luba üks kord",

@@ -8,8 +8,8 @@ import {
   chatLocalRunAnswersRefusal,
   type ChatLocalRunQuestion,
   chatLocalRunQuestionReplySchema,
-  type ChatLocalRunTarget,
-} from "@stll/api-contract/chat-run-target";
+} from "@stll/api-contract/chat-local-run-question";
+import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -22,7 +22,9 @@ import { readChatThread } from "./chat-messages";
 import {
   continuationOf,
   isSamePendingInput,
+  pendingInputKey,
   pendingInputOf,
+  showsPendingInput,
 } from "./chat-pending-input";
 import type { PendingInput } from "./chat-pending-input";
 import { chatContinueBody } from "./chat-stream";
@@ -150,15 +152,22 @@ const wireBody = ({
       threadId: THREAD_ID,
     }),
   );
-  return JSON.parse(sent) as {
-    parentRunId: unknown;
-    resume: unknown;
-    forwardedProps: Record<string, unknown> & {
-      message: { id: unknown; role: unknown; parts: unknown };
-    };
-    data: unknown;
-  };
+  return v.parse(sentBodySchema, JSON.parse(sent));
 };
+
+/** The fields of a sent continuation these tests read. */
+const sentBodySchema = v.looseObject({
+  parentRunId: v.unknown(),
+  resume: v.unknown(),
+  forwardedProps: v.looseObject({
+    message: v.looseObject({
+      id: v.unknown(),
+      role: v.unknown(),
+      parts: v.unknown(),
+    }),
+  }),
+  data: v.unknown(),
+});
 
 const THREAD_ID = "00000000-0000-7000-8000-000000000002";
 
@@ -274,6 +283,59 @@ describe("a turn waiting for an approval", () => {
     expect(read.isOk() ? read.value.activeTurnId : null).toBe(
       page.activeTurnId,
     );
+  });
+});
+
+describe("an answer the server refuses", () => {
+  const deny = recorded("deny");
+
+  test("leaves the card on screen, held, from the send to the refusal", () => {
+    const pending = answerable(pendingOfPage(exchange(deny, 0)));
+    // Waiting; the answer's run starting, which continues the paused
+    // message; then the refusal, which takes that run off the screen.
+    const answering = [
+      null,
+      { streaming: true, continues: pending.messageId },
+      null,
+    ];
+    expect(answering.map((live) => showsPendingInput(live))).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    // Any other answer still arriving has nothing to ask yet.
+    expect(showsPendingInput({ streaming: true, continues: undefined })).toBe(
+      false,
+    );
+    expect(showsPendingInput({ streaming: false, continues: undefined })).toBe(
+      true,
+    );
+  });
+
+  test("keeps what was entered when the thread, read again, still waits on the same pause", () => {
+    const asked = answerable(pendingOfPage(exchange(deny, 0)));
+    // The thread is read again after the refusal: the same stored pause.
+    const reread = answerable(pendingOfPage(exchange(deny, 0)));
+    expect(reread).not.toBe(asked);
+    expect(pendingInputKey(reread)).toBe(pendingInputKey(asked));
+    // A different pause starts with nothing entered.
+    const other = answerable(
+      pendingOfPage(exchange(recorded("approvals-in-one-step"), 0)),
+    );
+    expect(pendingInputKey(other)).not.toBe(pendingInputKey(asked));
+    const question = answerable(
+      pendingInputOf({ message: pausedOnQuestion, runTarget: LOCAL_TARGET }),
+    );
+    expect(
+      pendingInputKey(
+        answerable(
+          pendingInputOf({
+            message: structuredClone(pausedOnQuestion),
+            runTarget: LOCAL_TARGET,
+          }),
+        ),
+      ),
+    ).toBe(pendingInputKey(question));
   });
 });
 
@@ -418,7 +480,10 @@ describe("a turn a coding agent paused on its question", () => {
         payload: { answers },
       },
     ]);
-    const [resumed] = body.resume as [{ payload: unknown }];
+    const [resumed] = v.parse(
+      v.tuple([v.looseObject({ payload: v.unknown() })]),
+      body.resume,
+    );
     const reply = v.parse(chatLocalRunQuestionReplySchema, resumed.payload);
     expect(
       chatLocalRunAnswersRefusal([governingLaw, passphrase], reply.answers),

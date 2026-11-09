@@ -48,7 +48,7 @@
     "answerNeedsInput": "Esta resposta precisa da sua ação. Continue-a na stella pela web.",
     "answerFailed": "Não foi possível concluir a resposta.",
     "answerAwaitingInput": "Esta resposta precisa da sua ação.",
-    "answeredElsewhere": "Isso já foi respondido em outro lugar.",
+    "alreadyAnswered": "Isso já foi respondido.",
     "answerSendFailed": "Não foi possível enviar sua resposta. Tente novamente.",
     "approvalTitle": "Permitir esta ação?",
     "approvalAllowOnce": "Permitir uma vez",

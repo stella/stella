@@ -32,7 +32,10 @@ import {
   readOlderChatMessages,
 } from "@/state/chat-messages";
 import type { ChatEntry, ChatMessagesPage } from "@/state/chat-messages";
-import { isSamePendingInput } from "@/state/chat-pending-input";
+import {
+  isSamePendingInput,
+  showsPendingInput,
+} from "@/state/chat-pending-input";
 import type { PendingAnswer } from "@/state/chat-pending-input";
 import { answerEntry } from "@/state/chat-stream";
 import { useAppColors } from "@/theme";
@@ -250,7 +253,7 @@ const ThreadMessages = ({
             setInputNotice("failed");
             return;
           }
-          setInputNotice("answeredElsewhere");
+          setInputNotice("alreadyAnswered");
           if (activeTurnId !== null) {
             turn.follow(activeTurnId, asked.messageId);
           }
@@ -338,7 +341,14 @@ const ThreadMessages = ({
             {live === null ? null : (
               <LiveTurnView accepted={turn.canStop} turn={live} />
             )}
-            {live === null || live.answer.status !== "streaming" ? (
+            {showsPendingInput(
+              live === null
+                ? null
+                : {
+                    streaming: live.answer.status === "streaming",
+                    continues: live.continues,
+                  },
+            ) ? (
               <ChatInputCard
                 busy={turn.busy}
                 notice={inputNotice}

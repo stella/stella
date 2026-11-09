@@ -48,7 +48,7 @@
     "answerNeedsInput": "Diese Antwort braucht Ihre Eingabe. Setzen Sie sie in stella im Web fort.",
     "answerFailed": "Die Antwort konnte nicht abgeschlossen werden.",
     "answerAwaitingInput": "Diese Antwort braucht Ihre Eingabe.",
-    "answeredElsewhere": "Dies wurde bereits an anderer Stelle beantwortet.",
+    "alreadyAnswered": "Dies wurde bereits beantwortet.",
     "answerSendFailed": "Ihre Antwort konnte nicht gesendet werden. Versuchen Sie es erneut.",
     "approvalTitle": "Diese Aktion erlauben?",
     "approvalAllowOnce": "Einmal erlauben",

@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
-import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 
 import { SignedOutError } from "@/connection/errors";
 import { fetchWithTimeout } from "@/connection/http";
@@ -17,6 +16,7 @@ import type { ApiError } from "@/state/api-request";
 import { attachmentParts } from "@/state/chat-attachments";
 import type { ReadyFile } from "@/state/chat-attachments";
 import type { ChatEntry } from "@/state/chat-messages";
+import type { LocalRunTarget } from "@/state/chat-pending-input";
 
 /** One server-sent event: the id it carried, if any, and its data lines joined. */
 type SseEvent = {
@@ -279,7 +279,7 @@ export const chatContinueBody = ({
   readonly continuation: ChatContinuation;
   readonly matterId: string | undefined;
   readonly runId: string;
-  readonly runTarget: ChatLocalRunTarget | undefined;
+  readonly runTarget: LocalRunTarget | undefined;
   readonly threadId: string;
 }) => {
   const forwarded = {
@@ -567,7 +567,7 @@ export const continueChatTurn = async ({
   readonly onEvent: (event: ChatEvent) => void;
   readonly onTurn: (turnId: string) => void;
   readonly runId: string;
-  readonly runTarget: ChatLocalRunTarget | undefined;
+  readonly runTarget: LocalRunTarget | undefined;
   readonly signal: AbortSignal;
   readonly source: AccessTokenSource;
   readonly threadId: string;

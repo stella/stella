@@ -48,7 +48,7 @@
     "answerNeedsInput": "This answer needs your input. Continue it in stella on the web.",
     "answerFailed": "The answer could not be completed.",
     "answerAwaitingInput": "This answer needs your input.",
-    "answeredElsewhere": "This was already answered elsewhere.",
+    "alreadyAnswered": "This was already answered.",
     "answerSendFailed": "Your answer could not be sent. Try again.",
     "approvalTitle": "Allow this action?",
     "approvalAllowOnce": "Allow once",

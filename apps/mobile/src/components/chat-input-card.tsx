@@ -6,13 +6,13 @@ import { useTranslations } from "use-intl";
 import {
   answersInOwnWords,
   canSubmitLocalRunAnswers,
+  type ChatLocalRunQuestion,
   EMPTY_LOCAL_RUN_QUESTION_DRAFT,
   localRunAnswersOf,
   type LocalRunQuestionDraft,
   type LocalRunQuestionPause,
   toggleLocalRunOption,
 } from "@stll/api-contract/chat-local-run-question";
-import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
 import {
   getReadableInputRows,
   humanizeIdentifier,
@@ -21,6 +21,7 @@ import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
 
+import { pendingInputKey } from "@/state/chat-pending-input";
 import type {
   PendingAnswer,
   PendingApproval,
@@ -28,7 +29,7 @@ import type {
 } from "@/state/chat-pending-input";
 
 /** Why the card's last answer did not continue the turn. */
-export type InputNotice = "failed" | "answeredElsewhere";
+export type InputNotice = "failed" | "alreadyAnswered";
 
 /**
  * What a paused turn waits for, answered from the phone: the calls it asks
@@ -52,7 +53,7 @@ export const ChatInputCard = ({
   if (pending === null || pending.type === "elsewhere") {
     const said = [
       pending === null ? undefined : t("answerNeedsInput"),
-      notice === "answeredElsewhere" ? t("answeredElsewhere") : undefined,
+      notice === "alreadyAnswered" ? t("alreadyAnswered") : undefined,
     ].filter((line) => line !== undefined);
     return said.length === 0 ? null : (
       <View className="gap-1 px-4">
@@ -66,22 +67,22 @@ export const ChatInputCard = ({
   }
   return (
     <View className="border-border bg-card gap-3 rounded-xl border p-3">
-      {notice === "answeredElsewhere" ? (
-        // An earlier pause was answered elsewhere; this is the one after it.
-        <Text variant="caption">{t("answeredElsewhere")}</Text>
+      {notice === "alreadyAnswered" ? (
+        // An earlier pause was answered already; this is the one after it.
+        <Text variant="caption">{t("alreadyAnswered")}</Text>
       ) : null}
       {pending.type === "approvals" ? (
         <ApprovalsCard
           approvals={pending.approvals}
           busy={busy}
-          // A new pause starts with nothing decided.
-          key={pending.parentRunId}
+          // A new pause starts with nothing decided; the same one keeps it.
+          key={pendingInputKey(pending)}
           onAnswer={onAnswer}
         />
       ) : (
         <QuestionCard
           busy={busy}
-          key={pending.pause.interruptId}
+          key={pendingInputKey(pending)}
           onAnswer={onAnswer}
           pause={pending.pause}
         />

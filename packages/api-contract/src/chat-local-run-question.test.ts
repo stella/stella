@@ -2,17 +2,15 @@ import { describe, expect, test } from "bun:test";
 
 import {
   canSubmitLocalRunAnswers,
+  chatLocalRunAnswersRefusal,
+  type ChatLocalRunQuestion,
   EMPTY_LOCAL_RUN_QUESTION_DRAFT,
   localRunAnswersOf,
   type LocalRunQuestionDraft,
   localRunQuestionPauseOf,
   toggleLocalRunOption,
 } from "./chat-local-run-question";
-import {
-  chatLocalRunAnswersRefusal,
-  type ChatLocalRunQuestion,
-} from "./chat-run-target";
-import { DESKTOP_RUNNER_ANSWER_LIMITS } from "./desktop-runner";
+import { DESKTOP_RUNNER_ANSWER_LIMITS } from "./desktop-runner-answers";
 
 const governingLaw = {
   id: "law",

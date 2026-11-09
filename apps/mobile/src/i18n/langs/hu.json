@@ -48,7 +48,7 @@
     "answerNeedsInput": "Ez a válasz az Ön közreműködésére vár. Folytassa a stella webes felületén.",
     "answerFailed": "A választ nem sikerült befejezni.",
     "answerAwaitingInput": "Ez a válasz az Ön közreműködésére vár.",
-    "answeredElsewhere": "Erre már máshol válaszoltak.",
+    "alreadyAnswered": "Erre már válaszoltak.",
     "answerSendFailed": "A választ nem sikerült elküldeni. Próbálja újra.",
     "approvalTitle": "Engedélyezi ezt a műveletet?",
     "approvalAllowOnce": "Engedélyezés egyszer",

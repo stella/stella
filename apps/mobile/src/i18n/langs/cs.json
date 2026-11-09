@@ -48,7 +48,7 @@
     "answerNeedsInput": "Tato odpověď čeká na váš vstup. Pokračujte v ní ve webové aplikaci stella.",
     "answerFailed": "Odpověď se nepodařilo dokončit.",
     "answerAwaitingInput": "Tato odpověď čeká na váš vstup.",
-    "answeredElsewhere": "Na tohle už bylo odpovězeno jinde.",
+    "alreadyAnswered": "Na tohle už bylo odpovězeno.",
     "answerSendFailed": "Odpověď se nepodařilo odeslat. Zkuste to znovu.",
     "approvalTitle": "Povolit tuto akci?",
     "approvalAllowOnce": "Povolit jednou",

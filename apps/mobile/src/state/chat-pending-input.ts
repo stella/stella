@@ -2,14 +2,10 @@ import * as v from "valibot";
 
 import { isHarnessChatToolCall } from "@stll/api-contract/chat";
 import {
+  type ChatLocalRunQuestionReply,
   type LocalRunQuestionPause,
   localRunQuestionPauseOf,
 } from "@stll/api-contract/chat-local-run-question";
-import {
-  type ChatLocalRunQuestionReply,
-  type ChatLocalRunTarget,
-  chatRunTargetSchema,
-} from "@stll/api-contract/chat-run-target";
 
 /**
  * A tool call as the thread stores it. A continuation names each call it
@@ -32,6 +28,21 @@ const storedToolCallSchema = v.looseObject({
 });
 
 type StoredToolCall = v.InferOutput<typeof storedToolCallSchema>;
+
+/**
+ * A thread's local run target, as much of it as an answer names. The server
+ * checks the target itself; the phone only passes back what the thread
+ * stores, without the contract's runner protocol, which this app does not
+ * load.
+ */
+const localRunTargetSchema = v.object({
+  kind: v.literal("local"),
+  harness: v.pipe(v.string(), v.minLength(1)),
+  model: v.pipe(v.string(), v.minLength(1)),
+  approvals: v.optional(v.string()),
+});
+
+export type LocalRunTarget = v.InferOutput<typeof localRunTargetSchema>;
 
 /** One interrupt a paused turn waits on, as its resume snapshot stores it. */
 const pendingInterruptSchema = v.looseObject({
@@ -74,7 +85,7 @@ export type PendingApproval = {
  */
 type PendingOwner =
   | { readonly type: "cloud" }
-  | { readonly type: "harness"; readonly runTarget: ChatLocalRunTarget };
+  | { readonly type: "harness"; readonly runTarget: LocalRunTarget };
 
 type Resumable = {
   /** The paused assistant message the answer continues. */
@@ -223,8 +234,8 @@ function ownerOf(
   if (harness.length !== calls.length) {
     return undefined;
   }
-  const target = v.safeParse(chatRunTargetSchema, runTarget);
-  return target.success && target.output.kind === "local"
+  const target = v.safeParse(localRunTargetSchema, runTarget);
+  return target.success
     ? { type: "harness", runTarget: target.output }
     : undefined;
 }
@@ -327,3 +338,35 @@ export const isSamePendingInput = (
     left.messageId === right.messageId && left.parentRunId === right.parentRunId
   );
 };
+
+/** What the thread's live turn says about the card, when one is on screen. */
+type LiveTurnView = {
+  /** Whether the turn's answer is still arriving. */
+  readonly streaming: boolean;
+  /** The paused message the turn continues, when it is the card's answer. */
+  readonly continues: string | undefined;
+};
+
+/**
+ * Whether the card for what the thread waits for is on screen. A turn
+ * streaming its answer has nothing to ask yet, so the card waits for it to
+ * end; the run an answer from this card started is the exception, and the
+ * card stays (held while the answer is on its way), so an answer the
+ * server refuses keeps what the person entered.
+ */
+export const showsPendingInput = (live: LiveTurnView | null): boolean =>
+  live === null || !live.streaming || live.continues !== undefined;
+
+/**
+ * The identity a card keeps its entries under: the same pause read again
+ * (after a refused answer, or a refresh) keeps them; a new pause starts
+ * empty.
+ */
+export const pendingInputKey = (
+  pending: Exclude<PendingInput, { type: "elsewhere" }>,
+): string =>
+  pending.type === "question"
+    ? `question:${pending.pause.interruptId}`
+    : `approvals:${pending.parentRunId}:${pending.approvals
+        .map(({ interruptId }) => interruptId)
+        .join(",")}`;
