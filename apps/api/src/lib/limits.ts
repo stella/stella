@@ -688,6 +688,8 @@ export const LIMITS = {
    * citation; anything longer is prose and belongs in a text search.
    */
   caseLawIdentifierMaxLength: 256,
+  /** Characters of the cursor a `query` read issues. */
+  caseLawDecisionQueryCursorMaxLength: 128,
   /**
    * Decisions listed when a reference names more than one. Past a handful the
    * reference names a list of decisions rather than a decision, and the

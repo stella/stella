@@ -7320,6 +7320,8 @@ describe("OpenAI-compatible MCP tools", () => {
           text: string;
         }[];
         truncated?: true;
+        resumeAfter?: string;
+        section?: unknown;
         warnings?: { code: string; message: string; hint: string }[];
       };
       requestedDecisionId?: string;
@@ -8128,6 +8130,57 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(first.decision).toMatchObject({ text: "𠮷", pageCount: 2 });
     const second = await readOne({ max_chars: 1, page: 2 });
     expect(second.decision?.text).toBe("A");
+  });
+
+  test("read_case_law_decision continues a query with its cursor", async () => {
+    serveFulltext(
+      Array.from(
+        { length: 30 },
+        (_, index) => `hit ${String(index)}\nother`,
+      ).join("\n"),
+    );
+    const first = await readOne({ query: "hit" });
+    expect(first.decision?.matches?.hitCount).toBe(30);
+    const resumeAfter =
+      first.decision?.matches?.resumeAfter ?? panic("Missing resumeAfter");
+
+    const second = await readOne({ query: "hit", resume_after: resumeAfter });
+    const positions = (second.decision?.matches?.paragraphs ?? [])
+      .filter(({ hit }) => hit)
+      .map(({ position }) => position);
+    expect(positions).toEqual(
+      Array.from({ length: 10 }, (_, index) => 41 + 2 * index),
+    );
+    expect(second.decision?.matches).not.toHaveProperty("resumeAfter");
+    expect(second.decision).not.toHaveProperty("versionChanged");
+
+    serveFulltext(
+      Array.from(
+        { length: 30 },
+        (_, index) => `hit ${String(index)}!\nother`,
+      ).join("\n"),
+    );
+    const changed = await readOne({ query: "hit", resume_after: resumeAfter });
+    expect(changed.decision).toMatchObject({ versionChanged: true });
+  });
+
+  test("read_case_law_decision refuses a cursor it did not issue for this query", async () => {
+    const error = await refusal({
+      decision_ids: [DECISION_ID],
+      query: "hit",
+      resume_after: "not a cursor",
+    });
+    expect(error["issues"]).toMatchObject([{ path: "resume_after" }]);
+  });
+
+  test("read_case_law_decision reports a court-reasoning restriction it could not apply", async () => {
+    serveFulltext("hit one\nhit two");
+    const read = await readOne({ query: "hit", section: "court_reasoning" });
+    expect(read.decision?.matches?.section).toEqual({
+      status: "not_found",
+      reason: "no_assessment_heading",
+    });
+    expect(read.decision?.matches?.hitCount).toBe(2);
   });
 
   test("read_case_law_decision reads the preferred language's version", async () => {
