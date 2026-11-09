@@ -19,7 +19,6 @@ import { inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
-import { createMembershipScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readPositionDecisionOverlay } from "@/api/lib/document-review/position-decisions";
@@ -29,6 +28,7 @@ import type {
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
 } from "@/api/lib/document-review/run-contract";
+import { membershipScopedDb } from "@/api/tests/helpers/application-role-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -144,11 +144,17 @@ const seedFinding = async ({
 };
 
 const overlay = async () =>
-  await readPositionDecisionOverlay({
-    tx: asTestRaw<Transaction>(testDb),
+  await membershipScopedDb(testDb, {
     organizationId: ids.orgA,
-    positionIds: [DECIDED_POSITION_ID, UNTOUCHED_POSITION_ID],
-  });
+    userId: ids.userA1,
+  })(
+    async (tx) =>
+      await readPositionDecisionOverlay({
+        tx,
+        organizationId: ids.orgA,
+        positionIds: [DECIDED_POSITION_ID, UNTOUCHED_POSITION_ID],
+      }),
+  );
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -326,14 +332,13 @@ describe("position decision overlay", () => {
 
     const overlayFor = async (userId: SafeId<"user">) =>
       (
-        await createMembershipScopedDb(testDb, {
+        await membershipScopedDb(testDb, {
           organizationId: ids.orgA,
-          serverValidatedWorkspaceIds: [],
           userId,
         })(
           async (tx) =>
             await readPositionDecisionOverlay({
-              tx: asTestRaw<Transaction>(tx),
+              tx,
               organizationId: ids.orgA,
               positionIds: [REFERENCE_POSITION_ID],
             }),
@@ -420,14 +425,13 @@ describe("position decision overlay", () => {
 
     const overlayFor = async (userId: SafeId<"user">) =>
       (
-        await createMembershipScopedDb(testDb, {
+        await membershipScopedDb(testDb, {
           organizationId: ids.orgA,
-          serverValidatedWorkspaceIds: [],
           userId,
         })(
           async (tx) =>
             await readPositionDecisionOverlay({
-              tx: asTestRaw<Transaction>(tx),
+              tx,
               organizationId: ids.orgA,
               positionIds: [TIERS_POSITION_ID],
             }),

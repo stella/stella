@@ -57,6 +57,7 @@ import {
   createRootRunActor,
 } from "@/api/lib/root-scoped-db";
 import { brandPersistedDocumentReviewRunId } from "@/api/lib/safe-id-boundaries";
+import { memberScopedDb } from "@/api/tests/helpers/application-role-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -216,16 +217,26 @@ const finalize = async (
   target: ReviewTarget,
   expectedFindingCount: number,
 ) =>
-  await finalizeReviewRun({
-    tx: asTestRaw<Transaction>(testDb),
-    workspaceId: ids.wsA1,
-    runId,
-    entityId: target.entityId,
-    fileFieldId: target.fileFieldId,
-    executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
-    fixStaging: { type: REVIEW_FIX_STAGING.stage, sourceDataWorkspaceIds: [] },
-    expectedFindingCount,
-  });
+  await memberScopedDb(testDb, {
+    organizationId: ids.orgA,
+    workspaceIds: [ids.wsA1],
+    userId: ids.userA1,
+  })(
+    async (tx) =>
+      await finalizeReviewRun({
+        tx,
+        workspaceId: ids.wsA1,
+        runId,
+        entityId: target.entityId,
+        fileFieldId: target.fileFieldId,
+        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
+        fixStaging: {
+          type: REVIEW_FIX_STAGING.stage,
+          sourceDataWorkspaceIds: [],
+        },
+        expectedFindingCount,
+      }),
+  );
 
 const suggestionsFor = async (findingId: SafeId<"documentReviewFinding">) =>
   await testDb
