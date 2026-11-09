@@ -243,6 +243,44 @@ export const scaleViolations = ({
     : [];
 };
 
+type ScheduledWriteMeasurement = {
+  writeMetrics: QueryPerfMetrics;
+  writtenRows: number;
+};
+
+/**
+ * Write pages per written row may not grow with the corpus either. The twin's
+ * write pages are scaled to the first run's written rows, then held to the
+ * same tolerance as reads: a b-tree level more, never a share of the extra rows.
+ */
+export const writeScaleViolations = ({
+  size,
+  double,
+}: {
+  size: ScheduledWriteMeasurement;
+  double: ScheduledWriteMeasurement;
+}) => {
+  if (size.writtenRows === 0 || double.writtenRows === 0) {
+    return size.writtenRows === double.writtenRows
+      ? []
+      : [
+          `writes appear at only one size: ${String(size.writtenRows)} rows at one size, ${String(double.writtenRows)} at twice the size`,
+        ];
+  }
+  const scaled = Math.ceil(
+    (double.writeMetrics.sharedBlocks * size.writtenRows) / double.writtenRows,
+  );
+  return scaleViolations({
+    size: size.writeMetrics.sharedBlocks,
+    double: scaled,
+  }).map((violation) =>
+    violation.replace(
+      /^reads grow with the corpus/u,
+      "write pages per written row grow with the corpus",
+    ),
+  );
+};
+
 export const shapeViolations = (
   document: ExplainPlanDocument,
   profileId: QueryPerfTenantProfileId,

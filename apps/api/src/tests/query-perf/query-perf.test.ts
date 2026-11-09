@@ -66,6 +66,7 @@ import {
   scheduledJobBudgetProblems,
   shapeViolations,
   sharedBlockSampleProblem,
+  writeScaleViolations,
 } from "./measurement";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { QUERY_PERF_PROFILES } from "./profiles";
@@ -964,17 +965,20 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               runs.at(0) ?? panic("Missing small writing-job measurement");
             const large =
               runs.at(1) ?? panic("Missing large writing-job measurement");
-            for (const violation of scaleViolations({
-              size: small.readMetrics.sharedBlocks,
-              double: large.readMetrics.sharedBlocks,
-            })) {
+            for (const violation of [
+              ...scaleViolations({
+                size: small.readMetrics.sharedBlocks,
+                double: large.readMetrics.sharedBlocks,
+              }),
+              ...writeScaleViolations({ size: small, double: large }),
+            ]) {
               note(`${jobId}: ${violation}`);
             }
             continue;
           }
           const backfill = backfillFixture(jobId);
           if (backfill !== undefined) {
-            const pages: number[] = [];
+            const runs: Awaited<ReturnType<typeof runMetrics>>[] = [];
             for (const rows of [backfill.sizes.base, backfill.sizes.double]) {
               // db-await-in-loop: the source table grows before the second bounded run is measured.
               const result = await deadline.run(
@@ -1012,7 +1016,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                   return await runMetrics(jobId, measurement.task);
                 },
               );
-              pages.push(result.readMetrics.sharedBlocks);
+              runs.push(result);
               for (const problem of scheduledJobBudgetProblems(
                 budgetId,
                 result,
@@ -1021,10 +1025,16 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               }
             }
             const size =
-              pages.at(0) ?? panic("missing base backfill measurement");
+              runs.at(0) ?? panic("missing base backfill measurement");
             const double =
-              pages.at(1) ?? panic("missing double backfill measurement");
-            for (const violation of scaleViolations({ size, double })) {
+              runs.at(1) ?? panic("missing double backfill measurement");
+            for (const violation of [
+              ...scaleViolations({
+                size: size.readMetrics.sharedBlocks,
+                double: double.readMetrics.sharedBlocks,
+              }),
+              ...writeScaleViolations({ size, double }),
+            ]) {
               note(`${jobId} on backfill source rows: ${violation}`);
             }
             continue;
@@ -1055,10 +1065,13 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             )) {
               note(problem);
             }
-            for (const violation of scaleViolations({
-              size: size.readMetrics.sharedBlocks,
-              double: double.readMetrics.sharedBlocks,
-            })) {
+            for (const violation of [
+              ...scaleViolations({
+                size: size.readMetrics.sharedBlocks,
+                double: double.readMetrics.sharedBlocks,
+              }),
+              ...writeScaleViolations({ size, double }),
+            ]) {
               note(`${jobId} on ${label}: ${violation}`);
             }
           }

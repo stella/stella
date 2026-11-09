@@ -14,6 +14,7 @@ import {
   sharedBlockSampleProblem,
   summarize,
   sumMetrics,
+  writeScaleViolations,
 } from "./measurement";
 import { analyzePlan } from "./plan-analyzer";
 import { PLAN_EXCEPTIONS } from "./plan-exceptions";
@@ -126,6 +127,30 @@ test("scheduled write budgets fail closed and enforce both write limits", () => 
       measured(10_000, 300_001),
     ).join("\n"),
   ).toContain("300001 write pages per run");
+});
+
+test("write pages per written row hold across corpus sizes", () => {
+  const run = (writtenRows: number, sharedBlocks: number) => ({
+    writeMetrics: { sharedBlocks, executionTimeMs: 1 },
+    writtenRows,
+  });
+  expect(writeScaleViolations({ size: run(0, 0), double: run(0, 0) })).toEqual(
+    [],
+  );
+  expect(
+    writeScaleViolations({ size: run(100, 1000), double: run(200, 2000) }),
+  ).toEqual([]);
+  expect(
+    writeScaleViolations({ size: run(100, 1000), double: run(100, 1164) }),
+  ).toEqual([]);
+  expect(
+    writeScaleViolations({ size: run(100, 1000), double: run(100, 1165) }).join(
+      "\n",
+    ),
+  ).toContain("write pages per written row grow with the corpus");
+  expect(
+    writeScaleViolations({ size: run(0, 0), double: run(5, 50) }).join("\n"),
+  ).toContain("writes appear at only one size");
 });
 
 test("a sequential scan on a large table fails while a declared small table passes", () => {
