@@ -82,6 +82,7 @@ import { useProxiedIconSrc } from "@/components/proxied-icon";
 import {
   BROWSER_APPROVAL_MODE,
   browserCommandSite,
+  currentBrowserAutoApproval,
   recordBrowserSiteGrantApproval,
   setBrowserApprovalMode,
   useBrowserApprovalMode,
@@ -443,19 +444,28 @@ const useBrowserCardApproval = ({
       : null;
   return {
     /**
-     * Whether the API still allows the site, read past the cache. The sites
-     * allowed then are kept with the call, and its result is checked
-     * against them once the command ran.
+     * Whether the API still allows the site, read with a request of its own.
+     * The card decides again once that read is back, on the approval state
+     * of that moment: a re-paired controller, a failed command or a moved
+     * tab in the meantime makes it ask. The site is kept with the call, and
+     * its result is checked against it once the command ran.
      */
     confirmSiteGrant: async (toolCallId: string): Promise<boolean> => {
-      if (siteGrantOrigin === null) {
+      if (siteGrantOrigin === null || browserCommand === null) {
         return false;
       }
       const fresh = await sites.readFresh();
+      if (fresh === null) {
+        return false;
+      }
+      const now = currentBrowserAutoApproval({
+        command: browserCommand,
+        grantedOrigins: fresh,
+      });
       return (
-        fresh !== null &&
-        fresh.has(siteGrantOrigin) &&
-        recordBrowserSiteGrantApproval(toolCallId, fresh)
+        now.type === "site-grant" &&
+        now.origin === siteGrantOrigin &&
+        recordBrowserSiteGrantApproval(toolCallId, now.origin)
       );
     },
     isReadsAutoApproval: autoApproval.type === "reads-mode",

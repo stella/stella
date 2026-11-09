@@ -13,8 +13,10 @@ import { chatBrowserSiteGrants } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { lockChatOwnerStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 
@@ -56,6 +58,27 @@ const createBrowserSiteGrant = createSafeRootHandler(
 
     const stored = yield* Result.await(
       safeDb(async (tx) => {
+        // Member removal takes this fence before it deletes the member's
+        // approvals, so a grant either lands before the removal deletes it,
+        // or waits and then finds the member gone.
+        await lockChatOwnerStoredContentTransitionOnTx(tx, {
+          organizationId,
+          userId: user.id,
+        });
+        const membership = await holdMemberAccessOnTx(tx, {
+          organizationId,
+          userId: user.id,
+          workspaceIds: [],
+        });
+        if (membership.type === "not-member") {
+          return Result.err(
+            new HandlerError({
+              code: "forbidden",
+              status: 403,
+              message: "Only a member of the organization can allow a website",
+            }),
+          );
+        }
         // The same per-user collection lock as tool grants: one writer at a
         // time keeps the cap exact.
         await withAggregateLock({
@@ -102,7 +125,7 @@ const createBrowserSiteGrant = createSafeRootHandler(
           ).at(0) ?? panic("A website approval insert returned no row");
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT,
+          resourceType: AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT,
           resourceId: inserted.id,
           workspaceId: null,
           metadata: { browserOrigin: origin, scope: "always" },
@@ -118,7 +141,7 @@ const createBrowserSiteGrant = createSafeRootHandler(
 
 declareAggregateMutation(createBrowserSiteGrant, {
   type: "aggregate",
-  aggregates: ["chatToolGrants"],
+  aggregates: ["chatOwnerStoredContentEgress", "chatToolGrants"],
 });
 
 export default createBrowserSiteGrant;

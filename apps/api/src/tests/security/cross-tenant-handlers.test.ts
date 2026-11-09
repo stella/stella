@@ -71,6 +71,7 @@ import { env } from "@/api/env";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
+import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
 import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
 import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
@@ -2537,6 +2538,29 @@ const isolationCases: IsolationCase[] = [
       expect(chatToolGrantIds(result)).not.toContain(browserSiteGrantB),
     expectPositive: (result) =>
       expect(chatToolGrantIds(result)).toContain(browserSiteGrantB),
+  },
+  {
+    // A website allowed in one firm never answers the same person's browser
+    // cards in another: the grant is stored for the session's organization.
+    name: "browser site grant create",
+    runAAgainstB: async ({ sameUserWorkspaceB, workspaceA }) => {
+      await runHandler(createBrowserSiteGrant, workspaceA, {
+        body: { url: "https://allowed-in-a.example/page" },
+      });
+      return await runHandler(listBrowserSiteGrants, sameUserWorkspaceB, {});
+    },
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      await runHandler(createBrowserSiteGrant, sameUserWorkspaceB, {
+        body: { url: "https://allowed-in-b.example/page" },
+      });
+      return await runHandler(listBrowserSiteGrants, sameUserWorkspaceB, {});
+    },
+    expectDenied: (result) =>
+      expect(JSON.stringify(result)).not.toContain(
+        "https://allowed-in-a.example",
+      ),
+    expectPositive: (result) =>
+      expect(JSON.stringify(result)).toContain("https://allowed-in-b.example"),
   },
   {
     name: "browser site grant delete",

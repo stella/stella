@@ -9,9 +9,10 @@ import {
   type BrowserControlCommand,
   type BrowserControlSnapshot,
   isReadOnlyBrowserCommand,
+  parseElementReference,
 } from "@stll/api-contract/browser-control";
 import {
-  BROWSER_SITE_GRANTS_MAX,
+  BROWSER_SITE_GRANT_ORIGIN_CHARS,
   browserSiteGrantOrigin,
 } from "@stll/api-contract/browser-site-grants";
 
@@ -37,18 +38,19 @@ export type BrowserApprovalMode =
 
 const STORAGE_KEY = "stella.chat.browserApprovalMode";
 const SITE_GRANT_APPROVALS_KEY = "stella.chat.browserSiteGrantApprovals";
-/** Site-grant answers kept for checking their results, newest last. */
-const SITE_GRANT_APPROVALS_KEPT = BROWSER_CONTROL_LIMITS.executionReceipts;
+/**
+ * Site-grant answers kept for checking their results, newest last. A pairing
+ * session runs at most this many commands, so no answer is dropped while its
+ * command can still run, and a missing entry always means a person answered.
+ */
+const SITE_GRANT_APPROVALS_KEPT = BROWSER_CONTROL_LIMITS.sessionActions;
 // An unknown stored value (a mode an older build offered) parses to null and
 // falls back to asking.
 const modeSchema = v.picklist(Object.values(BROWSER_APPROVAL_MODE));
 const siteGrantApprovalsSchema = v.pipe(
   v.array(
     v.strictObject({
-      origins: v.pipe(
-        v.array(v.string()),
-        v.maxLength(BROWSER_SITE_GRANTS_MAX),
-      ),
+      origin: v.pipe(v.string(), v.maxLength(BROWSER_SITE_GRANT_ORIGIN_CHARS)),
       toolCallId: v.pipe(
         v.string(),
         v.maxLength(BROWSER_CONTROL_LIMITS.requestIdChars),
@@ -58,6 +60,17 @@ const siteGrantApprovalsSchema = v.pipe(
   v.maxLength(SITE_GRANT_APPROVALS_KEPT),
 );
 type SiteGrantApprovals = v.InferOutput<typeof siteGrantApprovalsSchema>;
+
+/**
+ * Who answered a command, as this tab recorded it before the answer was sent:
+ * a website approval for `origin`, or nobody this tab knows of (the user, or
+ * the reads mode). `unreadable` means the record could not be read, so
+ * whatever answered it is unknown and its result is withheld.
+ */
+export type BrowserApprovalProvenance =
+  | { type: "site-grant"; origin: string }
+  | { type: "person" }
+  | { type: "unreadable" };
 
 /**
  * The controlled tab's page as the extension reported it in the last
@@ -126,10 +139,23 @@ export const browserCommandSite = ({
   }
 };
 
+/** The top frame's id in an element reference (`e:<frameId>:<path>`). */
+const TOP_FRAME_ID = 0;
+
 /**
- * Whether a website approval may answer this command at all. Typing into a
- * field the extension did not report a value for may be typing a secret, so
- * it always asks.
+ * Whether a command's target sits in the controlled tab's top frame. The
+ * snapshot merges every controllable frame, including another website's
+ * embedded frame, and names only the top frame's address; an element in a
+ * subframe may belong to a website nobody allowed.
+ */
+const targetsTopFrame = (ref: string): boolean =>
+  parseElementReference(ref)?.frameId === TOP_FRAME_ID;
+
+/**
+ * Whether a website approval may answer this command at all. An element
+ * command must target the allowed page itself, never a frame embedded in it.
+ * Typing into a field the extension did not report a value for may be typing
+ * a secret, so it always asks.
  */
 const isCoveredBySiteGrant = ({
   command,
@@ -137,9 +163,28 @@ const isCoveredBySiteGrant = ({
 }: {
   command: BrowserControlCommand;
   observedPage: BrowserObservedPage | null;
-}): boolean =>
-  command.action !== BROWSER_CONTROL_ACTION.fill ||
-  (observedPage?.valueRefs.has(command.target.ref) ?? false);
+}): boolean => {
+  switch (command.action) {
+    case BROWSER_CONTROL_ACTION.open:
+    case BROWSER_CONTROL_ACTION.switchTab:
+    case BROWSER_CONTROL_ACTION.goBack:
+    case BROWSER_CONTROL_ACTION.snapshot:
+      return true;
+    case BROWSER_CONTROL_ACTION.click:
+    case BROWSER_CONTROL_ACTION.pressKey:
+    case BROWSER_CONTROL_ACTION.select:
+      return targetsTopFrame(command.target.ref);
+    case BROWSER_CONTROL_ACTION.fill:
+      return (
+        targetsTopFrame(command.target.ref) &&
+        observedPage !== null &&
+        observedPage.valueRefs.has(command.target.ref)
+      );
+    default:
+      command satisfies never;
+      return panic("Unhandled browser command action");
+  }
+};
 
 export type BrowserAutoApproval =
   | { type: "ask" }
@@ -202,11 +247,22 @@ export const createBrowserApprovalStore = (getStorage: () => Storage) => {
   const readMode = (): BrowserApprovalMode =>
     readStoredJson(readItem(STORAGE_KEY), modeSchema) ??
     BROWSER_APPROVAL_MODE.askEveryTime;
-  const readSiteGrantApprovals = (): SiteGrantApprovals =>
-    readStoredJson(
-      readItem(SITE_GRANT_APPROVALS_KEY),
-      siteGrantApprovalsSchema,
-    ) ?? [];
+  /**
+   * The recorded website approvals, or null when they cannot be read: the
+   * storage throws, or holds something that is not a list of approvals.
+   * Nothing recorded yet reads as an empty list.
+   */
+  const readSiteGrantApprovals = (): SiteGrantApprovals | null => {
+    const raw = Result.try(() =>
+      getStorage().getItem(userStorageKey(SITE_GRANT_APPROVALS_KEY)),
+    );
+    if (raw.isErr()) {
+      return null;
+    }
+    return raw.value === null
+      ? []
+      : readStoredJson(raw.value, siteGrantApprovalsSchema);
+  };
   let mode = readMode();
   let observedPage: BrowserObservedPage | null = null;
   let commandsInFlight = 0;
@@ -286,40 +342,40 @@ export const createBrowserApprovalStore = (getStorage: () => Storage) => {
       notify();
     },
     /**
-     * Remembers that a website approval answered `toolCallId`, with the sites
-     * allowed then, before the answer is sent; false when it cannot be kept,
-     * and the card then asks. Kept in the tab session, so a result that
-     * arrives after a reload is still checked.
+     * Remembers that a website approval for `origin` answered `toolCallId`,
+     * before the answer is sent; false when it cannot be kept, and the card
+     * then asks. Kept in the tab session, so a result that arrives after a
+     * reload is still checked.
      */
-    recordSiteGrantApproval(
-      toolCallId: string,
-      origins: ReadonlySet<string>,
-    ): boolean {
+    recordSiteGrantApproval(toolCallId: string, origin: string): boolean {
       const storage = Result.try(() => getStorage()).unwrapOr(null);
-      if (storage === null) {
+      const recorded = readSiteGrantApprovals();
+      if (storage === null || recorded === null) {
         return false;
       }
       const next = [
-        ...readSiteGrantApprovals().filter(
-          (entry) => entry.toolCallId !== toolCallId,
-        ),
-        { origins: [...origins], toolCallId },
+        ...recorded.filter((entry) => entry.toolCallId !== toolCallId),
+        { origin, toolCallId },
       ].slice(-SITE_GRANT_APPROVALS_KEPT);
-      const key = userStorageKey(SITE_GRANT_APPROVALS_KEY);
-      writeStoredJson(storage, key, next);
+      writeStoredJson(storage, userStorageKey(SITE_GRANT_APPROVALS_KEY), next);
       return (
-        readStoredJson(
-          readItem(SITE_GRANT_APPROVALS_KEY),
-          siteGrantApprovalsSchema,
-        )?.some((entry) => entry.toolCallId === toolCallId) ?? false
+        readSiteGrantApprovals()?.some(
+          (entry) => entry.toolCallId === toolCallId && entry.origin === origin,
+        ) === true
       );
     },
-    /** The sites allowed when a website approval answered `toolCallId`. */
-    siteGrantApprovalFor(toolCallId: string): ReadonlySet<string> | null {
-      const entry = readSiteGrantApprovals().find(
+    /** Who answered `toolCallId`, as this tab recorded it. */
+    approvalProvenanceFor(toolCallId: string): BrowserApprovalProvenance {
+      const recorded = readSiteGrantApprovals();
+      if (recorded === null) {
+        return { type: "unreadable" };
+      }
+      const entry = recorded.find(
         (candidate) => candidate.toolCallId === toolCallId,
       );
-      return entry === undefined ? null : new Set(entry.origins);
+      return entry === undefined
+        ? { type: "person" }
+        : { type: "site-grant", origin: entry.origin };
     },
     /**
      * Forgets what was approved: the controller re-paired or disconnected,
@@ -377,12 +433,34 @@ export const observeBrowserPage = (page: BrowserObservedPage | null): void => {
 
 export const recordBrowserSiteGrantApproval = (
   toolCallId: string,
-  origins: ReadonlySet<string>,
-): boolean => getStore().recordSiteGrantApproval(toolCallId, origins);
+  origin: string,
+): boolean => getStore().recordSiteGrantApproval(toolCallId, origin);
 
-export const browserSiteGrantApprovalFor = (
+export const browserApprovalProvenanceFor = (
   toolCallId: string,
-): ReadonlySet<string> | null => getStore().siteGrantApprovalFor(toolCallId);
+): BrowserApprovalProvenance => getStore().approvalProvenanceFor(toolCallId);
+
+/**
+ * How a browser command card may answer itself at this moment, read outside
+ * React: a card re-decides with it after an await, so a pairing reset or a
+ * failed command in the meantime makes it ask.
+ */
+export const currentBrowserAutoApproval = ({
+  command,
+  grantedOrigins,
+}: {
+  command: BrowserControlCommand;
+  grantedOrigins: ReadonlySet<string>;
+}): BrowserAutoApproval => {
+  const current = getStore();
+  return decideBrowserAutoApproval({
+    command,
+    grantedOrigins,
+    lastCommandSucceeded: current.lastCommandSucceeded(),
+    mode: current.getMode(),
+    observedPage: current.getObservedPage(),
+  });
+};
 
 export const useBrowserApprovalMode = (): BrowserApprovalMode =>
   useSyncExternalStore(
@@ -417,15 +495,7 @@ export const useBrowserAutoApproval = ({
   grantedOrigins: ReadonlySet<string>;
 }): BrowserAutoApproval => {
   useBrowserApprovalVersion();
-  if (command === null) {
-    return ASK;
-  }
-  const current = getStore();
-  return decideBrowserAutoApproval({
-    command,
-    grantedOrigins,
-    lastCommandSucceeded: current.lastCommandSucceeded(),
-    mode: current.getMode(),
-    observedPage: current.getObservedPage(),
-  });
+  return command === null
+    ? ASK
+    : currentBrowserAutoApproval({ command, grantedOrigins });
 };

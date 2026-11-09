@@ -22,7 +22,10 @@ import {
   useConnectedApps,
 } from "@/routes/_protected.settings/-components/account/connections/apps-group";
 import { BrowserExtensionGroup } from "@/routes/_protected.settings/-components/account/connections/browser-extension-group";
-import { BrowserSitesGroup } from "@/routes/_protected.settings/-components/account/connections/browser-sites-group";
+import {
+  BrowserSitesGroup,
+  useBrowserSites,
+} from "@/routes/_protected.settings/-components/account/connections/browser-sites-group";
 import { ClientSetupGroups } from "@/routes/_protected.settings/-components/account/connections/client-setup-groups";
 import {
   IntegrationsGroup,
@@ -75,8 +78,10 @@ function ConnectionsPage() {
   const isSearching = trimmedQuery.length > 0;
   const integrations = useIntegrations(trimmedQuery);
   const apps = useConnectedApps(trimmedQuery);
+  const sites = useBrowserSites(trimmedQuery);
   const showIntegrations = !isSearching || integrations.visible.length > 0;
   const showApps = !isSearching || apps.visible.length > 0;
+  const showSites = sites.visible.length > 0;
 
   return (
     <div className="flex flex-col gap-8">
@@ -97,9 +102,9 @@ function ConnectionsPage() {
       {showIntegrations && <IntegrationsGroup integrations={integrations} />}
       {showApps && <AppsGroup apps={apps} />}
       {!isSearching && <BrowserExtensionGroup />}
-      {!isSearching && <BrowserSitesGroup />}
+      {showSites && <BrowserSitesGroup sites={sites} />}
       {!isSearching && <ClientSetupGroups apiOrigin={externalApiOrigin()} />}
-      {!showIntegrations && !showApps && (
+      {!showIntegrations && !showApps && !showSites && (
         <div className="text-muted-foreground flex flex-col items-start gap-1 px-1 text-sm">
           <p className="text-foreground flex items-center gap-2">
             <SearchXIcon className="text-muted-foreground size-4" />

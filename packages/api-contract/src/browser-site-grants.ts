@@ -34,13 +34,9 @@ export const browserSiteGrantOrigin = (rawUrl: string): string | null => {
   if (rawUrl.length > BROWSER_CONTROL_LIMITS.urlChars) {
     return null;
   }
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
-    return null;
-  }
+  const url = URL.parse(rawUrl);
   if (
+    url === null ||
     url.protocol !== "https:" ||
     url.username !== "" ||
     url.password !== "" ||
@@ -65,10 +61,5 @@ export const isOnGrantedBrowserSite = (
 };
 
 /** The host people recognise a site grant by, for labels. */
-export const browserSiteGrantHost = (origin: string): string => {
-  try {
-    return new URL(origin).host;
-  } catch {
-    return origin;
-  }
-};
+export const browserSiteGrantHost = (origin: string): string =>
+  URL.parse(origin)?.host ?? origin;

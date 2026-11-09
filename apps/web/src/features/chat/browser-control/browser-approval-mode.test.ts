@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_TARGET_METADATA,
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
@@ -297,6 +298,8 @@ describe("website approvals", () => {
   const granted: ReadonlySet<string> = new Set([GRANTED]);
   const FIELD = "e:0:0.4";
   const SECRET_FIELD = "e:0:0.5";
+  /** A field the extension read, inside a frame another website may own. */
+  const FRAME_FIELD = "e:2:0.4";
 
   /** URLs on and around the granted site; only the first two are on it. */
   const SITE_URLS: readonly string[] = [
@@ -314,7 +317,7 @@ describe("website approvals", () => {
   const observed = (url: string): BrowserObservedPage => ({
     revision: "revision-1",
     url,
-    valueRefs: new Set([FIELD]),
+    valueRefs: new Set([FIELD, FRAME_FIELD]),
   });
 
   const target = (ref: string) => ({
@@ -363,8 +366,7 @@ describe("website approvals", () => {
   const isOnGrantedSite = (url: string) => {
     const parsed = URL.parse(url);
     return (
-      parsed !== null &&
-      parsed.protocol === "https:" &&
+      parsed?.protocol === "https:" &&
       parsed.username === "" &&
       parsed.origin === GRANTED
     );
@@ -376,7 +378,7 @@ describe("website approvals", () => {
       fc.property(
         fc.constantFrom(...SITE_URLS),
         fc.constantFrom(...SITE_URLS),
-        fc.constantFrom(FIELD, SECRET_FIELD),
+        fc.constantFrom(FIELD, SECRET_FIELD, FRAME_FIELD),
         fc.boolean(),
         fc.constantFrom(
           BROWSER_APPROVAL_MODE.askEveryTime,
@@ -398,7 +400,10 @@ describe("website approvals", () => {
             const site = navigates
               ? isOnGrantedSite(commandUrl)
               : isOnGrantedSite(pageUrl) && (!onPage || commandUrl === pageUrl);
-            const secretFill = command.action === "fill" && ref !== FIELD;
+            const secretFill =
+              command.action === "fill" && ref === SECRET_FIELD;
+            // An element in a subframe may belong to another website.
+            const inSubframe = onPage && ref === FRAME_FIELD;
             const readsMode =
               mode === BROWSER_APPROVAL_MODE.autoApproveReads &&
               command.action === "snapshot";
@@ -406,7 +411,7 @@ describe("website approvals", () => {
               expectedDecision({
                 lastCommandSucceeded,
                 readsMode,
-                siteGrant: site && !secretFill,
+                siteGrant: site && !secretFill && !inSubframe,
               }),
             );
             if (decision.type === "site-grant") {
@@ -487,17 +492,55 @@ describe("website approvals", () => {
   test("a website approval is kept for its result check, also across a reload", () => {
     const storage = memoryStorage();
     const store = createBrowserApprovalStore(() => storage);
-    expect(store.recordSiteGrantApproval("call-1", granted)).toBe(true);
+    expect(store.recordSiteGrantApproval("call-1", GRANTED)).toBe(true);
 
     const reloaded = createBrowserApprovalStore(() => storage);
-    expect(reloaded.siteGrantApprovalFor("call-1")).toEqual(granted);
-    expect(reloaded.siteGrantApprovalFor("call-2")).toBeNull();
+    expect(reloaded.approvalProvenanceFor("call-1")).toEqual({
+      type: "site-grant",
+      origin: GRANTED,
+    });
+    expect(reloaded.approvalProvenanceFor("call-2")).toEqual({
+      type: "person",
+    });
+  });
+
+  test("every approval a pairing session can run stays recorded", () => {
+    const storage = memoryStorage();
+    const store = createBrowserApprovalStore(() => storage);
+    const calls = Array.from(
+      { length: BROWSER_CONTROL_LIMITS.sessionActions },
+      (_, index) => `call-${String(index)}`,
+    );
+    for (const call of calls) {
+      expect(store.recordSiteGrantApproval(call, GRANTED)).toBe(true);
+    }
+    // More answers than one turn may run, and the first is still there.
+    expect(calls.length).toBeGreaterThan(BROWSER_CONTROL_LIMITS.turnActions);
+    expect(store.approvalProvenanceFor("call-0")).toEqual({
+      type: "site-grant",
+      origin: GRANTED,
+    });
   });
 
   test("an approval that cannot be kept is refused, so the card asks", () => {
     const store = createBrowserApprovalStore(blockedStorage);
-    expect(store.recordSiteGrantApproval("call-1", granted)).toBe(false);
-    expect(store.siteGrantApprovalFor("call-1")).toBeNull();
+    expect(store.recordSiteGrantApproval("call-1", GRANTED)).toBe(false);
+  });
+
+  test("an unreadable record withholds who answered", () => {
+    expect(
+      createBrowserApprovalStore(blockedStorage).approvalProvenanceFor(
+        "call-1",
+      ),
+    ).toEqual({ type: "unreadable" });
+    const storage = memoryStorage();
+    storage.setItem(
+      userStorageKey("stella.chat.browserSiteGrantApprovals"),
+      "not json",
+    );
+    expect(
+      createBrowserApprovalStore(() => storage).approvalProvenanceFor("call-1"),
+    ).toEqual({ type: "unreadable" });
   });
 
   test("a new pairing forgets the page the extension reported", () => {

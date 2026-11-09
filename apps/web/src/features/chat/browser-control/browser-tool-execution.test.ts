@@ -7,7 +7,10 @@ import {
   type BrowserControlResult,
 } from "@stll/api-contract/browser-control";
 
-import { createBrowserApprovalStore } from "./browser-approval-mode";
+import {
+  type BrowserApprovalProvenance,
+  createBrowserApprovalStore,
+} from "./browser-approval-mode";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
 
 const success = {
@@ -41,7 +44,7 @@ const redirected = {
 } satisfies BrowserControlResult;
 
 const untracked = () => () => undefined;
-const answeredByUser = () => null;
+const answeredByUser = (): BrowserApprovalProvenance => ({ type: "person" });
 
 const RUN = { signal: new AbortController().signal, turnId: "turn-1" };
 
@@ -169,14 +172,17 @@ describe("commands a website approval answered", () => {
     ...success,
     snapshot: { ...success.snapshot, url },
   });
-  const allowed = new Set(["https://example.com"]);
+  const allowed = (): BrowserApprovalProvenance => ({
+    type: "site-grant",
+    origin: "https://example.com",
+  });
 
   test("a page on an allowed website is handed back", async () => {
     const store = sessionStore();
     const cache = createBrowserToolExecutionCache(
       async () => landedOn("https://example.com/results"),
       store.beginCommand,
-      () => allowed,
+      allowed,
     );
 
     expect(
@@ -195,7 +201,7 @@ describe("commands a website approval answered", () => {
       const cache = createBrowserToolExecutionCache(
         async () => landedOn(url),
         store.beginCommand,
-        () => allowed,
+        allowed,
       );
 
       const result = await cache.executeOnce(
@@ -210,6 +216,39 @@ describe("commands a website approval answered", () => {
       expect(JSON.stringify(result)).not.toContain("Ready");
       expect(store.lastCommandSucceeded()).toBe(false);
     }
+  });
+
+  test("who answered is read before the command runs, and unknown withholds the page", async () => {
+    const store = sessionStore();
+    let provenance: BrowserApprovalProvenance = {
+      type: "site-grant",
+      origin: "https://example.com",
+    };
+    const cache = createBrowserToolExecutionCache(
+      async () => {
+        // The record is cleared while the command runs.
+        provenance = { type: "person" };
+        return landedOn("https://other.test/");
+      },
+      store.beginCommand,
+      () => provenance,
+    );
+    expect(
+      await cache.executeOnce("call-1", { action: "go-back" }, RUN),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.redirected });
+
+    const unreadable = createBrowserToolExecutionCache(
+      async () => landedOn("https://example.com/"),
+      store.beginCommand,
+      () => ({ type: "unreadable" }),
+    );
+    const withheld = await unreadable.executeOnce(
+      "call-2",
+      { action: "snapshot" },
+      RUN,
+    );
+    expect(withheld).toMatchObject({ status: "error" });
+    expect(JSON.stringify(withheld)).not.toContain("Ready");
   });
 
   test("a command the user answered is not held to the allowed websites", async () => {

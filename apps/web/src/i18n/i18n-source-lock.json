@@ -4640,6 +4640,7 @@
   "settings.organization.auditResourceKinds.case_law_matter_link": "case law matter link",
   "settings.organization.auditResourceKinds.case_law_reader_answer": "case law reader answer",
   "settings.organization.auditResourceKinds.case_law_research_column": "case law research column",
+  "settings.organization.auditResourceKinds.chat_browser_site_grant": "chat website approval",
   "settings.organization.auditResourceKinds.chat_file": "chat file",
   "settings.organization.auditResourceKinds.chat_message": "chat message",
   "settings.organization.auditResourceKinds.chat_thread": "chat thread",

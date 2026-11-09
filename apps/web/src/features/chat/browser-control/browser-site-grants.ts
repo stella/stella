@@ -1,17 +1,14 @@
-import {
-  type QueryClient,
-  queryOptions,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { STALE_TIME } from "@/lib/consts";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -41,7 +38,7 @@ export const browserSiteGrantsOptions = ({
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
-export type BrowserSiteGrantsResponse = Awaited<
+type BrowserSiteGrantsResponse = Awaited<
   ReturnType<
     NonNullable<ReturnType<typeof browserSiteGrantsOptions>["queryFn"]>
   >
@@ -50,24 +47,21 @@ export type BrowserSiteGrantsResponse = Awaited<
 export type BrowserSiteGrant = BrowserSiteGrantsResponse["grants"][number];
 
 /** The granted origins, for the approval policy; empty until they load. */
-export const grantedBrowserOrigins = (
+const grantedBrowserOrigins = (
   grants: readonly BrowserSiteGrant[] | undefined,
 ): ReadonlySet<string> => new Set(grants?.map(({ origin }) => origin));
 
-/** The origins the API holds grants for now, read past the cache. */
-export const readGrantedBrowserOrigins = async ({
-  key,
-  queryClient,
-}: {
-  key: BrowserSiteGrantsKey;
-  queryClient: QueryClient;
-}): Promise<ReadonlySet<string>> => {
-  const fresh = await queryClient.fetchQuery({
-    ...browserSiteGrantsOptions(key),
-    staleTime: 0,
-  });
-  return grantedBrowserOrigins(fresh.grants);
+/**
+ * The origins the API holds grants for now. Always its own request, never the
+ * cache or a list request already in flight, which may predate a removal: a
+ * card answers itself only on what the API says at the moment it answers.
+ */
+const readGrantedBrowserOrigins = async (): Promise<ReadonlySet<string>> => {
+  const response = await api.chat["browser-site-grants"].get();
+  return grantedBrowserOrigins(unwrapApiResponse(response).grants);
 };
+
+const CREATE_OPERATION = "chat.browser-site-grants.create";
 
 /**
  * The signed-in user's website approvals for a browser card: the cached set
@@ -77,6 +71,7 @@ export const readGrantedBrowserOrigins = async ({
  */
 export const useBrowserSiteGrants = (enabled: boolean) => {
   const queryClient = useQueryClient();
+  const submit = useIdempotentSubmit();
   const user = useMaybeAuthenticatedUser();
   const key =
     user === null
@@ -103,14 +98,22 @@ export const useBrowserSiteGrants = (enabled: boolean) => {
       if (key === null) {
         return null;
       }
-      const fresh = await Result.tryPromise(
-        async () => await readGrantedBrowserOrigins({ key, queryClient }),
-      );
+      const fresh = await Result.tryPromise(readGrantedBrowserOrigins);
       return fresh.isOk() ? fresh.value : null;
     },
-    /** Stores a website approval and refreshes every reader of the list. */
+    /**
+     * Stores a website approval and refreshes every reader of the list. Only
+     * the user's own click stores one: an agent cannot allow a website for
+     * itself, so the write has no automation capability.
+     */
     allow: async (origin: string) => {
-      await storeBrowserSiteGrant(origin);
+      const body = { url: origin };
+      const request = submit.prepare({ body, operation: CREATE_OPERATION });
+      await invokeAppOnlyWrite(CREATE_OPERATION, async () =>
+        unwrapApiResponse(
+          await api.chat["browser-site-grants"].post(body, request),
+        ),
+      );
       if (key !== null) {
         await queryClient.invalidateQueries({
           queryKey: chatKeys.browserSiteGrants(
@@ -123,13 +126,12 @@ export const useBrowserSiteGrants = (enabled: boolean) => {
   };
 };
 
-/** Stores a grant for the site `url` is on; the API keeps only its origin. */
-export const storeBrowserSiteGrant = async (url: string) =>
-  unwrapApiResponse(await api.chat["browser-site-grants"].post({ url }));
-
+/** Takes back a website approval; like allowing one, only the user does. */
 export const deleteBrowserSiteGrant = async (grantId: string) =>
-  unwrapApiResponse(
-    await api.chat["browser-site-grants"]({
-      grantId: toSafeId<"chatBrowserSiteGrant">(grantId),
-    }).delete(),
+  await invokeAppOnlyWrite("chat.browser-site-grants.delete", async () =>
+    unwrapApiResponse(
+      await api.chat["browser-site-grants"]({
+        grantId: toSafeId<"chatBrowserSiteGrant">(grantId),
+      }).delete(),
+    ),
   );

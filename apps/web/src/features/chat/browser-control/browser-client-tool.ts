@@ -9,7 +9,7 @@ import {
 
 import {
   beginBrowserCommand,
-  browserSiteGrantApprovalFor,
+  browserApprovalProvenanceFor,
 } from "./browser-approval-mode";
 import { executeBrowserExtensionCommand } from "./browser-extension-bridge";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
@@ -32,7 +32,7 @@ export const createBrowserExtensionTool = ({
   const executions = createBrowserToolExecutionCache(
     executeBrowserExtensionCommand,
     beginBrowserCommand,
-    browserSiteGrantApprovalFor,
+    browserApprovalProvenanceFor,
   );
   const stopper = createTurnStopper();
 

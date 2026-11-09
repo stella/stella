@@ -1,9 +1,13 @@
+import { panic } from "better-result";
+
 import {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   type BrowserControlResult,
 } from "@stll/api-contract/browser-control";
-import { isOnGrantedBrowserSite } from "@stll/api-contract/browser-site-grants";
+import { browserSiteGrantOrigin } from "@stll/api-contract/browser-site-grants";
+
+import type { BrowserApprovalProvenance } from "./browser-approval-mode";
 
 /** How a command runs: the chat turn it belongs to and its stop signal. */
 export type BrowserCommandRun = {
@@ -20,34 +24,46 @@ type BrowserCommandExecutor = (
 /** Marks a command as running; the returned callback reports how it ended. */
 type BeginBrowserCommand = () => (succeeded: boolean) => void;
 
-/**
- * The websites allowed when a website approval answered `toolCallId`, or
- * null when the user answered it (or the reads mode did).
- */
-type SiteGrantApprovalFor = (toolCallId: string) => ReadonlySet<string> | null;
+/** Who answered `toolCallId`, as this tab recorded it. */
+type ApprovalProvenanceFor = (toolCallId: string) => BrowserApprovalProvenance;
+
+const WITHHELD: BrowserControlResult = {
+  code: BROWSER_CONTROL_ERROR_CODE.redirected,
+  message:
+    "The tab is now on a website the user has not allowed, so the page was not read. Take a snapshot; the user is asked first.",
+  protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+  status: "error",
+};
 
 /**
- * A command a website approval answered may only hand back a page on an
- * allowed website. The extension reports where the tab ended up; a page
- * elsewhere (a link, a redirect, going back, or the user moving the tab
- * before it ran) is withheld from the model, and the command counts as
- * failed so the next one asks.
+ * A command a website approval answered may only hand back a page on the
+ * website it was allowed for. The extension reports where the tab ended up; a
+ * page elsewhere (a link, a redirect, going back, or the user moving the tab
+ * before it ran) is withheld from the model, and the command counts as failed
+ * so the next one asks. When this tab cannot tell who answered, the page is
+ * withheld too.
  */
-export const withinSiteGrant = (
+const withinSiteGrant = (
   result: BrowserControlResult,
-  grantedOrigins: ReadonlySet<string> | null,
-): BrowserControlResult =>
-  grantedOrigins === null ||
-  result.status !== "success" ||
-  isOnGrantedBrowserSite(result.snapshot.url, grantedOrigins)
-    ? result
-    : {
-        code: BROWSER_CONTROL_ERROR_CODE.redirected,
-        message:
-          "The tab is now on a website the user has not allowed, so the page was not read. Take a snapshot; the user is asked first.",
-        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-        status: "error",
-      };
+  provenance: BrowserApprovalProvenance,
+): BrowserControlResult => {
+  if (result.status !== "success") {
+    return result;
+  }
+  switch (provenance.type) {
+    case "person":
+      return result;
+    case "site-grant":
+      return browserSiteGrantOrigin(result.snapshot.url) === provenance.origin
+        ? result
+        : WITHHELD;
+    case "unreadable":
+      return WITHHELD;
+    default:
+      provenance satisfies never;
+      return panic("Unhandled browser approval provenance");
+  }
+};
 
 /**
  * Coalesces same-runtime retries. Durable at-most-once enforcement lives in
@@ -58,7 +74,7 @@ export const withinSiteGrant = (
 export const createBrowserToolExecutionCache = (
   execute: BrowserCommandExecutor,
   beginCommand: BeginBrowserCommand,
-  siteGrantApprovalFor: SiteGrantApprovalFor,
+  approvalProvenanceFor: ApprovalProvenanceFor,
 ) => {
   const executions = new Map<string, Promise<BrowserControlResult>>();
 
@@ -68,11 +84,14 @@ export const createBrowserToolExecutionCache = (
     commandRun: BrowserCommandRun,
   ) => {
     const finish = beginCommand();
+    // Read before the command runs: what answered it must not depend on the
+    // record still being there, or readable, once the result comes back.
+    const provenance = approvalProvenanceFor(toolCallId);
     let succeeded = false;
     try {
       const result = withinSiteGrant(
         await execute(input, toolCallId, commandRun),
-        siteGrantApprovalFor(toolCallId),
+        provenance,
       );
       succeeded = result.status === "success";
       return result;

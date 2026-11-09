@@ -55,7 +55,7 @@ const deleteBrowserSiteGrant = createSafeRootHandler(
         if (row) {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.DELETE,
-            resourceType: AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT,
+            resourceType: AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT,
             resourceId: row.id,
             workspaceId: null,
             metadata: { browserOrigin: row.origin, scope: "always" },
