@@ -12,7 +12,7 @@ on:
       models:
         description: Comma-separated model ids to evaluate
         required: true
-        default: claude-haiku-5-5
+        default: claude-sonnet-5-5
         type: string
       runs:
         description: Runs per model

@@ -6,8 +6,9 @@ defaults:
 
 # Weekly, with a live model: runs a playbook from the table and from the review
 # panel on fixture contracts through the API, and checks how every run ends
-# (apps/api/evals/playbook-journey.ts). One run of one small model per week;
-# start it by hand after a change to the review pipeline.
+# (apps/api/evals/playbook-journey.ts). One run of one model per week; start it
+# by hand after a change to the review pipeline. Sonnet by default: Haiku
+# returned output the extraction batch schema rejects.
 on:
   schedule:
     - cron: "30 4 * * 1"
@@ -16,11 +17,11 @@ on:
       model:
         description: Model every AI task of the stack uses
         required: true
-        default: claude-haiku-5-5
+        default: claude-sonnet-5-5
         type: choice
         options:
-          - claude-haiku-5-5
           - claude-sonnet-5-5
+          - claude-haiku-5-5
 
 permissions: {}
 
@@ -69,10 +70,10 @@ jobs:
           USE_MOCK_AI: "false"
           AI_PROVIDER: anthropic
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AI_MODEL_FAST: ${{ inputs.model || 'claude-haiku-5-5' }}
-          AI_MODEL_CHAT: ${{ inputs.model || 'claude-haiku-5-5' }}
-          AI_MODEL_REASONING: ${{ inputs.model || 'claude-haiku-5-5' }}
-          AI_MODEL_PDF: ${{ inputs.model || 'claude-haiku-5-5' }}
+          AI_MODEL_FAST: ${{ inputs.model || 'claude-sonnet-5-5' }}
+          AI_MODEL_CHAT: ${{ inputs.model || 'claude-sonnet-5-5' }}
+          AI_MODEL_REASONING: ${{ inputs.model || 'claude-sonnet-5-5' }}
+          AI_MODEL_PDF: ${{ inputs.model || 'claude-sonnet-5-5' }}
 
       - name: Run the journey
         timeout-minutes: 30
@@ -80,7 +81,7 @@ jobs:
         env:
           NODE_ENV: development
           STELLA_LOCAL_DEV: "1"
-          JOURNEY_MODEL: ${{ inputs.model || 'claude-haiku-5-5' }}
+          JOURNEY_MODEL: ${{ inputs.model || 'claude-sonnet-5-5' }}
         run: |
           report="$RUNNER_TEMP/playbook-journey"
           status=0
