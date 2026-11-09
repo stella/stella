@@ -1731,10 +1731,6 @@ describe("managed model tier", () => {
         provider: "openai",
         modelId: BYOK_DEFAULT_MODELS.openai.pdf.modelId,
       },
-      browse: {
-        provider: "openai",
-        modelId: BYOK_DEFAULT_MODELS.openai.browse.modelId,
-      },
     },
     decision: null,
   } satisfies OrgAIConfig;

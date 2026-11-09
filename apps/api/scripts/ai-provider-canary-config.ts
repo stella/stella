@@ -134,7 +134,6 @@ const MODEL_TASK_MAX_OUTPUT_TOKENS = {
   chat: 512,
   reasoning: 25_000,
   pdf: 512,
-  browse: 512,
 } as const satisfies Record<ModelTask, number>;
 
 // Providers reject ceilings above their model's output limit before generating

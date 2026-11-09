@@ -3,14 +3,19 @@ import { describe, expect, test } from "bun:test";
 import {
   AI_PROVIDERS,
   type AIProvider,
+  BYOK_DEFAULT_MODELS,
   type ReasoningEffort,
   resolveReasoningEffort,
 } from "./index";
 import {
+  inheritedOverrideGroup,
   MODEL_DEFAULTS_LEDGER,
+  MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
   MODEL_TASK_OVERRIDE_GROUP,
   MODEL_TASKS,
   type ModelMode,
+  type ModelOverrideGroup,
   type ModelTask,
   resolveDefaultModel,
 } from "./model-defaults-ledger";
@@ -192,8 +197,6 @@ const SEED_ROLE_BY_TASK = {
   "search-expand": "fast",
   classify: "fast",
   "short-text": "fast",
-  // Browsing has no legacy role: it seeds from each provider's fast model.
-  browse: "fast",
 } as const satisfies Record<ModelTask, LegacyRole>;
 
 const FAST_REPLACEMENTS = {
@@ -201,6 +204,36 @@ const FAST_REPLACEMENTS = {
   bedrock: "us.anthropic.claude-haiku-5-5",
   openrouter: "anthropic/claude-haiku-5.5",
 } as const;
+
+describe("roles without defaults of their own", () => {
+  test("every role owns its task's defaults or follows the role that does", () => {
+    for (const group of MODEL_OVERRIDE_GROUPS) {
+      const inherited = inheritedOverrideGroup(group);
+      if (inherited === null) {
+        expect<ModelOverrideGroup>(
+          MODEL_TASK_OVERRIDE_GROUP[MODEL_OVERRIDE_GROUP_TASK[group]],
+        ).toBe(group);
+        continue;
+      }
+      // One hop: the followed role owns its task's defaults.
+      expect(inheritedOverrideGroup(inherited)).toBeNull();
+    }
+    expect(inheritedOverrideGroup("browse")).toBe("fast");
+  });
+
+  test("browsing shows each provider's fast default with its own explanation", () => {
+    for (const [provider, roles] of Object.entries(BYOK_DEFAULT_MODELS)) {
+      expect({ provider, browse: roles.browse }).toEqual({
+        provider,
+        browse: {
+          kind: "default",
+          modelId: roles.fast.modelId,
+          rationaleKey: "organization.aiConfig.defaultRationale.browse",
+        },
+      });
+    }
+  });
+});
 
 describe("task default migration", () => {
   test("covers every provider and task with one documented document exception", () => {

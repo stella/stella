@@ -30,7 +30,9 @@ import {
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
 import {
+  DEFAULT_RATIONALE_BY_GROUP,
   MODEL_DEFAULTS_LEDGER,
+  MODEL_OVERRIDE_GROUP_TASK,
   MODEL_TASK_OVERRIDE_GROUP,
   resolveDefaultModel,
 } from "./model-defaults-ledger";
@@ -50,6 +52,7 @@ export {
   MODEL_OVERRIDE_GROUPS,
   MODEL_TASK_OVERRIDE_GROUP,
   MODEL_OVERRIDE_GROUP_TASK,
+  inheritedOverrideGroup,
   resolveDefaultModel,
   resolveDefaultOverrideModels,
 } from "./model-defaults-ledger";
@@ -245,6 +248,23 @@ const defaultPresentation = <TModelId extends string>(entry: {
   rationaleKey: entry.rationale.rationaleKey,
 });
 
+/**
+ * A role without defaults of its own shows the default of the task it
+ * inherits (`MODEL_OVERRIDE_GROUP_TASK`), explained in its own words.
+ */
+const inheritedRolePresentation = <TModelId extends string>(
+  group: ModelOverrideGroup,
+  inherited: {
+    candidate: { modelId: TModelId };
+    rationale: ModelDefaultRationale;
+  },
+) => ({
+  ...defaultPresentation(inherited),
+  rationaleKey: DEFAULT_RATIONALE_BY_GROUP[group].rationaleKey,
+});
+
+const BROWSE_DEFAULTS = MODEL_DEFAULTS_LEDGER[MODEL_OVERRIDE_GROUP_TASK.browse];
+
 /** Default labels in the override editor derive from the task ledger. */
 export const BYOK_DEFAULT_MODELS = {
   google: {
@@ -252,42 +272,42 @@ export const BYOK_DEFAULT_MODELS = {
     chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.google),
     reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.google),
     pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.google),
-    browse: defaultPresentation(MODEL_DEFAULTS_LEDGER.browse.google),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.google),
   },
   openrouter: {
     fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].openrouter),
     chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.openrouter),
     reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.openrouter),
     pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.openrouter),
-    browse: defaultPresentation(MODEL_DEFAULTS_LEDGER.browse.openrouter),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.openrouter),
   },
   openai: {
     fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].openai),
     chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.openai),
     reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.openai),
     pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.openai),
-    browse: defaultPresentation(MODEL_DEFAULTS_LEDGER.browse.openai),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.openai),
   },
   anthropic: {
     fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].anthropic),
     chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.anthropic),
     reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.anthropic),
     pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.anthropic),
-    browse: defaultPresentation(MODEL_DEFAULTS_LEDGER.browse.anthropic),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.anthropic),
   },
   bedrock: {
     fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].bedrock),
     chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.bedrock),
     reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.bedrock),
     pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.bedrock),
-    browse: defaultPresentation(MODEL_DEFAULTS_LEDGER.browse.bedrock),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.bedrock),
   },
   mistral: {
     fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].mistral),
     chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.mistral),
     reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.mistral),
     pdf: { kind: MODEL_DEFAULTS_LEDGER.pdf.mistral.kind },
-    browse: defaultPresentation(MODEL_DEFAULTS_LEDGER.browse.mistral),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.mistral),
   },
 } as const satisfies Record<
   TanStackAIProvider,

@@ -269,6 +269,8 @@ describe("BYOK provider and model configuration", () => {
     ).toEqual({
       ...GOOGLE_DEFAULTS,
       fast: { provider: "anthropic", modelId: "claude-opus-5-5" },
+      // Unset browsing follows the fast pick.
+      browse: { provider: "anthropic", modelId: "claude-opus-5-5" },
     });
     expect(GOOGLE_DEFAULTS.fast.provider).toBe("google");
   });
@@ -294,7 +296,13 @@ describe("BYOK provider and model configuration", () => {
     ).toEqual([{ provider: "google", defaultModels: GOOGLE_DEFAULTS }]);
   });
 
-  test("normalizes stored role selections into picker state", () => {
+  test("normalizes stored role selections into picker state, browsing on the chosen fast model", () => {
+    // The fixture's fast pick differs from the default the browse row
+    // would otherwise show.
+    expect(ANTHROPIC_DEFAULTS.browse).not.toEqual({
+      provider: "openai",
+      modelId: "gpt-5.4-nano",
+    });
     expect(
       roleModelsFromOverrideModels({
         providers: ["anthropic", "openai"],
@@ -309,8 +317,21 @@ describe("BYOK provider and model configuration", () => {
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
       reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
       pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
-      browse: { provider: "anthropic", modelId: "claude-haiku-5-5" },
+      browse: { provider: "openai", modelId: "gpt-5.4-nano" },
     });
+  });
+
+  test("keeps a browsing model the admin picked", () => {
+    expect(
+      roleModelsFromOverrideModels({
+        providers: ["anthropic", "openai"],
+        defaultModels: ANTHROPIC_DEFAULTS,
+        overrideModels: {
+          fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+          browse: { provider: "anthropic", modelId: "claude-opus-5-5" },
+        },
+      }).browse,
+    ).toEqual({ provider: "anthropic", modelId: "claude-opus-5-5" });
   });
 
   test("encodes OpenRouter model values without breaking model IDs that contain slashes", () => {

@@ -5,6 +5,7 @@ import {
   BYOK_MODEL_OPTIONS,
   DECISION_MODEL_CATALOG,
   DECISION_MODEL_PROVIDERS,
+  inheritedOverrideGroup,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   MODEL_OVERRIDE_GROUPS,
@@ -330,7 +331,19 @@ export const roleModelsFromOverrideModels = ({
     }
   }
 
-  return { ...defaultModels, ...Object.fromEntries(entries) };
+  const resolved: RoleModelSelections = {
+    ...defaultModels,
+    ...Object.fromEntries(entries),
+  };
+  // A role the admin never picked (a config saved before it existed) runs on
+  // the role it inherits, as the server resolves it, so show that model.
+  const inheritedEntries = ROLE_KEYS.flatMap((role) => {
+    const inherited = inheritedOverrideGroup(role);
+    return inherited !== null && overrideModels[role] === undefined
+      ? [[role, resolved[inherited]] as const]
+      : [];
+  });
+  return { ...resolved, ...Object.fromEntries(inheritedEntries) };
 };
 
 export const roleOverridesFromStoredModels = ({

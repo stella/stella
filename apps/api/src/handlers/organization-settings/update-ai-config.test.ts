@@ -8,6 +8,7 @@ import {
   MODEL_OVERRIDE_GROUPS,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
+import type { ModelOverrideGroup } from "@stll/ai-catalog";
 import { resolveDefaultOverrideModels } from "@stll/ai-catalog/model-defaults-ledger";
 
 import type { Transaction } from "@/api/db/root";
@@ -40,6 +41,10 @@ const decryptAIConfig = async (
 type UpdateContext = Parameters<typeof updateAIConfig.handler>[0];
 
 const models = BYOK_DEFAULT_MODELS.google;
+// Every role's Google default, a role without defaults of its own included.
+const googleDefaultModelId = (role: ModelOverrideGroup): string =>
+  resolveDefaultOverrideModels(["google"])[role]?.modelId ??
+  panic(`Google has no default for ${role}`);
 const overrideModels = {
   fast: { provider: "google", modelId: models.fast.modelId },
   chat: { provider: "google", modelId: models.chat.modelId },
@@ -522,7 +527,7 @@ describe("sparse custom model settings", () => {
       for (const role of MODEL_OVERRIDE_GROUPS) {
         const selection = {
           provider: "google",
-          modelId: BYOK_DEFAULT_MODELS.google[role].modelId,
+          modelId: googleDefaultModelId(role),
         } satisfies OrgAIModelSelection;
         expect(
           resolveOrgAIModelForTask(existing, MODEL_OVERRIDE_GROUP_TASK[role]),
@@ -582,7 +587,7 @@ describe("sparse custom model settings", () => {
         role,
         {
           provider: "google",
-          modelId: BYOK_DEFAULT_MODELS.google[role].modelId,
+          modelId: googleDefaultModelId(role),
         },
       ]),
     );

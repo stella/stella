@@ -14,7 +14,6 @@ export const MODEL_TASKS = [
   "search-expand",
   "classify",
   "short-text",
-  "browse",
 ] as const;
 export type ModelTask = (typeof MODEL_TASKS)[number];
 
@@ -35,16 +34,33 @@ export const MODEL_TASK_OVERRIDE_GROUP = {
   "search-expand": "fast",
   classify: "fast",
   "short-text": "fast",
-  browse: "browse",
 } as const satisfies Record<ModelTask, ModelOverrideGroup>;
 
+/**
+ * The one place a role (an override group an admin picks a model for) names
+ * the task whose defaults and capability checks it inherits. A role that does
+ * not own that task, like `browse`, has no default of its own: while the admin
+ * has not picked a model for it, it runs on the owning role's model.
+ */
 export const MODEL_OVERRIDE_GROUP_TASK = {
   fast: "short-text",
   chat: "chat",
   reasoning: "reasoning",
   pdf: "pdf",
-  browse: "browse",
+  browse: "short-text",
 } as const satisfies Record<ModelOverrideGroup, ModelTask>;
+
+/**
+ * The role whose choice an unset role follows, or null for a role that owns
+ * its task. Derived from the two maps above, so it cannot drift: `browse`
+ * inherits `short-text`, which `fast` owns.
+ */
+export const inheritedOverrideGroup = (
+  group: ModelOverrideGroup,
+): ModelOverrideGroup | null => {
+  const owner = MODEL_TASK_OVERRIDE_GROUP[MODEL_OVERRIDE_GROUP_TASK[group]];
+  return owner === group ? null : owner;
+};
 
 /** A reasoning request is capability-clamped before it reaches the provider. */
 export type ModelMode =
@@ -159,7 +175,7 @@ const UNMEASURED_SEED_QUALITY = {
   measurement: { status: "unmeasured" },
 } as const satisfies ModelDefaultQuality;
 
-const DEFAULT_RATIONALE_BY_GROUP = {
+export const DEFAULT_RATIONALE_BY_GROUP = {
   fast: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
   chat: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
   reasoning: {
@@ -513,50 +529,6 @@ const FAST_DEFAULTS = {
   },
 } as const satisfies TaskProviderDefaults<"short-text">;
 
-/**
- * Browsing drives the user's browser one step at a time and reads whole
- * pages, so it runs on each provider's fast model; an admin picks another in
- * AI settings. Only the rationale differs from the fast defaults.
- */
-const BROWSE_DEFAULTS = {
-  google: {
-    ...FAST_DEFAULTS.google,
-    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
-  },
-  openrouter: {
-    ...FAST_DEFAULTS.openrouter,
-    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
-  },
-  openai: {
-    ...FAST_DEFAULTS.openai,
-    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
-  },
-  azure_foundry: {
-    ...FAST_DEFAULTS.azure_foundry,
-    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
-  },
-  anthropic: {
-    ...FAST_DEFAULTS.anthropic,
-    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
-  },
-  bedrock: {
-    ...FAST_DEFAULTS.bedrock,
-    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
-  },
-  mistral: {
-    ...FAST_DEFAULTS.mistral,
-    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
-  },
-  openai_compatible: {
-    ...FAST_DEFAULTS.openai_compatible,
-    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
-  },
-  huggingface: {
-    ...FAST_DEFAULTS.huggingface,
-    rationale: DEFAULT_RATIONALE_BY_GROUP.browse,
-  },
-} as const satisfies TaskProviderDefaults<"browse">;
-
 export const MODEL_DEFAULTS_LEDGER = {
   chat: CHAT_DEFAULTS,
   reasoning: REASONING_DEFAULTS,
@@ -565,7 +537,6 @@ export const MODEL_DEFAULTS_LEDGER = {
   "search-expand": FAST_DEFAULTS,
   classify: FAST_DEFAULTS,
   "short-text": FAST_DEFAULTS,
-  browse: BROWSE_DEFAULTS,
 } as const satisfies ModelDefaultsLedger;
 
 export type ResolvedDefaultModel<TProvider extends AIProvider = AIProvider> = {

@@ -7,10 +7,15 @@ import {
   MODEL_TASKS,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
-import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
+import {
+  MODEL_DEFAULTS_LEDGER,
+  resolveDefaultOverrideModels,
+} from "@stll/ai-catalog/model-defaults-ledger";
 
 import {
   normalizeOrgAIConfig,
+  resolveOrgAIModel,
+  resolveOrgAIModelForOverrideGroup,
   resolveOrgAIModelForTask,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -90,14 +95,9 @@ describe("normalizeOrgAIConfig auto-heal", () => {
   });
 
   test("keeps the selection of every role the catalog defines", () => {
+    const defaults = resolveDefaultOverrideModels(["google"]);
     const overrideModels = Object.fromEntries(
-      MODEL_OVERRIDE_GROUPS.map((role) => [
-        role,
-        {
-          provider: "google",
-          modelId: BYOK_DEFAULT_MODELS.google[role].modelId,
-        },
-      ]),
+      MODEL_OVERRIDE_GROUPS.map((role) => [role, defaults[role] ?? undefined]),
     );
     const config: OrgAIConfig = {
       providers: [googleProvider],
@@ -217,39 +217,70 @@ describe("organization catalog defaults", () => {
       modelId: BYOK_DEFAULT_MODELS.google.fast.modelId,
     });
   });
-  test("browsing resolves its own role, apart from the fast one", () => {
-    const fast = { provider: "google", modelId: "gemini-3.8-flash" } as const;
+  test("browsing runs on the admin's pick, else on the org's fast model", () => {
+    const fast = {
+      provider: "google",
+      modelId: "gemini-3.1-pro-preview",
+    } as const;
     const browse = {
       provider: "google",
       modelId: BYOK_DEFAULT_MODELS.google.chat.modelId,
     } as const;
-    expect(
-      resolveOrgAIModelForTask(
-        {
-          providers: [googleProvider],
-          overrideModels: { fast, browse },
-          decision: null,
-        },
-        "browse",
-      ),
-    ).toEqual(browse);
-    // Without a browsing choice it takes the catalog's browsing default, not
-    // the fast role's custom model.
-    expect(
-      resolveOrgAIModelForTask(
-        {
-          providers: [googleProvider],
-          overrideModels: {
-            fast: { provider: "google", modelId: "gemini-3-pro-preview" },
-          },
-          decision: null,
-        },
-        "browse",
-      ),
-    ).toEqual({
-      provider: "google",
-      modelId: BYOK_DEFAULT_MODELS.google.browse.modelId,
-    });
+    const fastDefault = resolveOrgAIModelForTask(
+      { providers: [googleProvider], overrideModels: null, decision: null },
+      "short-text",
+    );
+    // The custom fast pick differs from the catalog default, so following
+    // the default instead of the pick would fail below.
+    expect(fastDefault).not.toEqual(fast);
+    expect(browse).not.toEqual(fast);
+
+    const picked = {
+      providers: [googleProvider],
+      overrideModels: { fast, browse },
+      decision: null,
+    } satisfies OrgAIConfig;
+    expect(resolveOrgAIModelForOverrideGroup(picked, "browse")).toEqual(browse);
+    expect(resolveOrgAIModel(picked, { overrideGroup: "browse" })).toEqual(
+      browse,
+    );
+
+    const fastOnly = {
+      providers: [googleProvider],
+      overrideModels: { fast },
+      decision: null,
+    } satisfies OrgAIConfig;
+    expect(resolveOrgAIModelForOverrideGroup(fastOnly, "browse")).toEqual(fast);
+
+    const none = {
+      providers: [googleProvider],
+      overrideModels: null,
+      decision: null,
+    } satisfies OrgAIConfig;
+    expect(resolveOrgAIModelForOverrideGroup(none, "browse")).toEqual(
+      fastDefault,
+    );
+  });
+
+  test("a role that owns its task resolves exactly as its task does", () => {
+    const config = {
+      providers: [googleProvider],
+      overrideModels: {
+        chat: { provider: "google", modelId: "gemini-3.1-pro-preview" },
+      },
+      decision: null,
+    } satisfies OrgAIConfig;
+    for (const task of MODEL_TASKS) {
+      expect(resolveOrgAIModel(config, { task })).toEqual(
+        resolveOrgAIModelForTask(config, task),
+      );
+    }
+    expect(resolveOrgAIModelForOverrideGroup(config, "chat")).toEqual(
+      resolveOrgAIModelForTask(config, "chat"),
+    );
+    expect(resolveOrgAIModelForOverrideGroup(config, "pdf")).toEqual(
+      resolveOrgAIModelForTask(config, "pdf"),
+    );
   });
   test("defaults use the first configured provider that supports the task", () => {
     const config = {

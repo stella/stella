@@ -256,6 +256,47 @@ export const resolveOrgAIModelForTask = (
     : { provider: candidate.provider, modelId: candidate.modelId };
 };
 
+/**
+ * The model a role runs on: the admin's pick for that role, else the model of
+ * the task it inherits (`MODEL_OVERRIDE_GROUP_TASK`). For a role that owns its
+ * task this equals the task lookup; `browse` unset runs on the org's fast
+ * model, whether the admin picked one or it is the catalog default.
+ */
+export const resolveOrgAIModelForOverrideGroup = (
+  config: OrgAIConfig,
+  group: ModelOverrideGroup,
+): OrgAIModelSelection | null =>
+  config.overrideModels?.[group] ??
+  resolveOrgAIModelForTask(config, MODEL_OVERRIDE_GROUP_TASK[group]);
+
+/**
+ * What a model call is for: a task (its role's pick, else the task default)
+ * or a role whose pick the admin makes (its pick, else the task it inherits).
+ * The task decides capability checks and sampling; the lookup decides the
+ * model and is what usage analytics records.
+ */
+export type ModelLookup =
+  { task: ModelTask } | { overrideGroup: ModelOverrideGroup };
+
+export const modelLookupTask = (lookup: ModelLookup): ModelTask =>
+  "task" in lookup
+    ? lookup.task
+    : MODEL_OVERRIDE_GROUP_TASK[lookup.overrideGroup];
+
+/** The label usage analytics records: the task, or the role it ran for. */
+export const modelLookupLabel = (
+  lookup: ModelLookup,
+): ModelTask | ModelOverrideGroup =>
+  "task" in lookup ? lookup.task : lookup.overrideGroup;
+
+export const resolveOrgAIModel = (
+  config: OrgAIConfig,
+  lookup: ModelLookup,
+): OrgAIModelSelection | null =>
+  "task" in lookup
+    ? resolveOrgAIModelForTask(config, lookup.task)
+    : resolveOrgAIModelForOverrideGroup(config, lookup.overrideGroup);
+
 export const normalizeOrgAIConfig = (config: OrgAIConfig): OrgAIConfig => ({
   providers: config.providers.map(normalizeOrgAIProviderConfig),
   overrideModels: healOverrideModels(config.overrideModels),
