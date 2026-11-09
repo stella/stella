@@ -13,7 +13,7 @@ import {
   type HarnessToolCall,
 } from "./events";
 import { redactingSkillPaths, type SkillPathScope } from "./skill-redaction";
-import { shownToolInput } from "./tool-parts";
+import { HARNESS_TOOL_NAMES, shownToolInput } from "./tool-parts";
 
 const FOLDER = "/srv/member/skills/fixture-skill";
 const PLUGIN = "/data/harness-home/claude-code/stella-skill-plugins/abc";
@@ -288,9 +288,10 @@ describe("what a turn reports about its skill folders", () => {
     const request: HarnessApprovalRequest = {
       requestId: "r-1",
       kind: "command",
+      // An adapter asks about the call it built, named as chat keeps it.
       toolCall: {
         id: "call-1",
-        name: "Bash",
+        name: HARNESS_TOOL_NAMES.commandExecution,
         input: { command: `bun ${FOLDER}/scripts/run.ts` },
       },
       reason: `Runs a script in ${FOLDER}`,
