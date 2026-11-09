@@ -3,10 +3,16 @@ import * as v from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
+import type { TurnAppRead } from "@/api/handlers/chat/tools/show-app-tool";
+import { chatMcpAppForTool } from "@/api/lib/chat/mcp-app-catalog";
 import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { containsRawUuid } from "@/api/lib/chat/uuid-mask";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { runAsCorpusSearchCaller } from "@/api/lib/legal-search/corpus-index-admission";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { mcpPublicReadCallerKey } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
@@ -32,10 +38,12 @@ import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
+  getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { RequiresThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
+import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type {
   AllHandlerOutputsTyped,
   AssertTrue,
@@ -45,7 +53,10 @@ import type {
   McpToolResponse,
   TypedHandlerDataByName,
 } from "@/api/mcp/tool-types";
-import { validationErrorResult } from "@/api/mcp/tool-utils";
+import {
+  serializeToolResult,
+  validationErrorResult,
+} from "@/api/mcp/tool-utils";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizeMcpToolContext } from "@/api/mcp/write-tool-authority";
 
@@ -204,6 +215,11 @@ export type RunRegistryReadToolProps = {
         args: Record<string, unknown>,
       ) => Promise<Result<Record<string, unknown>, ChatToolError>>)
     | undefined;
+  /**
+   * Keeps a read a chat app presents, for the turn to show (`show_app`).
+   * The id it returns rides beside the projected payload as `appId`.
+   */
+  recordAppRead?: ((read: TurnAppRead) => string | undefined) | undefined;
 };
 
 /**
@@ -243,6 +259,46 @@ const runInjectedHandler = async ({
   return await handler({ args: parsed.output, context });
 };
 
+/**
+ * Chat waits for a continued read instead of handing the model a token: the
+ * turn is already open, so holding it costs nothing the model could use. Past
+ * this the model gets the honest running answer and may call again.
+ */
+const CHAT_CONTINUATION_WAIT_MS = 45_000;
+
+const runningContinuation = (response: McpToolResponse) =>
+  !isMcpEgressPlan(response) &&
+  response.status === "success" &&
+  isRecord(response.data) &&
+  response.data["status"] === "running" &&
+  typeof response.data["continuationToken"] === "string" &&
+  typeof response.data["retryAfterMs"] === "number"
+    ? {
+        token: response.data["continuationToken"],
+        retryAfterMs: response.data["retryAfterMs"],
+      }
+    : null;
+
+const waitOutContinuation = async (
+  first: McpToolResponse,
+  args: Record<string, unknown>,
+  run: (runArgs: Record<string, unknown>) => Promise<McpToolResponse>,
+): Promise<McpToolResponse> => {
+  const deadlineAt = performance.now() + CHAT_CONTINUATION_WAIT_MS;
+  let response = first;
+  for (
+    let running = runningContinuation(response);
+    running !== null && performance.now() < deadlineAt;
+    running = runningContinuation(response)
+  ) {
+    await Bun.sleep(
+      Math.min(running.retryAfterMs, deadlineAt - performance.now()),
+    );
+    response = await run({ ...args, continuation_token: running.token });
+  }
+  return response;
+};
+
 /** The key the boundary's input notes ride under beside a read's payload. */
 const CHAT_INPUT_NOTES_KEY = "inputRead";
 
@@ -263,6 +319,59 @@ const withChatInputNotes = (
     : { ...payload, [CHAT_INPUT_NOTES_KEY]: safe };
 };
 
+const APP_READ_CONTRACT_SINK = failureSink({
+  event: "chat.app_read_contract_violated",
+  expected: [],
+});
+
+/** The key the turn's id for a read an app can show rides under. */
+const CHAT_APP_ID_KEY = "appId";
+
+const withAppId = (payload: unknown, appId: string | undefined): unknown =>
+  appId === undefined || !isRecord(payload)
+    ? payload
+    : { ...payload, [CHAT_APP_ID_KEY]: appId };
+
+/**
+ * Keep a read a chat app presents with the MCP result an MCP client would
+ * have received, which is what the app reads. Any other read is not kept.
+ */
+const recordShownRead = ({
+  toolName,
+  args,
+  result,
+  record,
+}: {
+  toolName: RegistryReadToolName;
+  args: Record<string, unknown>;
+  result: InternalToolResult;
+  record: (read: TurnAppRead) => string | undefined;
+}): string | undefined => {
+  if (chatMcpAppForTool(toolName) === undefined) {
+    return undefined;
+  }
+  // The MCP contract is stricter than the chat projection in places; a read
+  // the chat could show but an MCP client could not receive shows no app.
+  const wire = Result.try(() =>
+    serializeToolResult(
+      result,
+      getStaticMcpToolOutputContract(toolName),
+      toolName,
+    ),
+  );
+  if (Result.isError(wire)) {
+    observeFailure(wire.error, { sink: APP_READ_CONTRACT_SINK });
+    return undefined;
+  }
+  const { structuredContent } = wire.value;
+  return isRecord(structuredContent) && !Array.isArray(structuredContent)
+    ? record({
+        toolName,
+        call: { input: args, result: { structuredContent } },
+      })
+    : undefined;
+};
+
 /** What running one registry read answered, before any surface shaped it. */
 export type RegistryReadOutcome =
   /** Refused before the handler ran: the tool is off or the caller may not. */
@@ -271,7 +380,13 @@ export type RegistryReadOutcome =
    * The read's own answer after egress, a validation refusal included, as
    * the MCP server would serialize it.
    */
-  | { type: "answered"; result: InternalToolResult; notes: readonly string[] };
+  | {
+      type: "answered";
+      result: InternalToolResult;
+      notes: readonly string[];
+      /** The arguments the handler ran with, after normalization. */
+      args: Record<string, unknown>;
+    };
 
 type ExecuteRegistryReadProps = {
   toolName: RegistryReadToolName;
@@ -337,6 +452,7 @@ export const executeRegistryRead = async ({
         subject: `${toolName} arguments`,
       }),
       notes: [],
+      args,
     };
   }
   const scoped =
@@ -364,24 +480,38 @@ export const executeRegistryRead = async ({
   }
   const authorizedContext = authorization.context;
 
-  const response =
-    handler === undefined
-      ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
-          args: scoped.value,
-          context: authorizedContext,
-        })
-      : await runInjectedHandler({
-          args: scoped.value,
-          context: authorizedContext,
-          toolName,
-          handler,
-        });
+  const invoke = async (invokeArgs: Record<string, unknown>) =>
+    await runAsCorpusSearchCaller(
+      mcpPublicReadCallerKey(authorizedContext),
+      async () =>
+        handler === undefined
+          ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
+              args: invokeArgs,
+              context: authorizedContext,
+            })
+          : await runInjectedHandler({
+              args: invokeArgs,
+              context: authorizedContext,
+              toolName,
+              handler,
+            }),
+    );
+  const response = await waitOutContinuation(
+    await invoke(scoped.value),
+    scoped.value,
+    invoke,
+  );
   const finished = await finalizeToolEgress({
     context: authorizedContext,
     mode: "default",
     response,
   });
-  return { type: "answered", result: finished, notes: normalized.notes };
+  return {
+    type: "answered",
+    result: finished,
+    notes: normalized.notes,
+    args: scoped.value,
+  };
 };
 
 export const isRegistryReadToolName = (
@@ -409,6 +539,7 @@ export const runRegistryReadTool = async ({
   refRegistry,
   handler,
   scopeArgs,
+  recordAppRead,
 }: RunRegistryReadToolProps): Promise<Result<unknown, ChatToolError>> => {
   if (!isProjectableRegistryReadToolName(toolName)) {
     return Result.err(
@@ -452,7 +583,19 @@ export const runRegistryReadTool = async ({
     source: "run-registry-tool",
     toolName,
   });
-  return Result.isError(projected)
-    ? projected
-    : Result.ok(withChatInputNotes(projected.value, outcome.notes));
+  if (Result.isError(projected)) {
+    return projected;
+  }
+  const appId =
+    recordAppRead === undefined
+      ? undefined
+      : recordShownRead({
+          toolName,
+          args: outcome.args,
+          result: finished,
+          record: recordAppRead,
+        });
+  return Result.ok(
+    withAppId(withChatInputNotes(projected.value, outcome.notes), appId),
+  );
 };

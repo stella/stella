@@ -305,6 +305,9 @@ type McpCapabilityReason =
  * - `native_device`: a native app registering the device it runs on (push
  *   alert delivery). Only the signed-in app holds the device token; an agent
  *   that could register one could route a person's alerts elsewhere.
+ * - `agent_autonomy_ceiling`: an organization's limit on how much an agent
+ *   may do without asking. An agent that could change it could raise its
+ *   own limit, so only an administrator in the app sets it.
  */
 type McpInternalReason =
   | "auth_plumbing"
@@ -329,7 +332,8 @@ type McpInternalReason =
   | "native_tool_ui"
   | "billing_ui"
   | "compound_consent"
-  | "native_device";
+  | "native_device"
+  | "agent_autonomy_ceiling";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler

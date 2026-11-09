@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "bringReleaseLoadJobsForward (apps/api/src/lib/smoke-session/store.ts) sets scheduler_jobs.next_run_at to now for six fixed recurring corpus jobs, on the staging deployment only, so the release proof's MCP load overlaps them. It is scheduler system state with no organization or user; the smoke route logs the ids it moved as smoke.scheduled_jobs_brought_forward."
+}

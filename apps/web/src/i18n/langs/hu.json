@@ -92,6 +92,7 @@
     "countSummary": "{columns} oszlop × {rows} sor = {answers, plural, one {# válasz} other {# válasz}}. A válaszok felhasználják a keretet.",
     "modelRefused": "A modell megtagadta a választ",
     "nothingFound": "Nincs találat",
+    "nothingFoundInCutDocument": "Az elolvasott részben nem található semmi",
     "refusedBudget": "Nem futott le: a válaszkeret nem érhető el",
     "rerunAllPage": "Összes újrafuttatása (ezen az oldalon)",
     "rerunColumnPage": "Oszlop újrafuttatása (ezen az oldalon)",
@@ -1695,6 +1696,7 @@
       "errorUnavailable": "A számítógépe leállította ennek a válasznak a feldolgozását. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
       "filesNotShared": "A meg nem osztható fájlok a számítógépén maradnak: {fileNames}",
       "onThisComputer": "{harness} ezen a számítógépen",
+      "permissionAboveLimit": "A szervezete nem engedélyezi",
       "permissionAskDescription": "A csevegés mappájában lévő fájlokat magától szerkeszti; minden más előtt rákérdez.",
       "permissionAutoDescription": "Amit biztonságosnak ítél, magától elvégzi; a többire rákérdez.",
       "permissionFullAuto": "Teljesen automatikus",
@@ -1706,6 +1708,7 @@
       "refusalHarnessUnavailable": "A számítógépén futó kódoló ügynök most nem tudja fogadni ezt a kérést. Ellenőrizze a stella desktopban.",
       "refusalModelUnavailable": "A számítógépén futó kódoló ügynök már nem kínálja ezt a modellt. Válasszon másikat a Futtatás itt menüben.",
       "refusalNoComputer": "Egyik számítógépe sem csatlakozik. Nyissa meg a stella desktopot, majd küldje el újra.",
+      "refusalPermissionAboveLimit": "A szervezete nem adja meg ezeket az engedélyeket a számítógépén futó kódoló ügynöknek. Válasszon másik lehetőséget az Engedélyek menüben.",
       "refusalPermissionUnavailable": "A számítógépén futó kódoló ügynök nem futhat ezekkel az engedélyekkel. Válasszon másik lehetőséget az Engedélyek menüben.",
       "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
@@ -2027,6 +2030,7 @@
       "search-past-chats": "Keresés a korábbi csevegésekben",
       "set_field_value": "Mezőérték beállítása",
       "set_practice_jurisdictions": "Joghatóságok beállítása",
+      "show_app": "Interaktív nézet megjelenítése",
       "show_in_document": "Megjelenítés a dokumentumban",
       "spawn_subagents": "Delegálás alügynököknek",
       "suggestChangesApplied": "{applied, plural, one {# módosítás alkalmazva} other {# módosítás alkalmazva}}",
@@ -4038,6 +4042,8 @@
       "description": "Válasszon egy kidolgozott playbookot, referenciadokumentumokat vagy mindkettőt.",
       "dismissFinding": "Megállapítás elvetése",
       "documentChanged": "A dokumentum az ellenőrzés óta megváltozott.",
+      "documentCutNotice": "<strong>A(z) {documentName} dokumentumot nem sikerült teljes egészében elolvasni.</strong> Ehhez a modellhez túl hosszú, ezért a szöveg körülbelül {percent}-a kimaradt. A válasz nélküli pozíció ellenőrzésre jelölve jelenik meg, mert a válasz a kimaradt részben is lehet.",
+      "documentTooLarge": "Ez a dokumentum túl hosszú ahhoz, hogy ez a modell elegendő részét elolvassa. Próbáljon nagyobb kontextusablakkal rendelkező modellt.",
       "export": {
         "counterparty": "Letöltés az ellenfélnek",
         "counterpartyFailed": "A dokumentumot nem sikerült exportálni",
@@ -5637,6 +5643,11 @@
         "labelAria": "Dokumentumtípus neve",
         "reorder": "Dokumentumtípus átrendezése",
         "title": "Dokumentumtípusok"
+      },
+      "localRuns": {
+        "description": "Legfeljebb ennyit tehet meg egy kódoló ügynök kérdezés nélkül, amikor egy tag számítógépén futtat egy csevegést. Az alacsonyabb korlát minden tag következő üzenetétől érvényes; a már futó munkamenet megtartja az engedélyeit.",
+        "title": "Kódoló ügynökök a tagok számítógépein",
+        "updated": "A kódoló ügynökök engedélyei frissítve"
       },
       "matterNumbering": "Ügyszámozás",
       "matterNumberingDescription": "Beállíthatja, hogyan generálódjanak az új ügyek hivatkozási számai",

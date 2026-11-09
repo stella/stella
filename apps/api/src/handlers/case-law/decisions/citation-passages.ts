@@ -96,6 +96,8 @@ export type DecisionCitationsPage = {
   doctrineAvailability: "available" | "unavailable";
   items: CitationWithPassage[];
   nextCursor: string | null;
+  /** Rows the page read before a passage filter, present only with one. */
+  scannedCitations?: number;
 };
 
 /** An invalid cursor, told apart from "no such public decision" (null). */
@@ -111,6 +113,15 @@ export type DecisionCitationsRead =
  * citation rather than sent whole.
  */
 const PASSAGE_MAX_CHARS = LIMITS.caseLawCitationPassageChars;
+
+/**
+ * Keeps a citation by the text of its citing paragraph, in that decision's
+ * language: the whole paragraph, not the excerpt a reply carries of it.
+ */
+export type CitationPassageFilter = (
+  paragraph: string,
+  language: string,
+) => boolean;
 
 /** Documents whose AST is fetched at once while resolving one page. */
 const PASSAGE_AST_GROUP_SIZE = LIMITS.caseLawCitationPassageConcurrency;
@@ -128,6 +139,7 @@ type PassageSourcePointer = {
   id: SafeId<"caseLawDecision">;
   astS3Key: string | null;
   contentHash: string | null;
+  language: string;
   versionTimestamp: string;
   extractionWarnings: ExtractionWarnings;
   textWithheldReason: DecisionTextWithheldReason | null;
@@ -146,6 +158,7 @@ const readPassageSourcePointers = async (
       id: publishedCaseLawDecisions.id,
       astS3Key: publishedCaseLawDecisions.astS3Key,
       contentHash: publishedCaseLawDecisions.contentHash,
+      language: publishedCaseLawDecisions.language,
       updatedAt: publishedCaseLawDecisions.updatedAt,
       versionTimestamp: pgTimestampCursorValue(
         publishedCaseLawDecisions.updatedAt,
@@ -174,17 +187,17 @@ type Excerpt = { text: string; truncated: boolean };
  * `caseLawDecisionCitationPageSize` of them, so what travels with a citation
  * is centred on the citation rather than sent whole.
  */
-const excerptAround = (text: string, at: number, length: number): Excerpt => {
-  if (text.length <= PASSAGE_MAX_CHARS) {
+const excerptAround = (
+  text: string,
+  { at, length, maxChars }: { at: number; length: number; maxChars: number },
+): Excerpt => {
+  if (text.length <= maxChars) {
     return { text, truncated: false };
   }
-  const margin = Math.max(0, Math.floor((PASSAGE_MAX_CHARS - length) / 2));
-  const start = Math.max(
-    0,
-    Math.min(at - margin, text.length - PASSAGE_MAX_CHARS),
-  );
+  const margin = Math.max(0, Math.floor((maxChars - length) / 2));
+  const start = Math.max(0, Math.min(at - margin, text.length - maxChars));
   return {
-    text: text.slice(start, start + PASSAGE_MAX_CHARS),
+    text: text.slice(start, start + maxChars),
     truncated: true,
   };
 };
@@ -195,6 +208,10 @@ export type CitationPassageOptions = {
   /** The section the citation row was extracted from, when the row kept it. */
   classifiedBlockIds?: readonly string[] | undefined;
   evidenceQuote?: string | null;
+  /** Excerpt length; `PASSAGE_MAX_CHARS` when absent. */
+  maxChars?: number | undefined;
+  /** No passage when the citing paragraph does not satisfy this. */
+  paragraphMatches?: ((paragraph: string) => boolean) | undefined;
 };
 
 /**
@@ -210,13 +227,18 @@ export const citationPassageIn = ({
   citationText,
   classifiedBlockIds,
   evidenceQuote,
+  maxChars = PASSAGE_MAX_CHARS,
+  paragraphMatches,
 }: CitationPassageOptions): CitationPassage | null => {
   const match = findCitationPassage({
     blocks: ast.blocks,
     citationText,
     classifiedBlockIds,
   });
-  if (match === null) {
+  if (
+    match === null ||
+    (paragraphMatches !== undefined && !paragraphMatches(match.text))
+  ) {
     return null;
   }
   // The quote anchors to the paragraph that carries it, which need not repeat
@@ -240,11 +262,11 @@ export const citationPassageIn = ({
   ) {
     logger.warn("case_law.citation_passage.doctrine_evidence_unavailable", {});
   }
-  const excerpt = excerptAround(
-    match.text,
-    match.start,
-    match.end - match.start,
-  );
+  const excerpt = excerptAround(match.text, {
+    at: match.start,
+    length: match.end - match.start,
+    maxChars,
+  });
   return {
     anchorId: match.anchorId,
     text: excerpt.text,
@@ -261,6 +283,7 @@ export const citationPassageIn = ({
 /** A citing decision's text, as a passage read needs to see it. */
 type DecisionText = {
   ast: DocumentAst;
+  language: string;
   sections: Awaited<ReturnType<typeof readDecisionSectionIndex>>;
 };
 
@@ -373,7 +396,10 @@ const readDecisionTextGroup = async ({
         });
         return changed.has(pointer.id)
           ? null
-          : { id: pointer.id, text: { ast, sections } };
+          : {
+              id: pointer.id,
+              text: { ast, language: pointer.language, sections },
+            };
       });
       if (Result.isError(read)) {
         logger.warn("case_law.citation_passage.ast_unavailable", {
@@ -486,6 +512,13 @@ export type ReadDecisionCitationsOptions = {
   limit: number;
   /** The surface the read serves; its country list decides publication. */
   surface: PublicCountrySurface;
+  /** Passage excerpt length; the full allowance when absent. */
+  passageChars?: number;
+  /**
+   * Keeps only rows whose citing paragraph satisfies it. A row with no
+   * paragraph to read is dropped too: the filter cannot say it matches.
+   */
+  passageFilter?: CitationPassageFilter;
 };
 
 const statusCodeOf = (result: { code: number | string }): number =>
@@ -508,6 +541,8 @@ export const readGatedDecisionCitations = defineWindowedRead(
     polarity,
     limit,
     surface,
+    passageChars,
+    passageFilter,
   }: ReadDecisionCitationsOptions): Promise<DecisionCitationsRead | null> => {
     const gated = await withRedistributableSubject(
       caseLawDb,
@@ -568,7 +603,7 @@ export const readGatedDecisionCitations = defineWindowedRead(
         citingId: String(citation.printedBy),
       })),
     });
-    const items = resolved.map(
+    const withPassages = resolved.map(
       ({ citation: item, disposition }): CitationWithPassage => {
         const { evidenceQuote, printedBy: _printedBy, ...citation } = item;
         switch (disposition.type) {
@@ -593,8 +628,9 @@ export const readGatedDecisionCitations = defineWindowedRead(
                   ? null
                   : citationPassageIn({
                       evidenceQuote:
-                        item.doctrine === "distinguishes" ||
-                        item.doctrine === "limits"
+                        passageChars === undefined &&
+                        (item.doctrine === "distinguishes" ||
+                          item.doctrine === "limits")
                           ? evidenceQuote
                           : null,
                       ast: text.ast,
@@ -603,6 +639,12 @@ export const readGatedDecisionCitations = defineWindowedRead(
                         text,
                         item.sectionIndex,
                       ),
+                      maxChars: passageChars,
+                      paragraphMatches:
+                        passageFilter === undefined
+                          ? undefined
+                          : (paragraph) =>
+                              passageFilter(paragraph, text.language),
                     }),
             };
           }
@@ -615,9 +657,15 @@ export const readGatedDecisionCitations = defineWindowedRead(
 
     return {
       page: {
-        items,
+        items:
+          passageFilter === undefined
+            ? withPassages
+            : withPassages.filter(({ passage }) => passage !== null),
         nextCursor: gated.page.nextCursor,
         doctrineAvailability: gated.page.doctrineAvailability,
+        ...(passageFilter === undefined
+          ? {}
+          : { scannedCitations: withPassages.length }),
       },
       type: "page",
     };

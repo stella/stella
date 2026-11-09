@@ -122,21 +122,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-57",
           "excerpt": "dle odst. 1 písm. b) hranici 10 procent na hranici 6 procent ⏎ písm. c)"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-149",
-          "excerpt": "nodárce, rozhodně by však neměla absentovat jakákoli podobná ⏎ pojistka."
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-162",
-          "excerpt": "o změně a doplnění některých dalších zákonů, ve znění zákona ⏎ č. 204/2000 Sb., které zní \"Politické straně, politickému"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-165",
-          "excerpt": "átní příspěvek a jeho výše vycházejí až z výsledků voleb, na ⏎ rozdíl od kaucí, které mohou být někdy obtížně překonatel"
         }
       ],
       "cz-us-page.json.gz[4]": [
@@ -307,28 +292,13 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-7",
-          "excerpt": "otorových vozidel a doprava, trvale bytem Adresa obviněného, ⏎ je vinen, že"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-12",
           "excerpt": "becného zájmu a spáchal takový čin vůči úřední osobě (ad 1), ⏎ jednak poskytl jinému úplatek v souvislosti s obstarávání"
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-13",
-          "excerpt": "becného zájmu a spáchal takový čin vůči úřední osobě (ad 2), ⏎ čímž spáchal"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-15",
           "excerpt": " 1 alinea první, odst. 2 písm. b) trestního zákoníku (ad 1), ⏎ jednak zločin podplacení podle § 332 odst. 1 alinea první"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-16",
-          "excerpt": " 1 alinea první, odst. 2 písm. b) trestního zákoníku (ad 2), ⏎ a odsuzuje se"
         }
       ]
     },
@@ -1459,16 +1429,6 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-30",
-          "excerpt": "kę akcyjną w Warszawie – tytułem wynagrodzenia pełnomocnika, ⏎ 3.2. zasądza od wykonawcy A. Polska Spółka z ograniczoną "
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-35",
-          "excerpt": "kę akcyjną w Warszawie – tytułem wynagrodzenia pełnomocnika, ⏎ 4.2. zasądza od wykonawcy B-Act Spółka akcyjna w Bydgoszc"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-79",
           "excerpt": "tyczące zgodności z przepisami o minimalnym wynagrodzeniu za ⏎ pracę oraz minimalnej stawce godzinowej, ustalonych na po"
         },
@@ -1496,11 +1456,6 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-14",
-          "excerpt": "z ograniczoną odpowiedzialnością tytułem wpisu od odwołania, ⏎ 2.2. zasądza od Uniwersytetu Medycznego im. Piastów Śląsk"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-81",
           "excerpt": "równowartość kwoty 20.000.000 euro, a dla dostaw lub usług - ⏎ 10.000.000 euro;"
         }
@@ -1513,11 +1468,6 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-14",
-          "excerpt": "z ograniczoną odpowiedzialnością tytułem wpisu od odwołania, ⏎ 2.2. zasądza od Uniwersytetu Medycznego im. Piastów Śląsk"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-81",
           "excerpt": "równowartość kwoty 20.000.000 euro, a dla dostaw lub usług - ⏎ 10.000.000 euro;"
         }
@@ -1527,16 +1477,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-23",
           "excerpt": "mówienia publicznego prowadzonym przez innego zamawiającego, ⏎ ii. nie upłynął 2-letni okres wykluczenia SAFEGE S.A.S. w"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-30",
-          "excerpt": "kę akcyjną w Warszawie – tytułem wynagrodzenia pełnomocnika, ⏎ 3.2. zasądza od wykonawcy A. Polska Spółka z ograniczoną "
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-35",
-          "excerpt": "kę akcyjną w Warszawie – tytułem wynagrodzenia pełnomocnika, ⏎ 4.2. zasądza od wykonawcy B-Act Spółka akcyjna w Bydgoszc"
         },
         {
           "rule": "sentence-cut",

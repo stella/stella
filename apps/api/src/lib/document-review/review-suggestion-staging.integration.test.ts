@@ -74,6 +74,7 @@ const basis: DocumentReviewRunBasis = {
     definitionSnapshot: {
       name: "Positions confirmed for this review",
       positions: { version: 3, items: [] },
+      scope: null,
     },
   },
   perspective: { type: "party", role: "Purchaser", name: null },
@@ -510,6 +511,7 @@ describe("a re-run after the reviewer dismissed a staged fix", () => {
             },
           ],
         },
+        scope: null,
       },
     },
   });

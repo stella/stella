@@ -32,6 +32,7 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
   "chat_message_revisions.content",
   "chat_run_log_entries.chunk",
   "chat_run_logs.reference_summary",
+  "desktop_runner_app_calls.result",
   "desktop_runner_commands.payload",
   "desktop_runner_events.message",
   "entity_versions.collaboration_contributor_user_ids",
@@ -121,6 +122,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "document_review_parties.parties",
   "document_review_runs.basis",
   "document_review_runs.skipped",
+  "document_review_runs.withheld_sources",
   "document_translation_runs.warnings",
   "document_translation_units.application",
   "document_translation_units.warnings",
@@ -491,6 +493,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Run log history; tool payloads name members as they were.",
   "chat_run_logs.reference_summary":
     "Derived conversation context can retain member identifiers in text; it grants no membership and expires with the run log.",
+  "desktop_runner_app_calls.result":
+    "Answers the server gave the member's own runs, deleted with their runner on organization removal; tool results name people as they were.",
   "desktop_runner_commands.payload":
     "Commands of the member's own runs, deleted with their runner on organization removal; transcripts name members as they were.",
   "desktop_runner_events.message":

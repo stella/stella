@@ -92,6 +92,7 @@
     "countSummary": "{columns} stĺpcov × {rows} riadkov = {answers, plural, one {# odpoveď} few {# odpovede} many {# odpovede} other {# odpovedí}}. Odpovede čerpajú rozpočet.",
     "modelRefused": "Model odmietol odpovedať",
     "nothingFound": "Nič sa nenašlo",
+    "nothingFoundInCutDocument": "V prečítanej časti sa nič nenašlo",
     "refusedBudget": "Nespustené: rozpočet na odpovede nie je k dispozícii",
     "rerunAllPage": "Spustiť všetko znova (táto stránka)",
     "rerunColumnPage": "Spustiť stĺpec znova (táto stránka)",
@@ -1695,6 +1696,7 @@
       "errorUnavailable": "Váš počítač prestal túto odpoveď spracúvať. Overte, že je stella desktop spustený a pripojený, a skúste to znova.",
       "filesNotShared": "Súbory, ktoré sa nepodarilo zdieľať, zostávajú vo vašom počítači: {fileNames}",
       "onThisComputer": "{harness} v tomto počítači",
+      "permissionAboveLimit": "Vaša organizácia to nepovoľuje",
       "permissionAskDescription": "Súbory v priečinku chatu upravuje sám; na všetko ostatné sa opýta.",
       "permissionAutoDescription": "Čo považuje za bezpečné, urobí sám; na zvyšok sa opýta.",
       "permissionFullAuto": "Plne automaticky",
@@ -1706,6 +1708,7 @@
       "refusalHarnessUnavailable": "Programovací agent vo vašom počítači teraz túto požiadavku nemôže prevziať. Skontrolujte ho v stella desktop.",
       "refusalModelUnavailable": "Programovací agent vo vašom počítači už tento model neponúka. Vyberte iný v ponuke Spustiť na.",
       "refusalNoComputer": "Žiadny z vašich počítačov nie je pripojený. Otvorte stella desktop a odošlite správu znova.",
+      "refusalPermissionAboveLimit": "Vaša organizácia tieto oprávnenia programovaciemu agentovi vo vašom počítači nepovoľuje. Vyberte inú možnosť v ponuke Oprávnenia.",
       "refusalPermissionUnavailable": "Programovací agent vo vašom počítači s týmito oprávneniami bežať nemôže. Vyberte inú možnosť v ponuke Oprávnenia.",
       "refusalTooLarge": "Táto konverzácia je príliš dlhá na odovzdanie do vášho počítača. Na spustenie tam začnite nový chat.",
       "refusalUnavailable": "Spúšťanie chatov vo vašom počítači nie je pre váš účet dostupné.",
@@ -2027,6 +2030,7 @@
       "search-past-chats": "Prehľadávanie predchádzajúcich chatov",
       "set_field_value": "Nastaviť hodnotu poľa",
       "set_practice_jurisdictions": "Nastaviť jurisdikcie",
+      "show_app": "Zobrazenie interaktívneho prehľadu",
       "show_in_document": "Zobrazenie v dokumente",
       "spawn_subagents": "Delegovanie na čiastkových agentov",
       "suggestChangesApplied": "{applied, plural, one {Použitá # úprava} few {Použité # úpravy} many {Použitých # úprav} other {Použitých # úpravy}}",
@@ -4038,6 +4042,8 @@
       "description": "Vyberte pripravený playbook, referenčné dokumenty alebo oboje.",
       "dismissFinding": "Zamietnuť zistenie",
       "documentChanged": "Dokument sa od tejto kontroly zmenil.",
+      "documentCutNotice": "<strong>Dokument {documentName} nebol prečítaný celý.</strong> Pre tento model je príliš dlhý, preto bolo vynechaných približne {percent} jeho textu. Pozícia bez odpovede je označená na kontrolu, pretože odpoveď môže byť vo vynechanej časti.",
+      "documentTooLarge": "Tento dokument je príliš dlhý na to, aby z neho tento model prečítal dostatočnú časť. Skúste model s väčším kontextovým oknom.",
       "export": {
         "counterparty": "Stiahnuť pre protistranu",
         "counterpartyFailed": "Dokument sa nepodarilo exportovať",
@@ -5637,6 +5643,11 @@
         "labelAria": "Názov typu dokumentu",
         "reorder": "Zmeniť poradie typu dokumentu",
         "title": "Typy dokumentov"
+      },
+      "localRuns": {
+        "description": "Najviac, čo smie programovací agent urobiť bez pýtania, keď spúšťa chat v počítači člena. Nižší limit platí od ďalšej správy každého člena; beh, ktorý už prebieha, si svoje oprávnenia ponechá.",
+        "title": "Programovací agenti v počítačoch členov",
+        "updated": "Oprávnenia programovacích agentov boli aktualizované"
       },
       "matterNumbering": "Číslovanie spisov",
       "matterNumberingDescription": "Nakonfigurujte, ako sa generujú referenčné čísla nových spisov",

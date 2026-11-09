@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import { stripPromptUnsafeChars } from "@/api/lib/prompt-safety";
 import {
   citationTextMatches,
   normalizeForCitationMatch,
@@ -181,6 +182,19 @@ describe("citationTextMatches — grounding decision", () => {
   test("real quote differing only by NBSP/curly-quote/dash/NFC still verifies", () => {
     const block = `Le vendeur s${RIGHT_SQUOTE}engage à indemniser l${RIGHT_SQUOTE}acheteur${NBSP}${EM_DASH} sans délai${NBSP}${EM_DASH} de toute perte.`;
     const quote = `s'engage à indemniser l'acheteur - sans de${COMBINING_ACUTE}lai - de toute perte`;
+    expect(citationTextMatches({ quote, source: block })).toBe(true);
+  });
+
+  // Prompt sanitizing removes these characters, so the model's quote lacks them.
+  test.each([
+    ["Persian non-joiner", "می\u200cخواهد"],
+    ["Hebrew right-to-left mark", "סעיף\u200f 5"],
+    ["Arabic embedding", "\u202bالبند 5\u202c"],
+    ["isolate", "\u2067البند 5\u2069"],
+  ])("a quote sanitized for the prompt verifies: %s", (_, block) => {
+    const quote = stripPromptUnsafeChars(block);
+
+    expect(quote).not.toBe(block);
     expect(citationTextMatches({ quote, source: block })).toBe(true);
   });
 });

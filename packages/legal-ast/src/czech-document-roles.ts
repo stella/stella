@@ -1,10 +1,13 @@
-// parser-output-unchanged: [cz-ns] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
-// parser-output-unchanged: [cz-nss] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
-// parser-output-unchanged: [cz-us] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
-// parser-output-unchanged: [cz-regional] only adds the authority head-matter, lead-in, title, instruction-heading and office-signature predicates, which only the ÚOHS reader calls.
+// parser-output-unchanged: [cz-regional] only adds the bench-recital rule, which only the Supreme and Constitutional Court readers call.
+// parser-output-unchanged: [cz-uohs] only adds the bench-recital rule, which only the Supreme and Constitutional Court readers call.
+// parser-output-unchanged: [cz-nss] only adds the bench-recital rule, which only the Supreme and Constitutional Court readers call.
 import { collapseSpacedLetters, normalizeUnicode } from "@stll/text-normalize";
 
 import type { Block, ParagraphBlock } from "./document-ast.js";
+import {
+  PRINTED_LABEL_KIND,
+  readPrintedLabel,
+} from "./printed-paragraph-labels.js";
 
 /** Closing formula: `V Brně dne 6. ledna 2016`, `Brno 15. května 2023`. */
 export const CZ_CLOSING_RE =
@@ -125,6 +128,54 @@ const BARE_SIGNATORY_NAME_RE =
 /** Whether a line is a bare personal name, as a judge signs without a title. */
 export const isCzechBareSignatoryName = (text: string): boolean =>
   BARE_SIGNATORY_NAME_RE.test(text.trim());
+
+/** One academic degree printed before a Czech signatory's name. */
+const DEGREE_BEFORE_NAME_RE =
+  /^(?:JUDr|Mgr|MgA|doc|prof|PhDr|Ing|Bc|BcA|RNDr|MUDr|ThDr|PaedDr|Dr)\. ?/u;
+/** One degree printed after the name, with its comma. */
+const DEGREE_AFTER_NAME_RE =
+  /,? ?(?:Ph\. ?D\.|Th\. ?D\.|LL\. ?M\.|M\. ?A\.|CSc\.|DrSc\.|MSc\.|MBA)$/u;
+/** Longest line a signed name with its degrees takes. */
+const SIGNATURE_NAME_MAX_CHARS = 80;
+/** More degrees than any signatory carries on one side of a name. */
+const MAX_DEGREES_PER_SIDE = 4;
+
+const withoutDegrees = (name: string): string => {
+  let bare = name;
+  for (let step = 0; step < MAX_DEGREES_PER_SIDE; step += 1) {
+    bare = bare
+      .replace(DEGREE_BEFORE_NAME_RE, "")
+      .replace(DEGREE_AFTER_NAME_RE, "")
+      .trim();
+  }
+  return bare;
+};
+
+/**
+ * A signatory's name as a Czech court prints it under the closing: a
+ * personal name, with or without its academic degrees (`JUDr. Miluše
+ * Došková`, `Mgr. Miroslav Hromada, Ph.D.`), the `v. r.` signature mark, or
+ * a letter-spaced surname (`JUDr. František B a l á k, v.r.`).
+ */
+export const isCzechSignatoryName = (text: string): boolean =>
+  text.trim().length < SIGNATURE_NAME_MAX_CHARS &&
+  isCzechBareSignatoryName(withoutDegrees(normalizeCzechJudgeName(text)));
+
+/**
+ * The court office's certification that a copy matches the decision
+ * (`Za správnost vyhotovení:`), printed under the judges' signatures with
+ * the name of the clerk who made the copy. It is not a judge's signature.
+ */
+const COPY_CERTIFICATION_RE = /^Za správnost vyhotovení(?!\p{L})/iu;
+
+/** Whether a line opens the certification of a decision's copy. */
+export const isCzechCopyCertification = (text: string): boolean =>
+  COPY_CERTIFICATION_RE.test(
+    // Spaced letters are joined while the wider word gap still shows.
+    collapseSpacedLetters(
+      normalizeUnicode(text, "NFC").replaceAll("\u00a0", " ").trim(),
+    ).replaceAll(/\s+/gu, " "),
+  );
 
 /** An office printed beside a signed name in Czech public documents. */
 const CZ_PUBLIC_OFFICE_TITLE_RE = /^(?:vice)?guvernér(?:ka)?\s*:?$/iu;
@@ -257,4 +308,80 @@ export const czechAuthorityHeadRoles = (
     }
     return index < reasons ? "holding" : undefined;
   });
+};
+
+/**
+ * The lines a criminal verdict prints between the parts of its ruling, each
+ * on its own line: `je vinen, že`, `tedy`, `čímž spáchal`, `tím spáchal`,
+ * `přičemž`, `a odsuzuje se`. The verdict's sentence runs on across them by
+ * the court's own layout, not where a line or a page ended.
+ */
+const VERDICT_FORMULA_RE =
+  /^(?:(?:je|jsou) vinn?\p{Ll}*,? že|tedy|čímž? spáchal\p{Ll}*|tím spáchal\p{Ll}*|přičemž|a odsuzuj\p{Ll}+ se)(?!\p{L})/iu;
+
+/** Whether a line opens one of a criminal verdict's formula lines. */
+export const isCzechVerdictFormulaLine = (text: string): boolean =>
+  VERDICT_FORMULA_RE.test(
+    collapseSpacedLetters(text.trim()).replaceAll(/\s+/gu, " "),
+  );
+
+/** Most paragraphs a bench recital is printed in. */
+const BENCH_RECITAL_MAX_PARAGRAPHS = 3;
+/** The labels a court numbers its paragraphs with: `12.`, `[12]`, `5.5.`. */
+const COURT_NUMBER_KINDS: ReadonlySet<string> = new Set([
+  PRINTED_LABEL_KIND.BRACKET,
+  PRINTED_LABEL_KIND.NUMBER,
+  PRINTED_LABEL_KIND.SUBNUMBER,
+]);
+
+/** Whether a paragraph opens on the court's number: it is reasoning. */
+const opensOnCourtNumber = (text: string): boolean => {
+  const label = readPrintedLabel(text);
+  return label !== null && COURT_NUMBER_KINDS.has(label.kind);
+};
+/** The verb a bench recital states its decision with (`… rozhodl …`). */
+const BENCH_DECIDED_RE = /(?<!\p{L})rozhodl[aoi]?(?!\p{L})/iu;
+
+/**
+ * Where the bench recital ending before `end` starts (`Ústavní soud České
+ * republiky` / `v senátě rozhodl ve věci … `, or one paragraph ending
+ * `takto:`): the role-less paragraphs that run back to the decision's head
+ * matter (its title, docket or opening formula). Only a short recital that
+ * carries no court number and states the bench's decision (`rozhodl`) is
+ * one, so a `takto:` the reasons quote, or a docket line above it, is not;
+ * `undefined` when the paragraphs before `end` are no recital. A reader
+ * whose blocks open after the head matter it keeps apart says so with
+ * `opensAfterHeadMatter`: a recital may then run back to its first block.
+ */
+export const czechBenchRecitalStart = (
+  blocks: readonly Block[],
+  end: number,
+  { opensAfterHeadMatter = false }: { opensAfterHeadMatter?: boolean } = {},
+): number | undefined => {
+  let start = end;
+  while (start > 0) {
+    const previous = blocks.at(start - 1);
+    if (previous?.type !== "paragraph" || previous.role !== undefined) {
+      break;
+    }
+    start -= 1;
+  }
+  // `at(-1)` would read the last block: at the start there is no head.
+  const head = start > 0 ? blocks.at(start - 1) : undefined;
+  const followsHeadMatter =
+    head === undefined
+      ? opensAfterHeadMatter
+      : (head.type === "heading" && head.role === "decision-title") ||
+        (head.type === "paragraph" &&
+          (head.role === "case-number" ||
+            head.role === "intro" ||
+            head.role === "apparatus"));
+  const recital = blocks.slice(start, end);
+  return followsHeadMatter &&
+    recital.length > 0 &&
+    recital.length <= BENCH_RECITAL_MAX_PARAGRAPHS &&
+    !recital.some((block) => opensOnCourtNumber(block.plainText)) &&
+    recital.some((block) => BENCH_DECIDED_RE.test(block.plainText))
+    ? start
+    : undefined;
 };

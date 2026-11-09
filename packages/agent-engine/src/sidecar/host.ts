@@ -42,6 +42,7 @@ import {
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import { copyAttachments } from "./attachments";
+import { readInputFiles } from "./input-files";
 import { type McpProxy, startMcpProxy } from "./mcp-proxy";
 import {
   outputReportChunk,
@@ -692,6 +693,16 @@ export class SidecarHost {
     // Read after the copies and before the harness: what is there now was not
     // written by this turn.
     run.outputs = await snapshotOutputs(message.workspaceDir);
+    // From the copies just made: a file is never fetched twice.
+    const input = await readInputFiles({
+      attachments: message.attachments,
+      workspaceDir: message.workspaceDir,
+      request: transcript.output.at(-1),
+      accepts: adapter.value.inputFileTypes,
+    });
+    for (const reason of input.skipped) {
+      this.options.log(`an attached file stays a path only: ${reason}`);
+    }
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
@@ -704,6 +715,7 @@ export class SidecarHost {
       policy: message.policy,
       mcp: binding.value,
       transcript: transcript.output,
+      inputFiles: input.files,
       continuation:
         message.harnessSessionId === null
           ? { type: "fresh" }

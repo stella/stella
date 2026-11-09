@@ -343,3 +343,52 @@ export const desktopRunnerEvents = p.pgTable.withRLS(
     ...ownerOnlyPolicies("desktop_runner_events"),
   ],
 );
+
+/**
+ * The calls a run's MCP token made to a stella tool that one of chat's apps
+ * presents, in the order the server answered them: what the tool returned
+ * to that run, as the server sent it. Chat shows an app for a call the run
+ * reported only by pairing the report with one of these rows, so what an
+ * app shows is never a copy the desktop sent. Bounded per run and deleted
+ * with the run.
+ */
+export const desktopRunnerAppCalls = p.pgTable.withRLS(
+  "desktop_runner_app_calls",
+  {
+    /** Orders a run's answers as the server gave them. */
+    id: p.bigint({ mode: "number" }).generatedAlwaysAsIdentity(),
+    runId: p
+      .uuid("run_id")
+      .notNull()
+      .references(() => desktopRunnerRuns.runId, { onDelete: "cascade" }),
+    toolName: p.varchar("tool_name", { length: 128 }).notNull(),
+    /** SHA-256 of the call's arguments as the server received them. */
+    argumentsHash: p.varchar("arguments_hash", { length: 64 }).notNull(),
+    resourceUri: p.varchar("resource_uri", { length: 256 }).notNull(),
+    /** The tool's `structuredContent`, as the server answered the run. */
+    result: jsonb("result").notNull(),
+    /** The chat call this row was paired with; null while it is unpaired. */
+    pairedToolCallId: p.varchar("paired_tool_call_id", { length: 256 }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "desktop_runner_app_calls_pkey",
+      columns: [table.id],
+    }),
+    p.index("desktop_runner_app_calls_run_idx").on(table.runId, table.id),
+    p
+      .uniqueIndex("desktop_runner_app_calls_paired_idx")
+      .on(table.runId, table.pairedToolCallId)
+      .where(sql`${table.pairedToolCallId} IS NOT NULL`),
+    p.check(
+      "desktop_runner_app_calls_hash_check",
+      sql`${table.argumentsHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "desktop_runner_app_calls_result_check",
+      sql`jsonb_typeof(${table.result}) = 'object'`,
+    ),
+    ...ownerOnlyPolicies("desktop_runner_app_calls"),
+  ],
+);

@@ -1,22 +1,29 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
   CHAT_LOCAL_RUN_HARNESSES,
   type ChatLocalHarnessReadiness,
   type ChatLocalRunnerReadiness,
+  type ChatLocalRunReadiness,
 } from "@stll/api-contract/chat-run-target";
+import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import {
   CHAT_LOCAL_HARNESS_NAMES,
   type ChatLocalHarnessOption,
   chatLocalHarnessOptions,
   effectiveRunTarget,
+  localRunMaxApprovals,
   localRunModelLabel,
   localRunTargetFor,
   permissionView,
   runTargetValue,
   sameRunTarget,
 } from "@/components/chat/chat-run-target-menu.logic";
+
+/** The ceiling of an organization that never lowered it. */
+const NO_LIMIT = CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS;
 
 const READY_CODEX: ChatLocalHarnessReadiness = {
   id: "codex",
@@ -52,6 +59,7 @@ describe("the Run on choices", () => {
     const options = chatLocalHarnessOptions({
       status: "enabled",
       runners: [runner([READY_CODEX])],
+      maxApprovals: NO_LIMIT,
     });
     expect(options?.map(({ harness }) => harness)).toEqual([
       ...CHAT_LOCAL_RUN_HARNESSES,
@@ -63,7 +71,11 @@ describe("the Run on choices", () => {
 
   test("without a connected computer every harness reads as offline", () => {
     for (const runners of [[], [runner([READY_CODEX], false)]]) {
-      const options = chatLocalHarnessOptions({ status: "enabled", runners });
+      const options = chatLocalHarnessOptions({
+        status: "enabled",
+        runners,
+        maxApprovals: NO_LIMIT,
+      });
       expect(options?.map(({ state }) => state)).toEqual(
         CHAT_LOCAL_RUN_HARNESSES.map(() => "offline"),
       );
@@ -77,6 +89,7 @@ describe("the Run on choices", () => {
         runner([{ id: "codex", state: "needs_login", version: "0.50.0" }]),
         runner([READY_CODEX]),
       ],
+      maxApprovals: NO_LIMIT,
     });
     expect(options?.at(0)).toEqual({
       harness: "codex",
@@ -99,6 +112,7 @@ describe("the Run on choices", () => {
           },
         ]),
       ],
+      maxApprovals: NO_LIMIT,
     });
     expect(options?.at(0)).toEqual({
       harness: "codex",
@@ -117,6 +131,7 @@ describe("the Run on choices", () => {
           { id: "claude-code", state: "unsupported", version: "1.0.0" },
         ]),
       ],
+      maxApprovals: NO_LIMIT,
     });
     expect(options).toEqual([
       { harness: "codex", state: "unavailable" },
@@ -143,18 +158,45 @@ const CLAUDE = { ...LOCAL, harness: "claude-code", model: "sonnet" } as const;
 
 describe("the permission choice", () => {
   test("is offered only for a local target whose harness is ready", () => {
-    expect(permissionView({ kind: "cloud" }, [READY_CLAUDE])).toBeNull();
     expect(
-      permissionView(CLAUDE, [
-        { harness: "claude-code", state: "needs_login" },
-      ]),
+      permissionView({ kind: "cloud" }, [READY_CLAUDE], NO_LIMIT),
     ).toBeNull();
-    expect(permissionView(CLAUDE, [READY_CLAUDE])).toEqual({
+    expect(
+      permissionView(
+        CLAUDE,
+        [{ harness: "claude-code", state: "needs_login" }],
+        NO_LIMIT,
+      ),
+    ).toBeNull();
+    expect(permissionView(CLAUDE, [READY_CLAUDE], NO_LIMIT)).toEqual({
       type: "choice",
       modes: [
-        { mode: "ask", available: true },
-        { mode: "auto", available: true },
-        { mode: "full_auto", available: false },
+        { mode: "ask", availability: "available" },
+        { mode: "auto", availability: "available" },
+        { mode: "full_auto", availability: "computer" },
+      ],
+    });
+  });
+
+  test("a mode above the organization's limit is unavailable for that reason; one the computer cannot run says so first", () => {
+    expect(permissionView(CLAUDE, [READY_CLAUDE], "ask")).toEqual({
+      type: "choice",
+      modes: [
+        { mode: "ask", availability: "available" },
+        { mode: "auto", availability: "organization" },
+        { mode: "full_auto", availability: "computer" },
+      ],
+    });
+    const sandboxing = {
+      ...READY_CLAUDE,
+      approvalModes: ["ask", "auto", "full_auto"],
+    } as const;
+    expect(permissionView(CLAUDE, [sandboxing], "auto")).toEqual({
+      type: "choice",
+      modes: [
+        { mode: "ask", availability: "available" },
+        { mode: "auto", availability: "available" },
+        { mode: "full_auto", availability: "organization" },
       ],
     });
   });
@@ -164,15 +206,21 @@ describe("the permission choice", () => {
       chatLocalHarnessOptions({
         status: "enabled",
         runners: [runner([READY_CODEX])],
+        maxApprovals: NO_LIMIT,
       }) ?? [];
-    expect(codex === undefined ? null : permissionView(LOCAL, [codex])).toEqual(
-      { type: "fixed", harness: "codex" },
-    );
+    expect(
+      codex === undefined ? null : permissionView(LOCAL, [codex], NO_LIMIT),
+    ).toEqual({ type: "fixed", harness: "codex" });
   });
 
   test("a picked model keeps the permission mode the harness supports, else asks", () => {
     const pick = (selected: Parameters<typeof sameRunTarget>[0]) =>
-      localRunTargetFor({ selected, option: READY_CLAUDE, model: "opus" });
+      localRunTargetFor({
+        selected,
+        option: READY_CLAUDE,
+        model: "opus",
+        maxApprovals: NO_LIMIT,
+      });
     expect(pick({ ...CLAUDE, approvals: "auto" })).toEqual({
       ...CLAUDE,
       model: "opus",
@@ -184,6 +232,17 @@ describe("the permission choice", () => {
       approvals: "ask",
     });
     expect(pick({ kind: "cloud" })).toEqual({ ...CLAUDE, model: "opus" });
+  });
+
+  test("a picked model never carries a mode above the organization's limit", () => {
+    expect(
+      localRunTargetFor({
+        selected: { ...CLAUDE, approvals: "auto" },
+        option: READY_CLAUDE,
+        model: "opus",
+        maxApprovals: "ask",
+      }),
+    ).toEqual({ ...CLAUDE, model: "opus", approvals: "ask" });
   });
 });
 
@@ -210,6 +269,50 @@ describe("the selected run target", () => {
     expect(effectiveRunTarget(undefined)).toEqual({ kind: "cloud" });
   });
 
+  test("a thread whose mode is now above the organization's limit runs its next turn in the highest allowed mode", () => {
+    const sandboxingClaude: ChatLocalHarnessReadiness = {
+      ...READY_CODEX,
+      id: "claude-code",
+      approvalModes: ["ask", "auto", "full_auto"],
+      models: [{ id: "sonnet", label: "Sonnet" }],
+    };
+    const readiness = (
+      maxApprovals: DesktopRunnerApprovalMode,
+      harness: ChatLocalHarnessReadiness = sandboxingClaude,
+    ): ChatLocalRunReadiness => ({
+      status: "enabled",
+      runners: [runner([harness])],
+      maxApprovals,
+    });
+    const stored = { ...CLAUDE, approvals: "full_auto" } as const;
+    expect(effectiveRunTarget(stored, readiness("auto"))).toEqual({
+      ...stored,
+      approvals: "auto",
+    });
+    expect(effectiveRunTarget(stored, readiness("ask"))).toEqual({
+      ...stored,
+      approvals: "ask",
+    });
+    // A computer without the in-between mode falls past it, to Ask.
+    expect(
+      effectiveRunTarget(
+        stored,
+        readiness("auto", {
+          ...sandboxingClaude,
+          approvalModes: ["ask", "full_auto"],
+        }),
+      ),
+    ).toEqual({ ...stored, approvals: "ask" });
+    // Within the limit, or before the limit is known, the stored mode stands.
+    expect(effectiveRunTarget(stored, readiness(NO_LIMIT))).toBe(stored);
+    expect(effectiveRunTarget(stored, undefined)).toBe(stored);
+    expect(effectiveRunTarget({ kind: "cloud" }, readiness("ask"))).toEqual({
+      kind: "cloud",
+    });
+    expect(localRunMaxApprovals(readiness("auto"))).toBe("auto");
+    expect(localRunMaxApprovals({ status: "hidden" })).toBe(NO_LIMIT);
+  });
+
   test("the composer names a local model as the harness reports it, and only then", () => {
     const target = {
       kind: "local",
@@ -219,7 +322,11 @@ describe("the selected run target", () => {
     } as const;
     expect(
       localRunModelLabel(
-        { status: "enabled", runners: [runner([READY_CODEX])] },
+        {
+          status: "enabled",
+          runners: [runner([READY_CODEX])],
+          maxApprovals: NO_LIMIT,
+        },
         target,
       ),
     ).toBe("GPT-5 Codex");
@@ -229,6 +336,7 @@ describe("the selected run target", () => {
         {
           status: "enabled",
           runners: [runner([{ ...READY_CODEX, id: "claude-code" }])],
+          maxApprovals: NO_LIMIT,
         },
         target,
       ),

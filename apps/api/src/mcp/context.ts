@@ -78,6 +78,7 @@ import type {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
+import type { readPreferredLanguageVersionIds } from "@/api/lib/case-law/language-alternates";
 import type {
   readCaseLawProvisionScope,
   readProvisionWorkLinked,
@@ -137,6 +138,8 @@ import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate
 import type { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import type { McpFeatureAccessBindings } from "@/api/mcp/feature-access";
+import type { LegislationContinuation } from "@/api/mcp/legislation-tools";
+import type { CaseLawContinuation } from "@/api/mcp/stella-tools";
 import type {
   claimTemplatePersistenceRequest,
   fingerprintTemplatePersistenceRequest,
@@ -198,6 +201,9 @@ export type McpRequestContext = {
     createTimeEntryHandler?: typeof createTimeEntryHandler;
     readCaseLawCoverageHandler?: typeof readCaseLawCoverageHandler;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
+    caseLawSearchContinuation?: CaseLawContinuation;
+    publicReadResponseDeadlineMs?: number;
+    legislationSearchContinuation?: LegislationContinuation;
     listCaseLawProvisionDecisions?: typeof listCaseLawProvisionDecisions;
     /** Reads a provision's citing set once per agent search. */
     readCaseLawProvisionScope?: (
@@ -225,6 +231,7 @@ export type McpRequestContext = {
     resolveDecision?: typeof resolveDecision;
     resolveLawCitation?: typeof resolveLawCitation;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
+    readPreferredLanguageVersionIds?: typeof readPreferredLanguageVersionIds;
     readDecisionReaderSource?: typeof readDecisionReaderSource;
     readProvisionPreviewHandler?: typeof readProvisionPreviewHandler;
     readsSharedPublicLawCorpus?: typeof readsSharedPublicLawCorpus;

@@ -76,6 +76,7 @@ const BASIS: DocumentReviewRunBasis = {
     definitionSnapshot: {
       name: "Reconciler fixture",
       positions: { version: 3, items: [] },
+      scope: null,
     },
   },
   references: [],

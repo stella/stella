@@ -22,25 +22,22 @@ import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { closedQuotationParagraphStarts } from "./closed-quotation-paragraphs";
 import type { Block, ParagraphBlock } from "./document-ast.js";
 import { normalizeInlineLine, stripInlineLinePrefix } from "./inline-line.js";
+import {
+  COURT_PARAGRAPH_MARKER_PATTERNS,
+  COURT_PARAGRAPH_MARKER_STYLES,
+  type CourtParagraphMarkerStyle,
+  OCR_DOT_MARKER,
+  opensWithItemLabel,
+  withoutLeadingNumber,
+} from "./printed-paragraph-labels.js";
 import { separateOpinionHeading } from "./separate-opinion-heading.js";
-
-/** The three ways Czech and Slovak courts print a paragraph number. */
-const COURT_PARAGRAPH_MARKER_STYLES = ["bracket", "dot", "paren"] as const;
-
-type CourtParagraphMarkerStyle = (typeof COURT_PARAGRAPH_MARKER_STYLES)[number];
-
-/** Dates and lowercase list points are excluded even after a glued marker. */
-const MARKER_PATTERNS = {
-  bracket: /^\[(?<number>\d{1,4})\][ \t ]*(?![ \t \d\p{Ll}])/u,
-  dot: /^(?<number>\d{1,4})\.(?:[ \t ]+(?![ \t \d\p{Ll}])|(?=\p{Lu}))/u,
-  paren: /^(?<number>\d{1,4})\)[ \t ]+(?![ \t \d\p{Ll}])/u,
-} as const satisfies Record<CourtParagraphMarkerStyle, RegExp>;
 
 const markerNumber = (
   style: CourtParagraphMarkerStyle,
   text: string,
 ): number | null => {
-  const raw = MARKER_PATTERNS[style].exec(text)?.groups?.["number"];
+  const raw =
+    COURT_PARAGRAPH_MARKER_PATTERNS[style].exec(text)?.groups?.["number"];
   if (raw === undefined) {
     return null;
   }
@@ -63,13 +60,6 @@ export const opensWithCourtParagraphMarker = (text: string): boolean => {
     (style) => markerNumber(style, line) !== null,
   );
 };
-
-/**
- * Any item marker, whatever follows it: a court marker, a list's lowercase
- * point ("2. osoby …"), a lettered point ("a) …"). An item is not text the
- * numbering leaves out.
- */
-const LIST_ITEM_RE = /^(?:\[\d{1,4}\]|\d{1,4}[.)]|\p{L}\)|[-–•])[ \t ]/u;
 
 /** The instruction on remedies, which closes a decision's reasoning. */
 const INSTRUCTION_RE = /^\s*P\s*o\s*u\s*[čc]\s*e\s*n\s*(?:[íi]|i\s*e)\s*:/iu;
@@ -149,9 +139,6 @@ export type CourtParagraphNumbering =
 
 const SENTENCE_END_RE = /[.!?:;…]["'»«“”„)\]]*$/u;
 
-const OCR_DOT_MARKER =
-  /^(?<number>[\dlI]{1,4})\.(?:[ \t ]+(?![ \t \d\p{Ll}])|(?=\p{Lu}))/u;
-
 /** A body paragraph opening with a marker of the style being read. */
 type Candidate = {
   /** Position among the document's body paragraphs. */
@@ -208,10 +195,8 @@ const bodyOf = (blocks: readonly Block[]): Body => {
     if (block.type === "heading") {
       headingSinceBody = true;
       const opinionHeading =
-        separateOpinionHeading(
-          block.plainText.replace(/^\d+[.)]\s*/u, ""),
-          1000,
-        ) !== undefined;
+        separateOpinionHeading(withoutLeadingNumber(block.plainText), 1000) !==
+        undefined;
       if (opinionHeading) {
         opinionStarts.add(paragraphs.length);
         opinionBoundary = "heading";
@@ -472,7 +457,7 @@ const candidatesOf = (
 
 /** Whether a body paragraph opens with any marker shape at all. */
 const opensWithMarker = (block: Block | undefined): boolean =>
-  block?.type === "paragraph" && LIST_ITEM_RE.test(block.plainText.trimStart());
+  block?.type === "paragraph" && opensWithItemLabel(block.plainText);
 
 type NumberAssignment = {
   readonly candidate: Candidate;
@@ -862,7 +847,9 @@ const withNumber = (
   }
   const { line } = stripInlineLinePrefix(
     normalizeInlineLine(block.inlines),
-    candidate.source === "ocr" ? OCR_DOT_MARKER : MARKER_PATTERNS[style],
+    candidate.source === "ocr"
+      ? OCR_DOT_MARKER
+      : COURT_PARAGRAPH_MARKER_PATTERNS[style],
   );
   return {
     ...block,
