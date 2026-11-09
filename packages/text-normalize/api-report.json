@@ -207,6 +207,17 @@
         }
       ]
     },
+    "./hungarian-letters": {
+      "type": "module",
+      "file": "./src/hungarian-letters.d.ts",
+      "exports": [
+        {
+          "name": "restoreHungarianLetters",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
     "./postgres-search-fold": {
       "type": "module",
       "file": "./src/postgres-search-fold.d.ts",
@@ -283,6 +294,7 @@
     "./src/ascii-fold.d.ts": "export declare const applyAsciiFolds: (decomposed: string) => string;\nexport declare const foldToAscii: (text: string) => string;\n",
     "./src/diacritics.d.ts": "export declare const SEARCH_DIACRITIC_SOURCE = \"(?=\\\\p{M}|\\\\p{Script=Latin})\\\\p{Diacritic}\";\nexport declare const stripDiacritics: (text: string) => string;\nexport declare const stripDiacriticsForSlug: (text: string) => string;\n",
     "./src/escape-regexp.d.ts": "export declare const escapeRegExp: (value: string) => string;\n",
+    "./src/hungarian-letters.d.ts": "export declare const restoreHungarianLetters: (text: string) => string;\n",
     "./src/index.d.ts": "export { applyArabicFolds, applyArabicFoldsWithOffsets, ARABIC_DIGIT_FOLDS, ARABIC_LETTER_FOLDS, ARABIC_REMOVED, } from \"./arabic.js\";\nexport type { FoldedText } from \"./arabic.js\";\nexport { foldToAscii } from \"./ascii-fold.js\";\nexport { ASCII_FOLD_TABLE } from \"./ascii-fold-table.js\";\nexport { stripDiacritics, stripDiacriticsForSlug } from \"./diacritics.js\";\nexport { escapeRegExp } from \"./escape-regexp.js\";\nexport { arabicNormalize } from \"./normalize.js\";\nexport { findSearchMatchRanges, foldSearchMatchText, foldSearchMatchTextWithOffsets, foldSearchMatchTextWithOffsetsAndOptions, foldSearchMatchTextWithOptions, hasFoldedSearchMatch, } from \"./search-match.js\";\nexport type { FoldedSearchText, SearchFoldOptions, SearchMatchOptions, SearchMatchRange, } from \"./search-match.js\";\nexport { collapseLetterSpacing, collapseSpacedLetters, documentWordCounts, isLetterSpacedEmphasis, joinWordSeams, letterGapCounts, letterSpacingJoins, } from \"./letter-spacing.js\";\nexport type { LetterSpacingOptions } from \"./letter-spacing.js\";\nexport { slugify } from \"./slug.js\";\nexport type { SlugCharset, SlugifyOptions, SlugSeparator } from \"./slug.js\";\nexport { normalizeUnicode, stripUnicodeMarks, UNICODE_NORMALIZATION_FORMS, } from \"./unicode.js\";\nexport type { UnicodeMarkClass, UnicodeNormalizationForm } from \"./unicode.js\";\nexport { normalizeNumericIndices } from \"./numeric-indices.js\";\n",
     "./src/letter-spacing.d.ts": "export type LetterSpacingOptions = {\n    readonly documentWords?: ReadonlyMap<string, number>;\n    readonly spacedWords?: ReadonlySet<string>;\n    readonly setApart?: boolean;\n    readonly emphasis?: boolean;\n};\nexport declare const collapseLetterSpacing: (text: string, options?: LetterSpacingOptions) => string;\nexport declare const isLetterSpacedEmphasis: (text: string) => boolean;\nexport declare const documentWordCounts: (texts: Iterable<string>) => Map<string, number>;\nexport declare const letterGapCounts: (texts: Iterable<string>) => {\n    plain: number;\n    noBreak: number;\n};\nexport declare const joinWordSeams: (text: string, wholeWords: ReadonlySet<string>) => string;\nexport declare const collapseSpacedLetters: (text: string) => string;\nexport declare const letterSpacingJoins: (text: string) => number[];\n",
     "./src/normalize.d.ts": "export declare const arabicNormalize: (text: string) => string;\n",
