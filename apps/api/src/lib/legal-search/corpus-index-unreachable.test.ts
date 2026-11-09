@@ -315,7 +315,7 @@ describe("the request's latency budget is not the index's availability", () => {
         init: { method: "POST" },
         path: "/api/v1/legal_corpus_v1_cze/search",
         signal: undefined,
-        timeoutMs: 50,
+        timeoutMs: 50, // timeout under test
         endsAtRequestDeadline: true,
       },
       { type: "refused", reason: "deadline", waitedMs: 0, queued: 3 },
