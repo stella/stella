@@ -479,6 +479,7 @@ type WaitForPublicReadOptions<TArgs, TData> = {
   context: RunContinuablePublicReadOptions<TArgs, TData, null>["context"];
   waitMs: number;
   execute: (args: TArgs) => Promise<InternalToolResult<TData>>;
+  now?: () => number;
 };
 
 export type WaitedPublicRead<TData> =
@@ -497,6 +498,7 @@ export const waitForPublicRead = async <TArgs, TData>({
   context,
   waitMs,
   execute,
+  now = () => performance.now(),
 }: WaitForPublicReadOptions<TArgs, TData>): Promise<
   WaitedPublicRead<TData>
 > => {
@@ -518,9 +520,9 @@ export const waitForPublicRead = async <TArgs, TData>({
         RESPONSE_RESERVE_MS,
     ),
   );
-  const startedAt = performance.now();
+  const startedAt = now();
   for (;;) {
-    const remainingMs = waitLimitMs - (performance.now() - startedAt);
+    const remainingMs = waitLimitMs - (now() - startedAt);
     const outcome = await continuation.attach({
       via: "call",
       responseDeadlineMs: Math.max(0, remainingMs),
@@ -536,12 +538,15 @@ export const waitForPublicRead = async <TArgs, TData>({
         };
       case "failed":
         return { type: "finished", result: failedReadResult(outcome.error) };
-      case "running":
-        if (remainingMs <= 0) {
+      case "running": {
+        // Measured again: the attach above can spend all of the wait.
+        const leftMs = waitLimitMs - (now() - startedAt);
+        if (leftMs <= 0) {
           return { type: "still_running" };
         }
-        await sleep(Math.min(outcome.retryAfterMs, remainingMs));
+        await sleep(Math.min(outcome.retryAfterMs, leftMs));
         break;
+      }
       default:
         outcome satisfies never;
         return panic("Unhandled continuation outcome");
