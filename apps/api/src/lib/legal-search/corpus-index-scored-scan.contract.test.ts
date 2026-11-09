@@ -1084,6 +1084,19 @@ describe.skipIf(!runEngineTests)(
       expect(Array.isArray(splits) ? splits.length : 0).toBeGreaterThan(1);
     });
 
+    test("the split census reports each index it is asked about", async () => {
+      const counts = await client.readPublishedSplitCounts({
+        includes: (indexId) => indexId === INDEX_ID,
+        observer: "unobserved",
+      });
+      if (counts.isErr()) {
+        throw counts.error;
+      }
+      expect(counts.value).toHaveLength(1);
+      expect(counts.value.at(0)?.indexId).toBe(INDEX_ID);
+      expect(counts.value.at(0)?.publishedSplits ?? 0).toBeGreaterThan(1);
+    });
+
     test.each(ENTRIES)(
       "a %s entry pages in the same order through both endpoints",
       async (_kind, entry) => {

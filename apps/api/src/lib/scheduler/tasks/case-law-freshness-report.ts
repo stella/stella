@@ -3,6 +3,10 @@ import {
   emitCaseLawFreshnessReport,
   readCaseLawFreshnessReportTx,
 } from "@/api/lib/observability/case-law-freshness-metrics";
+import {
+  readServedGenerationsForCensusTx,
+  reportCorpusIndexSplitCensus,
+} from "@/api/lib/observability/corpus-index-split-census";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const REPORT_CASE_LAW_FRESHNESS_TASK =
@@ -14,4 +18,7 @@ export const reportCaseLawFreshnessTask: SchedulerTask = async ({ db }) => {
     readCaseLawFreshnessReportTx,
   );
   emitCaseLawFreshnessReport(report);
+  await reportCorpusIndexSplitCensus(
+    await withAggregateTransaction(db, readServedGenerationsForCensusTx),
+  );
 };
