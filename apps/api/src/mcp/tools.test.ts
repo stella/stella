@@ -3913,6 +3913,32 @@ describe("OpenAI-compatible MCP tools", () => {
       }[];
     };
 
+    test("names the phrasing whose partial matches went unread", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => ({
+          ...answered(query, null),
+          relaxedHitCount: 0,
+          ...(query === "short" ? { relaxedTopUp: "skipped" as const } : {}),
+        }),
+      );
+
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["full", "short"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(result.isError).not.toBe(true);
+      const page = asTestRaw<PartialPage>(parseToolPayload(result));
+      expect(page.searches.at(0)?.warnings).toEqual([]);
+      const warnings = page.searches.at(1)?.warnings ?? [];
+      expect(warnings.map(({ code }) => code)).toEqual([
+        "partial_matches_unread",
+      ]);
+      expect(JSON.stringify(warnings)).toContain('\\"short\\"');
+      expect(warnings.at(0)?.hint).toContain("strict: true");
+    });
+
     test("leaves the phrasings that finished on the page and says it timed out", async () => {
       searchDecisionsHandlerMock.mockImplementation(
         async ({ body: { query } }: { body: { query: string } }) =>
