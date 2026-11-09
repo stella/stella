@@ -559,6 +559,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "owner/repo that filed feedback is posted to as an issue. Requires FEEDBACK_GITHUB_TOKEN; unset disables GitHub delivery.",
   FEEDBACK_GITHUB_TOKEN:
     "Token used to file feedback issues in FEEDBACK_GITHUB_REPO. Needs issue-write scope only; unset disables GitHub delivery.",
+  SKILL_IMPORT_GITHUB_TOKEN:
+    "GitHub token for skill sources a person links. Grant public repositories read-only and no other access; never reuse GITHUB_TOKEN. Unset sends these requests without a token.",
   FRONTEND_URL:
     "Web app origin used for absolute transactional-email links, document verification links, and trusted redirects.",
   APPLE_AUTH_CLIENT_ID:
@@ -918,6 +920,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEEDBACK_GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
   FRONTEND_URL: ENV_CREDENTIAL_KIND.notCredential,
   GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  SKILL_IMPORT_GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_CH: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_EU: ENV_CREDENTIAL_KIND.credential,
   APPLE_AUTH_CLIENT_ID: ENV_CREDENTIAL_KIND.notCredential,

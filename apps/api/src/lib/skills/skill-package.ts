@@ -49,20 +49,30 @@ const USER_GITHUB_FETCH_ACCESS = { source: "user" } as const;
 type GithubSkillFetchAccess =
   { source: "catalogue"; githubToken?: string } | { source: "user" };
 
-const githubSkillFetchHeaders = ({
+/**
+ * GitHub API headers for one skill source request. A catalogue read uses the
+ * catalogue token; a source the person linked uses only the public-repository
+ * token, so it can never read what the catalogue token can see. Either token
+ * goes to api.github.com alone.
+ */
+export const githubSkillFetchHeaders = ({
   access,
   hostname,
+  publicGithubToken,
 }: {
   access: GithubSkillFetchAccess;
   hostname: string;
-}): Record<string, string> => ({
-  ...GITHUB_FETCH_HEADERS,
-  ...(access.source === "catalogue" &&
-  access.githubToken &&
-  hostname === "api.github.com"
-    ? { Authorization: `Bearer ${access.githubToken}` }
-    : {}),
-});
+  publicGithubToken?: string | undefined;
+}): Record<string, string> => {
+  const token =
+    access.source === "catalogue" ? access.githubToken : publicGithubToken;
+  return {
+    ...GITHUB_FETCH_HEADERS,
+    ...(token && hostname === "api.github.com"
+      ? { Authorization: `Bearer ${token}` }
+      : {}),
+  };
+};
 
 type ParsedSkillResource = {
   content: string;
@@ -185,6 +195,8 @@ type SkillSourceRequestBudget = {
   deadlineAt: number;
   permit: ThirdPartyOutboundPermit;
   fetchBytes?: typeof safeOutboundFetchBytes;
+  /** GitHub token limited to public repositories, for sources a person links. */
+  publicGithubToken?: string | undefined;
   remainingRequests?: number;
   timeoutMessage?: string;
 };
@@ -204,17 +216,20 @@ type CreateSkillPackageFetchContextOptions = {
     maxRequests: number;
   };
   fetchBytes?: typeof safeOutboundFetchBytes;
+  publicGithubToken?: string | undefined;
 };
 
 export const createSkillPackageFetchContext = ({
   permit,
   limits,
   fetchBytes = safeOutboundFetchBytes,
+  publicGithubToken,
 }: CreateSkillPackageFetchContextOptions): SkillPackageFetchContext => ({
   requestBudget: {
     deadlineAt: limits?.deadlineAt ?? Number.POSITIVE_INFINITY,
     fetchBytes,
     permit,
+    ...(publicGithubToken ? { publicGithubToken } : {}),
     ...(limits === undefined ? {} : { remainingRequests: limits.maxRequests }),
     timeoutMessage: "Skill import timed out",
   },
@@ -390,12 +405,14 @@ export const fetchGithubCatalogueSkillPackage = async ({
 type DiscoverSkillPackagesFromUrlOptions = {
   fetchBytes?: typeof safeOutboundFetchBytes;
   permit: ThirdPartyOutboundPermit;
+  publicGithubToken?: string | undefined;
   rawUrl: string;
 };
 
 export const discoverSkillPackagesFromUrl = async ({
   fetchBytes = safeOutboundFetchBytes,
   permit,
+  publicGithubToken,
   rawUrl,
 }: DiscoverSkillPackagesFromUrlOptions): Promise<
   Result<SkillPackageDiscovery, HandlerError>
@@ -408,6 +425,7 @@ export const discoverSkillPackagesFromUrl = async ({
           GITHUB_DISCOVERY_TIMEOUT_MS,
         fetchBytes,
         permit,
+        ...(publicGithubToken ? { publicGithubToken } : {}),
       };
       const githubTarget = await parseGithubDiscoveryPath(rawUrl, budget);
       if (githubTarget.isErr()) {
@@ -1326,7 +1344,11 @@ const fetchSafeBytes = async ({
   }
   const response = await (budget.fetchBytes ?? safeOutboundFetchBytes)({
     permit: budget.permit,
-    headers: githubSkillFetchHeaders({ access, hostname: url.hostname }),
+    headers: githubSkillFetchHeaders({
+      access,
+      hostname: url.hostname,
+      publicGithubToken: budget.publicGithubToken,
+    }),
     maxBytes,
     timeoutMs: timeoutMs.value,
     url,
