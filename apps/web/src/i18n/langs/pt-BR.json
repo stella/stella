@@ -92,6 +92,7 @@
     "countSummary": "{columns} colunas × {rows} linhas = {answers, plural, one {# resposta} other {# respostas} many {# respostas}}. As respostas consomem o orçamento.",
     "modelRefused": "O modelo se recusou a responder",
     "nothingFound": "Nada encontrado",
+    "nothingFoundInCutDocument": "Nada encontrado na parte lida",
     "refusedBudget": "Não executado: orçamento de respostas indisponível",
     "rerunAllPage": "Executar tudo novamente (esta página)",
     "rerunColumnPage": "Executar coluna novamente (esta página)",
@@ -1695,6 +1696,7 @@
       "errorUnavailable": "Seu computador parou de processar esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
       "filesNotShared": "Os arquivos que não puderam ser compartilhados continuam no seu computador: {fileNames}",
       "onThisComputer": "{harness} neste computador",
+      "permissionAboveLimit": "Não permitido pela sua organização",
       "permissionAskDescription": "Edita sozinho os arquivos da pasta do chat; pergunta antes de qualquer outra coisa.",
       "permissionAutoDescription": "Faz sozinho o que julga seguro; pergunta sobre o resto.",
       "permissionFullAuto": "Totalmente automático",
@@ -1706,6 +1708,7 @@
       "refusalHarnessUnavailable": "O agente de programação do seu computador não pode atender a esta solicitação agora. Verifique-o no stella desktop.",
       "refusalModelUnavailable": "O agente de programação do seu computador não oferece mais este modelo. Escolha outro em Executar em.",
       "refusalNoComputer": "Nenhum dos seus computadores está conectado. Abra o stella desktop e envie de novo.",
+      "refusalPermissionAboveLimit": "Sua organização não permite essas permissões para o agente de programação do seu computador. Escolha outra opção em Permissões.",
       "refusalPermissionUnavailable": "O agente de programação do seu computador não pode ser executado com essas permissões. Escolha outra opção em Permissões.",
       "refusalTooLarge": "Esta conversa é longa demais para ser enviada ao seu computador. Comece um novo chat para executá-la lá.",
       "refusalUnavailable": "Executar chats no seu computador não está disponível para sua conta.",
@@ -4039,6 +4042,8 @@
       "description": "Escolha um playbook elaborado, documentos de referência ou ambos.",
       "dismissFinding": "Descartar constatação",
       "documentChanged": "Este documento mudou após esta revisão.",
+      "documentCutNotice": "<strong>{documentName} não foi lido por inteiro.</strong> Ele é longo demais para este modelo, então cerca de {percent} do texto foi omitido. Uma posição sem resposta é marcada para revisão, pois a resposta pode estar na parte omitida.",
+      "documentTooLarge": "Este documento é longo demais para que este modelo leia uma parte suficiente dele. Tente um modelo com uma janela de contexto maior.",
       "export": {
         "counterparty": "Baixar para a contraparte",
         "counterpartyFailed": "Não foi possível exportar o documento",
@@ -5638,6 +5643,11 @@
         "labelAria": "Nome do tipo de documento",
         "reorder": "Reordenar tipo de documento",
         "title": "Tipos de documentos"
+      },
+      "localRuns": {
+        "description": "O máximo que um agente de programação pode fazer sem perguntar ao executar um chat no computador de um membro. Um limite mais baixo vale a partir da próxima mensagem de cada membro; uma execução já em andamento mantém suas permissões.",
+        "title": "Agentes de programação nos computadores dos membros",
+        "updated": "Permissões dos agentes de programação atualizadas"
       },
       "matterNumbering": "Numeração de casos",
       "matterNumberingDescription": "Configure como os novos números de referência de casos são gerados",

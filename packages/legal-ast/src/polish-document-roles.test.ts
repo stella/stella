@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import {
   containsPlOperativeVerb,
   isPlAppealInstruction,
+  isPlAuthorityDecisionTitle,
+  isPlBenchMemberLine,
   isPlCompositionLine,
+  isPlDecisionDateLine,
   isPlHoldingHeading,
   isPlInstructionHeading,
   isPlLegalBasisRuling,
@@ -14,6 +17,7 @@ import {
   isPlSignatureLine,
   namesPlDocumentType,
   opensPlRuling,
+  plRulingClauseStart,
   startsWithPlOperativeVerb,
 } from "./polish-document-roles";
 
@@ -290,5 +294,87 @@ describe("a Polish instruction on appeal", () => {
     expect(isPlRemedyFilingLine("Skarga została wniesiona w terminie.")).toBe(
       false,
     );
+  });
+});
+
+describe("a Polish head-matter line", () => {
+  test.each([
+    "Przewodniczący: Ewa Sikorska",
+    "Przewodnicząca: Agnieszka Trojanowska",
+    "Protokolant: Aldona Karpińska",
+    "Członkowie: Katarzyna Prowadzisz",
+    "Protokolant: stażysta Anna Kosowska",
+    "Przewodniczący: SSO Katarzyna Banko",
+  ])("%p names who sat", (line) => {
+    expect(isPlBenchMemberLine(line)).toBe(true);
+  });
+
+  test.each([
+    "Przewodniczący:…………………………",
+    "Przewodniczący:",
+    "Skład orzekający Izby:",
+    "Prokurator: zarzuty wobec oskarżonego",
+    "Członkowie: zarzuty wobec członków zarządu",
+  ])("%p is a signing label or a heading, not a name", (line) => {
+    expect(isPlBenchMemberLine(line)).toBe(false);
+  });
+
+  test("the decision's date on a line of its own", () => {
+    expect(isPlDecisionDateLine("z dnia 4 lutego 2022 r.")).toBe(true);
+    expect(isPlDecisionDateLine("Warszawa, dnia 1 września 2025 roku")).toBe(
+      true,
+    );
+    expect(isPlDecisionDateLine("Dnia 31 grudnia 2019 r.")).toBe(true);
+    expect(isPlDecisionDateLine("z dnia 12.03.2021 r.")).toBe(true);
+    expect(isPlDecisionDateLine("z dnia 4 lutego 2022 r.,")).toBe(true);
+    expect(
+      isPlDecisionDateLine(
+        "po rozpoznaniu na rozprawie w dniu 1 lutego 2022 roku",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("a Polish authority's decision title", () => {
+  test.each([
+    "DECYZJA RGD - 1/2026",
+    "DECYZJA DIH-1/48/2017",
+    "DECYZJA NR RBG - 11/2018",
+    "DECYZJA Nr RWA-26/2009",
+    "DECYZJA nr RPZ 6/2011",
+    "Decyzja nr 12",
+  ])("%p is a decision title", (line) => {
+    expect(isPlAuthorityDecisionTitle(line)).toBe(true);
+  });
+
+  test.each([
+    "DECYZJA",
+    "decyzja Prezesa Urzędu z dnia 3 marca 2020 r.",
+    "Decyzja ta jest ostateczna.",
+    "Decyzja nr 5 z dnia 3 marca 2020 r. została uchylona.",
+    "Decyzja nr 5 z dnia 3 marca 2020",
+    "Decyzja nr DOK-9/2011 jest prawomocna",
+  ])("%p is not one", (line) => {
+    expect(isPlAuthorityDecisionTitle(line)).toBe(false);
+  });
+});
+
+describe("a Polish recital that rules in its last clause", () => {
+  test("the ruling starts at its verb", () => {
+    const text =
+      "po przeprowadzeniu postępowania przeciwko spółce z siedzibą w Warszawie, uznaje się, że działanie narusza interesy konsumentów";
+    const start = plRulingClauseStart(text);
+    expect(start === undefined ? undefined : text.slice(start)).toStartWith(
+      "uznaje się, że działanie",
+    );
+  });
+
+  test("a recital without a ruling, or a ruling without a recital, is not split", () => {
+    expect(
+      plRulingClauseStart(
+        "po rozpoznaniu na rozprawie w dniu 1 lutego 2022 roku w Warszawie odwołania",
+      ),
+    ).toBeUndefined();
+    expect(plRulingClauseStart("Sąd, oddala apelację")).toBeUndefined();
   });
 });

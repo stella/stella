@@ -92,6 +92,7 @@
     "countSummary": "{columns} kolonnas × {rows} rindas = {answers, plural, zero {# atbildes} one {# atbilde} other {# atbildes}}. Atbildes patērē budžetu.",
     "modelRefused": "Modelis atteicās atbildēt",
     "nothingFound": "Nekas netika atrasts",
+    "nothingFoundInCutDocument": "Izlasītajā daļā nekas nav atrasts",
     "refusedBudget": "Nav palaists: atbilžu budžets nav pieejams",
     "rerunAllPage": "Palaist visu vēlreiz (šajā lapā)",
     "rerunColumnPage": "Palaist kolonnu vēlreiz (šajā lapā)",
@@ -1695,6 +1696,7 @@
       "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
       "filesNotShared": "Faili, kurus neizdevās kopīgot, paliek jūsu datorā: {fileNames}",
       "onThisComputer": "{harness} šajā datorā",
+      "permissionAboveLimit": "Jūsu organizācija to neatļauj",
       "permissionAskDescription": "Tērzēšanas mapes failus rediģē pats; par visu citu jautā.",
       "permissionAutoDescription": "To, ko uzskata par drošu, dara pats; par pārējo jautā.",
       "permissionFullAuto": "Pilnībā automātiski",
@@ -1706,6 +1708,7 @@
       "refusalHarnessUnavailable": "Programmēšanas aģents jūsu datorā šobrīd nevar pieņemt šo pieprasījumu. Pārbaudiet to lietotnē stella desktop.",
       "refusalModelUnavailable": "Programmēšanas aģents jūsu datorā vairs nepiedāvā šo modeli. Izvēlieties citu izvēlnē Palaist.",
       "refusalNoComputer": "Neviens no jūsu datoriem nav savienots. Atveriet stella desktop un nosūtiet vēlreiz.",
+      "refusalPermissionAboveLimit": "Jūsu organizācija neļauj programmēšanas aģentam jūsu datorā darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
       "refusalPermissionUnavailable": "Programmēšanas aģents jūsu datorā nevar darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
       "refusalTooLarge": "Šī saruna ir pārāk gara, lai to nodotu jūsu datoram. Sāciet jaunu tērzēšanu, lai to palaistu tur.",
       "refusalUnavailable": "Tērzēšanu palaišana jūsu datorā jūsu kontam nav pieejama.",
@@ -4039,6 +4042,8 @@
       "description": "Izvēlieties sagatavotu pārbaudes ceļvedi, atsauces dokumentus vai abus.",
       "dismissFinding": "Noraidīt secinājumu",
       "documentChanged": "Šis dokuments pēc šīs pārbaudes ir mainījies.",
+      "documentCutNotice": "<strong>Dokuments {documentName} nav izlasīts pilnībā.</strong> Šim modelim tas ir pārāk garš, tāpēc aptuveni {percent} teksta tika izlaisti. Pozīcija bez atbildes tiek atzīmēta pārskatīšanai, jo atbilde var būt izlaistajā daļā.",
+      "documentTooLarge": "Šis dokuments ir pārāk garš, lai šis modelis varētu izlasīt pietiekamu tā daļu. Izmēģiniet modeli ar lielāku konteksta logu.",
       "export": {
         "counterparty": "Lejupielādēt pretpusei",
         "counterpartyFailed": "Neizdevās eksportēt dokumentu",
@@ -5638,6 +5643,11 @@
         "labelAria": "Dokumenta tipa nosaukums",
         "reorder": "Pārkārtot dokumenta tipu",
         "title": "Dokumentu tipi"
+      },
+      "localRuns": {
+        "description": "Visvairāk, ko programmēšanas aģents drīkst darīt, nejautājot, kad tas palaiž tērzēšanu dalībnieka datorā. Zemāks ierobežojums stājas spēkā ar katra dalībnieka nākamo ziņu; jau notiekoša palaišana saglabā savas atļaujas.",
+        "title": "Programmēšanas aģenti dalībnieku datoros",
+        "updated": "Programmēšanas aģentu atļaujas atjauninātas"
       },
       "matterNumbering": "Lietu numerācija",
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",

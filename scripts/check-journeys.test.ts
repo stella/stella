@@ -1140,7 +1140,7 @@ test("schedules bounded journeys and routes alerts", async () => {
   expect(workflow).toContain("cancel-in-progress: false");
   expect(workflow).not.toMatch(/matrix:|bun ci|bun install/u);
   expect(workflow).toContain("persist-credentials: false");
-  expect(workflow).toContain("no-cache: true");
+  expect(workflow).not.toContain("no-cache: true");
   expect(workflow).toContain("&& '0' || '1'");
   expect(workflow).toContain("bun scripts/check-published-versions.ts");
   expect(workflow).toContain("bash scripts/check-journeys.sh --cli");

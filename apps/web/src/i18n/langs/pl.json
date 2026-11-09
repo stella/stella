@@ -92,6 +92,7 @@
     "countSummary": "{columns} kolumn × {rows} wierszy = {answers, plural, one {# odpowiedź} few {# odpowiedzi} many {# odpowiedzi} other {# odpowiedzi}}. Odpowiedzi zużywają budżet.",
     "modelRefused": "Model odmówił odpowiedzi",
     "nothingFound": "Nic nie znaleziono",
+    "nothingFoundInCutDocument": "W przeczytanej części nic nie znaleziono",
     "refusedBudget": "Nie uruchomiono: budżet odpowiedzi niedostępny",
     "rerunAllPage": "Uruchom wszystko ponownie (ta strona)",
     "rerunColumnPage": "Uruchom kolumnę ponownie (ta strona)",
@@ -1695,6 +1696,7 @@
       "errorUnavailable": "Twój komputer przestał przetwarzać tę odpowiedź. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
       "filesNotShared": "Pliki, których nie udało się udostępnić, pozostają na Twoim komputerze: {fileNames}",
       "onThisComputer": "{harness} na tym komputerze",
+      "permissionAboveLimit": "Twoja organizacja na to nie pozwala",
       "permissionAskDescription": "Sam edytuje pliki w folderze czatu; o wszystko inne pyta.",
       "permissionAutoDescription": "Sam robi to, co uznaje za bezpieczne; o resztę pyta.",
       "permissionFullAuto": "W pełni automatycznie",
@@ -1706,6 +1708,7 @@
       "refusalHarnessUnavailable": "Agent programistyczny na Twoim komputerze nie może teraz przyjąć tego żądania. Sprawdź go w stella desktop.",
       "refusalModelUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje już tego modelu. Wybierz inny w menu Uruchom na.",
       "refusalNoComputer": "Żaden z Twoich komputerów nie jest połączony. Otwórz stella desktop i wyślij ponownie.",
+      "refusalPermissionAboveLimit": "Twoja organizacja nie pozwala agentowi programistycznemu na Twoim komputerze działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
       "refusalPermissionUnavailable": "Agent programistyczny na Twoim komputerze nie może działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
       "refusalTooLarge": "Ta rozmowa jest zbyt długa, by przekazać ją do Twojego komputera. Rozpocznij nowy czat, aby uruchomić go tam.",
       "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
@@ -4039,6 +4042,8 @@
       "description": "Wybierz przygotowany playbook, dokumenty referencyjne lub oba.",
       "dismissFinding": "Odrzuć ustalenie",
       "documentChanged": "Ten dokument zmienił się po tej weryfikacji.",
+      "documentCutNotice": "<strong>Dokument {documentName} nie został przeczytany w całości.</strong> Jest zbyt długi dla tego modelu, dlatego pominięto około {percent} tekstu. Pozycja bez odpowiedzi jest oznaczana do sprawdzenia, ponieważ odpowiedź może znajdować się w pominiętej części.",
+      "documentTooLarge": "Ten dokument jest zbyt długi, aby ten model mógł przeczytać jego wystarczającą część. Wypróbuj model z większym oknem kontekstu.",
       "export": {
         "counterparty": "Pobierz dla kontrahenta",
         "counterpartyFailed": "Nie udało się wyeksportować dokumentu",
@@ -5638,6 +5643,11 @@
         "labelAria": "Nazwa typu dokumentu",
         "reorder": "Zmień kolejność typu dokumentu",
         "title": "Typy dokumentów"
+      },
+      "localRuns": {
+        "description": "Najwięcej, ile agent programistyczny może zrobić bez pytania, gdy prowadzi czat na komputerze członka. Niższy limit obowiązuje od następnej wiadomości każdego członka; trwające już uruchomienie zachowuje swoje uprawnienia.",
+        "title": "Agenci programistyczni na komputerach członków",
+        "updated": "Uprawnienia agentów programistycznych zostały zaktualizowane"
       },
       "matterNumbering": "Numeracja spraw",
       "matterNumberingDescription": "Skonfiguruj sposób generowania numerów referencyjnych nowych spraw",

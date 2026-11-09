@@ -13,7 +13,8 @@ import {
  * and protocol handling run unmodified in tests without a model provider.
  * Its startup (arguments, working directory, the environment variables the
  * adapter controls) and every message it receives are appended to
- * `$FAKE_HARNESS_LOG` for the test to inspect.
+ * `$FAKE_HARNESS_LOG` for the test to inspect. A user message whose content
+ * the Messages API would refuse ends it with code 96.
  *
  * Usage: `bun scripts/fake-claude-code-cli.ts <scenario> [CLI arguments]`.
  */
@@ -791,6 +792,50 @@ const IncomingSchema = v.looseObject({
   response: v.optional(v.looseObject({ request_id: v.optional(v.string()) })),
 });
 
+const Base64Schema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.regex(/^[A-Za-z0-9+/]+={0,2}$/u),
+);
+
+/** A user message's content as the Messages API takes it from the CLI. */
+const UserContentSchema = v.union([
+  v.string(),
+  v.array(
+    v.variant("type", [
+      v.strictObject({ type: v.literal("text"), text: v.string() }),
+      v.strictObject({
+        type: v.literal("image"),
+        source: v.strictObject({
+          type: v.literal("base64"),
+          media_type: v.picklist([
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/webp",
+          ]),
+          data: Base64Schema,
+        }),
+      }),
+      v.strictObject({
+        type: v.literal("document"),
+        source: v.strictObject({
+          type: v.literal("base64"),
+          media_type: v.literal("application/pdf"),
+          data: Base64Schema,
+        }),
+      }),
+    ]),
+  ),
+]);
+
+const UserInputSchema = v.looseObject({
+  message: v.strictObject({
+    role: v.literal("user"),
+    content: UserContentSchema,
+  }),
+});
+
 /** Environment variables the adapter sets or must drop, as the CLI saw them. */
 const OBSERVED_ENV =
   /^(?:ANTHROPIC_|CLAUDE|AWS_BEARER_TOKEN_BEDROCK$|DISABLE_AUTOUPDATER$|ENABLE_CLAUDEAI_MCP_SERVERS$|FAKE_KEEP$|BUN_INSTALL_CACHE_DIR$|npm_config_cache$|PIP_CACHE_DIR$|UV_CACHE_DIR$|PLAYWRIGHT_BROWSERS_PATH$|XDG_CACHE_HOME$)/u;
@@ -808,6 +853,10 @@ const run = async (
         case "control_response":
           return "responses";
         case "user":
+          if (!v.is(UserInputSchema, message)) {
+            log({ refusedInput: "user" });
+            process.exit(96);
+          }
           return "users";
         default:
           return null;

@@ -149,7 +149,10 @@ import {
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
 import { sourceScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-source-scopes";
-import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
+import type {
+  LocalChatRun,
+  LocalRunAppIssuer,
+} from "@/api/handlers/chat/local-run-chunks";
 import {
   resolveChatLocalRun,
   type ResolveChatLocalRunOptions,
@@ -290,6 +293,7 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { resolveCredentialMemberExecutionContext } from "@/api/lib/chat/credential-member-execution-context";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
+import { readLocalRunApprovalCeiling } from "@/api/lib/chat/local-run-approval-ceiling";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   CHAT_REF_ENCODING,
@@ -2387,10 +2391,12 @@ const turnCopiesFiles = (
   sendMode: ChatSendMode,
 ) => localRun !== undefined && sendMode !== CHAT_SEND_MODE.anonymized;
 
-const localRunWithAttachments = (
+const localRunForTurn = (
   localRun: LocalChatRun | undefined,
   attachments: readonly LocalRunAttachment[],
-): LocalChatRun | undefined => localRun?.withAttachments(attachments);
+  origin: LocalRunAppIssuer,
+): LocalChatRun | undefined =>
+  localRun?.withAttachments(attachments).withResourceOrigin(origin);
 
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
@@ -2817,6 +2823,11 @@ export const createSendMessage = (
               pinnedIds: effectiveContextMatterIds,
               accessibleWorkspaceIds,
             }),
+            readApprovalCeiling: async () =>
+              await readLocalRunApprovalCeiling(
+                safeDb,
+                session.activeOrganizationId,
+              ),
             ...(dependencies.localRunRuntime === undefined
               ? {}
               : { runtime: dependencies.localRunRuntime }),
@@ -3605,9 +3616,10 @@ export const createSendMessage = (
                   promptCachingEnabled,
                   runMode: turnRunModeOf(body),
                   sandboxRun,
-                  localRun: localRunWithAttachments(
+                  localRun: localRunForTurn(
                     localRun,
                     chatContext.localRunAttachments,
+                    visualOrigin,
                   ),
                   usageLane: turnLane.lane,
                   decisionPassageStamper: createTurnDecisionPassageStamper({

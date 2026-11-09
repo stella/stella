@@ -24,6 +24,7 @@ import {
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import {
   fieldContentFromValidated,
+  isEmptyFieldContent,
   validateAIOutput,
 } from "@/api/lib/workflow/ai-validators";
 import { withGradingSource } from "@/api/lib/workflow/cited-passages";
@@ -299,6 +300,7 @@ export const generateBatch = async (
         skippedPropertyIds,
         unsupportedPropertyIds: [],
         settlements: new Map(),
+        withheld: [],
       });
     }
 
@@ -317,6 +319,7 @@ export const generateBatch = async (
         skippedPropertyIds,
         unsupportedPropertyIds: aiInputProperties.map((p) => p.id),
         settlements,
+        withheld: [],
       });
     }
 
@@ -381,6 +384,8 @@ export const generateBatch = async (
     const aiResults: AIResult[] = [];
     const aiJustifications: AIJustification[] = [];
     const settlements = new Map<SafeId<"property">, BatchSettlement>();
+    const noAnswer =
+      generation.fit.type === "cut" ? "notFoundInCutDocument" : "notStated";
 
     for (const property of generation.properties) {
       if (generation.refusedPropertyIds.has(property.id)) {
@@ -389,7 +394,7 @@ export const generateBatch = async (
       }
       const propertyResult = generation.output[property.id];
       if (!propertyResult) {
-        settlements.set(property.id, "notStated");
+        settlements.set(property.id, noAnswer);
         continue;
       }
 
@@ -399,8 +404,13 @@ export const generateBatch = async (
       });
 
       const content = fieldContentFromValidated(validated);
-      if (content === null) {
-        settlements.set(property.id, "notStated");
+      // In a cut document an empty answer says nothing about the document: the
+      // value may sit in the text the model never read.
+      if (
+        content === null ||
+        (generation.fit.type === "cut" && isEmptyFieldContent(content))
+      ) {
+        settlements.set(property.id, noAnswer);
         continue;
       }
 
@@ -438,5 +448,6 @@ export const generateBatch = async (
       skippedPropertyIds,
       unsupportedPropertyIds: [],
       settlements,
+      withheld: generation.fit.type === "cut" ? generation.fit.withheld : [],
     });
   });

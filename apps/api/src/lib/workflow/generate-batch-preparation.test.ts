@@ -35,7 +35,7 @@ const fileContent = {
 
 const dependencies = {
   fetchInputFieldsForBatch: async () => [
-    { id: fileFieldId, propertyId, content: fileContent },
+    { id: fileFieldId, propertyId, content: fileContent, aiSettlement: null },
   ],
   fetchAndPrepareFiles,
   generateWorkflowData,

@@ -48,6 +48,7 @@ import { answerShapeForPosition } from "@/api/lib/workflow/position-runtime";
 import {
   askPresence,
   askText,
+  CUT_DOCUMENT_RATIONALE,
   extractedFromCitedClause,
   extractedFromContent,
   gradePresence,
@@ -137,6 +138,8 @@ export type OnFindingsGraded = (
 export type BuildFindingsArgs = AiGradingDeps & {
   positions: readonly Position[];
   contentBySourceId: ReadonlyMap<string, AskExtraction>;
+  /** Asks the model declined to answer, which say nothing about the document. */
+  refusedSourceIds: ReadonlySet<string>;
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
   /** The prepared target, compared directly against a reference standard's
    *  passages. */
@@ -148,6 +151,8 @@ export type BuildFindingsArgs = AiGradingDeps & {
   /** The words behind every passage the positions pin, keyed by passage id.
    *  A passage whose row is gone is graded as if it were never quoted. */
   passageTextById: ReadonlyMap<string, string>;
+  /** Whether the model read the target whole, or with text withheld for length. */
+  documentRead: "whole" | "cut";
   /** Progress, per completed batch. The full set still comes back from the
    *  return value; this only lets a caller commit early. */
   onGraded: OnFindingsGraded;
@@ -221,14 +226,28 @@ const gradeWithoutModel = ({
   position,
   askContent,
   fieldContentBySourceId,
+  documentRead,
+  askRefused,
 }: {
   position: Position;
   askContent: FieldContent | undefined;
   fieldContentBySourceId: ReadonlyMap<string, FieldContent>;
+  documentRead: "whole" | "cut";
+  askRefused: boolean;
 }): GradingOutcome | null => {
   // Extract-only positions capture a value with no verdict.
   if (position.mode === "extract") {
     return { status: "graded", verdict: null, rationale: null };
+  }
+  if (askRefused) {
+    return UNGRADED_VERDICT;
+  }
+  if (documentRead === "cut" && askPresence(askContent) !== "present") {
+    return {
+      status: "ungraded",
+      verdict: "deviation",
+      rationale: CUT_DOCUMENT_RATIONALE,
+    };
   }
 
   const { check } = position;
@@ -567,11 +586,13 @@ const referenceFinding = (
 export const buildFindings = async ({
   positions,
   contentBySourceId,
+  refusedSourceIds,
   tiersBySourceId,
   target,
   perspective,
   referenceEntityVersionIds,
   passageTextById,
+  documentRead,
   onGraded,
   ...deps
 }: BuildFindingsArgs): Promise<ReviewFinding[]> => {
@@ -596,6 +617,8 @@ export const buildFindings = async ({
       position,
       askContent: contentBySourceId.get(position.sourceId)?.content,
       fieldContentBySourceId,
+      documentRead,
+      askRefused: refusedSourceIds.has(position.sourceId),
     });
     if (verdict === null) {
       forModel.push(position);

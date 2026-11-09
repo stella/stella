@@ -767,6 +767,7 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 | account_lifecycle | 6 |
+| agent_autonomy_ceiling | 1 |
 | assistant_chat | 16 |
 | auth_plumbing | 38 |
 | billing_ui | 1 |

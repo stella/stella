@@ -92,6 +92,7 @@
     "countSummary": "{columns} Spalten × {rows} Zeilen = {answers, plural, one {# Antwort} other {# Antworten}}. Antworten verbrauchen Budget.",
     "modelRefused": "Das Modell hat die Antwort verweigert",
     "nothingFound": "Nichts gefunden",
+    "nothingFoundInCutDocument": "Im gelesenen Teil nichts gefunden",
     "refusedBudget": "Nicht ausgeführt: Antwortbudget nicht verfügbar",
     "rerunAllPage": "Alle erneut ausführen (diese Seite)",
     "rerunColumnPage": "Spalte erneut ausführen (diese Seite)",
@@ -1695,6 +1696,7 @@
       "errorUnavailable": "Ihr Computer hat die Bearbeitung dieser Antwort beendet. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
       "filesNotShared": "Dateien, die nicht geteilt werden konnten, bleiben auf Ihrem Computer: {fileNames}",
       "onThisComputer": "{harness} auf diesem Computer",
+      "permissionAboveLimit": "Von Ihrer Organisation nicht erlaubt",
       "permissionAskDescription": "Bearbeitet Dateien im Ordner des Chats selbst; fragt vor allem anderen nach.",
       "permissionAutoDescription": "Erledigt selbst, was es für sicher hält; fragt beim Rest nach.",
       "permissionFullAuto": "Vollautomatisch",
@@ -1706,6 +1708,7 @@
       "refusalHarnessUnavailable": "Der Coding-Agent auf Ihrem Computer kann diese Anfrage gerade nicht übernehmen. Prüfen Sie ihn in stella desktop.",
       "refusalModelUnavailable": "Der Coding-Agent auf Ihrem Computer bietet dieses Modell nicht mehr an. Wählen Sie unter „Ausführen auf“ ein anderes.",
       "refusalNoComputer": "Keiner Ihrer Computer ist verbunden. Öffnen Sie stella desktop und senden Sie erneut.",
+      "refusalPermissionAboveLimit": "Ihre Organisation erlaubt diese Berechtigungen für den Coding-Agenten auf Ihrem Computer nicht. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalPermissionUnavailable": "Der Coding-Agent auf Ihrem Computer kann mit diesen Berechtigungen nicht laufen. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalTooLarge": "Diese Unterhaltung ist zu lang, um sie an Ihren Computer zu übergeben. Starten Sie einen neuen Chat, um sie dort auszuführen.",
       "refusalUnavailable": "Chats auf Ihrem Computer auszuführen ist für Ihr Konto nicht verfügbar.",
@@ -4039,6 +4042,8 @@
       "description": "Wählen Sie ein erstelltes Playbook, Referenzdokumente oder beides.",
       "dismissFinding": "Ergebnis verwerfen",
       "documentChanged": "Dieses Dokument hat sich seit dieser Prüfung geändert.",
+      "documentCutNotice": "<strong>{documentName} wurde nicht vollständig gelesen.</strong> Das Dokument ist für dieses Modell zu lang, daher wurden etwa {percent} des Textes ausgelassen. Eine Position ohne Antwort wird zur Prüfung markiert, weil die Antwort im ausgelassenen Teil stehen kann.",
+      "documentTooLarge": "Dieses Dokument ist zu lang, als dass dieses Modell genug davon lesen könnte. Versuchen Sie ein Modell mit einem größeren Kontextfenster.",
       "export": {
         "counterparty": "Für die Gegenpartei herunterladen",
         "counterpartyFailed": "Das Dokument konnte nicht exportiert werden",
@@ -5638,6 +5643,11 @@
         "labelAria": "Name der Dokumentart",
         "reorder": "Dokumentart neu anordnen",
         "title": "Dokumentarten"
+      },
+      "localRuns": {
+        "description": "Wie viel ein Coding-Agent höchstens ohne Nachfrage tun darf, wenn er einen Chat auf dem Computer eines Mitglieds ausführt. Ein niedrigeres Limit gilt ab der nächsten Nachricht jedes Mitglieds; ein bereits laufender Durchlauf behält seine Berechtigungen.",
+        "title": "Coding-Agenten auf den Computern der Mitglieder",
+        "updated": "Berechtigungen der Coding-Agenten aktualisiert"
       },
       "matterNumbering": "Aktennummerierung",
       "matterNumberingDescription": "Konfigurieren Sie, wie neue Aktenzeichen erzeugt werden",

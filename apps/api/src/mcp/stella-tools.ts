@@ -90,6 +90,7 @@ import {
   type AgentCaseLawSearchWarning,
   manyRequiredTermsWarning,
   partialMatchesAppendedWarning,
+  partialMatchesUnreadWarning,
   phrasingTimedOutWarning,
   provisionCitedWidelyWarning,
   withFacetValues,
@@ -184,6 +185,7 @@ import {
   searchCaseLawArgsSchema,
 } from "@/api/mcp/case-law-search-input";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { statusCodeToErrorCode } from "@/api/mcp/error-codes";
 import {
   countryInputSchema,
   countryNormalization,
@@ -228,6 +230,7 @@ import {
   ensureWorkspaceAccess,
   errorResult,
   handlerResultMessage,
+  handlerStatusOf,
   internalFailureResult,
   invalidCursorResult,
   isCaseLawSearchTimeout,
@@ -2070,6 +2073,21 @@ type CaseLawSearchAnswer =
   | { type: "timed_out"; result: InternalToolErrorResult };
 
 /** One query's handler answer read as its page or the tool's refusal. */
+/**
+ * A search the handler refused or failed, in the typed envelope every other
+ * failure of this tool uses. A caller's mistake keeps its message and gains a
+ * code; anything else is captured and answered generically.
+ */
+const caseLawSearchFailedResult = (
+  answer: unknown,
+): InternalToolErrorResult => {
+  const status = handlerStatusOf(answer);
+  const code = statusCodeToErrorCode(status?.code ?? 500);
+  return status?.message && code !== "internal_error"
+    ? structuredErrorResult({ code, message: status.message })
+    : internalFailureResult(answer, "mcp.searchRefusal");
+};
+
 const readCaseLawSearchAnswer = (
   answer: Parameters<typeof isSearchCaseLawSuccess>[0],
   cursor: string | undefined,
@@ -2092,11 +2110,8 @@ const readCaseLawSearchAnswer = (
       }),
     };
   }
-  if (resultMessage) {
-    return { type: "failed", result: errorResult(resultMessage) };
-  }
-  if (!isSearchCaseLawSuccess(answer)) {
-    return { type: "failed", result: errorResult("Case-law search failed") };
+  if (resultMessage || !isSearchCaseLawSuccess(answer)) {
+    return { type: "failed", result: caseLawSearchFailedResult(answer) };
   }
   return { type: "page", page: answer };
 };
@@ -2119,6 +2134,13 @@ const provisionRefusal = (
 });
 
 /**
+ * No EU provision links are recorded yet, so a corrected EU filter would only
+ * answer not_found: the next call a refusal names is the text search.
+ */
+const EU_PROVISION_FILTER_HINT =
+  "Omit provision and name the EU provisions in queries.";
+
+/**
  * Reads the provision a caller names against the country's citation profile,
  * the vocabulary the corpus's provision links were extracted with, as the act
  * in force today. Every refusal names what to send instead.
@@ -2132,7 +2154,7 @@ const resolveSearchProvision = (
   if (euCitations.length > 1) {
     return provisionRefusal(
       "The provision names several provisions or a range",
-      'Pass one EU provision per search, for example "Article 6(1)(a) GDPR".',
+      EU_PROVISION_FILTER_HINT,
     );
   }
   const euCitation = euCitations.at(0);
@@ -2142,7 +2164,7 @@ const resolveSearchProvision = (
     if (before.length > 0 || (after.length > 0 && after !== ".")) {
       return provisionRefusal(
         "The provision names several provisions or contains unsupported text",
-        'Pass one complete EU provision per search, for example "Article 6(1)(a) GDPR"; search enumerated provisions separately.',
+        EU_PROVISION_FILTER_HINT,
       );
     }
     const { reference } = euCitation;
@@ -2845,6 +2867,32 @@ const phrasingResultSet = <Facet>(
     ? { facets }
     : { facets: index === 0 ? facets : [], describeResultSet: false };
 
+type AnsweredPhrasingWarningsOptions = Parameters<
+  typeof manyRequiredTermsWarnings
+>[0] &
+  PartialMatchWarningOptions & {
+    query: string;
+    page: { relaxedTopUp?: "skipped" | undefined };
+  };
+
+/** What a phrasing that returned a page says about that page. */
+const answeredPhrasingWarnings = ({
+  guidance,
+  query,
+  subCursor,
+  page,
+  slots,
+  merged,
+  queryIndex,
+  countsStrictSet,
+}: AnsweredPhrasingWarningsOptions): AgentCaseLawSearchWarning[] => [
+  ...(page.relaxedTopUp === "skipped"
+    ? [partialMatchesUnreadWarning({ query })]
+    : []),
+  ...manyRequiredTermsWarnings({ guidance, subCursor, page, slots }),
+  ...partialMatchWarnings({ merged, queryIndex, countsStrictSet }),
+];
+
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
@@ -3045,13 +3093,12 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           ...outcome.page.warnings
             .filter(({ code }) => code !== "partial_matches_appended")
             .map((warning) => withFacetValues(warning, values)),
-          ...manyRequiredTermsWarnings({
+          ...answeredPhrasingWarnings({
             guidance: mcpCaseLawSearchGuidance(context),
+            query,
             subCursor,
             page: outcome.page,
             slots: perQueryLimit,
-          }),
-          ...partialMatchWarnings({
             merged,
             queryIndex: index,
             countsStrictSet: single !== undefined,

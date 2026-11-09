@@ -11,6 +11,7 @@ import {
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
+import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
 import {
   requiresPerCallChatApproval,
   USE_CONNECTOR_SECRET_TOOL_NAME,
@@ -861,8 +862,8 @@ const getToolApprovalState = ({
     part.output !== undefined &&
     isSuggestChangesApplyOutput(part.output) &&
     !part.output.success;
-  // The decision remains denied when the SDK settles the call as an error.
-  const isDenied = isStructuredEditFailure || part.approval.approved === false;
+  // A declined call is stored settled as an error; it is still a decline.
+  const isDenied = isStructuredEditFailure || isDeclinedChatToolCall(part);
   const isApproved =
     part.state === "complete" && part.output !== undefined && !isDenied;
   const isBlocked = blockedApprovalTools?.has(name) ?? false;

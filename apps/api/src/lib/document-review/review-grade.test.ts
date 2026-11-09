@@ -17,6 +17,7 @@ import type {
   ResolvedTiers,
 } from "@/api/lib/workflow/playbook-positions";
 import {
+  CUT_DOCUMENT_RATIONALE,
   type gradeTierMatches,
   TIER_MATCH_BATCH_SIZE,
 } from "@/api/lib/workflow/verdict-engine";
@@ -222,6 +223,8 @@ const buildArgs = (
   perspective: NEUTRAL_PERSPECTIVE,
   referenceEntityVersionIds: [],
   passageTextById: referencePassageTextById,
+  refusedSourceIds: new Set<string>(),
+  documentRead: "whole" as const,
   gradeTierMatches: gradeTierMatchesMock,
   gradeReferencePositions: gradeReferencePositionsMock,
 });
@@ -237,6 +240,47 @@ beforeEach(() => {
 });
 
 describe("document review grading", () => {
+  test("flags a position with no answer in a cut document, never missing", async () => {
+    const answered = position(1);
+    const unanswered = position(2);
+    const args = buildArgs(
+      [answered, unanswered],
+      new AbortController().signal,
+    );
+    args.contentBySourceId.delete(unanswered.sourceId);
+
+    const findings = await buildFindings({ ...args, documentRead: "cut" });
+
+    expect(
+      findings.find(({ positionId }) => positionId === unanswered.sourceId),
+    ).toMatchObject({
+      verdict: "deviation",
+      rationale: CUT_DOCUMENT_RATIONALE,
+    });
+    expect(findings.map(({ verdict }) => verdict)).not.toContain("missing");
+  });
+
+  test("flags a refused ask for review, in a whole or a cut document", async () => {
+    const refused = position(1);
+    const args = buildArgs([refused], new AbortController().signal);
+    args.contentBySourceId.delete(refused.sourceId);
+    const refusedSourceIds = new Set([refused.sourceId]);
+
+    for (const documentRead of ["whole", "cut"] as const) {
+      const [finding] = await buildFindings({
+        ...args,
+        refusedSourceIds,
+        documentRead,
+      });
+
+      expect(finding).toMatchObject({
+        verdict: "deviation",
+        rationale:
+          "Automated comparison against the standard could not be completed.",
+      });
+    }
+  });
+
   test("does not propose a fix when model grading produced no verdict", async () => {
     returnVerdicts = false;
 

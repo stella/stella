@@ -13,7 +13,10 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  DocumentTooLargeError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
@@ -276,6 +279,7 @@ const previewProperty = createSafeHandler(
       const skipped: boolean = matchError(generateResult.error, {
         WorkflowValidationError: () => true,
         WorkflowIntegrationError: () => false,
+        DocumentTooLargeError: () => false,
       });
       if (skipped) {
         return Result.ok({ status: "skipped" } satisfies PreviewResponse);
@@ -284,10 +288,15 @@ const previewProperty = createSafeHandler(
       // failure (if any) on its `cause` — classify against that so
       // quota/usage-limit errors propagate the right status to the UI.
       return Result.err(
-        aiHandlerError(generateResult.error.cause, {
-          status: 502,
-          message: "Preview generation failed",
-        }),
+        aiHandlerError(
+          DocumentTooLargeError.is(generateResult.error)
+            ? generateResult.error
+            : generateResult.error.cause,
+          {
+            status: 502,
+            message: "Preview generation failed",
+          },
+        ),
       );
     }
 

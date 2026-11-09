@@ -1,4 +1,5 @@
-// parser-output-unchanged: [sk-us] only adds isSkOpeningFormula, skTitleFormulaStart and isSkPortalMetadataRow, which only the Slovak courts' PDF reader calls; this source's lines are read as before.
+// parser-output-unchanged: [sk-us] only adds isSkVerdictFormulaLine, which only the structure-fidelity guard calls; this source's lines are read as before.
+// parser-output-unchanged: [sk-courts] only adds isSkVerdictFormulaLine, which only the structure-fidelity guard calls; this source's lines are read as before.
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { caseLawSectionHeading } from "./case-law-heading";
@@ -155,3 +156,18 @@ export const skSectionHeading = (text: string, section: SkDocumentSection) => {
   }
   return caseLawSectionHeading(trimmed);
 };
+
+/**
+ * The lines a criminal verdict prints between the parts of its ruling, each
+ * on its own line: `uznáva sa za vinného, že`, `teda`, `čím spáchal`,
+ * `pričom`, `za to mu súd ukladá`. The verdict's sentence runs on across
+ * them by the court's own layout, not where a line or a page ended.
+ */
+const VERDICT_FORMULA_RE =
+  /^(?:uznáva sa za vinn\p{Ll}+,? že|teda|čím spáchal\p{Ll}*|pričom|za to (?:mu|jej|im) súd ukladá)(?!\p{L})/iu;
+
+/** Whether a line opens one of a criminal verdict's formula lines. */
+export const isSkVerdictFormulaLine = (text: string): boolean =>
+  VERDICT_FORMULA_RE.test(
+    collapseSpacedLetters(text.trim()).replaceAll(/\s+/gu, " "),
+  );

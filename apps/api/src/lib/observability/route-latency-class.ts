@@ -703,6 +703,7 @@ export const ROUTE_LATENCY_CLASSES = {
     "crud",
   "POST /v1/organization-settings/correspondence/data-boxes": "crud",
   "POST /v1/organization-settings/deepl": "crud",
+  "POST /v1/organization-settings/local-runs": "crud",
   "POST /v1/organization-settings/practice-jurisdictions": "crud",
   "POST /v1/organization-settings/preview": "crud",
   "POST /v1/organization-settings/sanctions-monitoring": "crud",

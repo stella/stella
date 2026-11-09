@@ -212,6 +212,27 @@ describe("a UOKiK decision PDF", () => {
     );
   });
 
+  test("the authority's bracketed paragraph numbers [1] to [61] are block numbers", async () => {
+    const parsed = await parsePlUokikDocument(
+      inputOf([await bytesOf(RGD_16_2024)]),
+    );
+    const blocks = parsed?.documentAst.blocks ?? [];
+    expect(
+      blocks.flatMap((block) =>
+        block.type === "paragraph" && block.number !== undefined
+          ? [block.number]
+          : [],
+      ),
+    ).toEqual(Array.from({ length: 61 }, (_, index) => index + 1));
+    expect(
+      blocks.filter(
+        (block) =>
+          block.type === "paragraph" && /^\[\d{1,3}\]/u.test(block.plainText),
+      ),
+    ).toEqual([]);
+    expect(parsed?.fulltext).not.toMatch(/(?:^|\n)\[1\] /u);
+  });
+
   test("states the decision it is", async () => {
     const parsed = await parsePlUokikDocument(
       inputOf([await bytesOf(DOK_9_2011)]),
@@ -456,6 +477,86 @@ describe("a UOKiK decision read as the office sets its pages", () => {
         plainText.startsWith("Po dokonanym zakupie kontrolnym"),
       ),
     ).toBe(true);
+  });
+});
+
+describe("a UOKiK decision's numbered subheadings", () => {
+  const subheadings = (blocks: readonly Block[]): string[] =>
+    blocks.flatMap((block) =>
+      block.type === "heading" && block.level === 3 ? [block.plainText] : [],
+    );
+
+  test("DDK-2/2017: a subheading numbered in the outline heads its part", async () => {
+    const { blocks } = await parsedOf(DDK_2_2017);
+    expect(subheadings(blocks)).toEqual(
+      expect.arrayContaining([
+        "1. Status przedsiębiorcy",
+        "2. Zbiorowy interes konsumentów",
+        "3. Bezprawność działań",
+        "Działanie Spółki opisane w pkt I.1 sentencji decyzji",
+      ]),
+    );
+  });
+
+  test("RGD-9/2026: a bold abbreviation in the distribution list heads nothing", async () => {
+    const { blocks } = await parsedOf(RGD_9_2026);
+    expect(subheadings(blocks)).not.toContain("2. a/a");
+  });
+});
+
+describe("a UOKiK decision's title and ruling", () => {
+  const titlesOf = (blocks: readonly Block[]): string[] =>
+    blocks.flatMap((block) =>
+      block.type === "heading" && block.role === "decision-title"
+        ? [block.plainText]
+        : [],
+    );
+  const firstHolding = (blocks: readonly Block[]): string | undefined =>
+    blocks.find(
+      (block) => block.type === "paragraph" && block.role === "holding",
+    )?.plainText;
+
+  test("DIH-48/2017 is titled by its docket alone, once, and rules under it", async () => {
+    const { blocks } = await parsedOf(DIH_48_2017);
+    expect(titlesOf(blocks)).toEqual(["DECYZJA DIH-1/48/2017"]);
+    expect(firstHolding(blocks)).toStartWith("Na podstawie art. 138 § 1 pkt 1");
+  });
+
+  test("RBG-11/2018 rules under its numbered title printed below the bare title", async () => {
+    const { blocks } = await parsedOf(RBG_11_2018);
+    expect(titlesOf(blocks)).toEqual(["DECYZJA"]);
+    expect(firstHolding(blocks)).toStartWith(
+      "I. Na podstawie art. 27 ust. 1 i 2 ustawy z dnia 16 lutego 2007 r.",
+    );
+  });
+});
+
+/** A 2009 decision whose recital runs on into the ruling, recorded for its roles. */
+const RWA_26_2009 = new URL(
+  "__fixtures__/decision-roles/pl-uokik-rwa-26-2009.pdf",
+  import.meta.url,
+);
+
+describe("a UOKiK decision whose recital runs on into its ruling", () => {
+  test("RWA-26/2009: the legal basis and the recital introduce the ruling, which opens at its verb", async () => {
+    const { blocks } = await parsedOf(RWA_26_2009);
+    const opening = bodyOf(blocks)
+      .filter((block) => block.type === "paragraph")
+      .slice(7, 12)
+      .map((block) => `${block.role ?? "-"} ${block.plainText.slice(0, 30)}`);
+
+    expect(opening).toEqual([
+      "intro I. Na podstawie art. 27 ust. 2",
+      "intro − w imieniu Prezesa Urzędu Och",
+      "intro po przeprowadzeniu postępowani",
+      "holding uznaje się, że działanie poleg",
+      "holding 1. „Koszty ponoszone przez ucz",
+    ]);
+    // The text stays as printed: the two paragraphs read as the one.
+    const all = blocks.map(({ plainText }) => plainText).join(" ");
+    expect(all).toContain(
+      "z siedzibą w Warszawie, uznaje się, że działanie polegające",
+    );
   });
 });
 

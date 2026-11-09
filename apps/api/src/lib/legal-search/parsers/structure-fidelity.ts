@@ -30,6 +30,10 @@ import {
 } from "@stll/legal-ast/decision-role-grammar";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block } from "@stll/legal-ast/document-ast";
+import {
+  PRINTED_LABEL_KIND,
+  readPrintedLabel,
+} from "@stll/legal-ast/printed-paragraph-labels";
 
 import {
   continuesAcrossPageBreak,
@@ -119,6 +123,45 @@ const separatesLabelledLines = (
   SEPARATOR_WORD_RE.test(nextText) &&
   afterNext?.type === "paragraph" &&
   OPENS_ON_LABEL_RE.test(afterNext.plainText.trim());
+
+/** The labels a list's points open on: `2.`, `2)`, `b)`, `5.5.`. */
+const LIST_POINT_KINDS: ReadonlySet<string> = new Set([
+  PRINTED_LABEL_KIND.NUMBER,
+  PRINTED_LABEL_KIND.SUBNUMBER,
+  PRINTED_LABEL_KIND.LETTER,
+]);
+
+/** A list point a sentence names before its label (`v bode 2) …`). */
+const NAMED_POINT_PREFIX = "v bode ";
+
+/**
+ * Whether a paragraph is a point of a list the sentence runs on into,
+ * opening on its label as the printed-label grammar reads it (`b) …`,
+ * `v bode 2) …`): the list's own paragraph, not the rest of a cut sentence.
+ */
+const opensListPoint = (text: string): boolean => {
+  const point = text.startsWith(NAMED_POINT_PREFIX)
+    ? text.slice(NAMED_POINT_PREFIX.length)
+    : text;
+  const label = readPrintedLabel(point);
+  return label !== null && LIST_POINT_KINDS.has(label.kind);
+};
+
+/**
+ * Whether a paragraph break inside a criminal verdict's ruling falls at one
+ * of the verdict's formula lines (`uznáva sa za vinného, že`, `teda`), which
+ * the court prints on lines of their own.
+ */
+const breaksAtVerdictFormula = (
+  grammar: DecisionRoleGrammar | undefined,
+  role: string | undefined,
+  text: string,
+  nextText: string,
+): boolean =>
+  role === "holding" &&
+  grammar?.isVerdictFormulaLine !== undefined &&
+  (grammar.isVerdictFormulaLine(text) ||
+    grammar.isVerdictFormulaLine(nextText));
 
 /** Units a table row prints beside its figures, compared lowercased. */
 const TABLE_UNITS: ReadonlySet<string> = new Set([
@@ -296,6 +339,8 @@ export const structureFidelityIn = (
       !isTableRow(text) &&
       !isTableRow(nextText) &&
       !separatesLabelledLines(nextText, blocks[index + 2]) &&
+      !opensListPoint(nextText) &&
+      !breaksAtVerdictFormula(reading.grammar, block.role, text, nextText) &&
       continuesAcrossPageBreak(text, nextText)
     ) {
       finding(

@@ -117,6 +117,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A run's output upload authenticates the run's agent token on every deployment; a run exists only once the member's local-agents feature let it start",
   ],
   [
+    "/v1/organization-settings/local-runs",
+    "An administrator's limit on local run permissions is settable on every deployment; it only narrows turns the member's local-agents feature lets start",
+  ],
+  [
     "/v1/desktop/time-entries",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
