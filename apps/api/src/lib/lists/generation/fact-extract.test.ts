@@ -185,6 +185,25 @@ describe("extractFacts", () => {
     }
   });
 
+  test("one passage can establish two facts, and a repeated fact is listed once", async () => {
+    const amount = rawFact({
+      fact: "The board approved the discharge policy.",
+    });
+    const date = rawFact({
+      fact: "The discharge policy was approved on 9 March 2021.",
+    });
+    answers.push({ facts: [amount, date, amount] });
+
+    const result = await extractFacts({ blocks: BLOCKS, request: null, deps });
+
+    expect(
+      (Result.isOk(result) ? result.value : []).map(({ name }) => name),
+    ).toEqual([
+      "The board approved the discharge policy.",
+      "The discharge policy was approved on 9 March 2021.",
+    ]);
+  });
+
   test("a fact whose quote is still not in the document after repair is dropped", async () => {
     answers.push(
       { facts: [rawFact({ quote: "the board rejected the policy" })] },

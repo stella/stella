@@ -340,11 +340,18 @@ export const extractFacts = async ({
           }
           resolved.push(...window.value);
         }
-        // A fact quoted twice from the same words (two windows, or again in
-        // a repair) is one fact: its span is its identity.
+        // The same fact listed twice from the same words (two windows, or
+        // again in a repair) is one fact. One passage can establish several
+        // facts (a payment's amount and its date), so the statement is part
+        // of the identity, not only the span.
         const unique = new Map<string, ExtractedFact>();
         for (const fact of resolved) {
-          const key = `${String(fact.blockIndex)}:${String(fact.start)}:${String(fact.quote.length)}`;
+          const key = JSON.stringify([
+            fact.blockIndex,
+            fact.start,
+            fact.quote.length,
+            fact.name.toLocaleLowerCase("en"),
+          ]);
           if (!unique.has(key)) {
             unique.set(key, fact);
           }
