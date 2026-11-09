@@ -41,6 +41,7 @@ const CHAT_THREAD_SETTING_FIELDS = [
   "chatLocalRunTarget",
   "contextMatterIds",
   "dataWorkspaceIds",
+  "limitReminder",
   "titleChanged",
   "titleSource",
   "webSearchEnabled",
