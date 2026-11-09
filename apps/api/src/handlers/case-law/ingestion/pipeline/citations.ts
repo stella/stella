@@ -14,10 +14,12 @@ import {
   resolveCitationsForDecision,
 } from "@/api/handlers/case-law/citation-resolution";
 import { deriveDecisionReferences } from "@/api/handlers/case-law/citations/decision-references";
-import type { DecisionReference } from "@/api/handlers/case-law/citations/decision-references";
 import type { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import { classifyCitedPart } from "@/api/handlers/case-law/polarity/cited-part";
-import { POLARITY_CLASSIFIER_VERSION } from "@/api/handlers/case-law/polarity/consts";
+import {
+  citationEvidenceColumns,
+  readReference,
+} from "@/api/handlers/case-law/ingestion/pipeline/citation-reading";
+import type { ReadReference } from "@/api/handlers/case-law/ingestion/pipeline/citation-reading";
 import {
   applyCitationReviews,
   applyDoctrineReviews,
@@ -25,18 +27,12 @@ import {
 import {
   ACTIVE_RULE_SOURCES,
   loadRules,
-  selectCitationPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
-import type {
-  CitationPolarityVerdict,
-  RuleCache,
-} from "@/api/handlers/case-law/polarity/rule-engine";
+import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { parseCitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import { assertCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
-import { CITED_PART } from "@/api/lib/case-law/citation-vocabulary";
-import type { CitedPart } from "@/api/lib/case-law/citation-vocabulary";
 import { persistedColumnNumber } from "@/api/lib/db/column-storage";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
@@ -51,13 +47,6 @@ type PlanDecisionCitationsOptions = {
   proceduralKeys: ProceduralKeys;
   scopedDb: ScopedDb;
   sections: { index: number; text: string }[];
-};
-
-/** One reference and the rule tier's reading of its treatment. */
-type ReadReference = {
-  reference: DecisionReference;
-  verdict: CitationPolarityVerdict | null;
-  citedPart: CitedPart;
 };
 
 /** A decision's references as the writer publishes them. */
@@ -79,9 +68,10 @@ type CitationRow = typeof caseLawCitations.$inferInsert;
 /** The row a reference is stored as, before it is settled. */
 export const citationRowOf = (
   citingDecisionId: SafeId<"caseLawDecision">,
-  { reference, verdict, citedPart }: ReadReference,
+  read: ReadReference,
 ) =>
   Result.gen(function* () {
+    const { reference, verdict } = read;
     const [identifier] = reference.identifiers;
     const citationText = yield* assertCitationStorageField(
       "text",
@@ -113,14 +103,9 @@ export const citationRowOf = (
       sectionIndex: reference.sectionIndex,
       polarity: verdict?.polarity ?? null,
       polarityRuleId: verdict?.ruleId ?? null,
-      polaritySource: verdict ? "rule" : null,
-      polarityClassifierVersion: verdict ? POLARITY_CLASSIFIER_VERSION : null,
-      polarityEvidenceWindows:
-        verdict === null
-          ? null
-          : (reference.polarityWindows?.evidenceWindows ?? null),
-      polarityConfidence: verdict?.confidence ?? null,
-      citedPart,
+      // Where the stored polarity came from, the exact text it was read from,
+      // and the opinion part the reference cites.
+      ...citationEvidenceColumns(read),
     } satisfies CitationRow);
   });
 
@@ -182,28 +167,17 @@ export const planDecisionCitations = async ({
       references: [],
     } as const);
   }
+  // One rule set per decision language, loaded once for every reference.
   const rules = await loadRules(language, scopedDb, polarityRules);
   const plan = {
     disposition: "legacy-graph",
     citingDecisionId,
-    references: references.map((reference) => {
-      const windows = reference.polarityWindows;
-      return {
-        reference,
-        citedPart:
-          windows === null
-            ? CITED_PART.NOT_STATED
-            : classifyCitedPart({
-                contexts: windows.contexts,
-                citationText: reference.printed,
-                language,
-              }),
-        verdict:
-          reference.kind !== CITATION_KIND.PRECEDENT || windows === null
-            ? null
-            : selectCitationPolarity(rules, windows.mentions),
-      };
-    }),
+    // Each reference carries the opinion part it cites; a precedent also
+    // carries the rule tier's verdict over its mentions and the evidence
+    // windows that verdict was read from (see `readReference`).
+    references: references.map((reference) =>
+      readReference(reference, rules, language),
+    ),
   } as const satisfies LegacyGraphCitationPlan;
   return citationRowsOf(plan).map(() => plan);
 };

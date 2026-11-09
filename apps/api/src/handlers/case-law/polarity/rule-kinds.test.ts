@@ -9,9 +9,9 @@ import {
 } from "@/api/handlers/case-law/polarity/consts";
 import {
   compileRules,
-  isValidRuleKindPolarity,
   selectCitationPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
+import { isValidRuleKindPolarity } from "@/api/handlers/case-law/polarity/rule-kind";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import { toSafeId } from "@/api/lib/branded-types";
 

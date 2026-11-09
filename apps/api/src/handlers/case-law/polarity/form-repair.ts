@@ -29,7 +29,7 @@ import type { CompiledRule } from "@/api/handlers/case-law/polarity/rule-engine"
 import { citationTextRevisionFence } from "@/api/handlers/case-law/polarity/text-revision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
-import { numericColumnParam } from "@/api/lib/db/column-storage";
+import { persistedColumnNumber } from "@/api/lib/db/column-storage";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
@@ -393,30 +393,50 @@ export const applyFormRepairs = async ({
         { sections: candidate.sections, contentHash: candidate.contentHash },
       ]),
     );
+    // One JSON parameter per list keeps the statement text the same for any
+    // batch length.
+    const expectedDocuments = [...documents].map(([id, revision]) => ({
+      id,
+      sections: revision.sections,
+      content_hash: revision.contentHash,
+    }));
+    const repairRows = repairs.map(
+      ({ candidate, current, ruleFingerprint }) => ({
+        id: candidate.id,
+        citing_decision_id: candidate.citingDecisionId,
+        citation_text: candidate.citationText,
+        section_index: persistedColumnNumber(
+          caseLawCitations.sectionIndex,
+          candidate.sectionIndex,
+        ),
+        previous_polarity: current.row.oldPolarity,
+        previous_rule_id: current.row.oldRuleId,
+        rule_id: current.row.newRuleId,
+        rule_pattern: current.rulePattern,
+        rule_fingerprint: ruleFingerprint,
+        evidence_windows: current.windows.evidenceWindows,
+        confidence: persistedColumnNumber(
+          caseLawCitations.polarityConfidence,
+          current.confidence,
+        ),
+        cited_part: classifyCitedPart({
+          contexts: current.windows.contexts,
+          citationText: candidate.citationText,
+          language: plan.language,
+        }),
+      }),
+    );
     const changed =
       repairs.length === 0
         ? []
         : await tx.execute(sql`
-      WITH expected_documents(id, sections, content_hash) AS (VALUES ${sql.join(
-        [...documents].map(
-          ([id, revision]) =>
-            sql`(${id}::uuid, ${revision.sections === null ? null : JSON.stringify(revision.sections)}::text::jsonb, ${revision.contentHash}::text)`,
-        ),
-        sql.raw(","),
-      )}), repairs(id, citing_decision_id, citation_text, section_index, previous_polarity, previous_rule_id, rule_id, rule_pattern, rule_fingerprint, evidence_windows, confidence, cited_part) AS (VALUES ${sql.join(
-        repairs.map(
-          ({ candidate, current, ruleFingerprint }) => sql`(
-          ${candidate.id}::uuid, ${candidate.citingDecisionId}::uuid,
-          ${candidate.citationText}::text, ${numericColumnParam(caseLawCitations.sectionIndex, candidate.sectionIndex)},
-          ${current.row.oldPolarity}::text, ${current.row.oldRuleId}::uuid,
-          ${current.row.newRuleId}::uuid, ${current.rulePattern}::text,
-          ${ruleFingerprint}::text,
-          ${JSON.stringify(current.windows.evidenceWindows)}::text::jsonb,
-          ${numericColumnParam(caseLawCitations.polarityConfidence, current.confidence)}, ${classifyCitedPart({ contexts: current.windows.contexts, citationText: candidate.citationText, language: plan.language })}::text
-        )`,
-        ),
-        sql.raw(","),
-      )})
+      WITH expected_documents AS (
+        SELECT * FROM jsonb_to_recordset(${JSON.stringify(expectedDocuments)}::text::jsonb)
+          AS x(id uuid, sections jsonb, content_hash text)
+      ), repairs AS (
+        SELECT * FROM jsonb_to_recordset(${JSON.stringify(repairRows)}::text::jsonb)
+          AS x(id uuid, citing_decision_id uuid, citation_text text, section_index integer, previous_polarity text, previous_rule_id uuid, rule_id uuid, rule_pattern text, rule_fingerprint text, evidence_windows jsonb, confidence double precision, cited_part text)
+      )
       UPDATE ${caseLawCitations} AS c
          SET polarity = ${POLARITY.NEUTRAL}, polarity_rule_id = v.rule_id,
              polarity_source = 'rule', polarity_classifier_version = ${POLARITY_CLASSIFIER_VERSION},

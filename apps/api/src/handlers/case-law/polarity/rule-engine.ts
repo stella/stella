@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 /**
  * Regex-based polarity classification engine.
  *
@@ -10,6 +9,7 @@ import { panic } from "better-result";
  * for batch scripts; the API server should omit it to stay
  * stateless (rules reload from DB on every call).
  */
+
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
@@ -18,18 +18,17 @@ import { caseLawPolarityRules } from "@/api/db/schema";
 import { aggregateMentionPolarities } from "@/api/handlers/case-law/polarity/aggregate";
 import {
   CLASSIFIABLE_POLARITIES,
-  isClassifiablePolarity,
-  POLARITY,
   POLARITY_PRECEDENCE,
-  POLARITY_RULE_KIND,
   REPORTED_PARTY_SUBMISSION_GROUP,
   RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
-import type {
-  ClassifiablePolarity,
-  Polarity,
-  PolarityRuleKind,
-} from "@/api/handlers/case-law/polarity/consts";
+import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
+import {
+  invalidRuleKindPolarityMessage,
+  isValidRuleKindPolarity,
+  typedRuleKindPolarity,
+} from "@/api/handlers/case-law/polarity/rule-kind";
+import type { ValidRuleKindPolarity } from "@/api/handlers/case-law/polarity/rule-kind";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -49,30 +48,8 @@ type CompiledRuleBase = {
   confidence: number;
 };
 
-type RuleKindPolarity = {
-  kind: PolarityRuleKind;
-  polarity: Polarity;
-};
-
-export type ValidRuleKindPolarity =
-  | {
-      kind: typeof POLARITY_RULE_KIND.FORM;
-      polarity: typeof POLARITY.NEUTRAL;
-    }
-  | {
-      kind: typeof POLARITY_RULE_KIND.STANCE;
-      polarity: ClassifiablePolarity;
-    };
-
+/** A compiled rule; its kind decides which polarity it may carry. */
 export type CompiledRule = CompiledRuleBase & ValidRuleKindPolarity;
-
-/** Form describes how a citation is printed; it cannot express treatment. */
-export const isValidRuleKindPolarity = (
-  rule: RuleKindPolarity,
-): rule is ValidRuleKindPolarity =>
-  isClassifiablePolarity(rule.polarity) &&
-  (rule.kind === POLARITY_RULE_KIND.STANCE ||
-    rule.polarity === POLARITY.NEUTRAL);
 
 /** The rule tier's label for one citation, over all of its mentions. */
 export type CitationPolarityVerdict = {
@@ -232,53 +209,23 @@ export const compileRules = (
       continue;
     }
 
-    if (!isClassifiablePolarity(row.polarity)) {
-      observeFailure(
-        new TelemetryError({
-          message: "Polarity rule carries a polarity no match may assign",
-        }),
-        { sink: invalidPolarityRule, ctx: { entityId: row.id } },
-      );
-      continue;
-    }
-
     if (!isValidRuleKindPolarity(row)) {
       observeFailure(
         new TelemetryError({
-          message: "Citation-form rule carries a stance polarity",
+          message: invalidRuleKindPolarityMessage(row.polarity),
         }),
         { sink: invalidPolarityRule, ctx: { entityId: row.id } },
       );
       continue;
     }
 
-    const base = {
+    compiled.push({
       id: row.id,
       regex,
       pattern: row.pattern,
       confidence: row.confidence,
-    };
-    const kind = row.kind;
-    switch (kind) {
-      case POLARITY_RULE_KIND.FORM:
-        compiled.push({
-          ...base,
-          kind: POLARITY_RULE_KIND.FORM,
-          polarity: POLARITY.NEUTRAL,
-        });
-        break;
-      case POLARITY_RULE_KIND.STANCE:
-        compiled.push({
-          ...base,
-          kind: POLARITY_RULE_KIND.STANCE,
-          polarity: row.polarity,
-        });
-        break;
-      default: {
-        kind satisfies never;
-        panic("Unhandled polarity rule kind");
-      }
-    }
+      ...typedRuleKindPolarity(row),
+    });
   }
 
   return compiled.toSorted(compareRulePrecedence);
