@@ -74,29 +74,6 @@ error boundary, content that never finished loading, or API calls still
 running after 20 s. Look at the
 screenshots; a clean report with the wrong content is still wrong.
 
-### Chats that run on a computer
-
-```bash
-bun run agent:up -- --local-runner
-```
-
-adds a stand-in computer for the seeded owner: the desktop crate's own
-runner, journal, harness host and holder (the `runner_stand_in` example,
-built with Cargo on first use, which needs `cmake`), linked through the
-API's desktop-registry endpoints, with Codex and Claude Code replaced by the
-agent engine's `fake-codex-by-model.ts` and `fake-claude-code-by-model.ts`.
-No desktop app, CLI login or model provider is involved. In the composer
-pick Run on > this computer, then a model: each model is a scenario.
-Codex offers `text`, `tool_calls`, `stella_tools`, `approval`,
-`blocking_question`, `async_question`, `usage_limit` (resets an hour from
-now), `slow_text` (one word every 2 s, honours Stop) and `slow_` versions of
-the others (`FAKE_CODEX_PACE_MS` sets the pace). `touch
-.stella-dev/local-runner/offline` takes the computer offline mid-turn;
-removing the file brings it back. `agent:status` shows it, `agent:down`
-stops it with the stack (a restart reuses the same computer), `agent:reset`
-forgets it and its runs, and its logs are `.stella-dev/local-runner.log`
-and `.stella-dev/local-runner/*.log`.
-
 ## 4. Measure
 
 ```bash
