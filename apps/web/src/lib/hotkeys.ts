@@ -1,4 +1,10 @@
-import { detectPlatform, formatForDisplay } from "@tanstack/react-hotkeys";
+import {
+  detectPlatform,
+  formatForDisplay,
+  getHotkeyManager,
+  normalizeHotkey,
+  parseKeyboardEvent,
+} from "@tanstack/react-hotkeys";
 import type { HotkeyChord, IndividualKey } from "@tanstack/react-hotkeys";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -290,4 +296,22 @@ export const isEditableEventTarget = (target: EventTarget | null): boolean => {
   }
   const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+};
+
+/**
+ * Keeps a key press inside a text surface from reaching its ancestors' key
+ * handlers, unless an active app hotkey claims it. The hotkeys skip a press
+ * that a React handler has already stopped, so a surface that stopped every
+ * press would silence search, the sidebar and the chat toggle while it has
+ * focus.
+ */
+export const keepKeyPressLocal = (event: {
+  readonly nativeEvent: KeyboardEvent;
+  stopPropagation: () => void;
+}): void => {
+  const chord = normalizeHotkey(parseKeyboardEvent(event.nativeEvent));
+  if (getHotkeyManager().hasActiveRegistration(chord)) {
+    return;
+  }
+  event.stopPropagation();
 };

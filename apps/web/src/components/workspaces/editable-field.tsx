@@ -39,6 +39,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { keepKeyPressLocal } from "@/lib/hotkeys";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -737,7 +738,7 @@ const ContainedFieldControl = ({ children }: ContainedFieldControlProps) => (
   <span
     className="inline-flex min-w-0"
     onClick={(event) => event.stopPropagation()}
-    onKeyDown={(event) => event.stopPropagation()}
+    onKeyDown={keepKeyPressLocal}
     role="presentation"
   >
     {children}
