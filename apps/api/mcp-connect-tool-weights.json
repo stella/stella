@@ -376,10 +376,10 @@
     {
       "name": "read_case_law_decision",
       "nameChars": 22,
-      "descriptionChars": 558,
-      "inputSchemaChars": 2621,
-      "totalChars": 3201,
-      "estimatedTokens": 1286
+      "descriptionChars": 594,
+      "inputSchemaChars": 3441,
+      "totalChars": 4057,
+      "estimatedTokens": 1640
     },
     {
       "name": "read_case_law_decision_blocks",
@@ -412,14 +412,6 @@
       "inputSchemaChars": 727,
       "totalChars": 1340,
       "estimatedTokens": 508
-    },
-    {
-      "name": "read_guidance",
-      "nameChars": 13,
-      "descriptionChars": 506,
-      "inputSchemaChars": 363,
-      "totalChars": 882,
-      "estimatedTokens": 325
     },
     {
       "name": "read_provision_history",
@@ -577,17 +569,9 @@
       "name": "search_case_law",
       "nameChars": 15,
       "descriptionChars": 499,
-      "inputSchemaChars": 5142,
-      "totalChars": 5656,
-      "estimatedTokens": 2314
-    },
-    {
-      "name": "search_guidance",
-      "nameChars": 15,
-      "descriptionChars": 592,
-      "inputSchemaChars": 1779,
-      "totalChars": 2386,
-      "estimatedTokens": 944
+      "inputSchemaChars": 6441,
+      "totalChars": 6955,
+      "estimatedTokens": 2856
     },
     {
       "name": "search_legislation",
@@ -655,7 +639,7 @@
     }
   ],
   "totals": {
-    "characters": 137661,
-    "estimatedTokens": 54701
+    "characters": 136548,
+    "estimatedTokens": 54328
   }
 }

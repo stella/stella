@@ -680,11 +680,20 @@ export const LIMITS = {
    * token itself is shorter; the bound leaves room to change it.
    */
   caseLawDecisionTextVersionMaxLength: 24,
+  /** Characters of one docket register, such as "Cdo". */
+  caseLawDocketRegisterMaxChars: 16,
+  /** Registers one search may list. */
+  caseLawDocketRegistersFilterMax: 8,
+  /** Bounds of the senate number a docket opens with. */
+  caseLawSenateMin: 1,
+  caseLawSenateMax: 999,
   /**
    * Characters of one case reference. A docket, an ECLI or a reporter
    * citation; anything longer is prose and belongs in a text search.
    */
   caseLawIdentifierMaxLength: 256,
+  /** Characters of the cursor a `query` read issues. */
+  caseLawDecisionQueryCursorMaxLength: 128,
   /**
    * Decisions listed when a reference names more than one. Past a handful the
    * reference names a list of decisions rather than a decision, and the

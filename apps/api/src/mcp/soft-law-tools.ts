@@ -254,6 +254,9 @@ const handleReadGuidanceTool: TypedMcpToolHandler<
       `Find a served document with ${SEARCH_GUIDANCE_TOOL} and pass its documentId.`,
     );
   }
+  if (document.text === null && cursor !== undefined) {
+    return invalidCursorResult({ cursor, tool: READ_GUIDANCE_TOOL });
+  }
   const window =
     document.text === null
       ? null

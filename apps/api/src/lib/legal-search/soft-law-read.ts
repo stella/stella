@@ -154,6 +154,7 @@ export const searchSoftLawDocuments = async (
   const headline = sql<string | null>`CASE
     WHEN ${inArray(softLawDocuments.authority, textAuthorities)}
       AND ${softLawDocumentVersions.extractedText} IS NOT NULL
+      AND to_tsvector('simple'::regconfig, search_fold(left(${softLawDocumentVersions.extractedText}, ${sql.raw(String(SOFT_LAW_HEADLINE_TEXT_CHARS))}))) @@ ${query}
     THEN ts_headline(
       'simple',
       left(${softLawDocumentVersions.extractedText}, ${sql.raw(String(SOFT_LAW_HEADLINE_TEXT_CHARS))}),

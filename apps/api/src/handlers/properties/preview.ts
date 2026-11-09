@@ -194,7 +194,12 @@ const previewProperty = createSafeHandler(
         type: "ai-model" as const,
         prompt: serialized.prompt,
       };
-      const base = { id: propertyId, status: "stale" as const, tool };
+      const base = {
+        id: propertyId,
+        status: "stale" as const,
+        answerShape: "value" as const,
+        tool,
+      };
 
       if (
         body.contentType === "single-select" ||

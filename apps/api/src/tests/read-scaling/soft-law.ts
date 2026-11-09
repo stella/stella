@@ -82,7 +82,11 @@ const seedServedGuidance = async (db: GatedTestDb, size: number) => {
   };
 };
 
-type HandlerMeasurementOptions = { size: number; db: GatedTestDb };
+type HandlerMeasurementOptions<Read> = {
+  size: number;
+  db: GatedTestDb;
+  read: Read;
+};
 
 const brandedDocumentId = (documentId: string) =>
   asTestRaw<Parameters<typeof readSoftLawDocument>[1]["documentId"]>(
@@ -93,13 +97,17 @@ const brandedDocumentId = (documentId: string) =>
 export const softLawSearchScalingScenario = {
   name: "regulator guidance search",
   definition: searchSoftLaw,
-  measure: async ({ size, db }: HandlerMeasurementOptions) => {
+  measure: async ({
+    size,
+    db,
+    read,
+  }: HandlerMeasurementOptions<typeof searchSoftLawDocuments>) => {
     const seeded = await seedServedGuidance(db, size);
     try {
       return await runWithMeasuredQueryCounter(async (counter) => {
         const page = await db.transaction(
           async (tx) =>
-            await searchSoftLawDocuments(tx, {
+            await read(tx, {
               query: SCALING_TERM,
               surface: SOFT_LAW_READ_SURFACE.people,
               limit: SCALING_PAGE,
@@ -122,13 +130,17 @@ export const softLawSearchScalingScenario = {
 export const softLawReadScalingScenario = {
   name: "regulator guidance read",
   definition: readSoftLaw,
-  measure: async ({ size, db }: HandlerMeasurementOptions) => {
+  measure: async ({
+    size,
+    db,
+    read,
+  }: HandlerMeasurementOptions<typeof readSoftLawDocument>) => {
     const seeded = await seedServedGuidance(db, size);
     try {
       return await runWithMeasuredQueryCounter(async (counter) => {
         const document = await db.transaction(
           async (tx) =>
-            await readSoftLawDocument(tx, {
+            await read(tx, {
               documentId: brandedDocumentId(seeded.documentId),
               surface: SOFT_LAW_READ_SURFACE.people,
             }),

@@ -305,6 +305,8 @@ const SCOPE_STRICTNESS: Record<string, number> = {
  * the same consent.
  */
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
+  // The same consent its MCP tool demands.
+  "soft-law.search": "stella:search",
   "legislation.matter-links.batch.create": "stella:matters_write",
   "legislation.matter-links.create": "stella:matters_write",
   "legislation.matter-links.delete": "stella:matters_write",

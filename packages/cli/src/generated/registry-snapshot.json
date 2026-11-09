@@ -550,6 +550,26 @@
             "kind": "filter"
           }
         },
+        "docket_registers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "description": "Only decisions whose Czech or Slovak docket carries one of these registers, case-insensitive: [\"Cdo\"] keeps Supreme Court civil appeals and leaves out \"Tdo\" criminal ones. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Other countries have no register to filter by and refuse it; a docket without one (Constitutional Court) never matches. Use a JSON array of strings; a single string is read as a one-item list.",
+          "x-stella-agent-input": {
+            "kind": "string-list"
+          }
+        },
+        "senate": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 999,
+          "description": "The senate number a Czech or Slovak docket opens with, for example 21 in \"21 Cdo 641/2018\". Same limits as docket_registers."
+        },
         "provision": {
           "type": "string",
           "minLength": 1,
@@ -578,6 +598,15 @@
           "minLength": 1,
           "maxLength": 8,
           "description": "Filter by language code. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "preferred_language": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8,
+          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, its snippet still in the language that matched; otherwise it stays as matched. Ignored together with language. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -1185,7 +1214,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_case_law_decision",
-    "description": "Read `decision_ids[]` in order. `page` selects a `max_chars` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. `full: true` returns whole text up to 200000 chars. `query` returns matches, neighbours and deep links. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. `include` picks fields; [] returns text and identity only.",
+    "description": "Read `decision_ids[]` in order. `page` selects a `max_chars` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. `full: true` returns whole text up to 200000 chars. `query` returns matches, neighbours and deep links; matches.resumeAfter continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. `include` picks fields; [] returns text and identity only.",
     "inputSchema": {
       "type": "object",
       "required": ["decision_ids"],
@@ -1230,10 +1259,28 @@
           "maxLength": 24,
           "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
         },
+        "preferred_language": {
+          "type": "string",
+          "maxLength": 8,
+          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed. Omit it to search without this filter; a placeholder such as \"all\" or \"-\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
         "query": {
           "type": "string",
           "maxLength": 256,
           "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
+        },
+        "resume_after": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "matches.resumeAfter of a previous query; pass the same query and section, one decision id."
+        },
+        "section": {
+          "enum": ["court_reasoning"],
+          "type": "string",
+          "description": "With query, court_reasoning keeps matches from the first heading opening the court's own assessment, reported in matches.section. Recognised by wording (cs, sk, en); where none is found status is not_found and all matches return."
         },
         "include": {
           "type": "array",

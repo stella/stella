@@ -6,7 +6,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { readServedSoftLaw } from "@/api/lib/legal-search/soft-law-read";
-import { SOFT_LAW_READ_SURFACE } from "@/api/lib/legal-search/soft-law-serving";
+import { softLawSurfaceOfRoute } from "@/api/lib/legal-search/soft-law-serving";
 
 import { readSoftLawResponseSchema } from "./read-schema";
 
@@ -15,8 +15,9 @@ const config = {
   description:
     "Read one served regulator guidance document by id: its issuer, kind, reference, " +
     "issue date, validity as the publisher states it, publisher URL, required attribution " +
-    "and text. It is guidance, not a court decision. A source served as metadata and link " +
-    "answers without text; a source that is not served answers not found.",
+    "and text. It is guidance, not a court decision. textState says why text is null: " +
+    "withheld_by_source_setting or not_extracted. A source that is not served answers not found. " +
+    "When you summarize this text, show attribution.text, its conditions and any summaryDisclaimer with the summary.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "read_guidance" },
@@ -27,13 +28,13 @@ const config = {
 
 const readSoftLaw = createSafeRootHandler(
   config,
-  async function* ({ params: { documentId } }) {
+  async function* ({ params: { documentId }, route }) {
     const document = yield* Result.await(
       Result.tryPromise(
         async () =>
           await readServedSoftLaw({
             documentId,
-            surface: SOFT_LAW_READ_SURFACE.people,
+            surface: softLawSurfaceOfRoute(route),
           }),
       ),
     );

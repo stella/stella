@@ -8,7 +8,7 @@ import {
   encodeSoftLawCursor,
   searchServedSoftLaw,
 } from "@/api/lib/legal-search/soft-law-read";
-import { SOFT_LAW_READ_SURFACE } from "@/api/lib/legal-search/soft-law-serving";
+import { softLawSurfaceOfRoute } from "@/api/lib/legal-search/soft-law-serving";
 
 import {
   searchSoftLawQuerySchema,
@@ -24,6 +24,7 @@ const config = {
     "opinions, guidelines, recommendations, FAQs and similar documents, never court decisions. " +
     "Every result names its issuer, document kind, publisher URL and required attribution. " +
     "Filter by authority, jurisdiction, kind and issue date; paginate with limit and cursor. " +
+    "A source served as metadata only is matched on its title alone, so a missing hit there says nothing about its text. " +
     "Totals are not counted.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -35,7 +36,7 @@ const config = {
 
 const searchSoftLaw = createSafeRootHandler(
   config,
-  async function* ({ query: { cursor, limit, query, ...filters } }) {
+  async function* ({ query: { cursor, limit, query, ...filters }, route }) {
     const offset = cursor === undefined ? 0 : decodeSoftLawCursor(cursor);
     const page =
       offset === null
@@ -48,7 +49,7 @@ const searchSoftLaw = createSafeRootHandler(
                   query,
                   offset,
                   limit: limit ?? SOFT_LAW_SEARCH_DEFAULT_LIMIT,
-                  surface: SOFT_LAW_READ_SURFACE.people,
+                  surface: softLawSurfaceOfRoute(route),
                 }),
             ),
           );
