@@ -4,7 +4,7 @@
 // local `no-raw-overflow-scroll`, `no-raw-context-menu` and
 // `no-imported-class-constant`, the API size-bound rules
 // `require-bounded-request-schema` and `no-unbounded-response-body`,
-// `no-computed-key-record-assignment`, and the
+// `no-computed-key-record-assignment`, `exhaustive-union-map`, and the
 // function size limits `complexity`,
 // `max-lines-per-function` and `max-params`) for every file in their scope
 // except the ones this baseline lists per rule (scripts/design-lint-policy.ts
@@ -111,6 +111,7 @@ export const emptyBacklog = (): DesignLintBacklog => ({
   "require-bounded-request-schema/require-bounded-request-schema": {},
   "no-unbounded-response-body/no-unbounded-response-body": {},
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {},
+  "exhaustive-union-map/exhaustive-union-map": {},
   "no-direct-status-set/no-direct-status-set": {},
   "require-polite-publisher-fetch/require-polite-publisher-fetch": {},
   "no-native-ui/no-native-accordion": {},
