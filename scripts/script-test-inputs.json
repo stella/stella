@@ -112,6 +112,7 @@
     "scripts/dev-seeded-e2e-guard.test.ts": ["**"],
     "scripts/diff-scoped-steps.test.ts": ["**"],
     "scripts/disarm-auto-merge.test.ts": ["**"],
+    "scripts/dom-test-isolation.test.ts": ["apps/**", "packages/**"],
     "scripts/download-run-artifact.test.ts": ["**"],
     "scripts/draft-release-reads.test.ts": ["**"],
     "scripts/drizzle-config.test.ts": ["**"],
@@ -137,6 +138,7 @@
     "scripts/generate-mobile-ui-theme.test.ts": ["**"],
     "scripts/generate-npm-release-jobs.test.ts": ["**"],
     "scripts/generate-playwright-devices.test.ts": ["**"],
+    "scripts/generate-tailwind-classes.test.ts": ["turbo.json"],
     "scripts/generated-conflicts-workflows.test.ts": ["**"],
     "scripts/generated-conflicts.test.ts": ["**"],
     "scripts/generated-files-format.test.ts": ["**"],
@@ -144,6 +146,7 @@
     "scripts/generated-files.test.ts": ["**"],
     "scripts/generated-markdown-merge.test.ts": ["**"],
     "scripts/generated-web-merge.test.ts": ["**"],
+    "scripts/gh-dispatch-workflow.test.ts": [".github/**", "scripts/**"],
     "scripts/gh-retry-processes.test.ts": ["**"],
     "scripts/github-expression.test.ts": ["**"],
     "scripts/gitleaks.test.ts": ["**"],
@@ -286,6 +289,9 @@
     "scripts/workflow-steps.test.ts": ["**"]
   },
   "noTrackedInputs": {
-    "scripts/query-perf-baseline.test.ts": "Uses only temporary fixtures and its static import closure."
+    "scripts/cargo-update.test.ts": "Uses only fake crates.io responses, in-memory lockfiles and its static import closure.",
+    "scripts/migration-rehearsal-startup-refusal.test.ts": "Uses only inline log and ledger fixtures and its static import closure.",
+    "scripts/query-perf-baseline.test.ts": "Uses only temporary fixtures and its static import closure.",
+    "scripts/seed-test-determinism-baselines.test.ts": "Uses only inline census fixtures and its static import closure."
   }
 }
