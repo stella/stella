@@ -149,8 +149,8 @@ export const ANALYSIS_FAILURE_CODE_BY_KIND = {
   local_runner_limit_reached: "provider_refused",
   local_runner_unavailable: "provider_unavailable",
   local_runner_turn_too_large: "provider_refused",
-  // A chat turn's delivery limit; analysis never streams through one.
-  turn_too_large: "failed",
+  // Output grown past what one delivered run holds is an incomplete answer.
+  turn_too_large: "answer_incomplete",
   unknown: "failed",
 } as const satisfies Record<AIErrorKind, AnalysisFailureCode>;
 
@@ -172,7 +172,7 @@ const ANALYSIS_INCOMPLETE_REASON_BY_KIND = {
   local_runner_limit_reached: null,
   local_runner_unavailable: null,
   local_runner_turn_too_large: null,
-  turn_too_large: null,
+  turn_too_large: "incomplete_output",
   unknown: null,
 } as const satisfies Record<
   AIErrorKind,
