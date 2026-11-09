@@ -157,14 +157,19 @@ describe("Codex by model", () => {
   test("an unlisted model refuses to start the thread", async () => {
     const { adapter, workspaceDir } = codex();
     const started = await adapter.startTurn(turnInput(workspaceDir, "gpt-x"));
-    if (Result.isOk(started)) {
+    const outcome = async () => {
+      if (Result.isError(started)) {
+        return "refused";
+      }
       const events: HarnessEvent[] = [];
       for await (const event of started.value.events) {
         events.push(event);
       }
       await started.value.dispose();
-      expect(events.at(-1)?.type).toBe("turn.failed");
-    }
+      return events.at(-1)?.type;
+    };
+    // The adapter refuses the start or fails the turn; it never answers.
+    expect(["refused", "turn.failed"]).toContain(await outcome());
   });
 });
 
