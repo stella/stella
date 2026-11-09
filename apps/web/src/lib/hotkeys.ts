@@ -2,8 +2,7 @@ import {
   detectPlatform,
   formatForDisplay,
   getHotkeyManager,
-  normalizeHotkey,
-  parseKeyboardEvent,
+  matchesKeyboardEvent,
 } from "@tanstack/react-hotkeys";
 import type { HotkeyChord, IndividualKey } from "@tanstack/react-hotkeys";
 
@@ -309,9 +308,21 @@ export const keepKeyPressLocal = (event: {
   readonly nativeEvent: KeyboardEvent;
   stopPropagation: () => void;
 }): void => {
-  const chord = normalizeHotkey(parseKeyboardEvent(event.nativeEvent));
-  if (getHotkeyManager().hasActiveRegistration(chord)) {
-    return;
+  const manager = getHotkeyManager();
+  // Each registration matches the press the way its dispatch will, so a
+  // non-Latin layout that reports Ctrl+K as Ctrl+л still reaches Mod+K.
+  for (const registration of manager.registrations.state.values()) {
+    if (
+      registration.kind === "chord" &&
+      matchesKeyboardEvent(
+        event.nativeEvent,
+        registration.hotkey,
+        registration.options.platform,
+      ) &&
+      manager.hasActiveRegistration(registration.hotkey)
+    ) {
+      return;
+    }
   }
   event.stopPropagation();
 };

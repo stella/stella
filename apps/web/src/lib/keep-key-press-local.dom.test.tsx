@@ -51,13 +51,18 @@ const counter = () => {
   };
 };
 
-const press = (target: Element, key: string, withMod: boolean) => {
+const press = (
+  target: Element,
+  key: string,
+  withMod: boolean,
+  code = `Key${key.toUpperCase()}`,
+) => {
   const mac = detectPlatform() === "mac";
   act(() => {
     target.dispatchEvent(
       new KeyboardEvent("keydown", {
         key,
-        code: `Key${key.toUpperCase()}`,
+        code,
         ctrlKey: withMod && !mac,
         metaKey: withMod && mac,
         bubbles: true,
@@ -80,6 +85,17 @@ describe("a text surface that keeps key presses local", () => {
 
     // Plain typing stays inside the surface.
     press(input, "a", false);
+    expect(counts).toEqual({ search: 1, ancestor: 1 });
+  });
+
+  test("lets the hotkey through from a non-Latin layout, as its dispatch does", () => {
+    const { counts, ...handlers } = counter();
+    const view = render(
+      <Surface {...handlers} onKeyDown={keepKeyPressLocal} />,
+    );
+
+    // A Russian layout reports Ctrl+K as Ctrl+л on the K key.
+    press(view.getByLabelText("text"), "л", true, "KeyK");
     expect(counts).toEqual({ search: 1, ancestor: 1 });
   });
 
