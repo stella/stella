@@ -42,7 +42,11 @@ export const searchPreviewHandler = async ({
   }
   if (preview.value === null) {
     return Result.err(
-      new HandlerError({ status: 404, message: "Search result not found" }),
+      new HandlerError({
+        status: 404,
+        code: "not_found",
+        message: "Search result not found",
+      }),
     );
   }
   return Result.ok(preview.value);

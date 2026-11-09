@@ -5,7 +5,7 @@ import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { DocumentProcessingStatus } from "@/api/db/schema";
-import { searchProvenanceError } from "@/api/handlers/search/provenance-error";
+import { searchProvenanceAnswer } from "@/api/handlers/search/provenance-error";
 import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
@@ -196,8 +196,7 @@ export const searchHandler = async ({
   );
 
   if (searched.isErr()) {
-    const error = searchProvenanceError(searched.error);
-    return status(error.status, { message: error.message });
+    return searchProvenanceAnswer(searched.error);
   }
   const result = searched.value;
   const entityHits = result.hits.filter(isEntitySearchHit);

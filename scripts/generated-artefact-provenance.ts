@@ -598,7 +598,6 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
         modelImport = true;
       }
       if (provenance) {
-        modelImport = true;
         wrapperNamespaces.add(imported.name.text);
       }
       return;
