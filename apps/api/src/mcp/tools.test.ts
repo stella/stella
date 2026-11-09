@@ -4027,6 +4027,28 @@ describe("OpenAI-compatible MCP tools", () => {
       );
     });
 
+    test.each([
+      { status: 400, code: "validation_error", message: "Invalid country" },
+      { status: 500, code: "internal_error", message: "Tool execution failed" },
+    ] as const)(
+      "a $status from the search answers in the typed envelope",
+      async ({ status, code, message }) => {
+        searchDecisionsHandlerMock.mockImplementation(
+          async () =>
+            new HttpStatusResponse(status, { message: "Invalid country" }),
+        );
+
+        const result = await handleMcpToolCall({
+          args: { country: "CZE", queries: ["broken"] },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+
+        expect(result.isError).toBe(true);
+        expect(validationEnvelope(result)).toMatchObject({ code, message });
+      },
+    );
+
     test("any other phrasing failure still fails the call", async () => {
       searchDecisionsHandlerMock.mockImplementation(
         async ({ body: { query } }: { body: { query: string } }) =>

@@ -185,6 +185,7 @@ import {
   searchCaseLawArgsSchema,
 } from "@/api/mcp/case-law-search-input";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { statusCodeToErrorCode } from "@/api/mcp/error-codes";
 import {
   countryInputSchema,
   countryNormalization,
@@ -229,6 +230,7 @@ import {
   ensureWorkspaceAccess,
   errorResult,
   handlerResultMessage,
+  handlerStatusOf,
   internalFailureResult,
   invalidCursorResult,
   isCaseLawSearchTimeout,
@@ -2071,6 +2073,21 @@ type CaseLawSearchAnswer =
   | { type: "timed_out"; result: InternalToolErrorResult };
 
 /** One query's handler answer read as its page or the tool's refusal. */
+/**
+ * A search the handler refused or failed, in the typed envelope every other
+ * failure of this tool uses. A caller's mistake keeps its message and gains a
+ * code; anything else is captured and answered generically.
+ */
+const caseLawSearchFailedResult = (
+  answer: unknown,
+): InternalToolErrorResult => {
+  const status = handlerStatusOf(answer);
+  const code = statusCodeToErrorCode(status?.code ?? 500);
+  return status?.message && code !== "internal_error"
+    ? structuredErrorResult({ code, message: status.message })
+    : internalFailureResult(answer, "mcp.searchRefusal");
+};
+
 const readCaseLawSearchAnswer = (
   answer: Parameters<typeof isSearchCaseLawSuccess>[0],
   cursor: string | undefined,
@@ -2093,11 +2110,8 @@ const readCaseLawSearchAnswer = (
       }),
     };
   }
-  if (resultMessage) {
-    return { type: "failed", result: errorResult(resultMessage) };
-  }
-  if (!isSearchCaseLawSuccess(answer)) {
-    return { type: "failed", result: errorResult("Case-law search failed") };
+  if (resultMessage || !isSearchCaseLawSuccess(answer)) {
+    return { type: "failed", result: caseLawSearchFailedResult(answer) };
   }
   return { type: "page", page: answer };
 };
