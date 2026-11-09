@@ -3108,6 +3108,7 @@
       "organizationMemberLimitReached": "Ši organizacija pasiekė narių ribą.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
+      "skillSourceUnreachable": "Nepavyko įkelti įgūdžio šaltinio. Patikrinkite, ar nuoroda veda į viešą „GitHub“ saugyklą, arba bandykite vėliau.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
       "usageLimitExceeded": "Pasiektas naudojimo limitas.",
       "validationInvalid": "Lauke yra reikšmė, kurios negalima išsaugoti.",

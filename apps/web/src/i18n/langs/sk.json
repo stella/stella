@@ -3108,6 +3108,7 @@
       "organizationMemberLimitReached": "Táto organizácia dosiahla limit členov.",
       "providerKeyRejected": "Poskytovateľ odmietol kľúč API.",
       "providerRateLimited": "Bol dosiahnutý limit požiadaviek poskytovateľa. Skúste to čoskoro znova.",
+      "skillSourceUnreachable": "Zdroj zručnosti sa nepodarilo načítať. Skontrolujte, či odkaz vedie na verejný repozitár GitHub, alebo to skúste neskôr.",
       "thirdPartyBoundaryRefusal": "Požiadavka sa pokúsila použiť obsah mimo povoleného kontextu pracovného priestoru.",
       "usageLimitExceeded": "Bol dosiahnutý limit používania.",
       "validationInvalid": "Pole obsahuje hodnotu, ktorú nemožno uložiť.",
