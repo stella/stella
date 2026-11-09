@@ -50,7 +50,10 @@ import { provisionScopeLinksQuery } from "@/api/lib/case-law/provision-filter";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
-import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CorpusIndexError,
+  getCorpusIndexClient,
+} from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -81,6 +84,7 @@ import {
   installCorpusDispositionScan,
   installCorpusRevisionScan,
 } from "@/api/tests/helpers/corpus-disposition-scan";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -1013,6 +1017,7 @@ test("a short strict page is topped up with new partial matches only, after the 
   // match. Highlights run through the search endpoint, facets through the
   // aggregate one.
   let scans = 0;
+  let coverageRefuses = false;
   const engine = getCorpusIndexClient(manifest.cluster);
   const scoredSpy = spyOn(engine, "scoredSearch").mockImplementation(
     async () => {
@@ -1047,6 +1052,9 @@ test("a short strict page is topped up with new partial matches only, after the 
   const aggregateSpy = spyOn(engine, "aggregate").mockImplementation(
     async ({ aggs, query }) => {
       if ("term_coverage" in aggs) {
+        if (coverageRefuses) {
+          return Result.err(new CorpusIndexError({ message: "over budget" }));
+        }
         const ids = query.includes("promlčení")
           ? [czechId, slovakId, projectedId].filter((id) => query.includes(id))
           : [];
@@ -1126,6 +1134,16 @@ test("a short strict page is topped up with new partial matches only, after the 
     // The total and facets stay the strict set's.
     expect(relaxed.result.total).toEqual(strictOnly.result.total);
     expect(relaxed.result.facets).toEqual(strictOnly.result.facets);
+    expect(relaxed.result.relaxedTopUp).toBeUndefined();
+
+    // A top-up that cannot finish keeps the strict page and says so.
+    coverageRefuses = true;
+    const unread = await search(false);
+    expect(unread.result.hits.map(({ decisionId }) => decisionId)).toEqual([
+      String(czechId),
+    ]);
+    expect(unread.result.relaxedHitCount).toBe(0);
+    expect(unread.result.relaxedTopUp).toBe("skipped");
   } finally {
     scoredSpy.mockRestore();
     searchSpy.mockRestore();
@@ -1772,9 +1790,10 @@ test("a provision-only list reads its page and excerpts in one snapshot", async 
       loadCourtWeights: async () => await Promise.resolve(courtWeights),
     },
   });
-  // One read for ids, citing sentences and rows (one repeatable-read
-  // transaction), one for the language alternates.
-  expect(reads - before).toBe(2);
+  // One read for the provision's scope, which only chooses the path; one for
+  // ids, citing sentences and rows (one repeatable-read transaction); one for
+  // the language alternates.
+  expect(reads - before).toBe(3);
 });
 
 test("a provision-only list cursor resumes only the request it was issued for", async () => {
@@ -1902,6 +1921,73 @@ test("a provision-only list cursor resumes only the request it was issued for", 
         .delete(caseLawProvisionCitations)
         .where(eq(caseLawProvisionCitations.id, extra.id));
     }
+  }
+});
+
+test("a citation removed after the scope read leaves the provision-only page", async () => {
+  const db = drizzle({ client });
+  const [extra] = await db
+    .insert(caseLawProvisionCitations)
+    .values({
+      anchor: "par_316-odst_1",
+      confidence: 0.9,
+      decisionDate: "2024-01-01",
+      decisionId: slovakId,
+      jurisdiction: "CZE",
+      section: 316,
+      subsection: "1",
+      sentenceText: "sentence par_316-odst_1",
+      spanEnd: 60,
+      spanStart: 50,
+      unit: "section",
+      workCollection: "Sb.",
+      workIdentifier: "262/2006 Sb.",
+      workNumber: 262,
+      workYear: 2006,
+    })
+    .returning({ id: caseLawProvisionCitations.id });
+  if (extra === undefined) {
+    throw new Error("expected the inserted citation");
+  }
+  try {
+    let scopeRead = false;
+    const removingAfterScopeRead = asTestRaw<CaseLawPublicReadDb>(
+      async (
+        fn: Parameters<CaseLawPublicReadDb>[0],
+        options: Parameters<CaseLawPublicReadDb>[1],
+      ) => {
+        const answer = await caseLawDb(fn, options);
+        if (!scopeRead) {
+          scopeRead = true;
+          await db
+            .delete(caseLawProvisionCitations)
+            .where(eq(caseLawProvisionCitations.id, extra.id));
+        }
+        return answer;
+      },
+    );
+    const listed = await listCaseLawProvisionDecisions({
+      body: {
+        ...SEARCH_BODY,
+        provision: { work: "262/2006 Sb.", anchor: "par_316" },
+      },
+      caseLawDb: removingAfterScopeRead,
+      dependencies: {
+        servingGeneration: GENERATION,
+        provider: "corpus-index",
+        loadCourtWeights: async () => await Promise.resolve(courtWeights),
+      },
+    });
+    if (!("hits" in listed)) {
+      throw new Error("expected a page");
+    }
+    expect(listed.hits.map(({ decisionId }) => decisionId)).toEqual([
+      String(czechId),
+    ]);
+  } finally {
+    await db
+      .delete(caseLawProvisionCitations)
+      .where(eq(caseLawProvisionCitations.id, extra.id));
   }
 });
 

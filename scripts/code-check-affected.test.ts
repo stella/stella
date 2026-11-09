@@ -1228,9 +1228,13 @@ process.exit(childExitStatus(result));
         }
         continue;
       }
-      expect(taskField(tasks, `${name}#lint`, "dependsOn")).toEqual([
-        "typecheck",
-      ]);
+      // A workspace the Tailwind rules lint also waits for its Tailwind cache
+      // node (scripts/generate-tailwind-classes.test.ts owns that set).
+      expect(
+        taskField(tasks, `${name}#lint`, "dependsOn").filter(
+          (dependency) => dependency !== "tailwind-cache",
+        ),
+      ).toEqual(["typecheck"]);
       expect(taskInputs(tasks, `${name}#lint`)).toEqual(
         expect.arrayContaining(taskInputs(tasks, "lint")),
       );

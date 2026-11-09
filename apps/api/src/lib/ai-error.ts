@@ -34,6 +34,7 @@ import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+  DocumentTooLargeError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import type {
@@ -318,6 +319,20 @@ const errorCause = (error: unknown): unknown => {
   return error["cause"];
 };
 
+const UNAVAILABLE_MODEL_CODES: ReadonlySet<string> = new Set([
+  "model_not_found",
+]);
+
+const namesUnavailableModel = (source: unknown): boolean =>
+  [
+    providerErrorBodyOf(source),
+    providerErrorBodyOf(providerMessageBody(source)),
+  ]
+    .map((body) => body?.["code"])
+    .some(
+      (code) => typeof code === "string" && UNAVAILABLE_MODEL_CODES.has(code),
+    );
+
 const providerResponseKind = (error: unknown): AIErrorKind | null => {
   const response = selectProviderResponse(error, "classification");
   const statusCode = response?.status ?? null;
@@ -350,8 +365,8 @@ const providerResponseKind = (error: unknown): AIErrorKind | null => {
     // Only a provider status or explicit provider-owned credential marker
     // counts, which is what keeps a 401 this service raised itself out of
     // here: its curated copy would otherwise be replaced by the provider's.
-    // A provider 403 stays unmapped because it is ambiguous (permission,
-    // region, or account state) where a 401 is not.
+    // A provider 403 otherwise stays unmapped because it is ambiguous
+    // (permission, region, or account state) where a 401 is not.
     if (statusCode === 401 || (statusCode === null && credentialsRejected)) {
       return "provider_credentials_rejected";
     }
@@ -359,6 +374,11 @@ const providerResponseKind = (error: unknown): AIErrorKind | null => {
     // serves the configured model (retired or renamed upstream) — a
     // config problem, not a transient outage, so retrying won't help.
     if (statusCode === 404) {
+      return "model_unavailable";
+    }
+    // A 403 whose body names the model as the refused resource is the same
+    // configuration state: the key cannot use the configured model.
+    if (statusCode === 403 && namesUnavailableModel(response?.source)) {
       return "model_unavailable";
     }
     if (statusCode !== null && statusCode >= HTTP_SERVER_ERROR_MIN) {
@@ -758,6 +778,15 @@ export const aiHandlerError = (
   error: unknown,
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
+  // Raised before any model call, so no provider failure kind describes it.
+  if (DocumentTooLargeError.is(error)) {
+    return new HandlerError({
+      code: "document_too_large",
+      status: 413,
+      message: error.message,
+      cause: error,
+    });
+  }
   const kind = classifyAIBoundaryFailure(error);
   const mapped = aiKindHandlerError(kind, error, fallback);
   const handlerError =

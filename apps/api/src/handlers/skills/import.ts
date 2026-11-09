@@ -4,6 +4,7 @@ import * as v from "valibot";
 import { Temporal } from "@stll/time";
 
 import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -151,6 +152,7 @@ const importSkillsFromUrls = createSafeRootHandler(
     const { items } = deduplicated;
     const fetchContext = createSkillPackageFetchContext({
       permit: grantThirdPartyOutboundPermit(),
+      publicGithubToken: env.SKILL_IMPORT_GITHUB_TOKEN,
       limits: {
         deadlineAt:
           Temporal.Now.instant().epochMilliseconds + SKILL_IMPORT_TIMEOUT_MS,

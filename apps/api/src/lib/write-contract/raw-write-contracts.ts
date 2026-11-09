@@ -82,6 +82,7 @@ export const RAW_WRITE_CONTRACTS: ReadonlyMap<ApiRouteKey, WriteContract> =
       },
     ],
     ["POST /smoke/scheduled-jobs", { contract: "patch" }],
+    ["POST /smoke/scheduled-jobs/journey-prerequisites", { contract: "patch" }],
     [
       "POST /smoke/session",
       {

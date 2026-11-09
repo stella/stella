@@ -34,6 +34,7 @@ import {
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
+  chatBrowserSiteGrantPolicies,
   chatMessagePolicies,
   chatMessageRevisionPolicies,
   chatMessageSearchDocumentPolicies,
@@ -217,6 +218,8 @@ export type JustificationBlock =
 export type JustificationContent = {
   version: 1;
   blocks: JustificationBlock[];
+  /** Set on a clause summary, whose wording lives only in its citations. */
+  gradeFrom?: "cited-passages";
 };
 
 /** Re-exported so the schema layer keeps one import surface; the agenda member
@@ -570,6 +573,7 @@ export {
   orgPolicies,
   orgReadOnlyPolicies,
   savedSearchPolicies,
+  chatBrowserSiteGrantPolicies,
   chatToolGrantPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,

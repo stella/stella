@@ -16,6 +16,7 @@ import {
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
+import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
 import { claimCommentScalingScenarios } from "./claim-comments";
@@ -47,6 +48,10 @@ import {
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import {
+  softLawReadScalingScenario,
+  softLawSearchScalingScenario,
+} from "./soft-law";
+import {
   apiScalingSurface,
   mcpScalingSurface,
   parseScalingLedger,
@@ -70,6 +75,7 @@ const measuredApiScenarios = [
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
   chatActiveRunsScalingScenario,
+  browserSiteGrantsScalingScenario,
   chatMcpAppBundleScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
@@ -86,6 +92,8 @@ const measuredApiScenarios = [
   dictationScalingScenario,
   organizationSlugScalingScenario,
   organizationAuditExportScalingScenario,
+  softLawSearchScalingScenario,
+  softLawReadScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

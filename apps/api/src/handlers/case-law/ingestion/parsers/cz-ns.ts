@@ -25,6 +25,7 @@ import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
   CZ_JUDGE_TITLE_RE as PREDSEDA_RE,
+  czechBenchRecitalStart,
   isCzechCopyCertification,
   isCzechOpeningFormula,
 } from "@stll/legal-ast/czech-document-roles";
@@ -715,43 +716,17 @@ const copyCertificationStart = (blocks: readonly Block[]): number => {
   return blocks.length;
 };
 
-/** Most paragraphs a bench recital is printed in. */
-const BENCH_RECITAL_MAX_PARAGRAPHS = 3;
-/** A paragraph opening on the court's number (`12.`, `[12]`) is reasoning. */
-const COURT_NUMBERED_RE = /^(?:\[\d{1,4}\]|\d{1,4}\.)\s/u;
-
 /**
  * The bench recital the ruling follows (`Nejvyšší soud rozhodl v senátě
  * složeném z … takto:`) introduces it: the lead-in paragraph and the
- * role-less paragraphs of the same recital before it, back to the title.
- * Only a short recital that runs back to the decision's head matter (its
- * title, docket or opening formula) and carries no court number is one; a
- * `takto:` the reasons quote is not.
+ * recital's paragraphs before it, as the shared Czech grammar reads them.
  */
 const markBenchRecital = (blocks: readonly Block[], leadIn: number): void => {
-  let start = leadIn;
-  while (start > 0) {
-    const previous = blocks.at(start - 1);
-    if (previous?.type !== "paragraph" || previous.role !== undefined) {
-      break;
-    }
-    start -= 1;
-  }
-  const head = blocks.at(start - 1);
-  const followsHeadMatter =
-    head !== undefined &&
-    ((head.type === "heading" && head.role === "decision-title") ||
-      (head.type === "paragraph" &&
-        (head.role === "case-number" || head.role === "intro")));
-  const recital = blocks.slice(start, leadIn + 1);
-  if (
-    !followsHeadMatter ||
-    recital.length > BENCH_RECITAL_MAX_PARAGRAPHS ||
-    recital.some((block) => COURT_NUMBERED_RE.test(block.plainText.trim()))
-  ) {
+  const start = czechBenchRecitalStart(blocks, leadIn + 1);
+  if (start === undefined) {
     return;
   }
-  for (const block of recital) {
+  for (const block of blocks.slice(start, leadIn + 1)) {
     if (block.type === "paragraph") {
       block.role = "intro";
     }

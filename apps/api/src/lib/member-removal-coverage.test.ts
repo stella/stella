@@ -122,6 +122,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "document_review_parties.parties",
   "document_review_runs.basis",
   "document_review_runs.skipped",
+  "document_review_runs.withheld_sources",
   "document_translation_runs.warnings",
   "document_translation_units.application",
   "document_translation_units.warnings",
@@ -571,6 +572,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped connection; the person stays an organization member.",
   "chat_tool_grants.user_id":
     "The person's own organization-scoped tool approvals; every tool call still checks matter access.",
+  "chat_browser_site_grants.user_id":
+    "The person's own organization-scoped browser site approvals; they hold no matter data.",
   "invitation.inviter_id":
     "Organization invitation; the person stays an organization member.",
   "session.user_id":

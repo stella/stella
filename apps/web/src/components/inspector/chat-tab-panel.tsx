@@ -60,7 +60,6 @@ import {
   ChatMatterPickerPending,
 } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
-import { effectiveRunTarget } from "@/components/chat/chat-run-target-menu.logic";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
   DockedComposer,
@@ -68,6 +67,7 @@ import {
   PromptBarPlaceholderContent,
 } from "@/components/chat/docked-composer";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
+import { useEffectiveRunTarget } from "@/components/chat/use-effective-run-target";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import {
   boundLegalDocumentLabel,
@@ -262,9 +262,8 @@ export const ChatTabPanel = ({
   // Read at send time, so a follow-up carries the thread's stored target as
   // the chat page sends it. The cache key never depends on it, so the
   // runtime addresses the entry read above.
-  const getRunTarget = useLatestCallback((): ChatRunTarget =>
-    effectiveRunTarget(data.runTarget),
-  );
+  const runTarget = useEffectiveRunTarget(activeOrganizationId, data.runTarget);
+  const getRunTarget = useLatestCallback((): ChatRunTarget => runTarget);
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: { ...chatThreadContext, getRunTarget },
@@ -824,6 +823,7 @@ export const ChatTabPanel = ({
             skillChat={{
               contextMatterIds: tab.contextMatterIds,
               document: null,
+              runTarget,
               threadRef,
               webSearch: {
                 available: data.webSearchAvailable,

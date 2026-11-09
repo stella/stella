@@ -46,10 +46,12 @@ const ephemeralPlaybook: PinnedPlaybook = {
   definitionSnapshot: {
     name: "Positions confirmed for this review",
     positions: { version: 3, items: [] },
+    scope: null,
   },
 };
 
-const basis: DocumentReviewRunBasis = {
+// A basis written since the pin carried its scope, which the reader shape needs.
+const basis: DocumentReviewRunBasis & { playbook: PinnedPlaybook } = {
   playbook: ephemeralPlaybook,
   references: [reference("Precedent SPA", PRECEDENT_FIELD)],
   perspective: { type: "party", role: "Buyer", name: null },
@@ -225,6 +227,7 @@ describe("buildIssuesTableRows", () => {
           definitionSnapshot: {
             name: "SPA (buyer)",
             positions: { version: 3, items: [] },
+            scope: null,
           },
         },
         references: [],
