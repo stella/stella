@@ -1,6 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import { Result, TaggedError } from "better-result";
-import { type BigIntStats, lstatSync } from "node:fs";
+import { lstatSync, type Stats } from "node:fs";
 import {
   chmod,
   constants,
@@ -80,7 +80,7 @@ export type CheckpointUnavailableReason =
   (typeof DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS)[number];
 
 /** What a restore did; the host adds `folder_busy` before it starts one. */
-export type CheckpointRestoreOutcome =
+type CheckpointRestoreOutcome =
   "restored" | "no_checkpoint" | "not_newest" | "failed";
 
 export type CheckpointRestore = {
@@ -164,7 +164,7 @@ const modeSchema = v.pipe(
   v.minValue(0),
   v.maxValue(MODE_BITS),
 );
-const decimalSchema = v.pipe(v.string(), v.regex(/^\d{1,40}$/u));
+const statNumberSchema = v.pipe(v.number(), v.minValue(0));
 const sha256Schema = v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u));
 
 const entrySchema = v.variant("kind", [
@@ -176,9 +176,9 @@ const entrySchema = v.variant("kind", [
     mode: modeSchema,
     /** What the file's state was read from; an unchanged file is not reread. */
     stat: v.object({
-      ino: decimalSchema,
-      mtimeNs: decimalSchema,
-      ctimeNs: decimalSchema,
+      ino: statNumberSchema,
+      mtimeMs: statNumberSchema,
+      ctimeMs: statNumberSchema,
     }),
   }),
   v.object({
@@ -218,7 +218,7 @@ class CheckpointRefused extends TaggedError("CheckpointRefused")<{
   cause?: unknown;
 }> {}
 
-class RestoreFailed extends TaggedError("RestoreFailed")<{
+class CheckpointRestoreFailed extends TaggedError("CheckpointRestoreFailed")<{
   message: string;
   cause?: unknown;
 }> {}
@@ -228,25 +228,28 @@ const refused =
     new CheckpointRefused({ reason, message, cause });
 
 const restoreFailed = (message: string) => (cause?: unknown) =>
-  new RestoreFailed({ message, cause });
+  new CheckpointRestoreFailed({ message, cause });
 
 /** What is at `target`, without following a link; `undefined` is nothing. */
 const entryAt = (target: string) =>
-  lstatSync(target, { bigint: true, throwIfNoEntry: false });
+  lstatSync(target, { throwIfNoEntry: false });
 
-const modeOf = (stat: BigIntStats) =>
-  isWindows() ? 0 : Number(stat.mode % BigInt(MODE_BITS + 1));
+const modeOf = (stat: Stats) => (isWindows() ? 0 : stat.mode % (MODE_BITS + 1));
 
-const statKeyOf = (stat: BigIntStats): StatKey => ({
-  ino: stat.ino.toString(),
-  mtimeNs: stat.mtimeNs.toString(),
-  ctimeNs: stat.ctimeNs.toString(),
+/**
+ * The change time is part of it: the agent can set a file's modified time
+ * back, never its change time.
+ */
+const statKeyOf = (stat: Stats): StatKey => ({
+  ino: stat.ino,
+  mtimeMs: stat.mtimeMs,
+  ctimeMs: stat.ctimeMs,
 });
 
 const sameStat = (left: StatKey, right: StatKey) =>
   left.ino === right.ino &&
-  left.mtimeNs === right.mtimeNs &&
-  left.ctimeNs === right.ctimeNs;
+  left.mtimeMs === right.mtimeMs &&
+  left.ctimeMs === right.ctimeMs;
 
 const isStoredObject = (store: string, sha256: string) =>
   entryAt(objectPath(store, sha256))?.isFile() === true;
@@ -302,13 +305,13 @@ const storeFile = async (
         `${TEMP_OBJECT_PREFIX}${crypto.randomUUID()}`,
       );
       try {
-        const opened = await source.stat({ bigint: true });
+        const opened = await source.stat();
         if (!opened.isFile()) {
           return Result.err(
             refused("unsupported", "The folder holds a special file.")(),
           );
         }
-        if (Number(opened.size) > walk.limits.maxFileBytes) {
+        if (opened.size > walk.limits.maxFileBytes) {
           return Result.err(refused("too_large", "A file is too large.")());
         }
         const hash = createSha256();
@@ -381,9 +384,9 @@ const saveFile = async (
   walk: Walk,
   target: string,
   entryPath: string,
-  stat: BigIntStats,
+  stat: Stats,
 ): Promise<Result<FileEntry, CheckpointRefused>> => {
-  const size = Number(stat.size);
+  const size = stat.size;
   if (size > walk.limits.maxFileBytes) {
     return Result.err(refused("too_large", "A file is too large.")());
   }
@@ -528,23 +531,34 @@ const saveTree = async ({
 
 /** The store's folders, made for the member alone; never through a link. */
 const openStore = async (store: string) =>
-  await Result.tryPromise({
-    try: async () => {
-      for (const folder of [
-        store,
-        path.join(store, OBJECTS),
-        path.join(store, MANIFESTS),
-      ]) {
-        const existing = entryAt(folder);
-        if (existing === undefined) {
-          // await-in-loop: the parent comes first.
-          await mkdir(folder, { mode: PRIVATE_FOLDER_MODE });
-        } else if (!existing.isDirectory()) {
-          throw refused("failed", "The checkpoint store is not a folder.")();
-        }
+  await Result.gen(async function* () {
+    for (const folder of [
+      store,
+      path.join(store, OBJECTS),
+      path.join(store, MANIFESTS),
+    ]) {
+      const existing = yield* Result.try({
+        try: () => entryAt(folder),
+        catch: refused("failed", "The checkpoint store could not be read."),
+      });
+      if (existing !== undefined && !existing.isDirectory()) {
+        return Result.err(
+          refused("failed", "The checkpoint store is not a folder.")(),
+        );
       }
-    },
-    catch: refused("failed", "The checkpoint store could not be opened."),
+      if (existing === undefined) {
+        // await-in-loop: the parent comes first.
+        yield* Result.await(
+          Result.tryPromise({
+            try: async () => {
+              await mkdir(folder, { mode: PRIVATE_FOLDER_MODE });
+            },
+            catch: refused("failed", "The checkpoint store could not be made."),
+          }),
+        );
+      }
+    }
+    return Result.ok();
   });
 
 type StoredManifests = {
@@ -805,17 +819,33 @@ const desiredTree = (
   return desired;
 };
 
+/** One filesystem step of a restore; what it throws is its failure. */
+const restoreStep = async (message: string, act: () => Promise<void>) =>
+  await Result.tryPromise({ try: act, catch: restoreFailed(message) });
+
 /** Each folder below the run's folder on the way to `relative` is a plain one. */
-const checkParents = (workspaceDir: string, relative: string) => {
+const checkParents = (
+  workspaceDir: string,
+  relative: string,
+): Result<string, CheckpointRestoreFailed> => {
   let current = workspaceDir;
   for (const segment of relative.split("/").slice(0, -1)) {
     current = path.join(current, segment);
-    const stat = entryAt(current);
-    if (stat?.isDirectory() !== true) {
-      throw restoreFailed("A folder on the way is not a plain folder.")();
+    const folder = current;
+    const stat = Result.try({
+      try: () => entryAt(folder),
+      catch: restoreFailed("A folder on the way could not be read."),
+    });
+    if (Result.isError(stat)) {
+      return stat;
+    }
+    if (stat.value?.isDirectory() !== true) {
+      return Result.err(
+        restoreFailed("A folder on the way is not a plain folder.")(),
+      );
     }
   }
-  return path.join(workspaceDir, relative);
+  return Result.ok(path.join(workspaceDir, relative));
 };
 
 const sameKind = (wanted: Entry | undefined, existing: Entry) => {
@@ -857,74 +887,124 @@ const verifyObject = async (store: string, entry: FileEntry) => {
   }
 };
 
-/** Write a stored file to a fresh name beside `target`, then rename over it. */
+/** Write a stored file to a fresh name beside its place, then rename over it. */
 const writeStored = async (
   workspaceDir: string,
   store: string,
   entry: FileEntry,
-) => {
-  const target = checkParents(workspaceDir, entry.path);
-  const temp = path.join(
-    path.dirname(target),
-    `${RESTORE_TEMP_PREFIX}${crypto.randomUUID()}`,
-  );
-  const source = await open(objectPath(store, entry.sha256), READ_FLAGS);
-  try {
-    const sink = await open(temp, CREATE_FLAGS, PRIVATE_FILE_MODE);
-    try {
-      const buffer = Buffer.alloc(COPY_CHUNK_BYTES);
-      for (;;) {
-        // await-in-loop: a chunk at a time keeps a large file out of memory.
-        const { bytesRead } = await source.read(buffer, 0, buffer.length, null);
-        if (bytesRead === 0) {
-          break;
+) =>
+  await Result.gen(async function* () {
+    const target = yield* checkParents(workspaceDir, entry.path);
+    const temp = path.join(
+      path.dirname(target),
+      `${RESTORE_TEMP_PREFIX}${crypto.randomUUID()}`,
+    );
+    return await restoreStep("A file could not be written.", async () => {
+      const source = await open(objectPath(store, entry.sha256), READ_FLAGS);
+      try {
+        const sink = await open(temp, CREATE_FLAGS, PRIVATE_FILE_MODE);
+        try {
+          const buffer = Buffer.alloc(COPY_CHUNK_BYTES);
+          for (;;) {
+            // await-in-loop: a chunk at a time keeps a large file out of memory.
+            const { bytesRead } = await source.read(
+              buffer,
+              0,
+              buffer.length,
+              null,
+            );
+            if (bytesRead === 0) {
+              break;
+            }
+            // await-in-loop: written in order, one chunk in memory.
+            await sink.write(buffer.subarray(0, bytesRead));
+          }
+          if (!isWindows()) {
+            await sink.chmod(entry.mode);
+          }
+          await sink.sync();
+        } finally {
+          await sink.close();
         }
-        // await-in-loop: written in order, one chunk in memory.
-        await sink.write(buffer.subarray(0, bytesRead));
+        await rename(temp, target);
+      } finally {
+        await source.close();
+        await rm(temp, { force: true });
       }
-      if (!isWindows()) {
-        await sink.chmod(entry.mode);
-      }
-      await sink.sync();
-    } finally {
-      await sink.close();
-    }
-    await rename(temp, target);
-  } finally {
-    await source.close();
-    await rm(temp, { force: true });
-  }
-};
+    });
+  });
 
 /** Set a file's mode through a descriptor that did not follow a link. */
-const chmodFile = async (workspaceDir: string, entry: FileEntry) => {
-  const handle = await open(checkParents(workspaceDir, entry.path), READ_FLAGS);
-  try {
-    if (!(await handle.stat()).isFile()) {
-      throw restoreFailed("A file was replaced during the restore.")();
-    }
-    await handle.chmod(entry.mode);
-  } finally {
-    await handle.close();
-  }
-};
+const chmodFile = async (workspaceDir: string, entry: FileEntry) =>
+  await Result.gen(async function* () {
+    const target = yield* checkParents(workspaceDir, entry.path);
+    const changed = yield* Result.await(
+      Result.tryPromise({
+        try: async () => {
+          const handle = await open(target, READ_FLAGS);
+          try {
+            if (!(await handle.stat()).isFile()) {
+              return false;
+            }
+            await handle.chmod(entry.mode);
+            return true;
+          } finally {
+            await handle.close();
+          }
+        },
+        catch: restoreFailed("A file's mode could not be set."),
+      }),
+    );
+    return changed
+      ? Result.ok()
+      : Result.err(restoreFailed("A file was replaced during the restore.")());
+  });
 
 const writeLink = async (
   workspaceDir: string,
   entry: Extract<Entry, { kind: "link" }>,
-) => {
-  const target = checkParents(workspaceDir, entry.path);
-  const temp = path.join(
-    path.dirname(target),
-    `${RESTORE_TEMP_PREFIX}${crypto.randomUUID()}`,
-  );
-  try {
-    await symlink(entry.linkTarget, temp);
-    await rename(temp, target);
-  } finally {
-    await rm(temp, { force: true });
-  }
-};
+) =>
+  await Result.gen(async function* () {
+    const target = yield* checkParents(workspaceDir, entry.path);
+    const temp = path.join(
+      path.dirname(target),
+      `${RESTORE_TEMP_PREFIX}${crypto.randomUUID()}`,
+    );
+    return await restoreStep("A link could not be made.", async () => {
+      try {
+        await symlink(entry.linkTarget, temp);
+        await rename(temp, target);
+      } finally {
+        await rm(temp, { force: true });
+      }
+    });
+  });
+
+/** Set a folder's mode, unless something else took its place. */
+const chmodFolder = async (
+  workspaceDir: string,
+  entry: Extract<Entry, { kind: "dir" }>,
+) =>
+  await Result.gen(async function* () {
+    const target = yield* checkParents(workspaceDir, entry.path);
+    const changed = yield* Result.await(
+      Result.tryPromise({
+        try: async () => {
+          if (entryAt(target)?.isDirectory() !== true) {
+            return false;
+          }
+          await chmod(target, entry.mode);
+          return true;
+        },
+        catch: restoreFailed("A folder's mode could not be set."),
+      }),
+    );
+    return changed
+      ? Result.ok()
+      : Result.err(
+          restoreFailed("A folder was replaced during the restore.")(),
+        );
+  });
 
 /**
  * Make the folder hold exactly `desired`, from the `existing` entries a walk
@@ -937,77 +1017,83 @@ const applyTree = async (
   desired: ReadonlyMap<string, Entry>,
   existing: ReadonlyMap<string, Entry>,
 ) =>
-  await Result.tryPromise({
-    try: async () => {
+  await Result.gen(async function* () {
+    const root = yield* Result.try({
+      try: () => entryAt(workspaceDir),
+      catch: restoreFailed("The folder could not be read."),
+    });
+    if (root === undefined) {
       // A folder removed since is made again; its parent is the app's own.
-      if (entryAt(workspaceDir) === undefined) {
-        await mkdir(workspaceDir, { mode: PRIVATE_FOLDER_MODE });
+      yield* Result.await(
+        restoreStep("The folder could not be made.", async () => {
+          await mkdir(workspaceDir, { mode: PRIVATE_FOLDER_MODE });
+        }),
+      );
+    }
+    const removed = new Set<string>();
+    const removals = [...existing.values()]
+      .filter((entry) => !sameKind(desired.get(entry.path), entry))
+      .toSorted(byPath)
+      .toReversed();
+    for (const entry of removals) {
+      const target = yield* checkParents(workspaceDir, entry.path);
+      // await-in-loop: children go before their folder, in order.
+      yield* Result.await(
+        restoreStep("An entry could not be removed.", async () => {
+          const stat = entryAt(target);
+          if (stat?.isDirectory() === true) {
+            await rmdir(target);
+          } else if (stat !== undefined) {
+            await unlink(target);
+          }
+        }),
+      );
+      removed.add(entry.path);
+    }
+    const current = (entryPath: string) =>
+      removed.has(entryPath) ? undefined : existing.get(entryPath);
+    const wanted = [...desired.values()].toSorted(byPath);
+    for (const entry of wanted) {
+      if (entry.kind === "dir" && current(entry.path)?.kind !== "dir") {
+        const target = yield* checkParents(workspaceDir, entry.path);
+        // await-in-loop: a folder's parent is made first.
+        yield* Result.await(
+          restoreStep("A folder could not be made.", async () => {
+            await mkdir(target, { mode: PRIVATE_FOLDER_MODE });
+          }),
+        );
       }
-      const removed = new Set<string>();
-      const removals = [...existing.values()]
-        .filter((entry) => !sameKind(desired.get(entry.path), entry))
-        .toSorted(byPath)
-        .toReversed();
-      for (const entry of removals) {
-        const target = checkParents(workspaceDir, entry.path);
-        const stat = entryAt(target);
-        if (stat?.isDirectory() === true) {
-          // await-in-loop: children go before their folder, in order.
-          await rmdir(target);
-        } else if (stat !== undefined) {
-          // await-in-loop: in order.
-          await unlink(target);
+    }
+    for (const entry of wanted) {
+      const now = current(entry.path);
+      if (entry.kind === "file") {
+        if (now?.kind === "file" && now.sha256 === entry.sha256) {
+          if (!isWindows() && now.mode !== entry.mode) {
+            // await-in-loop: one file at a time.
+            yield* Result.await(chmodFile(workspaceDir, entry));
+          }
+          continue;
         }
-        removed.add(entry.path);
+        // await-in-loop: one file in memory at a time.
+        yield* Result.await(writeStored(workspaceDir, store, entry));
+      } else if (entry.kind === "link" && now?.kind !== "link") {
+        // await-in-loop: one entry at a time.
+        yield* Result.await(writeLink(workspaceDir, entry));
       }
-      const current = (entryPath: string) =>
-        removed.has(entryPath) ? undefined : existing.get(entryPath);
-      const wanted = [...desired.values()].toSorted(byPath);
-      for (const entry of wanted) {
-        if (entry.kind === "dir" && current(entry.path)?.kind !== "dir") {
-          // await-in-loop: a folder's parent is made first.
-          await mkdir(checkParents(workspaceDir, entry.path), {
-            mode: PRIVATE_FOLDER_MODE,
-          });
-        }
-      }
-      for (const entry of wanted) {
+    }
+    if (!isWindows()) {
+      for (const entry of wanted.toReversed()) {
         const now = current(entry.path);
-        if (entry.kind === "file") {
-          if (now?.kind === "file" && now.sha256 === entry.sha256) {
-            if (!isWindows() && now.mode !== entry.mode) {
-              // await-in-loop: one file at a time.
-              await chmodFile(workspaceDir, entry);
-            }
-            continue;
-          }
-          // await-in-loop: one file in memory at a time.
-          await writeStored(workspaceDir, store, entry);
-        } else if (entry.kind === "link" && now?.kind !== "link") {
-          // await-in-loop: one entry at a time.
-          await writeLink(workspaceDir, entry);
+        if (
+          entry.kind === "dir" &&
+          (now?.kind !== "dir" || now.mode !== entry.mode)
+        ) {
+          // await-in-loop: deepest folders first.
+          yield* Result.await(chmodFolder(workspaceDir, entry));
         }
       }
-      if (!isWindows()) {
-        for (const entry of wanted.toReversed()) {
-          const now = current(entry.path);
-          if (
-            entry.kind === "dir" &&
-            (now?.kind !== "dir" || now.mode !== entry.mode)
-          ) {
-            const target = checkParents(workspaceDir, entry.path);
-            if (entryAt(target)?.isDirectory() !== true) {
-              throw restoreFailed(
-                "A folder was replaced during the restore.",
-              )();
-            }
-            // await-in-loop: deepest folders first.
-            await chmod(target, entry.mode);
-          }
-        }
-      }
-    },
-    catch: restoreFailed("The folder could not be put back."),
+    }
+    return Result.ok();
   });
 
 type RestoreOptions = {

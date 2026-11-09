@@ -779,14 +779,6 @@ export class SidecarHost {
         `a run's folder was not saved: ${run.checkpoint.reason}`,
       );
     }
-    if (run.stop !== RUN_STOP.none) {
-      return Result.err({
-        type: "harness_exited",
-        message: "The run was stopped before it started.",
-        exitCode: null,
-        signal: null,
-      });
-    }
     // Read after the copies and before the harness: what is there now was not
     // written by this turn.
     run.outputs = await snapshotOutputs(message.workspaceDir);

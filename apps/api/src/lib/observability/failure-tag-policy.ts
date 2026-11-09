@@ -13,6 +13,8 @@ export const TAGGED_FAILURE_REASON = {
   AnalysisInputVersionChangedError: "conflict",
   AIColumnInputRequiredError: "tagged_failure",
   AttachmentCopyFailed: "tagged_failure",
+  CheckpointRefused: "tagged_failure",
+  CheckpointRestoreFailed: "tagged_failure",
   AIGenerationCancelledError: "tagged_failure",
   AccountExportArchiveError: "tagged_failure",
   LimiterStoreUnavailableError: "limiter_store_unavailable",
