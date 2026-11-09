@@ -128,6 +128,7 @@ import type { withTimeout } from "@/api/lib/with-timeout";
 import { CITATION_READ_DETAILS } from "@/api/mcp/case-law-citations-input";
 import { decisionTextVersion } from "@/api/mcp/case-law-decision-read";
 import { CASE_LAW_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/case-law-search-input";
+import { createCompatCorpusContinuation } from "@/api/mcp/compat-corpus";
 import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import {
@@ -4270,6 +4271,71 @@ describe("OpenAI-compatible MCP tools", () => {
         payload.partial.decisions.map(({ decisionId }) => decisionId),
       ).toEqual(["dec-fast"]);
       gate.resolve(undefined);
+    });
+
+    describe("the OpenAI-compatible search", () => {
+      const compatContext = (
+        store: ReturnType<typeof createFakeContinuationStore>["store"],
+        deadlineMs: number,
+      ) =>
+        createContext({
+          testDependencies: {
+            compatCorpusContinuation: createCompatCorpusContinuation({
+              store,
+              ownerId: "task-a",
+              limits,
+            }),
+            publicReadResponseDeadlineMs: deadlineMs,
+          },
+        });
+      type CompatPage = {
+        results: { id: string }[];
+        nextCursor: string | null;
+        paginationOutcome?: unknown;
+      };
+      const compatSearch = async (
+        context: AuthorizedMcpRequestContext,
+        args: Record<string, unknown>,
+      ) => await handleMcpToolCall({ args, context, toolName: "search" });
+
+      test("waits for a search that finishes within the wait", async () => {
+        const { store } = createFakeContinuationStore();
+        searchDecisionsHandlerMock.mockImplementation(
+          async ({ body: { query } }: { body: { query: string } }) =>
+            answered(query),
+        );
+        const result = await compatSearch(compatContext(store, 2000), {
+          query: "náhrada",
+        });
+        expect(result.isError).not.toBe(true);
+        const page = asTestRaw<CompatPage>(parseToolPayload(result));
+        expect(page.results.length).toBeGreaterThan(0);
+      });
+
+      test("answers cut short with a cursor that runs the same page again", async () => {
+        const { store } = createFakeContinuationStore();
+        const gate = gatedSearch();
+        const first = await compatSearch(compatContext(store, 5), {
+          query: "náhrada",
+        });
+        expect(first.isError).not.toBe(true);
+        const page = asTestRaw<CompatPage>(parseToolPayload(first));
+        expect(page.results).toEqual([]);
+        expect(page.paginationOutcome).toEqual(
+          SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+        );
+        expect(page.nextCursor).not.toBeNull();
+
+        gate.resolve(undefined);
+        const second = await compatSearch(compatContext(store, 2000), {
+          query: "náhrada",
+          cursor: page.nextCursor,
+        });
+        expect(second.isError).not.toBe(true);
+        expect(
+          asTestRaw<CompatPage>(parseToolPayload(second)).results.length,
+        ).toBeGreaterThan(0);
+      });
     });
 
     test("the response deadline stays under the search budget", () => {

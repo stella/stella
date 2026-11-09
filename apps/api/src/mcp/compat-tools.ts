@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET } from "@stll/api-contract/search";
+
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -28,7 +30,7 @@ import {
   EMPTY_CORPUS_CURSORS,
   hasMoreCorpusPages,
   resolveCompatCorpusCountries,
-  searchCompatCorpus,
+  waitForCompatCorpus,
 } from "@/api/mcp/compat-corpus";
 import {
   COMPAT_ID_HINT,
@@ -533,7 +535,7 @@ const handleCompatSearchTool: McpToolHandler<
     };
   }
 
-  const corpus = await searchCompatCorpus({
+  const corpus = await waitForCompatCorpus({
     context,
     countries: await resolveCompatCorpusCountries(context),
     cursors: position.corpus,
@@ -541,6 +543,19 @@ const handleCompatSearchTool: McpToolHandler<
   });
   if (corpus.type === "failed") {
     return corpus.result;
+  }
+  if (corpus.type === "still_running") {
+    // Nothing here says "running", so the page says it is cut short and its
+    // cursor runs the same corpus page again.
+    return {
+      egress: "compatSearch",
+      paginationOutcome: SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+      nextCursor: encodeCompatSearchCursor({
+        matter: matter.nextCursor ?? null,
+        corpus: position.corpus,
+      }),
+      results: matter.results,
+    };
   }
 
   // Matter hits first, then decisions, then statutes: a caller asking this
