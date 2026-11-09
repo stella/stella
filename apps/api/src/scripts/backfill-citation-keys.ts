@@ -185,14 +185,17 @@ await runScriptWithErrorOutput(async () => {
                     FROM v
                    WHERE t.id = v.id`,
                       );
-                      await reopenCitationsForKeys(
-                        tx,
-                        keyed
-                          .filter(({ key, stored }) => key !== stored)
-                          .flatMap(({ key, stored }) =>
+                      // A changed case-file key changes which candidate a
+                      // stated sheet can name (`SHEET_READING_SQL.stated`),
+                      // so citations under the decision's keys are reopened
+                      // whichever of its keys changed.
+                      await reopenCitationsForKeys(tx, [
+                        ...new Set(
+                          keyed.flatMap(({ key, stored }) =>
                             [key, stored].filter((value) => value !== null),
                           ),
-                      );
+                        ),
+                      ]);
                     } else {
                       const values = sql.join(
                         keyed.map(
