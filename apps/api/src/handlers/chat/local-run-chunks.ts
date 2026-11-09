@@ -470,7 +470,9 @@ const asToolInputChunk = (
     if (call.endCarried) {
       return null;
     }
+    // The end writes the whole input, so later arguments are not carried.
     call.endCarried = true;
+    call.argsCarried = true;
     // The normalised end the harness sends, its input rebuilt; anything
     // else on the chunk, a top-level input included, is not carried.
     const reported = tanstackOf(chunk.metadata);
@@ -1217,6 +1219,40 @@ const createRunApps = (context: LocalRunContext, runnerRunId: string) => {
 };
 
 /**
+ * What a chunk read before a pause did to its call, as the read that carried
+ * it left the call: the first start names it, and its arguments and its end
+ * count as carried once they were read. An end writes the call's whole
+ * input, so arguments after it are not carried either.
+ */
+const recordOpenedCall = (
+  calls: LocalRunToolCalls,
+  chunk: PublicStreamChunk,
+) => {
+  if (chunk.type === EventType.TOOL_CALL_START) {
+    if (!calls.has(chunk.toolCallId)) {
+      calls.set(chunk.toolCallId, {
+        name: chunk.toolCallName,
+        argsCarried: false,
+        endCarried: false,
+      });
+    }
+    return;
+  }
+  const call =
+    chunk.type === EventType.TOOL_CALL_ARGS ||
+    chunk.type === EventType.TOOL_CALL_END
+      ? calls.get(chunk.toolCallId)
+      : undefined;
+  if (call === undefined) {
+    return;
+  }
+  call.argsCarried = true;
+  if (chunk.type === EventType.TOOL_CALL_END) {
+    call.endCarried = true;
+  }
+};
+
+/**
  * The calls a run opened through `throughSeq`, read again when a resumed turn
  * continues after a pause: a result for a call opened before the pause is
  * checked by the name its start gave it.
@@ -1252,16 +1288,8 @@ const openedCalls = async (
         parsed.output.type === DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent
           ? parsed.output.chunk
           : null;
-      if (
-        isPublicStreamChunk(chunk) &&
-        chunk.type === EventType.TOOL_CALL_START &&
-        !calls.has(chunk.toolCallId)
-      ) {
-        calls.set(chunk.toolCallId, {
-          name: chunk.toolCallName,
-          argsCarried: true,
-          endCarried: true,
-        });
+      if (isPublicStreamChunk(chunk)) {
+        recordOpenedCall(calls, chunk);
       }
     }
     if (page.value.nextAfterSeq === null) {

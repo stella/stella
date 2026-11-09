@@ -3280,6 +3280,125 @@ describe("chat turns on a computer", () => {
     expect(toolCallIdsOf(resumed)).toEqual([...new Set(toolCallIdsOf(paused))]);
   });
 
+  test("a native call opened before a pause and ended after it carries its arguments and its end once in the resumed turn", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const requestId = Bun.randomUUIDv7();
+    const turn = (chatRunId: string, resume?: RunAgentResumeItem[]) =>
+      collect(
+        createLocalChatRun(
+          contextFor(chatThreadId),
+          resume === undefined
+            ? startPlan(desktopId)
+            : { type: "resume", harness: "codex" },
+        ).stream({
+          chatRunId,
+          chatTurnId: turnOf(chatThreadId),
+          messages:
+            resume === undefined
+              ? [{ role: "user", content: "Run the tests" }]
+              : [],
+          instructions: "You are stella.",
+          resume,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+    const pausedTurn = turn("chat-run-split-paused");
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const toolCall = {
+      id: "item_split",
+      name: COMMAND_EXECUTION,
+      input: { command: "bun test" },
+    };
+    const sent = await harnessChunks(start.runId, [
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("codex-session-split"),
+        continuation: { type: "fresh" },
+      },
+      {
+        type: "approval.requested",
+        request: {
+          requestId,
+          kind: "command",
+          toolCall,
+          reason: null,
+          options: [{ id: "accept", decision: "approve" }],
+        },
+      },
+      { type: "interaction.resolved", requestId },
+      {
+        type: "tool.completed",
+        toolCall,
+        result: { content: "{}", status: "succeeded" },
+      },
+      { type: "turn.completed", usage: null },
+    ]);
+    const isCallChunk = (chunk: unknown, type: EventType) =>
+      isRecord(chunk) &&
+      chunk["type"] === type &&
+      chunk["toolCallId"] === toolCall.id;
+    const pauseAt =
+      sent.findIndex(
+        (chunk) =>
+          isRecord(chunk) &&
+          chunk["type"] === EventType.RUN_FINISHED &&
+          isRecord(chunk["outcome"]) &&
+          chunk["outcome"]["type"] === "interrupt",
+      ) + 1;
+    const args = sent.find((chunk) =>
+      isCallChunk(chunk, EventType.TOOL_CALL_ARGS),
+    );
+    const end = sent.find((chunk) =>
+      isCallChunk(chunk, EventType.TOOL_CALL_END),
+    );
+    expect(pauseAt).toBeGreaterThan(0);
+    // The call opens before the pause; its arguments and end, an end
+    // repeated, come after it.
+    const beforePause = sent
+      .slice(0, pauseAt)
+      .filter(
+        (chunk) =>
+          !isCallChunk(chunk, EventType.TOOL_CALL_ARGS) &&
+          !isCallChunk(chunk, EventType.TOOL_CALL_END),
+      );
+    const run = desktopRun(desktop, start.runId);
+    await run.approvalRequest(requestId);
+    await run.events(beforePause);
+    await pausedTurn.done;
+
+    const resumedTurn = turn("chat-run-split-resumed", [
+      {
+        interruptId: requestId,
+        status: "resolved",
+        payload: { approved: true },
+      },
+    ]);
+    await desktop.receive("run.approval", ofRun(start.runId));
+    await run.events([args, end, end, ...sent.slice(pauseAt)]);
+    await run.finish("completed", "codex-session-split");
+    const resumed = await resumedTurn.done;
+
+    const ofCall = (type: EventType) =>
+      resumed.filter(
+        (chunk) =>
+          chunk.type === type &&
+          "toolCallId" in chunk &&
+          chunk.toolCallId.endsWith(`_${toolCall.id}`),
+      );
+    expect(ofCall(EventType.TOOL_CALL_ARGS).map(meaning)).toEqual(
+      [args].map(meaning),
+    );
+    expect(ofCall(EventType.TOOL_CALL_END).map(meaning)).toEqual(
+      [end].map(meaning),
+    );
+    expect(ofCall(EventType.TOOL_CALL_END)).toMatchObject([
+      { metadata: { tanstack: { input: toolCall.input } } },
+    ]);
+    expect(ofCall(EventType.TOOL_CALL_RESULT)).toHaveLength(1);
+  });
+
   test("an answer from another thread does not reach the run", async () => {
     const chatThreadId = await newThread();
     const otherThreadId = await newThread();
