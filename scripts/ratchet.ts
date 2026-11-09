@@ -6951,7 +6951,7 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
-      "apps/api/src/lib/workflow/handle-casts.integration.test.ts",
+      "apps/api/src/handlers/document-reviews/handle-casts.integration.test.ts",
       SELF_TEST_TEST_DATABASE_HANDLE_CASTS,
     );
     writeFixture(
