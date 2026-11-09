@@ -644,6 +644,10 @@ export const LIMITS = {
   caseLawAgentCitationPageSizeDefault: 20,
   /** Citing paragraph sent with a citation, centred on the citation itself. */
   caseLawCitationPassageChars: 1200,
+  /** The same passage in a compact citation read: a cue, not a quotation. */
+  caseLawCitationCompactPassageChars: 240,
+  /** Length of the words a citation read filters its citing paragraphs by. */
+  caseLawCitationPassageQueryChars: 256,
   /** Decision ASTs fetched at once while resolving one page of passages. */
   caseLawCitationPassageConcurrency: 6,
   /**

@@ -446,6 +446,25 @@ const termMatcher = (language: string) => {
     fold(morphology === null ? token : stemLegalTerm(token, morphology));
 };
 
+/**
+ * Whether a paragraph holds every word of `query`, each compared as
+ * `paragraphsMatching` compares them, in the paragraph's own language. Null
+ * when `query` carries no word.
+ */
+export const paragraphWordsMatcher = (
+  query: string,
+): ((paragraph: string, language: string) => boolean) | null => {
+  const words = corpusTokens(query);
+  if (words.length === 0) {
+    return null;
+  }
+  return (paragraph, language) => {
+    const termOf = termMatcher(language);
+    const terms = new Set(corpusTokens(paragraph).map(termOf));
+    return words.every((word) => terms.has(termOf(word)));
+  };
+};
+
 export type QueryParagraph = DecisionParagraph & {
   /** 1-based position among the decision's paragraphs. */
   position: number;
