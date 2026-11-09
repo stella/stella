@@ -13,6 +13,11 @@
  * passage ids, and both drop the other reference-derived fields; the run's
  * reference list keeps ids but not names or content digests.
  *
+ * A finding is judged against the whole run, not only its own position: one
+ * grading call can cover positions from several matters, so any finding's
+ * prose can restate any of the run's reference matters. Its prose is shown
+ * only to a reader who can open all of them.
+ *
  * Every endpoint that returns findings or a run basis goes through here.
  *
  * @yields safeDb errors out to the parent safe-handler.
@@ -201,21 +206,24 @@ export type ReaderFinding = ReviewFinding & {
 };
 
 /**
- * One finding for this reader. Tier-graded findings and findings whose
- * reference matters are all readable are returned unchanged.
+ * One finding for this reader, given every matter the run's references came
+ * from (`basisReferenceWorkspaceIds`). Returned unchanged when the reader can
+ * open all of them; otherwise only the target-side fields are kept, whatever
+ * the finding's own standard, since the grading call that wrote it may have
+ * seen any of them. Existing findings record no narrower scope, so this
+ * holds for them too.
  */
 export const findingForReader = (
   finding: ReviewFinding,
   {
-    positionWorkspaces,
+    runSources,
     readable,
   }: {
-    positionWorkspaces: ReadonlyMap<string, readonly string[]>;
+    runSources: readonly string[];
     readable: ReadonlySet<string>;
   },
 ): ReaderFinding => {
-  const sources = positionWorkspaces.get(finding.positionId);
-  if (sources === undefined || sources.every((id) => readable.has(id))) {
+  if (runSources.every((id) => readable.has(id))) {
     return finding;
   }
   return {

@@ -6,11 +6,11 @@ import path from "node:path";
 import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { basisReferenceWorkspaceIds } from "@/api/lib/document-review/reference-passages";
 import {
   basisForReader,
   findingForReader,
   referencesForReader,
-  referenceWorkspacesByPosition,
 } from "@/api/lib/document-review/reference-visibility";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import type {
@@ -118,22 +118,22 @@ const referenceFinding: ReviewFinding = {
   },
 };
 
-const positionWorkspaces = referenceWorkspacesByPosition(basis);
+const runSources = basisReferenceWorkspaceIds(basis);
 
 describe("findingForReader", () => {
   test("returns the finding unchanged when every reference matter is readable", () => {
     const readable = new Set([REFERENCE_WORKSPACE, OTHER_REFERENCE_WORKSPACE]);
 
-    expect(
-      findingForReader(referenceFinding, { positionWorkspaces, readable }),
-    ).toBe(referenceFinding);
+    expect(findingForReader(referenceFinding, { runSources, readable })).toBe(
+      referenceFinding,
+    );
   });
 
   test("keeps the target-side verdict and drops fields written from the reference", () => {
     const readable = new Set([REFERENCE_WORKSPACE]);
 
     const shown = findingForReader(referenceFinding, {
-      positionWorkspaces,
+      runSources,
       readable,
     });
 
@@ -153,18 +153,44 @@ describe("findingForReader", () => {
     expect(JSON.stringify(shown)).not.toContain("24 months");
   });
 
-  test("leaves findings for positions without reference passages alone", () => {
-    const tiersFinding: ReviewFinding = {
-      ...referenceFinding,
-      positionId: TIERS_POSITION,
-      standardSource: "tiers",
-    };
+  // One grading call can cover positions from several matters, so a tier
+  // finding can restate a reference it was graded beside.
+  const tiersFinding: ReviewFinding = {
+    ...referenceFinding,
+    positionId: TIERS_POSITION,
+    standardSource: "tiers",
+    rationale: "The standard allows 24 months.",
+  };
 
+  test("withholds a tier finding's prose when one of the run's reference matters is unreadable", () => {
+    const shown = findingForReader(tiersFinding, {
+      runSources,
+      readable: new Set([REFERENCE_WORKSPACE]),
+    });
+
+    expect(shown).toMatchObject({
+      positionId: TIERS_POSITION,
+      verdict: "deviation",
+      rationale: null,
+      recommendation: null,
+      fix: null,
+      referenceDetail: "withheld",
+    });
+    expect(JSON.stringify(shown)).not.toContain("24 months");
+  });
+
+  test("returns a tier finding unchanged when every reference matter is readable", () => {
     expect(
       findingForReader(tiersFinding, {
-        positionWorkspaces,
-        readable: new Set(),
+        runSources,
+        readable: new Set([REFERENCE_WORKSPACE, OTHER_REFERENCE_WORKSPACE]),
       }),
+    ).toBe(tiersFinding);
+  });
+
+  test("returns findings unchanged when the run has no reference matters", () => {
+    expect(
+      findingForReader(tiersFinding, { runSources: [], readable: new Set() }),
     ).toBe(tiersFinding);
   });
 });
@@ -285,7 +311,7 @@ describe("basis and finding projections agree", () => {
     const shown = new Set(
       proseLeaves(
         findingForReader(referenceFinding, {
-          positionWorkspaces,
+          runSources,
           readable: new Set(),
         }),
       ),
@@ -364,7 +390,7 @@ describe("basis and finding projections agree", () => {
                   standardSource: source,
                 },
                 {
-                  positionWorkspaces: referenceWorkspacesByPosition(runBasis),
+                  runSources: basisReferenceWorkspaceIds(runBasis),
                   readable: readableSet,
                 },
               ),
