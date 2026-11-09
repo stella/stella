@@ -102,7 +102,7 @@ requires (request it at `stella auth login --scopes`).
 | case-law | `stella case-law citations` | read | paginated |
 | case-law | `stella case-law coverage` | read |  |
 | case-law | `stella case-law open` | read |  |
-| case-law | `stella case-law read` | read |  |
+| case-law | `stella case-law read` | read | paginated |
 | case-law | `stella case-law resolve` | law_read |  |
 | case-law | `stella case-law search` | search | paginated |
 | clause | `stella clause delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
@@ -209,7 +209,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --paragraphs
 - `stella case-law read`
   - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
-  - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
+  - optional: --max-chars, --page, --full, --text-version, --query, --section (court_reasoning), --include (details|metadata|textFields|source|citations|outline)
 - `stella case-law resolve`
   - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - `--identifier` — Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions. (string)
