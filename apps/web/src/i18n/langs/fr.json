@@ -3625,6 +3625,12 @@
     "versionCreatedTitle": "Version créée",
     "viewOnly": "Lecture seule"
   },
+  "guidance": {
+    "notCaseLaw": "Lignes directrices émises par un régulateur. Il ne s’agit pas d’une décision de justice.",
+    "openAtPublisher": "Ouvrir chez l’éditeur",
+    "source": "Source : {attribution}",
+    "textUnavailable": "Le texte de ce document n’est pas disponible ici. Consultez-le chez l’éditeur."
+  },
   "guides": {
     "action": {
       "replay": "Recommencer",

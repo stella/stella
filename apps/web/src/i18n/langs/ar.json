@@ -3625,6 +3625,12 @@
     "versionCreatedTitle": "تم إنشاء الإصدار",
     "viewOnly": "عرض فقط"
   },
+  "guidance": {
+    "notCaseLaw": "إرشادات صادرة عن جهة تنظيمية. هذا ليس حكمًا قضائيًا.",
+    "openAtPublisher": "فتح لدى الناشر",
+    "source": "المصدر: {attribution}",
+    "textUnavailable": "نص هذا المستند غير متاح هنا. اقرأه لدى الناشر."
+  },
   "guides": {
     "action": {
       "replay": "البدء من جديد",

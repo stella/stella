@@ -3625,6 +3625,12 @@
     "versionCreatedTitle": "Version created",
     "viewOnly": "View only"
   },
+  "guidance": {
+    "notCaseLaw": "Guidance issued by a regulator. This is not a court decision.",
+    "openAtPublisher": "Open at the publisher",
+    "source": "Source: {attribution}",
+    "textUnavailable": "The text of this document is not available here. Read it at the publisher."
+  },
   "guides": {
     "action": {
       "replay": "Start again",

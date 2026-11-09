@@ -3625,6 +3625,12 @@
     "versionCreatedTitle": "Versioon loodud",
     "viewOnly": "Ainult vaatamiseks"
   },
+  "guidance": {
+    "notCaseLaw": "Järelevalveasutuse välja antud juhend. See ei ole kohtulahend.",
+    "openAtPublisher": "Ava väljaandja juures",
+    "source": "Allikas: {attribution}",
+    "textUnavailable": "Selle dokumendi tekst ei ole siin saadaval. Lugege seda väljaandja juures."
+  },
   "guides": {
     "action": {
       "replay": "Alusta uuesti",

@@ -3625,6 +3625,12 @@
     "versionCreatedTitle": "Verzió létrehozva",
     "viewOnly": "Csak megtekintés"
   },
+  "guidance": {
+    "notCaseLaw": "Szabályozó hatóság által kiadott iránymutatás. Ez nem bírósági határozat.",
+    "openAtPublisher": "Megnyitás a kiadónál",
+    "source": "Forrás: {attribution}",
+    "textUnavailable": "A dokumentum szövege itt nem érhető el. Olvassa el a kiadónál."
+  },
   "guides": {
     "action": {
       "replay": "Újrakezdés",

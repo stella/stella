@@ -3625,6 +3625,12 @@
     "versionCreatedTitle": "Versija sukurta",
     "viewOnly": "Tik peržiūra"
   },
+  "guidance": {
+    "notCaseLaw": "Reguliavimo institucijos paskelbtos gairės. Tai nėra teismo sprendimas.",
+    "openAtPublisher": "Atidaryti leidėjo svetainėje",
+    "source": "Šaltinis: {attribution}",
+    "textUnavailable": "Šio dokumento teksto čia nėra. Perskaitykite jį leidėjo svetainėje."
+  },
   "guides": {
     "action": {
       "replay": "Pradėti iš naujo",
