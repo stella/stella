@@ -7,6 +7,7 @@ import {
   browserControlResultSchema,
 } from "@stll/api-contract/browser-control";
 
+import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { arrayOrEmpty } from "@/api/lib/array";
 
 /**
@@ -42,38 +43,80 @@ export const supersedeBrowserSnapshots = (
     return messages;
   }
 
-  const results = messages.map((message) =>
-    readBrowserSnapshotResult(message, browserCallIds),
+  return supersedeNewest(
+    messages,
+    (message) => readBrowserSnapshotResult(message, browserCallIds),
+    (message, result) => ({
+      ...message,
+      content: JSON.stringify(supersededBrowserResult(result)),
+    }),
   );
-  // The newest snapshot stays whole; only the ones before it shrink.
+};
+
+/**
+ * The same rule over stored chat messages, for estimates of what the next
+ * send gives the model (the context meter, the compaction trigger): each
+ * superseded `use-browser` call part, mapped to the output the model reads in
+ * place of its stored one. Stored parts stay as they are.
+ */
+export const supersededBrowserParts = (
+  messages: readonly ChatMessage[],
+): ReadonlyMap<ChatPart, SupersededBrowserResult> => {
+  const parts = messages.flatMap((message) => message.parts);
+  const superseded = new Map<ChatPart, SupersededBrowserResult>();
+  supersedeNewest(
+    parts,
+    (part) =>
+      part.type === "tool-call" && part.name === BROWSER_CONTROL_TOOL_NAME
+        ? readBrowserSuccess(part.output)
+        : null,
+    (part, result) => {
+      superseded.set(part, supersededBrowserResult(result));
+      return part;
+    },
+  );
+  return superseded;
+};
+
+/**
+ * Keeps the newest item that carries a browser page whole and replaces every
+ * earlier one. Returns the same array when nothing is superseded.
+ */
+const supersedeNewest = <T>(
+  items: T[],
+  read: (item: T) => BrowserSnapshotResult | null,
+  replace: (item: T, result: BrowserSnapshotResult) => T,
+): T[] => {
+  const results = items.map(read);
   const newest = results.findLastIndex((result) => result !== null);
   if (results.slice(0, Math.max(newest, 0)).every((r) => r === null)) {
-    return messages;
+    return items;
   }
-
-  return messages.map((message, index) => {
+  return items.map((item, index) => {
     const result = results.at(index) ?? null;
-    if (index >= newest || result === null) {
-      return message;
-    }
-    const { snapshot } = result;
-    return {
-      ...message,
-      content: JSON.stringify({
-        status: result.status,
-        superseded: true,
-        note: SUPERSEDED_BROWSER_SNAPSHOT_NOTE,
-        page: {
-          contentTrust: snapshot.contentTrust,
-          tabId: snapshot.tabId,
-          textTotalChars: snapshot.textTotalChars,
-          title: snapshot.title,
-          url: snapshot.url,
-        },
-      }),
-    };
+    return index >= newest || result === null ? item : replace(item, result);
   });
 };
+
+export type SupersededBrowserResult = ReturnType<
+  typeof supersededBrowserResult
+>;
+
+const supersededBrowserResult = ({
+  snapshot,
+  status,
+}: BrowserSnapshotResult) => ({
+  status,
+  superseded: true,
+  note: SUPERSEDED_BROWSER_SNAPSHOT_NOTE,
+  page: {
+    contentTrust: snapshot.contentTrust,
+    tabId: snapshot.tabId,
+    textTotalChars: snapshot.textTotalChars,
+    title: snapshot.title,
+    url: snapshot.url,
+  },
+});
 
 type BrowserSnapshotResult = Extract<
   v.InferOutput<typeof browserControlResultSchema>,
@@ -94,10 +137,11 @@ const readBrowserSnapshotResult = (
   }
   const content = message.content;
   const parsed = Result.try((): unknown => JSON.parse(content));
-  if (Result.isError(parsed)) {
-    return null;
-  }
-  const result = v.safeParse(browserControlResultSchema, parsed.value);
+  return Result.isError(parsed) ? null : readBrowserSuccess(parsed.value);
+};
+
+const readBrowserSuccess = (output: unknown): BrowserSnapshotResult | null => {
+  const result = v.safeParse(browserControlResultSchema, output);
   if (!result.success || result.output.status !== "success") {
     return null;
   }

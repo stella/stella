@@ -1,4 +1,7 @@
-import { normalizeToolResult } from "@tanstack/ai";
+import {
+  convertMessagesToModelMessages,
+  normalizeToolResult,
+} from "@tanstack/ai";
 import type { ModelMessage } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
@@ -17,7 +20,10 @@ import {
 import {
   supersedeBrowserSnapshots,
   SUPERSEDED_BROWSER_SNAPSHOT_NOTE,
+  supersededBrowserParts,
 } from "@/api/handlers/chat/browser-snapshot-history";
+import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
+import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 
 const pageResult = (index: number): BrowserControlResult =>
   v.parse(browserControlResultSchema, {
@@ -162,5 +168,68 @@ describe("supersedeBrowserSnapshots", () => {
 
     expect(supersedeBrowserSnapshots(none)).toBe(none);
     expect(supersedeBrowserSnapshots(one)).toBe(one);
+  });
+});
+
+const browserPart = (id: string, output: BrowserControlResult): ChatPart => ({
+  arguments: "{}",
+  id,
+  input: {},
+  name: BROWSER_CONTROL_TOOL_NAME,
+  output,
+  state: "complete",
+  type: "tool-call",
+});
+
+const storedThread = (pages: number): ChatMessage[] => [
+  {
+    id: "request",
+    parts: [{ content: "najdi komentář k § 88", type: "text" }],
+    role: "user",
+  },
+  {
+    id: "answer",
+    parts: Array.from({ length: pages }, (_, page) =>
+      browserPart(`p${page}`, pageResult(page)),
+    ),
+    role: "assistant",
+  },
+];
+
+describe("supersededBrowserParts", () => {
+  test("stubs stored parts exactly as the model messages are stubbed", () => {
+    const thread = storedThread(4);
+
+    const superseded = supersededBrowserParts(thread);
+    const fromModel = supersedeBrowserSnapshots(
+      convertMessagesToModelMessages(thread),
+    );
+
+    const stubbedIds = new Set<string>();
+    for (const [part, stub] of superseded) {
+      if (part.type !== "tool-call") {
+        throw new Error("Only tool calls are superseded");
+      }
+      stubbedIds.add(part.id);
+      const modelResult = fromModel.find(
+        (message) => message.role === "tool" && message.toolCallId === part.id,
+      );
+      expect(modelResult?.content).toBe(JSON.stringify(stub));
+    }
+    expect([...stubbedIds].toSorted()).toEqual(["p0", "p1", "p2"]);
+  });
+
+  test("the context meter counts one page however many the turn read", () => {
+    const usage = (pages: number) =>
+      computeThreadContextUsage({
+        messages: storedThread(pages),
+        summary: null,
+      }).estimatedTokens;
+
+    expect(usage(20)).toBeLessThan(usage(1) + 20 * 300);
+  });
+
+  test("supersedes nothing for a single page", () => {
+    expect(supersededBrowserParts(storedThread(1)).size).toBe(0);
   });
 });
