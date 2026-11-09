@@ -1376,8 +1376,10 @@ const startSkillSourceRequest = (
   const remainingMs =
     budget.deadlineAt - Temporal.Now.instant().epochMilliseconds;
   if (remainingMs <= 0) {
-    return rejectSkillPackage(
-      budget.timeoutMessage ?? "GitHub skill discovery timed out",
+    return Result.err(
+      skillSourceUnreachable(
+        budget.timeoutMessage ?? "GitHub skill discovery timed out",
+      ),
     );
   }
   return Result.ok(Math.min(GITHUB_API_TIMEOUT_MS, remainingMs));
@@ -1656,7 +1658,9 @@ const parseGithubDiscoveryPath = async (
     return Result.err(resolved.error);
   }
   if (!resolved.value) {
-    return rejectSkillPackage("GitHub branch or folder could not be resolved");
+    return Result.err(
+      skillSourceUnreachable("GitHub branch or folder could not be resolved"),
+    );
   }
   return Result.ok({ owner, repo, ...resolved.value });
 };
