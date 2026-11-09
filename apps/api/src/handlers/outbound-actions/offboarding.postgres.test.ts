@@ -11,6 +11,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 
@@ -97,9 +98,7 @@ describe.skipIf(!runPostgres)("outbound action offboarding", () => {
         expect(remaining).toHaveLength(expected.length);
         expect(remaining).toEqual(expect.arrayContaining(expected));
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(eq(user.id, userId));
         await db.delete(user).where(eq(user.id, actorUserId));
       }

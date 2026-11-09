@@ -28,6 +28,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { createConfirmOutboundActionHandler } from "./confirm";
@@ -216,9 +217,7 @@ if (!databaseUrl || !runPostgres) {
           .where(eq(outboundActions.id, actionId));
         expect(rows).toEqual([{ status: "sent" }]);
       } finally {
-        await firstDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(firstDb, [organizationId]);
         await firstDb.delete(user).where(eq(user.id, userId));
       }
     });
