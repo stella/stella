@@ -12,6 +12,7 @@ import {
 } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { useIsMobile } from "@stll/ui/use-mobile";
@@ -201,28 +202,47 @@ export const ReferencePeekHeader = ({
         className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap"
         data-slot="reference-peek-summary"
       >
-        <TruncatedText
-          className="shrink-0 text-sm font-medium"
-          data-slot="reference-peek-primary"
-          render={<BidiText as="span" />}
-          tooltip={<BidiText>{primary}</BidiText>}
-        >
-          {primary}
-        </TruncatedText>
-        {meta.map(({ part, text }, index) => (
-          <TruncatedText
-            className={cn(
-              "text-muted-foreground text-xs",
-              index === 0 && "max-w-max flex-1 basis-0",
-              SEPARATED_PART,
-            )}
-            data-part={part}
-            data-slot="reference-peek-meta"
-            key={part}
-            tooltip={<BidiText>{text}</BidiText>}
+        {/* Each part shows its whole text on hover, cut or not, so the
+            tooltip is the part's own and the cut text has no second hint. */}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <TruncatedText
+                className="shrink-0 text-sm font-medium"
+                data-slot="reference-peek-primary"
+                hint={false}
+                render={<BidiText as="span" />}
+              />
+            }
           >
-            <BidiText>{text}</BidiText>
-          </TruncatedText>
+            {primary}
+          </TooltipTrigger>
+          <TooltipPopup>
+            <BidiText>{primary}</BidiText>
+          </TooltipPopup>
+        </Tooltip>
+        {meta.map(({ part, text }, index) => (
+          <Tooltip key={part}>
+            <TooltipTrigger
+              render={
+                <TruncatedText
+                  className={cn(
+                    "text-muted-foreground text-xs",
+                    index === 0 && "max-w-max flex-1 basis-0",
+                    SEPARATED_PART,
+                  )}
+                  data-part={part}
+                  data-slot="reference-peek-meta"
+                  hint={false}
+                />
+              }
+            >
+              <BidiText>{text}</BidiText>
+            </TooltipTrigger>
+            <TooltipPopup>
+              <BidiText>{text}</BidiText>
+            </TooltipPopup>
+          </Tooltip>
         ))}
       </span>
       {actions.length > 0 && (
