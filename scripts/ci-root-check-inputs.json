@@ -454,7 +454,10 @@
       ".github/workflows/journey-canary.yml",
       ".github/workflows/case-law-search-probe.yml",
       ".github/workflows/scheduled-run-alerts.yml",
-      ".github/workflows/publish-npm.yml"
+      ".github/workflows/publish-npm.yml",
+      "packages/db-load-gate/src/default-busy-windows.json",
+      "apps/api/src/lib/case-law/coverage-freshness.ts",
+      "apps/api/src/lib/case-law/coverage-refresh-interval.ts"
     ],
     "Test release policy scripts": [
       "scripts/**",

@@ -152,7 +152,7 @@ validate_payload() {
   if [[ -n "${3:-}" ]]; then
     reason=stale_result
     detail="payload freshness check: $3"
-    jq -e "$3" "$scratch/payload" >/dev/null 2>"$scratch/error" || return 1
+    jq -e --argjson busy_hold_seconds "${busy_hold_seconds:-null}" "$3" "$scratch/payload" >/dev/null 2>"$scratch/error" || return 1
   fi
   reason=contract_error
 }
@@ -165,8 +165,36 @@ statute_shape='.results | type == "array" and all(.[]; type == "object" and (.do
 statute_nonempty='.results | length > 0'
 coverage_shape='(.asOf | type == "string") and (.freshness.status | type == "string") and (.countries | type == "array" and all(.[]; type == "object" and (.country | type == "string") and (.sources | type == "array")))'
 coverage_nonempty='[.countries[] | select(.availability == "searchable")] | length > 0 and all(.[]; .sources | length > 0)'
-# Figures older than three refresh intervals mean refreshes are not landing.
-coverage_current='.freshness.status == "current"'
+# Figures older than three refresh intervals mean refreshes are not landing,
+# except while the database busy window holds the refresh on purpose: then
+# figures computed shortly before the window opened read as refresh_pending
+# and still pass. Anything older, or pending outside a window, fails.
+coverage_current='.freshness.status == "current" or (.freshness.status == "refresh_pending" and (.freshness.ageSeconds | type == "number") and .freshness.ageSeconds <= ($busy_hold_seconds // -1))'
+# The windows background database work pauses in by default; the API reads
+# the same file. A missing or malformed file grants no hold.
+busy_windows_file="${JOURNEY_BUSY_WINDOWS_FILE:-$script_dir/../packages/db-load-gate/src/default-busy-windows.json}"
+# How long before a window opened the last refresh may have landed: the age at
+# which coverage stops reading as current (CASE_LAW_COVERAGE_CURRENT_WITHIN_MS).
+busy_hold_margin_seconds=900
+
+# Prints how old coverage may be while a busy window is open: the time since
+# the window opened plus the margin. Prints null outside every window.
+coverage_busy_hold() {
+  local now="${JOURNEY_NOW_EPOCH:-$(date +%s)}" windows window time_zone local_time hold=null
+  windows="$(jq -c 'if type == "array" and all(.[]; type == "object" and ([.start, .end] | all(type == "string" and test("^([01][0-9]|2[0-3]):[0-5][0-9]$"))) and (.timeZone | type == "string" and length > 0)) then .[] else error("invalid busy windows") end' \
+    "$busy_windows_file" 2>/dev/null)" || { printf null; return; }
+  while IFS= read -r window; do
+    [[ -n "$window" ]] || continue
+    time_zone="$(jq -r '.timeZone' <<<"$window")"
+    local_time="$(TZ="$time_zone" jq -nr --argjson now "$now" '$now | strflocaltime("%H:%M:%S")')" || continue
+    hold="$(jq -n --argjson window "$window" --arg local_time "$local_time" --argjson margin "$busy_hold_margin_seconds" --argjson hold "$hold" '
+      def seconds: split(":") | map(tonumber) | .[0] * 3600 + .[1] * 60 + (.[2] // 0);
+      ($local_time | seconds) as $now | ($window.start | seconds) as $start | ($window.end | seconds) as $end
+      | (if $start <= $end then $now >= $start and $now < $end else $now >= $start or $now < $end end) as $open
+      | if $open then [$hold, ($now - $start + 86400) % 86400 + $margin] | max else $hold end')"
+  done <<<"$windows"
+  printf '%s' "$hold"
+}
 
 mcp_tool() {
   local payload
@@ -402,6 +430,7 @@ else
     probe mcp_search mcp_tool search_case_law "$case_args" "$case_shape" "$case_nonempty"
     probe mcp_read mcp_tool read_case_law_decision "$read_args" "$read_shape" "$read_nonempty"
     probe mcp_legislation mcp_tool search_legislation '{"query":"smlouva","country":"CZE","limit":1}' "$statute_shape" "$statute_nonempty"
+    busy_hold_seconds="$(coverage_busy_hold)"
     probe mcp_coverage mcp_tool case_law_coverage '{}' "$coverage_shape" "$coverage_nonempty" "$coverage_current"
   fi
 fi
