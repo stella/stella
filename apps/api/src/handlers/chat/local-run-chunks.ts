@@ -268,6 +268,7 @@ const LOCAL_RUN_REJECTION = {
   at_capacity: AI_FAILURE_CODES.local_runner_unavailable,
   run_too_large: AI_FAILURE_CODES.local_runner_turn_too_large,
   unknown_run: AI_FAILURE_CODES.local_runner_unavailable,
+  folder_busy: AI_FAILURE_CODES.local_runner_unavailable,
 } as const satisfies Record<RejectReason, LocalRunFailure>;
 
 /** A stored chunk as the turn pipeline folds it. */
@@ -1496,6 +1497,7 @@ async function* readRunChunks({
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.harnessStatus:
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runAccepted:
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runRejected:
+          case DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored:
             panic(`A run stored an unsequenced ${message.type}`);
         }
       }
@@ -1661,6 +1663,7 @@ async function* startLocalRun({
     case "no_computer":
     case "model_unavailable":
     case "approvals_unavailable":
+    case "folder_busy":
       yield* refuse(AI_FAILURE_CODES.local_runner_unavailable);
       return;
     case "too_large":

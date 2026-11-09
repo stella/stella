@@ -5,8 +5,12 @@ import {
   DESKTOP_RUNNER_COMMAND_KINDS,
   DESKTOP_RUNNER_CONNECTIONS,
   DESKTOP_RUNNER_EVENT_TYPES,
+  DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS,
+  DESKTOP_RUNNER_FOLDER_RESTORE_STATES,
   DESKTOP_RUNNER_LEASED_RUN_STATES,
+  DESKTOP_RUNNER_LIVE_FOLDER_RESTORE_STATES,
   DESKTOP_RUNNER_RUN_STATES,
+  DESKTOP_RUNNER_SETTLED_FOLDER_RESTORE_STATES,
   DESKTOP_RUNNER_STORED_OUTCOMES,
   DESKTOP_RUNNER_STORED_REJECT_REASONS,
 } from "@/api/lib/desktop-runner/states";
@@ -390,5 +394,123 @@ export const desktopRunnerAppCalls = p.pgTable.withRLS(
       sql`jsonb_typeof(${table.result}) = 'object'`,
     ),
     ...ownerOnlyPolicies("desktop_runner_app_calls"),
+  ],
+);
+
+/**
+ * A member's request to undo the file changes of a chat turn run on their
+ * computer: the chat's folder goes back to the checkpoint the run took before
+ * it started. Not a run command: it goes to the run's computer whether or not
+ * a run is open there. A queued request expires unsent after a short while,
+ * so a computer that is away never restores days later; a sent one waits for
+ * its answer, also past that time, and is sent again on the computer's next
+ * socket. A turn has at most one restore that is queued, sent or done; a
+ * refused or expired one can be asked again.
+ */
+export const desktopRunnerFolderRestores = p.pgTable.withRLS(
+  "desktop_runner_folder_restores",
+  {
+    id: p.uuid("id").notNull(),
+    userId: p.text("user_id").notNull(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    chatThreadId: p.uuid("chat_thread_id").notNull(),
+    chatTurnId: p.uuid("chat_turn_id").notNull(),
+    /** The run whose checkpoint the folder goes back to. */
+    runId: p.uuid("run_id").notNull(),
+    /** The run's computer and device key; only that socket is sent it. */
+    desktopId: p.uuid("desktop_id").notNull(),
+    deviceJkt: p.text("device_jkt").notNull(),
+    state: p.text({ enum: DESKTOP_RUNNER_FOLDER_RESTORE_STATES }).notNull(),
+    /** Set with `refused`: why the computer refused it. */
+    reason: p.text({ enum: DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    /** A `queued` request not sent by then is never sent. */
+    expiresAt: timestamptz("expires_at").notNull(),
+    /** When it was restored, refused or expired. */
+    settledAt: timestamptz("settled_at"),
+    /** When a later run of the chat was told the folder went back. */
+    notedAt: timestamptz("noted_at"),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "desktop_runner_folder_restores_pkey",
+      columns: [table.id],
+    }),
+    p
+      .foreignKey({
+        name: "desktop_runner_folder_restores_chat_thread_fk",
+        columns: [table.chatThreadId],
+        foreignColumns: [chatThreads.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "desktop_runner_folder_restores_chat_turn_fk",
+        columns: [table.chatTurnId],
+        foreignColumns: [chatTurns.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "desktop_runner_folder_restores_run_fk",
+        columns: [table.runId],
+        foreignColumns: [desktopRunnerRuns.runId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "desktop_runner_folder_restores_runner_fk",
+        columns: [
+          table.userId,
+          table.organizationId,
+          table.desktopId,
+          table.deviceJkt,
+        ],
+        foreignColumns: [
+          desktopRunners.userId,
+          desktopRunners.organizationId,
+          desktopRunners.desktopId,
+          desktopRunners.deviceJkt,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .uniqueIndex("desktop_runner_folder_restores_live_run_idx")
+      .on(table.runId)
+      .where(
+        sql`${table.state} IN (${sqlValues(DESKTOP_RUNNER_LIVE_FOLDER_RESTORE_STATES)})`,
+      ),
+    p
+      .index("desktop_runner_folder_restores_runner_state_idx")
+      .on(
+        table.userId,
+        table.organizationId,
+        table.desktopId,
+        table.deviceJkt,
+        table.state,
+      ),
+    p
+      .index("desktop_runner_folder_restores_chat_thread_idx")
+      .on(table.chatThreadId, table.state),
+    p
+      .index("desktop_runner_folder_restores_chat_turn_idx")
+      .on(table.chatTurnId),
+    p.check(
+      "desktop_runner_folder_restores_state_check",
+      sql`${table.state} IN (${sqlValues(DESKTOP_RUNNER_FOLDER_RESTORE_STATES)})`,
+    ),
+    p.check(
+      "desktop_runner_folder_restores_reason_check",
+      sql`(${table.state} = 'refused') = (${table.reason} IS NOT NULL) AND (${table.reason} IS NULL OR ${table.reason} IN (${sqlValues(DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS)}))`,
+    ),
+    p.check(
+      "desktop_runner_folder_restores_settled_check",
+      sql`(${table.state} IN (${sqlValues(DESKTOP_RUNNER_SETTLED_FOLDER_RESTORE_STATES)})) = (${table.settledAt} IS NOT NULL)`,
+    ),
+    p.check(
+      "desktop_runner_folder_restores_noted_check",
+      sql`${table.notedAt} IS NULL OR ${table.state} = 'restored'`,
+    ),
+    ...ownerOnlyPolicies("desktop_runner_folder_restores"),
   ],
 );

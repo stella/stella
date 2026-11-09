@@ -1,0 +1,669 @@
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
+
+import {
+  DESKTOP_RUNNER_CHECKPOINT_EVENT,
+  type DesktopRunnerFolderRestoreOutcome,
+} from "@stll/api-contract/desktop-runner";
+
+import {
+  chatTurns,
+  desktopRunnerEvents,
+  desktopRunnerFolderRestores,
+  desktopRunnerRuns,
+  desktopRunners,
+} from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
+import {
+  withAggregateLock,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
+import {
+  transitionLifecycle,
+  transitionLifecycleBatch,
+} from "@/api/lib/db/transitions";
+import { DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
+import {
+  DESKTOP_RUNNER_OPEN_RUN_STATES,
+  type DesktopRunnerFolderRestoreRefusal,
+  type DesktopRunnerFolderRestoreState,
+} from "@/api/lib/desktop-runner/states";
+import type {
+  DesktopRunnerDb,
+  RunHolder,
+  RunnerBinding,
+  RunOwner,
+} from "@/api/lib/desktop-runner/store";
+
+/**
+ * Folder restores: a member's request to put a chat's folder back as the
+ * checkpoint a run took before its turn. A request is queued for the run's
+ * computer, taken by its socket (`sent`) and settled by the computer's answer.
+ * A queued request expires unsent after a short while, so a computer that is
+ * away never restores later; every read treats a queued request past its time
+ * as expired. A sent one waits for its answer, however late, and is sent again
+ * on each new socket of the computer.
+ */
+
+const restores = desktopRunnerFolderRestores;
+const runs = desktopRunnerRuns;
+const runner = desktopRunners;
+const events = desktopRunnerEvents;
+
+// audit: skip - socket bookkeeping; the endpoint that asks for a restore audits it
+const skipRestoreAudit = async () => await Promise.resolve();
+
+/** A restore as a member sees it; a queued one past its time reads `expired`. */
+export type FolderRestoreView = {
+  readonly restoreId: string;
+  readonly state: DesktopRunnerFolderRestoreState;
+  readonly reason: DesktopRunnerFolderRestoreRefusal | null;
+};
+
+type StoredRestore = {
+  id: string;
+  state: DesktopRunnerFolderRestoreState;
+  reason: DesktopRunnerFolderRestoreRefusal | null;
+  expiresAt: Date;
+};
+
+const restoreColumns = {
+  id: restores.id,
+  state: restores.state,
+  reason: restores.reason,
+  expiresAt: restores.expiresAt,
+};
+
+const lapsed = (row: StoredRestore, now: Date) =>
+  row.state === "queued" && row.expiresAt <= now;
+
+const viewOf = (row: StoredRestore, now: Date): FolderRestoreView => ({
+  restoreId: row.id,
+  state: lapsed(row, now) ? "expired" : row.state,
+  reason: row.reason,
+});
+
+/** Still waiting for a socket at `now`. */
+const inTime = (now: Date) => sql`${restores.expiresAt} > ${now}::timestamptz`;
+/** Past its time at `now`. */
+const lapsedAt = (now: Date) =>
+  sql`${restores.expiresAt} <= ${now}::timestamptz`;
+
+/** Queued and still in time, or sent: the computer may still act on it. */
+const pending = (now: Date) =>
+  or(
+    and(eq(restores.state, "queued"), inTime(now)),
+    eq(restores.state, "sent"),
+  );
+
+/** Whether the run's stored messages include the checkpoint it took before its turn. */
+const readTookCheckpoint = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  runId: string,
+) => {
+  const [taken] = await db
+    .select({ seq: events.seq })
+    .from(events)
+    .where(
+      and(
+        eq(events.runId, runId),
+        eq(events.type, "run.event"),
+        sql`${events.message} -> 'chunk' ->> 'type' = 'CUSTOM'`,
+        sql`${events.message} -> 'chunk' ->> 'name' = ${DESKTOP_RUNNER_CHECKPOINT_EVENT}`,
+        sql`${events.message} -> 'chunk' -> 'value' ->> 'status' = 'taken'`,
+      ),
+    )
+    .limit(1);
+  return taken !== undefined;
+};
+
+type ThreadOf = { owner: RunOwner; threadId: SafeId<"chatThread"> };
+type TurnOptions = ThreadOf & { turnId: SafeId<"chatTurn"> };
+
+const ownedBy = (owner: RunOwner) =>
+  and(
+    eq(restores.userId, owner.userId),
+    eq(restores.organizationId, owner.organizationId),
+  );
+
+/** The newest run the owner's turn started, and whether it took a checkpoint. */
+const readTurnRun = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, threadId, turnId }: TurnOptions,
+) => {
+  const [run] = await db
+    .select({
+      runId: runs.runId,
+      state: runs.state,
+      desktopId: runs.desktopId,
+    })
+    .from(runs)
+    .where(
+      and(
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        eq(runs.chatThreadId, threadId),
+        eq(runs.chatTurnId, turnId),
+      ),
+    )
+    .orderBy(desc(runs.createdAt), desc(runs.runId))
+    .limit(1);
+  if (run === undefined) {
+    return null;
+  }
+  return { ...run, tookCheckpoint: await readTookCheckpoint(db, run.runId) };
+};
+
+/** The turn's newest restore, if any. */
+const readTurnRestore = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, threadId, turnId }: TurnOptions,
+): Promise<StoredRestore | null> => {
+  const [row] = await db
+    .select(restoreColumns)
+    .from(restores)
+    .where(
+      and(
+        ownedBy(owner),
+        eq(restores.chatThreadId, threadId),
+        eq(restores.chatTurnId, turnId),
+      ),
+    )
+    .orderBy(desc(restores.createdAt), desc(restores.id))
+    .limit(1);
+  return row ?? null;
+};
+
+const readOwnedTurn = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, threadId, turnId }: TurnOptions,
+) => {
+  const [turn] = await db
+    .select({ id: chatTurns.id, createdAt: chatTurns.createdAt })
+    .from(chatTurns)
+    .where(
+      and(
+        eq(chatTurns.id, turnId),
+        eq(chatTurns.threadId, threadId),
+        eq(chatTurns.userId, owner.userId),
+        eq(chatTurns.organizationId, owner.organizationId),
+      ),
+    )
+    .limit(1);
+  return turn ?? null;
+};
+
+export type TurnFolderRestore = {
+  /** Whether the turn's run finished after taking a checkpoint. */
+  readonly undoable: boolean;
+  /** The turn's newest restore; `null` when none was asked for. */
+  readonly restore: FolderRestoreView | null;
+};
+
+/** Where a turn's undo stands; `null` for a turn that is not the owner's. */
+export const readTurnFolderRestore = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  options: TurnOptions & { now: Date },
+): Promise<TurnFolderRestore | null> => {
+  const turn = await readOwnedTurn(db, options);
+  if (turn === null) {
+    return null;
+  }
+  const run = await readTurnRun(db, options);
+  const restore = await readTurnRestore(db, options);
+  return {
+    undoable: run?.state === "finished" && run.tookCheckpoint,
+    restore: restore === null ? null : viewOf(restore, options.now),
+  };
+};
+
+/** Why a turn's undo was not queued. */
+export type FolderRestoreRefusal =
+  /** No such turn of the member in the thread. */
+  | "not_found"
+  /** A later turn exists: only the newest turn is undone. */
+  | "not_newest"
+  /** A turn or run of the thread is still going. */
+  | "thread_busy"
+  /** The turn's run did not finish after taking a checkpoint. */
+  | "no_checkpoint"
+  /** The run's computer is not connected. */
+  | "desktop_offline";
+
+export type RequestedFolderRestore =
+  /** Queued now; its computer's socket is rung. */
+  | { type: "queued"; restore: FolderRestoreView; holder: RunHolder }
+  /** The turn's restore that is still going or done, answered again. */
+  | { type: "existing"; restore: FolderRestoreView }
+  | { type: "refused"; reason: FolderRestoreRefusal };
+
+type RequestOptions = TurnOptions & {
+  restoreId: string;
+  now: Date;
+  /** Only a computer seen since then counts as connected. */
+  seenSince: Date;
+  /** How long a queued request waits for the computer's socket. */
+  expiresInMs: number;
+};
+
+/** Whether a turn or run of the thread is still going. */
+const readThreadBusy = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, threadId }: ThreadOf,
+) => {
+  const [turn] = await db
+    .select({ id: chatTurns.id })
+    .from(chatTurns)
+    .where(
+      and(
+        eq(chatTurns.threadId, threadId),
+        notInArray(chatTurns.status, CHAT_TURN_RUN_ENDING_STATUSES),
+      ),
+    )
+    .limit(1);
+  if (turn !== undefined) {
+    return true;
+  }
+  const [run] = await db
+    .select({ runId: runs.runId })
+    .from(runs)
+    .where(
+      and(
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        eq(runs.chatThreadId, threadId),
+        inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+      ),
+    )
+    .limit(1);
+  return run !== undefined;
+};
+
+/** A later turn of the owner's in the thread. */
+const readNewerTurn = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  {
+    owner,
+    threadId,
+    turn,
+  }: ThreadOf & { turn: { id: string; createdAt: Date } },
+) => {
+  const [newer] = await db
+    .select({ id: chatTurns.id })
+    .from(chatTurns)
+    .where(
+      and(
+        eq(chatTurns.organizationId, owner.organizationId),
+        eq(chatTurns.userId, owner.userId),
+        eq(chatTurns.threadId, threadId),
+        sql`(${chatTurns.createdAt}, ${chatTurns.id}) > (${turn.createdAt}::timestamptz, ${turn.id}::uuid)`,
+      ),
+    )
+    .limit(1);
+  return newer !== undefined;
+};
+
+/**
+ * Queue an undo of the turn's file changes, or answer why not. Only the newest
+ * turn of the thread is undone, only once its run finished after taking a
+ * checkpoint, only while nothing else runs in the thread, and only while the
+ * run's computer is connected: a request never waits for a computer that is
+ * away. Asking again while one is queued, sent or done answers that one.
+ * Serialized per member with the runner capacity lock.
+ */
+export const requestFolderRestore = async (
+  db: DesktopRunnerDb,
+  options: RequestOptions,
+): Promise<RequestedFolderRestore> =>
+  await withAggregateTransaction(
+    db,
+    async (tx): Promise<RequestedFolderRestore> => {
+      const { owner, threadId, turnId, now } = options;
+      await withAggregateLock({
+        aggregate: "desktopRunnerCapacity",
+        id: { organizationId: owner.organizationId, userId: owner.userId },
+        tx,
+      });
+      const turn = await readOwnedTurn(tx, options);
+      if (turn === null) {
+        return { type: "refused", reason: "not_found" };
+      }
+      const existing = await readTurnRestore(tx, options);
+      if (existing !== null && lapsed(existing, now)) {
+        // Past its time: expire it, so the turn may be asked again.
+        await transitionLifecycle({
+          tx,
+          spec: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+          id: existing.id,
+          moves: { state: { from: ["queued"], to: "expired" } },
+          guard: lapsedAt(now),
+          set: { settledAt: existing.expiresAt },
+          recordTransitionAuditEvent: skipRestoreAudit,
+        });
+      } else if (
+        existing !== null &&
+        (existing.state === "queued" ||
+          existing.state === "sent" ||
+          existing.state === "restored")
+      ) {
+        return { type: "existing", restore: viewOf(existing, now) };
+      }
+      if (await readNewerTurn(tx, { owner, threadId, turn })) {
+        return { type: "refused", reason: "not_newest" };
+      }
+      if (await readThreadBusy(tx, options)) {
+        return { type: "refused", reason: "thread_busy" };
+      }
+      const run = await readTurnRun(tx, options);
+      if (run?.state !== "finished" || !run.tookCheckpoint) {
+        return { type: "refused", reason: "no_checkpoint" };
+      }
+      const [online] = await tx
+        .select({
+          deviceJkt: runner.deviceJkt,
+          sessionId: runner.sessionId,
+          instanceId: runner.instanceId,
+        })
+        .from(runner)
+        .where(
+          and(
+            eq(runner.userId, owner.userId),
+            eq(runner.organizationId, owner.organizationId),
+            eq(runner.desktopId, run.desktopId),
+            eq(runner.connection, "connected"),
+            sql`${runner.lastSeenAt} >= ${options.seenSince}::timestamptz`,
+          ),
+        )
+        // Another device key may name the same installation; the newest wins,
+        // as when a run is assigned.
+        .orderBy(desc(runner.lastSeenAt))
+        .limit(1);
+      if (online === undefined) {
+        return { type: "refused", reason: "desktop_offline" };
+      }
+      // audit: skip - the endpoint that asks for the restore audits it
+      await tx.insert(restores).values({
+        id: options.restoreId,
+        userId: owner.userId,
+        organizationId: owner.organizationId,
+        chatThreadId: threadId,
+        chatTurnId: turnId,
+        runId: run.runId,
+        desktopId: run.desktopId,
+        deviceJkt: online.deviceJkt,
+        state: "queued",
+        createdAt: now,
+        expiresAt: new Date(now.getTime() + options.expiresInMs),
+      });
+      return {
+        type: "queued",
+        restore: {
+          restoreId: options.restoreId,
+          state: "queued",
+          reason: null,
+        },
+        holder: { sessionId: online.sessionId, instanceId: online.instanceId },
+      };
+    },
+  );
+
+/** A restore a socket sends: what `folder.restore` carries. */
+export type FolderRestoreToSend = {
+  readonly restoreId: string;
+  readonly folderId: string;
+  readonly runId: string;
+};
+
+type ClaimOptions = {
+  binding: RunnerBinding;
+  sessionId: string;
+  now: Date;
+  /** Also those sent before and not answered: a new socket sends them again. */
+  resendSent: boolean;
+};
+
+const ofComputer = (binding: RunnerBinding) =>
+  and(
+    eq(restores.userId, binding.userId),
+    eq(restores.organizationId, binding.organizationId),
+    eq(restores.desktopId, binding.desktopId),
+    eq(restores.deviceJkt, binding.deviceJkt),
+  );
+
+/** Restores one claim sends at most; a computer holds one per chat at a time. */
+const MAX_RESTORES_PER_CLAIM = 100;
+
+/**
+ * The restores this socket sends now: queued ones still in time, marked sent
+ * before they go out, and on a new socket the sent ones not answered yet. A
+ * queued one past its time is expired instead. Only the computer's current
+ * socket claims any.
+ */
+export const claimFolderRestores = async (
+  db: DesktopRunnerDb,
+  { binding, sessionId, now, resendSent }: ClaimOptions,
+): Promise<FolderRestoreToSend[]> =>
+  await withAggregateTransaction(
+    db,
+    async (tx): Promise<FolderRestoreToSend[]> => {
+      const [current] = await tx
+        .select({ sessionId: runner.sessionId })
+        .from(runner)
+        .where(
+          and(
+            eq(runner.userId, binding.userId),
+            eq(runner.organizationId, binding.organizationId),
+            eq(runner.desktopId, binding.desktopId),
+            eq(runner.deviceJkt, binding.deviceJkt),
+            eq(runner.sessionId, sessionId),
+          ),
+        )
+        .limit(1);
+      if (current === undefined) {
+        return [];
+      }
+      const stale = await tx
+        .select({ id: restores.id, expiresAt: restores.expiresAt })
+        .from(restores)
+        .where(
+          and(ofComputer(binding), eq(restores.state, "queued"), lapsedAt(now)),
+        );
+      for (const row of stale) {
+        // Each keeps the time it lapsed at; a computer holds few.
+        // oxlint-disable-next-line no-await-in-loop
+        await transitionLifecycle({
+          tx,
+          spec: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+          id: row.id,
+          moves: { state: { from: ["queued"], to: "expired" } },
+          guard: lapsedAt(now),
+          set: { settledAt: row.expiresAt },
+          recordTransitionAuditEvent: skipRestoreAudit,
+        });
+      }
+      const due = await tx
+        .select({
+          id: restores.id,
+          state: restores.state,
+          folderId: restores.chatThreadId,
+          runId: restores.runId,
+        })
+        .from(restores)
+        .where(
+          and(
+            ofComputer(binding),
+            resendSent
+              ? pending(now)
+              : and(eq(restores.state, "queued"), inTime(now)),
+          ),
+        )
+        .orderBy(restores.createdAt, restores.id)
+        .limit(MAX_RESTORES_PER_CLAIM);
+      const queued = due
+        .filter(({ state }) => state === "queued")
+        .map(({ id }) => id);
+      const sent =
+        queued.length === 0
+          ? []
+          : await transitionLifecycleBatch({
+              tx,
+              spec: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+              ids: queued,
+              moves: { state: { from: ["queued"], to: "sent" } },
+              guard: inTime(now),
+              set: {},
+              recordTransitionAuditEvent: skipRestoreAudit,
+            });
+      return due
+        .filter(({ id, state }) => state === "sent" || sent.includes(id))
+        .map(({ id, folderId, runId }) => ({ restoreId: id, folderId, runId }));
+    },
+  );
+
+type SettleOptions = {
+  binding: RunnerBinding;
+  restoreId: string;
+  outcome: DesktopRunnerFolderRestoreOutcome;
+  now: Date;
+};
+
+/**
+ * Record the computer's answer to a restore it was sent. Only the computer the
+ * restore was for settles it, and only once: a repeated or unknown answer
+ * changes nothing. An answer settles a sent restore past its time too: the
+ * computer acted on it.
+ */
+export const settleFolderRestore = async (
+  db: DesktopRunnerDb,
+  { binding, restoreId, outcome, now }: SettleOptions,
+): Promise<"settled" | "unknown"> =>
+  await withAggregateTransaction(db, async (tx) => {
+    const to = outcome === "restored" ? "restored" : "refused";
+    const settled = await transitionLifecycle({
+      tx,
+      spec: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+      id: restoreId,
+      moves: { state: { from: ["sent"], to } },
+      guard: ofComputer(binding),
+      set: { reason: outcome === "restored" ? null : outcome, settledAt: now },
+      recordTransitionAuditEvent: skipRestoreAudit,
+    });
+    return settled.type === "transitioned" ? "settled" : "unknown";
+  });
+
+type QueuedSessionsOptions = {
+  instanceId: string;
+  now: Date;
+  limit: number;
+};
+
+/**
+ * The sockets this API task holds whose computer has a restore queued and in
+ * time: a sweep sends them in case a doorbell ring was lost.
+ */
+export const readSessionsWithQueuedFolderRestores = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { instanceId, now, limit }: QueuedSessionsOptions,
+): Promise<string[]> =>
+  (
+    await db
+      .select({ sessionId: runner.sessionId })
+      .from(runner)
+      .where(
+        and(
+          eq(runner.instanceId, instanceId),
+          eq(runner.connection, "connected"),
+          sql`exists (
+            select 1 from ${restores}
+            where ${restores.userId} = ${runner.userId}
+              and ${restores.organizationId} = ${runner.organizationId}
+              and ${restores.desktopId} = ${runner.desktopId}
+              and ${restores.deviceJkt} = ${runner.deviceJkt}
+              and ${restores.state} = 'queued'
+              and ${restores.expiresAt} > ${now}::timestamptz
+          )`,
+        ),
+      )
+      .limit(limit)
+  ).map(({ sessionId }) => sessionId);
+
+/**
+ * Whether the thread has a restore its computer may still act on: no run
+ * starts in the chat's folder meanwhile.
+ */
+export const hasPendingFolderRestore = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, threadId, now }: ThreadOf & { now: Date },
+): Promise<boolean> => {
+  const [row] = await db
+    .select({ id: restores.id })
+    .from(restores)
+    .where(
+      and(ownedBy(owner), eq(restores.chatThreadId, threadId), pending(now)),
+    )
+    .limit(1);
+  return row !== undefined;
+};
+
+/** Restores of the thread a run tells about at most; older ones are told with them. */
+const MAX_NOTED_RESTORES = 20;
+
+/**
+ * The thread's restores no run was told about yet: the next run's request says
+ * the files went back, and marks them told when it is stored.
+ */
+export const readUnnotedFolderRestores = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, threadId }: ThreadOf,
+): Promise<string[]> =>
+  (
+    await db
+      .select({ id: restores.id })
+      .from(restores)
+      .where(
+        and(
+          ownedBy(owner),
+          eq(restores.chatThreadId, threadId),
+          eq(restores.state, "restored"),
+          isNull(restores.notedAt),
+        ),
+      )
+      .limit(MAX_NOTED_RESTORES)
+  ).map(({ id }) => id);
+
+/** Record that a run's request told about these restores of the thread. */
+export const markFolderRestoresNoted = async (
+  db: Pick<DesktopRunnerDb, "update">,
+  {
+    owner,
+    threadId,
+    restoreIds,
+    now,
+  }: ThreadOf & { restoreIds: readonly string[]; now: Date },
+): Promise<void> => {
+  if (restoreIds.length === 0) {
+    return;
+  }
+  // audit: skip - bookkeeping of the note a run's request carried
+  await db
+    .update(restores)
+    .set({ notedAt: now })
+    .where(
+      and(
+        ownedBy(owner),
+        eq(restores.chatThreadId, threadId),
+        inArray(restores.id, restoreIds),
+        eq(restores.state, "restored"),
+        isNull(restores.notedAt),
+      ),
+    );
+};

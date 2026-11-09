@@ -59,8 +59,9 @@ use tokio::sync::{mpsc, oneshot};
 pub(crate) use endpoint::EndpointError;
 use endpoint::Endpoints;
 pub(crate) use protocol::{
-  CHECKPOINT_STORE_SUFFIX, HarnessLaunchSettings, HarnessProbe, HarnessProcess,
-  HeldRun, ProbeOutcome, SidecarRunStart, SkillFolderRef,
+  CHECKPOINT_STORE_SUFFIX, FolderRestore as SidecarFolderRestore,
+  HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
+  RestoreOutcome, SidecarRunStart, SkillFolderRef,
 };
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProbeFailure,
@@ -257,6 +258,7 @@ pub(crate) enum ResumeError {
 }
 
 type ProbeReply = oneshot::Sender<Result<ProbeOutcome, ProbeError>>;
+type RestoreReply = oneshot::Sender<Result<RestoreOutcome, ProbeError>>;
 
 /// One host message, serialized within the line limit, newline included.
 /// Commands are encoded before they are queued, so the supervisor only ever
@@ -294,6 +296,11 @@ enum Control {
     request_id: String,
     line: HostLine,
     reply: ProbeReply,
+  },
+  Restore {
+    request_id: String,
+    line: HostLine,
+    reply: RestoreReply,
   },
   Forward {
     run_id: String,
@@ -345,6 +352,7 @@ impl HarnessSidecar {
         next_link: 0,
         runs: HashMap::new(),
         probes: HashMap::new(),
+        restores: HashMap::new(),
         processes: None,
       }
       .run(),
@@ -489,6 +497,28 @@ impl HarnessSidecar {
   ) -> Result<(), SidecarUnavailable> {
     let line = HostLine::encode(message)?;
     self.control(Control::Forward { run_id, line })
+  }
+
+  /// Put a run folder back as the checkpoint of `restore.run_id` saved it.
+  /// The caller makes sure no run uses the folder meanwhile.
+  pub(crate) async fn restore_folder(
+    &self,
+    restore: SidecarFolderRestore,
+  ) -> Result<RestoreOutcome, ProbeError> {
+    let request_id = restore.request_id.clone();
+    let line = HostLine::encode(&HostMessage::FolderRestore(restore))
+      .map_err(ProbeError::Unavailable)?;
+    let (reply, answer) = oneshot::channel();
+    self
+      .control(Control::Restore {
+        request_id,
+        line,
+        reply,
+      })
+      .map_err(ProbeError::Unavailable)?;
+    answer.await.map_err(|_supervisor_gone| {
+      ProbeError::Unavailable(SidecarUnavailable::Stopped)
+    })?
   }
 
   /// The harness's version, account state and models, without a prompt.
@@ -888,6 +918,8 @@ struct Supervisor {
   next_link: u64,
   runs: HashMap<String, Run>,
   probes: HashMap<String, (PathBuf, ProbeReply)>,
+  /// Folder restores waiting for their holder's answer.
+  restores: HashMap<String, (PathBuf, RestoreReply)>,
   /// Where reported harness processes go.
   processes: Option<mpsc::Sender<HarnessProcess>>,
 }
@@ -917,6 +949,9 @@ impl Supervisor {
           }
           Some(Control::Probe { request_id, line, reply }) => {
             self.probe(request_id, &line, reply).await;
+          }
+          Some(Control::Restore { request_id, line, reply }) => {
+            self.restore(request_id, &line, reply).await;
           }
           Some(Control::Forward { run_id, line }) => {
             self.forward(&run_id, &line).await;
@@ -1255,6 +1290,20 @@ impl Supervisor {
     self.write_line(&dir, line).await;
   }
 
+  async fn restore(
+    &mut self,
+    request_id: String,
+    line: &HostLine,
+    reply: RestoreReply,
+  ) {
+    let Some(dir) = self.current().await else {
+      let _delivered = reply.send(Err(ProbeError::SidecarDown));
+      return;
+    };
+    self.restores.insert(request_id, (dir.clone(), reply));
+    self.write_line(&dir, line).await;
+  }
+
   async fn forward(&mut self, run_id: &str, line: &HostLine) {
     let Some(run) = self.runs.get(run_id) else {
       tracing::warn!(target: LOG_TARGET, "a command named a run no holder holds");
@@ -1425,12 +1474,18 @@ impl Supervisor {
         );
       }
       SidecarMessage::FolderRestored(restored) => {
-        // This desktop sends no restore yet; an answer is only logged.
-        tracing::warn!(
-          target: LOG_TARGET,
-          outcome = restored.outcome.wire_name(),
-          "harness holder answered a folder restore this desktop did not send"
-        );
+        match self.restores.remove(&restored.request_id) {
+          Some((_dir, reply)) => {
+            let _delivered = reply.send(Ok(restored.outcome));
+          }
+          None => {
+            tracing::warn!(
+              target: LOG_TARGET,
+              outcome = restored.outcome.wire_name(),
+              "harness holder answered a folder restore nobody waits for"
+            );
+          }
+        }
       }
       SidecarMessage::Rejected(rejected) => {
         tracing::warn!(
@@ -1556,6 +1611,17 @@ impl Supervisor {
       .collect();
     for request_id in waiting {
       if let Some((_dir, reply)) = self.probes.remove(&request_id) {
+        let _delivered = reply.send(Err(ProbeError::SidecarDown));
+      }
+    }
+    let restoring: Vec<String> = self
+      .restores
+      .iter()
+      .filter(|(_request_id, (holder, _reply))| holder == dir)
+      .map(|(request_id, _restore)| request_id.clone())
+      .collect();
+    for request_id in restoring {
+      if let Some((_dir, reply)) = self.restores.remove(&request_id) {
         let _delivered = reply.send(Err(ProbeError::SidecarDown));
       }
     }

@@ -11,7 +11,7 @@ use std::{collections::BTreeMap, num::NonZeroU32, time::Duration};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-pub(crate) const PROTOCOL: u32 = 1;
+pub(crate) const PROTOCOL: u32 = 2;
 /// Largest frame either side sends or accepts, in UTF-8 bytes.
 pub(crate) const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 /// Sequenced messages one run may store; the API refuses more.
@@ -154,6 +154,15 @@ wire_values!(RejectReason {
   AtCapacity => "at_capacity",
   RunTooLarge => "run_too_large",
   UnknownRun => "unknown_run",
+  FolderBusy => "folder_busy",
+});
+
+wire_values!(FolderRestoreOutcome {
+  Restored => "restored",
+  NoCheckpoint => "no_checkpoint",
+  NotNewest => "not_newest",
+  FolderBusy => "folder_busy",
+  Failed => "failed",
 });
 
 wire_values!(HarnessUnavailableReason {
@@ -379,6 +388,14 @@ pub(crate) struct RunFinished {
   pub(crate) harness_session_id: Option<String>,
 }
 
+/// How a folder restore ended; it names no file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FolderRestored {
+  pub(crate) restore_id: String,
+  pub(crate) outcome: FolderRestoreOutcome,
+}
+
 wire_union!(DesktopMessage tagged "type" {
   Hello(Hello) => "hello",
   HarnessStatus(HarnessStatus) => "harness.status",
@@ -387,6 +404,7 @@ wire_union!(DesktopMessage tagged "type" {
   RunEvent(RunEvent) => "run.event",
   RunApprovalRequest(RunApprovalRequest) => "run.approval_request",
   RunFinished(RunFinished) => "run.finished",
+  FolderRestored(FolderRestored) => "folder.restored",
 });
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -498,6 +516,16 @@ pub(crate) struct Ack {
   pub(crate) seq: NonZeroU32,
 }
 
+/// Put a chat's folder back as it was before the run, from the checkpoint the
+/// run took. Sent again on a new socket until it is answered.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FolderRestore {
+  pub(crate) restore_id: String,
+  pub(crate) folder_id: String,
+  pub(crate) run_id: String,
+}
+
 wire_union!(ServerMessage tagged "type" {
   Welcome(Welcome) => "welcome",
   UpgradeRequired(UpgradeRequired) => "upgrade_required",
@@ -510,6 +538,7 @@ wire_union!(ServerMessage tagged "type" {
   RunCancel(RunRef) => "run.cancel",
   RunToken(RunTokenRefresh) => "run.token",
   Ack(Ack) => "ack",
+  FolderRestore(FolderRestore) => "folder.restore",
 });
 
 #[cfg(test)]
@@ -623,6 +652,14 @@ mod tests {
       (
         "runOutcomes",
         names(RunOutcome::ALL.iter().map(|value| value.wire_name())),
+      ),
+      (
+        "folderRestoreOutcomes",
+        names(
+          FolderRestoreOutcome::ALL
+            .iter()
+            .map(|value| value.wire_name()),
+        ),
       ),
       (
         "networkPolicies",

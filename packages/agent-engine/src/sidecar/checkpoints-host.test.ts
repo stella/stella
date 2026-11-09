@@ -282,10 +282,11 @@ describe("undoing a local run's file changes", () => {
       outcome: "restored",
     });
     expect(contentsOf(at.workspaceDir)).toEqual(before);
-    // Undone once.
+    // Asked again, as after a lost answer: the same answer, nothing moves.
     const again = second.upcoming("folder.restored");
     second.host.handle(restoreMessage(at, runId));
-    expect((await again).outcome).toBe("not_newest");
+    expect((await again).outcome).toBe("restored");
+    expect(contentsOf(at.workspaceDir)).toEqual(before);
   });
 
   test("a folder past a bound runs its turn without an undo", async () => {

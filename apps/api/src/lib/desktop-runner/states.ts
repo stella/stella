@@ -82,6 +82,7 @@ export const DESKTOP_RUNNER_STORED_REJECT_REASONS = [
   "at_capacity",
   "run_too_large",
   "unknown_run",
+  "folder_busy",
 ] as const;
 true satisfies Same<
   (typeof DESKTOP_RUNNER_STORED_REJECT_REASONS)[number],
@@ -104,11 +105,60 @@ true satisfies Same<
   (typeof DESKTOP_RUNNER_COMMAND_KINDS)[number],
   Exclude<
     DesktopRunnerServerMessage["type"],
-    "welcome" | "upgrade_required" | "reconnect" | "run.token" | "ack"
+    | "welcome"
+    | "upgrade_required"
+    | "reconnect"
+    | "run.token"
+    | "ack"
+    | "folder.restore"
   >
 >;
 export type DesktopRunnerCommandKind =
   (typeof DESKTOP_RUNNER_COMMAND_KINDS)[number];
+
+/**
+ * Where a folder restore stands: waiting to be sent (`queued`, until it
+ * expires), sent and not answered (`sent`, sent again on the desktop's next
+ * socket), done (`restored`), refused by the computer (`refused`, with its
+ * reason), or never sent in time (`expired`).
+ */
+export const DESKTOP_RUNNER_FOLDER_RESTORE_STATES = [
+  "queued",
+  "sent",
+  "restored",
+  "refused",
+  "expired",
+] as const;
+export type DesktopRunnerFolderRestoreState =
+  (typeof DESKTOP_RUNNER_FOLDER_RESTORE_STATES)[number];
+
+/** States in which a turn's restore counts: a turn has at most one. */
+export const DESKTOP_RUNNER_LIVE_FOLDER_RESTORE_STATES = [
+  "queued",
+  "sent",
+  "restored",
+] as const satisfies readonly DesktopRunnerFolderRestoreState[];
+
+/** States a restore ends in; each records when it settled. */
+export const DESKTOP_RUNNER_SETTLED_FOLDER_RESTORE_STATES = [
+  "restored",
+  "refused",
+  "expired",
+] as const satisfies readonly DesktopRunnerFolderRestoreState[];
+
+/** Why the computer refused a restore, as its `folder.restored` said. */
+export const DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS = [
+  "no_checkpoint",
+  "not_newest",
+  "folder_busy",
+  "failed",
+] as const;
+true satisfies Same<
+  (typeof DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS)[number],
+  Exclude<DesktopMessageOf<"folder.restored">["outcome"], "restored">
+>;
+export type DesktopRunnerFolderRestoreRefusal =
+  (typeof DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS)[number];
 
 /** Desktop messages that take a position in their run's sequence. */
 export const DESKTOP_RUNNER_EVENT_TYPES = [

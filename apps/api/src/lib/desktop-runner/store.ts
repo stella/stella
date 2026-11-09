@@ -52,6 +52,10 @@ import {
   transitionLifecycleBatch,
 } from "@/api/lib/db/transitions";
 import { questionPauseOf } from "@/api/lib/desktop-runner/chunk";
+import {
+  hasPendingFolderRestore,
+  markFolderRestoresNoted,
+} from "@/api/lib/desktop-runner/folder-restores";
 import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
 import {
   DESKTOP_RUNNER_LEASED_RUN_STATES,
@@ -1312,6 +1316,8 @@ type InsertRunOptions = {
   workspaceIds: readonly SafeId<"workspace">[];
   /** The chat turn that starts and reads the run, when one does. */
   chat?: ChatRunBinding | null;
+  /** Restores of the chat's folder the run's request tells about. */
+  notedRestoreIds?: readonly string[];
   payload: object;
   now: Date;
   leaseMs: number;
@@ -1332,7 +1338,9 @@ export type InsertedRun =
       report: DesktopRunnerHarnessReport | null;
     }
   | { type: "model_unavailable" }
-  | { type: "approvals_unavailable" };
+  | { type: "approvals_unavailable" }
+  /** The chat's folder is being restored on its computer. */
+  | { type: "folder_busy" };
 
 /**
  * Bind a new run to a connected runner and queue its `run.start`, both or
@@ -1381,6 +1389,20 @@ export const insertAssignedRun = async (
     if (!report.approvalModes.includes(options.approvals)) {
       return { type: "approvals_unavailable" };
     }
+    // A restore of the chat's folder that its computer may still act on: the
+    // run would work in files about to change. The computer refuses such a
+    // run too, for a restore asked while this one is stored.
+    const chat = options.chat ?? null;
+    if (
+      chat !== null &&
+      (await hasPendingFolderRestore(tx, {
+        owner,
+        threadId: chat.threadId,
+        now,
+      }))
+    ) {
+      return { type: "folder_busy" };
+    }
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
     await tx.insert(runs).values({
       runId,
@@ -1404,6 +1426,14 @@ export const insertAssignedRun = async (
       commandKey: runId,
       payload: options.payload,
     });
+    if (chat !== null) {
+      await markFolderRestoresNoted(tx, {
+        owner,
+        threadId: chat.threadId,
+        restoreIds: options.notedRestoreIds ?? [],
+        now,
+      });
+    }
     return {
       type: "assigned",
       holder: { sessionId: target.sessionId, instanceId: target.instanceId },

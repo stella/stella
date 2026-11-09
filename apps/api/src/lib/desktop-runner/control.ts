@@ -23,6 +23,14 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { pairAppCall, recordAppCall } from "@/api/lib/desktop-runner/app-calls";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
 import {
+  type FolderRestoreView,
+  readTurnFolderRestore,
+  readUnnotedFolderRestores,
+  type RequestedFolderRestore,
+  requestFolderRestore,
+  type TurnFolderRestore,
+} from "@/api/lib/desktop-runner/folder-restores";
+import {
   type RunAnswerMessage,
   sealRunAnswer,
 } from "@/api/lib/desktop-runner/sealed-answers";
@@ -127,6 +135,8 @@ export type StartLocalRunOutcome =
     }
   | { type: "model_unavailable" }
   | { type: "approvals_unavailable" }
+  /** The chat's folder is being restored on its computer. */
+  | { type: "folder_busy" }
   /** The message would not fit one frame, even with the longest token. */
   | { type: "too_large" };
 
@@ -156,6 +166,12 @@ const fitsOneFrame = (message: unknown) =>
   Buffer.byteLength(JSON.stringify(message)) <= DESKTOP_RUNNER_MAX_FRAME_BYTES;
 const MAX_EVENT_PAGE = 500;
 const MAX_CANDIDATE_RUNNERS = 10;
+/**
+ * How long an undo waits for its computer's socket to take it. A computer that
+ * is away is refused at once; this only covers a socket that drops in between,
+ * so the files never change long after the member asked.
+ */
+const FOLDER_RESTORE_WAIT_MS = 2 * 60_000;
 
 type ControlOptions = {
   db: DesktopRunnerDb;
@@ -231,10 +247,52 @@ const pickDesktop = async (
   );
 };
 
+/**
+ * What a run is told when its chat's folder was put back since the last run:
+ * written by the server, so the harness knows its earlier edits are gone.
+ */
+export const FOLDER_RESTORED_NOTE =
+  "Note from stella: the member undid the file changes of an earlier reply, so the working folder is as it was before that reply. Read files again before relying on what you saw or wrote earlier.";
+
+/** The messages with the note added to the newest member message. */
+const withRestoredNote = (
+  messages: RunStart["messages"],
+): RunStart["messages"] => {
+  const note = { type: "text", content: FOLDER_RESTORED_NOTE };
+  const last = messages.at(-1);
+  if (last?.role !== "user") {
+    return [...messages, { role: "user", content: [note] }];
+  }
+  const content: unknown = last["content"];
+  let parts: readonly unknown[] = [];
+  if (typeof content === "string") {
+    parts = [{ type: "text", content }];
+  } else if (Array.isArray(content)) {
+    parts = content;
+  }
+  return [...messages.slice(0, -1), { ...last, content: [...parts, note] }];
+};
+
 const startRun = async (
   deps: ControlDeps,
   input: StartLocalRunInput,
 ): Promise<Result<StartLocalRunOutcome, DesktopRunnerControlError>> => {
+  const chat = input.chat ?? null;
+  const unnoted =
+    chat === null
+      ? Result.ok<string[], DatabaseError>([])
+      : await Result.tryPromise({
+          try: async () =>
+            await readUnnotedFolderRestores(deps.db, {
+              owner: input.owner,
+              threadId: chat.threadId,
+            }),
+          catch: toDatabaseError,
+        });
+  if (unnoted.isErr()) {
+    return unnoted;
+  }
+  const notedRestoreIds = unnoted.value;
   const runId = Bun.randomUUIDv7();
   const message = {
     type: DESKTOP_RUNNER_SERVER_MESSAGE.runStart,
@@ -246,7 +304,10 @@ const startRun = async (
     model: input.model,
     harnessSessionId: input.harnessSessionId,
     instructions: input.instructions,
-    messages: input.messages,
+    messages:
+      notedRestoreIds.length === 0
+        ? input.messages
+        : withRestoredNote(input.messages),
     attachments: input.attachments.map(({ path, s3Key }) => ({ path, s3Key })),
     policy: { network: "open", fs: "workspace", approvals: input.approvals },
     mcp: input.mcp,
@@ -280,7 +341,8 @@ const startRun = async (
         model: input.model,
         approvals: input.approvals,
         workspaceIds: input.workspaceIds,
-        chat: input.chat ?? null,
+        chat,
+        notedRestoreIds,
         payload: message,
         now: deps.now(),
         leaseMs: deps.timing.leaseMs,
@@ -415,6 +477,55 @@ const queue = async (
     deps.doorbell.ring(outcome.holder);
   }
   return Result.ok({ type: "queued" });
+};
+
+type TurnRestoreOptions = {
+  owner: RunOwner;
+  threadId: SafeId<"chatThread">;
+  turnId: SafeId<"chatTurn">;
+};
+
+export type RequestFolderRestoreOutcome =
+  | { type: "accepted"; restore: FolderRestoreView }
+  | Extract<RequestedFolderRestore, { type: "refused" }>;
+
+/**
+ * Ask the run's computer to put the chat's folder back as it was before the
+ * turn; the restore id is minted here. A repeat answers the turn's restore
+ * that is still going or done.
+ */
+const requestRestore = async (
+  deps: ControlDeps,
+  options: TurnRestoreOptions,
+): Promise<Result<RequestFolderRestoreOutcome, DatabaseError>> => {
+  const requested = await Result.tryPromise({
+    try: async () =>
+      await requestFolderRestore(deps.db, {
+        ...options,
+        restoreId: Bun.randomUUIDv7(),
+        now: deps.now(),
+        seenSince: seenSince(deps),
+        expiresInMs: FOLDER_RESTORE_WAIT_MS,
+      }),
+    catch: toDatabaseError,
+  });
+  if (requested.isErr()) {
+    return requested;
+  }
+  const outcome = requested.value;
+  switch (outcome.type) {
+    case "queued":
+      deps.doorbell.ring(outcome.holder);
+      return Result.ok({ type: "accepted", restore: outcome.restore });
+    case "existing":
+      return Result.ok({ type: "accepted", restore: outcome.restore });
+    case "refused":
+      return Result.ok(outcome);
+    default: {
+      outcome satisfies never;
+      return panic("Unknown folder restore outcome");
+    }
+  }
 };
 
 type RunOptions = { owner: RunOwner; runId: string };
@@ -609,6 +720,18 @@ export const createDesktopRunnerControl = ({
     ): Promise<Result<ChatRunForRequest | null, DatabaseError>> =>
       await Result.tryPromise({
         try: async () => await readChatRunForRequest(db, options),
+        catch: toDatabaseError,
+      }),
+    /** Undo the file changes of the thread's newest turn on its computer. */
+    requestFolderRestore: async (options: TurnRestoreOptions) =>
+      await requestRestore(deps, options),
+    /** Whether the turn can be undone, and its undo; `null` for another's turn. */
+    readFolderRestore: async (
+      options: TurnRestoreOptions,
+    ): Promise<Result<TurnFolderRestore | null, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () =>
+          await readTurnFolderRestore(db, { ...options, now: deps.now() }),
         catch: toDatabaseError,
       }),
     /** Record how far a chat turn read the run; it only moves forward. */

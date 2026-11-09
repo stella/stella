@@ -27,7 +27,7 @@
 //!   finds what this one left (`run_folders`).
 
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   num::NonZeroU32,
   path::PathBuf,
   sync::{Arc, Mutex, MutexGuard, PoisonError},
@@ -40,19 +40,20 @@ use tokio::sync::{Notify, mpsc, watch};
 use uuid::Uuid;
 
 use super::harness::{
-  EmitError, Forwarded, HarnessHost, HarnessReports, JournaledRun, NotForwarded,
-  RunOutput, RunSink,
+  EmitError, FolderAnswer, Forwarded, HarnessHost, HarnessReports, JournaledRun,
+  NotForwarded, RunOutput, RunSink,
 };
 use super::run_folders;
 use crate::harness_sidecar::{
   self, HarnessLaunchSettings, HarnessProbe, HarnessProcess, HarnessSidecar,
-  ResumeError, SidecarDelivery, SidecarRunOutput, SidecarRunStart, SidecarSettings,
-  SkillFolderRef,
+  RestoreOutcome, ResumeError, SidecarDelivery, SidecarFolderRestore, SidecarRunOutput,
+  SidecarRunStart, SidecarSettings, SkillFolderRef,
 };
 use crate::runner_protocol::{
-  Harness, HarnessReport, HarnessUnavailableReason, JsonObject, MAX_FRAME_BYTES,
-  MissingHarness, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunStart,
-  RunTokenRefresh, UnavailableHarness,
+  FolderRestore, FolderRestoreOutcome, Harness, HarnessReport,
+  HarnessUnavailableReason, JsonObject, MAX_FRAME_BYTES, MissingHarness, RejectReason,
+  RunAnswer, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
+  UnavailableHarness,
 };
 
 const LOG_TARGET: &str = "desktop_runner::host";
@@ -136,6 +137,9 @@ struct HostRun {
   /// after a restart.
   model: Option<String>,
   thread_id: Option<String>,
+  /// The chat folder the run works in; unknown for a run picked up after a
+  /// restart, whose holder still refuses a restore of the folder it uses.
+  folder_id: Option<Uuid>,
 }
 
 struct Shared {
@@ -151,8 +155,9 @@ struct Shared {
   probes: Mutex<HashMap<String, ProcessGrant>>,
   /// Held grants, by run id or probe request id.
   grants: Mutex<HashMap<String, Box<dyn Send + Sync>>>,
-  /// Keeps a run starting in a folder apart from that folder's removal.
-  folders: Mutex<()>,
+  /// The folders being restored. Held while a run starts in a folder, a
+  /// folder is removed, or a restore begins: none of them overlaps another.
+  folders: run_folders::FolderLock,
 }
 
 /// One per app: the supervisor and its holder connection outlive runner
@@ -173,7 +178,7 @@ impl SidecarHarnessHost {
   ) -> Self {
     Self {
       shared: Arc::new(Shared {
-        folders: Mutex::new(()),
+        folders: Mutex::new(HashSet::new()),
         settings,
         harnesses,
         sidecar: Mutex::new(None),
@@ -785,6 +790,7 @@ impl HarnessHost for SidecarHarnessHost {
           grant: None,
           model: None,
           thread_id: None,
+          folder_id: None,
         },
       );
       fresh.push(run);
@@ -815,7 +821,10 @@ impl HarnessHost for SidecarHarnessHost {
     }
     let workspace = self.shared.workspace(folder_id);
     let opened = {
-      let _held = locked(&self.shared.folders);
+      let restoring = locked(&self.shared.folders);
+      if restoring.contains(&folder_id) {
+        return Err(RejectReason::FolderBusy);
+      }
       run_folders::open(&workspace, SystemTime::now())
     };
     if let Err(error) = opened {
@@ -839,6 +848,7 @@ impl HarnessHost for SidecarHarnessHost {
         grant: credentials.as_ref().and_then(|held| held.grant.clone()),
         model: Some(start.model.clone()),
         thread_id: Some(thread_id.clone()),
+        folder_id: Some(folder_id),
       },
     );
     let run_id = start.run_id.clone();
@@ -921,6 +931,60 @@ impl HarnessHost for SidecarHarnessHost {
 
   fn token(&self, refresh: RunTokenRefresh) -> Forwarded {
     self.forward("token", |sidecar| sidecar.token(refresh))
+  }
+
+  fn restore_folder(&self, restore: FolderRestore, answer: FolderAnswer) {
+    // Only a UUID names a folder.
+    let Ok(folder_id) = Uuid::parse_str(&restore.folder_id) else {
+      answer.send(FolderRestoreOutcome::Failed);
+      return;
+    };
+    // The holder makes the final call: it refuses a restore of a folder one
+    // of its runs uses, and a run in a folder it restores.
+    let in_use = locked(&self.shared.runs)
+      .values()
+      .any(|run| run.folder_id == Some(folder_id));
+    if in_use || !locked(&self.shared.folders).insert(folder_id) {
+      answer.send(FolderRestoreOutcome::FolderBusy);
+      return;
+    }
+    let Some(sidecar) = self.shared.sidecar() else {
+      locked(&self.shared.folders).remove(&folder_id);
+      answer.send(FolderRestoreOutcome::Failed);
+      return;
+    };
+    let shared = Arc::clone(&self.shared);
+    let workspace = shared.workspace(folder_id);
+    tokio::spawn(async move {
+      let restored = sidecar
+        .restore_folder(SidecarFolderRestore {
+          request_id: Uuid::new_v4().to_string(),
+          workspace_dir: workspace.to_string_lossy().into_owned(),
+          run_id: restore.run_id,
+        })
+        .await;
+      locked(&shared.folders).remove(&folder_id);
+      let outcome = match restored {
+        Ok(outcome) => folder_outcome(outcome),
+        Err(error) => {
+          tracing::warn!(target: LOG_TARGET, ?error, "a folder restore got no answer");
+          FolderRestoreOutcome::Failed
+        }
+      };
+      tracing::info!(target: LOG_TARGET, outcome = outcome.wire_name(), "a folder restore ended");
+      answer.send(outcome);
+    });
+  }
+}
+
+/// The holder's answer in the runner protocol's words.
+const fn folder_outcome(outcome: RestoreOutcome) -> FolderRestoreOutcome {
+  match outcome {
+    RestoreOutcome::Restored => FolderRestoreOutcome::Restored,
+    RestoreOutcome::NoCheckpoint => FolderRestoreOutcome::NoCheckpoint,
+    RestoreOutcome::NotNewest => FolderRestoreOutcome::NotNewest,
+    RestoreOutcome::FolderBusy => FolderRestoreOutcome::FolderBusy,
+    RestoreOutcome::Failed => FolderRestoreOutcome::Failed,
   }
 }
 

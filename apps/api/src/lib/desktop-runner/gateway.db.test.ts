@@ -35,6 +35,7 @@ import {
 } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_APPROVAL_MODES,
+  DESKTOP_RUNNER_CHECKPOINT_EVENT,
   DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_FEATURE_ID,
@@ -62,6 +63,7 @@ import {
   chatTurns,
   desktopRunnerCommands,
   desktopRunnerEvents,
+  desktopRunnerFolderRestores,
   desktopRunnerRuns,
   desktopRunners,
   featureEnrolments,
@@ -117,6 +119,7 @@ import {
 import {
   createDesktopRunnerControl,
   type DesktopRunnerControl,
+  FOLDER_RESTORED_NOTE,
 } from "@/api/lib/desktop-runner/control";
 import {
   createLocalDoorbell,
@@ -128,6 +131,7 @@ import {
   type RunnerFeatureAccess,
   runnerFeatureAccess,
 } from "@/api/lib/desktop-runner/feature-access";
+import { requestFolderRestore } from "@/api/lib/desktop-runner/folder-restores";
 import {
   authorizeRunnerWith,
   createDesktopRunnerGateway,
@@ -621,6 +625,7 @@ const ofRun = (runId: string) => (message: DesktopRunnerServerMessage) => {
     case "run.cancel":
     case "run.token":
     case "ack":
+    case "folder.restore":
       return message.runId === runId;
     default:
       message satisfies never;
@@ -1774,10 +1779,10 @@ describe("sweep delivery", () => {
     ).toEqual({ type: "queued" });
     directReads.count = 0;
     await sweeping.gateway.sweep();
-    // One read finds runs whose chat turn ended, one finds the socket; its
-    // delivery reads one page, which matches the socket's runner in the same
-    // statement.
-    expect(directReads.count).toBe(3);
+    // One read finds runs whose chat turn ended, one finds the socket, one
+    // finds sockets with a folder restore queued; its delivery reads one
+    // page, which matches the socket's runner in the same statement.
+    expect(directReads.count).toBe(4);
     expect(
       (
         await busy.receive(
@@ -1832,11 +1837,11 @@ describe("sweep delivery", () => {
       ).inputId,
     ).toBe(inputId);
     // Once sent, the next sweep finds nothing left to read for the socket:
-    // it reads only which runs ended with their chat turn, and which sockets
-    // have commands queued.
+    // it reads only which runs ended with their chat turn, which sockets have
+    // commands queued, and which have a folder restore queued.
     directReads.count = 0;
     await sweeping.gateway.sweep();
-    expect(directReads.count).toBe(2);
+    expect(directReads.count).toBe(3);
     await desktop.close();
   });
 
@@ -5708,5 +5713,438 @@ describe("chat turns on a computer", () => {
     });
     expect(await commandsOf(served.runId, "run.interrupt")).toHaveLength(1);
     expect(await commandsOf(served.runId, "run.answer")).toEqual([]);
+  });
+});
+
+describe("undoing a turn's file changes", () => {
+  type Thread = SafeId<"chatThread">;
+  type Turn = SafeId<"chatTurn">;
+  const MINUTE_MS = 60_000;
+  let undoInstance: Instance;
+
+  beforeAll(async () => {
+    // The account already holds the runners the earlier tests paired.
+    undoInstance = await startInstance("api-undo", sharedDoorbell, {
+      limits: { maxRunnersPerAccount: 1000 },
+    });
+  });
+
+  const newThread = async (): Promise<Thread> => {
+    const id = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    await db.insert(chatThreads).values({
+      id,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      title: "Files on this computer",
+    });
+    return id;
+  };
+
+  const storeMessage = async (threadId: Thread, role: "user" | "assistant") => {
+    const id = createSafeId<"chatMessage">();
+    clock.now += 1;
+    await db.insert(chatMessages).values({
+      id,
+      threadId,
+      userId: ids.userA1,
+      role,
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text", content: `A ${role} message` }],
+      }),
+    });
+    return id;
+  };
+
+  /** A turn of the thread, running until `completeTurn` ends it. */
+  const newTurn = async (threadId: Thread): Promise<Turn> => {
+    const turnId = createSafeId<"chatTurn">();
+    clock.now += 1;
+    await db.insert(chatTurns).values({
+      id: turnId,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      threadId,
+      userMessageId: await storeMessage(threadId, "user"),
+      status: "running",
+      executionId: Bun.randomUUIDv7(),
+      leaseExpiresAt: new Date(clock.now + DAY_MS),
+      createdAt: new Date(clock.now),
+    });
+    return turnId;
+  };
+
+  const completeTurn = async (threadId: Thread, turnId: Turn) => {
+    await db
+      .update(chatTurns)
+      .set({
+        status: "completed",
+        assistantMessageId: await storeMessage(threadId, "assistant"),
+        executionId: null,
+        leaseExpiresAt: null,
+        settledAt: new Date(clock.now),
+      })
+      .where(eq(chatTurns.id, turnId));
+  };
+
+  const checkpointEvent = (runId: string, seq: number) => ({
+    type: "run.event",
+    runId,
+    seq,
+    chunk: {
+      type: "CUSTOM",
+      name: DESKTOP_RUNNER_CHECKPOINT_EVENT,
+      value: { status: "taken" },
+      timestamp: seq,
+    },
+  });
+
+  /** Start the turn's run on the computer; the run.start it receives. */
+  const startTurnRun = async (
+    desktop: FakeDesktop,
+    desktopId: string,
+    chat: { threadId: Thread; turnId: Turn },
+  ) => {
+    const started = (
+      await control.startRun({ ...startInput(desktopId), chat })
+    ).unwrap();
+    if (started.type !== "assigned") {
+      return panic(`the run was not assigned: ${started.type}`);
+    }
+    return await desktop.receive("run.start", ofRun(started.runId));
+  };
+
+  /** A completed turn whose run saved the folder first, unless told not to. */
+  const finishedTurn = async (
+    desktop: FakeDesktop,
+    desktopId: string,
+    { threadId, checkpoint = true }: { threadId: Thread; checkpoint?: boolean },
+  ) => {
+    const turnId = await newTurn(threadId);
+    const { runId } = await startTurnRun(desktop, desktopId, {
+      threadId,
+      turnId,
+    });
+    desktop.send({ type: "run.accepted", runId });
+    const events = checkpoint ? [checkpointEvent(runId, 1)] : [];
+    for (const event of events) {
+      desktop.send(event);
+      await desktop.receive("ack", ofRun(runId));
+    }
+    desktop.send({
+      type: "run.finished",
+      runId,
+      seq: events.length + 1,
+      outcome: "completed",
+      harnessSessionId: null,
+    });
+    await desktop.receive("ack", ofRun(runId));
+    await completeTurn(threadId, turnId);
+    return { turnId, runId };
+  };
+
+  const connected = async () => {
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(undoInstance, desktopId);
+    await desktop.hello();
+    return { desktopId, desktop };
+  };
+
+  const request = async (threadId: Thread, turnId: Turn, by = owner) =>
+    (
+      await control.requestFolderRestore({ owner: by, threadId, turnId })
+    ).unwrap();
+  const read = async (threadId: Thread, turnId: Turn, by = owner) =>
+    (await control.readFolderRestore({ owner: by, threadId, turnId })).unwrap();
+  const accepted = async (threadId: Thread, turnId: Turn) => {
+    const outcome = await request(threadId, turnId);
+    return outcome.type === "accepted"
+      ? outcome.restore
+      : panic(`the undo was refused: ${outcome.reason}`);
+  };
+  const settled = async (threadId: Thread, turnId: Turn) =>
+    await waitForExternalState({
+      description: "the computer's answer is stored",
+      read: async () => {
+        const undo = (await read(threadId, turnId))?.restore;
+        return undo?.state === "sent" || undo?.state === "queued" ? null : undo;
+      },
+    });
+
+  test("the newest turn's undo reaches its computer once, survives a reload, and the next run is told once", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId, runId } = await finishedTurn(desktop, desktopId, {
+      threadId,
+    });
+    expect(await read(threadId, turnId)).toEqual({
+      undoable: true,
+      restore: null,
+    });
+
+    const undo = await accepted(threadId, turnId);
+    expect(undo.state).toBe("queued");
+    const sent = await desktop.receive("folder.restore");
+    expect(sent).toEqual({
+      type: "folder.restore",
+      restoreId: undo.restoreId,
+      folderId: threadId,
+      runId,
+    });
+    // Asking again answers the same undo; nothing more is sent.
+    expect(await accepted(threadId, turnId)).toEqual({
+      restoreId: undo.restoreId,
+      state: "sent",
+      reason: null,
+    });
+
+    desktop.send({
+      type: "folder.restored",
+      restoreId: undo.restoreId,
+      outcome: "restored",
+    });
+    expect(await settled(threadId, turnId)).toEqual({
+      restoreId: undo.restoreId,
+      state: "restored",
+      reason: null,
+    });
+    // A repeated answer changes nothing, and the socket stays open.
+    desktop.send({
+      type: "folder.restored",
+      restoreId: undo.restoreId,
+      outcome: "failed",
+    });
+    desktop.send({
+      type: "folder.restored",
+      restoreId: Bun.randomUUIDv7(),
+      outcome: "restored",
+    });
+    expect((await accepted(threadId, turnId)).state).toBe("restored");
+    expect(
+      desktop.received.filter(({ type }) => type === "folder.restore"),
+    ).toHaveLength(1);
+
+    // The next run's request carries the note, and only that run's.
+    const next = await newTurn(threadId);
+    const told = await startTurnRun(desktop, desktopId, {
+      threadId,
+      turnId: next,
+    });
+    expect(JSON.stringify(told.messages.at(-1))).toContain(
+      FOLDER_RESTORED_NOTE,
+    );
+    const [row] = await db
+      .select({ notedAt: desktopRunnerFolderRestores.notedAt })
+      .from(desktopRunnerFolderRestores)
+      .where(eq(desktopRunnerFolderRestores.id, undo.restoreId));
+    expect(row?.notedAt).toBeInstanceOf(Date);
+    desktop.send({ type: "run.accepted", runId: told.runId });
+    desktop.send({
+      type: "run.finished",
+      runId: told.runId,
+      seq: 1,
+      outcome: "completed",
+      harnessSessionId: null,
+    });
+    await desktop.receive("ack", ofRun(told.runId));
+    await completeTurn(threadId, next);
+    const after = await startTurnRun(desktop, desktopId, {
+      threadId,
+      turnId: await newTurn(threadId),
+    });
+    expect(JSON.stringify(after.messages)).not.toContain(FOLDER_RESTORED_NOTE);
+    await desktop.close();
+  });
+
+  test("only the member's newest finished turn with a checkpoint is undone, and only while its computer is online", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const older = await finishedTurn(desktop, desktopId, { threadId });
+    const plain = await finishedTurn(desktop, desktopId, {
+      threadId,
+      checkpoint: false,
+    });
+    expect(await request(threadId, older.turnId)).toEqual({
+      type: "refused",
+      reason: "not_newest",
+    });
+    expect(await request(threadId, plain.turnId)).toEqual({
+      type: "refused",
+      reason: "no_checkpoint",
+    });
+    expect((await read(threadId, plain.turnId))?.undoable).toBe(false);
+
+    // The member in another organization sees no turn.
+    const outsider = { userId: ids.userA1, organizationId: ids.orgB };
+    expect(await request(threadId, plain.turnId, outsider)).toEqual({
+      type: "refused",
+      reason: "not_found",
+    });
+    expect(await read(threadId, plain.turnId, outsider)).toBeNull();
+
+    const newest = await finishedTurn(desktop, desktopId, { threadId });
+    const running = await newTurn(threadId);
+    expect(await request(threadId, newest.turnId)).toEqual({
+      type: "refused",
+      reason: "not_newest",
+    });
+    await db.delete(chatTurns).where(eq(chatTurns.id, running));
+
+    await desktop.close();
+    expect(await request(threadId, newest.turnId)).toEqual({
+      type: "refused",
+      reason: "desktop_offline",
+    });
+    expect(
+      await db
+        .select({ id: desktopRunnerFolderRestores.id })
+        .from(desktopRunnerFolderRestores)
+        .where(eq(desktopRunnerFolderRestores.chatThreadId, threadId)),
+    ).toEqual([]);
+  });
+
+  test("a run still open in the thread refuses an undo", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const done = await finishedTurn(desktop, desktopId, { threadId });
+    // A run of the turn is still open on the computer.
+    await startTurnRun(desktop, desktopId, { threadId, turnId: done.turnId });
+    expect(await request(threadId, done.turnId)).toEqual({
+      type: "refused",
+      reason: "thread_busy",
+    });
+    await desktop.close();
+  });
+
+  test("the computer's refusal is stored with its reason, and the turn can be asked again", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
+    for (const outcome of [
+      "not_newest",
+      "no_checkpoint",
+      "folder_busy",
+      "failed",
+    ] as const) {
+      const undo = await accepted(threadId, turnId);
+      expect(undo.state).toBe("queued");
+      const sent = await desktop.receive(
+        "folder.restore",
+        (message) =>
+          message.type === "folder.restore" &&
+          message.restoreId === undo.restoreId,
+      );
+      desktop.send({
+        type: "folder.restored",
+        restoreId: sent.restoreId,
+        outcome,
+      });
+      expect(await settled(threadId, turnId)).toEqual({
+        restoreId: undo.restoreId,
+        state: "refused",
+        reason: outcome,
+      });
+    }
+    // A refused undo leaves nothing for the next run to be told.
+    const next = await startTurnRun(desktop, desktopId, {
+      threadId,
+      turnId: await newTurn(threadId),
+    });
+    expect(JSON.stringify(next.messages)).not.toContain(FOLDER_RESTORED_NOTE);
+    await desktop.close();
+  });
+
+  test("an undo no socket took expires and blocks no run after; one sent is sent again on the next socket and settles late", async () => {
+    const threadId = await newThread();
+    const { desktopId, desktop } = await connected();
+    const { turnId, runId } = await finishedTurn(desktop, desktopId, {
+      threadId,
+    });
+    await desktop.close();
+    // The computer's row still reads connected and fresh, but no socket of
+    // any API task holds it: the undo waits queued.
+    await db
+      .update(desktopRunners)
+      .set({
+        connection: "connected",
+        instanceId: "api-elsewhere",
+        sessionId: Bun.randomUUIDv7(),
+        lastSeenAt: now(),
+      })
+      .where(eq(desktopRunners.desktopId, desktopId));
+    const waiting = await accepted(threadId, turnId);
+    expect(waiting.state).toBe("queued");
+    // No run starts in the folder while the undo may still happen.
+    const blockedTurn = await newTurn(threadId);
+    const blocked = (
+      await control.startRun({
+        ...startInput(desktopId),
+        chat: { threadId, turnId: blockedTurn },
+      })
+    ).unwrap();
+    expect(blocked).toEqual({ type: "folder_busy" });
+    await db.delete(chatTurns).where(eq(chatTurns.id, blockedTurn));
+
+    clock.now += 2 * MINUTE_MS + 1;
+    expect((await read(threadId, turnId))?.restore).toEqual({
+      restoreId: waiting.restoreId,
+      state: "expired",
+      reason: null,
+    });
+
+    // Back online: the expired undo is never sent, and a new one is.
+    const back = await openDesktop(undoInstance, desktopId);
+    await back.hello();
+    const again = await accepted(threadId, turnId);
+    expect(again.restoreId).not.toBe(waiting.restoreId);
+    const sent = await back.receive("folder.restore");
+    expect(sent).toMatchObject({ restoreId: again.restoreId, runId });
+    expect(
+      back.received.filter(
+        (message) =>
+          message.type === "folder.restore" &&
+          message.restoreId === waiting.restoreId,
+      ),
+    ).toEqual([]);
+
+    // The socket drops before the answer: the next socket gets it again, and
+    // its answer settles the undo however late it comes.
+    await back.close();
+    clock.now += 10 * MINUTE_MS;
+    const later = await openDesktop(undoInstance, desktopId);
+    await later.hello();
+    const resent = await later.receive("folder.restore");
+    expect(resent.restoreId).toBe(again.restoreId);
+    later.send({
+      type: "folder.restored",
+      restoreId: again.restoreId,
+      outcome: "restored",
+    });
+    expect(await settled(threadId, turnId)).toMatchObject({
+      restoreId: again.restoreId,
+      state: "restored",
+    });
+    await later.close();
+  });
+
+  test("the sweep sends an undo whose ring was lost", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
+    const undo = (
+      await requestFolderRestore(gatewayDb, {
+        owner,
+        threadId,
+        turnId,
+        restoreId: Bun.randomUUIDv7(),
+        now: now(),
+        seenSince: new Date(clock.now - TIMING.runnerFreshnessMs),
+        expiresInMs: 2 * MINUTE_MS,
+      })
+    ).type;
+    // Queued without ringing the doorbell, as a lost ring leaves it.
+    expect(undo).toBe("queued");
+    await undoInstance.gateway.sweep();
+    expect((await desktop.receive("folder.restore")).folderId).toBe(threadId);
+    await desktop.close();
   });
 });

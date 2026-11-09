@@ -27,6 +27,10 @@ import type { DesktopKeyLiveness } from "@/api/lib/business-registries/desktop/l
 import { isFoldableChunk } from "@/api/lib/desktop-runner/chunk";
 import type { RunnerFeatureAccess } from "@/api/lib/desktop-runner/feature-access";
 import {
+  claimFolderRestores,
+  settleFolderRestore,
+} from "@/api/lib/desktop-runner/folder-restores";
+import {
   openRunAnswer,
   storedRunAnswerSchema,
 } from "@/api/lib/desktop-runner/sealed-answers";
@@ -409,12 +413,55 @@ const outgoing = async (
   };
 };
 
-/** Send every command queued after the last one sent, page by page. */
-const deliverPending = async (state: SessionState) => {
+/**
+ * Send the computer's folder restores: those queued, and on a new socket
+ * (`resendSent`) those sent before that it has not answered. Each is marked
+ * sent before it goes out, so a restore that expired is never sent; a frame
+ * lost with its socket is sent again on the next one.
+ */
+const deliverRestores = async (state: SessionState, resendSent: boolean) => {
+  const due = await claimFolderRestores(state.context.db, {
+    binding: state.binding,
+    sessionId: state.sessionId,
+    now: state.context.now(),
+    resendSent,
+  });
+  for (const { restoreId, folderId, runId } of due) {
+    const sent = send(state, {
+      type: DESKTOP_RUNNER_SERVER_MESSAGE.folderRestore,
+      restoreId,
+      folderId,
+      runId,
+    });
+    if (sent === "closed") {
+      return;
+    }
+    if (sent === "backpressure") {
+      state.backpressured = true;
+    }
+  }
+};
+
+type DeliverOptions = {
+  /** A new socket also sends again the restores sent to an earlier one. */
+  resendSent: boolean;
+};
+
+/**
+ * Send the computer's folder restores, then every command queued after the
+ * last one sent, page by page.
+ */
+const deliverPending = async (
+  state: SessionState,
+  { resendSent }: DeliverOptions,
+) => {
   if (state.phase.type !== "ready") {
     return;
   }
   const { held } = state.phase;
+  if (!state.backpressured) {
+    await deliverRestores(state, resendSent);
+  }
   for (;;) {
     // Commands wait in the queue, not in the socket's buffer, until it drains.
     if (state.backpressured) {
@@ -458,7 +505,7 @@ const deliver = async (state: SessionState) => {
   // One queued delivery reads everything queued before it runs.
   state.queuedDelivery ??= step(state, "deliver", async () => {
     state.queuedDelivery = null;
-    await deliverPending(state);
+    await deliverPending(state, { resendSent: false });
   });
   await state.queuedDelivery;
 };
@@ -667,7 +714,7 @@ const onHello = async (
       await sendToken(state, run.runId, run.workspaceIds);
     }
   }
-  await deliverPending(state);
+  await deliverPending(state, { resendSent: true });
 };
 
 const handleMessage = async (
@@ -728,6 +775,16 @@ const handleMessage = async (
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished:
       await storeSequenced(state, message);
+      return;
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored:
+      // An answer to a restore this computer was not sent, or answered
+      // before, changes nothing: the restore stays as its first answer left it.
+      await settleFolderRestore(db, {
+        binding,
+        restoreId: message.restoreId,
+        outcome: message.outcome,
+        now: now(),
+      });
       return;
     default: {
       message satisfies never;
