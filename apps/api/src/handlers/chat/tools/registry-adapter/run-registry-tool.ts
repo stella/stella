@@ -44,6 +44,7 @@ import {
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { RequiresThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
+import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type {
   AllHandlerOutputsTyped,
   AssertTrue,
@@ -261,6 +262,46 @@ const runInjectedHandler = async ({
   return await handler({ args: parsed.output, context });
 };
 
+/**
+ * Chat waits for a continued read instead of handing the model a token: the
+ * turn is already open, so holding it costs nothing the model could use. Past
+ * this the model gets the honest running answer and may call again.
+ */
+const CHAT_CONTINUATION_WAIT_MS = 45_000;
+
+const runningContinuation = (response: McpToolResponse) =>
+  !isMcpEgressPlan(response) &&
+  response.status === "success" &&
+  isRecord(response.data) &&
+  response.data["status"] === "running" &&
+  typeof response.data["continuationToken"] === "string" &&
+  typeof response.data["retryAfterMs"] === "number"
+    ? {
+        token: response.data["continuationToken"],
+        retryAfterMs: response.data["retryAfterMs"],
+      }
+    : null;
+
+const waitOutContinuation = async (
+  first: McpToolResponse,
+  args: Record<string, unknown>,
+  run: (runArgs: Record<string, unknown>) => Promise<McpToolResponse>,
+): Promise<McpToolResponse> => {
+  const deadlineAt = performance.now() + CHAT_CONTINUATION_WAIT_MS;
+  let response = first;
+  for (
+    let running = runningContinuation(response);
+    running !== null && performance.now() < deadlineAt;
+    running = runningContinuation(response)
+  ) {
+    await Bun.sleep(
+      Math.min(running.retryAfterMs, deadlineAt - performance.now()),
+    );
+    response = await run({ ...args, continuation_token: running.token });
+  }
+  return response;
+};
+
 /** The key the boundary's input notes ride under beside a read's payload. */
 const CHAT_INPUT_NOTES_KEY = "inputRead";
 
@@ -458,7 +499,11 @@ export const executeRegistryRead = async ({
               handler,
             }),
     );
-  const response = await invoke(scoped.value);
+  const response = await waitOutContinuation(
+    await invoke(scoped.value),
+    scoped.value,
+    invoke,
+  );
   const finished = await finalizeToolEgress({
     context: authorizedContext,
     mode: "default",

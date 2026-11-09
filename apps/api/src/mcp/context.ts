@@ -143,6 +143,8 @@ import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate
 import type { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import type { McpFeatureAccessBindings } from "@/api/mcp/feature-access";
+import type { LegislationContinuation } from "@/api/mcp/legislation-tools";
+import type { CaseLawContinuation } from "@/api/mcp/stella-tools";
 import type {
   claimTemplatePersistenceRequest,
   fingerprintTemplatePersistenceRequest,
@@ -206,6 +208,9 @@ export type McpRequestContext = {
     createTimeEntryHandler?: typeof createTimeEntryHandler;
     readCaseLawCoverageHandler?: typeof readCaseLawCoverageHandler;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
+    caseLawSearchContinuation?: CaseLawContinuation;
+    publicReadResponseDeadlineMs?: number;
+    legislationSearchContinuation?: LegislationContinuation;
     listCaseLawProvisionDecisions?: typeof listCaseLawProvisionDecisions;
     /** Reads a provision's citing set once per agent search. */
     readCaseLawProvisionScope?: (

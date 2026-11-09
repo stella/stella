@@ -190,7 +190,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -247,6 +247,12 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "minLength": 1,
           "maxLength": 12450,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
+        },
+        "continuation_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "From a status \\"running\\" answer; collects that work."
         },
         "court": {
           "type": "string",
@@ -1225,7 +1231,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search legislation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). \`as_of\` searches text in force on that date; omit it to include historical wording. No facets are returned and \`total\` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
+    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). \`as_of\` searches text in force on that date; omit it to include historical wording. No facets are returned; \`total\` is not counted, so page with nextCursor. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token.",
     "annotations": {
       "title": "Search legislation",
       "destructiveHint": false,
@@ -1334,6 +1340,12 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "minLength": 1,
           "maxLength": 5364,
           "description": "Opaque cursor from a previous search_legislation call"
+        },
+        "continuation_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "From a status \\"running\\" answer; collects that work."
         }
       }
     }
@@ -7745,7 +7757,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -7802,6 +7814,12 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "minLength": 1,
           "maxLength": 12450,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
+        },
+        "continuation_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "From a status \\"running\\" answer; collects that work."
         },
         "court": {
           "type": "string",
@@ -8780,7 +8798,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search legislation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). \`as_of\` searches text in force on that date; omit it to include historical wording. No facets are returned and \`total\` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
+    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). \`as_of\` searches text in force on that date; omit it to include historical wording. No facets are returned; \`total\` is not counted, so page with nextCursor. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token.",
     "annotations": {
       "title": "Search legislation",
       "destructiveHint": false,
@@ -8889,6 +8907,12 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "minLength": 1,
           "maxLength": 5364,
           "description": "Opaque cursor from a previous search_legislation call"
+        },
+        "continuation_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "From a status \\"running\\" answer; collects that work."
         }
       }
     }
@@ -16036,7 +16060,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -16093,6 +16117,12 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "minLength": 1,
           "maxLength": 12450,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
+        },
+        "continuation_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "From a status \\"running\\" answer; collects that work."
         },
         "court": {
           "type": "string",
@@ -16761,7 +16791,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search legislation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). \`as_of\` searches text in force on that date; omit it to include historical wording. No facets are returned and \`total\` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
+    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). \`as_of\` searches text in force on that date; omit it to include historical wording. No facets are returned; \`total\` is not counted, so page with nextCursor. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token.",
     "annotations": {
       "title": "Search legislation",
       "destructiveHint": false,
@@ -16870,6 +16900,12 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "minLength": 1,
           "maxLength": 5364,
           "description": "Opaque cursor from a previous search_legislation call"
+        },
+        "continuation_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "From a status \\"running\\" answer; collects that work."
         }
       }
     }
@@ -18355,7 +18391,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -18412,6 +18448,12 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "minLength": 1,
           "maxLength": 12450,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
+        },
+        "continuation_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "From a status \\"running\\" answer; collects that work."
         },
         "court": {
           "type": "string",
@@ -19012,7 +19054,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search legislation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). \`as_of\` searches text in force on that date; omit it to include historical wording. No facets are returned and \`total\` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source.",
+    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). \`as_of\` searches text in force on that date; omit it to include historical wording. No facets are returned; \`total\` is not counted, so page with nextCursor. A hit is metadata only: pass its \`eli\` to read_statute for the text, the outline of anchors and the consolidated versions. Use \`url\` for the stella reader when served, otherwise the publisher; \`source_url\` is the publisher source. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token.",
     "annotations": {
       "title": "Search legislation",
       "destructiveHint": false,
@@ -19121,6 +19163,12 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "minLength": 1,
           "maxLength": 5364,
           "description": "Opaque cursor from a previous search_legislation call"
+        },
+        "continuation_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "From a status \\"running\\" answer; collects that work."
         }
       }
     }
