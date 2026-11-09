@@ -12,7 +12,7 @@ on:
       models:
         description: Comma-separated model ids to evaluate
         required: true
-        default: gpt-5.6-luna
+        default: claude-haiku-5-5
         type: string
       runs:
         description: Runs per model
@@ -58,6 +58,7 @@ jobs:
       - name: Run the eval
         working-directory: apps/api
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           USE_MOCK_AI: "false"

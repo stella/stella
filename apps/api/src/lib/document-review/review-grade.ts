@@ -208,13 +208,16 @@ const EMPTY_TIERS: ResolvedTiers = {
   notAcceptableRules: [],
 };
 
+/** The rationale of a finding whose model comparison never completed. */
+export const UNGRADED_RATIONALE =
+  "Automated comparison against the standard could not be completed.";
+
 // A failed or absent compare must not silently pass: the finding is flagged
 // for human review, mirroring the engine's "no criteria configured" fallback.
 const UNGRADED_VERDICT: GradingOutcome = {
   status: "ungraded",
   verdict: "deviation",
-  rationale:
-    "Automated comparison against the standard could not be completed.",
+  rationale: UNGRADED_RATIONALE,
 };
 
 /**
