@@ -2,11 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import {
   isSearchBusy,
-  searchRetryDelayMs,
   shouldRetrySearch,
   withRetryAfterDetail,
 } from "@/features/case-law/search-busy.logic";
-import { APIError } from "@/lib/errors/api";
+import { APIError, apiRetryDelayMs } from "@/lib/errors/api";
 
 const busy = new APIError({
   status: 503,
@@ -27,12 +26,12 @@ describe("a search the server turned away for now", () => {
   });
 
   test("waits as long as the server said", () => {
-    expect(searchRetryDelayMs(0, busy)).toBe(4000);
+    expect(apiRetryDelayMs(0, busy)).toBe(4000);
   });
 
   test("other failures keep the shared retry policy and backoff", () => {
     expect(shouldRetrySearch(1, outage)).toBe(true);
-    expect(searchRetryDelayMs(2, outage)).toBe(4000);
+    expect(apiRetryDelayMs(2, outage)).toBe(4000);
   });
 });
 

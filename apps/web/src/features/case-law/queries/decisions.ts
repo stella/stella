@@ -20,7 +20,6 @@ import {
 } from "@/components/public-law-table/public-law-route-pagination.logic";
 import { defaultCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
 import {
-  searchRetryDelayMs,
   shouldRetrySearch,
   withRetryAfterDetail,
 } from "@/features/case-law/search-busy.logic";
@@ -488,7 +487,6 @@ export const decisionsPageOptions = ({
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
     retry: shouldRetrySearch,
-    retryDelay: searchRetryDelayMs,
   });
 
 type UsePrefetchedDecisionPageInput = Omit<
