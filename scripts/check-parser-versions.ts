@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import path from "node:path";
 
 import {
@@ -121,14 +120,16 @@ const readReplayDeclarations = (
   if (source === undefined) {
     return { declarations: [], errors: [] };
   }
-  const decoded = Result.try(() => JSON.parse(source));
-  if (decoded.isErr()) {
+  // The guard imports no packages; it reads the registry with the JSON built-in.
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
     return {
       declarations: [],
       errors: ["Replay declarations must be valid JSON"],
     };
   }
-  const parsed: unknown = decoded.value;
   if (!Array.isArray(parsed)) {
     return {
       declarations: [],
