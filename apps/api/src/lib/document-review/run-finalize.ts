@@ -51,6 +51,7 @@ import {
 import type {
   DocumentReviewRunBasis,
   DocumentReviewRunErrorCode,
+  DocumentReviewRunStatus,
 } from "@/api/lib/document-review/run-contract";
 import { logger } from "@/api/lib/observability/logger";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
@@ -146,6 +147,38 @@ const replayFixesWithheld = async ({
   return updated.at(0)?.fixesWithheld ?? withheldThisPass;
 };
 
+type ReviewRunRef = {
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"documentReviewRun">;
+};
+
+/**
+ * The one statement that moves a review run's status, for both executors:
+ * completion, failure, and the bookkeeping written while a run is open. It
+ * matches only a run still in one of `statuses`, so a write that lost a race
+ * to a terminal state changes nothing. Returns whether the run matched.
+ */
+const updateRunWhileIn = async (
+  tx: Transaction,
+  { workspaceId, runId }: ReviewRunRef,
+  statuses: readonly DocumentReviewRunStatus[],
+  values: Partial<typeof documentReviewRuns.$inferInsert>,
+): Promise<boolean> => {
+  // audit: skip — lifecycle bookkeeping on the run row audited at create.
+  const updated = await tx
+    .update(documentReviewRuns)
+    .set(values)
+    .where(
+      and(
+        eq(documentReviewRuns.id, runId),
+        eq(documentReviewRuns.workspaceId, workspaceId),
+        inArray(documentReviewRuns.status, [...statuses]),
+      ),
+    )
+    .returning({ id: documentReviewRuns.id });
+  return updated.length > 0;
+};
+
 export const finalizeReviewRun = async (
   args: FinalizeReviewRunArgs,
 ): Promise<FinalizeReviewRunResult> => {
@@ -185,39 +218,32 @@ export const finalizeReviewRun = async (
   // the previous review of this document is not staged again as a proposal.
   const staging = await stageForProducer(args);
 
-  // audit: skip — terminal bookkeeping on the run row audited at create.
-  const flipped = await tx
-    .update(documentReviewRuns)
-    .set({
+  const flipped = await updateRunWhileIn(
+    tx,
+    { workspaceId, runId },
+    ["running"],
+    {
       status: "completed",
       errorCode: null,
       completed: committed,
       fixesWithheld: staging.skippedForUnreadableReference,
       finishedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(documentReviewRuns.id, runId),
-        eq(documentReviewRuns.workspaceId, workspaceId),
-        eq(documentReviewRuns.status, "running"),
-      ),
-    )
-    .returning({ id: documentReviewRuns.id });
+    },
+  );
 
   // The single completion point for both producers, so the inbox learns of
   // every finished review exactly once.
-  if (flipped.length > 0) {
+  if (flipped) {
     await maybeEmitDocumentReviewSignal({ tx, workspaceId, runId });
   }
-  const skippedForUnreadableReference =
-    flipped.length > 0
-      ? staging.skippedForUnreadableReference
-      : await replayFixesWithheld({
-          tx,
-          workspaceId,
-          runId,
-          withheldThisPass: staging.skippedForUnreadableReference,
-        });
+  const skippedForUnreadableReference = flipped
+    ? staging.skippedForUnreadableReference
+    : await replayFixesWithheld({
+        tx,
+        workspaceId,
+        runId,
+        withheldThisPass: staging.skippedForUnreadableReference,
+      });
 
   return {
     type: "completed",
@@ -227,11 +253,6 @@ export const finalizeReviewRun = async (
     skippedForPendingLimit: staging.skippedForPendingLimit,
     skippedForUnreadableReference,
   };
-};
-
-type ReviewRunRef = {
-  workspaceId: SafeId<"workspace">;
-  runId: SafeId<"documentReviewRun">;
 };
 
 /** Logs what a completion did beyond the status flip, the same way for both
@@ -268,26 +289,6 @@ export const reportFinalizedReviewRun = (
   }
 };
 
-const updateActiveRun = async (
-  tx: Transaction,
-  { workspaceId, runId }: ReviewRunRef,
-  values: Partial<typeof documentReviewRuns.$inferInsert>,
-): Promise<void> => {
-  // audit: skip — bookkeeping on the run row audited at create.
-  await tx
-    .update(documentReviewRuns)
-    .set(values)
-    .where(
-      and(
-        eq(documentReviewRuns.id, runId),
-        eq(documentReviewRuns.workspaceId, workspaceId),
-        inArray(documentReviewRuns.status, [
-          ...DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
-        ]),
-      ),
-    );
-};
-
 /** Fails a run that is still queued or running. A terminal run is left as it
  *  is, so a late failure never overwrites a completion. */
 export const failReviewRun = async (
@@ -295,7 +296,7 @@ export const failReviewRun = async (
   run: ReviewRunRef,
   errorCode: DocumentReviewRunErrorCode,
 ): Promise<void> => {
-  await updateActiveRun(tx, run, {
+  await updateRunWhileIn(tx, run, DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES, {
     status: "failed",
     errorCode,
     finishedAt: new Date(),
@@ -309,7 +310,9 @@ export const recordRunWithheldSources = async (
   run: ReviewRunRef,
   withheld: readonly ReviewWithheldSource[],
 ): Promise<void> => {
-  await updateActiveRun(tx, run, { withheldSources: [...withheld] });
+  await updateRunWhileIn(tx, run, DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES, {
+    withheldSources: [...withheld],
+  });
 };
 
 type FinalizeWorkerRunArgs = {
