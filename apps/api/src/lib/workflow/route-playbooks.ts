@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -306,18 +307,13 @@ export const routeClassifiedDocuments = async ({
       LIMITS.playbookDefinitionsCount,
     );
     if (approvedRead.type === "overflow") {
-      // More approved playbooks than the org may hold: route on the live
-      // trigger alone this time rather than fail the classification.
-      captureError(
-        new Error("Approved onClassified playbooks exceed the playbook cap"),
-        handlerErrorContext("workflow.routeClassifiedDocuments", {
-          workspaceId,
-          cap: String(approvedRead.cap),
-        }),
-      );
+      // Each distinct id is a playbook of this org, which may hold at most
+      // the cap; the caller reports the failure.
+      return panic("Approved onClassified playbooks exceed the playbook cap", {
+        cap: approvedRead.cap,
+      });
     }
-    const approvedOnClassified =
-      approvedRead.type === "complete" ? approvedRead.rows : [];
+    const approvedOnClassified = approvedRead.rows;
     const routable = await tx.query.playbookDefinitions.findMany({
       where: {
         organizationId: { eq: organizationId },
