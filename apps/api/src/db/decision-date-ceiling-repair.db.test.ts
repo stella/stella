@@ -357,7 +357,7 @@ test("the migration swaps the CHECK untouched, the repair clears and reopens, bo
     },
     {
       citingDecisionId: citingId,
-      citedDecisionId: null,
+      citedDecisionId: rederivedId,
       citationText: "f incoming rederived",
       resolutionStatus: "pending",
     },
