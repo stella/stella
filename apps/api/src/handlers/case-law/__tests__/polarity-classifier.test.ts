@@ -431,6 +431,7 @@ describe("seed rules", () => {
       id: createSafeId<"caseLawPolarityRule">(),
       pattern: r.pattern,
       polarity: r.polarity,
+      kind: r.kind,
       confidence: 1,
     }));
 

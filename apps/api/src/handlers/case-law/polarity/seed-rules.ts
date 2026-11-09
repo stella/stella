@@ -453,7 +453,7 @@ export const SEED_RULES: readonly SeedRule[] = [
     kind: POLARITY_RULE_KIND.STANCE,
   },
   {
-    pattern: `\\b${CS_DECISION_ANCHOR}\\p{L}*\\s+${WORDS_BETWEEN}(?:se\\s+neuplatní|nedopad|skutkově\\s+odliš)`,
+    pattern: `\\b${CS_DECISION_ANCHOR}\\p{L}*\\s+${WORDS_BETWEEN}(?:se\\s+neuplatní|skutkově\\s+odliš)`,
     polarity: "negative",
     language: "cs",
     kind: POLARITY_RULE_KIND.STANCE,
