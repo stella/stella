@@ -468,7 +468,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_case_law",
-    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Use `url` for the reader and `source_url` for the publisher.",
+    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token; \"partial\" is never the full answer. Use `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["country"],
@@ -517,6 +517,12 @@
           "minLength": 1,
           "maxLength": 12450,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
+        },
+        "continuation_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "From a status \"running\" answer; collects that work."
         },
         "court": {
           "type": "string",
@@ -664,7 +670,7 @@
           "type": "string"
         },
         "status": {
-          "enum": ["unavailable"],
+          "enum": ["unavailable", "running"],
           "type": "string"
         },
         "domain": {
@@ -970,6 +976,42 @@
         },
         "nextStep": {
           "type": "string"
+        },
+        "continuationToken": {
+          "type": "string"
+        },
+        "retryAfterMs": {
+          "type": "number"
+        },
+        "phase": {
+          "enum": ["queued", "running", "not_started"],
+          "type": "string"
+        },
+        "partial": {
+          "type": ["object", "null"],
+          "properties": {
+            "finishedQueries": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "pendingQueries": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "decisions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": ["finishedQueries", "pendingQueries", "decisions"],
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -2739,7 +2781,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_legislation",
-    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). `as_of` searches text in force on that date; omit it to include historical wording. No facets are returned and `total` is not counted, so page with the returned nextCursor instead of reasoning about a result count. A hit is metadata only: pass its `eli` to read_statute for the text, the outline of anchors and the consolidated versions. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+    "description": "Search the stella legislation corpus within one country: consolidated statutes, each with its ELI, title, language, document type, publication status, effective date and a matched snippet. Filters: document type, status, language, and an effective-date range (ISO YYYY-MM-DD). `as_of` searches text in force on that date; omit it to include historical wording. No facets are returned; `total` is not counted, so page with nextCursor. A hit is metadata only: pass its `eli` to read_statute for the text, the outline of anchors and the consolidated versions. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token.",
     "inputSchema": {
       "type": "object",
       "required": ["query", "country"],
@@ -2836,6 +2878,12 @@
           "minLength": 1,
           "maxLength": 5364,
           "description": "Opaque cursor from a previous search_legislation call"
+        },
+        "continuation_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "From a status \"running\" answer; collects that work."
         }
       }
     },
@@ -2847,7 +2895,7 @@
           "type": "string"
         },
         "status": {
-          "enum": ["unavailable"],
+          "enum": ["unavailable", "running"],
           "type": "string"
         },
         "domain": {
@@ -2984,6 +3032,19 @@
           },
           "required": ["type"],
           "additionalProperties": false
+        },
+        "continuationToken": {
+          "type": "string"
+        },
+        "retryAfterMs": {
+          "type": "number"
+        },
+        "phase": {
+          "enum": ["queued", "running", "not_started"],
+          "type": "string"
+        },
+        "partial": {
+          "type": "null"
         }
       },
       "additionalProperties": false

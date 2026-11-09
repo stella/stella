@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# resolución lleva} other {# resoluciones llevan} many {# resoluciones llevan}} este número de asunto. Elija el tribunal.",
     "searchLabel": "Buscar jurisprudencia",
     "searchPlaceholder": "Número de asunto, ECLI o palabras, p. ej. 22 Cdo 2653/2012",
+    "searchStillSearching": "El servicio de búsqueda está ocupado. Seguimos buscando…",
     "searchUnavailable": {
       "description": "No se pudo acceder a la búsqueda de jurisprudencia. Tu consulta se conserva en la barra de direcciones; inténtalo de nuevo en un momento.",
       "title": "La búsqueda no está disponible temporalmente"
@@ -4059,6 +4060,7 @@
       "failed": "La revisión del documento falló",
       "filterCoverage": "Cobertura",
       "filterDeviations": "Desviaciones",
+      "fixesWithheldNotice": "No se crearon cambios propuestos para esta revisión porque usó un documento de referencia de un asunto que no está disponible para la persona que la inició. Los resultados no se ven afectados.",
       "flag": "Señalar",
       "flaggedPositions": "{total, plural, one {{flagged, number} de # posición señalada} other {{flagged, number} de # posiciones señaladas} many {{flagged, number} de # posiciones señaladas}}",
       "fromChat": "Desde el chat",

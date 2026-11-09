@@ -568,18 +568,18 @@
     {
       "name": "search_case_law",
       "nameChars": 15,
-      "descriptionChars": 566,
-      "inputSchemaChars": 6441,
-      "totalChars": 7022,
-      "estimatedTokens": 2878
+      "descriptionChars": 721,
+      "inputSchemaChars": 6579,
+      "totalChars": 7315,
+      "estimatedTokens": 2987
     },
     {
       "name": "search_legislation",
       "nameChars": 18,
-      "descriptionChars": 722,
-      "inputSchemaChars": 2365,
-      "totalChars": 3105,
-      "estimatedTokens": 1233
+      "descriptionChars": 783,
+      "inputSchemaChars": 2503,
+      "totalChars": 3304,
+      "estimatedTokens": 1310
     },
     {
       "name": "set_field_value",
@@ -639,7 +639,7 @@
     }
   ],
   "totals": {
-    "characters": 136615,
-    "estimatedTokens": 54350
+    "characters": 137107,
+    "estimatedTokens": 54536
   }
 }

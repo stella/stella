@@ -498,6 +498,7 @@ describe("opening runs for a files table", () => {
       carried: 0,
       staged: 0,
       skippedForPendingLimit: 0,
+      skippedForUnreadableReference: 0,
     });
 
     const decidedAt = new Date();
@@ -536,6 +537,7 @@ describe("opening runs for a files table", () => {
       carried: 1,
       staged: 0,
       skippedForPendingLimit: 0,
+      skippedForUnreadableReference: 0,
     });
 
     const carried = await testDb

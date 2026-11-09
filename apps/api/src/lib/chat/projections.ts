@@ -50,6 +50,7 @@ import {
 } from "@/api/lib/case-law/decision-read-vocabulary";
 import { DECISION_QUERY_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
+import { publicReadRunningFields } from "@/api/lib/chat/projection-fields";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
@@ -1979,6 +1980,10 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
       ),
       total: searchTotalProjection,
     }),
+  ),
+  // One query, so nothing has finished until everything has.
+  projectionBranch(
+    v.strictObject({ ...publicReadRunningFields, partial: v.null() }),
   ),
 ]);
 

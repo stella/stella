@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# décision porte} other {# décisions portent} many {# décisions portent}} ce numéro d'affaire. Choisissez la juridiction.",
     "searchLabel": "Rechercher dans la jurisprudence",
     "searchPlaceholder": "Numéro d'affaire, ECLI ou mots-clés, p. ex. 22 Cdo 2653/2012",
+    "searchStillSearching": "Le service de recherche est occupé. La recherche se poursuit…",
     "searchUnavailable": {
       "description": "La recherche dans la jurisprudence n’a pas pu être jointe. Votre requête reste dans la barre d’adresse : réessayez dans un instant.",
       "title": "La recherche est temporairement indisponible"
@@ -4059,6 +4060,7 @@
       "failed": "Échec de la révision du document",
       "filterCoverage": "Couverture",
       "filterDeviations": "Écarts",
+      "fixesWithheldNotice": "Aucune modification proposée n'a été créée pour cette révision, car elle s'appuyait sur un document de référence provenant d'un dossier qui n'est pas disponible pour la personne qui l'a lancée. Les constats ne sont pas affectés.",
       "flag": "Signaler",
       "flaggedPositions": "{total, plural, one {{flagged, number} sur # critère signalé} other {{flagged, number} sur # critères signalés} many {{flagged, number} sur # critères signalés}}",
       "fromChat": "Depuis la conversation",

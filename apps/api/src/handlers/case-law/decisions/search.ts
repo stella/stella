@@ -152,7 +152,7 @@ import {
   provisionLinkMatchSql,
   type ProvisionLinkReadOutcome,
   provisionLinkReadOutcomeSql,
-  readCaseLawProvisionScope,
+  readCaseLawProvisionScopeWithinBudget,
   readProvisionCitingSentences,
 } from "@/api/lib/case-law/provision-filter";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
@@ -559,13 +559,10 @@ export const searchDecisionsHandler = async ({
         scopedBody.provisionScope ??
         (provision === undefined
           ? null
-          : await caseLawDb(
-              async (tx) =>
-                await readCaseLawProvisionScope(tx, {
-                  jurisdiction: country,
-                  provision,
-                }),
-            ));
+          : await readCaseLawProvisionScopeWithinBudget(caseLawDb, {
+              jurisdiction: country,
+              provision,
+            }));
       return await tracedCorpusIndexSearch({
         body:
           provisionScope?.type === "decisions"
@@ -4579,40 +4576,54 @@ export const listCaseLawProvisionDecisions = async ({
   }
   const candidateBudget =
     dependencies.candidateBudget ?? LIMITS.caseLawProvisionCandidateBudget;
-  // The page, citing sentences and hydrated rows share one snapshot.
-  const read = await caseLawDb(async (tx) => {
-    const provisionScope = await readCaseLawProvisionScope(tx, {
+  // Read outside the page's snapshot: it only chooses the path, and the page
+  // keeps only rows that still cite the provision in that snapshot.
+  const provisionScope = await readCaseLawProvisionScopeWithinBudget(
+    caseLawDb,
+    {
       ...scope,
       ...(dependencies.provisionIdSetMax === undefined
         ? {}
         : { idSetMax: dependencies.provisionIdSetMax }),
-    });
+    },
+  );
+  // The page, citing sentences and hydrated rows share one snapshot.
+  const read = await caseLawDb(async (tx) => {
     // Without its index the walk sorts the whole country per request, the
     // unbounded read it replaces; it waits for the online build instead.
     if (
-      provisionScope.type === "broad" &&
+      provisionScope.type !== "decisions" &&
       order.walkIndexes.length > 0 &&
       !(await readOnlineIndexesReady(tx, order.walkIndexes))
     ) {
       return { type: "walkIndexNotReady" } as const;
     }
     const page =
-      provisionScope.type === "broad"
-        ? await readBroadProvisionPage(tx, {
-            body,
-            candidateBudget,
-            generation,
-            order,
-            limit,
-          })
-        : await readProvisionIdSetPage(tx, {
+      provisionScope.type === "decisions"
+        ? await readProvisionIdSetPage(tx, {
             body,
             decisionIds: provisionScope.decisionIds,
             generation,
             order,
             limit,
+          })
+        : await readBroadProvisionPage(tx, {
+            body,
+            candidateBudget,
+            generation,
+            order,
+            limit,
           });
-    const pageIds = page.rows.map(({ id }) => id);
+    const sentences = await readProvisionCitingSentences(
+      tx,
+      scope,
+      page.rows.map(({ id }) => id),
+    );
+    // The scope predates this snapshot: a decision whose citation has gone
+    // since has no citing link here, so it is not a match. The cursor still
+    // moves past it, and a short page with a cursor is an ordinary page.
+    const emitted = page.rows.filter(({ id }) => sentences.has(String(id)));
+    const pageIds = emitted.map(({ id }) => id);
     const hydrated = await pageDecisionRowsQuery(tx, {
       admission: "indexed",
       body,
@@ -4624,9 +4635,9 @@ export const listCaseLawProvisionDecisions = async ({
     });
     return {
       type: "page",
-      emitted: page.rows,
+      emitted,
       nextCursor: page.nextCursor,
-      sentences: await readProvisionCitingSentences(tx, scope, pageIds),
+      sentences,
       byId: new Map(hydrated.rows.map((row) => [String(row.id), row])),
     } as const;
   });

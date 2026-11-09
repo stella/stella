@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.",
     "searchLabel": "Search case law",
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012",
+    "searchStillSearching": "The search service is busy. Still searching…",
     "searchUnavailable": {
       "description": "The case-law search could not be reached. Your query is kept in the address bar, so try again in a moment.",
       "title": "Search is temporarily unavailable"
@@ -4059,6 +4060,7 @@
       "failed": "Document review failed",
       "filterCoverage": "Coverage",
       "filterDeviations": "Deviations",
+      "fixesWithheldNotice": "Proposed changes weren't created for this review because it used a reference document from a matter that isn't available to the person who ran it. Findings are unaffected.",
       "flag": "Flag",
       "flaggedPositions": "{total, plural, one {{flagged, number} of # position flagged} other {{flagged, number} of # positions flagged}}",
       "fromChat": "From chat",

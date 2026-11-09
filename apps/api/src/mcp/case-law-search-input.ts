@@ -13,6 +13,7 @@ import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-sea
 import { LIMITS } from "@/api/lib/limits";
 import type { SearchCaseLawTexts } from "@/api/mcp/case-law-search-guidance";
 import {
+  continuationTokenInput,
   countryInputSchema,
   countryNormalization,
   cursorInput,
@@ -107,6 +108,7 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
           "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
         maxLength: CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
       }),
+      continuation_token: continuationTokenInput,
       court: v.optional(
         v.pipe(
           v.string(),

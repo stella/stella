@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# lahend kannab} other {# lahendit kannavad}} seda kohtuasja numbrit. Valige kohus.",
     "searchLabel": "Otsi kohtupraktikast",
     "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
+    "searchStillSearching": "Otsinguteenus on hõivatud. Otsing jätkub…",
     "searchUnavailable": {
       "description": "Kohtupraktika otsinguga ei õnnestunud ühendust saada. Sinu päring säilib aadressiribal, proovi hetke pärast uuesti.",
       "title": "Otsing pole ajutiselt saadaval"
@@ -4059,6 +4060,7 @@
       "failed": "Dokumendi ülevaatamine ebaõnnestus",
       "filterCoverage": "Kaetus",
       "filterDeviations": "Kõrvalekalded",
+      "fixesWithheldNotice": "Selle ülevaatuse jaoks kavandatavaid muudatusi ei loodud, sest see kasutas võrdlusdokumenti toimikust, mis ei ole selle käivitanud isikule kättesaadav. Leide see ei mõjuta.",
       "flag": "Märgista",
       "flaggedPositions": "{total, plural, one {{flagged, number} ühest seisukohast märgistatud} other {{flagged, number} #-st seisukohast märgistatud}}",
       "fromChat": "Vestlusest",

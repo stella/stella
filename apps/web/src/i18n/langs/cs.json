@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# rozhodnutí nese} few {# rozhodnutí nesou} other {# rozhodnutí nese} many {# rozhodnutí nese}} tuto spisovou značku. Vyberte soud.",
     "searchLabel": "Hledat v judikatuře",
     "searchPlaceholder": "Spisová značka, ECLI nebo slova, např. 22 Cdo 2653/2012",
+    "searchStillSearching": "Vyhledávání je přetížené. Stále hledáme…",
     "searchUnavailable": {
       "description": "Vyhledávání v judikatuře se nepodařilo kontaktovat. Váš dotaz zůstává v adresním řádku, zkuste to prosím za chvíli znovu.",
       "title": "Vyhledávání je dočasně nedostupné"
@@ -4059,6 +4060,7 @@
       "failed": "Kontrola dokumentu se nezdařila",
       "filterCoverage": "Pokrytí",
       "filterDeviations": "Odchylky",
+      "fixesWithheldNotice": "Pro tuto kontrolu nebyly vytvořeny navrhované změny, protože použila referenční dokument ze spisu, který osoba, jež ji spustila, nemá k dispozici. Zjištění tím nejsou dotčena.",
       "flag": "Označit",
       "flaggedPositions": "{total, plural, one {označeno {flagged, number} z # pozice} few {označeno {flagged, number} z # pozic} other {označeno {flagged, number} z # pozic} many {označeno {flagged, number} z # pozice}}",
       "fromChat": "Z chatu",

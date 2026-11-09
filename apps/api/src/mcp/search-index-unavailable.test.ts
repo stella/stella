@@ -60,10 +60,13 @@ import { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
+import { createLegislationContinuation } from "@/api/mcp/legislation-tools";
+import { CONTINUABLE_PUBLIC_READ_TOOLS } from "@/api/mcp/public-read-continuation";
 import {
   LAW_MCP_TOOL_DISPOSITION,
   MCP_PUBLIC_CORPUS_CLASS,
 } from "@/api/mcp/static-tool-definitions";
+import { createCaseLawContinuation } from "@/api/mcp/stella-tools";
 import type { McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import {
@@ -74,6 +77,7 @@ import {
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { createFakeContinuationStore } from "@/api/tests/helpers/fake-continuation-store";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -512,6 +516,22 @@ const installSlowEngine = (): void => {
   );
 };
 
+/** A continuation of its own, so a run a test leaves behind stays there. */
+const withFreshContinuations = (
+  context: ReturnType<typeof createContext>,
+): ReturnType<typeof createContext> => ({
+  ...context,
+  testDependencies: {
+    ...context.testDependencies,
+    caseLawSearchContinuation: createCaseLawContinuation({
+      store: createFakeContinuationStore().store,
+    }),
+    legislationSearchContinuation: createLegislationContinuation({
+      store: createFakeContinuationStore().store,
+    }),
+  },
+});
+
 /** A tool call inside the latency scope the MCP server opens for it. */
 const callWithinBudget = async (
   tool: (typeof INDEX_BACKED_TOOLS)[number],
@@ -522,7 +542,7 @@ const callWithinBudget = async (
     async () =>
       await handleMcpToolCall({
         args: tool.args,
-        context: createContext(),
+        context: withFreshContinuations(createContext()),
         mode: tool.mode,
         toolName: tool.toolName,
       }),
@@ -540,6 +560,12 @@ describe("a search the tool's latency budget ends is a timeout", () => {
       expect(performance.now() - startedAt).toBeLessThan(
         CORPUS_INDEX_SEARCH_TIMEOUT_MS,
       );
+      if (CONTINUABLE_PUBLIC_READ_TOOLS.has(tool.toolName)) {
+        // The caller is told the search continues; nothing timed out for it.
+        expect(result.isError).not.toBe(true);
+        expect(payloadOf(result)).toMatchObject({ status: "running" });
+        return;
+      }
       expect(result.isError).toBe(true);
       expect(payloadOf(result)).toMatchObject({
         error: { code: "public_read_timeout", retryable: true },
@@ -557,7 +583,7 @@ describe("a search the tool's latency budget ends is a timeout", () => {
 
   for (const tool of INDEX_BACKED_TOOLS) {
     test(`${tool.toolName} (${tool.mode}) maps a returned timeout envelope to a retryable timeout`, async () => {
-      const context = createContext();
+      const context = withFreshContinuations(createContext());
       const timedOut = async () =>
         await Promise.resolve(
           publicReadTimeoutResponse({
@@ -579,12 +605,17 @@ describe("a search the tool's latency budget ends is a timeout", () => {
         toolName: tool.toolName,
       });
 
+      if (CONTINUABLE_PUBLIC_READ_TOOLS.has(tool.toolName)) {
+        expect(result.isError).not.toBe(true);
+        expect(payloadOf(result)).toMatchObject({ status: "running" });
+        return;
+      }
       expect(result.isError).toBe(true);
       // search_case_law answers its own timeouts with a case-law-specific hint.
       expect(payloadOf(result)).toMatchObject({
         error:
           tool.toolName === "search_case_law"
-            ? { code: "upstream_unavailable", retryable: true }
+            ? { code: "public_read_timeout", retryable: true }
             : {
                 code: "public_read_timeout",
                 hint: PUBLIC_READ_TIMEOUT_HINT,
@@ -713,7 +744,9 @@ describe("public corpus statement budgets", () => {
           },
           dispatchGatewayToolCall: async () => {
             exercised.push(toolName);
-            expect(admitted.at(-1)).toBe(toolName);
+            if (!CONTINUABLE_PUBLIC_READ_TOOLS.has(toolName)) {
+              expect(admitted.at(-1)).toBe(toolName);
+            }
             expect(getPublicReadSignal()).toBeDefined();
             const corpusClass = classes.get(toolName);
             if (corpusClass === undefined) {
@@ -733,7 +766,11 @@ describe("public corpus statement budgets", () => {
       expect(getPublicReadStatementTimeoutMs()).toBeUndefined();
     }
     expect(exercised.toSorted()).toEqual([...classes.keys()].toSorted());
-    expect(admitted.toSorted()).toEqual(exercised.toSorted());
+    expect(admitted.toSorted()).toEqual(
+      exercised
+        .filter((name) => !CONTINUABLE_PUBLIC_READ_TOOLS.has(name))
+        .toSorted(),
+    );
   });
 
   test("upstream-only dispatch does not acquire a public-read budget", async () => {
@@ -759,8 +796,8 @@ describe("public corpus statement budgets", () => {
   test("busy public reads return retry advice without dispatching", async () => {
     let dispatched = false;
     const result = await handleMcpToolCall({
-      toolName: "search_case_law",
-      args: { country: "CZE", queries: ["smlouva"] },
+      toolName: "read_statute",
+      args: { eli: "eli/cz/sb/2006/262" },
       context: createContext(),
       dependencies: {
         admitPublicRead: async () =>
@@ -797,7 +834,7 @@ describe("public corpus statement budgets", () => {
     } satisfies CallToolResult;
     try {
       const result = await handleMcpToolCall({
-        toolName: "search_case_law",
+        toolName: "read_statute",
         args: {},
         context: createContext(),
         dependencies: {
@@ -837,8 +874,8 @@ describe("public corpus statement budgets", () => {
   test("a public-read lease cancellation keeps its typed admission outcome", async () => {
     const context = createContext();
     const result = await handleMcpToolCall({
-      toolName: "search_case_law",
-      args: { country: "CZE", queries: ["smlouva"] },
+      toolName: "search",
+      args: { query: "smlouva" },
       context: {
         ...context,
         testDependencies: {
@@ -859,7 +896,7 @@ describe("public corpus statement budgets", () => {
     });
   });
 
-  test("one case-law search with several queries acquires one caller slot", async () => {
+  test("one case-law search with several queries takes no per-caller lease", async () => {
     let slots = 0;
     const queries = ["smlouva", "nájem", "škoda"];
     const searched: string[] = [];
@@ -871,8 +908,10 @@ describe("public corpus statement budgets", () => {
         ...context,
         testDependencies: {
           ...context.testDependencies,
+          caseLawSearchContinuation: createCaseLawContinuation({
+            store: createFakeContinuationStore().store,
+          }),
           searchDecisionsHandler: async ({ body }) => {
-            expect(slots).toBe(1);
             searched.push(body.query);
             return {
               hits: [],
@@ -899,7 +938,8 @@ describe("public corpus statement budgets", () => {
         dispatchGatewayToolCall: async () => null,
       },
     });
-    expect(slots).toBe(1);
+    // The continuation holds the caller to its concurrency, per run.
+    expect(slots).toBe(0);
     expect(searched.toSorted()).toEqual(queries.toSorted());
     expect(result.isError).not.toBe(true);
   });
@@ -911,8 +951,8 @@ describe("public corpus statement budgets", () => {
     try {
       const context = createContext();
       const result = await handleMcpToolCall({
-        toolName: "search_case_law",
-        args: { country: "CZE", queries: ["smlouva"] },
+        toolName: "search",
+        args: { query: "smlouva" },
         context: {
           ...context,
           testDependencies: {

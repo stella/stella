@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie} many {# rozhodnutia nesie}} túto spisovú značku. Vyberte súd.",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
+    "searchStillSearching": "Vyhľadávanie je preťažené. Stále hľadáme…",
     "searchUnavailable": {
       "description": "Vyhľadávanie v judikatúre sa nepodarilo kontaktovať. Váš dotaz zostáva v adresnom riadku, skúste to prosím o chvíľu znova.",
       "title": "Vyhľadávanie je dočasne nedostupné"
@@ -4059,6 +4060,7 @@
       "failed": "Kontrola dokumentu sa nepodarila",
       "filterCoverage": "Pokrytie",
       "filterDeviations": "Odchýlky",
+      "fixesWithheldNotice": "Pre túto kontrolu neboli vytvorené navrhované zmeny, pretože použila referenčný dokument zo spisu, ktorý osoba, ktorá ju spustila, nemá k dispozícii. Zistenia tým nie sú dotknuté.",
       "flag": "Označiť",
       "flaggedPositions": "{total, plural, one {označené {flagged, number} z # pozície} few {označené {flagged, number} z # pozícií} other {označené {flagged, number} z # pozícií} many {označené {flagged, number} z # pozície}}",
       "fromChat": "Z chatu",

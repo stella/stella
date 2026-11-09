@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# Entscheidung trägt} other {# Entscheidungen tragen}} dieses Aktenzeichen. Wählen Sie das Gericht.",
     "searchLabel": "Rechtsprechung durchsuchen",
     "searchPlaceholder": "Aktenzeichen, ECLI oder Stichwörter, z. B. 22 Cdo 2653/2012",
+    "searchStillSearching": "Die Suche ist ausgelastet. Es wird weiter gesucht…",
     "searchUnavailable": {
       "description": "Die Suche in der Rechtsprechung war nicht erreichbar. Ihre Suchanfrage bleibt in der Adresszeile, versuchen Sie es gleich noch einmal.",
       "title": "Die Suche ist vorübergehend nicht verfügbar"
@@ -4059,6 +4060,7 @@
       "failed": "Dokumentenprüfung fehlgeschlagen",
       "filterCoverage": "Abdeckung",
       "filterDeviations": "Abweichungen",
+      "fixesWithheldNotice": "Für diese Prüfung wurden keine vorgeschlagenen Änderungen erstellt, weil sie ein Referenzdokument aus einer Akte verwendet hat, die der Person, die sie gestartet hat, nicht zur Verfügung steht. Die Ergebnisse sind davon nicht betroffen.",
       "flag": "Kennzeichnen",
       "flaggedPositions": "{total, plural, one {{flagged, number} von # Standpunkt gekennzeichnet} other {{flagged, number} von # Standpunkten gekennzeichnet}}",
       "fromChat": "Aus dem Chat",

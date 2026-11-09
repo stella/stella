@@ -866,10 +866,11 @@ type ConsumeResponse<T> = (
 /**
  * Why a queued read was not sent, in the terms a sent one fails in: a wait
  * its timeout ended is that timeout expiring (the request's budget when the
- * budget set it), a caller's cancel is the cancel, and a full queue is the
- * index turning the read away, which a retry can get past.
+ * budget set it), a read the queue estimates cannot start in time is that
+ * budget's expiry too, a caller's cancel is the cancel, and a full queue is
+ * the index turning the read away, which a retry can get past.
  */
-const admissionRefusal = (
+export const admissionRefusal = (
   request: RequestIdentity,
   refused: Extract<CorpusSearchAdmission, { type: "refused" }>,
 ): CorpusIndexError => {
@@ -880,12 +881,19 @@ const admissionRefusal = (
   });
   switch (refused.reason) {
     case "busy":
-    case "deadline":
-      return new CorpusIndexError({
+    case "deadline": {
+      const notQueued = new CorpusIndexError({
         message: `corpus index ${requestLabel(request)} was not queued: ${String(refused.queued)} reads are already waiting`,
         rejection: "transient",
         reach: "unreachable",
       });
+      return refused.reason === "deadline"
+        ? (corpusIndexBudgetExpiry({
+            label: `${requestLabel(request)} before it could start`,
+            cause: notQueued,
+          }) ?? notQueued)
+        : notQueued;
+    }
     case "expired":
     case "aborted":
       return requestFailure({
@@ -1991,6 +1999,19 @@ const buildClient = (
 });
 
 const cachedClients = new Map<QuickwitCluster, CorpusIndexClient>();
+const searchAdmissions = new Map<QuickwitCluster, CorpusSearchAdmissionGate>();
+
+/**
+ * The longest wait a corpus read arriving now should expect, across this
+ * process's search queues; zero until a queue has seen enough reads to say.
+ */
+export const estimatedCorpusSearchWaitMs = (): number =>
+  Math.max(
+    0,
+    ...[...searchAdmissions.values()].map((admission) =>
+      admission.estimatedWaitMs(),
+    ),
+  );
 
 export const getCorpusIndexClient = (
   cluster: QuickwitCluster,
@@ -2001,10 +2022,11 @@ export const getCorpusIndexClient = (
   }
   // One search queue per cluster for the life of the process: every search
   // read of this process to that engine waits in it.
-  const client = buildClient(
-    cluster,
-    createCorpusSearchAdmission({ slots: LIMITS.corpusIndexSearchConcurrency }),
-  );
+  const admission = createCorpusSearchAdmission({
+    slots: LIMITS.corpusIndexSearchConcurrency,
+  });
+  const client = buildClient(cluster, admission);
+  searchAdmissions.set(cluster, admission);
   cachedClients.set(cluster, client);
   return client;
 };
