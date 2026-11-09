@@ -11,7 +11,10 @@ import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import { verifiedPassageTexts } from "@/api/lib/workflow/cited-passages";
 import { generateBatch } from "@/api/lib/workflow/generate-batch";
 import type { PreparedInputFile } from "@/api/lib/workflow/generate-batch";
-import type { GenerateBatchProps } from "@/api/lib/workflow/generate-batch-shared";
+import type {
+  GenerateBatchProps,
+  InputFieldRow,
+} from "@/api/lib/workflow/generate-batch-shared";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
@@ -76,19 +79,15 @@ const fileField = {
     sha256Hex: "a".repeat(64),
     pdfFileId: null,
   },
-} as const satisfies {
-  id: unknown;
-  propertyId: unknown;
-  content: FieldContent;
-};
+  aiSettlement: null,
+} as const satisfies InputFieldRow;
 
-const textInputField = (
-  content: FieldContent,
-): {
-  id: ReturnType<typeof toSafeId<"field">>;
-  propertyId: typeof inputId;
-  content: FieldContent;
-} => ({ id: toSafeId<"field">("field_input"), propertyId: inputId, content });
+const textInputField = (content: FieldContent): InputFieldRow => ({
+  id: toSafeId<"field">("field_input"),
+  propertyId: inputId,
+  content,
+  aiSettlement: null,
+});
 
 const DOCUMENT_TYPE_GATE = {
   type: "compare",
