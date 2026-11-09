@@ -19,15 +19,21 @@
  * Completion is also where a run's proposed fixes become Folio suggestions —
  * for the worker only, because the files-table path grades many documents at
  * once against a tier ladder and never grounds a fix.
+ *
+ * The rest of a run's lifecycle that both producers share lives here too: the
+ * failure write and the record of sources a run read only in part. Each
+ * batch's findings go through `writeReviewFindingBatch` in finding-write.ts,
+ * which ends here for the files-table path.
  */
 
 import { panic } from "better-result";
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { holdLiveSourceWorkspaces } from "@/api/lib/db/aggregate-lock";
+import type { ReviewWithheldSource } from "@/api/lib/document-review/contract";
 import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
 import { basisFixSourceWorkspaceIds } from "@/api/lib/document-review/reference-passages";
 import {
@@ -38,8 +44,15 @@ import type {
   ReviewFixStaging,
   StagedReviewFixSuggestions,
 } from "@/api/lib/document-review/review-suggestion-staging";
-import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
-import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
+import {
+  DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
+  DOCUMENT_REVIEW_RUN_EXECUTOR,
+} from "@/api/lib/document-review/run-contract";
+import type {
+  DocumentReviewRunBasis,
+  DocumentReviewRunErrorCode,
+} from "@/api/lib/document-review/run-contract";
+import { logger } from "@/api/lib/observability/logger";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
 import { maybeEmitDocumentReviewSignal } from "@/api/lib/scouts/document-review";
 
@@ -214,6 +227,89 @@ export const finalizeReviewRun = async (
     skippedForPendingLimit: staging.skippedForPendingLimit,
     skippedForUnreadableReference,
   };
+};
+
+type ReviewRunRef = {
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"documentReviewRun">;
+};
+
+/** Logs what a completion did beyond the status flip, the same way for both
+ *  producers. Call it after the completing transaction commits. */
+export const reportFinalizedReviewRun = (
+  finalized: FinalizeReviewRunResult | { type: "deferred" },
+  { workspaceId, runId }: ReviewRunRef,
+): void => {
+  if (finalized.type !== "completed") {
+    return;
+  }
+  const fields = (value: number) => ({
+    count: String(value),
+    runId,
+    workspaceId,
+  });
+  if (finalized.carried > 0) {
+    logger.info(
+      "document_review_run.decisions_carried",
+      fields(finalized.carried),
+    );
+  }
+  if (finalized.skippedForPendingLimit > 0) {
+    logger.warn(
+      "document_review_run.fixes_unstaged_pending_limit",
+      fields(finalized.skippedForPendingLimit),
+    );
+  }
+  if (finalized.skippedForUnreadableReference > 0) {
+    logger.warn(
+      "document_review_run.fixes_unstaged_unreadable_reference",
+      fields(finalized.skippedForUnreadableReference),
+    );
+  }
+};
+
+const updateActiveRun = async (
+  tx: Transaction,
+  { workspaceId, runId }: ReviewRunRef,
+  values: Partial<typeof documentReviewRuns.$inferInsert>,
+): Promise<void> => {
+  // audit: skip — bookkeeping on the run row audited at create.
+  await tx
+    .update(documentReviewRuns)
+    .set(values)
+    .where(
+      and(
+        eq(documentReviewRuns.id, runId),
+        eq(documentReviewRuns.workspaceId, workspaceId),
+        inArray(documentReviewRuns.status, [
+          ...DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
+        ]),
+      ),
+    );
+};
+
+/** Fails a run that is still queued or running. A terminal run is left as it
+ *  is, so a late failure never overwrites a completion. */
+export const failReviewRun = async (
+  tx: Transaction,
+  run: ReviewRunRef,
+  errorCode: DocumentReviewRunErrorCode,
+): Promise<void> => {
+  await updateActiveRun(tx, run, {
+    status: "failed",
+    errorCode,
+    finishedAt: new Date(),
+  });
+};
+
+/** Notes on a run which sources it read only in part. Every batch of a run reads
+ *  the same document under the same model, so a later batch writes the same record. */
+export const recordRunWithheldSources = async (
+  tx: Transaction,
+  run: ReviewRunRef,
+  withheld: readonly ReviewWithheldSource[],
+): Promise<void> => {
+  await updateActiveRun(tx, run, { withheldSources: [...withheld] });
 };
 
 type FinalizeWorkerRunArgs = {
