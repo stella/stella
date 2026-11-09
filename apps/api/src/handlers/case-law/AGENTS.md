@@ -730,6 +730,12 @@ type Block = HeadingBlock | ParagraphBlock | TableBlock | ImageBlock;
 - `heading` with `level: 1|2|3` for section titles
 - `paragraph` with optional `role`:
   - `"case-number"` — the file reference (top of document)
+  - `"opening-formula"` — the formula a court decides under and the state
+    line beside the title (`ČESKÁ REPUBLIKA`, `JMÉNEM REPUBLIKY`,
+    `V MENE SLOVENSKEJ REPUBLIKY`), kept as printed; centred under the title
+    in the reader, neither a heading nor `intro` prose. Recognised by
+    `isCzechOpeningFormula`, `isSkOpeningFormula` and `isSkStateLine`
+  - `"intro"` — the preamble and the lead-in (`takto:`) to the ruling
   - `"holding"` — ruling/verdict paragraphs (bold in reader)
   - `"closing"` — closing formula
   - `"signature"` — judge signatures
