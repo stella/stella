@@ -109,6 +109,12 @@ fn policy() -> AccountPolicy {
   .expect("the committed desktop account policy must be valid")
 }
 
+/// The link protocol a redemption announces in [`ACCOUNT_PROTOCOL_HEADER`].
+#[cfg(all(feature = "dev-runner-stand-in", unix))]
+pub(crate) fn link_protocol_header() -> (&'static str, String) {
+  (ACCOUNT_PROTOCOL_HEADER, policy().link_protocol.to_string())
+}
+
 pub(crate) fn role_forbidden_error() -> String {
   policy().error_codes.role_forbidden
 }

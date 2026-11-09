@@ -23,7 +23,10 @@ import {
  * Usage: `bun scripts/fake-codex-app-server.ts <scenario>`.
  */
 
-type FakeStep =
+/** A notification the client is sent, or a pause. */
+type FakeOutput = { notify: string; params: unknown } | { sleep: number };
+
+export type FakeStep =
   /** Wait for the client's next request with this method and answer it. */
   | {
       expect: string;
@@ -48,7 +51,12 @@ type FakeStep =
   | { spawn: readonly string[]; in?: "own_group" | "orphan" }
   | { raw: string }
   | { sleep: number }
-  | { exit: number };
+  | { exit: number }
+  /**
+   * Send these while watching for `turn/interrupt`: one answers it, ends the
+   * turn `interrupted` and the scenario. No later step may expect a request.
+   */
+  | { untilInterrupted: readonly FakeOutput[] };
 
 const userAgent = (version: string) =>
   `stella/${version} (Mac OS 27.0; arm64) test`;
@@ -63,7 +71,7 @@ const signedIn = {
   requiresOpenaiAuth: false,
 };
 
-const handshake = (
+export const handshake = (
   account: unknown = signedIn,
   version = "0.166.0",
 ): FakeStep[] => [
@@ -243,7 +251,99 @@ const tokenUsage = (usage: {
 
 const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
 
-const FAKE_SCENARIOS = {
+/**
+ * A turn out of its plan's limit: the rate limits Codex reports (each window
+ * resetting at a Unix time in seconds), a retry, then the failure.
+ */
+export const usageLimitTurn = (resetsAt: {
+  primary: number;
+  secondary: number;
+}): FakeStep[] => [
+  ...freshTurn(),
+  {
+    notify: "account/rateLimits/updated",
+    params: {
+      rateLimits: {
+        limitId: "codex",
+        limitName: null,
+        primary: {
+          usedPercent: 100,
+          windowDurationMins: 300,
+          resetsAt: resetsAt.primary,
+        },
+        secondary: {
+          usedPercent: 40,
+          windowDurationMins: 10_080,
+          resetsAt: resetsAt.secondary,
+        },
+        credits: null,
+        individualLimit: null,
+        planType: "plus",
+        rateLimitReachedType: null,
+      },
+    },
+  },
+  {
+    notify: "error",
+    params: {
+      threadId: FAKE_THREAD_ID,
+      turnId: FAKE_TURN_ID,
+      willRetry: true,
+      error: {
+        message: "Reconnecting",
+        codexErrorInfo: null,
+        additionalDetails: null,
+      },
+    },
+  },
+  completed("failed", {
+    message: "You've hit your usage limit.",
+    codexErrorInfo: "usageLimitExceeded",
+    additionalDetails: null,
+  }),
+];
+
+/** Between paced outputs, in milliseconds. */
+const FAKE_PACE_MS = Number(process.env["FAKE_CODEX_PACE_MS"] ?? "2000");
+
+const SLOW_TEXT_WORDS = [
+  "Lease",
+  " one",
+  " is",
+  " the",
+  " office",
+  " lease;",
+  " lease",
+  " two",
+  " is",
+  " the",
+  " warehouse.",
+];
+
+const textDelta = (itemId: string, delta: string): FakeOutput => ({
+  notify: "item/agentMessage/delta",
+  params: { threadId: FAKE_THREAD_ID, turnId: FAKE_TURN_ID, itemId, delta },
+});
+
+export const FAKE_SCENARIOS = {
+  /** A streamed answer and nothing else. */
+  text: [
+    ...freshTurn(),
+    {
+      notify: "turn/started",
+      params: { threadId: FAKE_THREAD_ID, turn: turn("inProgress") },
+    },
+    textDelta("m-text", "Lease one is the office lease;"),
+    textDelta("m-text", " lease two is the warehouse."),
+    item(
+      "completed",
+      agentMessage(
+        "m-text",
+        "Lease one is the office lease; lease two is the warehouse.",
+      ),
+    ),
+    completed(),
+  ],
   /**
    * The shared stella tool calls through the stella MCP binding, step by
    * step: a step's calls all start, then complete. Then an answer.
@@ -627,49 +727,28 @@ const FAKE_SCENARIOS = {
       additionalDetails: null,
     }),
   ],
-  usage_limit: [
+  usage_limit: usageLimitTurn({
+    primary: 1_793_196_000,
+    secondary: 1_793_700_000,
+  }),
+  /**
+   * An answer streamed a word at a time, `FAKE_CODEX_PACE_MS` apart; an
+   * interrupt ends it where it got to.
+   */
+  slow_text: [
     ...freshTurn(),
     {
-      notify: "account/rateLimits/updated",
-      params: {
-        rateLimits: {
-          limitId: "codex",
-          limitName: null,
-          primary: {
-            usedPercent: 100,
-            windowDurationMins: 300,
-            resetsAt: 1_793_196_000,
-          },
-          secondary: {
-            usedPercent: 40,
-            windowDurationMins: 10_080,
-            resetsAt: 1_793_700_000,
-          },
-          credits: null,
-          individualLimit: null,
-          planType: "plus",
-          rateLimitReachedType: null,
-        },
-      },
+      notify: "turn/started",
+      params: { threadId: FAKE_THREAD_ID, turn: turn("inProgress") },
     },
     {
-      notify: "error",
-      params: {
-        threadId: FAKE_THREAD_ID,
-        turnId: FAKE_TURN_ID,
-        willRetry: true,
-        error: {
-          message: "Reconnecting",
-          codexErrorInfo: null,
-          additionalDetails: null,
-        },
-      },
+      untilInterrupted: SLOW_TEXT_WORDS.flatMap((word): FakeOutput[] => [
+        { sleep: FAKE_PACE_MS },
+        textDelta("m-slow", word),
+      ]),
     },
-    completed("failed", {
-      message: "You've hit your usage limit.",
-      codexErrorInfo: "usageLimitExceeded",
-      additionalDetails: null,
-    }),
+    item("completed", agentMessage("m-slow", SLOW_TEXT_WORDS.join(""))),
+    completed(),
   ],
   capacity_retry: [
     ...freshTurn(),
@@ -832,7 +911,7 @@ const TURN_MODELS = {
 
 export type FakeScenario = keyof typeof FAKE_SCENARIOS;
 
-const isScenario = (name: string): name is FakeScenario =>
+export const isScenario = (name: string): name is FakeScenario =>
   Object.hasOwn(FAKE_SCENARIOS, name);
 
 const IncomingSchema = v.looseObject({
@@ -933,7 +1012,7 @@ const FAKE_SYSTEM_SKILL = "/fake-home/skills/.system/imagegen/SKILL.md";
  * roots this process was given, the member's own `~/.agents/skills`, and
  * whatever the working directory holds in its `.agents/skills`.
  */
-const skillDiscovery = () => {
+export const skillDiscovery = () => {
   const roots: string[] = [];
   const home = process.env["HOME"];
   return {
@@ -967,11 +1046,9 @@ const skillDiscovery = () => {
   };
 };
 
-const run = async (
-  steps: readonly FakeStep[],
-  log: (entry: object) => void,
-) => {
-  const { reading, take, write } = openFakeHarnessPeer({
+/** The client's requests and its responses to ours, read from stdin. */
+export const openCodexPeer = (log: (entry: object) => void) =>
+  openFakeHarnessPeer({
     schema: IncomingSchema,
     queueOf: (message) => {
       if (message.method === undefined) {
@@ -983,10 +1060,29 @@ const run = async (
     log,
   });
 
-  const skills = skillDiscovery();
+type CodexPeer = ReturnType<typeof openCodexPeer>;
+
+/**
+ * Plays `steps` to the client. A caller that answered the start of the
+ * conversation itself passes its `peer` and `skills`, and the `models`
+ * `model/list` answers with from then on.
+ */
+export const run = async (
+  steps: readonly FakeStep[],
+  log: (entry: object) => void,
+  options: {
+    peer?: CodexPeer;
+    skills?: ReturnType<typeof skillDiscovery>;
+    models?: object;
+  } = {},
+) => {
+  const { reading, take, write } = options.peer ?? openCodexPeer(log);
+
+  const skills = options.skills ?? skillDiscovery();
+  const models = options.models ?? TURN_MODELS;
   /** Model listing and skill discovery answer whenever they are asked. */
   const unscriptedAnswer = (method: string | undefined, params: unknown) =>
-    method === "model/list" ? TURN_MODELS : skills.answer(method, params);
+    method === "model/list" ? models : skills.answer(method, params);
   /** The next request a step scripts; skill discovery answers the rest. */
   const nextRequest = async (expected: string) => {
     for (;;) {
@@ -1001,6 +1097,51 @@ const run = async (
       }
       write({ id: message?.id, result: answer });
     }
+  };
+  /**
+   * Send `outputs` while watching for `turn/interrupt`, which ends the turn
+   * `interrupted`; how the stretch ended.
+   */
+  const playUntilInterrupted = async (
+    outputs: readonly FakeOutput[],
+  ): Promise<"played" | "interrupted" | "closed"> => {
+    const interrupt = nextRequest("turn/interrupt");
+    const watched: { message: Awaited<typeof interrupt> | undefined } = {
+      message: undefined,
+    };
+    // Registered before any race below, so it has run when one settles.
+    const settled = interrupt.then((message) => {
+      watched.message = message;
+      return message;
+    });
+    for (const output of outputs) {
+      if (watched.message !== undefined) {
+        break;
+      }
+      if ("sleep" in output) {
+        // await-in-loop: the outputs are paced one after another.
+        await Promise.race([Bun.sleep(output.sleep), settled]);
+      } else {
+        write({ method: output.notify, params: output.params });
+      }
+    }
+    const message = watched.message;
+    if (message === undefined) {
+      return "played";
+    }
+    if (message === null) {
+      return "closed";
+    }
+    if (message.method !== "turn/interrupt") {
+      log({ unexpected: message.method, wanted: "turn/interrupt" });
+      process.exit(97);
+    }
+    write({ id: message.id, result: {} });
+    write({
+      method: "turn/completed",
+      params: { threadId: FAKE_THREAD_ID, turn: turn("interrupted") },
+    });
+    return "interrupted";
   };
   let serverRequestId = 1000;
   for (const step of steps) {
@@ -1051,6 +1192,14 @@ const run = async (
       process.stdout.write(`${step.raw}\n`);
     } else if ("sleep" in step) {
       await Bun.sleep(step.sleep);
+    } else if ("untilInterrupted" in step) {
+      const played = await playUntilInterrupted(step.untilInterrupted);
+      if (played === "closed") {
+        return;
+      }
+      if (played === "interrupted") {
+        break;
+      }
     } else {
       process.exit(step.exit);
     }

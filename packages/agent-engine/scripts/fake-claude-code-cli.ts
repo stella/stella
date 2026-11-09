@@ -19,7 +19,7 @@ import {
  * Usage: `bun scripts/fake-claude-code-cli.ts <scenario> [CLI arguments]`.
  */
 
-type FakeStep =
+export type FakeStep =
   /** Wait for the client's next control request of this subtype; answer it. */
   | { expect: string; response?: unknown; error?: string }
   /** Wait for the client's next user message. */
@@ -243,7 +243,7 @@ export const FAKE_SANDBOX_REFUSAL =
 
 const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
 
-const FAKE_SCENARIOS = {
+export const FAKE_SCENARIOS = {
   /**
    * The shared stella tool calls through the stella MCP binding, step by
    * step: one assistant message per call of a step (the CLI writes one per
@@ -775,7 +775,7 @@ export type FakeScenarioName = keyof typeof FAKE_SCENARIOS;
 const isScenario = (name: string): name is FakeScenarioName =>
   Object.hasOwn(FAKE_SCENARIOS, name);
 
-const stepsFor = (
+export const stepsFor = (
   scenario: FakeScenario,
   args: readonly string[],
 ): readonly FakeStep[] => {
@@ -840,7 +840,7 @@ const UserInputSchema = v.looseObject({
 const OBSERVED_ENV =
   /^(?:ANTHROPIC_|CLAUDE|AWS_BEARER_TOKEN_BEDROCK$|DISABLE_AUTOUPDATER$|ENABLE_CLAUDEAI_MCP_SERVERS$|FAKE_KEEP$|BUN_INSTALL_CACHE_DIR$|npm_config_cache$|PIP_CACHE_DIR$|UV_CACHE_DIR$|PLAYWRIGHT_BROWSERS_PATH$|XDG_CACHE_HOME$)/u;
 
-const run = async (
+export const run = async (
   steps: readonly FakeStep[],
   log: (entry: object) => void,
 ) => {

@@ -1,7 +1,9 @@
 #!/usr/bin/env bun
 // A signed-in local stack in one blocking command, for agents and scripts.
 //
-//   bun run agent:up       start (or reuse) this checkout's seeded stack
+//   bun run agent:up       start (or reuse) this checkout's seeded stack;
+//                          `-- --local-runner` adds a stand-in computer
+//                          (agent-local-runner.ts)
 //   bun run agent:status   print the live URLs and credentials paths
 //   bun run agent:down     stop the stack this checkout started
 //   bun run agent:reset    recreate a worktree stack from the seed alone
@@ -45,6 +47,14 @@ import {
   parseSealStatus,
   verifyAttachment,
 } from "./agent-evidence";
+import {
+  forgetLocalRunner,
+  LOCAL_RUNNER_FLAG,
+  printLocalRunner,
+  runningLocalRunner,
+  startLocalRunner,
+  stopLocalRunner,
+} from "./agent-local-runner";
 import { childExitStatus } from "./child-exit-status";
 import {
   DEV_SESSION_ID_ENV,
@@ -505,6 +515,10 @@ const printStatus = (root: string, runtime: DevRuntime) => {
   console.log(`storage state: ${path.join(root, STORAGE_STATE_PATH)}`);
   console.log(`env file:      ${devStatePath(root, AGENT_ENV_FILE)}`);
   console.log(`runner log:    ${devStatePath(root, RUNNER_LOG_FILE)}`);
+  const localRunner = runningLocalRunner(root);
+  if (localRunner !== null) {
+    printLocalRunner(root, localRunner);
+  }
 };
 
 const up = async (root: string, args: readonly string[]) => {
@@ -565,9 +579,22 @@ const up = async (root: string, args: readonly string[]) => {
   );
   console.log(reused === null ? "Stack ready." : "Reusing the running stack.");
   printStatus(root, runtime);
+  if (args.includes(LOCAL_RUNNER_FLAG) && runningLocalRunner(root) === null) {
+    const started = await startLocalRunner({
+      root,
+      apiUrl,
+      webUrl: runtime.webUrl ?? fail("The running stack has no web server"),
+      cookie: readSessionCookie(root),
+    });
+    if (started.isErr()) {
+      fail(started.error);
+    }
+  }
 };
 
 export const down = async (root: string) => {
+  // Its runs answer through the API, so it stops before the stack.
+  await stopLocalRunner(root);
   const runtime = readDevRuntime(root);
   const starting = readStartingRunner(root);
   // A runner still starting has no runtime file yet, only its starting pid.
@@ -828,6 +855,7 @@ const reset = async (root: string, args: readonly string[]) => {
   });
   await down(root);
   rmSync(devStatePath(root, AGENT_KEY_FILE), { force: true });
+  forgetLocalRunner(root);
   await up(root, args);
 };
 

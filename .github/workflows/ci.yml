@@ -6761,7 +6761,7 @@ jobs:
 
       - name: Test
         if: matrix.os == 'macos'
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features allocation-tests --target ${{ matrix.target }} --frozen
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features allocation-tests,dev-runner-stand-in --target ${{ matrix.target }} --frozen
 
       - name: Build test binaries
         if: matrix.os == 'windows'
@@ -6911,7 +6911,7 @@ jobs:
       - *desktop_rust_fetch
       - name: Clippy
         shell: pwsh
-        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen -- -D warnings
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --features dev-runner-stand-in --target ${{ matrix.target }} --frozen -- -D warnings
       - *merge_group_cancel
 
   dependency-audit:

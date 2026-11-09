@@ -186,6 +186,16 @@ impl SidecarHarnessHost {
       }),
     }
   }
+
+  /// Stop every run and let the holders exit. The app never does: its runs
+  /// outlive it. The development stand-in computer does when it stops.
+  #[cfg(all(feature = "dev-runner-stand-in", unix))]
+  pub(crate) async fn stop_holders(&self) {
+    let sidecar = self.shared.sidecar();
+    if let Some(sidecar) = sidecar {
+      sidecar.shutdown().await;
+    }
+  }
 }
 
 impl Shared {
