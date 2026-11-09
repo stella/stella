@@ -49,7 +49,7 @@ const STELLA_GENERATION_RUN_TRANSITIONS = defineTransitions(
   { terminal: ["committed", "failed", "cancelled"] },
 );
 
-export type GenerationRunScope = {
+type GenerationRunScope = {
   id: SafeId<"legalListGenerationRun">;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;

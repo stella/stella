@@ -214,6 +214,7 @@ export const FAILURE_TAGS = [
   "ExecutorSavepointError",
   "ExportCorpusSliceArgumentsError",
   "ExtractionWorkerError",
+  "FactExtractionReconcileError",
   "FeedbackIntakeRedisReplyError",
   "FeedbackStoreError",
   "FetchBoundaryError",
