@@ -14,6 +14,7 @@ import type {
 
 import { bfdiAdapter } from "./bfdi";
 import { edpbAdapter } from "./edpb";
+import { suipAdapter } from "./suip";
 import { uoouCzAdapter } from "./uoou-cz";
 import { uoouSkAdapter } from "./uoou-sk";
 import { wp29Adapter } from "./wp29";
@@ -79,7 +80,17 @@ export const SOFT_LAW_ADMISSIONS = {
     // The site states no reuse terms beyond its copyright footer.
     reuseNotice: "https://uoou.gov.cz/",
   },
-  "cz-suip": held,
+  "cz-suip": {
+    state: "registered",
+    adapter: suipAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "Státní úřad inspekce práce; https://suip.gov.cz",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["cz-suip"]),
+    },
+    // The site states no reuse terms beyond its copyright footer.
+    reuseNotice: "https://suip.gov.cz/",
+  },
   "at-dsb": unverified,
   "be-apd": unverified,
   "bg-cpdp": unverified,
