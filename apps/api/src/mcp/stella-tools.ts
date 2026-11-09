@@ -2862,7 +2862,7 @@ const readCaseLawQueryPages = (
   }
   const pages: CaseLawQueryOutcome[] = [];
   let timeout: InternalToolErrorResult | null = null;
-  let rejectedTimeout: { error: unknown } | null = null;
+  const rejectedTimeouts: unknown[] = [];
   for (const outcome of outcomes) {
     switch (outcome.type) {
       case "exhausted":
@@ -2870,7 +2870,7 @@ const readCaseLawQueryPages = (
         break;
       case "rejected":
         // Only a time-budget rejection reaches here.
-        rejectedTimeout ??= { error: outcome.error };
+        rejectedTimeouts.push(outcome.error);
         pages.push({ type: "timed_out", subCursor: outcome.subCursor });
         break;
       case "answered": {
@@ -2897,15 +2897,21 @@ const readCaseLawQueryPages = (
     }
   }
   if (pages.some(({ type }) => type === "page")) {
+    // No error answers these, so reading each is what records it, as an
+    // answered timeout is recorded.
+    for (const error of rejectedTimeouts) {
+      caseLawSearchTimeoutResult(error);
+    }
     return { type: "pages", pages };
   }
   // A thrown expiry keeps the answer the tool boundary gives it, so a search
   // reads the same whichever phrasing count it ran with.
+  const rejected = rejectedTimeouts.at(0);
   const expired =
-    rejectedTimeout === null
+    rejected === undefined
       ? timeout
-      : (searchRefusalResult(rejectedTimeout.error) ??
-        caseLawSearchTimeoutResult(rejectedTimeout.error) ??
+      : (searchRefusalResult(rejected) ??
+        caseLawSearchTimeoutResult(rejected) ??
         panic("A rejection kept with the phrasings is not a timeout"));
   return expired === null
     ? { type: "pages", pages }
@@ -3283,7 +3289,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     paginationOutcome: mergedCaseLawPaginationOutcome(pages),
     results: caseLawSearchResults(merged, parsed.output),
     total: caseLawAgentSearchTotal(single?.total ?? SEARCH_TOTAL_NOT_COUNTED),
-    ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
+    // A page empty only because a phrasing timed out is not an empty search,
+    // and its optional read must not replace the retry cursor with an error.
+    ...(merged.length === 0 && !pages.some(({ type }) => type === "timed_out")
+      ? await onboardingNextStep(context)
+      : {}),
   });
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
 };

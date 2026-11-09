@@ -4191,6 +4191,32 @@ describe("OpenAI-compatible MCP tools", () => {
           }) ?? panic("A budget expiry inside a scope is always attributed"),
       );
 
+    test("records a thrown timeout beside a phrasing that finished", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => {
+          if (query === "slow") {
+            throw budgetExpiry();
+          }
+          return answered(query, null);
+        },
+      );
+      const logs = installRecordingLogger();
+      try {
+        const result = await handleMcpToolCall({
+          args: { country: "CZE", queries: ["fast", "slow"] },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+
+        expect(result.isError).not.toBe(true);
+        expect(logs.at("WARN").map(({ message }) => message)).toContain(
+          "mcp.case_law_search_timeout",
+        );
+      } finally {
+        logs.restore();
+      }
+    });
+
     test("isolates a phrasing the request's deadline ended on a database read", async () => {
       searchDecisionsHandlerMock.mockImplementation(
         async ({ body: { query } }: { body: { query: string } }) => {
