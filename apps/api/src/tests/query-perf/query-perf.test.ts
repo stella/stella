@@ -722,7 +722,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           pages: unbounded,
         });
         note(
-          unbounded > READ_BUDGETS["scheduled.caseLaw.reportFreshness"].pages
+          unbounded > readBudgetPages("scheduled.caseLaw.reportFreshness")
             ? undefined
             : `the former unbounded freshness reads measured ${String(unbounded)} pages, inside the job's budget: the fixture is too small to refuse them`,
         );
