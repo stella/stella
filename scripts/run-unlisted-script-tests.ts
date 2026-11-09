@@ -284,8 +284,8 @@ const scriptTestDeclarationsSchema = v.object({
 });
 
 type ScriptTestDeclarations = {
-  readonly inputs?: Readonly<Record<string, readonly string[]>>;
-  readonly noTrackedInputs?: Readonly<Record<string, string>>;
+  readonly inputs?: Readonly<Record<string, readonly string[]>> | undefined;
+  readonly noTrackedInputs?: Readonly<Record<string, string>> | undefined;
 };
 
 /**
