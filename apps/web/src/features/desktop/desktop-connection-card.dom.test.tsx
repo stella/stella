@@ -218,8 +218,11 @@ describe("a challenge the desktop app just opened", () => {
 
     // The connection store is shared by the module, so the attempt ends on an
     // outcome that returns it to idle: shuffled tests must not inherit a link.
+    const approvalRequired = Result.ok({
+      status: "approval-required",
+    } as const);
     await act(async () => {
-      settled.resolve(Result.ok({ status: "approval-required" }));
+      settled.resolve(approvalRequired);
       await settled.promise;
     });
     expect(
