@@ -23,7 +23,8 @@ const boundedText = (maxLength: number) =>
     v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(maxLength))),
   );
 
-export const candidateFactDetailsSchema = v.object({
+// Strict, so a misspelt field is refused rather than silently dropped.
+export const candidateFactDetailsSchema = v.strictObject({
   occurredOn: v.optional(
     v.nullable(
       v.object({

@@ -28,6 +28,7 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
+import type { CreateTaskFactDetails } from "@/api/lib/tasks/create-task-entity";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 
 const bodySchema = v.object({
@@ -337,6 +338,29 @@ const releaseLostClaim = async (
   );
 };
 
+/** A fact candidate's proposal as the item's details; unstated scoring is
+ *  included. */
+const acceptedFactDetails = (
+  candidate: Pick<
+    ClaimedCandidate,
+    | "occurredOn"
+    | "occurredOnPrecision"
+    | "evidenceKind"
+    | "medium"
+    | "confidence"
+    | "interpretationNote"
+    | "scoring"
+  >,
+): CreateTaskFactDetails => ({
+  occurredOn: candidate.occurredOn,
+  occurredOnPrecision: candidate.occurredOnPrecision,
+  evidenceKind: candidate.evidenceKind,
+  medium: candidate.medium,
+  confidence: candidate.confidence,
+  interpretationNote: candidate.interpretationNote,
+  scoring: candidate.scoring ?? "included",
+});
+
 type CreateCandidateTaskOptions = {
   body: AcceptanceBody;
   candidate: ClaimedCandidate;
@@ -397,6 +421,11 @@ const createCandidateTask = async ({
         ...(body.sectionId && { listSectionId: body.sectionId }),
       },
       ...(workObligationSource ? { workObligationSource } : {}),
+      // Written with the item, so verification never reads an accepted fact
+      // before its details exist.
+      ...(candidate.itemType === LIST_ITEM_TYPE.FACT
+        ? { factDetails: acceptedFactDetails(candidate) }
+        : {}),
     }),
   );
 };
@@ -512,11 +541,13 @@ const finalizeAcceptance = async ({
     })),
   );
   // The candidate row is locked above, so its proposal cannot change under
-  // this read.
+  // this read; the item's own type is read too, since an item an earlier
+  // attempt committed may have been retyped since.
   const proposal = (
     await tx
       .select({
         itemType: legalListGenerationCandidates.itemType,
+        liveItemType: entities.listItemType,
         occurredOn: legalListGenerationCandidates.occurredOn,
         occurredOnPrecision: legalListGenerationCandidates.occurredOnPrecision,
         evidenceKind: legalListGenerationCandidates.evidenceKind,
@@ -526,6 +557,13 @@ const finalizeAcceptance = async ({
         scoring: legalListGenerationCandidates.scoring,
       })
       .from(legalListGenerationCandidates)
+      .innerJoin(
+        entities,
+        and(
+          eq(entities.id, entityId),
+          eq(entities.workspaceId, legalListGenerationCandidates.workspaceId),
+        ),
+      )
       .where(
         and(
           eq(legalListGenerationCandidates.id, body.candidateId),
@@ -535,19 +573,20 @@ const finalizeAcceptance = async ({
         ),
       )
   ).at(0);
-  if (proposal?.itemType === LIST_ITEM_TYPE.FACT) {
-    const { itemType: _itemType, scoring, ...details } = proposal;
-    // Every accepted fact gets its row, so a fact never scores by the row's
-    // absence. A row already there was written by a person on an item an
-    // interrupted earlier attempt committed, and their edit wins.
+  if (
+    proposal?.itemType === LIST_ITEM_TYPE.FACT &&
+    proposal.liveItemType === LIST_ITEM_TYPE.FACT
+  ) {
+    // The item is normally created with its details. This covers an item an
+    // interrupted earlier attempt committed without them, so an accepted fact
+    // never scores by the row's absence; a row already there wins.
     await tx
       .insert(legalListFactDetails)
       .values({
+        ...acceptedFactDetails(proposal),
         itemEntityId: entityId,
         workspaceId,
         listId: body.listId,
-        ...details,
-        scoring: scoring ?? "included",
         updatedBy: userId,
       })
       .onConflictDoNothing({ target: legalListFactDetails.itemEntityId });

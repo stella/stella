@@ -592,3 +592,40 @@ test("an accepted task gets no fact details", async () => {
     undefined,
   );
 });
+
+// Verification reads every fact item without a held row as relied on, so the
+// row must commit with the item itself, not in the later finalizing step.
+test("an accepted fact's details commit with the item, before acceptance finalizes", async () => {
+  const seeded = await seedAcceptance({
+    itemType: LIST_ITEM_TYPE.FACT,
+    ownership: "created-here",
+    sources: "cited",
+    factDetails: { scoring: "held", interpretationNote: "Two readings." },
+  });
+  const { createAcceptGenerationCandidate } =
+    await import("@/api/handlers/lists/generation-candidates/acceptance/create");
+  const { createTaskEntityHandler } =
+    await import("@/api/lib/tasks/create-task-entity");
+  const seenAtCreation: unknown[] = [];
+  const accept = createAcceptGenerationCandidate({
+    async *createTaskEntityHandler(props) {
+      const created = yield* createTaskEntityHandler({
+        ...props,
+        features: { governedWorkflow: false, legalLists: true },
+      });
+      if (created.isOk()) {
+        seenAtCreation.push(await factDetailsOf(created.value.entityId));
+      }
+      return created;
+    },
+  });
+
+  await runAcceptance(accept, seeded);
+
+  expect(seenAtCreation).toEqual([
+    expect.objectContaining({
+      scoring: "held",
+      interpretationNote: "Two readings.",
+    }),
+  ]);
+});
