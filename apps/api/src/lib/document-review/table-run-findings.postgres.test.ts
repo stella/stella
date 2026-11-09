@@ -217,7 +217,11 @@ const openTwoPositionRun = async (
       definitionId,
       versionId: null,
       provenance: "draft",
-      definitionSnapshot: { name: "Termination review", positions },
+      definitionSnapshot: {
+        name: "Termination review",
+        positions,
+        scope: null,
+      },
     },
     docTypeGate: null,
     projection: PLAYBOOK_RUN_PROJECTION.COLUMNS,
