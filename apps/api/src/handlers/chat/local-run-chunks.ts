@@ -402,13 +402,17 @@ const withCheckedContext = (
 };
 
 /**
- * Each call one read saw open: the tool name its start gave it, and whether
- * its arguments have been carried. A harness-native step's input is the
+ * Each call one read saw open: the tool name its first start gave it, and
+ * whether its arguments and its end have been carried. A harness-native
+ * step's input is the
  * contract's (`@stll/api-contract/chat-local-run-tool`): a command line, file
  * names, a search or a plan's titles, bounded. Whatever else a desktop puts on
  * it, a command's output or a file's contents included, is not carried.
  */
-type LocalRunToolCalls = Map<string, { name: string; argsCarried: boolean }>;
+type LocalRunToolCalls = Map<
+  string,
+  { name: string; argsCarried: boolean; endCarried: boolean }
+>;
 
 /** The input chat keeps for a native step, from what the desktop sent. */
 const nativeInput = (name: ChatLocalRunToolName, input: unknown) =>
@@ -461,6 +465,12 @@ const asToolInputChunk = (
   const stamp =
     chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp };
   if (chunk.type === EventType.TOOL_CALL_END) {
+    // A harness ends a native step once; a second end would rewrite the
+    // input the first one wrote.
+    if (call.endCarried) {
+      return null;
+    }
+    call.endCarried = true;
     // The normalised end the harness sends, its input rebuilt; anything
     // else on the chunk, a top-level input included, is not carried.
     const reported = tanstackOf(chunk.metadata);
@@ -665,6 +675,7 @@ const asChatChunk = (
       calls.set(chunk.toolCallId, {
         name: chunk.toolCallName,
         argsCarried: false,
+        endCarried: false,
       });
     }
     // A start's metadata becomes the call's: only the model a harness names
@@ -1249,6 +1260,7 @@ const openedCalls = async (
         calls.set(chunk.toolCallId, {
           name: chunk.toolCallName,
           argsCarried: true,
+          endCarried: true,
         });
       }
     }

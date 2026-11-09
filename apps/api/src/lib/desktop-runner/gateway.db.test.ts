@@ -4819,7 +4819,34 @@ describe("chat turns on a computer", () => {
       });
     });
     expect(turn.finish.outcome).toMatchObject({ type: "awaiting-user" });
-    const stored = persistTurn(turn.finish, "harness").unwrap();
+    const pause = turn.emitted.findLast(
+      (chunk) =>
+        chunk.type === EventType.RUN_FINISHED &&
+        chunk.outcome?.type === "interrupt",
+    );
+    if (
+      pause?.type !== EventType.RUN_FINISHED ||
+      pause.outcome?.type !== "interrupt"
+    ) {
+      return panic("the served turn did not pause");
+    }
+    // As `streamChat` stores an awaiting turn: with its interrupts.
+    const stored = persistTurn(
+      {
+        ...turn.finish,
+        responseMessage: {
+          ...turn.finish.responseMessage,
+          metadata: {
+            ...turn.finish.responseMessage.metadata,
+            resumeSnapshot: {
+              resumeState: { threadId: "thread-approval", runId: pause.runId },
+              pendingInterrupts: pause.outcome.interrupts,
+            },
+          },
+        },
+      },
+      "harness",
+    ).unwrap();
     expect(
       JSON.stringify({ emitted: turn.emitted, finish: turn.finish, stored }),
     ).not.toContain(secret);
