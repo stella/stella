@@ -108,7 +108,8 @@ testState.beforeAll(async () => {
         resourceType === AUDIT_RESOURCE_TYPE.CHAT_MESSAGE ||
         resourceType === AUDIT_RESOURCE_TYPE.CHAT_FILE ||
         resourceType === AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION ||
-        resourceType === AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT
+        resourceType === AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT ||
+        resourceType === AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT
       ) {
         await recordAuditEvent(tx, {
           ...event,
