@@ -177,8 +177,7 @@ const isCoveredBySiteGrant = ({
     case BROWSER_CONTROL_ACTION.fill:
       return (
         targetsTopFrame(command.target.ref) &&
-        observedPage !== null &&
-        observedPage.valueRefs.has(command.target.ref)
+        observedPage?.valueRefs.has(command.target.ref) === true
       );
     default:
       command satisfies never;

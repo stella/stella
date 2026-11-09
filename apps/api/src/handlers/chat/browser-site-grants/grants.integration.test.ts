@@ -138,7 +138,7 @@ describe("browser site grants (database)", () => {
     const second = await store("https://EXAMPLE.com:443/b");
     expect(second).toMatchObject({ created: false });
     if (first instanceof HttpStatusResponse) {
-      return panic("Expected the first grant to be stored");
+      panic("Expected the first grant to be stored");
     }
     expect(second).toMatchObject({ id: first.id });
     expect(await reload()).toHaveLength(1);
@@ -174,7 +174,7 @@ describe("browser site grants (database)", () => {
   test("a removed grant is gone on the next read", async () => {
     const stored = await store("https://example.com/");
     if (stored instanceof HttpStatusResponse) {
-      return panic("Expected the grant to be stored");
+      panic("Expected the grant to be stored");
     }
     expect(await remove(stored.id)).toEqual({ deleted: true });
     expect(await reload()).toEqual([]);
