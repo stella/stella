@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { waitFor } from "@stll/test-kit";
+
 import {
   type ContinuationCodec,
   type ContinuationStore,
@@ -91,6 +93,9 @@ const workFor = ({
 });
 
 const deferred = () => Promise.withResolvers<undefined>();
+
+const until = async (condition: () => boolean, description: string) =>
+  await waitFor(() => (condition() ? true : undefined), { description });
 
 describe("public read continuation", () => {
   test("a read inside the deadline answers normally and stores nothing", async () => {
@@ -377,7 +382,10 @@ describe("public read continuation", () => {
     });
     const attempt = async () =>
       await instance.attach({ work, via: "call", responseDeadlineMs: 1000 });
-    expect((await attempt()).status).toBe("running");
+    expect(await attempt()).toMatchObject({
+      status: "running",
+      phase: "not_started",
+    });
     expect((await attempt()).status).toBe("running");
     expect(runs).toBe(2);
     expect(await attempt()).toEqual({ status: "exhausted", token: "work-1" });
@@ -435,6 +443,297 @@ describe("public read continuation", () => {
     gate.resolve(undefined);
     expect((await waiting).status).toBe("finished");
     expect(Result.unwrap(await store.readFinished("work-1"))).toBeNull();
+  });
+
+  test("an answer too large for the token that wants it ends, not runs for ever", async () => {
+    const { store } = createFakeStore();
+    const instance = createInstance(store, "a", {
+      maxResultBytes: 10,
+      maxAttempts: 2,
+    });
+    let gate = deferred();
+    let runs = 0;
+    const work = workFor({
+      run: async (args) => {
+        runs += 1;
+        await gate.promise;
+        return { query: args.query, complete: true };
+      },
+    });
+    const slowRun = async () => {
+      gate = deferred();
+      const first = await instance.attach({
+        work,
+        via: "token",
+        responseDeadlineMs: 0,
+      });
+      expect(first.status).toBe("running");
+      const waiting = instance.attach({
+        work,
+        via: "token",
+        responseDeadlineMs: 1000,
+      });
+      gate.resolve(undefined);
+      await waiting;
+    };
+    await slowRun();
+    await slowRun();
+    expect(runs).toBe(2);
+    expect(
+      await instance.attach({ work, via: "token", responseDeadlineMs: 1000 }),
+    ).toEqual({ status: "exhausted", token: "work-1" });
+  });
+
+  test("the size limit counts bytes, not characters", async () => {
+    const { store } = createFakeStore();
+    const query = "ě".repeat(40);
+    const instance = createInstance(store, "a", { maxResultBytes: 100 });
+    const gate = deferred();
+    const work = workFor({
+      run: async () => {
+        await gate.promise;
+        return { query, complete: true };
+      },
+    });
+    await instance.attach({ work, via: "call", responseDeadlineMs: 0 });
+    const waiting = instance.attach({
+      work,
+      via: "call",
+      responseDeadlineMs: 1000,
+    });
+    gate.resolve(undefined);
+    expect((await waiting).status).toBe("finished");
+    expect(Result.unwrap(await store.readFinished("work-1"))).toBeNull();
+  });
+
+  describe("answers the store refused", () => {
+    const heldOnThisTask = async () => {
+      const fake = createFakeStore();
+      let clock = 0;
+      const instance = createPublicReadContinuation<Args, Answer, Progress>({
+        codec,
+        store: fake.store,
+        ownerId: "a",
+        limits,
+        now: () => clock,
+        sleep: neverElapses,
+      });
+      fake.setAvailable(false);
+      const gate = deferred();
+      let runs = 0;
+      const work = workFor({
+        run: async (args) => {
+          runs += 1;
+          await gate.promise;
+          return { query: args.query, complete: true };
+        },
+      });
+      await instance.attach({ work, via: "call", responseDeadlineMs: 0 });
+      const waiting = instance.attach({
+        work,
+        via: "call",
+        responseDeadlineMs: 1000,
+      });
+      gate.resolve(undefined);
+      await waiting;
+      const collect = async () =>
+        await instance.attach({ work, via: "token", responseDeadlineMs: 1000 });
+      return {
+        ...fake,
+        collect,
+        runs: () => runs,
+        pass: (ms: number) => {
+          clock += ms;
+        },
+      };
+    };
+
+    test("serve their token only for their retention", async () => {
+      const { collect, runs, pass } = await heldOnThisTask();
+      expect((await collect()).status).toBe("finished");
+      expect(runs()).toBe(1);
+      pass(limits.retentionMs + 1);
+      expect((await collect()).status).toBe("finished");
+      expect(runs()).toBe(2);
+    });
+
+    test("give way to what the store holds now", async () => {
+      const { collect, runs, store, setAvailable } = await heldOnThisTask();
+      setAvailable(true);
+      Result.unwrap(
+        await store.writeFinished(
+          "work-1",
+          JSON.stringify({
+            complete: true,
+            result: { query: "from-the-store", complete: true },
+          }),
+          60_000,
+        ),
+      );
+      expect(await collect()).toEqual({
+        status: "finished",
+        result: { query: "from-the-store", complete: true },
+      });
+      expect(runs()).toBe(1);
+    });
+  });
+
+  describe("lease ownership", () => {
+    const withRenewalLog = (store: ContinuationStore) => {
+      const renewed: { id: string; held: boolean }[] = [];
+      const logged: ContinuationStore = {
+        ...store,
+        renewLease: async (id, owner, ttl) => {
+          const reply = await store.renewLease(id, owner, ttl);
+          if (Result.isOk(reply)) {
+            renewed.push({ id, held: reply.value });
+          }
+          return reply;
+        },
+      };
+      return { logged, renewed };
+    };
+
+    test("a run stops when another task takes its work, and cannot overwrite that task's answer", async () => {
+      const { store } = createFakeStore();
+      const instance = createInstance(store, "a", { leaseMs: 9 });
+      const aborted = deferred();
+      const release = deferred();
+      const work = {
+        ...workFor(),
+        run: async (args: Args, { signal }: { signal: AbortSignal }) => {
+          signal.addEventListener("abort", () => {
+            aborted.resolve(undefined);
+          });
+          await release.promise;
+          return Result.ok({ query: args.query, complete: false });
+        },
+      };
+      await instance.attach({ work, via: "call", responseDeadlineMs: 0 });
+      Result.unwrap(await store.releaseLease("work-1", "a"));
+      Result.unwrap(await store.acquireLease("work-1", "b", 60_000));
+      await aborted.promise;
+      const theirs = JSON.stringify({
+        complete: true,
+        result: { query: "theirs", complete: true },
+      });
+      Result.unwrap(await store.writeFinished("work-1", theirs, 60_000));
+      const joined = instance.attach({
+        work,
+        via: "call",
+        responseDeadlineMs: 1000,
+      });
+      release.resolve(undefined);
+      await joined;
+      expect(Result.unwrap(await store.readFinished("work-1"))).toBe(theirs);
+    });
+
+    test("a queued job keeps renewing its lease, so no other task starts it too", async () => {
+      const { store } = createFakeStore();
+      const { logged, renewed } = withRenewalLog(store);
+      const instance = createInstance(logged, "a", {
+        leaseMs: 9,
+        perCallerConcurrency: 1,
+      });
+      const release = deferred();
+      const blocked = async (args: Args) => {
+        await release.promise;
+        return { query: args.query, complete: true };
+      };
+      await instance.attach({
+        work: workFor({ id: "work-1", run: blocked }),
+        via: "call",
+        responseDeadlineMs: 0,
+      });
+      expect(
+        await instance.attach({
+          work: workFor({ id: "work-2", run: blocked }),
+          via: "call",
+          responseDeadlineMs: 0,
+        }),
+      ).toMatchObject({ status: "running", phase: "queued" });
+      await until(() => renewed.some(({ id }) => id === "work-2"), "a renewal");
+      expect(renewed.find(({ id }) => id === "work-2")?.held).toBe(true);
+      release.resolve(undefined);
+    });
+
+    test("with the store down at the start, a recovered store does not stop the run", async () => {
+      const { store, setAvailable } = createFakeStore();
+      const { logged, renewed } = withRenewalLog(store);
+      setAvailable(false);
+      const instance = createInstance(logged, "a", { leaseMs: 9 });
+      const release = deferred();
+      let aborted = false;
+      const work = {
+        ...workFor(),
+        run: async (args: Args, { signal }: { signal: AbortSignal }) => {
+          signal.addEventListener("abort", () => {
+            aborted = true;
+          });
+          await release.promise;
+          return Result.ok({ query: args.query, complete: true });
+        },
+      };
+      await instance.attach({ work, via: "call", responseDeadlineMs: 0 });
+      setAvailable(true);
+      await until(() => renewed.length > 0, "a renewal");
+      expect(renewed.at(0)?.held).toBe(false);
+      expect(aborted).toBe(false);
+      release.resolve(undefined);
+    });
+  });
+
+  test("a run that ignores its budget gives its slot back", async () => {
+    const { store } = createFakeStore();
+    const instance = createInstance(store, "a", {
+      runBudgetMs: 5,
+      perCallerConcurrency: 1,
+    });
+    const stuck = workFor({
+      run: async () => await Promise.withResolvers<Answer>().promise,
+    });
+    expect(
+      await instance.attach({
+        work: stuck,
+        via: "call",
+        responseDeadlineMs: 5000,
+      }),
+    ).toMatchObject({ status: "running", phase: "not_started" });
+    expect(
+      await instance.attach({
+        work: workFor({ id: "work-2" }),
+        via: "call",
+        responseDeadlineMs: 1000,
+      }),
+    ).toMatchObject({ status: "finished" });
+  });
+
+  test("identical calls during a store outage run the work once", async () => {
+    const { store, setAvailable } = createFakeStore();
+    setAvailable(false);
+    const instance = createInstance(store, "a");
+    let runs = 0;
+    const gate = deferred();
+    const work = workFor({
+      run: async (args) => {
+        runs += 1;
+        await gate.promise;
+        return { query: args.query, complete: true };
+      },
+    });
+    const calls = [1, 2, 3].map(
+      async () =>
+        await instance.attach({ work, via: "call", responseDeadlineMs: 1000 }),
+    );
+    await until(() => runs > 0, "the run to start");
+    gate.resolve(undefined);
+    const outcomes = await Promise.all(calls);
+    expect(outcomes.map(({ status }) => status)).toEqual([
+      "finished",
+      "finished",
+      "finished",
+    ]);
+    expect(runs).toBe(1);
   });
 
   test("a stored answer that no longer parses reads as absent", async () => {

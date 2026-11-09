@@ -840,8 +840,9 @@ const runAuthorizedMcpToolCall = async ({
   if (budgetMs === undefined) {
     return await run();
   }
-  // The continuation owns these tools' concurrency, per work and per caller:
-  // a call over the limit is queued and told so, not refused.
+  // The continuation owns these tools' concurrency and takes the caller's
+  // fleet-wide slot for the detached run: a call over the limit is queued and
+  // told so, not refused.
   if (CONTINUABLE_PUBLIC_READ_TOOLS.has(toolName)) {
     const finished = await runWithPublicReadScope(
       { budgetMs, signal: context.request?.signal },

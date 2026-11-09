@@ -131,11 +131,19 @@ type JobOutcome<R> =
   | { type: "overloaded" }
   | { type: "failed"; error: unknown };
 
+type LeaseHold = {
+  /** Aborts when the store confirms another task now owns this work. */
+  signal: AbortSignal;
+  lost: () => boolean;
+  stop: () => void;
+};
+
 type Job<R, P> = {
   phase: "queued" | "running";
   progress: P | null;
   /** A caller on this task holds a token, so the answer must be stored. */
   tokenIssued: boolean;
+  lease: LeaseHold;
   settled: Promise<JobOutcome<R>>;
 };
 
@@ -290,10 +298,14 @@ type Reported = <T>(
 
 const LOCAL_FINISHED_MAX = 32;
 
+/** How long a run may ignore its abort before its slot is taken back. */
+const ABORT_GRACE_MS = 1000;
+
 type FinishedAnswersOptions<R> = {
   decodeResult: (value: unknown) => R | null;
   store: ContinuationStore;
   limits: PublicReadContinuationLimits;
+  now: () => number;
   reported: Reported;
   onStoreError: (operation: string, error: ContinuationStoreError) => void;
 };
@@ -303,11 +315,27 @@ const createFinishedAnswers = <R>({
   decodeResult,
   store,
   limits,
+  now,
   reported,
   onStoreError,
 }: FinishedAnswersOptions<R>) => {
   /** Answers the store refused, so this task can still serve its own token. */
-  const localFinished = new Map<string, string>();
+  const localFinished = new Map<
+    string,
+    { json: string; expiresAtMs: number }
+  >();
+
+  const liveLocal = (workId: string): string | null => {
+    const entry = localFinished.get(workId);
+    if (entry === undefined) {
+      return null;
+    }
+    if (entry.expiresAtMs <= now()) {
+      localFinished.delete(workId);
+      return null;
+    }
+    return entry.json;
+  };
 
   const decodeFinished = (raw: string): StoredFinished<R> | null => {
     const parsed = parseJson(raw);
@@ -321,32 +349,32 @@ const createFinishedAnswers = <R>({
   const readFinished = async (
     workId: string,
   ): Promise<StoredFinished<R> | null> => {
-    const local = localFinished.get(workId);
-    if (local !== undefined) {
-      return decodeFinished(local);
-    }
+    // The store first: a local answer is only what the store refused, and a
+    // newer run may have written a better one since.
     const stored = reported("read_finished", await store.readFinished(workId));
-    return stored === undefined || stored === null
-      ? null
-      : decodeFinished(stored);
+    if (stored !== undefined && stored !== null) {
+      localFinished.delete(workId);
+      return decodeFinished(stored);
+    }
+    const local = liveLocal(workId);
+    return local === null ? null : decodeFinished(local);
   };
 
   const keepFinished = async (
     workId: string,
     finished: StoredFinished<R>,
-  ): Promise<void> => {
+  ): Promise<"kept" | "too_large"> => {
     const json = JSON.stringify(finished);
-    if (json.length > limits.maxResultBytes) {
-      return;
+    if (Buffer.byteLength(json) > limits.maxResultBytes) {
+      return "too_large";
     }
-    const written = await store.writeFinished(
-      workId,
-      json,
-      finished.complete ? limits.retentionMs : limits.incompleteRetentionMs,
-    );
+    const ttlMs = finished.complete
+      ? limits.retentionMs
+      : limits.incompleteRetentionMs;
+    const written = await store.writeFinished(workId, json, ttlMs);
     if (Result.isError(written)) {
       onStoreError("write_finished", written.error);
-      localFinished.set(workId, json);
+      localFinished.set(workId, { json, expiresAtMs: now() + ttlMs });
       if (localFinished.size > LOCAL_FINISHED_MAX) {
         const oldest = localFinished.keys().next();
         if (!oldest.done) {
@@ -354,19 +382,85 @@ const createFinishedAnswers = <R>({
         }
       }
     }
+    return "kept";
   };
 
   return { readFinished, keepFinished };
+};
+
+/**
+ * Settles once the run has ignored its abort for the grace period, so a stuck
+ * promise cannot hold a slot and a lease for ever.
+ */
+const abandonAfterAbort = async (signal: AbortSignal) =>
+  await new Promise<Result<never, "abandoned">>((resolve) => {
+    signal.addEventListener(
+      "abort",
+      () => {
+        setTimeout(() => {
+          resolve(Result.err("abandoned"));
+        }, ABORT_GRACE_MS).unref();
+      },
+      { once: true },
+    );
+  });
+
+type HoldLeaseOptions = {
+  workId: string;
+  store: ContinuationStore;
+  ownerId: string;
+  limits: PublicReadContinuationLimits;
+  reported: Reported;
+  /** False when the store was down at the start: there is no lease to lose. */
+  leased: boolean;
+};
+
+/** Keep the lease alive from admission, queue time included, until stopped. */
+const holdLease = ({
+  workId,
+  store,
+  ownerId,
+  limits,
+  reported,
+  leased,
+}: HoldLeaseOptions): LeaseHold => {
+  const controller = new AbortController();
+  const heartbeat = setInterval(
+    () => {
+      detached(async () => {
+        const renewed = reported(
+          "renew_lease",
+          await store.renewLease(workId, ownerId, limits.leaseMs),
+        );
+        // `undefined` is an unreachable store, which says nothing about who
+        // owns the work.
+        if (renewed === false && leased) {
+          controller.abort();
+        }
+      }, "public-read-continuation.renew-lease");
+    },
+    Math.max(1, Math.floor(limits.leaseMs / 3)),
+  );
+  heartbeat.unref();
+  return {
+    signal: controller.signal,
+    lost: () => controller.signal.aborted,
+    stop: () => {
+      clearInterval(heartbeat);
+    },
+  };
 };
 
 type RunContinuationJobOptions<A, R, P> = {
   work: ContinuationWork<A, R, P>;
   job: Job<R, P>;
   store: ContinuationStore;
-  ownerId: string;
   limits: PublicReadContinuationLimits;
   reported: Reported;
-  keepFinished: (workId: string, finished: StoredFinished<R>) => Promise<void>;
+  keepFinished: (
+    workId: string,
+    finished: StoredFinished<R>,
+  ) => Promise<"kept" | "too_large">;
   persistProgress: (workId: string, progress: P) => void;
 };
 
@@ -375,7 +469,6 @@ const runContinuationJob = async <A, R, P>({
   work,
   job,
   store,
-  ownerId,
   limits,
   reported,
   keepFinished,
@@ -387,43 +480,38 @@ const runContinuationJob = async <A, R, P>({
     return job.tokenIssued || (spec !== undefined && spec !== null);
   };
 
+  // Lost while queued: the task that took the lease runs it.
+  if (job.lease.lost()) {
+    return { type: "overloaded" };
+  }
   job.phase = "running";
   const controller = new AbortController();
   const budget = setTimeout(() => {
     controller.abort();
   }, limits.runBudgetMs);
   budget.unref();
-  const heartbeat = setInterval(
-    () => {
-      detached(async () => {
-        reported(
-          "renew_lease",
-          await store.renewLease(work.workId, ownerId, limits.leaseMs),
-        );
-      }, "public-read-continuation.renew-lease");
-    },
-    Math.max(1, Math.floor(limits.leaseMs / 3)),
-  );
-  heartbeat.unref();
+  const signal = AbortSignal.any([controller.signal, job.lease.signal]);
   const reportProgress = (progress: P) => {
     job.progress = progress;
     if (job.tokenIssued) {
       persistProgress(work.workId, progress);
     }
   };
-  const settled = await Result.tryPromise({
-    try: async () =>
-      await work.run(work.args, {
-        signal: controller.signal,
-        reportProgress,
-      }),
-    catch: (error) => error,
-  });
+  const settled = await Promise.race([
+    Result.tryPromise({
+      try: async () => await work.run(work.args, { signal, reportProgress }),
+      catch: (error) => error,
+    }),
+    abandonAfterAbort(signal),
+  ]);
   const attempted = Result.isError(settled) ? settled : settled.value;
   clearTimeout(budget);
-  clearInterval(heartbeat);
+  // Another task owns this work now; what this run found must not replace it.
+  if (job.lease.lost()) {
+    return { type: "overloaded" };
+  }
   if (Result.isError(attempted)) {
-    return work.isOverload(attempted.error) || controller.signal.aborted
+    return work.isOverload(attempted.error) || signal.aborted
       ? { type: "overloaded" }
       : { type: "failed", error: attempted.error };
   }
@@ -431,12 +519,16 @@ const runContinuationJob = async <A, R, P>({
   if (verdict.type === "overloaded") {
     return { type: "overloaded" };
   }
-  reported("clear_attempts", await store.clearAttempts(work.workId));
-  if (await someoneHoldsToken()) {
-    await keepFinished(work.workId, {
-      complete: verdict.type === "complete",
-      result: attempted.value,
-    });
+  const kept = (await someoneHoldsToken())
+    ? await keepFinished(work.workId, {
+        complete: verdict.type === "complete",
+        result: attempted.value,
+      })
+    : "kept";
+  // An answer no token can collect must keep counting, or a token holder
+  // would be told "running" forever.
+  if (kept === "kept") {
+    reported("clear_attempts", await store.clearAttempts(work.workId));
   }
   return { type: "finished", result: attempted.value };
 };
@@ -481,6 +573,7 @@ type StartContinuationJobOptions<A, R, P> = {
   ownerId: string;
   limits: PublicReadContinuationLimits;
   reported: Reported;
+  leased: boolean;
   runJob: (
     work: ContinuationWork<A, R, P>,
     job: Job<R, P>,
@@ -500,6 +593,7 @@ const startContinuationJob = async <A, R, P>({
   ownerId,
   limits,
   reported,
+  leased,
   runJob,
 }: StartContinuationJobOptions<A, R, P>): Promise<
   Job<R, P> | "not_started" | "exhausted"
@@ -521,6 +615,19 @@ const startContinuationJob = async <A, R, P>({
   if (attempts !== undefined && attempts > limits.maxAttempts) {
     return await giveUp("exhausted");
   }
+  // With the store down nothing serialised the starts above.
+  const raced = jobs.get(work.workId);
+  if (raced !== undefined) {
+    return raced;
+  }
+  const lease = holdLease({
+    workId: work.workId,
+    store,
+    ownerId,
+    limits,
+    reported,
+    leased,
+  });
   let begin: () => void = () => undefined;
   const started = new Promise<void>((resolve) => {
     begin = resolve;
@@ -529,9 +636,13 @@ const startContinuationJob = async <A, R, P>({
     phase: "queued",
     progress: null,
     tokenIssued: false,
+    lease,
     settled: started.then(async () => {
       const outcome = await runJob(work, job);
-      jobs.delete(work.workId);
+      lease.stop();
+      if (jobs.get(work.workId) === job) {
+        jobs.delete(work.workId);
+      }
       gate.release(work.caller);
       // Not awaited: whoever waits on this job has its answer already.
       detached(async () => {
@@ -545,6 +656,7 @@ const startContinuationJob = async <A, R, P>({
   };
   const admitted = gate.enter(work.caller, begin);
   if (admitted === "refused") {
+    lease.stop();
     return await giveUp("not_started");
   }
   if (admitted === "started") {
@@ -554,26 +666,18 @@ const startContinuationJob = async <A, R, P>({
   return job;
 };
 
-type SuggestedRetryAfterOptions = {
-  queueWaitMs: number;
-  backlog: number;
-  concurrency: number;
-  limits: PublicReadContinuationLimits;
-};
-
-const suggestedRetryAfterMs = ({
-  queueWaitMs,
-  backlog,
-  concurrency,
-  limits,
-}: SuggestedRetryAfterOptions): number =>
+const suggestedRetryAfterMs = (
+  gate: Pick<ReturnType<typeof createWorkGate>, "backlog" | "concurrency">,
+  queueWaitMs: number,
+  limits: PublicReadContinuationLimits,
+): number =>
   Math.round(
     Math.min(
       limits.maxRetryAfterMs,
       Math.max(
         limits.minRetryAfterMs,
         queueWaitMs,
-        (backlog / concurrency) * limits.followPollMs * 4,
+        (gate.backlog() / gate.concurrency) * limits.followPollMs * 4,
       ),
     ),
   );
@@ -613,6 +717,7 @@ export const createPublicReadContinuation = <A, R, P>({
     decodeResult: codec.result,
     store,
     limits,
+    now,
     reported,
     onStoreError,
   });
@@ -659,12 +764,7 @@ export const createPublicReadContinuation = <A, R, P>({
     return {
       status: "running",
       token: work.workId,
-      retryAfterMs: suggestedRetryAfterMs({
-        queueWaitMs: estimateQueueWaitMs(),
-        backlog: gate.backlog(),
-        concurrency: gate.concurrency,
-        limits,
-      }),
+      retryAfterMs: suggestedRetryAfterMs(gate, estimateQueueWaitMs(), limits),
       phase,
       progress,
     };
@@ -678,14 +778,13 @@ export const createPublicReadContinuation = <A, R, P>({
       work,
       job,
       store,
-      ownerId,
       limits,
       reported,
       keepFinished,
       persistProgress,
     });
 
-  const start = async (work: ContinuationWork<A, R, P>) =>
+  const start = async (work: ContinuationWork<A, R, P>, leased: boolean) =>
     await startContinuationJob({
       work,
       gate,
@@ -694,10 +793,10 @@ export const createPublicReadContinuation = <A, R, P>({
       ownerId,
       limits,
       reported,
+      leased,
       runJob,
     });
 
-  /** Wait for the job until the deadline; a slower job keeps running. */
   const awaitJob = async (
     work: ContinuationWork<A, R, P>,
     job: Job<R, P>,
@@ -718,7 +817,7 @@ export const createPublicReadContinuation = <A, R, P>({
       case "finished":
         return { status: "finished", result: settled.result };
       case "overloaded":
-        return await running(work, "running", job.progress);
+        return await running(work, "not_started", job.progress);
       case "failed":
         return { status: "failed", error: settled.error };
       default:
@@ -734,7 +833,6 @@ export const createPublicReadContinuation = <A, R, P>({
       : codec.progress(parseJson(stored));
   };
 
-  /** Start the work here, or follow the task that holds its lease. */
   const startOrFollow = async (
     work: ContinuationWork<A, R, P>,
     via: "call" | "token",
@@ -751,7 +849,7 @@ export const createPublicReadContinuation = <A, R, P>({
         onStoreError("acquire_lease", lease.error);
       }
       if (Result.isError(lease) || lease.value) {
-        const job = await start(work);
+        const job = await start(work, Result.isOk(lease));
         if (job === "exhausted") {
           return { status: "exhausted", token: workId };
         }

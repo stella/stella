@@ -42,7 +42,9 @@ return 0
 
 const COUNT_ATTEMPT = `
 local attempts = redis.call("INCR", KEYS[1])
-redis.call("PEXPIRE", KEYS[1], ARGV[1])
+if attempts == 1 then
+  redis.call("PEXPIRE", KEYS[1], ARGV[1])
+end
 return attempts
 `;
 

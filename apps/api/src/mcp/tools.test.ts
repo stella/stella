@@ -4415,7 +4415,7 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(result.isError).not.toBe(true);
       expect(parseToolPayload(result)).toMatchObject({
         status: "running",
-        phase: "running",
+        phase: "not_started",
       });
     });
 

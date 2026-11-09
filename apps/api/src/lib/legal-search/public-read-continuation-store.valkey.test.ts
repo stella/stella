@@ -213,6 +213,22 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       expect(unwrapped(await store.countAttempt(id, 60_000))).toBe(1);
     });
 
+    test("a later attempt does not push back the counter's expiry", async () => {
+      const id = workId();
+      const key = coordinationKey({
+        scope: "public-read-continuation",
+        slot: id,
+        suffix: "attempts",
+      });
+      unwrapped(await store.countAttempt(id, 60_000));
+      await withInspector(async ({ pttl }) => {
+        const first = await pttl(key);
+        expect(first).toBeGreaterThan(0);
+        unwrapped(await store.countAttempt(id, 600_000));
+        expect(await pttl(key)).toBeLessThanOrEqual(first);
+      });
+    });
+
     test("concurrent acquires on one server admit exactly one owner", async () => {
       const id = workId();
       const results = await Promise.all(

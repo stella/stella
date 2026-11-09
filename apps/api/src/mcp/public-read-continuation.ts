@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { sleep } from "@stll/concurrency/sleep";
@@ -35,9 +35,14 @@ import {
   remainingRequestBudgetMs,
   runWithinRequestLatencyBudget,
 } from "@/api/lib/load/request-latency-budget";
-import { mcpPublicReadCallerKey } from "@/api/lib/rate-limit/mcp-public-read-admission";
+import { getRequestId } from "@/api/lib/observability/request-context";
+import {
+  mcpPublicReadCallerKey,
+  withMcpPublicReadAdmission,
+} from "@/api/lib/rate-limit/mcp-public-read-admission";
 import { isRecord } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import type {
   InternalToolResult,
   TypedMcpToolResponse,
@@ -59,6 +64,8 @@ import {
  * ran it. The work is scoped to the organization, because a handler's output
  * can depend on the organization's page limit.
  */
+
+const FLEET_SLOT_RETRY_MS = 500;
 
 /** How long a call holds its caller before answering that the work continues. */
 export const PUBLIC_READ_RESPONSE_DEADLINE_MS = 6000;
@@ -89,7 +96,7 @@ const runningMessage = (
   phase: ContinuationPhase,
 ): string =>
   phase === "not_started"
-    ? `Nothing has failed, but the server is at capacity and this ${toolName} call has not started. Call ${toolName} again after retryAfterMs with the same arguments plus continuation_token.`
+    ? `Nothing has failed, but the server is at capacity and this ${toolName} call is not running now. Call ${toolName} again after retryAfterMs with the same arguments plus continuation_token.`
     : `Nothing has failed. This ${toolName} call is still ${phase === "queued" ? "queued" : "running"} and the results are not complete. Call ${toolName} again after retryAfterMs with the same arguments plus continuation_token. Do not report the search as empty or finished.`;
 
 type ContinuableToolName = "search_case_law" | "search_legislation";
@@ -132,24 +139,61 @@ const judgeToolResponse = <TData>(
       return { type: "overloaded" };
     }
     // The answer of this moment: its token sees it, a new call asks again.
-    return response.error.code === INDEX_UNAVAILABLE_CODE
+    return response.error.code === INDEX_UNAVAILABLE_CODE ||
+      response.error.code === "internal_error"
       ? { type: "incomplete" }
       : { type: "complete" };
   }
-  const { data } = response;
-  return isRecord(data) &&
-    isRecord(data["paginationOutcome"]) &&
-    data["paginationOutcome"]["reason"] === "time_budget"
+  return isShapedByLoad(response.data)
     ? { type: "incomplete" }
     : { type: "complete" };
 };
 
+const isShapedByLoad = (data: unknown): boolean =>
+  isRecord(data) &&
+  ((isRecord(data["paginationOutcome"]) &&
+    data["paginationOutcome"]["reason"] === "time_budget") ||
+    (Array.isArray(data["warnings"]) &&
+      data["warnings"].some(
+        (warning) =>
+          isRecord(warning) && warning["code"] === "partial_matches_unread",
+      )));
+
+/** Every continuable tool answers an object; anything else is a stale store. */
 const isToolResponse = <TData>(
   value: unknown,
 ): value is InternalToolResult<TData> =>
   isRecord(value) &&
-  ((value["status"] === "success" && "data" in value) ||
+  ((value["status"] === "success" && isRecord(value["data"])) ||
     (value["status"] === "error" && isRecord(value["error"])));
+
+/**
+ * JSON storage drops the marker, and logs and analytics read a refusal without
+ * it. Only this module writes the store, so the code can be trusted here.
+ */
+const restoreInternalFailure = <TData>(
+  response: InternalToolResult<TData>,
+): InternalToolResult<TData> =>
+  response.status === "error" &&
+  response.error.type === "structured" &&
+  response.error.code === "internal_error"
+    ? {
+        ...response,
+        error: { ...response.error, [MCP_INTERNAL_TOOL_FAILURE]: true },
+      }
+    : response;
+
+/** A receipt names the request that hands it over, not the one that ran. */
+const withCollectingRequestId = <TData>(
+  response: InternalToolResult<TData>,
+): InternalToolResult<TData> => {
+  const requestId = getRequestId();
+  return response.status === "error" &&
+    response.error.type === "structured" &&
+    requestId !== undefined
+    ? { ...response, error: { ...response.error, requestId } }
+    : response;
+};
 
 type CreateToolContinuationOptions<P> = {
   store?: ContinuationStore;
@@ -180,7 +224,8 @@ export const createToolContinuation = <
       const parsed = v.safeParse(argsSchema, value);
       return parsed.success ? parsed.output : null;
     },
-    result: (value) => (isToolResponse<TData>(value) ? value : null),
+    result: (value) =>
+      isToolResponse<TData>(value) ? restoreInternalFailure(value) : null,
     progress,
   };
   return createPublicReadContinuation({
@@ -217,7 +262,7 @@ const continuationExpiredResult = (toolName: ContinuableToolName) =>
 const publicReadUnfinishedResult = (toolName: ContinuableToolName) =>
   structuredErrorResult({
     code: "public_read_unfinished",
-    message: "This search could not finish under the current load",
+    message: "This search did not finish after repeated attempts",
     hint: `Nothing was returned, so do not treat it as an empty result. Call ${toolName} later, or narrow it with fewer queries or a filter.`,
   });
 
@@ -254,6 +299,41 @@ type RunContinuablePublicReadOptions<TArgs, TData, P> = {
   ) => Promise<InternalToolResult<TData>>;
 };
 
+type UnderFleetCallerSlotOptions<T> = {
+  context: Parameters<typeof withMcpPublicReadAdmission>[0]["caller"] &
+    Pick<McpRequestContext, "testDependencies">;
+  signal: AbortSignal;
+  run: (signal: AbortSignal) => Promise<Result<T, unknown>>;
+};
+
+/**
+ * Hold the caller's fleet-wide slot for the whole run. Work that has no request
+ * waiting on it waits out a full pool instead of being refused; the run budget
+ * ends the wait.
+ */
+const underFleetCallerSlot = async <T>({
+  context,
+  signal,
+  run,
+}: UnderFleetCallerSlotOptions<T>): Promise<Result<T, unknown>> => {
+  const admit =
+    context.testDependencies?.admitPublicRead ?? withMcpPublicReadAdmission;
+  for (;;) {
+    const admitted = await admit({ caller: context, signal, run });
+    if (Result.isOk(admitted)) {
+      return admitted.value.value;
+    }
+    if (
+      !ActionAdmissionError.is(admitted.error) ||
+      admitted.error.reason !== "busy" ||
+      signal.aborted
+    ) {
+      return Result.err(admitted.error);
+    }
+    await sleep(FLEET_SLOT_RETRY_MS);
+  }
+};
+
 export const runContinuablePublicRead = async <TArgs, TData, P>({
   toolName,
   continuation,
@@ -274,7 +354,10 @@ export const runContinuablePublicRead = async <TArgs, TData, P>({
     if (resolved.status === "resolved") {
       workArgs = resolved.args;
       via = "token";
-    } else if (continuationToken !== callerWorkId) {
+    } else if (continuationToken === callerWorkId) {
+      // The token is these arguments' own work: no spec is needed to honour it.
+      via = "token";
+    } else {
       return continuationExpiredResult(toolName);
     }
   }
@@ -314,13 +397,15 @@ export const runContinuablePublicRead = async <TArgs, TData, P>({
                     await runAsCorpusSearchCaller(caller, async () => {
                       const read = await runWithPatientCorpusReads(
                         async () =>
-                          await runWithPublicReadScope(
-                            {
-                              budgetMs: statementBudgetMs,
-                              signal: run.signal,
-                            },
-                            async () => await execute(runArgs, run),
-                          ),
+                          await underFleetCallerSlot({
+                            context,
+                            signal: run.signal,
+                            run: async (signal) =>
+                              await runWithPublicReadScope(
+                                { budgetMs: statementBudgetMs, signal },
+                                async () => await execute(runArgs, run),
+                              ),
+                          }),
                       );
                       return read;
                     }),
@@ -331,7 +416,7 @@ export const runContinuablePublicRead = async <TArgs, TData, P>({
   });
   switch (outcome.status) {
     case "finished":
-      return await finish(outcome.result);
+      return await finish(withCollectingRequestId(outcome.result));
     case "running":
       return toolDataResult<PublicReadRunning<P>, PublicReadRunning<P>>({
         status: "running",

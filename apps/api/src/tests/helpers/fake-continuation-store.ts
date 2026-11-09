@@ -67,8 +67,17 @@ export const createFakeContinuationStore = () => {
       }),
     countAttempt: async (id, ttl) =>
       await guarded(() => {
-        const next = Number(live(`attempts:${id}`) ?? 0) + 1;
-        put(`attempts:${id}`, String(next), ttl);
+        const current = live(`attempts:${id}`);
+        if (current === null) {
+          put(`attempts:${id}`, "1", ttl);
+          return 1;
+        }
+        const next = Number(current) + 1;
+        const entry = values.get(`attempts:${id}`);
+        values.set(`attempts:${id}`, {
+          value: String(next),
+          expiresAt: entry?.expiresAt ?? clock + ttl,
+        });
         return next;
       }),
     clearAttempts: async (id) =>

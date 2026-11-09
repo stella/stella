@@ -221,6 +221,7 @@ export const createCorpusSearchAdmission = ({
       signal === undefined ? waitLimit : AbortSignal.any([signal, waitLimit]);
     const request = { signal: waitSignal, rank: admissionRank(virtualStart) };
     let result = await budget.acquire(request);
+    let retriedFullQueue = false;
     if (patient) {
       while (
         result.type === "refused" &&
@@ -228,6 +229,7 @@ export const createCorpusSearchAdmission = ({
         !waitSignal.aborted
       ) {
         // Not cancelled by the wait limit: the next acquire reports it.
+        retriedFullQueue = true;
         await sleep(FULL_QUEUE_RETRY_MS);
         result = await budget.acquire(request);
       }
@@ -245,7 +247,7 @@ export const createCorpusSearchAdmission = ({
         },
         // A read admitted without queueing waited for nothing: the time to
         // resume after the await is not time spent waiting for a slot.
-        waitedMs: result.queued ? waitedMs : 0,
+        waitedMs: result.queued || retriedFullQueue ? waitedMs : 0,
       };
     }
     const { queued } = budget.stats();
