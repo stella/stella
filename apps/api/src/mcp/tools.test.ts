@@ -4273,6 +4273,40 @@ describe("OpenAI-compatible MCP tools", () => {
       gate.resolve(undefined);
     });
 
+    test("keeps a phrasing that ran out of time among the pending ones", async () => {
+      const { store } = createFakeContinuationStore();
+      const gate = Promise.withResolvers<undefined>();
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => {
+          if (query === "expired") {
+            return new HttpStatusResponse(503, {
+              code: PUBLIC_READ_TIMEOUT_CODE,
+              message: "Public read timed out. Please try again.",
+            });
+          }
+          if (query === "slow") {
+            await gate.promise;
+          }
+          return answered(query);
+        },
+      );
+      const payload = asTestRaw<{
+        status: string;
+        partial: { finishedQueries: string[]; pendingQueries: string[] };
+      }>(
+        parseToolPayload(
+          await search(contextFor(store, "task-a"), {
+            country: "CZE",
+            queries: ["fast", "expired", "slow"],
+          }),
+        ),
+      );
+      expect(payload.status).toBe("running");
+      expect(payload.partial.finishedQueries).toEqual(["fast"]);
+      expect(payload.partial.pendingQueries).toEqual(["expired", "slow"]);
+      gate.resolve(undefined);
+    });
+
     describe("the OpenAI-compatible search", () => {
       const compatContext = (
         store: ReturnType<typeof createFakeContinuationStore>["store"],
