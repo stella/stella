@@ -92,6 +92,16 @@ incomplete smokes record `failure`. Before each write, the workflow rechecks the
 newest run and status owner, so a superseded proof cannot overwrite its
 replacement's status. The API model-turn smoke remains report-only.
 
+Staging is off between proofs, so data a scheduled job keeps fresh (such as the
+sanctions lists, stale 48 h after their last verification) can be stale when a
+proof starts. A deployed journey that reads such data names itself to
+`/smoke/scheduled-jobs/journey-prerequisites`, which brings the jobs declared
+for it in `apps/api/src/lib/smoke-session/journey-prerequisites.ts` ahead of
+every other due job and reports each one's latest run. The journey waits up to
+10 minutes for those runs and fails with the run's error, or the list's own
+failure code, when a run cannot refresh what the journey reads. The route has
+the same smoke-secret and staging-origin gates as `/smoke/scheduled-jobs`.
+
 Hosted deployment configuration must set `DEPLOY_ENVIRONMENT=staging` on the
 staging API and `DEPLOY_ENVIRONMENT=production` on the production API. The marker
 is independent of the image's build mode. It is optional at API startup: when

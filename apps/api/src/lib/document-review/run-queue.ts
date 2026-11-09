@@ -53,7 +53,7 @@ import type {
   DocumentReviewRunBasis,
   DocumentReviewRunErrorCode,
 } from "@/api/lib/document-review/run-contract";
-import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
+import { finalizeWorkerRun } from "@/api/lib/document-review/run-finalize";
 import { resolveDocumentReviewRunInputs } from "@/api/lib/document-review/run-inputs";
 import type { PinnedDocument } from "@/api/lib/document-review/run-inputs";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
@@ -949,18 +949,13 @@ const finalizeRun = async (
   run: ClaimedRun,
   plan: ReviewRunPlan,
 ): Promise<DocumentReviewRunErrorCode | null> => {
-  const finalized = await actor.writeDb(
-    async (tx) =>
-      await finalizeReviewRun({
-        tx,
-        workspaceId: actor.workspaceId,
-        runId: actor.runId,
-        entityId: run.entityId,
-        fileFieldId: run.fileFieldId,
-        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
-        expectedFindingCount: plan.expectedFindingCount,
-      }),
-  );
+  const finalized = await finalizeWorkerRun({
+    actor,
+    basis: run.basis,
+    entityId: run.entityId,
+    fileFieldId: run.fileFieldId,
+    expectedFindingCount: plan.expectedFindingCount,
+  });
   if (finalized.type === "incomplete") {
     return "internal";
   }
@@ -974,6 +969,13 @@ const finalizeRun = async (
   if (finalized.skippedForPendingLimit > 0) {
     logger.warn("document_review_run.fixes_unstaged_pending_limit", {
       count: String(finalized.skippedForPendingLimit),
+      runId: actor.runId,
+      workspaceId: actor.workspaceId,
+    });
+  }
+  if (finalized.skippedForUnreadableReference > 0) {
+    logger.warn("document_review_run.fixes_unstaged_unreadable_reference", {
+      count: String(finalized.skippedForUnreadableReference),
       runId: actor.runId,
       workspaceId: actor.workspaceId,
     });

@@ -21,15 +21,26 @@
  * once against a tier ladder and never grounds a fix.
  */
 
-import { and, count, eq } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, count, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { holdLiveSourceWorkspaces } from "@/api/lib/db/aggregate-lock";
 import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
-import { stageReviewFixSuggestions } from "@/api/lib/document-review/review-suggestion-staging";
+import { basisFixSourceWorkspaceIds } from "@/api/lib/document-review/reference-passages";
+import {
+  REVIEW_FIX_STAGING,
+  stageReviewFixSuggestions,
+} from "@/api/lib/document-review/review-suggestion-staging";
+import type {
+  ReviewFixStaging,
+  StagedReviewFixSuggestions,
+} from "@/api/lib/document-review/review-suggestion-staging";
 import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
-import type { DocumentReviewRunExecutor } from "@/api/lib/document-review/run-contract";
+import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
+import type { RootRunActor } from "@/api/lib/root-scoped-db";
 import { maybeEmitDocumentReviewSignal } from "@/api/lib/scouts/document-review";
 
 export type FinalizeReviewRunArgs = {
@@ -38,12 +49,15 @@ export type FinalizeReviewRunArgs = {
   runId: SafeId<"documentReviewRun">;
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
-  /** Which producer is finishing this run, named rather than inferred: only
-   *  the worker path stages suggestions. */
-  executor: DocumentReviewRunExecutor;
   /** The exact number of finding rows a completed run holds, from the plan. */
   expectedFindingCount: number;
-};
+} & (
+  | {
+      executor: typeof DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER;
+      fixStaging: ReviewFixStaging;
+    }
+  | { executor: typeof DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE }
+);
 
 export type FinalizeReviewRunResult =
   | {
@@ -54,18 +68,82 @@ export type FinalizeReviewRunResult =
       staged: number;
       /** New fixes left unstaged because the document is at its pending cap. */
       skippedForPendingLimit: number;
+      /** Fixes left unstaged because the requester cannot open a source matter. */
+      skippedForUnreadableReference: number;
     }
   | { type: "incomplete"; committed: number };
 
-export const finalizeReviewRun = async ({
+const stageForProducer = async (
+  args: FinalizeReviewRunArgs,
+): Promise<StagedReviewFixSuggestions> => {
+  switch (args.executor) {
+    case DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER:
+      return await stageReviewFixSuggestions({
+        tx: args.tx,
+        workspaceId: args.workspaceId,
+        entityId: args.entityId,
+        runId: args.runId,
+        fixStaging: args.fixStaging,
+      });
+    case DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE:
+      return {
+        staged: 0,
+        skippedForPendingLimit: 0,
+        skippedForUnreadableReference: 0,
+      };
+    default:
+      args satisfies never;
+      return panic("Unhandled review run executor");
+  }
+};
+
+type ReplayFixesWithheldArgs = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"documentReviewRun">;
+  withheldThisPass: number;
+};
+
+/**
+ * A replay of a completed run either stages the fixes (withholding none) or
+ * withholds every open one. Row security hides a suggestion whose source
+ * matter the requester can no longer open, so a withholding pass cannot see
+ * which fixes an earlier pass staged; the run's stored count can only fall.
+ */
+const replayFixesWithheld = async ({
   tx,
   workspaceId,
   runId,
-  entityId,
-  fileFieldId,
-  executor,
-  expectedFindingCount,
-}: FinalizeReviewRunArgs): Promise<FinalizeReviewRunResult> => {
+  withheldThisPass,
+}: ReplayFixesWithheldArgs) => {
+  // audit: skip — terminal bookkeeping on the run row audited at create.
+  const updated = await tx
+    .update(documentReviewRuns)
+    .set({
+      fixesWithheld: sql`least(${documentReviewRuns.fixesWithheld}, ${withheldThisPass})`,
+    })
+    .where(
+      and(
+        eq(documentReviewRuns.id, runId),
+        eq(documentReviewRuns.workspaceId, workspaceId),
+        eq(documentReviewRuns.status, "completed"),
+      ),
+    )
+    .returning({ fixesWithheld: documentReviewRuns.fixesWithheld });
+  return updated.at(0)?.fixesWithheld ?? withheldThisPass;
+};
+
+export const finalizeReviewRun = async (
+  args: FinalizeReviewRunArgs,
+): Promise<FinalizeReviewRunResult> => {
+  const {
+    tx,
+    workspaceId,
+    runId,
+    entityId,
+    fileFieldId,
+    expectedFindingCount,
+  } = args;
   const counted = await tx
     .select({ value: count() })
     .from(documentReviewFindings)
@@ -92,10 +170,7 @@ export const finalizeReviewRun = async ({
 
   // After carry-over, so a finding whose decision the reviewer already took in
   // the previous review of this document is not staged again as a proposal.
-  const staging =
-    executor === DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER
-      ? await stageReviewFixSuggestions({ tx, workspaceId, entityId, runId })
-      : { staged: 0, skippedForPendingLimit: 0 };
+  const staging = await stageForProducer(args);
 
   // audit: skip — terminal bookkeeping on the run row audited at create.
   const flipped = await tx
@@ -104,6 +179,7 @@ export const finalizeReviewRun = async ({
       status: "completed",
       errorCode: null,
       completed: committed,
+      fixesWithheld: staging.skippedForUnreadableReference,
       finishedAt: new Date(),
     })
     .where(
@@ -120,6 +196,15 @@ export const finalizeReviewRun = async ({
   if (flipped.length > 0) {
     await maybeEmitDocumentReviewSignal({ tx, workspaceId, runId });
   }
+  const skippedForUnreadableReference =
+    flipped.length > 0
+      ? staging.skippedForUnreadableReference
+      : await replayFixesWithheld({
+          tx,
+          workspaceId,
+          runId,
+          withheldThisPass: staging.skippedForUnreadableReference,
+        });
 
   return {
     type: "completed",
@@ -127,5 +212,61 @@ export const finalizeReviewRun = async ({
     carried,
     staged: staging.staged,
     skippedForPendingLimit: staging.skippedForPendingLimit,
+    skippedForUnreadableReference,
   };
+};
+
+type FinalizeWorkerRunArgs = {
+  actor: RootRunActor<"documentReviewRun">;
+  basis: DocumentReviewRunBasis;
+  entityId: SafeId<"entity">;
+  fileFieldId: SafeId<"field">;
+  expectedFindingCount: number;
+};
+
+/**
+ * The worker's completion. `writeDb` reaches only the reviewed matter, but a
+ * staged fix records the other matters its text came from, and row security
+ * lets a writer record only matters it holds. So the transaction also pins them
+ * when the requester can open them all, and otherwise withholds the fixes and
+ * completes the run anyway. Those matters are checked again inside the
+ * transaction, under their lifecycle fence, because a deletion that overlaps
+ * this write would otherwise miss the rows citing them.
+ */
+export const finalizeWorkerRun = async ({
+  actor,
+  basis,
+  entityId,
+  fileFieldId,
+  expectedFindingCount,
+}: FinalizeWorkerRunArgs): Promise<FinalizeReviewRunResult> => {
+  const sourceDataWorkspaceIds = basisFixSourceWorkspaceIds(basis).filter(
+    (referenceWorkspaceId) => referenceWorkspaceId !== actor.workspaceId,
+  );
+  const sourcesDb = await actor.writeDbWithReadableSources(
+    sourceDataWorkspaceIds,
+  );
+  const writeDb = sourcesDb ?? actor.writeDb;
+  return await writeDb(async (tx) => {
+    const sourcesStand =
+      sourcesDb !== null &&
+      (await holdLiveSourceWorkspaces({
+        tx,
+        organizationId: actor.organizationId,
+        workspaceIds: sourceDataWorkspaceIds,
+      }));
+    const fixStaging: ReviewFixStaging = sourcesStand
+      ? { type: REVIEW_FIX_STAGING.stage, sourceDataWorkspaceIds }
+      : { type: REVIEW_FIX_STAGING.withheld };
+    return await finalizeReviewRun({
+      tx,
+      workspaceId: actor.workspaceId,
+      runId: actor.runId,
+      entityId,
+      fileFieldId,
+      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
+      fixStaging,
+      expectedFindingCount,
+    });
+  });
 };

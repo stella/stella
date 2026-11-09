@@ -13,9 +13,9 @@ unset MCP_CANARY_TOKEN
 protocol_version=2025-11-25
 session_id=
 request_count=0
-# At most three extra HTTP requests: the hourly run stays within eleven.
+# Nine requests plus at most three retries: the hourly run stays within twelve.
 retry_budget=3
-request_limit=11
+request_limit=12
 pause="${JOURNEY_RETRY_PAUSE_SECONDS:-5}"
 deadline="${JOURNEY_TIMEOUT_SECONDS:-15}"
 web="${JOURNEY_WEB_URL:-https://my.stll.app}"

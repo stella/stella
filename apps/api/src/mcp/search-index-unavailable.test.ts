@@ -615,7 +615,7 @@ describe("a search the tool's latency budget ends is a timeout", () => {
       expect(payloadOf(result)).toMatchObject({
         error:
           tool.toolName === "search_case_law"
-            ? { code: "upstream_unavailable", retryable: true }
+            ? { code: "public_read_timeout", retryable: true }
             : {
                 code: "public_read_timeout",
                 hint: PUBLIC_READ_TIMEOUT_HINT,
@@ -976,7 +976,7 @@ describe("public corpus statement budgets", () => {
         error: {
           code: "public_read_timeout",
           message: "Public read timed out. Please try again.",
-          hint: "Retry with a narrower query or a smaller selection of public-law documents.",
+          hint: "Repeat the identical request once before changing it. If it times out again, narrow the query or select fewer public-law documents.",
           retryable: true,
         },
       });
