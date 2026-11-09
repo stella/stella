@@ -58,11 +58,14 @@ import { includes } from "@/api/lib/type-guards";
 import { createWorkObligation } from "@/api/lib/work-obligations/create-work-obligation";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 
+/** Longest task name; a proposal that becomes a task is held to it too. */
+export const TASK_NAME_MAX_LENGTH = 255;
+
 export const createTaskBodySchema = v.object({
   name: v.pipe(
     v.string(),
     v.minLength(1),
-    v.maxLength(255),
+    v.maxLength(TASK_NAME_MAX_LENGTH),
     v.description("Task name; required when creating"),
   ),
   parentId: v.optional(resourceIdSchema("entity")),

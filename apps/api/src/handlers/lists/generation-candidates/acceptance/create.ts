@@ -2,11 +2,14 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
+
 import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   entities,
+  legalListFactDetails,
   legalListGenerationCandidates,
   legalListGenerationCandidateSources,
   legalListGenerationRuns,
@@ -41,6 +44,8 @@ const config = {
     "Accept one candidate from a generation run: create the item it proposes " +
     "as a task in the matter, optionally in a named section, and copy the " +
     "candidate's sources onto the new item with their locators and quotes. " +
+    "An accepted fact also gets the candidate's fact details, scored as " +
+    "included unless the candidate holds it. " +
     "The candidate is claimed before the item is created, so two concurrent " +
     "accepts cannot both produce one, and the run flips to committed once no " +
     "candidate is left pending. A candidate whose sources have disappeared " +
@@ -506,6 +511,47 @@ const finalizeAcceptance = async ({
       createdBy: userId,
     })),
   );
+  // The candidate row is locked above, so its proposal cannot change under
+  // this read.
+  const proposal = (
+    await tx
+      .select({
+        itemType: legalListGenerationCandidates.itemType,
+        occurredOn: legalListGenerationCandidates.occurredOn,
+        occurredOnPrecision: legalListGenerationCandidates.occurredOnPrecision,
+        evidenceKind: legalListGenerationCandidates.evidenceKind,
+        medium: legalListGenerationCandidates.medium,
+        confidence: legalListGenerationCandidates.confidence,
+        interpretationNote: legalListGenerationCandidates.interpretationNote,
+        scoring: legalListGenerationCandidates.scoring,
+      })
+      .from(legalListGenerationCandidates)
+      .where(
+        and(
+          eq(legalListGenerationCandidates.id, body.candidateId),
+          eq(legalListGenerationCandidates.runId, body.runId),
+          eq(legalListGenerationCandidates.listId, body.listId),
+          eq(legalListGenerationCandidates.workspaceId, workspaceId),
+        ),
+      )
+  ).at(0);
+  if (proposal?.itemType === LIST_ITEM_TYPE.FACT) {
+    const { itemType: _itemType, scoring, ...details } = proposal;
+    // Every accepted fact gets its row, so a fact never scores by the row's
+    // absence. A row already there was written by a person on an item an
+    // interrupted earlier attempt committed, and their edit wins.
+    await tx
+      .insert(legalListFactDetails)
+      .values({
+        itemEntityId: entityId,
+        workspaceId,
+        listId: body.listId,
+        ...details,
+        scoring: scoring ?? "included",
+        updatedBy: userId,
+      })
+      .onConflictDoNothing({ target: legalListFactDetails.itemEntityId });
+  }
   const accepted = await tx
     .update(legalListGenerationCandidates)
     .set({
