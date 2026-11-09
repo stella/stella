@@ -137,9 +137,11 @@ import {
   describeQueuedMessage,
   type QueuedChatEntry,
   reduceSendQueue,
+  sendNowRoute,
   type SendQueueEvent,
   type SendQueueState,
   snapshotChatRequestOptions,
+  steerFallback,
 } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 import {
   fetchChatMessage,
@@ -865,13 +867,45 @@ export const useChatSession = ({
     [applySendQueueEvent],
   );
 
+  /** Queued messages a running turn is being handed, so a repeat waits. */
+  const steeringIdsRef = useRef(new Set<string>());
+
   // "Send now" on a queued message: it moves to the front of the queue.
-  // During a turn the turn is stopped, and the queue drain sends it once
-  // the stop settles; with the queue held after a failed turn it is sent
-  // at once, like a manual send.
+  // During a turn on the member's computer the turn is handed the message
+  // and goes on with it; a turn that cannot take it is stopped, and the
+  // queue drain sends the message once the stop settles. A turn that ends
+  // before it says leaves the message first in the queue, sent next. With
+  // the queue held after a failed turn it is sent at once, like a manual
+  // send.
   const sendQueuedMessageNow = useCallback(
     (id: string) => {
       applySendQueueEvent({ type: "queued-message-promoted", id });
+      const entry = sendQueueRef.current.queue.find(
+        (queued) => queued.id === id,
+      );
+      const route =
+        entry === undefined ? null : sendNowRoute(sendQueueRef.current, entry);
+      if (route?.type === "steer") {
+        if (steeringIdsRef.current.has(id)) {
+          return;
+        }
+        steeringIdsRef.current.add(id);
+        const steer = async () => {
+          const outcome = await chat.steerLocalTurn({
+            inputId: id,
+            text: route.text,
+          });
+          steeringIdsRef.current.delete(id);
+          const next = steerFallback(outcome);
+          if (next === "remove") {
+            applySendQueueEvent({ type: "queued-message-removed", id });
+          } else if (next === "stop") {
+            stop();
+          }
+        };
+        detached(steer(), "use-chat-session.steer-queued-message");
+        return;
+      }
       if (sendQueueRef.current.isGenerating) {
         stop();
         return;
@@ -886,7 +920,7 @@ export const useChatSession = ({
         );
       }
     },
-    [applySendQueueEvent, dispatchQueuedMessage, stop],
+    [applySendQueueEvent, chat, dispatchQueuedMessage, stop],
   );
 
   const resendLatestMessage = useCallback(

@@ -38,6 +38,7 @@ import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
+import steerTurn from "@/api/handlers/chat/turns/steer";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { routes } from "@/api/http/route";
 
@@ -88,6 +89,7 @@ export const chatRoute = routes(
     "/threads/:threadId/turns/:turnId/resume": { GET: probeChatTurn },
     "/threads/:threadId/turns/:turnId/join": { GET: joinChatTurn },
     "/threads/:threadId/turns/:turnId/cancel": { POST: cancelTurn },
+    "/threads/:threadId/turns/:turnId/steer": { POST: steerTurn },
     "/threads/:threadId/fork": { POST: forkThread },
     "/threads/:threadId/export": { POST: createMessageExport },
   },

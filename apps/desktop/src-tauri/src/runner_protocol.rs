@@ -140,6 +140,7 @@ wire_values!(HarnessCapability {
   Interrupt => "interrupt",
   Resume => "resume",
   ImageInput => "image_input",
+  Steer => "steer",
 });
 
 wire_values!(RejectReason {

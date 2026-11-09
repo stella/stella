@@ -15,6 +15,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { DESKTOP_RUNNER_INPUT_EVENT } from "@stll/api-contract/desktop-runner";
+
 import {
   FAKE_CLAUDE_VERSION,
   type FakeScenarioName,
@@ -462,7 +464,7 @@ describe("harness holder over its socket", () => {
   test("rejects unknown and invalid lines once authenticated", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
-    client.send({ type: "run.input", runId: crypto.randomUUID() });
+    client.send({ type: "run.pause", runId: crypto.randomUUID() });
     client.send("{not json");
     client.send({ type: "run.cancel", runId: "run-1" });
     client.send(helloMessage(holder));
@@ -484,7 +486,7 @@ describe("harness holder over its socket", () => {
         .filter((message) => message.type === "rejected")
         .map((message) => [message.reason, message.messageType]),
     ).toEqual([
-      ["unknown_type", "run.input"],
+      ["unknown_type", "run.pause"],
       ["not_json", null],
       ["invalid", "run.cancel"],
       ["hello_repeated", "hello"],
@@ -572,7 +574,13 @@ describe("harness holder over its socket", () => {
       outcome: {
         type: "ready",
         version: "0.166.0",
-        capabilities: ["approvals", "interrupt", "resume", "image_input"],
+        capabilities: [
+          "approvals",
+          "interrupt",
+          "resume",
+          "image_input",
+          "steer",
+        ],
         approvalModes: ["ask"],
         models: [{ id: "gpt-test", label: "GPT Test", isDefault: true }],
       },
@@ -1075,6 +1083,41 @@ describe("harness holder over its socket", () => {
         outcome,
       });
     }
+  });
+
+  test("hands a run.input to the running turn and reports on the run's stream that the harness took it", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "steered");
+    await client.waitFor(
+      (message): message is SidecarMessage =>
+        message.type === "run.event" &&
+        message.runId === runId &&
+        message.chunk.type === "TOOL_CALL_START",
+    );
+    const inputId = crypto.randomUUID();
+    client.send({
+      type: "run.input",
+      runId,
+      inputId,
+      message: { role: "user", content: "Also check the annex." },
+    });
+    expect(await client.waitFor(is("run.finished", runId))).toMatchObject({
+      outcome: "completed",
+    });
+    const reports = chunksOf(client, runId).filter(
+      (chunk) =>
+        chunk.type === "CUSTOM" && chunk["name"] === DESKTOP_RUNNER_INPUT_EVENT,
+    );
+    expect(reports.map((chunk) => chunk["value"])).toEqual([
+      { inputId, status: "accepted" },
+    ]);
+    // The harness was handed the text as the running turn's input.
+    expect(
+      holder.received().find(({ method }) => method === "turn/steer")?.params,
+    ).toMatchObject({
+      input: [{ type: "text", text: "Also check the annex." }],
+    });
   });
 
   test("starts Codex with the launch's overrides and environment, and only asks it anything once the desktop granted its process", async () => {

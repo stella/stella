@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
 import { assertProperty } from "@stll/property-testing";
 
 import { buildTurnPrompt } from "./transcript-handoff";
@@ -67,6 +68,50 @@ describe("turn prompt from the portable transcript", () => {
     expect(text).toEndWith(
       "Current request:\nAnd the notice period?\n[image attachment not carried over]",
     );
+  });
+
+  test("a message the member steered an answer with reads as theirs, after what the agent had done", () => {
+    const steered: ModelMessage[] = [
+      user("Summarise the lease."),
+      {
+        role: "assistant",
+        content: "Reading the lease.",
+        toolCalls: [
+          {
+            id: "c1",
+            type: "function",
+            function: { name: "command_execution", arguments: '{"cmd":"ls"}' },
+          },
+          {
+            id: "steer_1",
+            type: "function",
+            function: {
+              name: CHAT_LOCAL_RUN_STEER_TOOL,
+              arguments: JSON.stringify({ text: "Include the annex." }),
+            },
+          },
+        ],
+      },
+      { role: "tool", toolCallId: "c1", content: "lease.docx annex.docx" },
+      {
+        role: "tool",
+        toolCallId: "steer_1",
+        content: '{"status":"delivered"}',
+      },
+      { role: "assistant", content: "The annex extends the term." },
+      user("And the deposit?"),
+    ];
+    const text = prompt(steered, "standalone");
+    expect(text).toContain(
+      [
+        'Assistant: Reading the lease.\n[tool command_execution {"cmd":"ls"}]',
+        "User: Include the annex.",
+        "[tool result lease.docx annex.docx]",
+        "Assistant: The annex extends the term.",
+      ].join("\n\n"),
+    );
+    expect(text).not.toContain(CHAT_LOCAL_RUN_STEER_TOOL);
+    expect(text).not.toContain("delivered");
   });
 
   test("a transcript that does not end with user text is refused", () => {

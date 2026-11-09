@@ -1,3 +1,4 @@
+import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
 import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type BuiltInChatToolPolicyKindByName,
@@ -74,6 +75,9 @@ export const HARNESS_TOOL_NAMES = {
   fileChange: harnessToolName("file_change"),
   webSearch: harnessToolName("harness_web_search"),
   question: harnessToolName(HARNESS_QUESTION_TOOL),
+  // The API mints it, not an adapter: a message the member steered the
+  // running turn with, where the harness took it.
+  steer: harnessToolName(CHAT_LOCAL_RUN_STEER_TOOL),
   permissions: harnessToolName("request_permissions"),
   nativeTool: harnessToolName("harness_native_tool"),
   unsupportedItem: harnessToolName("harness_unsupported_item"),

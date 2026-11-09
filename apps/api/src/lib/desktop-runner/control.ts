@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import type { ChatLocalRunSteerOutcome } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_ATTACHMENT_LINK_MAX_LENGTH,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
@@ -42,7 +43,9 @@ import {
   readMemberRunners,
   readOpenRunChatThread,
   readRun,
+  readRunInputText,
   readRunOutputFile,
+  readSteerableChatRun,
   readStoredRunEvents,
   recordChatReadSeq,
   type RunOwner,
@@ -480,6 +483,54 @@ export const createDesktopRunnerControl = ({
         runId,
         inputId,
         message,
+      }),
+    /**
+     * Steer chat turn `chat.turnId` with `text`: hand it to the turn's run
+     * when its harness reports `steer`; idempotent on `inputId`. `queued`
+     * means the computer will say on the run's stream whether it took it.
+     */
+    steerChatTurn: async ({
+      owner,
+      chat,
+      inputId,
+      text,
+    }: {
+      owner: RunOwner;
+      chat: ChatRunBinding;
+      inputId: string;
+      text: string;
+    }): Promise<
+      Result<ChatLocalRunSteerOutcome, DesktopRunnerControlError>
+    > => {
+      const run = await Result.tryPromise({
+        try: async () => await readSteerableChatRun(db, { owner, chat }),
+        catch: toDatabaseError,
+      });
+      if (run.isErr()) {
+        return run;
+      }
+      if (run.value === null || !run.value.steerable) {
+        return Result.ok("unavailable");
+      }
+      const queued = await queue(deps, owner, {
+        type: DESKTOP_RUNNER_SERVER_MESSAGE.runInput,
+        runId: run.value.runId,
+        inputId,
+        message: { role: "user", content: text },
+      });
+      return queued.map((outcome) =>
+        outcome.type === "queued" || outcome.type === "duplicate"
+          ? "queued"
+          : "unavailable",
+      );
+    },
+    /** The text the owner's run was steered with under `inputId`. */
+    readRunInputText: async (
+      options: Parameters<typeof readRunInputText>[1],
+    ): Promise<Result<string | null, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => await readRunInputText(db, options),
+        catch: toDatabaseError,
       }),
     /** Answer an approval the run requested; idempotent on `requestId`. */
     answerApproval: async ({

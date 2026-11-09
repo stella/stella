@@ -13,7 +13,10 @@ import {
   isChatPastedTextPart,
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
-import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_QUESTION_TOOL,
+  CHAT_LOCAL_RUN_STEER_TOOL,
+} from "@stll/api-contract/chat-run-target";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import {
   isApprovalGatedBuiltInChatTool,
@@ -361,6 +364,8 @@ const HARNESS_TOOL_TITLE_KEYS = {
   file_change: "chat.tool.file_change",
   harness_web_search: "chat.tool.harness_web_search",
   request_user_input: "chat.tool.request_user_input",
+  // A message the member steered the running turn with; shown as theirs.
+  [CHAT_LOCAL_RUN_STEER_TOOL]: "chat.tool.user_message",
   request_permissions: "chat.tool.request_permissions",
   harness_unsupported_item: "chat.tool.harness_unsupported_item",
 } as const satisfies Record<string, TranslationKey>;

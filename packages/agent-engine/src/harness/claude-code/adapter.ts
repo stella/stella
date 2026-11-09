@@ -108,6 +108,8 @@ const CLAUDE_CODE_CAPABILITIES: Readonly<Record<HarnessCapability, boolean>> = {
   resume: true,
   // The turn's images and PDFs open the user message as content blocks.
   image_input: true,
+  // A user message written while the turn runs joins it at the next step.
+  steer: true,
 };
 
 /** Claude reads images and PDFs as model input. */
@@ -300,6 +302,9 @@ const PROTOCOL_ARGS = [
   "",
   // Only the MCP servers stella registers.
   "--strict-mcp-config",
+  // A user message written mid-turn is echoed back with its uuid once the
+  // turn takes it, which is how a steer learns it was taken.
+  "--replay-user-messages",
 ] as const;
 
 /**
@@ -789,6 +794,7 @@ const releasingSkills = (
 ): HarnessTurn => ({
   events: turn.events,
   respond: turn.respond,
+  steer: turn.steer,
   interrupt: turn.interrupt,
   dispose: async () => {
     await turn.dispose();

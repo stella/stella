@@ -14,11 +14,11 @@ use serde_json::Value;
 
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessCapability, JsonObject, McpBinding,
-  RunAnswer, RunApproval, RunAttachment, RunOutcome, RunPolicy, RunRef,
+  RunAnswer, RunApproval, RunAttachment, RunInput, RunOutcome, RunPolicy, RunRef,
   RunTokenRefresh,
 };
 
-pub(crate) const SIDECAR_PROTOCOL: u32 = 3;
+pub(crate) const SIDECAR_PROTOCOL: u32 = 5;
 /// Largest line either side writes or accepts, in UTF-8 bytes.
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Runs one `hello` may resume or list.
@@ -222,6 +222,10 @@ pub(crate) enum HostMessage {
   HarnessProbe(HarnessProbe),
   #[serde(rename = "run.start")]
   RunStart(Box<SidecarRunStart>),
+  /// A user message for the run's running turn; the holder answers with a
+  /// `stella.run-input` chunk on the run's stream.
+  #[serde(rename = "run.input")]
+  RunInput(RunInput),
   #[serde(rename = "run.approval")]
   RunApproval(RunApproval),
   #[serde(rename = "run.answer")]
@@ -251,6 +255,7 @@ impl HostMessage {
     "hello",
     "harness.probe",
     "run.start",
+    "run.input",
     "run.approval",
     "run.answer",
     "run.interrupt",

@@ -70,8 +70,8 @@ use protocol::{
 use crate::runner_protocol::{
   Ack, ApprovalKind, ApprovalMode, Harness, HarnessModel, HarnessReport,
   HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, RejectReason,
-  RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
-  UnavailableHarness, UnsupportedHarness,
+  RunAnswer, RunApproval, RunInput, RunOutcome, RunRef, RunTokenRefresh,
+  SignedOutHarness, UnavailableHarness, UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
@@ -449,6 +449,12 @@ impl HarnessSidecar {
     approval: RunApproval,
   ) -> Result<(), SidecarUnavailable> {
     self.forward(approval.run_id.clone(), &HostMessage::RunApproval(approval))
+  }
+
+  /// A user message for the run's running turn; the run's stream says
+  /// whether its harness took it.
+  pub(crate) fn input(&self, input: RunInput) -> Result<(), SidecarUnavailable> {
+    self.forward(input.run_id.clone(), &HostMessage::RunInput(input))
   }
 
   /// Answers to a blocking question the run asked.

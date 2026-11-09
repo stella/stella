@@ -445,6 +445,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  "POST /v1/chat/threads/:threadId/turns/:turnId/steer": {
+    type: "non-replay",
+    reason: "stream",
+  },
   "POST /v1/chat/tool-grants": {
     type: "non-replay",
     reason: "stream",

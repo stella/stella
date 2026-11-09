@@ -201,6 +201,11 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/chat/turns/cancel.ts",
     uncataloged: "realtime_stream",
   },
+  "POST /v1/chat/threads/:threadId/turns/:turnId/steer": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/turns/steer.ts",
+    uncataloged: "realtime_stream",
+  },
   // The caller's own timers. The organization-wide admin timer routes stay
   // closed to access tokens.
   "GET /v1/time-timers": {

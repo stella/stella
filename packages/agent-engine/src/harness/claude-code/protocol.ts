@@ -236,6 +236,13 @@ export const UserMessageSchema = v.object({
     ]),
   }),
   parent_tool_use_id: ParentToolUseId,
+  /** The id a message written to stdin carried, on its echo. */
+  uuid: v.optional(v.string()),
+  /**
+   * Set on the echo of a message written to stdin
+   * (`--replay-user-messages`), once the CLI took it into the conversation.
+   */
+  isReplay: v.optional(v.boolean()),
 });
 
 export const ResultMessageSchema = v.object({

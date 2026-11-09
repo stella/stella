@@ -36,6 +36,11 @@ export default {
         reason:
           "Reads the member's computers and harness reports for the chat composer.",
       },
+      {
+        path: "apps/api/src/handlers/chat/turns/steer.ts",
+        reason:
+          "Queues a message for the open run of the member's running chat turn through the control.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

@@ -21,6 +21,7 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
+import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -70,6 +71,7 @@ import {
 import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
 import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.logic";
 import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
+import { ChatSteeredMessage } from "@/components/chat/chat-steered-message";
 import {
   assistantMessageFallbackText,
   buildMessageTurns,
@@ -2097,6 +2099,10 @@ const AssistantMessageParts = ({
           pause={localRunQuestionPause}
         />
       );
+    }
+
+    if (part.type === "tool-call" && part.name === CHAT_LOCAL_RUN_STEER_TOOL) {
+      return <ChatSteeredMessage arguments={part.arguments} key={part.id} />;
     }
 
     if (part.type === "tool-call" && isOpaquePersistedChatToolCallPart(part)) {

@@ -22,9 +22,15 @@ import {
 import type { ChatSendRequest, ChatTurnIntent } from "@stll/api-contract";
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  CHAT_LOCAL_RUN_STEER_EVENT,
   chatLocalRunComputerEventSchema,
+  chatLocalRunSteerEventSchema,
 } from "@stll/api-contract/chat-run-target";
-import type { ChatLocalRunQuestionReply } from "@stll/api-contract/chat-run-target";
+import type {
+  ChatLocalRunQuestionReply,
+  ChatLocalRunSteerEvent,
+  ChatLocalRunSteerOutcome,
+} from "@stll/api-contract/chat-run-target";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -178,6 +184,13 @@ export type ChatToolResultInput = Omit<TanStackClientToolResult, "output"> & {
 
 const CHAT_RUNTIME_BRAND: unique symbol = Symbol("StellaChatRuntime");
 
+/**
+ * What became of a message handed to a turn running on the member's
+ * computer: the turn took it (`steered`), the turn runs on and did not
+ * (`refused`), or nothing settled it before the turn ended (`unsettled`).
+ */
+export type ChatSteerOutcome = ChatLocalRunSteerEvent["status"] | "unsettled";
+
 export type ChatActivitySession = {
   readonly reportedUnknownActivityTypes: Set<string>;
 };
@@ -203,6 +216,14 @@ export type ChatRuntime = ChatActivitySession & {
     interruptId: string,
     answers: ChatLocalRunQuestionReply["answers"] | null,
   ) => Promise<void>;
+  /**
+   * Hand a message to the turn running on the member's computer without
+   * stopping it; idempotent on `inputId`. See `ChatSteerOutcome`.
+   */
+  steerLocalTurn: (input: {
+    inputId: string;
+    text: string;
+  }) => Promise<ChatSteerOutcome>;
   getSnapshot: () => ChatRuntimeSnapshot;
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
   setMessages: (messages: PersistedChatMessage[]) => void;
@@ -472,6 +493,19 @@ export const createChatRuntime = ({
   let stopBeforeHeaders: "none" | "requested" = "none";
   const isStoppedTurn = (): boolean =>
     stoppedTurnId !== null && stoppedTurnId === turnId;
+  /** Steers waiting to hear from the running turn, by input id. */
+  const pendingSteers = new Map<string, (outcome: ChatSteerOutcome) => void>();
+  const settleSteer = (inputId: string, outcome: ChatSteerOutcome) => {
+    const settle = pendingSteers.get(inputId);
+    pendingSteers.delete(inputId);
+    settle?.(outcome);
+  };
+  /** The request ended: no steer still waiting can hear from its turn. */
+  const settleOpenSteers = () => {
+    for (const inputId of [...pendingSteers.keys()]) {
+      settleSteer(inputId, "unsettled");
+    }
+  };
   /** The server refused the latest request for a turn it had already
    *  settled. Kept apart from `snapshot.error`, which stays empty for it, so
    *  a generic replay of the same failure stays quiet too; the next request
@@ -1000,6 +1034,14 @@ export const createChatRuntime = ({
       }
     },
     onCustomEvent: (name, value) => {
+      if (name === CHAT_LOCAL_RUN_STEER_EVENT) {
+        // A malformed or unknown one settles nothing; the turn's end does.
+        const steer = v.safeParse(chatLocalRunSteerEventSchema, value);
+        if (steer.success) {
+          settleSteer(steer.output.inputId, steer.output.status);
+        }
+        return;
+      }
       if (name !== CHAT_LOCAL_RUN_COMPUTER_EVENT) {
         return;
       }
@@ -1025,6 +1067,9 @@ export const createChatRuntime = ({
       });
     },
     onLoadingChange: (isLoading) => {
+      if (!isLoading) {
+        settleOpenSteers();
+      }
       setSnapshot({
         isLoading,
         // A wait belongs to the request that reported it.
@@ -1377,6 +1422,56 @@ export const createChatRuntime = ({
     }
   };
 
+  /**
+   * Hand `text` to the turn running on the member's computer without
+   * stopping it. Resolves once the turn said what became of it (`steered`:
+   * its answer holds the message now; `refused`: it still runs and did not
+   * take it, as a cloud turn never does), or `unsettled` when no turn of
+   * this page runs any more or it ended before saying.
+   */
+  const steerLocalTurn = async ({
+    inputId,
+    text,
+  }: {
+    inputId: string;
+    text: string;
+  }): Promise<ChatSteerOutcome> => {
+    const steeredTurn = turnId;
+    const running = () =>
+      turnId === steeredTurn && snapshot.isLoading && !isStoppedTurn();
+    if (!running() || steeredTurn === null) {
+      return "unsettled";
+    }
+    // A cloud turn takes nothing mid-turn: it is stopped and started again.
+    if (context?.getRunTarget?.()?.kind !== "local") {
+      return "refused";
+    }
+    const settled = new Promise<ChatSteerOutcome>((resolve) => {
+      pendingSteers.set(inputId, resolve);
+    });
+    const sent = await Result.tryPromise(
+      async (): Promise<Result<ChatLocalRunSteerOutcome, APIError>> => {
+        const { data, error } = await api.chat
+          .threads({ threadId: toSafeId<"chatThread">(key.threadId) })
+          .turns({ turnId: steeredTurn })
+          .steer.post({ inputId, text });
+        return error ? Result.err(toAPIError(error)) : Result.ok(data.steer);
+      },
+    );
+    if (Result.isOk(sent) && Result.isOk(sent.value)) {
+      if (sent.value.value === "queued") {
+        return await settled;
+      }
+    } else {
+      captureRuntimeError(
+        Result.isError(sent) ? sent.error.cause : sent.value.error,
+      );
+    }
+    // Only a turn that still runs is one the caller can stop and restart.
+    settleSteer(inputId, running() ? "refused" : "unsettled");
+    return await settled;
+  };
+
   const answerToolApproval = async (
     response: { approved: boolean; id: string },
     options: ChatSendMessageOptions | undefined,
@@ -1516,6 +1611,7 @@ export const createChatRuntime = ({
       }
     },
     answerLocalRunQuestion,
+    steerLocalTurn,
     addToolResult: async (result, options) => {
       if (isStoppedTurn()) {
         return;

@@ -20,9 +20,9 @@
 //! - A harness process whose launch needs the desktop's authorization (Codex
 //!   on the user's ChatGPT plan) is granted when the holder reports it, and
 //!   again when a restarted app resumes the run.
-//! - `run.input` is not supported: each chat turn is its own run that
-//!   resumes the harness's session. Input is answered with a `RUN_ERROR`
-//!   chunk (`input_unsupported`) on the run's stream; the run goes on.
+//! - `run.input` steers the run's running turn: the holder hands the message
+//!   to the harness and answers with a `stella.run-input` chunk on the run's
+//!   stream, saying whether the harness took it.
 //! - A run works in its chat's folder under the app's data, so the next turn
 //!   finds what this one left (`run_folders`).
 
@@ -61,7 +61,6 @@ pub(crate) const PROBE_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// Retries of an output the journal could not record, doubling up to this.
 const STORAGE_RETRY_CAP: Duration = Duration::from_secs(30);
 const STORAGE_RETRY_FIRST: Duration = Duration::from_millis(250);
-const INPUT_UNSUPPORTED: &str = "input_unsupported";
 /// How long a run's start waits for its skill folders. A folder can sit on a
 /// mount that hangs, and a start runs on the runner's loop.
 const SKILL_FOLDER_BUDGET: Duration = Duration::from_secs(2);
@@ -880,27 +879,10 @@ impl HarnessHost for SidecarHarnessHost {
     Ok(())
   }
 
-  /// Local harnesses take no follow-up input: each chat turn is its own run.
-  /// The input is answered on the run's stream instead of dropped.
+  /// A message that steers the run's running turn; the holder answers on the
+  /// run's stream whether the harness took it.
   fn input(&self, input: RunInput) -> Forwarded {
-    tracing::warn!(target: LOG_TARGET, "a run received input local harnesses do not take");
-    let held = locked(&self.shared.runs)
-      .get(&input.run_id)
-      .map(|run| (run.sink.clone(), run.model.clone(), run.thread_id.clone()));
-    let Some((sink, model, thread_id)) = held else {
-      return Ok(());
-    };
-    let error = run_error(
-      &input.run_id,
-      model.as_deref(),
-      thread_id.as_deref(),
-      INPUT_UNSUPPORTED,
-      "Local harnesses take no input while a run is going; send it as the next turn.",
-    );
-    tokio::spawn(async move {
-      emit(&sink, &error).await;
-    });
-    Ok(())
+    self.forward("input", |sidecar| sidecar.input(input))
   }
 
   fn approval(&self, approval: RunApproval) -> Forwarded {

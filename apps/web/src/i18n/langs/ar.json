@@ -2049,6 +2049,7 @@
       "update_reader_annotation": "تعديل التمييز أو التعليق",
       "use-browser": "استخدام متصفحك",
       "use_connector_secret": "استخدام بيانات اعتماد الموصل",
+      "user_message": "أُرسلت أثناء عمل الوكيل",
       "web_search": "البحث على الويب"
     },
     "toolCall": {

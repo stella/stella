@@ -349,6 +349,7 @@ export class Holder {
       }
       case "harness.probe":
       case "harness.process_granted":
+      case "run.input":
       case "run.approval":
       case "run.answer":
       case "run.interrupt":

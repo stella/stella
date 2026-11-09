@@ -111,6 +111,8 @@ const CODEX_CAPABILITIES: Readonly<Record<HarnessCapability, boolean>> = {
   resume: true,
   // The turn's images open `turn/start` as image items.
   image_input: true,
+  // `turn/steer` adds a message to the running turn.
+  steer: true,
 };
 
 /** Codex takes images as input; a PDF stays a path the agent opens. */

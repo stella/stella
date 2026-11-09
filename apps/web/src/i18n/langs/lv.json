@@ -2049,6 +2049,7 @@
       "update_reader_annotation": "Rediģēt izcēlumu vai komentāru",
       "use-browser": "Jūsu pārlūkprogrammas izmantošana",
       "use_connector_secret": "Izmanto savienotāja piekļuves informāciju",
+      "user_message": "Nosūtīts aģenta darba laikā",
       "web_search": "Meklēšana tīmeklī"
     },
     "toolCall": {

@@ -525,6 +525,32 @@ const FAKE_SCENARIOS = {
     ),
     completed(),
   ],
+  /** A running command; the turn takes a steer, then answers it. */
+  steered: [
+    ...freshTurn(),
+    item("started", command("call-long", "inProgress")),
+    { expect: "turn/steer", result: { turnId: FAKE_TURN_ID } },
+    item(
+      "completed",
+      command("call-long", "completed", { aggregatedOutput: "", exitCode: 0 }),
+    ),
+    item("completed", agentMessage("m-steer", "Checked the annex as well.")),
+    completed(),
+  ],
+  /** The turn is no longer the active one when the steer arrives. */
+  steer_refused: [
+    ...freshTurn(),
+    item("started", command("call-long", "inProgress")),
+    {
+      expect: "turn/steer",
+      error: { code: -32_600, message: "expected active turn turn-1" },
+    },
+    item(
+      "completed",
+      command("call-long", "completed", { aggregatedOutput: "", exitCode: 0 }),
+    ),
+    completed(),
+  ],
   /** A queued turn: `turn/start` has no start time until `turn/started`. */
   interrupt_queued: [
     ...freshTurn(null),
@@ -867,6 +893,15 @@ const TurnStartParamsSchema = v.looseObject({
   ),
 });
 
+/**
+ * `turn/steer` as the app-server's `TurnSteerParams` defines it: the input of
+ * a `turn/start`, for the turn `expectedTurnId` names.
+ */
+const TurnSteerParamsSchema = v.looseObject({
+  ...TurnStartParamsSchema.entries,
+  expectedTurnId: v.string(),
+});
+
 /** Start `argv` the way `placement` says; its pid. */
 const spawnLongLived = async (
   argv: readonly string[],
@@ -1018,6 +1053,13 @@ const run = async (
         !v.is(TurnStartParamsSchema, message["params"])
       ) {
         log({ refusedInput: "turn/start" });
+        process.exit(96);
+      }
+      if (
+        message.method === "turn/steer" &&
+        !v.is(TurnSteerParamsSchema, message["params"])
+      ) {
+        log({ refusedInput: "turn/steer" });
         process.exit(96);
       }
       write(

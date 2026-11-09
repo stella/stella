@@ -1649,6 +1649,7 @@
   "chat.tool.update_reader_annotation": "Edit highlight or comment",
   "chat.tool.use-browser": "Using your browser",
   "chat.tool.use_connector_secret": "Using connector credential",
+  "chat.tool.user_message": "Sent while the agent was working",
   "chat.tool.web_search": "Searching the web",
   "chat.toolCall.characterCount": "{count, plural, one {# character} other {# characters}}",
   "chat.toolCall.consoleLogs": "Console output",

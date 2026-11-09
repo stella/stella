@@ -24,6 +24,11 @@ type FakeStep =
   | { expect: string; response?: unknown; error?: string }
   /** Wait for the client's next user message. */
   | { expectUser: true }
+  /**
+   * Wait for the client's next user message and echo it back with its uuid,
+   * as the CLI does once a message written mid-turn joins the turn.
+   */
+  | { echoUser: true }
   | { emit: object }
   /** Send a control request and wait for the client's response. */
   | { control: object }
@@ -543,6 +548,23 @@ const FAKE_SCENARIOS = {
     { sleep: 50 },
     result(),
   ],
+  /** A message written mid-turn joins the turn after the running tool. */
+  steered: [
+    ...freshTurn(),
+    assistant("msg-1", [toolUse("call-long", "Bash", { command: "ls" })]),
+    { echoUser: true },
+    toolResult("call-long", "notes.md"),
+    assistant("msg-2", [{ type: "text", text: "Checked the annex as well." }]),
+    result(),
+  ],
+  /** The turn ends before it takes the message written mid-turn. */
+  steer_too_late: [
+    ...freshTurn(),
+    assistant("msg-1", [toolUse("call-long", "Bash", { command: "ls" })]),
+    { expectUser: true },
+    toolResult("call-long", "notes.md"),
+    result(),
+  ],
   interrupt: [
     ...freshTurn(),
     assistant("msg-1", [
@@ -895,6 +917,19 @@ const run = async (
       if ((await take("users")) === null) {
         return;
       }
+    } else if ("echoUser" in step) {
+      const message = await take("users");
+      if (message === null) {
+        return;
+      }
+      write({
+        type: "user",
+        message: message["message"],
+        parent_tool_use_id: null,
+        session_id: "s",
+        uuid: message["uuid"],
+        isReplay: true,
+      });
     } else if ("emit" in step) {
       write(step.emit);
     } else if ("control" in step) {

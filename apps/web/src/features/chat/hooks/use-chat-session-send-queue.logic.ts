@@ -143,6 +143,56 @@ export const canSendWithoutQueueing = (state: SendQueueState): boolean =>
   !state.isGenerating && !isHeldForMessageEdit(state);
 
 /**
+ * How "Send now" sends a queued message:
+ * - `send`: no turn runs, so it goes as the next message at once.
+ * - `steer`: a turn runs; it is handed the message (`text`) and goes on
+ *   with it if it can. Only text can steer a turn.
+ * - `stop_and_send`: a turn runs and the message carries more than text; the
+ *   turn is stopped and the message goes once the stop settles.
+ *
+ * A steer that is not taken falls back to `stop_and_send` (see
+ * `steerFallback`).
+ */
+export type SendNowRoute =
+  | { type: "send" }
+  | { type: "steer"; text: string }
+  | { type: "stop_and_send" };
+
+export const sendNowRoute = (
+  state: Pick<SendQueueState, "isGenerating">,
+  entry: Pick<QueuedChatEntry, "fileCount" | "text">,
+): SendNowRoute => {
+  if (!state.isGenerating) {
+    return { type: "send" };
+  }
+  const text = entry.text.trim();
+  return entry.fileCount === 0 && text !== ""
+    ? { type: "steer", text }
+    : { type: "stop_and_send" };
+};
+
+/**
+ * What follows a steer, by what became of it: `steered` leaves the queue
+ * (the running answer holds the message), `refused` stops the turn so the
+ * message goes next, `unsettled` leaves it queued for the turn's end.
+ */
+export const steerFallback = (
+  outcome: "steered" | "refused" | "unsettled",
+): "remove" | "stop" | "keep" => {
+  switch (outcome) {
+    case "steered":
+      return "remove";
+    case "refused":
+      return "stop";
+    case "unsettled":
+      return "keep";
+    default:
+      outcome satisfies never;
+      return panic("Unhandled steer outcome");
+  }
+};
+
+/**
  * Every site in `useChatSession` that used to write one of the four
  * queue-related refs by hand. Each variant name traces back to the
  * call site it replaces (see `use-chat-session.ts`):

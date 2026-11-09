@@ -23,21 +23,28 @@ import {
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_STEER_EVENT,
+  CHAT_LOCAL_RUN_STEER_TOOL,
   type ChatLocalRunComputerEvent,
   chatLocalRunContextSchema,
   type ChatLocalRunFile,
   type ChatLocalRunHarness,
   type ChatLocalRunLimit,
   chatLocalRunLimitSchema,
+  chatLocalRunSteerCallId,
+  type ChatLocalRunSteerEvent,
+  type ChatLocalRunSteerInput,
 } from "@stll/api-contract/chat-run-target";
 import {
   type DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  DESKTOP_RUNNER_INPUT_EVENT,
   DESKTOP_RUNNER_OUTPUT_EVENT,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
+  desktopRunnerInputEventSchema,
   desktopRunnerOutputEventSchema,
 } from "@stll/api-contract/desktop-runner";
 import type {
@@ -98,6 +105,7 @@ type LocalRunControl = Pick<
   | "readChatRunSession"
   | "readEvents"
   | "readRun"
+  | "readRunInputText"
   | "readRunOutputFile"
   | "recordChatReadSeq"
   | "startRun"
@@ -746,6 +754,133 @@ const createRunOutputs = (
   };
 };
 
+/** What a stored chunk reports about one steering message, if that is what it is. */
+const runInputReportOf = (
+  chunk: PublicStreamChunk,
+): { value: unknown } | null =>
+  chunk.type === EventType.CUSTOM && chunk.name === DESKTOP_RUNNER_INPUT_EVENT
+    ? { value: chunk.value }
+    : null;
+
+class LocalRunSteerUnknown extends TaggedError("LocalRunSteerUnknown")<{
+  message: string;
+}> {}
+
+const LOCAL_RUN_STEER_SINK = failureSink({
+  event: "chat.local_run_steer_unknown",
+  expected: [],
+});
+
+/** The live event that tells the chat what became of its steer. */
+const steerEvent = (event: ChatLocalRunSteerEvent): PublicStreamChunk => ({
+  type: EventType.CUSTOM,
+  name: CHAT_LOCAL_RUN_STEER_EVENT,
+  value: event,
+  timestamp: nowMs(),
+});
+
+/**
+ * What one read of a run makes of the computer's reports on steering
+ * messages. A message the harness took becomes a call in the answer, where
+ * it was taken: a harness call whose input is the text the API itself queued
+ * (`run.input`), never what a desktop says it was. A report for an input
+ * this run was never sent, or a second report for one, shows nothing.
+ */
+const createRunSteers = (context: LocalRunContext, runnerRunId: string) => {
+  const settled = new Set<string>();
+  return async (value: unknown): Promise<PublicStreamChunk[]> => {
+    const report = v.safeParse(desktopRunnerInputEventSchema, value);
+    if (!report.success || settled.has(report.output.inputId)) {
+      return [];
+    }
+    const { inputId, status } = report.output;
+    settled.add(inputId);
+    const text = await context.control.readRunInputText({
+      owner: context.owner,
+      runId: runnerRunId,
+      inputId,
+    });
+    if (text.isErr()) {
+      observeFailure(text.error, { sink: LOCAL_RUN_STORE_SINK });
+      // The answer cannot hold the message; the chat sends it the usual way.
+      return [steerEvent({ inputId, status: "refused" })];
+    }
+    if (text.value === null) {
+      observeFailure(
+        new LocalRunSteerUnknown({
+          message: "A computer reported an input its run was never sent",
+        }),
+        { sink: LOCAL_RUN_STEER_SINK },
+      );
+      return [];
+    }
+    if (status === "rejected") {
+      return [steerEvent({ inputId, status: "refused" })];
+    }
+    const toolCallId = chatLocalRunSteerCallId(inputId);
+    const input = { text: text.value } satisfies ChatLocalRunSteerInput;
+    const args = JSON.stringify(input);
+    return [
+      ...publicChunks({
+        type: EventType.TOOL_CALL_START,
+        toolCallId,
+        toolCallName: CHAT_LOCAL_RUN_STEER_TOOL,
+        toolName: CHAT_LOCAL_RUN_STEER_TOOL,
+        metadata: {
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: CHAT_TOOL_EXECUTOR.harness,
+        },
+        timestamp: nowMs(),
+      }),
+      ...publicChunks({
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId,
+        delta: args,
+        args,
+        timestamp: nowMs(),
+      }),
+      ...publicChunks({
+        type: EventType.TOOL_CALL_END,
+        toolCallId,
+        toolCallName: CHAT_LOCAL_RUN_STEER_TOOL,
+        toolName: CHAT_LOCAL_RUN_STEER_TOOL,
+        input,
+        timestamp: nowMs(),
+      }),
+      ...publicChunks({
+        type: EventType.TOOL_CALL_RESULT,
+        toolCallId,
+        messageId: `${toolCallId}_result`,
+        content: JSON.stringify({ status: "delivered" }),
+        timestamp: nowMs(),
+      }),
+      steerEvent({ inputId, status: "steered" }),
+    ];
+  };
+};
+
+/**
+ * What the chat makes of a chunk that reports on the run rather than being
+ * part of its answer: an output file or a steering message. `null` for any
+ * other chunk.
+ */
+const createRunReports = (
+  context: LocalRunContext,
+  rewrite: RewriteContext,
+) => {
+  const outputs = createRunOutputs(context, rewrite);
+  const steers = createRunSteers(context, rewrite.runnerRunId);
+  return async (
+    chunk: PublicStreamChunk,
+  ): Promise<PublicStreamChunk[] | null> => {
+    const output = runOutputReportOf(chunk);
+    if (output !== null) {
+      return await outputs(output.value);
+    }
+    const steer = runInputReportOf(chunk);
+    return steer === null ? null : await steers(steer.value);
+  };
+};
+
 type ReadRunOptions = {
   context: LocalRunContext;
   runnerRunId: string;
@@ -969,7 +1104,7 @@ async function* readRunChunks({
     }
   };
   const computer = computerStatusChunks(start);
-  const runOutputChunks = createRunOutputs(context, rewrite);
+  const runReports = createRunReports(context, rewrite);
   const runApps = createRunApps(context, runnerRunId);
   const fail = function* (
     code: LocalRunFailure,
@@ -1047,10 +1182,10 @@ async function* readRunChunks({
             if (!isPublicStreamChunk(message.chunk)) {
               panic("A stored desktop runner chunk no longer folds");
             }
-            const output = runOutputReportOf(message.chunk);
-            if (output !== null) {
+            const reported = await runReports(message.chunk);
+            if (reported !== null) {
               yield* start();
-              yield* await runOutputChunks(output.value);
+              yield* reported;
               continue;
             }
             const chunk = asChatChunk(message.chunk, rewrite);

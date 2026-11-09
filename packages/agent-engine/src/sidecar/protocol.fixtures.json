@@ -1,12 +1,13 @@
 {
   "vocabulary": {
-    "protocol": 3,
+    "protocol": 5,
     "maxLineBytes": 8388608,
     "maxHeldRuns": 1000,
     "hostMessageTypes": [
       "hello",
       "harness.probe",
       "run.start",
+      "run.input",
       "run.approval",
       "run.answer",
       "run.interrupt",
@@ -51,7 +52,7 @@
     "host": [
       {
         "type": "hello",
-        "protocol": 3,
+        "protocol": 5,
         "secret": "abababababababababababababababababababababababababababababababab",
         "appVersion": "1.4.0",
         "apiOrigin": "https://api.example.test",
@@ -59,7 +60,7 @@
       },
       {
         "type": "hello",
-        "protocol": 3,
+        "protocol": 5,
         "secret": "abababababababababababababababababababababababababababababababab",
         "appVersion": "1.4.0",
         "apiOrigin": "http://127.0.0.1:3000",
@@ -185,6 +186,12 @@
         }
       },
       {
+        "type": "run.input",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "inputId": "7a2d3e4f-5b6c-4d7e-8f90-a1b2c3d4e5f6",
+        "message": { "role": "user", "content": "Also check the annex." }
+      },
+      {
         "type": "run.approval",
         "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
         "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
@@ -237,14 +244,14 @@
     "sidecar": [
       {
         "type": "hello",
-        "protocol": 3,
+        "protocol": 5,
         "sidecarVersion": "1.4.0",
         "mode": "serving",
         "runs": []
       },
       {
         "type": "hello",
-        "protocol": 3,
+        "protocol": 5,
         "sidecarVersion": "1.3.2",
         "mode": "draining",
         "runs": [
@@ -360,7 +367,7 @@
       {
         "type": "rejected",
         "reason": "unknown_type",
-        "messageType": "run.input",
+        "messageType": "run.pause",
         "runId": null
       },
       {
@@ -385,8 +392,13 @@
       },
       {
         "name": "unknown type",
-        "line": "{\"type\":\"run.input\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\"}",
+        "line": "{\"type\":\"run.pause\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\"}",
         "reason": "unknown_type"
+      },
+      {
+        "name": "input without text",
+        "line": "{\"type\":\"run.input\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"inputId\":\"7a2d3e4f-5b6c-4d7e-8f90-a1b2c3d4e5f6\",\"message\":{\"role\":\"user\",\"content\":\"\"}}",
+        "reason": "invalid"
       },
       {
         "name": "relative executable",
@@ -506,7 +518,7 @@
         "name": "unknown holder mode",
         "message": {
           "type": "hello",
-          "protocol": 3,
+          "protocol": 5,
           "sidecarVersion": "1.4.0",
           "mode": "paused",
           "runs": []

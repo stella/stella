@@ -210,6 +210,7 @@ const createRedactor = (scope: SkillPathScope) => {
       case "text.completed":
       case "reasoning.completed":
       case "interaction.resolved":
+      case "input.settled":
       case "turn.completed":
       case "turn.interrupted":
         return event;
@@ -237,6 +238,7 @@ export const redactingSkillPaths = (
   return {
     events: events(),
     respond: turn.respond,
+    steer: turn.steer,
     interrupt: turn.interrupt,
     dispose: turn.dispose,
   };
