@@ -18,7 +18,10 @@ import {
   extractAskContents,
   type ReviewCitation,
 } from "@/api/lib/document-review/review-extract";
-import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import {
+  ChatToolError,
+  DocumentTooLargeError,
+} from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import {
@@ -32,6 +35,9 @@ import {
 import { isAISupportedFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+
+const PARTIAL_READ_NOTICE =
+  "This review did not read every document in full: some text was withheld because the documents together were too long, so an inconsistency in the withheld text would not appear here.";
 
 export const REVIEW_FOLDER_CONSISTENCY_TOOL_NAME =
   "review_folder_consistency" satisfies RawModeOnlyChatToolName;
@@ -520,11 +526,21 @@ export const createFolderConsistencyReviewTools = ({
         },
       });
       if (Result.isError(extraction)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: "The folder consistency review could not be completed.",
-          cause: extraction.error,
-        });
+        throw new ChatToolError(
+          DocumentTooLargeError.is(extraction.error)
+            ? {
+                kind: "invalid-input",
+                message:
+                  "These documents are too large to review together. Review fewer documents at a time.",
+                cause: extraction.error,
+              }
+            : {
+                kind: "server-defect",
+                message:
+                  "The folder consistency review could not be completed.",
+                cause: extraction.error,
+              },
+        );
       }
       const answer = extraction.value.contentBySourceId.get(REVIEW_SOURCE_ID);
       if (!answer || answer.content.type !== "text") {
@@ -555,7 +571,10 @@ export const createFolderConsistencyReviewTools = ({
 
       return {
         ...baseOutput,
-        review: answer.content.value,
+        review:
+          extraction.value.withheld.length > 0
+            ? `${answer.content.value}\n\n${PARTIAL_READ_NOTICE}`
+            : answer.content.value,
         citations,
       };
     }),

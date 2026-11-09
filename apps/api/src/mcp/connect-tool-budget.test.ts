@@ -15,7 +15,7 @@ import committedWeights from "../../mcp-connect-tool-weights.json" with { type: 
 // and the audit log takes a performer filter. The case-law results app pages
 // a country's courts through list_case_law_courts (844 characters).
 // These measured limits include that shape; lower them as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 134_390;
+const TOTAL_CONNECT_CHAR_BUDGET = 134_387;
 const PER_TOOL_CONNECT_CHAR_CAP = 8179;
 
 describe("MCP connect-time tool budget", () => {

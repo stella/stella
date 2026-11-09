@@ -5,6 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { WorkflowValidationError } from "@/api/lib/errors/tagged-errors";
 import {
   fieldContentFromValidated,
+  isEmptyFieldContent,
   validateAIOutput,
 } from "@/api/lib/workflow/ai-validators";
 import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
@@ -284,5 +285,40 @@ describe("validateAIOutput — money answers", () => {
       amountCents: 4000,
       currency: "EUR",
     });
+  });
+});
+
+describe("isEmptyFieldContent", () => {
+  test("blank text, or an empty select, multi-select or date, states no value", () => {
+    expect(isEmptyFieldContent({ version: 1, type: "text", value: "" })).toBe(
+      true,
+    );
+    expect(
+      isEmptyFieldContent({ version: 1, type: "text", value: " \n" }),
+    ).toBe(true);
+    expect(
+      isEmptyFieldContent({ version: 1, type: "single-select", value: null }),
+    ).toBe(true);
+    expect(
+      isEmptyFieldContent({ version: 1, type: "multi-select", value: [] }),
+    ).toBe(true);
+    expect(isEmptyFieldContent({ version: 1, type: "date", value: null })).toBe(
+      true,
+    );
+  });
+
+  test("a stated value is not empty", () => {
+    expect(
+      isEmptyFieldContent({ version: 1, type: "single-select", value: "Yes" }),
+    ).toBe(false);
+    expect(
+      isEmptyFieldContent({ version: 1, type: "multi-select", value: ["A"] }),
+    ).toBe(false);
+    expect(
+      isEmptyFieldContent({ version: 1, type: "date", value: "2026-11-08" }),
+    ).toBe(false);
+    expect(
+      isEmptyFieldContent({ version: 1, type: "text", value: "Czech law" }),
+    ).toBe(false);
   });
 });

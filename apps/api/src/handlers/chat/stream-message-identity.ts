@@ -6,6 +6,10 @@ import {
 import type { StreamChunk, ToolCall } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
+import {
+  CHAT_TOOL_DECLINED_ERROR,
+  isDeclinedChatToolCall,
+} from "@stll/api-contract/chat";
 import { Temporal } from "@stll/time";
 
 import type { SafeDbError } from "@/api/db/safe-db";
@@ -88,7 +92,7 @@ export const findDeniedApprovals = (
       parts.flatMap((part): [string, DeniedApproval][] =>
         part.type === "tool-call" &&
         "approval" in part &&
-        part.approval.approved === false
+        isDeclinedChatToolCall(part)
           ? [[part.id, part.approval]]
           : [],
       ),
@@ -563,6 +567,7 @@ const keepDeniedApprovals = ({
       return [message];
     }
     const toolCallMetadata = readToolCallMetadata(message) ?? {};
+    const denials = deniedOutputs({ deniedApprovals, messages });
     const { parts } = modelMessageToUIMessage(
       {
         content: typeof message.content === "string" ? message.content : null,
@@ -579,9 +584,7 @@ const keepDeniedApprovals = ({
     const inUIForm = {
       ...message,
       parts: parts.map((part) =>
-        part.type === "tool-call"
-          ? asStoredDenial(part, deniedApprovals)
-          : part,
+        part.type === "tool-call" ? asStoredDenial(part, denials) : part,
       ),
     };
     return [inUIForm];
@@ -609,19 +612,66 @@ type UIToolCallPart = Extract<
   { type: "tool-call" }
 >;
 
-/** A rebuilt call as the stored thread holds it when its approval was denied. */
+/** A denied call's approval and the output the engine settled it with. */
+type DeniedOutput = { approval: DeniedApproval; output: unknown };
+
+/**
+ * The output each denied call settles with, as the engine stores it: the
+ * content of the tool message answering it, parsed as the engine's stream
+ * processor parses a result, or the engine's own denial when no message
+ * answers it yet.
+ */
+const deniedOutputs = ({
+  deniedApprovals,
+  messages,
+}: {
+  deniedApprovals: ReadonlyMap<string, DeniedApproval>;
+  messages: readonly SnapshotMessage[];
+}): ReadonlyMap<string, DeniedOutput> => {
+  const answers = new Map(
+    messages.flatMap((message): [string, unknown][] =>
+      message.role === "tool" ? [[message.toolCallId, message.content]] : [],
+    ),
+  );
+  return new Map(
+    [...deniedApprovals].map(([callId, approval]): [string, DeniedOutput] => [
+      callId,
+      { approval, output: storedResultOutput(answers.get(callId)) },
+    ]),
+  );
+};
+
+/** A tool message's content as the engine stores it on the call it
+ *  answers: JSON text parsed, anything else as it is; the engine's denial
+ *  when no message answers the call. */
+const storedResultOutput = (content: unknown): unknown => {
+  if (content === undefined) {
+    return { error: CHAT_TOOL_DECLINED_ERROR };
+  }
+  if (typeof content !== "string") {
+    return content;
+  }
+  return Result.try((): unknown => JSON.parse(content)).unwrapOr(content);
+};
+
+/**
+ * A rebuilt call as the stored thread holds it when its approval was denied:
+ * settled as an error carrying the denial (`declineToolCall`), so the
+ * snapshot and a reload show the same call.
+ */
 const asStoredDenial = (
   part: UIToolCallPart,
-  deniedApprovals: ReadonlyMap<string, DeniedApproval>,
+  denials: ReadonlyMap<string, DeniedOutput>,
 ): UIToolCallPart => {
-  const approval = deniedApprovals.get(part.id);
-  if (approval === undefined) {
+  const denial = denials.get(part.id);
+  if (denial === undefined) {
     return part;
   }
   const denied: UIToolCallPart = {
     ...part,
-    approval,
-    state: "approval-responded",
+    approval: denial.approval,
+    output: denial.output,
+    state: "error",
   };
   return denied;
 };

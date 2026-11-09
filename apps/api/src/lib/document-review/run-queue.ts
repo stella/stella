@@ -58,6 +58,8 @@ import { resolveDocumentReviewRunInputs } from "@/api/lib/document-review/run-in
 import type { PinnedDocument } from "@/api/lib/document-review/run-inputs";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import type { ReviewRunPlan } from "@/api/lib/document-review/run-plan";
+import { recordRunWithheldSources } from "@/api/lib/document-review/table-run-findings";
+import { DocumentTooLargeError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -86,6 +88,10 @@ import {
   isTierStandard,
   resolveEffectiveAsk,
 } from "@/api/lib/workflow/position-runtime";
+import {
+  fitDocxFilesToRequestBudget,
+  requestBudgetBytesForTask,
+} from "@/api/lib/workflow/request-budget";
 import {
   loadClauseSnapshots,
   resolveTiers,
@@ -763,6 +769,29 @@ const runGradingPass = async ({
     return null;
   }
 
+  const fit = fitDocxFilesToRequestBudget({
+    files: [target],
+    budgetBytes: requestBudgetBytesForTask("pdf", deps.orgAIConfig, {
+      dataClass: "customer",
+      organizationId: actor.organizationId,
+      modelTier: deps.admission.modelTier,
+    }),
+  });
+  if (Result.isError(fit)) {
+    return "document_too_large";
+  }
+  if (fit.value.type === "cut") {
+    const { withheld } = fit.value;
+    await actor.writeDb(
+      async (tx) =>
+        await recordRunWithheldSources(tx, {
+          workspaceId: actor.workspaceId,
+          runId: actor.runId,
+          withheld,
+        }),
+    );
+  }
+
   const positions = plan.positions.map((planned) => planned.position);
   const clauseSnapshots = await actor.writeDb(
     async (tx) =>
@@ -800,7 +829,9 @@ const runGradingPass = async ({
     ...deps,
   });
   if (Result.isError(extraction)) {
-    return "playbook_check_failed";
+    return DocumentTooLargeError.is(extraction.error)
+      ? "document_too_large"
+      : "playbook_check_failed";
   }
 
   const plannedByPositionId = new Map(
@@ -830,8 +861,10 @@ const runGradingPass = async ({
     positions,
     passageTextById,
     contentBySourceId: extraction.value.contentBySourceId,
+    refusedSourceIds: extraction.value.refusedSourceIds,
     tiersBySourceId,
     target,
+    documentRead: fit.value.type,
     perspective: run.basis.perspective,
     referenceEntityVersionIds: run.basis.references.map(
       (reference) => reference.entityVersionId,

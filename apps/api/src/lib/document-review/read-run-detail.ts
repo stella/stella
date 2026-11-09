@@ -74,6 +74,7 @@ export const readDocumentReviewRunDetail = async function* ({
           // What the proposal pass left uncompared, so the results can say how
           // much of the document the checklist never covered.
           skipped: documentReviewRuns.skipped,
+          withheldSources: documentReviewRuns.withheldSources,
           total: documentReviewRuns.total,
           completed: documentReviewRuns.completed,
           pipelineVersion: documentReviewRuns.pipelineVersion,
