@@ -82,6 +82,13 @@ const browserStep = (id: string, output: BrowserControlResult) => [
 
 const user: ModelMessage = { content: "najdi komentář k § 88", role: "user" };
 
+const textOf = (message: ModelMessage | undefined): string => {
+  if (typeof message?.content !== "string") {
+    throw new TypeError("Expected a text tool result");
+  }
+  return message.content;
+};
+
 const contentLength = (messages: readonly ModelMessage[]) =>
   messages.reduce(
     (total, message) => total + JSON.stringify(message.content).length,
@@ -101,7 +108,7 @@ describe("supersedeBrowserSnapshots", () => {
 
     expect(projected.at(-1)).toBe(messages.at(-1));
     for (const index of [2, 4]) {
-      const stub: unknown = JSON.parse(String(projected[index]?.content));
+      const stub: unknown = JSON.parse(textOf(projected[index]));
       expect(stub).toMatchObject({
         note: SUPERSEDED_BROWSER_SNAPSHOT_NOTE,
         page: {
@@ -111,7 +118,7 @@ describe("supersedeBrowserSnapshots", () => {
         status: "success",
         superseded: true,
       });
-      expect(String(projected[index]?.content).length).toBeLessThan(1000);
+      expect(textOf(projected[index]).length).toBeLessThan(1000);
     }
     expect(projected.slice(0, 2)).toEqual(messages.slice(0, 2));
   });
@@ -143,7 +150,7 @@ describe("supersedeBrowserSnapshots", () => {
 
     expect(projected[4]).toBe(messages[4]);
     expect(projected[6]).toBe(messages[6]);
-    expect(JSON.parse(String(projected[2]?.content))).toMatchObject({
+    expect(JSON.parse(textOf(projected[2]))).toMatchObject({
       superseded: true,
     });
   });
