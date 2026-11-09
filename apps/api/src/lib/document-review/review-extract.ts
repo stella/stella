@@ -69,7 +69,7 @@ export type PdfBatesCitation = {
 
 export type ReviewCitation = PdfBatesCitation | ReviewDocxFolioCitation;
 
-export type AskExtraction = {
+type AskExtraction = {
   content: FieldContent;
   citations: ReviewCitation[];
 };
