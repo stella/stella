@@ -5,16 +5,11 @@
   "adoptUnsupported": {
     "message": "Seules les pages HTTPS publiques peuvent être utilisées avec stella."
   },
-  "containedTabs": {
-    "message": "Onglets utilisés par stella : $TABS$",
-    "placeholders": {
-      "tabs": {
-        "content": "$1"
-      }
-    }
+  "usingTabs": {
+    "message": "Onglets utilisés :"
   },
   "downloadKept": {
-    "message": "Téléchargements terminés pendant que stella contrôlait un onglet et conservés : $COUNT$. Vérifiez leur provenance avant de les ouvrir.",
+    "message": "Téléchargements conservés : $COUNT$, vérifiez-les avant de les ouvrir",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -22,7 +17,7 @@
     }
   },
   "downloadStopped": {
-    "message": "Téléchargements arrêtés par stella pendant qu’il contrôlait un onglet : $COUNT$.",
+    "message": "Téléchargements arrêtés : $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -30,7 +25,7 @@
     }
   },
   "downloadsStoppedAndKept": {
-    "message": "Pendant que stella contrôlait un onglet : téléchargements arrêtés : $STOPPED$. Téléchargements terminés et conservés (vérifiez leur provenance avant de les ouvrir) : $KEPT$.",
+    "message": "Téléchargements arrêtés : $STOPPED$ · conservés : $KEPT$, vérifiez-les avant de les ouvrir",
     "placeholders": {
       "kept": {
         "content": "$2"
@@ -50,15 +45,10 @@
     "message": "Ouvrez un onglet de l’application stella, puis réessayez."
   },
   "connectionPurpose": {
-    "message": "À votre demande dans le chat, stella peut ouvrir et lire des sites dans un onglet séparé avec vos sessions actives."
+    "message": "Ouvre et lit des sites pour le chat, avec vos sessions actives."
   },
   "statusConnected": {
-    "message": "Connecté à $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
+    "message": "Connecté"
   },
   "statusNotConnected": {
     "message": "Non connecté"
@@ -68,14 +58,6 @@
   },
   "statusOpenStella": {
     "message": "Ouvrez stella pour vous connecter"
-  },
-  "statusTabHandedOver": {
-    "message": "Onglet confié à stella : $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
   },
   "allowAndConnect": {
     "message": "Autoriser l’accès et connecter"
@@ -92,20 +74,14 @@
   "disconnectTab": {
     "message": "Déconnecter"
   },
-  "disconnectDescription": {
-    "message": "stella cesse d’utiliser l’onglet connecté."
-  },
   "revokeAccess": {
-    "message": "Retirer l’accès aux sites"
-  },
-  "revokeDescription": {
-    "message": "Retire l’autorisation d’ouvrir et de lire des sites."
+    "message": "Retirer l’accès"
   },
   "checkingAccess": {
     "message": "Vérification de la connexion…"
   },
   "statusConnectedElsewhere": {
-    "message": "stella est connecté à une autre adresse"
+    "message": "Connecté ailleurs"
   },
   "connectStellaInstead": {
     "message": "Connecter stella ici à la place"

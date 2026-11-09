@@ -5,16 +5,11 @@
   "adoptUnsupported": {
     "message": "Se stellou lze používat jen veřejné stránky na HTTPS."
   },
-  "containedTabs": {
-    "message": "Karty, které stella používá: $TABS$",
-    "placeholders": {
-      "tabs": {
-        "content": "$1"
-      }
-    }
+  "usingTabs": {
+    "message": "Používá se:"
   },
   "downloadKept": {
-    "message": "Stahování dokončená během ovládání karty stellou a ponechaná: $COUNT$. Před otevřením ověřte, odkud pocházejí.",
+    "message": "Ponechaná stahování: $COUNT$, před otevřením ověřte",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -22,7 +17,7 @@
     }
   },
   "downloadStopped": {
-    "message": "Stahování zastavená stellou během ovládání karty: $COUNT$.",
+    "message": "Zastavená stahování: $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -30,7 +25,7 @@
     }
   },
   "downloadsStoppedAndKept": {
-    "message": "Během ovládání karty stellou: zastavená stahování: $STOPPED$. Dokončená a ponechaná stahování (před otevřením ověřte, odkud pocházejí): $KEPT$.",
+    "message": "Zastavená stahování: $STOPPED$ · ponechaná: $KEPT$, před otevřením ověřte",
     "placeholders": {
       "kept": {
         "content": "$2"
@@ -50,15 +45,10 @@
     "message": "Otevřete kartu aplikace stella a zkuste to znovu."
   },
   "connectionPurpose": {
-    "message": "Když o to požádáte v chatu, stella může na samostatné kartě otevírat a číst weby s využitím vašich přihlášení."
+    "message": "Otevírá a čte weby pro chat s vašimi přihlášeními."
   },
   "statusConnected": {
-    "message": "Připojeno k $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
+    "message": "Připojeno"
   },
   "statusNotConnected": {
     "message": "Nepřipojeno"
@@ -68,14 +58,6 @@
   },
   "statusOpenStella": {
     "message": "Pro připojení otevřete stellu"
-  },
-  "statusTabHandedOver": {
-    "message": "Karta předána stelle: $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
   },
   "allowAndConnect": {
     "message": "Povolit přístup k webům a připojit"
@@ -92,20 +74,14 @@
   "disconnectTab": {
     "message": "Odpojit"
   },
-  "disconnectDescription": {
-    "message": "stella přestane používat připojenou kartu."
-  },
   "revokeAccess": {
-    "message": "Odebrat přístup k webům"
-  },
-  "revokeDescription": {
-    "message": "Odebere oprávnění otevírat a číst weby."
+    "message": "Odebrat přístup"
   },
   "checkingAccess": {
     "message": "Kontrola připojení…"
   },
   "statusConnectedElsewhere": {
-    "message": "stella je připojena na jiné adrese"
+    "message": "Připojeno jinde"
   },
   "connectStellaInstead": {
     "message": "Připojit stellu tady"

@@ -278,12 +278,29 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     const page = () => ({ revision: snapshot.revision, url: snapshot.url });
 
     // The popup names the tab stella keeps contained, so the user can find
-    // it among their tabs and disconnect.
+    // it among their tabs and disconnect; the connected address is in the
+    // status tooltip and read out to screen readers.
     const popupPage = await harness.context.newPage();
     await popupPage.goto(new URL("/popup.html", harness.worker.url()).href);
-    await expect(popupPage.locator("#contained-tabs")).toHaveText(
-      `Tabs stella is using: Containment (${new URL(FIXTURE_ORIGIN).host})`,
+    await expect(popupPage.locator("#contained-tabs-label")).toHaveText(
+      "Using:",
     );
+    await expect(popupPage.locator(".tab-name")).toHaveText(["Containment"]);
+    await expect(popupPage.locator(".tab-host")).toHaveText([
+      new URL(FIXTURE_ORIGIN).host,
+    ]);
+    const status = popupPage.locator("#status");
+    await expect(status).toHaveAttribute("role", "status");
+    await expect(status).toHaveAttribute("title", harness.stellaOrigin);
+    await expect(popupPage.locator("#status-text")).toHaveText("Connected");
+    await expect(popupPage.locator("#status-origin")).toHaveText(
+      harness.stellaOrigin,
+    );
+    await expect(popupPage.locator("#purpose")).toBeHidden();
+    await expect(popupPage.getByRole("button")).toHaveText([
+      "Disconnect",
+      "Remove access",
+    ]);
     await popupPage.close();
 
     // While stella controls a tab, the user's own downloads elsewhere go
@@ -525,15 +542,15 @@ test("the popup names downloads stopped and files kept", async () => {
     const cases = [
       {
         notices: { kept: 2, stopped: 1 },
-        text: "While stella controlled a tab: downloads stopped: 1. Downloads that finished and were kept (check where they came from before opening them): 2.",
+        text: "Downloads stopped: 1 · kept: 2, check before opening",
       },
       {
         notices: { kept: 1, stopped: 0 },
-        text: "Downloads that finished while stella controlled a tab and were kept: 1. Check where they came from before opening them.",
+        text: "Downloads kept: 1, check before opening",
       },
       {
         notices: { kept: 0, stopped: 4 },
-        text: "Downloads stella stopped while it controlled a tab: 4.",
+        text: "Downloads stopped: 4",
       },
     ];
     for (const { notices, text } of cases) {
@@ -545,7 +562,7 @@ test("the popup names downloads stopped and files kept", async () => {
       }, notices);
       const popup = await harness.context.newPage();
       await popup.goto(new URL("/popup.html", harness.worker.url()).href);
-      await expect(popup.locator("#status")).toHaveText(text);
+      await expect(popup.locator("#notice")).toHaveText(text);
       // Shown once: the notice and the badge are cleared.
       expect(
         await harness.worker.evaluate(async () => [

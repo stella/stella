@@ -7,7 +7,8 @@ import { parseControllableUrl } from "../../lib/origin-policy";
 import { type PopupTab, runPopupAction } from "../../lib/popup-actions";
 import { type PopupResponse, sendPopupRequest } from "../../lib/popup-request";
 import {
-  containedTabsMessage,
+  connectedOrigin,
+  containedTabRows,
   handedTabView,
   type PopupAction,
   type PopupActiveTab,
@@ -19,35 +20,24 @@ import {
 import { containedTabIds, readContainedTabs } from "../../lib/tab-containment";
 import { trustedStellaOriginFromUrl } from "../../lib/trusted-origin";
 
-const purposeElement = document.querySelector("#purpose");
-const statusElement = document.querySelector("#status");
-const statusLine = document.querySelector(".status-line");
-const containedTabsElement = document.querySelector("#contained-tabs");
-const primaryButton = document.querySelector("#primary");
-const secondaryActions = document.querySelector("#secondary-actions");
-const titleElement = document.querySelector("#title");
+const element = <T extends Element>(selector: string, type: new () => T): T => {
+  const found = document.querySelector(selector);
+  return found instanceof type
+    ? found
+    : panic(`Missing popup element ${selector}`);
+};
 
-if (!(purposeElement instanceof HTMLParagraphElement)) {
-  panic("Missing popup purpose element");
-}
-if (!(statusElement instanceof HTMLParagraphElement)) {
-  panic("Missing popup status element");
-}
-if (!(statusLine instanceof HTMLDivElement)) {
-  panic("Missing popup status line");
-}
-if (!(containedTabsElement instanceof HTMLParagraphElement)) {
-  panic("Missing popup contained tabs element");
-}
-if (!(primaryButton instanceof HTMLButtonElement)) {
-  panic("Missing popup primary button");
-}
-if (!(secondaryActions instanceof HTMLDivElement)) {
-  panic("Missing popup secondary actions");
-}
-if (!(titleElement instanceof HTMLHeadingElement)) {
-  panic("Missing popup title element");
-}
+const titleElement = element("#title", HTMLHeadingElement);
+const statusElement = element("#status", HTMLParagraphElement);
+const statusText = element("#status-text", HTMLSpanElement);
+const statusOrigin = element("#status-origin", HTMLSpanElement);
+const purposeElement = element("#purpose", HTMLParagraphElement);
+const noticeElement = element("#notice", HTMLParagraphElement);
+const containedTabsElement = element("#contained-tabs", HTMLDivElement);
+const containedTabsLabel = element("#contained-tabs-label", HTMLSpanElement);
+const containedTabList = element("#contained-tab-list", HTMLUListElement);
+const primaryButton = element("#primary", HTMLButtonElement);
+const secondaryActions = element("#secondary-actions", HTMLDivElement);
 
 const message = (
   name: PopupMessageKey | "@@bidi_dir",
@@ -59,7 +49,8 @@ document.documentElement.dir = message("@@bidi_dir");
 document.title = message("extensionName");
 titleElement.textContent = message("extensionName");
 purposeElement.textContent = message("connectionPurpose");
-statusElement.textContent = message("checkingAccess");
+containedTabsLabel.textContent = message("usingTabs");
+statusText.textContent = message("checkingAccess");
 
 const readActiveTab = async (): Promise<PopupTab | null> =>
   (await chrome.tabs.query({ active: true, currentWindow: true })).at(0) ??
@@ -79,22 +70,6 @@ const activeTabKind = (tab: PopupTab | null): PopupActiveTab => {
   return { kind: "unsupported" };
 };
 
-const statusSubstitutions = (view: PopupView): string[] | undefined => {
-  switch (view.state.type) {
-    case "connected":
-    case "tab-handed-to-stella":
-      return [view.state.origin];
-    case "connected-elsewhere":
-    case "not-connected":
-    case "open-stella-to-connect":
-    case "website-access-needed":
-      return undefined;
-    default:
-      view.state satisfies never;
-      return panic("Unhandled popup state");
-  }
-};
-
 /** The tabs stella keeps contained: the controlled one first. */
 const readContainedTabsList = async (): Promise<chrome.tabs.Tab[]> => {
   const tabIds = containedTabIds(await readContainedTabs());
@@ -105,38 +80,63 @@ const readContainedTabsList = async (): Promise<chrome.tabs.Tab[]> => {
 };
 
 const renderContainedTabs = (tabs: readonly chrome.tabs.Tab[]): void => {
-  const line = containedTabsMessage(tabs, chrome.i18n.getUILanguage());
-  containedTabsElement.hidden = line === null;
-  containedTabsElement.textContent =
-    line === null ? "" : message(line.name, line.substitutions);
+  const rows = containedTabRows(tabs);
+  containedTabsElement.hidden = rows.length === 0;
+  containedTabList.replaceChildren(
+    ...rows.map(({ host, name }) => {
+      const item = document.createElement("li");
+      const nameElement = document.createElement("span");
+      nameElement.className = "tab-name";
+      nameElement.textContent = name;
+      nameElement.title = name;
+      item.append(nameElement);
+      if (host !== null) {
+        const hostElement = document.createElement("span");
+        hostElement.className = "tab-host";
+        hostElement.textContent = host;
+        item.append(hostElement);
+      }
+      return item;
+    }),
+  );
+};
+
+const renderNotice = (text: string): void => {
+  noticeElement.textContent = text;
+  noticeElement.hidden = false;
 };
 
 const renderFailure = (key: PopupMessageKey): void => {
-  statusElement.textContent = message(key);
+  renderNotice(message(key));
 };
 
 const renderSecondaryAction = (
   action: PopupSecondaryAction,
-): HTMLDivElement => {
-  const wrapper = document.createElement("div");
-  wrapper.className = "secondary-action";
+): HTMLButtonElement => {
   const button = document.createElement("button");
-  button.className = "secondary";
+  button.className = action.appearance === "link" ? "link" : "secondary";
   button.type = "button";
   button.textContent = message(action.messageKey);
-  const description = document.createElement("p");
-  description.textContent = message(action.descriptionMessageKey);
   button.addEventListener("click", () => execute(button, action.action));
-  wrapper.append(button, description);
-  return wrapper;
+  return button;
 };
 
-const render = (view: PopupView): void => {
-  statusLine.dataset["state"] = view.state.type;
-  statusElement.textContent = message(
-    view.statusMessageKey,
-    statusSubstitutions(view),
-  );
+const render = (
+  view: PopupView,
+  containedTabs: readonly chrome.tabs.Tab[],
+): void => {
+  statusElement.dataset["state"] = view.state.type;
+  statusText.textContent = message(view.statusMessageKey);
+  // The address is a tooltip on screen and read out to screen readers.
+  const origin = connectedOrigin(view);
+  statusOrigin.textContent = origin ?? "";
+  if (origin === null) {
+    statusElement.removeAttribute("title");
+  } else {
+    statusElement.title = origin;
+  }
+  purposeElement.hidden = !view.showPurpose;
+  renderContainedTabs(origin === null ? [] : containedTabs);
   primaryButton.hidden = view.primary === null;
   if (view.primary !== null) {
     primaryButton.textContent = message(view.primary.messageKey);
@@ -175,20 +175,25 @@ const adoptFailureMessage = {
 >;
 
 const adoptActiveTab = async (activeTab: PopupTab | null): Promise<void> => {
-  if (activeTab?.id !== undefined) {
-    const result = await sendPopupRequest({
-      tabId: activeTab.id,
-      type: "adopt",
-    });
-    if (result.status !== "adopted") {
-      renderFailure(adoptFailureMessage[result.status]);
-      return;
-    }
-    render(handedTabView(new URL(result.url).origin));
-    renderContainedTabs(await readContainedTabsList());
-  } else {
+  const tabId = activeTab === null ? undefined : activeTab.id;
+  if (tabId === undefined) {
     renderFailure("unsupportedTab");
+    return;
   }
+  const result = await sendPopupRequest({ tabId, type: "adopt" });
+  if (result.status !== "adopted") {
+    renderFailure(adoptFailureMessage[result.status]);
+    return;
+  }
+  const [controller, containedTabs] = await Promise.all([
+    readBrowserController(),
+    readContainedTabsList(),
+  ]);
+  if (controller === null) {
+    await renderAccess();
+    return;
+  }
+  render(handedTabView(controller.origin), containedTabs);
 };
 
 const execute = (
@@ -240,8 +245,8 @@ const renderAccess = async (): Promise<void> => {
   renderedTab = activeTab;
   render(
     popupView({ activeTab: activeTabKind(activeTab), controller, granted }),
+    containedTabs,
   );
-  renderContainedTabs(containedTabs);
 };
 
 await renderAccess();
@@ -249,8 +254,7 @@ const taken = await sendPopupRequest({ type: "take-download-notices" });
 const downloadNotice =
   taken.status === "download-notices" ? downloadNoticeMessage(taken) : null;
 if (downloadNotice !== null) {
-  statusElement.textContent = chrome.i18n.getMessage(
-    downloadNotice.name,
-    downloadNotice.substitutions,
+  renderNotice(
+    chrome.i18n.getMessage(downloadNotice.name, downloadNotice.substitutions),
   );
 }

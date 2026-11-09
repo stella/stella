@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type enMessages from "../../public/_locales/en/messages.json";
 import type { BrowserController } from "./controller";
 
@@ -13,7 +15,8 @@ export type PopupAction = {
 };
 export type PopupSecondaryAction = {
   action: "disconnect" | "revoke";
-  descriptionMessageKey: PopupMessageKey;
+  /** A plain button, or a quieter text link for the less common action. */
+  appearance: "button" | "link";
   messageKey: PopupMessageKey;
 };
 type PopupState =
@@ -26,18 +29,20 @@ type PopupState =
 export type PopupView = {
   primary: PopupAction | null;
   secondary: readonly PopupSecondaryAction[];
+  /** Whether to say what connecting does; only until stella is connected. */
+  showPurpose: boolean;
   state: PopupState;
   statusMessageKey: PopupMessageKey;
 };
 
 const DISCONNECT = {
   action: "disconnect",
-  descriptionMessageKey: "disconnectDescription",
+  appearance: "button",
   messageKey: "disconnectTab",
 } as const satisfies PopupSecondaryAction;
 const REVOKE = {
   action: "revoke",
-  descriptionMessageKey: "revokeDescription",
+  appearance: "link",
   messageKey: "revokeAccess",
 } as const satisfies PopupSecondaryAction;
 
@@ -60,6 +65,7 @@ export const popupView = ({
           ? { action: "grant-and-connect", messageKey: "allowAndConnect" }
           : { action: "grant", messageKey: "allowWebsiteAccess" },
       secondary: controller === null ? [] : [DISCONNECT],
+      showPurpose: true,
       state: { type: "website-access-needed" },
       statusMessageKey: "statusWebsiteAccessNeeded",
     };
@@ -69,6 +75,7 @@ export const popupView = ({
       return {
         primary: { action: "connect", messageKey: "connectStella" },
         secondary: [REVOKE],
+        showPurpose: true,
         state: { type: "not-connected" },
         statusMessageKey: "statusNotConnected",
       };
@@ -76,6 +83,7 @@ export const popupView = ({
     return {
       primary: null,
       secondary: [REVOKE],
+      showPurpose: true,
       state: { type: "open-stella-to-connect" },
       statusMessageKey: "statusOpenStella",
     };
@@ -85,6 +93,7 @@ export const popupView = ({
     return {
       primary: { action: "connect", messageKey: "connectStellaInstead" },
       secondary: [DISCONNECT, REVOKE],
+      showPurpose: false,
       state: { type: "connected-elsewhere" },
       statusMessageKey: "statusConnectedElsewhere",
     };
@@ -95,22 +104,50 @@ export const popupView = ({
         ? { action: "adopt", messageKey: "adoptTab" }
         : null,
     secondary: [DISCONNECT, REVOKE],
+    showPurpose: false,
     state: { origin: controller.origin, type: "connected" },
     statusMessageKey: "statusConnected",
   };
 };
 
+/** The view right after the user hands a tab over; `origin` is stella's. */
 export const handedTabView = (origin: string): PopupView => ({
   primary: null,
   secondary: [DISCONNECT, REVOKE],
+  showPurpose: false,
   state: { origin, type: "tab-handed-to-stella" },
-  statusMessageKey: "statusTabHandedOver",
+  statusMessageKey: "statusConnected",
 });
+
+/**
+ * The address stella is connected at, shown as the status tooltip and read
+ * out to screen readers; null while not connected here.
+ */
+export const connectedOrigin = ({ state }: PopupView): string | null => {
+  switch (state.type) {
+    case "connected":
+    case "tab-handed-to-stella":
+      return state.origin;
+    case "connected-elsewhere":
+    case "not-connected":
+    case "open-stella-to-connect":
+    case "website-access-needed":
+      return null;
+    default:
+      state satisfies never;
+      return panic("Unhandled popup state");
+  }
+};
 
 type NamedTab = Pick<chrome.tabs.Tab, "title" | "url">;
 
-/** Long titles are cut so the popup line stays readable. */
-const TAB_TITLE_LIMIT = 60;
+/** One tab stella keeps contained, as the popup lists it. */
+export type ContainedTabRow = {
+  /** The tab's host, unless the name already is the host. */
+  host: string | null;
+  /** The tab's title, or its host when it has none. */
+  name: string;
+};
 
 const webHost = (rawUrl: string | undefined): string | null => {
   if (rawUrl === undefined) {
@@ -126,54 +163,20 @@ const webHost = (rawUrl: string | undefined): string | null => {
   }
 };
 
-const shortTitle = (title: string | undefined): string | null => {
-  const trimmed = title?.trim() ?? "";
-  if (trimmed === "") {
-    return null;
-  }
-  // Cut by grapheme, so an emoji or an accented letter is never split.
-  const graphemes = Array.from(
-    new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(trimmed),
-    ({ segment }) => segment,
-  );
-  return graphemes.length > TAB_TITLE_LIMIT
-    ? `${graphemes
-        .slice(0, TAB_TITLE_LIMIT - 1)
-        .join("")
-        .trimEnd()}…`
-    : trimmed;
-};
-
 /**
- * How the popup names a tab stella keeps contained, so the user can find it
- * among their tabs: its title and host, or whichever Chrome reported. Null
- * when it reported neither.
+ * The tabs stella keeps contained, which stay so until stella is
+ * disconnected or they close, named so the user can find them among their
+ * tabs: by title and host, or whichever Chrome reported. A tab Chrome
+ * reported neither for is left out.
  */
-const containedTabLabel = ({ title, url }: NamedTab): string | null => {
-  const name = shortTitle(title);
-  const host = webHost(url);
-  if (name !== null && host !== null) {
-    return name === host ? host : `${name} (${host})`;
-  }
-  return name ?? host;
-};
-
-/**
- * The popup line naming the tabs stella keeps contained, which stay so
- * until stella is disconnected or they close; null when there are none.
- */
-export const containedTabsMessage = (
+export const containedTabRows = (
   tabs: readonly NamedTab[],
-  locale: string,
-): { name: PopupMessageKey; substitutions: string[] } | null => {
-  const labels = tabs.map(containedTabLabel).filter((label) => label !== null);
-  if (labels.length === 0) {
-    return null;
-  }
-  return {
-    name: "containedTabs",
-    substitutions: [
-      new Intl.ListFormat(locale, { type: "conjunction" }).format(labels),
-    ],
-  };
-};
+): ContainedTabRow[] =>
+  tabs.flatMap(({ title, url }): ContainedTabRow[] => {
+    const trimmed = title?.trim() ?? "";
+    const host = webHost(url);
+    if (trimmed === "") {
+      return host === null ? [] : [{ host: null, name: host }];
+    }
+    return [{ host: trimmed === host ? null : host, name: trimmed }];
+  });

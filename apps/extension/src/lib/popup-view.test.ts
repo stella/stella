@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 
 import {
-  containedTabsMessage,
+  connectedOrigin,
+  containedTabRows,
   handedTabView,
   type PopupActiveTab,
   type PopupController,
@@ -68,15 +69,16 @@ describe("popupView", () => {
               secondary: [
                 {
                   action: "disconnect",
-                  descriptionMessageKey: "disconnectDescription",
+                  appearance: "button",
                   messageKey: "disconnectTab",
                 },
                 {
                   action: "revoke",
-                  descriptionMessageKey: "revokeDescription",
+                  appearance: "link",
                   messageKey: "revokeAccess",
                 },
               ],
+              showPurpose: false,
               state: { type: "connected-elsewhere" },
               statusMessageKey: "statusConnectedElsewhere",
             });
@@ -110,9 +112,41 @@ describe("popupView", () => {
   test("represents a tab handed to stella after adoption", () => {
     expect(handedTabView("https://example.com")).toMatchObject({
       primary: null,
+      showPurpose: false,
       state: { origin: "https://example.com", type: "tab-handed-to-stella" },
-      statusMessageKey: "statusTabHandedOver",
+      statusMessageKey: "statusConnected",
     });
+  });
+
+  test("says what connecting does only until stella is connected", () => {
+    for (const granted of grants) {
+      for (const controller of controllers) {
+        for (const activeTab of activeTabs) {
+          const view = popupView({ activeTab, controller, granted });
+          expect(view.showPurpose).toBe(
+            !granted ||
+              view.state.type === "not-connected" ||
+              view.state.type === "open-stella-to-connect",
+          );
+        }
+      }
+    }
+  });
+
+  test("names the connected address only while connected here", () => {
+    for (const granted of grants) {
+      for (const controller of controllers) {
+        for (const activeTab of activeTabs) {
+          const view = popupView({ activeTab, controller, granted });
+          expect(connectedOrigin(view)).toBe(
+            view.state.type === "connected" ? "https://app.stll.app" : null,
+          );
+        }
+      }
+    }
+    expect(connectedOrigin(handedTabView("https://app.stll.app"))).toBe(
+      "https://app.stll.app",
+    );
   });
 });
 
@@ -127,79 +161,61 @@ for (const granted of grants) {
       }
       for (const secondary of view.secondary) {
         returnedMessageKeys.add(secondary.messageKey);
-        returnedMessageKeys.add(secondary.descriptionMessageKey);
       }
     }
   }
 }
 const handed = handedTabView("https://example.com");
 returnedMessageKeys.add(handed.statusMessageKey);
-const containedLine = containedTabsMessage(
-  [{ title: "Invoices", url: "https://portal.example.com/invoices" }],
-  "en",
-);
-if (containedLine !== null) {
-  returnedMessageKeys.add(containedLine.name);
+// Shown by the popup outside the view.
+for (const key of [
+  "checkingAccess",
+  "connectionPurpose",
+  "usingTabs",
+] as const satisfies readonly PopupMessageKey[]) {
+  returnedMessageKeys.add(key);
 }
 
 describe("naming the tabs stella keeps contained", () => {
-  /** How the popup line names one tab; null when it names none. */
-  const containedTabLabel = (
-    tab: Parameters<typeof containedTabsMessage>[0][number],
-  ): string | null =>
-    containedTabsMessage([tab], "en")?.substitutions.at(0) ?? null;
-
-  test("a tab is named by its title and host", () => {
+  test("a tab is named by its title, with its host beside it", () => {
     expect(
-      containedTabLabel({
-        title: "Invoices",
-        url: "https://portal.example.com/invoices?page=2",
-      }),
-    ).toBe("Invoices (portal.example.com)");
+      containedTabRows([
+        {
+          title: "  Invoices ",
+          url: "https://portal.example.com/invoices?page=2",
+        },
+      ]),
+    ).toEqual([{ host: "portal.example.com", name: "Invoices" }]);
   });
 
   test("whichever of title and host Chrome reported names the tab", () => {
     expect(
-      containedTabLabel({ title: "  ", url: "https://portal.example.com/" }),
-    ).toBe("portal.example.com");
-    expect(
-      containedTabLabel({
-        title: "portal.example.com",
-        url: "https://portal.example.com/",
-      }),
-    ).toBe("portal.example.com");
-    expect(containedTabLabel({ title: "Loading", url: "about:blank" })).toBe(
-      "Loading",
-    );
-    expect(containedTabLabel({})).toBe(null);
+      containedTabRows([
+        { title: "  ", url: "https://portal.example.com/" },
+        { title: "portal.example.com", url: "https://portal.example.com/" },
+        { title: "Loading", url: "about:blank" },
+        { title: "Broken", url: "not a url" },
+      ]),
+    ).toEqual([
+      { host: null, name: "portal.example.com" },
+      { host: null, name: "portal.example.com" },
+      { host: null, name: "Loading" },
+      { host: null, name: "Broken" },
+    ]);
   });
 
-  test("a long title is cut without splitting a character, emoji sequences included", () => {
-    const label = containedTabLabel({
-      title: `${"a".repeat(58)}👩‍👩‍👧👩‍👩‍👧👩‍👩‍👧`,
-      url: "https://portal.example.com/",
-    });
-    expect(label).toBe(`${"a".repeat(58)}👩‍👩‍👧… (portal.example.com)`);
-  });
-
-  test("lists every contained tab, the controlled one first, or nothing", () => {
+  test("a tab Chrome told nothing about is left out, the order kept", () => {
     expect(
-      containedTabsMessage(
-        [
-          { title: "Invoices", url: "https://portal.example.com/" },
-          {},
-          { title: "Report", url: "https://files.example.net/r" },
-        ],
-        "en",
-      ),
-    ).toEqual({
-      name: "containedTabs",
-      substitutions: [
-        "Invoices (portal.example.com) and Report (files.example.net)",
-      ],
-    });
-    expect(containedTabsMessage([], "en")).toBe(null);
-    expect(containedTabsMessage([{}], "en")).toBe(null);
+      containedTabRows([
+        { title: "Invoices", url: "https://portal.example.com/" },
+        {},
+        { title: "Report", url: "https://files.example.net/r" },
+      ]),
+    ).toEqual([
+      { host: "portal.example.com", name: "Invoices" },
+      { host: "files.example.net", name: "Report" },
+    ]);
+    expect(containedTabRows([])).toEqual([]);
   });
 });
 
@@ -221,5 +237,37 @@ test("Czech and Slovak messages contain no en or em dashes", async () => {
       new URL(`../../public/_locales/${locale}/messages.json`, import.meta.url),
     ).text();
     expect(text).not.toMatch(/[–—]/u);
+  }
+});
+
+test("every locale has exactly the English messages, none left unused", async () => {
+  const localesRoot = new URL("../../public/_locales/", import.meta.url);
+  const english = Object.keys(
+    await Bun.file(new URL("en/messages.json", localesRoot)).json(),
+  ).toSorted();
+  for (const locale of await readdir(localesRoot)) {
+    const keys = Object.keys(
+      await Bun.file(new URL(`${locale}/messages.json`, localesRoot)).json(),
+    ).toSorted();
+    expect(keys, locale).toEqual(english);
+  }
+  const extensionRoot = new URL("../../", import.meta.url);
+  const files = [
+    ...(await Array.fromAsync(
+      new Bun.Glob("src/**/*.ts").scan({ cwd: extensionRoot.pathname }),
+    )),
+    "wxt.config.ts",
+  ];
+  const sources = await Promise.all(
+    files
+      .filter((file) => !file.endsWith(".test.ts"))
+      .map(async (file) => await Bun.file(new URL(file, extensionRoot)).text()),
+  );
+  const text = sources.join("\n");
+  for (const key of english) {
+    expect(
+      text.includes(`"${key}"`) || text.includes(`__MSG_${key}__`),
+      `${key} is not used`,
+    ).toBe(true);
   }
 });
