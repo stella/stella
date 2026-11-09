@@ -56,6 +56,7 @@ import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { waitFor } from "@stll/test-kit";
 import { slugify } from "@stll/text-normalize";
 
 import {
@@ -114,7 +115,6 @@ import {
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import { LIMITS } from "@/api/lib/limits";
-import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
 import { currentReadWork } from "@/api/lib/observability/request-work";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
@@ -131,12 +131,18 @@ import {
 } from "@/api/mcp/matter-tools";
 import { windowProvisionText } from "@/api/mcp/provision-text-window";
 import type { ReadCaseLawDecisionSuccess } from "@/api/mcp/public-law-handlers";
+import {
+  PUBLIC_READ_CONTINUATION_LIMITS,
+  PUBLIC_READ_RESPONSE_DEADLINE_MS,
+} from "@/api/mcp/public-read-continuation";
 import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
+  createCaseLawContinuation,
   READ_DECISION_BATCH_MAX_TEXT_CHARS,
   READ_DECISION_FULL_MAX_TEXT_CHARS,
 } from "@/api/mcp/stella-tools";
+import { MCP_TOOL_LATENCY_BUDGET_OVERRIDES } from "@/api/mcp/tool-latency-budgets";
 import { MCP_CONTENT_MAX_CHARS } from "@/api/mcp/tool-utils";
 import {
   findUndeclaredArguments,
@@ -163,6 +169,7 @@ import {
   CASE_LAW_COVERAGE_EXPECTED,
   CASE_LAW_COVERAGE_FIXTURE,
 } from "@/api/tests/helpers/case-law-coverage-fixture";
+import { createFakeContinuationStore } from "@/api/tests/helpers/fake-continuation-store";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
@@ -1533,6 +1540,12 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           PAGE_SIZE_KIND,
         ),
+        continuation_token: {
+          type: "string",
+          description: 'From a status "running" answer; collects that work.',
+          minLength: 1,
+          maxLength: 32,
+        },
         cursor: {
           type: "string",
           description:
@@ -2981,7 +2994,7 @@ describe("OpenAI-compatible MCP tools", () => {
         },
         caseLawDb: caseLawPublicReadDb,
         observer,
-        signal: undefined,
+        signal: expect.any(AbortSignal),
       });
 
       expect(parseToolPayload(result)).toEqual({
@@ -4030,7 +4043,233 @@ describe("OpenAI-compatible MCP tools", () => {
       }),
       caseLawDb: caseLawPublicReadDb,
       observer,
-      signal: undefined,
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  describe("the overload continuation", () => {
+    const answered = (query: string) => ({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      facets: null,
+      hits: [createCaseLawHit(`dec-${query}`, query)],
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      queryUsed: query,
+      warnings: [],
+    });
+    const limits = {
+      ...PUBLIC_READ_CONTINUATION_LIMITS,
+      leaseMs: 200,
+      followPollMs: 5,
+      minRetryAfterMs: 50,
+    };
+    const gatedSearch = () => {
+      const gate = Promise.withResolvers<undefined>();
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => {
+          await gate.promise;
+          return answered(query);
+        },
+      );
+      return gate;
+    };
+    const contextFor = (
+      store: ReturnType<typeof createFakeContinuationStore>["store"],
+      ownerId: string,
+    ) =>
+      createContext({
+        testDependencies: {
+          caseLawSearchContinuation: createCaseLawContinuation({
+            store,
+            ownerId,
+            limits,
+          }),
+          publicReadResponseDeadlineMs: 15,
+        },
+      });
+    const search = async (
+      context: AuthorizedMcpRequestContext,
+      args: Record<string, unknown>,
+    ) =>
+      await handleMcpToolCall({ args, context, toolName: "search_case_law" });
+    const statusOf = (result: Awaited<ReturnType<typeof search>>) => {
+      expect(result.isError).not.toBe(true);
+      const { status } = asTestRaw<{ status?: string }>(
+        parseToolPayload(result),
+      );
+      return status ?? "finished";
+    };
+    const tokenOf = (result: Awaited<ReturnType<typeof search>>) =>
+      asTestRaw<{ continuationToken: string }>(parseToolPayload(result))
+        .continuationToken;
+
+    test("N parallel identical searches end in a continuation with one read and no error", async () => {
+      const { store } = createFakeContinuationStore();
+      const gate = gatedSearch();
+      const context = contextFor(store, "task-a");
+      const calls = await Promise.all(
+        Array.from(
+          { length: 20 },
+          async () =>
+            await search(context, { country: "CZE", queries: ["contract"] }),
+        ),
+      );
+      expect(calls.map(statusOf)).toEqual(
+        Array.from({ length: 20 }, () => "running"),
+      );
+      expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
+      gate.resolve(undefined);
+    });
+
+    test("N parallel distinct searches past the per-caller limit all answer, none fail", async () => {
+      const { store } = createFakeContinuationStore();
+      const gate = gatedSearch();
+      const context = contextFor(store, "task-a");
+      const calls = await Promise.all(
+        Array.from(
+          { length: 40 },
+          async (_, index) =>
+            await search(context, {
+              country: "CZE",
+              queries: [`query-${String(index)}`],
+            }),
+        ),
+      );
+      for (const call of calls) {
+        expect(statusOf(call)).toBe("running");
+      }
+      // The caller's concurrency is held: the rest queue or are told to come back.
+      expect(searchDecisionsHandlerMock.mock.calls.length).toBeLessThanOrEqual(
+        PUBLIC_READ_CONTINUATION_LIMITS.perCallerConcurrency,
+      );
+      gate.resolve(undefined);
+    });
+
+    test("a token resolves the finished answer on another task", async () => {
+      const { store, hasFinished } = createFakeContinuationStore();
+      const gate = gatedSearch();
+      const args = { country: "CZE", queries: ["contract"] };
+      const first = await search(contextFor(store, "task-a"), args);
+      const continuation_token = tokenOf(first);
+      gate.resolve(undefined);
+      await waitFor(
+        () => (hasFinished(continuation_token) ? true : undefined),
+        {
+          description: "the owning task stores the answer",
+        },
+      );
+
+      const other = await search(contextFor(store, "task-b"), {
+        ...args,
+        continuation_token,
+      });
+      expect(statusOf(other)).toBe("finished");
+      expect(
+        asTestRaw<MergedSearchPage>(parseToolPayload(other)).results.map(
+          ({ decisionId }) => decisionId,
+        ),
+      ).toEqual(["dec-contract"]);
+      expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
+    });
+
+    test("when the owning task dies the next call runs the search again", async () => {
+      const { store, advance } = createFakeContinuationStore();
+      // The dead task's heartbeat stops with it.
+      store.renewLease = async () => Result.ok(false);
+      searchDecisionsHandlerMock.mockImplementationOnce(
+        async () => await Promise.withResolvers<never>().promise,
+      );
+      const args = { country: "CZE", queries: ["contract"] };
+      const first = await search(contextFor(store, "dead-task"), args);
+      const continuation_token = tokenOf(first);
+      advance(limits.leaseMs + 50);
+
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) =>
+          answered(query),
+      );
+      const recovered = await search(contextFor(store, "live-task"), {
+        ...args,
+        continuation_token,
+      });
+      expect(statusOf(recovered)).toBe("finished");
+    });
+
+    test("a token from another organization is not honoured", async () => {
+      const { store } = createFakeContinuationStore();
+      const gate = gatedSearch();
+      const args = { country: "CZE", queries: ["contract"] };
+      const first = await search(contextFor(store, "task-a"), args);
+      const continuation_token = tokenOf(first);
+      gate.resolve(undefined);
+
+      const stranger = createContext({
+        testDependencies: {
+          caseLawSearchContinuation: createCaseLawContinuation({
+            store,
+            ownerId: "task-b",
+            limits,
+          }),
+          publicReadResponseDeadlineMs: 15,
+        },
+      });
+      expectErrorEnvelope(
+        await search(
+          { ...stranger, organizationId: toSafeId<"organization">("org_2") },
+          { country: "CZE", queries: ["something else"], continuation_token },
+        ),
+        {
+          code: "continuation_expired",
+          message: "This continuation_token is unknown or has expired",
+          hint: "Call search_case_law again with the original arguments and without continuation_token; the search runs again.",
+        },
+      );
+    });
+
+    test("names the phrasings that finished and never presents them as the answer", async () => {
+      const { store } = createFakeContinuationStore();
+      const gate = Promise.withResolvers<undefined>();
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => {
+          if (query === "slow") {
+            await gate.promise;
+          }
+          return answered(query);
+        },
+      );
+      const payload = asTestRaw<{
+        status: string;
+        results?: unknown;
+        partial: {
+          finishedQueries: string[];
+          pendingQueries: string[];
+          decisions: { decisionId: string }[];
+        };
+      }>(
+        parseToolPayload(
+          await search(contextFor(store, "task-a"), {
+            country: "CZE",
+            queries: ["fast", "slow"],
+          }),
+        ),
+      );
+      expect(payload.status).toBe("running");
+      expect(payload.results).toBeUndefined();
+      expect(payload.partial.finishedQueries).toEqual(["fast"]);
+      expect(payload.partial.pendingQueries).toEqual(["slow"]);
+      expect(
+        payload.partial.decisions.map(({ decisionId }) => decisionId),
+      ).toEqual(["dec-fast"]);
+      gate.resolve(undefined);
+    });
+
+    test("the response deadline stays under the search budget", () => {
+      expect(PUBLIC_READ_RESPONSE_DEADLINE_MS).toBeLessThan(
+        MCP_TOOL_LATENCY_BUDGET_OVERRIDES.search_case_law.budgetMs,
+      );
+      expect(PUBLIC_READ_RESPONSE_DEADLINE_MS).toBeLessThan(
+        MCP_TOOL_LATENCY_BUDGET_OVERRIDES.search_legislation.budgetMs,
+      );
     });
   });
 
@@ -4158,22 +4397,26 @@ describe("OpenAI-compatible MCP tools", () => {
       );
     });
 
-    test("fails the call with the retryable timeout when no phrasing finished", async () => {
+    test("answers a continuation, not an error, when no phrasing finished", async () => {
       searchDecisionsHandlerMock.mockImplementation(async () => timedOut());
 
-      expectErrorEnvelope(
-        await handleMcpToolCall({
-          args: { country: "CZE", queries: ["one", "two"] },
-          context: createContext(),
-          toolName: "search_case_law",
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["one", "two"] },
+        context: createContext({
+          testDependencies: {
+            caseLawSearchContinuation: createCaseLawContinuation({
+              store: createFakeContinuationStore().store,
+            }),
+          },
         }),
-        {
-          code: "public_read_timeout",
-          message: "Case-law search exceeded its time budget.",
-          hint: "Retry search_case_law with fewer queries or a narrower court, date range or provision filter. If it still times out, retry shortly.",
-          retryable: true,
-        },
-      );
+        toolName: "search_case_law",
+      });
+
+      expect(result.isError).not.toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        status: "running",
+        phase: "not_started",
+      });
     });
 
     test.each([
@@ -4398,7 +4641,7 @@ describe("OpenAI-compatible MCP tools", () => {
       body: expect.objectContaining({ cursor: longestEngineCursor }),
       caseLawDb: caseLawPublicReadDb,
       observer,
-      signal: undefined,
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -4946,6 +5189,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "as_of",
       "limit",
       "cursor",
+      "continuation_token",
     ]);
     // The admitted set is rendered from the contract, so a new jurisdiction
     // reaches the advertised schema without an edit here.
@@ -6260,7 +6504,7 @@ describe("OpenAI-compatible MCP tools", () => {
       body: expect.objectContaining({ dateFrom: "2026-10-01" }),
       caseLawDb: caseLawPublicReadDb,
       observer,
-      signal: undefined,
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -6870,27 +7114,21 @@ describe("OpenAI-compatible MCP tools", () => {
 
     test("a court list that misses the search's budget runs the filter as sent and says so", async () => {
       const baseContext = createContext();
-      const startedAt = performance.now();
-      // The tool's request scope bounds the list read, so a list that never
-      // arrives costs the search its sub-budget, not the caller's patience.
-      const result = await runWithinRequestLatencyBudget(
-        { label: "search_case_law", budgetMs: 50 },
-        async () =>
-          await handleMcpToolCall({
-            args: { queries: ["náhrada škody"], country: "CZE", court: "NS" },
-            context: {
-              ...baseContext,
-              testDependencies: {
-                ...baseContext.testDependencies,
-                readCaseLawCourtNames: async () =>
-                  await Promise.withResolvers<readonly string[]>().promise,
-              },
-            },
-            toolName: "search_case_law",
-          }),
-      );
+      // The list read has its own sub-budget, so a list that never arrives
+      // costs the search that sub-budget and nothing more.
+      const result = await handleMcpToolCall({
+        args: { queries: ["náhrada škody"], country: "CZE", court: "NS" },
+        context: {
+          ...baseContext,
+          testDependencies: {
+            ...baseContext.testDependencies,
+            readCaseLawCourtNames: async () =>
+              await Promise.withResolvers<readonly string[]>().promise,
+          },
+        },
+        toolName: "search_case_law",
+      });
 
-      expect(performance.now() - startedAt).toBeLessThan(1000);
       expect(searchedBody()["court"]).toBe("NS");
       expect(searchWarnings(result)).toContainEqual(
         expect.objectContaining({ code: "filter_unread" }),

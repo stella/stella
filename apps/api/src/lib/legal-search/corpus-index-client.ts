@@ -1999,6 +1999,19 @@ const buildClient = (
 });
 
 const cachedClients = new Map<QuickwitCluster, CorpusIndexClient>();
+const searchAdmissions = new Map<QuickwitCluster, CorpusSearchAdmissionGate>();
+
+/**
+ * The longest wait a corpus read arriving now should expect, across this
+ * process's search queues; zero until a queue has seen enough reads to say.
+ */
+export const estimatedCorpusSearchWaitMs = (): number =>
+  Math.max(
+    0,
+    ...[...searchAdmissions.values()].map((admission) =>
+      admission.estimatedWaitMs(),
+    ),
+  );
 
 export const getCorpusIndexClient = (
   cluster: QuickwitCluster,
@@ -2009,10 +2022,11 @@ export const getCorpusIndexClient = (
   }
   // One search queue per cluster for the life of the process: every search
   // read of this process to that engine waits in it.
-  const client = buildClient(
-    cluster,
-    createCorpusSearchAdmission({ slots: LIMITS.corpusIndexSearchConcurrency }),
-  );
+  const admission = createCorpusSearchAdmission({
+    slots: LIMITS.corpusIndexSearchConcurrency,
+  });
+  const client = buildClient(cluster, admission);
+  searchAdmissions.set(cluster, admission);
   cachedClients.set(cluster, client);
   return client;
 };

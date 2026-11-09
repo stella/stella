@@ -12,9 +12,11 @@ import {
   flushFailureObservations,
   resetFailureObservationsForTesting,
 } from "@/api/lib/observability/failure-shadow";
+import { createCaseLawContinuation } from "@/api/mcp/stella-tools";
 import { caseLawSearchTimeoutResult } from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { createFakeContinuationStore } from "@/api/tests/helpers/fake-continuation-store";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -25,7 +27,7 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 const state = createTestState({ file: import.meta.path, config: env });
 
 for (const failure of ["thrown", "returned", "provision lookup"] as const) {
-  test(`search_case_law returns actionable retryable errors for ${failure} statement timeouts`, async () => {
+  test(`search_case_law continues rather than failing on ${failure} statement timeouts`, async () => {
     state.setConfig("FEATURE_PUBLIC_LAW", true);
     const { safeDb, scopedDb } = createScopedDbMock({
       query: {
@@ -49,6 +51,9 @@ for (const failure of ["thrown", "returned", "provision lookup"] as const) {
       scopedDb,
       thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
       testDependencies: {
+        caseLawSearchContinuation: createCaseLawContinuation({
+          store: createFakeContinuationStore().store,
+        }),
         readCaseLawCourtNames: async () => [],
         readProvisionWorkLinked: async () => {
           provisionLookupReached = true;
@@ -91,19 +96,12 @@ for (const failure of ["thrown", "returned", "provision lookup"] as const) {
     });
     expect(searched).toBe(failure !== "provision lookup");
     expect(provisionLookupReached).toBe(failure === "provision lookup");
-    expect(result.isError).toBe(true);
+    expect(result.isError).not.toBe(true);
     const content = result.content.at(0);
     if (content?.type !== "text") {
-      throw new Error("Expected a text MCP error envelope");
+      throw new Error("Expected a text MCP result");
     }
-    expect(JSON.parse(content.text)).toEqual({
-      error: {
-        code: "public_read_timeout",
-        message: "Case-law search exceeded its time budget.",
-        hint: "Retry search_case_law with fewer queries or a narrower court, date range or provision filter. If it still times out, retry shortly.",
-        retryable: true,
-      },
-    });
+    expect(JSON.parse(content.text)).toMatchObject({ status: "running" });
     expect(JSON.stringify(result)).not.toContain("SQL diagnostics");
   });
 }

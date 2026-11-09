@@ -21,6 +21,11 @@ export default {
           "Bounded favicon cache and miss admission; outages return no icon without an origin lease.",
       },
       {
+        path: "apps/api/src/lib/legal-search/public-read-continuation-store.ts",
+        reason:
+          "Continuation leases and stored answers of public-law reads, all reproducible from the request; an outage trips a breaker and each read answers on its own task.",
+      },
+      {
         path: "apps/api/src/lib/admission-redis.ts",
         reason:
           "Admission clients check and periodically refresh the non-eviction policy before issuing coordination commands.",
