@@ -457,9 +457,9 @@
       "name": "resolve_law_citation",
       "nameChars": 20,
       "descriptionChars": 746,
-      "inputSchemaChars": 1802,
-      "totalChars": 2568,
-      "estimatedTokens": 1007
+      "inputSchemaChars": 1828,
+      "totalChars": 2594,
+      "estimatedTokens": 1018
     },
     {
       "name": "resolve_rate",
@@ -639,7 +639,7 @@
     }
   ],
   "totals": {
-    "characters": 136548,
-    "estimatedTokens": 54328
+    "characters": 136574,
+    "estimatedTokens": 54339
   }
 }
