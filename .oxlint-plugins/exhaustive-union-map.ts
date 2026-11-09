@@ -28,7 +28,9 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { ESTree } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
+  filenameForContext,
   getCalleeName,
   isAstNode,
   staticStringValue,
@@ -242,6 +244,25 @@ export default eslintCompatPlugin({
               !lookedUp &&
               (!(exported || exportedByName) || namedConstants)
             ) {
+              return;
+            }
+            // First-week rollout: only declarations on lines this change
+            // touched (scripts/guard-rollouts/exhaustive-union-map.json).
+            const start = context.sourceCode.getLocFromIndex(
+              node.range[0],
+            ).line;
+            const end = context.sourceCode.getLocFromIndex(
+              node.range[1] - 1,
+            ).line;
+            let enforced = false;
+            for (let line = start; line <= end && !enforced; line++) {
+              enforced = guardEnforcesLine({
+                guard: "exhaustive-union-map",
+                file: filenameForContext(context),
+                line,
+              });
+            }
+            if (!enforced) {
               return;
             }
             const id: unknown = node.id;

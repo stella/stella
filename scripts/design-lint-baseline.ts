@@ -185,7 +185,15 @@ const lint = (paths: readonly string[]): DesignLintBacklog => {
   const reportPath = path.join(reportDirectory, "report.json");
   const result = Bun.spawnSync(
     ["bun", "--bun", "oxlint", "-c", CONFIG_PATH, "--format=json", ...paths],
-    { cwd: REPOSITORY_ROOT, stdout: Bun.file(reportPath), stderr: "pipe" },
+    {
+      cwd: REPOSITORY_ROOT,
+      // The backlog counts every finding: a rule still in its changed-lines
+      // rollout (scripts/guard-rollouts) reports only changed lines unless the
+      // full scope is asked for, which would read its backlog files as clean.
+      env: { ...process.env, STELLA_GUARD_SCOPE: "all" },
+      stdout: Bun.file(reportPath),
+      stderr: "pipe",
+    },
   );
   const report = readFileSync(reportPath, "utf-8");
   rmSync(reportDirectory, { recursive: true, force: true });
