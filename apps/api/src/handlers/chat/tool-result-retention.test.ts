@@ -35,6 +35,7 @@ import {
 } from "@/api/handlers/chat/tool-result-retention";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
 
 const pageResult = (index: number): BrowserControlResult =>
   v.parse(browserControlResultSchema, {
@@ -317,38 +318,10 @@ const storeAndReload = (parts: ChatPart[]): ChatMessage => {
   });
 };
 
-const snapshotOf = (parts: ChatPart[]): StreamChunk => {
-  // Served page parts ride on the AG-UI assistant message.
-  const answer = {
-    content: "",
-    id: "answer",
-    parts,
-    role: "assistant" as const,
-  };
-  return snapshotWith(answer, parts);
-};
-
-const snapshotWith = (
-  answer: { content: string; id: string; role: "assistant" },
-  parts: ChatPart[],
-): StreamChunk => ({
-  messages: [
-    answer,
-    ...parts.flatMap((part) =>
-      part.type === "tool-call" && part.output !== undefined
-        ? [
-            {
-              content: JSON.stringify(part.output),
-              id: `result-${part.id}`,
-              role: "tool" as const,
-              toolCallId: part.id,
-            },
-          ]
-        : [],
-    ),
-  ],
-  type: EventType.MESSAGES_SNAPSHOT,
-});
+// The snapshot the SDK serializer builds for the answer: its parts, and a
+// `tool` row beside them for every call that has an output.
+const snapshotOf = (parts: ChatPart[]): StreamChunk =>
+  buildWireSnapshot([{ id: "answer", parts, role: "assistant" }]);
 
 describe("a browsing turn's stored and streamed parts", () => {
   test("store one page however many the turn read", () => {
