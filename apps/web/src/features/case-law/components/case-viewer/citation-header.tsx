@@ -3,6 +3,7 @@ import { useNow, useTranslations } from "use-intl";
 
 import { CASE_LAW_CITATION_TIMELINE_MAX_YEARS } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
@@ -128,25 +129,30 @@ export const CitationHeader = ({
       <Popover>
         <PopoverTrigger
           render={
-            <button
+            // The strip draws the trigger, so the button paints nothing of
+            // its own. A 16px strip is a 20px band to tap; the touch target
+            // gives a finger the project's 44px without moving a pixel of
+            // what the eye sees.
+            <Button
               aria-label={summaryText}
-              // A 16px strip is a 20px band to tap; the pseudo-element gives
-              // a finger the project's 44px target without moving a pixel of
-              // what the eye sees.
-              className={cn(
-                "text-muted-foreground hover:text-foreground flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm px-1 py-0.5 text-start",
-                CITATION_TRIGGER_TOUCH_TARGET,
-              )}
-              type="button"
+              className="group/plain"
+              variant="plain"
             />
           }
         >
-          <CitationYearStrip
-            byYear={summary.incomingByYear}
-            fromYear={fromYear}
-            toYear={currentYear}
-          />
-          {!compact && <span aria-hidden="true">{summaryText}</span>}
+          <span
+            className={cn(
+              "text-muted-foreground group-hover/plain:text-foreground group-data-popup-open/plain:text-foreground flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm px-1 py-0.5",
+              CITATION_TRIGGER_TOUCH_TARGET,
+            )}
+          >
+            <CitationYearStrip
+              byYear={summary.incomingByYear}
+              fromYear={fromYear}
+              toYear={currentYear}
+            />
+            {!compact && <span aria-hidden="true">{summaryText}</span>}
+          </span>
         </PopoverTrigger>
         <PopoverPanel
           align="start"

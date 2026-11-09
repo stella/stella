@@ -39,8 +39,10 @@ one refresh pull request for both snapshots.
 `gen:capabilities --refresh` rejects before fetching or writing: rates owns the
 shared upstream refresh, and capabilities reads those refreshed inputs.
 The snapshot covers text input/output, cache reads/writes, and context tiers.
-Audio pricing is deliberately excluded because Stella does not route audio
-model input; an unknown models.dev cost field fails generation.
+The text-model snapshot excludes audio rates; an unknown models.dev cost field
+fails generation. `@stll/ai-catalog/transcription` owns the separately curated
+transcription catalog, with dated public sources, rational duration rates, and
+explicit capability and regional-availability evidence.
 
 ## Install
 

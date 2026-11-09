@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
 import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-revisions";
+import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 
 import { chatContentJsonb } from "@/api/db/columns";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -204,6 +205,19 @@ export const chatThreads = p.pgTable(
     chatReasoningEffort: p.text("chat_reasoning_effort", {
       enum: REASONING_EFFORTS,
     }),
+    /**
+     * Superseded by `chat_local_run_target` and no longer read or written;
+     * dropped in a later release, once no running API task selects it.
+     */
+    chatRunTarget: p.varchar("chat_run_target", { length: 256 }),
+    /**
+     * Where the thread's turns run: the coding-agent harness on the member's
+     * computer, its model and permission mode, shaped and read back by the
+     * contract's `chatLocalRunTargetSchema`. Null keeps stella's own models.
+     */
+    chatLocalRunTarget: p
+      .jsonb("chat_local_run_target")
+      .$type<ChatLocalRunTarget>(),
     /**
      * Cached "where you left off" recap, shown as subtle grey text
      * below the last message when the user reopens this thread after
@@ -743,6 +757,12 @@ export const chatTurns = p.pgTable(
         table.createdAt,
         table.id,
       ),
+    // A member's unfinished runs, without walking their settled history.
+    // Built online (indexes-chat-turns-org-user-active-idx).
+    p
+      .index("chat_turns_org_user_active_idx")
+      .on(table.organizationId, table.userId)
+      .where(sql`${table.status} IN ('accepted', 'running', 'awaiting-user')`),
     p
       .index("chat_turns_org_user_message_created_idx")
       .on(table.organizationId, table.userMessageId, table.createdAt, table.id),

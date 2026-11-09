@@ -14,12 +14,14 @@ import { useTranslations } from "use-intl";
 
 import { Text } from "@stll/ui/text";
 
+import { useRevisedLoad } from "@/components/changes";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { EntityRow } from "@/components/entity-row";
 import { LoadFailedCard } from "@/components/load-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
+import { readFileProperty } from "@/state/document-upload";
 import {
   applyEntityPage,
   EMPTY_ENTITIES_LOAD,
@@ -42,6 +44,16 @@ export const MatterEntities = ({
 }) => {
   const colors = useAppColors();
   const { end } = useSession();
+  // The documents column, looked up once: its files name each document's
+  // format. Without it the rows still list, only without formats.
+  const [fileField] = useState(async () => {
+    const found = await readFileProperty({
+      fetch,
+      matterId: workspaceId,
+      source,
+    });
+    return Result.isOk(found) ? found.value : null;
+  });
   // A session the server ended sends the person back to sign in, from the
   // load itself rather than from a render.
   const loadPage = async (previous: EntitiesLoad): Promise<EntitiesLoad> => {
@@ -50,13 +62,17 @@ export const MatterEntities = ({
       source,
       workspaceId,
       cursor: previous.nextCursor,
+      fileFieldId: await fileField,
     });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
       end(source);
     }
     return applyEntityPage(previous, result, epochMilliseconds());
   };
-  const [load, setLoad] = useState(async () => loadPage(EMPTY_ENTITIES_LOAD));
+  const [load, setLoad] = useRevisedLoad(
+    async () => await loadPage(EMPTY_ENTITIES_LOAD),
+    ["documents", "tasks"],
+  );
   const [refreshing, startRefresh] = useTransition();
   const [loadingMore, startLoadMore] = useTransition();
   const reload = () => {
@@ -107,6 +123,18 @@ const LoadedEntities = ({
   const colors = useAppColors();
   const router = useRouter();
   const current = use(load);
+  const [openFolders, setOpenFolders] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleFolder = (folderId: string) => {
+    setOpenFolders((open) => {
+      const next = new Set(open);
+      if (!next.delete(folderId)) {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
 
   // The session provider is already returning to sign-in.
   if (current.error?._tag === "SignedOutError") {
@@ -170,7 +198,7 @@ const LoadedEntities = ({
       alwaysBounceVertical={current.entities.length > 0}
       contentContainerStyle={styles.content}
       contentInsetAdjustmentBehavior="automatic"
-      keyExtractor={(entity) => entity.entityId}
+      keyExtractor={(tree) => tree.entity.entityId}
       ListEmptyComponent={
         current.error !== null && current.entities.length === 0 ? (
           <LoadFailedCard
@@ -194,11 +222,19 @@ const LoadedEntities = ({
           tintColor={colors.muted}
         />
       }
-      renderItem={({ item }) => (
+      renderItem={({ item: tree }) => (
         <EntityRow
-          entity={item}
+          depth={tree.depth}
+          entity={tree.entity}
+          folder={tree.type === "folder" ? { open: tree.open } : null}
           onPress={() => {
-            // A document opens to its pages; a folder or task to its details.
+            const item = tree.entity;
+            // A folder opens and closes in place, as on the web; a document
+            // opens to its pages; a task to its details.
+            if (tree.type === "folder") {
+              toggleFolder(item.entityId);
+              return;
+            }
             if (item.kind === "document") {
               router.push({
                 pathname: "/document/[workspaceId]/[entityId]",
@@ -225,7 +261,7 @@ const LoadedEntities = ({
           {t(section.key)}
         </Text>
       )}
-      sections={entitySections(current.entities)}
+      sections={entitySections(current.entities, openFolders)}
       stickySectionHeadersEnabled={false}
     />
   );

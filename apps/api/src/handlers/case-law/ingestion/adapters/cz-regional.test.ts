@@ -27,6 +27,7 @@ import {
   assembleCzRegionalDecision,
   buildCzRegionalDecision,
   czRegionalAdapter,
+  czRegionalCaseNumberOf,
   czRegionalEnvelopeWithChain,
   czRegionalListingIdentity,
   fetchCzRegionalAffectingDocs,
@@ -66,9 +67,12 @@ import {
   type ReadRefusalFault,
 } from "@/api/tests/helpers/read-fault-drivers";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PublisherPageError } from "./publisher-page";
+
+const testFetchState = createTestFetch();
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -264,6 +268,49 @@ describe("the stored payload is an envelope of every response read", () => {
     expect(rejected).toMatchObject({
       type: "rejected",
       rejection: "unsupported-content",
+    });
+  });
+});
+
+describe("the docket keeps the court's registry spelling", () => {
+  test("the registry is spelled as the row's own ECLI spells it", () => {
+    // The listing prints "14 CO 25/2022-60"; the court's ECLI "14.Co.25.2022".
+    expect(
+      czRegionalCaseNumberOf({
+        jednaciCislo: "14 CO 25/2022-60",
+        ecli: "ECLI:CZ:KSBR:2023:14.Co.25.2022.1",
+      }),
+    ).toEqual({ caseNumber: "14 Co 25/2022", sheetNumber: "60" });
+    expect(
+      czRegionalCaseNumberOf({
+        jednaciCislo: "16 CO 179/2022-123",
+        ecli: "ECLI:CZ:KSOS:2022:16.Co.179.2022.1",
+      }).caseNumber,
+    ).toBe("16 Co 179/2022");
+  });
+
+  test("an ECLI of another docket, or none, leaves the docket as printed", () => {
+    expect(
+      czRegionalCaseNumberOf({
+        jednaciCislo: "14 CO 25/2022-60",
+        ecli: "ECLI:CZ:KSBR:2023:14.Co.26.2022.1",
+      }).caseNumber,
+    ).toBe("14 CO 25/2022");
+    expect(
+      czRegionalCaseNumberOf({ jednaciCislo: "12 C 157/2022-45", ecli: null })
+        .caseNumber,
+    ).toBe("12 C 157/2022");
+  });
+
+  test("the listing identity keys the row by the docket it is stored under", () => {
+    const raw = {
+      jednaciCislo: "14 CO 25/2022-60",
+      soud: "Krajský soud v Brně",
+      ecli: "ECLI:CZ:KSBR:2023:14.Co.25.2022.1",
+    };
+    expect(czRegionalListingIdentity(raw)).toMatchObject({
+      type: "case-number",
+      caseNumber: "14 Co 25/2022",
     });
   });
 });
@@ -638,10 +685,8 @@ describe("document metadata the publisher sends null or reshaped", () => {
 });
 
 describe("the crawl keeps a refused row as its listing", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     mock.restore();
   });
 
@@ -653,7 +698,7 @@ describe("the crawl keeps a refused row as its listing", () => {
     { name: "empty bytes", body: "" },
   ]) {
     test(`rejects a 200 ${fixture.name} listing with its typed page failure`, async () => {
-      globalThis.fetch = asFetchMock(async () => new Response(fixture.body));
+      testFetchState.set(asFetchMock(async () => new Response(fixture.body)));
       const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
@@ -669,14 +714,16 @@ describe("the crawl keeps a refused row as its listing", () => {
         pageNumber: 0,
       });
       const validDocument = await readFixture(APPELLATE_DOCUMENT);
-      globalThis.fetch = asFetchMock(async (input: string) => {
-        if (input === district.odkaz) {
-          return new Response(fixture.body);
-        }
-        return new Response(
-          input === appellate.odkaz ? validDocument : listing,
-        );
-      });
+      testFetchState.set(
+        asFetchMock(async (input: string) => {
+          if (input === district.odkaz) {
+            return new Response(fixture.body);
+          }
+          return new Response(
+            input === appellate.odkaz ? validDocument : listing,
+          );
+        }),
+      );
       const page = (
         await czRegionalAdapter.fetchPage("2025-06-11:0", {})
       ).unwrap();
@@ -700,14 +747,14 @@ describe("the crawl keeps a refused row as its listing", () => {
     });
   }
   test("accepts a small valid empty listing", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => new Response('{"items":[],"totalPages":0}'),
+    testFetchState.set(
+      asFetchMock(async () => new Response('{"items":[],"totalPages":0}')),
     );
     const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
     expect(result.unwrap().decisions).toEqual([]);
   });
   test("listing pagination requires a stated total page count", async () => {
-    globalThis.fetch = asFetchMock(async () => new Response('{"items":[]}'));
+    testFetchState.set(asFetchMock(async () => new Response('{"items":[]}')));
     const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -742,8 +789,10 @@ describe("the crawl keeps a refused row as its listing", () => {
       const listing = JSON.stringify({ items: [raw], totalPages: 1 });
       const document = await readFixture(DISTRICT_DOCUMENT);
       const documentFetch = mock(async () => new Response(document));
-      globalThis.fetch = asFetchMock(async (input: string) =>
-        input === item.odkaz ? await documentFetch() : new Response(listing),
+      testFetchState.set(
+        asFetchMock(async (input: string) =>
+          input === item.odkaz ? await documentFetch() : new Response(listing),
+        ),
       );
       const hasValidLink = !("odkaz" in drift);
       const identity =
@@ -858,9 +907,11 @@ describe("the crawl keeps a refused row as its listing", () => {
       totalPages: 2,
     });
     const document = await readFixture(DISTRICT_DOCUMENT);
-    globalThis.fetch = asFetchMock(
-      async (input: string) =>
-        new Response(input === item.odkaz ? document : listing),
+    testFetchState.set(
+      asFetchMock(
+        async (input: string) =>
+          new Response(input === item.odkaz ? document : listing),
+      ),
     );
     const page = (
       await czRegionalAdapter.fetchPage("2025-06-11:0", {})
@@ -876,13 +927,17 @@ describe("the crawl keeps a refused row as its listing", () => {
     const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
     const listing = JSON.stringify({ items: [item], totalPages: 1 });
     let requests = 0;
-    globalThis.fetch = asFetchMock(
-      async () =>
-        new Response(
-          ++requests === 1
-            ? listing
-            : JSON.stringify({ uuid: "499830de-0000-4000-8000-a32aab555555" }),
-        ),
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          new Response(
+            ++requests === 1
+              ? listing
+              : JSON.stringify({
+                  uuid: "499830de-0000-4000-8000-a32aab555555",
+                }),
+          ),
+      ),
     );
     const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
     expect(requests).toBe(2);
@@ -916,13 +971,15 @@ describe("the crawl keeps a refused row as its listing", () => {
       totalPages: 1,
       pageNumber: 0,
     });
-    globalThis.fetch = asFetchMock(
-      async (input: string) =>
-        await Promise.resolve(
-          new Response(bodies.get(input) ?? listing, {
-            headers: { "Content-Type": "application/json" },
-          }),
-        ),
+    testFetchState.set(
+      asFetchMock(
+        async (input: string) =>
+          await Promise.resolve(
+            new Response(bodies.get(input) ?? listing, {
+              headers: { "Content-Type": "application/json" },
+            }),
+          ),
+      ),
     );
     return await czRegionalAdapter.fetchPage(cursor, {});
   };
@@ -966,19 +1023,21 @@ describe("the crawl keeps a refused row as its listing", () => {
       totalPages: 1,
       pageNumber: 0,
     });
-    globalThis.fetch = asFetchMock(async (input: string) => {
-      // The district document never answers; the appellate one answers with
-      // a body that is not JSON.
-      if (input === district.odkaz) {
-        throw new TypeError("fetch failed");
-      }
-      return await Promise.resolve(
-        new Response(
-          input === appellate.odkaz ? "<html>maintenance</html>" : listing,
-          { headers: { "Content-Type": "application/json" } },
-        ),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string) => {
+        // The district document never answers; the appellate one answers with
+        // a body that is not JSON.
+        if (input === district.odkaz) {
+          throw new TypeError("fetch failed");
+        }
+        return await Promise.resolve(
+          new Response(
+            input === appellate.odkaz ? "<html>maintenance</html>" : listing,
+            { headers: { "Content-Type": "application/json" } },
+          ),
+        );
+      }),
+    );
     const logs = installRecordingLogger();
     try {
       const page = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
@@ -1042,17 +1101,19 @@ describe("the crawl keeps a refused row as its listing", () => {
       pageNumber: 0,
     });
     const controller = new AbortController();
-    globalThis.fetch = asFetchMock(async (input: string) => {
-      if (input === district.odkaz) {
-        controller.abort();
-        throw new DOMException("Aborted", "AbortError");
-      }
-      return await Promise.resolve(
-        new Response(listing, {
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string) => {
+        if (input === district.odkaz) {
+          controller.abort();
+          throw new DOMException("Aborted", "AbortError");
+        }
+        return await Promise.resolve(
+          new Response(listing, {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+    );
 
     const outcome = await czRegionalAdapter
       .fetchPage("2025-06-11:0", {}, controller.signal)
@@ -1105,33 +1166,35 @@ describe("the crawl keeps a refused row as its listing", () => {
     let listingRequests = 0;
     let documentRequests = 0;
     let budgetPassesAt = 0;
-    globalThis.fetch = asFetchMock(async (input: string) => {
-      if (input.includes("/api/finaldoc/")) {
-        documentRequests += 1;
-        if (documentRequests === budgetPassesAt) {
-          const reason = new DOMException("page budget", "TimeoutError");
-          budget.abort(reason);
-          throw reason;
+    testFetchState.set(
+      asFetchMock(async (input: string) => {
+        if (input.includes("/api/finaldoc/")) {
+          documentRequests += 1;
+          if (documentRequests === budgetPassesAt) {
+            const reason = new DOMException("page budget", "TimeoutError");
+            budget.abort(reason);
+            throw reason;
+          }
+          const body = documents.get(input);
+          return await Promise.resolve(
+            body === undefined
+              ? new Response("gone", { status: 404 })
+              : new Response(body, {
+                  headers: { "Content-Type": "application/json" },
+                }),
+          );
         }
-        const body = documents.get(input);
+        listingRequests += 1;
+        // The first listing request fails and is retried, spending listing time.
         return await Promise.resolve(
-          body === undefined
-            ? new Response("gone", { status: 404 })
-            : new Response(body, {
+          listingRequests === 1
+            ? new Response("unavailable", { status: 503 })
+            : new Response(listing, {
                 headers: { "Content-Type": "application/json" },
               }),
         );
-      }
-      listingRequests += 1;
-      // The first listing request fails and is retried, spending listing time.
-      return await Promise.resolve(
-        listingRequests === 1
-          ? new Response("unavailable", { status: 503 })
-          : new Response(listing, {
-              headers: { "Content-Type": "application/json" },
-            }),
-      );
-    });
+      }),
+    );
     try {
       // The budget passes on the fifth read of the second batch.
       budgetPassesAt = 15 + 5;
@@ -1193,22 +1256,24 @@ describe("the crawl keeps a refused row as its listing", () => {
       },
     );
     let listingRequests = 0;
-    globalThis.fetch = asFetchMock(async (input: string) => {
-      if (input.includes("/api/finaldoc/")) {
-        return await Promise.resolve(new Response("gone", { status: 404 }));
-      }
-      listingRequests += 1;
-      if (listingRequests === 1) {
-        const reason = new DOMException("page budget", "TimeoutError");
-        budget.abort(reason);
-        throw reason;
-      }
-      return await Promise.resolve(
-        new Response(listing, {
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string) => {
+        if (input.includes("/api/finaldoc/")) {
+          return await Promise.resolve(new Response("gone", { status: 404 }));
+        }
+        listingRequests += 1;
+        if (listingRequests === 1) {
+          const reason = new DOMException("page budget", "TimeoutError");
+          budget.abort(reason);
+          throw reason;
+        }
+        return await Promise.resolve(
+          new Response(listing, {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+    );
     try {
       const page = await czRegionalAdapter.fetchPage(
         "2025-06-11:0",
@@ -1240,9 +1305,11 @@ describe("the crawl keeps a refused row as its listing", () => {
     expect(
       assembleCzRegionalDecision({ item, document: null, chain: null }).type,
     ).toBe("unkeyable");
-    globalThis.fetch = asFetchMock(
-      async () =>
-        new Response(JSON.stringify({ items: [item], totalPages: 1 })),
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          new Response(JSON.stringify({ items: [item], totalPages: 1 })),
+      ),
     );
 
     const page = (
@@ -1303,15 +1370,13 @@ describe("the crawl keeps a refused row as its listing", () => {
 });
 
 describe("a failed publisher read is never built", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeEach(() => {
     // The document read's one retry backs off; the wait proves nothing here.
     spyOn(Bun, "sleep").mockResolvedValue();
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     mock.restore();
   });
 
@@ -1325,18 +1390,20 @@ describe("a failed publisher read is never built", () => {
     faulted: (url: string) => boolean;
     body: string;
   }): void => {
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = input instanceof Request ? input.url : String(input);
-      const served = async () =>
-        await Promise.resolve(
-          new Response(body, {
-            headers: { "Content-Type": "application/json" },
-          }),
-        );
-      return faulted(url)
-        ? await faultedResponse(fault, served)
-        : await served();
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : String(input);
+        const served = async () =>
+          await Promise.resolve(
+            new Response(body, {
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        return faulted(url)
+          ? await faultedResponse(fault, served)
+          : await served();
+      }),
+    );
   };
 
   const detailReadReports = (logs: ReturnType<typeof installRecordingLogger>) =>
@@ -1423,8 +1490,10 @@ describe("a failed publisher read is never built", () => {
 
   test("a document the publisher answers 404 for is held listing-only, not reported", async () => {
     const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(new Response("", { status: 404 })),
+    testFetchState.set(
+      asFetchMock(
+        async () => await Promise.resolve(new Response("", { status: 404 })),
+      ),
     );
     const logs = installRecordingLogger();
     try {
@@ -1516,23 +1585,29 @@ describe("a failed publisher read is never built", () => {
   );
 
   test("a chain the publisher answers 404 for is absent, and a non-list or non-JSON body is unread", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(new Response("", { status: 404 })),
+    testFetchState.set(
+      asFetchMock(
+        async () => await Promise.resolve(new Response("", { status: 404 })),
+      ),
     );
     expect(await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID)).toEqual({
       type: "absent",
       evidence: "http-404",
     });
 
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(new Response('{"items":[]}')),
+    testFetchState.set(
+      asFetchMock(
+        async () => await Promise.resolve(new Response('{"items":[]}')),
+      ),
     );
     expect(await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID)).toMatchObject(
       { type: "unavailable" },
     );
 
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(new Response("<html>busy</html>")),
+    testFetchState.set(
+      asFetchMock(
+        async () => await Promise.resolve(new Response("<html>busy</html>")),
+      ),
     );
     expect(await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID)).toMatchObject(
       { type: "unavailable" },
@@ -1562,8 +1637,10 @@ describe("a failed publisher read is never built", () => {
   );
 
   test("a day the publisher answers 410 for is an empty day, as a 404 is", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(new Response("", { status: 410 })),
+    testFetchState.set(
+      asFetchMock(
+        async () => await Promise.resolve(new Response("", { status: 410 })),
+      ),
     );
     const page = (
       await czRegionalAdapter.fetchPage("2025-06-11:0", {})
@@ -1611,9 +1688,11 @@ describe("regional cursor numeric tokens", () => {
     "2025-06-11:1e3",
     "2025-06-11:9007199254740992",
   ])("refuses malformed cursor %s before fetching", async (cursor) => {
-    const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ items: [], totalPages: 0 })),
+    const fetchResponse1 = new Response(
+      JSON.stringify({ items: [], totalPages: 0 }),
     );
+    const fetchSpy = mock(asFetchMock(async () => fetchResponse1));
+    testFetchState.set(asFetchMock(fetchSpy));
     try {
       const result = await czRegionalAdapter.fetchPage(cursor, {});
       expect(result.isErr()).toBe(true);
@@ -1622,7 +1701,7 @@ describe("regional cursor numeric tokens", () => {
       }
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
-      fetchSpy.mockRestore();
+      testFetchState.restore();
     }
   });
 });

@@ -359,7 +359,8 @@ const createMutationViolations = ({
           name === "useIdempotentMutation") ||
         (isModule({
           module,
-          owner: "routes/_protected.admin/-hooks/use-settings-mutation",
+          owner:
+            "routes/_protected.settings/organization/-hooks/use-settings-mutation",
         }) &&
           name === "useSettingsMutation") ||
         (isModule({
@@ -404,11 +405,14 @@ const createMutationViolations = ({
         entry.name.text === key,
     )?.type;
   };
-  const ownedRun = (node: ts.Node): boolean => {
+  const ownedSubmitCall = (
+    node: ts.Node,
+    method: "run" | "prepare" = "run",
+  ): boolean => {
     if (
       !ts.isCallExpression(node) ||
       !ts.isPropertyAccessExpression(node.expression) ||
-      node.expression.name.text !== "run" ||
+      node.expression.name.text !== method ||
       !ts.isIdentifier(node.expression.expression)
     ) {
       return false;
@@ -429,6 +433,16 @@ const createMutationViolations = ({
         ts.isFunctionDeclaration(ancestor)
       ) {
         for (const parameter of ancestor.parameters) {
+          const shadowsOwner = ts.isIdentifier(parameter.name)
+            ? parameter.name.text === name
+            : ts.isObjectBindingPattern(parameter.name) &&
+              parameter.name.elements.some(
+                (binding) =>
+                  ts.isIdentifier(binding.name) && binding.name.text === name,
+              );
+          if (!shadowsOwner) {
+            continue;
+          }
           const type = parameterBindingType(parameter, name);
           if (
             !type ||
@@ -436,7 +450,7 @@ const createMutationViolations = ({
             !ts.isIdentifier(type.typeName) ||
             type.typeName.text !== "ReturnType"
           ) {
-            continue;
+            return false;
           }
           const query = type.typeArguments?.at(0);
           if (
@@ -447,6 +461,7 @@ const createMutationViolations = ({
           ) {
             return true;
           }
+          return false;
         }
       }
     }
@@ -468,7 +483,7 @@ const createMutationViolations = ({
       return false;
     }
     if (assignment.name.text === "send") {
-      return ownedRun(call);
+      return ownedSubmitCall(call);
     }
     if (!ts.isIdentifier(call.expression)) {
       return false;
@@ -492,6 +507,9 @@ const createMutationViolations = ({
     for (const ancestor of ancestorsOf(node)) {
       const initializer = scopedDeclarations.get(ancestor)?.get(name);
       if (initializer) {
+        if (ownedSubmitCall(initializer, "prepare")) {
+          return true;
+        }
         if (
           !ts.isCallExpression(initializer) ||
           !ts.isPropertyAccessExpression(initializer.expression) ||
@@ -590,6 +608,16 @@ const createMutationViolations = ({
     node: ts.Expression,
     at: ts.Node,
   ): HeaderProjection => {
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      node.name.text === "headers" &&
+      ownedSubmitCall(node.expression, "prepare")
+    ) {
+      return {
+        keys: new Map([["Idempotency-Key", "owned"]]),
+        provenance: "known",
+      };
+    }
     if (
       ts.isPropertyAccessExpression(node) &&
       node.name.text === "headers" &&
@@ -765,7 +793,7 @@ const createMutationViolations = ({
       call.name.text === "send" &&
       ts.isObjectLiteralExpression(call.parent)
     ) {
-      protectedCall = ownedRun(call.parent.parent);
+      protectedCall = ownedSubmitCall(call.parent.parent);
       // The server fingerprints the path with the body, so one operation
       // shared by every path would replay a key minted for another target.
       const operation = call.parent.properties.find(
@@ -1023,6 +1051,31 @@ test.each([
   expect(result.violations.at(0)).toContain("needs submit-intent headers");
 });
 
+test("create census follows prepared submit headers and rejects unrelated prepare methods", () => {
+  const source = `
+    import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+    const submit = useIdempotentSubmit();
+    const unrelated = otherFactory();
+    const prepared = submit.prepare({ body, operation: "create" });
+    api.things.put(body, { headers: prepared.headers });
+    api.things.put(body, {
+      headers: { "Idempotency-Key": submit.prepare({ body, operation: "create" }).headers["Idempotency-Key"] },
+    });
+    api.things.put(body, { headers: unrelated.prepare({ body }).headers });
+    function shadowed(submit: unknown) {
+      api.things.put(body, { headers: submit.prepare({ body }).headers });
+    }
+  `;
+  const result = createMutationViolations({
+    file: "prepared.tsx",
+    text: source,
+    creates: new Set(["put:things"]),
+    roots: clientRoots(),
+  });
+  expect(result.createCalls).toBe(4);
+  expect(result.violations).toHaveLength(2);
+});
+
 test("create census recognizes the plain submit-intent owner and aliased client imports", () => {
   const source = `
     import { api as client } from "@/lib/api";
@@ -1113,7 +1166,7 @@ test("create census follows the owned subrequest derivation and rejects an unown
 test("create census trusts owning mutation wrappers and refuses unrelated matching names", () => {
   const source = `
     import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
-    import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+    import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
     import { useIdempotentMutation } from "@/unrelated/use-idempotent-mutation";
     useCapabilityMutation({ mutationFn: (body, request) => api.things.put(body, request) });
     useSettingsMutation({ mutationFn: (body, request) => api.things.put(body, request) });

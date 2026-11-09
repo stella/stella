@@ -39,6 +39,7 @@ const search = async (overrides: Partial<GlobalSearchQuery> = {}) =>
         accessibleWorkspaceIds,
         selectedWorkspaceIds: [],
         types: ["document", "matter"],
+        grantedScopes: undefined,
         editedByUserIds: [],
         mimeTypes: [],
         limit: 2,

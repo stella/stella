@@ -54,7 +54,6 @@ export const DOC_SOURCES = {
       "@tanstack/ai-openai",
       "@tanstack/ai-openrouter",
       "@tanstack/ai-persistence",
-      "@tanstack/ai-react",
       "@tanstack/ai-sandbox",
       "@tanstack/charts",
       "@tanstack/devtools-vite",
@@ -100,10 +99,6 @@ export const DOC_SOURCES = {
   React: {
     dependencies: ["react", "react-dom", "@types/react", "@types/react-dom"],
     url: "https://react.dev/llms.txt",
-  },
-  ReactEmail: {
-    dependencies: ["@react-email/components", "@react-email/render"],
-    url: "https://react.email/docs/llms.txt",
   },
   BaseUI: {
     dependencies: ["@base-ui/react"],
@@ -151,11 +146,16 @@ export const DOC_SOURCES = {
       "@expo/ui",
       "@expo/vector-icons",
       "expo",
+      "expo-asset",
+      "expo-audio",
       "expo-constants",
       "expo-crypto",
       "expo-dev-client",
+      "expo-document-picker",
       "expo-doctor",
+      "expo-file-system",
       "expo-font",
+      "expo-glass-effect",
       "expo-notifications",
       "expo-linking",
       "expo-router",
@@ -373,6 +373,20 @@ const PROBED_WITHOUT_LLMS_TXT = [
     ["https://pglite.dev/llms.txt", "https://pglite.dev/docs/llms.txt"],
   ],
   [
+    "@emnapi/core",
+    [
+      "https://emnapi.netlify.app/llms.txt",
+      "https://raw.githubusercontent.com/toyobayashi/emnapi/main/llms.txt",
+    ],
+  ],
+  [
+    "@emnapi/runtime",
+    [
+      "https://emnapi.netlify.app/llms.txt",
+      "https://raw.githubusercontent.com/toyobayashi/emnapi/main/llms.txt",
+    ],
+  ],
+  [
     "@firecrawl/anydoc",
     ["https://raw.githubusercontent.com/firecrawl/anydoc/HEAD/llms.txt"],
   ],
@@ -503,10 +517,6 @@ const PROBED_WITHOUT_LLMS_TXT = [
     "cheerio",
     ["https://cheerio.js.org/llms.txt", "https://cheerio.js.org/docs/llms.txt"],
   ],
-  [
-    "client-zip",
-    ["https://raw.githubusercontent.com/Touffy/client-zip/HEAD/llms.txt"],
-  ],
   ["clsx", ["https://raw.githubusercontent.com/lukeed/clsx/HEAD/llms.txt"]],
   ["cobe", ["https://raw.githubusercontent.com/shuding/cobe/HEAD/llms.txt"]],
   ["diff", ["https://raw.githubusercontent.com/kpdecker/jsdiff/HEAD/llms.txt"]],
@@ -550,7 +560,6 @@ const PROBED_WITHOUT_LLMS_TXT = [
     ["https://raw.githubusercontent.com/redis/ioredis/HEAD/llms.txt"],
   ],
   ["jose", ["https://raw.githubusercontent.com/panva/jose/HEAD/llms.txt"]],
-  ["jszip", ["https://raw.githubusercontent.com/Stuk/jszip/HEAD/llms.txt"]],
   ["katex", ["https://katex.org/llms.txt", "https://katex.org/docs/llms.txt"]],
   ["knip", ["https://knip.dev/llms.txt", "https://knip.dev/docs/llms.txt"]],
   [
@@ -688,6 +697,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
     ["https://raw.githubusercontent.com/xnimorz/use-debounce/HEAD/llms.txt"],
   ],
   [
+    "icu-minify",
+    [
+      "https://raw.githubusercontent.com/amannn/next-intl/HEAD/llms.txt",
+      "https://raw.githubusercontent.com/amannn/next-intl/HEAD/packages/icu-minify/llms.txt",
+    ],
+  ],
+  [
     "use-intl",
     ["https://next-intl.dev/llms.txt", "https://next-intl.dev/docs/llms.txt"],
   ],
@@ -715,6 +731,17 @@ const noLlmsTxt = ([dependency, urls]: readonly [
 export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
   noLlmsTxt,
 ).concat(
+  ...["@dnd-kit/core", "@dnd-kit/sortable"].map(
+    (dependency) =>
+      ({
+        checkedAt: "2026-10-28T00:00:00.000Z",
+        dependency,
+        explanation:
+          "https://raw.githubusercontent.com/clauderic/dnd-kit/master/llms.txt returns 404; https://dndkit.com/llms.txt and https://docs.dndkit.com/llms.txt reject retrieval with 403. No retrievable index was found. Use the official legacy API reference at https://dndkit.com/legacy/ directly for the retained Kanban consumer contract.",
+        expiresAt: "2026-11-27T00:00:00.000Z",
+        reason: "no-llms-txt",
+      }) satisfies NoLlmsTxtExclusion,
+  ),
   ...[
     "prosemirror-commands",
     "prosemirror-dropcursor",

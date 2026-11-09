@@ -109,6 +109,7 @@ const referenceBasis: DocumentReviewRunBasis = {
           },
         ],
       },
+      scope: null,
     },
   },
   perspective: { type: "party", role: "Buyer", name: null },

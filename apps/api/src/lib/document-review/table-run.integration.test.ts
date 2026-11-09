@@ -12,8 +12,10 @@
  *    judgment standing.
  */
 
+import { panic } from "better-result";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   describe,
   expect,
@@ -22,15 +24,19 @@ import {
 } from "bun:test";
 import { and, count, eq, inArray } from "drizzle-orm";
 
+import type { PlaybookRunProjection } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentReviewFindings,
   documentReviewRuns,
+  fields,
   playbookDefinitions,
   properties,
   propertyDependencies,
 } from "@/api/db/schema";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type {
@@ -39,11 +45,14 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import { recordTableRunDocumentRead } from "@/api/lib/document-review/table-run-findings";
 import {
   deletePlaybookColumns,
   deletePlaybookPositionColumns,
 } from "@/api/lib/properties/delete-playbook-columns";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
+import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -136,6 +145,7 @@ const pinnedPlaybook = (
   definitionSnapshot: {
     name: "Termination review",
     positions: { version: 3, items: [gradedPosition] },
+    scope: null,
   },
 });
 
@@ -317,6 +327,90 @@ afterAll(async () => {
 });
 
 describe("opening runs for a files table", () => {
+  describe("a document with a second DOCX in a custom file column", () => {
+    const customPropertyId = createSafeId<"property">();
+    const customFieldId = createSafeId<"field">();
+
+    beforeAll(async () => {
+      await testDb
+        .update(properties)
+        .set({ system: true })
+        .where(eq(properties.id, ids.filePropertyA1));
+      await testDb.insert(properties).values({
+        id: customPropertyId,
+        workspaceId: ids.wsA1,
+        name: "Signed copy",
+        content: { version: 1, type: "file" },
+        tool: { version: 1, type: "manual-input" },
+        status: "fresh",
+      });
+      await testDb.insert(fields).values({
+        id: customFieldId,
+        workspaceId: ids.wsA1,
+        propertyId: customPropertyId,
+        entityVersionId: ids.entityVersionA1,
+        content: {
+          version: 1,
+          type: "file",
+          id: Bun.randomUUIDv7(),
+          fileName: "signed.docx",
+          mimeType: DOCX_MIME_TYPE,
+          sizeBytes: 1024,
+          encrypted: false,
+          sha256Hex: "c".repeat(64),
+          pdfFileId: null,
+        },
+      });
+    });
+
+    afterAll(async () => {
+      await testDb.delete(fields).where(eq(fields.id, customFieldId));
+      await testDb
+        .delete(properties)
+        .where(eq(properties.id, customPropertyId));
+      await testDb
+        .update(properties)
+        .set({ system: false })
+        .where(eq(properties.id, ids.filePropertyA1));
+    });
+
+    const openedFileFieldIds = async (projection: PlaybookRunProjection) => {
+      const { runs } = await createPlaybookTableRuns({
+        tx: asTestRaw<Transaction>(testDb),
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        playbook: pinnedPlaybook(await seedPlaybookDefinition()),
+        docTypeGate: null,
+        projection,
+      });
+      seededRunIds.push(...runs.map(({ runId }) => runId));
+      const rows = await testDb
+        .select({ fileFieldId: documentReviewRuns.fileFieldId })
+        .from(documentReviewRuns)
+        .where(
+          inArray(
+            documentReviewRuns.id,
+            runs.map(({ runId }) => runId),
+          ),
+        );
+      await clearRuns();
+      return rows.map(({ fileFieldId }) => fileFieldId).toSorted();
+    };
+
+    test("a column run opens only for the file the columns read", async () => {
+      expect(await openedFileFieldIds(PLAYBOOK_RUN_PROJECTION.COLUMNS)).toEqual(
+        [ids.fileFieldA1],
+      );
+    });
+
+    test("a worker run still opens for each file", async () => {
+      expect(await openedFileFieldIds(PLAYBOOK_RUN_PROJECTION.NONE)).toEqual(
+        [ids.fileFieldA1, customFieldId].toSorted(),
+      );
+    });
+  });
+
   test("pins one run per document and materializes no columns", async () => {
     const definitionId = await seedPlaybookDefinition();
     const before = await propertyCount();
@@ -454,6 +548,128 @@ describe("opening runs for a files table", () => {
     expect(carried).toEqual([{ decision: "accepted", decidedBy: ids.userA1 }]);
 
     await clearRuns();
+  });
+});
+
+describe("telling a table run how its document was read", () => {
+  const scopedDb: ScopedDb = async (run) =>
+    await run(asTestRaw<Transaction>(testDb));
+  const source = (charactersWithheld: number) => ({
+    fileFieldId: ids.fileFieldA1,
+    passagesCut: 1,
+    charactersWithheld,
+    charactersTotal: 1000,
+  });
+  const openRun = async () => {
+    const definitionId = await seedPlaybookDefinition();
+    const { askId } = await seedMaterializedColumns(definitionId);
+    const opened = await openTableRuns(definitionId);
+    const runId = opened.runs.at(0)?.runId ?? panic("No run was opened");
+    await testDb
+      .update(documentReviewRuns)
+      .set({
+        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+        status: "running",
+      })
+      .where(eq(documentReviewRuns.id, runId));
+    const read = async () =>
+      (
+        await testDb
+          .select({
+            status: documentReviewRuns.status,
+            errorCode: documentReviewRuns.errorCode,
+            withheldSources: documentReviewRuns.withheldSources,
+          })
+          .from(documentReviewRuns)
+          .where(eq(documentReviewRuns.id, runId))
+      ).at(0);
+    const [pinned] = await testDb
+      .select({ entityVersionId: documentReviewRuns.entityVersionId })
+      .from(documentReviewRuns)
+      .where(eq(documentReviewRuns.id, runId));
+    const batch: BatchRead = {
+      entityVersionId: pinned?.entityVersionId ?? panic("No pinned version"),
+      propertyIds: [askId],
+    };
+    return { read, batch };
+  };
+  type BatchRead = Pick<
+    Parameters<typeof recordTableRunDocumentRead>[0],
+    "entityVersionId" | "propertyIds"
+  >;
+  const report = async (
+    batch: BatchRead,
+    read: Parameters<typeof recordTableRunDocumentRead>[0]["read"],
+  ) =>
+    await recordTableRunDocumentRead({
+      scopedDb,
+      workspaceId: ids.wsA1,
+      entityId: ids.entityA1,
+      ...batch,
+      read,
+    });
+
+  afterEach(clearRuns);
+
+  test("a later batch repeats a file's record instead of adding to it", async () => {
+    const { read, batch } = await openRun();
+
+    await report(batch, { type: "cut", withheld: [source(100)] });
+    await report(batch, { type: "cut", withheld: [source(200)] });
+
+    expect(await read()).toMatchObject({
+      withheldSources: [source(200)],
+    });
+  });
+
+  test("a document too large fails the run with its own code", async () => {
+    const { read, batch } = await openRun();
+
+    await report(batch, { type: "tooLarge" });
+
+    expect(await read()).toMatchObject({
+      status: "failed",
+      errorCode: "document_too_large",
+    });
+  });
+
+  test("a batch for a column outside the run leaves the run alone", async () => {
+    const { read, batch } = await openRun();
+
+    await report(
+      { ...batch, propertyIds: [toSafeId<"property">(Bun.randomUUIDv7())] },
+      { type: "tooLarge" },
+    );
+
+    expect(await read()).toMatchObject({ status: "running", errorCode: null });
+  });
+
+  test("a batch that read another version leaves the run alone", async () => {
+    const { read, batch } = await openRun();
+
+    await report(
+      {
+        ...batch,
+        entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
+      },
+      { type: "tooLarge" },
+    );
+
+    expect(await read()).toMatchObject({ status: "running", errorCode: null });
+  });
+
+  test("a cut records only the file the run reviews", async () => {
+    const { read, batch } = await openRun();
+    const otherFile = {
+      ...source(900),
+      fileFieldId: Bun.randomUUIDv7(),
+    };
+
+    await report(batch, { type: "cut", withheld: [otherFile, source(100)] });
+    expect(await read()).toMatchObject({ withheldSources: [source(100)] });
+
+    await report(batch, { type: "cut", withheld: [otherFile] });
+    expect(await read()).toMatchObject({ withheldSources: [source(100)] });
   });
 });
 

@@ -5,6 +5,7 @@ import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { hasChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import type { ChatWorkspaceAccess } from "@/api/handlers/chat/chat-scope";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
+import type { WorkspaceStatusAccess } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { projectThreadArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
 import { readThreadStoredContentSendModeOnTx } from "@/api/lib/chat/thread-stored-content-send-mode";
@@ -14,6 +15,9 @@ import type {
 } from "@/api/lib/projection-totality";
 
 type ReadEditableMessageOptions = {
+  /** Same contract as `resolveChatScope`'s `admitted`: a read of the message
+   *  admits an archived matter, and a step towards changing it does not. */
+  admitted: WorkspaceStatusAccess;
   tx: Transaction;
   threadId: SafeId<"chatThread">;
   messageId: SafeId<"chatMessage">;
@@ -23,6 +27,7 @@ type ReadEditableMessageOptions = {
 };
 
 export const readEditableMessageOnTx = async ({
+  admitted,
   tx,
   threadId,
   messageId,
@@ -48,6 +53,7 @@ export const readEditableMessageOnTx = async ({
   if (
     !row ||
     !(await hasChatWorkspaceAccess({
+      admitted,
       workspaceId: row.thread.workspaceId,
       getWorkspaceAccess,
     }))
@@ -96,6 +102,8 @@ export const readEditableMessageOnTx = async ({
       webSearchEnabled: row.thread.webSearchEnabled,
       chatModel: row.thread.chatModel,
       chatReasoningEffort: row.thread.chatReasoningEffort,
+      chatRunTarget: row.thread.chatRunTarget,
+      chatLocalRunTarget: row.thread.chatLocalRunTarget,
       recapText: row.thread.recapText,
       recapMessageId: row.thread.recapMessageId,
       recapPromptVersion: row.thread.recapPromptVersion,

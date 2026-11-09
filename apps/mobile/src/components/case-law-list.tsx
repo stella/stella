@@ -203,6 +203,7 @@ const DecisionTimeline = ({
       ListHeaderComponent={
         <View className="gap-2 pb-1">
           <ScrollView
+            alwaysBounceVertical={false}
             accessibilityRole="tablist"
             contentContainerStyle={{ gap: 6 }}
             horizontal

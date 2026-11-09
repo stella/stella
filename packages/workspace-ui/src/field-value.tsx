@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 import { useTranslations } from "use-intl";
 
@@ -9,7 +9,10 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { emptyColor, resolveOptionColor } from "./colors";
-import { getClipFieldValueLabel } from "./field-value-logic";
+import {
+  getClipFieldValueLabel,
+  summarizeRecordField,
+} from "./field-value-logic";
 import { useFormatter, useFormattingLocale } from "./formatting";
 import type { GenericProperty, WorkspaceFieldContent } from "./types";
 
@@ -106,7 +109,67 @@ export const FieldValue = ({
     );
   }
 
+  if (content.type === "record") {
+    return <RecordFieldValue content={content} variant={resolvedVariant} />;
+  }
+
   return <ClipFieldValue content={content} variant={resolvedVariant} />;
+};
+
+export const RecordFieldValue = ({
+  content,
+  variant,
+}: {
+  content: Extract<WorkspaceFieldContent, { type: "record" }>;
+  variant: FieldValueVariant;
+}) => {
+  const t = useTranslations();
+  const locale = useFormattingLocale();
+  if (variant === "kanban") {
+    return null;
+  }
+  const summary = summarizeRecordField(
+    content.state,
+    ({ amountMinor, currency }) =>
+      formatMoneyCents({ amountCents: amountMinor, currency, locale }),
+  );
+  const className =
+    variant === "table" ? "line-clamp-2" : "line-clamp-2 text-sm";
+  switch (summary.type) {
+    case "text":
+      return (
+        <BidiText as="span" className={className}>
+          {summary.text}
+        </BidiText>
+      );
+    case "records":
+      return (
+        <span className={className}>
+          {t("workspaces.fields.recordCount", { count: summary.count })}
+        </span>
+      );
+    case "choose":
+      return (
+        <span className={cn(className, "text-warning-foreground italic")}>
+          {t("workspaces.fields.recordChoose", { count: summary.count })}
+        </span>
+      );
+    case "needs-review":
+      return (
+        <span className={cn(className, "text-warning-foreground italic")}>
+          {t("workspaces.table.flags.needsReview")}
+        </span>
+      );
+    case "not-found":
+      return (
+        <span className={cn(className, "text-muted-foreground italic")}>
+          {t("workspaces.fields.recordNotFound")}
+        </span>
+      );
+    default:
+      summary satisfies never;
+      return panic("Unknown record field summary");
+  }
 };
 
 export const IntFieldValue = ({
@@ -188,7 +251,7 @@ export const PersonFieldValue = ({
       className={cn(
         "flex max-w-full min-w-0 items-center truncate",
         resolvedVariant === "kanban"
-          ? "text-muted-foreground bg-muted/60 gap-1 rounded px-1.5 py-0.5 text-xs leading-none"
+          ? "text-muted-foreground bg-muted/60 gap-1 rounded-sm px-1.5 py-0.5 text-xs leading-none"
           : "gap-1.5 text-sm",
       )}
     >
@@ -436,7 +499,7 @@ const DateFieldValue = ({
 
   if (variant === "kanban") {
     return (
-      <span className="text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none">
+      <span className="text-muted-foreground bg-muted/60 rounded-sm px-1.5 py-0.5 text-xs leading-none">
         {formatted}
       </span>
     );
@@ -465,7 +528,7 @@ const SelectFieldValue = ({
     return (
       <BidiText
         as="span"
-        className="max-w-full truncate rounded px-1.5 py-0.5 text-xs leading-none font-medium"
+        className="max-w-full truncate rounded-sm px-1.5 py-0.5 text-xs leading-none font-medium"
         style={{
           backgroundColor: color?.background,
           color: color?.foreground,
@@ -480,8 +543,8 @@ const SelectFieldValue = ({
     <span
       className={
         variant === "table"
-          ? "flex max-w-full items-center gap-x-1 rounded px-1 py-0.25 font-medium"
-          : "flex w-max max-w-full items-center gap-x-1 rounded px-1 py-0.25 text-sm font-medium"
+          ? "flex max-w-full items-center gap-x-1 rounded-sm px-1 py-0.25 font-medium"
+          : "flex w-max max-w-full items-center gap-x-1 rounded-sm px-1 py-0.25 text-sm font-medium"
       }
       style={{
         backgroundColor: color?.background,
@@ -550,7 +613,7 @@ export const ClipFieldValue = ({
     return (
       <BidiText
         as="span"
-        className="text-muted-foreground bg-muted/60 truncate rounded px-1.5 py-0.5 text-xs leading-none"
+        className="text-muted-foreground bg-muted/60 truncate rounded-sm px-1.5 py-0.5 text-xs leading-none"
       >
         {value}
       </BidiText>
@@ -631,7 +694,7 @@ export const getSelectPropertyColor = (
 
 export const getIntClassName = (variant: FieldValueVariant) => {
   if (variant === "kanban") {
-    return "text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none tabular-nums";
+    return "text-muted-foreground bg-muted/60 rounded-sm px-1.5 py-0.5 text-xs leading-none tabular-nums";
   }
 
   if (variant === "table") {

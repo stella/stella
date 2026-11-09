@@ -15,8 +15,14 @@ const { searchGlobal: searchGlobalWithDatabase } =
   await import("@/api/lib/search/index-global");
 const { scopedDb } = createScopedDbMock(rootDbTestDouble);
 const searchGlobal = async (
-  query: Parameters<typeof searchGlobalWithDatabase>[0],
-) => (await searchGlobalWithDatabase(query, { scopedDb })).unwrap();
+  query: Omit<Parameters<typeof searchGlobalWithDatabase>[0], "grantedScopes">,
+) =>
+  (
+    await searchGlobalWithDatabase(
+      { ...query, grantedScopes: undefined },
+      { scopedDb },
+    )
+  ).unwrap();
 
 beforeEach(() => {
   clearRootDbMocks();

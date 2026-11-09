@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -7,6 +6,10 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import "@/api/tests/setup-env";
 
 import { AI_PROVIDERS } from "@stll/ai-catalog";
+import {
+  isTranscriptionModelId,
+  TRANSCRIPTION_MODELS,
+} from "@stll/ai-catalog/transcription";
 import { compareCodeUnit } from "@stll/collation";
 
 import { CHAT_TURN_FAILURE_CODES } from "@/api/handlers/chat/chat-turn-state";
@@ -27,6 +30,7 @@ import {
   emitPromptCacheMetric,
   emitRawSourceStoredMetric,
   emitReasoningReplayDroppedMetric,
+  emitTranscriptionDurationMismatchMetric,
   emitVerificationRunFailureMetric,
   REQUEST_CLASSES,
   resetMetricLineSinkForTesting,
@@ -64,19 +68,6 @@ test("new raw object metrics count stored bytes and objects by source without do
           kind,
           RawSourceStoredBytes: 12_345,
           RawSourceStoredObjects: 1,
-          _aws: {
-            Timestamp: expect.any(Number),
-            CloudWatchMetrics: [
-              {
-                Namespace: "Stella/Api",
-                Dimensions: [["family", "source", "kind"]],
-                Metrics: [
-                  { Name: "RawSourceStoredBytes", Unit: "Bytes" },
-                  { Name: "RawSourceStoredObjects", Unit: "Count" },
-                ],
-              },
-            ],
-          },
         })),
       ),
     );
@@ -127,6 +118,37 @@ test("stage log fields pass the content-key policy", () => {
   for (const key of ["content", "decisionContent", "statuteTitle"]) {
     expect(SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key), key).toBe(true);
   }
+});
+
+test("a tools/call phase record says whether the call ran over its budget", () => {
+  const record = (totalMs: number) =>
+    buildMcpRequestMetricRecord({
+      method: "tools/call",
+      mode: "default",
+      overlap: false,
+      path: "modern",
+      toolName: "search_legislation",
+      phases: {
+        auth: 0,
+        context: 0,
+        server_build: 0,
+        tool_projection: 0,
+        dispatch: totalMs,
+      },
+      queryCount: 0,
+      totalMs,
+      latencyBudgetMs: 8000,
+    });
+  expect(record(10_499.2)).toMatchObject({
+    total: 10_500,
+    budget: 8000,
+    overBudget: true,
+  });
+  expect(record(7999.5)).toMatchObject({
+    total: 8000,
+    budget: 8000,
+    overBudget: false,
+  });
 });
 
 test("MCP phase records are integral, non-overlapping, and bounded", () => {
@@ -212,16 +234,6 @@ test("reasoning replay drops emit only bounded provider and reason dimensions", 
       toProvider: "openai",
       reason: "incompatible-provenance",
       "chat.reasoning_replay_dropped": 3,
-      _aws: {
-        Timestamp: expect.any(Number),
-        CloudWatchMetrics: [
-          {
-            Namespace: "Stella/Api",
-            Dimensions: [["fromProvider", "toProvider", "reason"]],
-            Metrics: [{ Name: "chat.reasoning_replay_dropped", Unit: "Count" }],
-          },
-        ],
-      },
     });
   } finally {
     resetMetricLineSinkForTesting();
@@ -257,16 +269,6 @@ test("verification failures emit bounded class metrics and structured events", (
         event: `list_verification_run.${record.errorCode}`,
         errorCode: record.errorCode,
         VerificationRunFailures: 1,
-        _aws: {
-          Timestamp: expect.any(Number),
-          CloudWatchMetrics: [
-            {
-              Namespace: "Stella/Api",
-              Dimensions: [["errorCode"]],
-              Metrics: [{ Name: "VerificationRunFailures", Unit: "Count" }],
-            },
-          ],
-        },
       });
     }
   } finally {
@@ -280,59 +282,34 @@ describe("buildRequestDurationRecord", () => {
     requestClass: "ai" as const,
     statusCode: 200,
     route: "/v1/templates/suggest-fields" satisfies ApiRoutePath,
-    timestamp: 1_700_000_000_000,
   };
 
-  const extracted = (requestClass: RequestClass) => {
-    const built = buildRequestDurationRecord({ ...base, requestClass });
-    if (built.type !== "extracted") {
-      return panic(`Expected an extracted metric for ${requestClass}`);
-    }
-    return built.record;
-  };
+  const recordFor = (requestClass: RequestClass) =>
+    buildRequestDurationRecord({ ...base, requestClass });
 
-  test("emits a valid EMF directive CloudWatch can extract", () => {
-    const record = extracted("ai");
-    const directive = record._aws.CloudWatchMetrics[0];
-
-    // EMF contract: every metric/dimension name referenced in the
-    // directive must exist as a root member, or CloudWatch silently
-    // drops the metric.
-    expect(directive.Namespace).toBe("Stella/Api");
-    expect(directive.Dimensions).toEqual([["class"]]);
-    expect(directive.Metrics).toEqual([
-      { Name: "RequestDuration", Unit: "Milliseconds" },
-    ]);
-    for (const dimension of directive.Dimensions.flat()) {
-      expect(record).toHaveProperty(dimension);
-    }
-    for (const metric of directive.Metrics) {
-      expect(record).toHaveProperty(metric.Name);
-    }
-    expect(record._aws.Timestamp).toBe(base.timestamp);
+  test("keeps request fields and the numeric duration in the record", () => {
+    const record = recordFor("ai");
+    expect(record.RequestDuration).toBe(1235);
+    expect("_aws" in record).toBe(false);
     expect(record["http.route"]).toBe(base.route);
     expect(record["http.status_code"]).toBe(base.statusCode);
   });
 
   test("rounds duration to an integer millisecond value", () => {
-    expect(buildRequestDurationRecord(base).record.RequestDuration).toBe(1235);
+    expect(buildRequestDurationRecord(base).RequestDuration).toBe(1235);
   });
 
-  test("every request class is logged; only alarmed classes extract a metric", () => {
-    const dispositions = REQUEST_CLASSES.map((requestClass) => {
-      const built = buildRequestDurationRecord({ ...base, requestClass });
-      expect(built.record.class).toBe(requestClass);
-      expect(built.record.RequestDuration).toBe(1235);
-      expect("_aws" in built.record).toBe(built.type === "extracted");
-      return [requestClass, built.type];
-    });
-    expect(Object.fromEntries(dispositions)).toEqual({
-      ai: "extracted",
-      crud: "extracted",
-      search: "extracted",
-      batch: "log_only",
-      stream: "log_only",
-    });
+  test("every request class has the same metric record shape", () => {
+    for (const requestClass of REQUEST_CLASSES) {
+      const record = buildRequestDurationRecord({ ...base, requestClass });
+      expect(record).toMatchObject({
+        class: requestClass,
+        RequestDuration: 1235,
+        "http.route": base.route,
+        "http.status_code": base.statusCode,
+      });
+      expect("_aws" in record).toBe(false);
+    }
   });
 });
 
@@ -345,13 +322,6 @@ test("chat run log metrics emit append latency and per-turn write volume without
     emitChatRunLogMetric({ type: "append", durationMs: 12.5 });
     emitChatRunLogMetric({ type: "turn", rows: 3, bytes: 512 });
     expect(lines).toHaveLength(2);
-    for (const line of lines) {
-      expect(JSON.parse(line)).toMatchObject({
-        _aws: {
-          CloudWatchMetrics: [{ Namespace: "Stella/Api", Dimensions: [[]] }],
-        },
-      });
-    }
     expect(JSON.parse(lines.at(0) ?? "null")).toMatchObject({
       ChatRunLogAppendDuration: 12.5,
     });
@@ -386,19 +356,6 @@ test("prompt-cache metrics emit a run's input, cached input and hit rate by surf
     expect(lines).toHaveLength(1);
     const record: unknown = JSON.parse(lines.at(0) ?? "null");
     expect(record).toMatchObject({
-      _aws: {
-        CloudWatchMetrics: [
-          {
-            Dimensions: [["surface", "provider"]],
-            Metrics: [
-              { Name: "PromptInputTokens", Unit: "Count" },
-              { Name: "PromptCachedInputTokens", Unit: "Count" },
-              { Name: "PromptCacheHitRate", Unit: "Percent" },
-            ],
-            Namespace: "Stella/Api",
-          },
-        ],
-      },
       PromptCacheHitRate: 75,
       PromptCachedInputTokens: 750,
       PromptInputTokens: 1000,
@@ -420,43 +377,35 @@ test("cost drop metrics count observations rather than failed batches", () => {
     expect(lines).toHaveLength(1);
     expect(JSON.parse(lines.at(0) ?? "null")).toMatchObject({
       ActionCostObservationsDropped: 7,
-      _aws: {
-        CloudWatchMetrics: [
-          {
-            Dimensions: [[]],
-            Metrics: [{ Name: "ActionCostObservationsDropped", Unit: "Count" }],
-          },
-        ],
-      },
     });
   } finally {
     resetMetricLineSinkForTesting();
   }
 });
 
-/**
- * EMF contract: every dimension and metric a directive names must be a root
- * member of the record, or CloudWatch silently drops the metric.
- */
-const expectExtractable = (record: {
-  _aws: {
-    CloudWatchMetrics: {
-      Dimensions: string[][];
-      Metrics: { Name: string }[];
-      Namespace: string;
-    }[];
-  };
-}) => {
-  for (const directive of record._aws.CloudWatchMetrics) {
-    expect(directive.Namespace).toBe("Stella/Api");
-    for (const dimension of directive.Dimensions.flat()) {
-      expect(record).toHaveProperty(dimension);
+test("transcription duration mismatches emit a structured count with catalog metadata only", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    const modelIds = Object.keys(TRANSCRIPTION_MODELS).filter(
+      isTranscriptionModelId,
+    );
+    for (const modelId of modelIds) {
+      emitTranscriptionDurationMismatchMetric(modelId);
+      const record: unknown = JSON.parse(lines.at(-1) ?? "null");
+      expect(record).toEqual({
+        event: "transcription.duration_mismatch",
+        modelId,
+        TranscriptionDurationMismatch: 1,
+      });
     }
-    for (const metric of directive.Metrics) {
-      expect(record).toHaveProperty(metric.Name);
-    }
+    expect(lines).toHaveLength(modelIds.length);
+  } finally {
+    resetMetricLineSinkForTesting();
   }
-};
+});
 
 /** Every outcome a turn settles with; a new one fails typecheck here. */
 const SETTLED_OUTCOMES = {
@@ -468,7 +417,7 @@ const SETTLED_OUTCOMES = {
 } as const satisfies { [TOutcome in ChatTurnOutcome["type"]]: TOutcome };
 
 describe("buildChatTurnSettlementRecord", () => {
-  test("every outcome, mode and provider builds one extractable count", () => {
+  test("every outcome, mode and provider builds a count record", () => {
     for (const outcome of Object.values(SETTLED_OUTCOMES)) {
       for (const mode of ["anonymized", "raw"] as const) {
         for (const provider of [...AI_PROVIDERS, "none" as const]) {
@@ -477,9 +426,7 @@ describe("buildChatTurnSettlementRecord", () => {
             mode,
             outcome,
             provider,
-            timestamp: 1_700_000_000_000,
           });
-          expectExtractable(record);
           expect(record).toMatchObject({
             ChatTurnSettlements: 1,
             mode,
@@ -497,18 +444,8 @@ describe("buildChatTurnSettlementRecord", () => {
       mode: "anonymized",
       outcome: "failed",
       provider: "anthropic",
-      timestamp: 1_700_000_000_000,
     });
-    expect(record._aws.CloudWatchMetrics).toEqual([
-      {
-        Namespace: "Stella/Api",
-        Dimensions: [
-          ["outcome", "mode"],
-          ["outcome", "mode", "provider"],
-        ],
-        Metrics: [{ Name: "ChatTurnSettlements", Unit: "Count" }],
-      },
-    ]);
+    expect("_aws" in record).toBe(false);
     // The failure code is a property to query, not a dimension.
     expect(record.failure_code).toBe("boundary-refusal");
   });
@@ -521,7 +458,6 @@ describe("buildChatTurnSettlementRecord", () => {
           mode: "raw",
           outcome: "failed",
           provider: "openai",
-          timestamp: 0,
         }).failure_code,
       ).toBe(code ?? "none");
     }
@@ -535,13 +471,8 @@ describe("buildAnonymizationRefusalRecord", () => {
         const record = buildAnonymizationRefusalRecord({
           reason,
           site,
-          timestamp: 1_700_000_000_000,
         });
-        expectExtractable(record);
-        expect(record._aws.CloudWatchMetrics.at(0)?.Dimensions).toEqual([
-          ["site", "reason"],
-          [],
-        ]);
+        expect("_aws" in record).toBe(false);
         expect(record).toMatchObject({
           AnonymizationRefusals: 1,
           reason,

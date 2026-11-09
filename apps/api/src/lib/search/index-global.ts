@@ -2,9 +2,18 @@ import { panic, Result } from "better-result";
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { isEntityKind, RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import {
+  ENTITY_KINDS,
+  GLOBAL_SEARCH_RESULT_TYPES,
+  isEntityKind,
+  RESOURCE_TYPE,
+  resourceRef,
+} from "@stll/api-contract";
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
-import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
+import {
+  GLOBAL_SEARCH_CHAT_COVERAGE,
+  GLOBAL_SEARCH_RESULT_LIMIT,
+} from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
@@ -26,7 +35,7 @@ import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import type { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
-import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { LIMITS } from "@/api/lib/limits";
@@ -70,6 +79,7 @@ import {
   buildSearchTsQuery,
 } from "@/api/lib/search/query";
 import { globalSearchIdentity } from "@/api/lib/search/resource-search";
+import { permittedSearchResultTypes } from "@/api/lib/search/result-type-scopes";
 import { searchTitleTierSql } from "@/api/lib/search/search-ranking";
 import { typedPgArray } from "@/api/lib/search/sql";
 import type {
@@ -85,7 +95,10 @@ import {
   projectChatSearchCandidates,
   readChatCandidateBatches,
 } from "@/api/lib/search/withdrawn-chat-candidates";
-import type { ChatSearchCandidateRow } from "@/api/lib/search/withdrawn-chat-candidates";
+import type {
+  ChatCandidateRead,
+  ChatSearchCandidateRow,
+} from "@/api/lib/search/withdrawn-chat-candidates";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const REINDEX_BATCH_SIZE = 100;
@@ -170,6 +183,12 @@ export type GlobalSearchQuery = {
   /** User-selected subset to filter by; empty means no extra filter. */
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   types: readonly GlobalSearchResultType[];
+  /**
+   * The caller's access-token scopes, or `undefined` for a browser session.
+   * A result type the scopes do not reach is neither searched nor counted,
+   * whatever `types` asks for (`permittedSearchResultTypes`).
+   */
+  grantedScopes: readonly string[] | undefined;
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
@@ -263,18 +282,41 @@ const toHeadline = (value: unknown): string | null => {
   return text === null ? null : escapeAndHighlight(text);
 };
 
-const selectedTypes = (types: readonly GlobalSearchResultType[]) =>
-  new Set<GlobalSearchResultType>(types);
+/**
+ * The result types one search reads. `searched` is what the caller asked for
+ * (every type when it asked for none), kept to the types it is `permitted`;
+ * `narrowed` says whether that falls short of every type.
+ */
+type ResultTypeSelection = {
+  readonly searched: ReadonlySet<GlobalSearchResultType>;
+  readonly permitted: ReadonlySet<GlobalSearchResultType>;
+  readonly narrowed: boolean;
+};
+
+const selectedTypes = (
+  types: readonly GlobalSearchResultType[],
+  permittedTypes: readonly GlobalSearchResultType[],
+): ResultTypeSelection => {
+  const permitted = new Set(permittedTypes);
+  const requested: readonly GlobalSearchResultType[] =
+    types.length === 0 ? GLOBAL_SEARCH_RESULT_TYPES : types;
+  return {
+    searched: new Set(requested.filter((type) => permitted.has(type))),
+    permitted,
+    narrowed:
+      types.length > 0 || permitted.size < GLOBAL_SEARCH_RESULT_TYPES.length,
+  };
+};
 
 const shouldSearchType = (
-  selected: ReadonlySet<GlobalSearchResultType>,
+  selected: ResultTypeSelection,
   type: GlobalSearchResultType,
-) => selected.size === 0 || selected.has(type);
+) => selected.searched.has(type);
 
 const NATIVE_PREVIEW_MIME_TYPES = [PDF_MIME_TYPE, DOCX_MIME_TYPE] as const;
 
-const hasSelectedEntityType = (selected: ReadonlySet<GlobalSearchResultType>) =>
-  selected.size === 0 || [...selected].some(isEntityKind);
+const hasSelectedEntityType = (selected: ResultTypeSelection) =>
+  [...selected.searched].some(isEntityKind);
 
 const fileFieldJoin = (mimeTypes: readonly string[]) => {
   const mimeFilter =
@@ -486,6 +528,14 @@ const facetBuckets = (
 
 const totalFrom = (rows: CountRow[]): number => Number(rows.at(0)?.total ?? 0);
 
+const readChatLeg = async (
+  condition: boolean,
+  read: () => Promise<ChatCandidateRead>,
+): Promise<ChatCandidateRead> =>
+  condition
+    ? await read()
+    : { rows: [], coverage: GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE };
+
 const rowsWhen = async <Row extends RawRow>(
   condition: boolean,
   query: () => Promise<Row[]>,
@@ -545,6 +595,7 @@ const toMimeTypeFacetMap = (
 type FilterFragmentInput = {
   query: string;
   types: readonly GlobalSearchResultType[];
+  permittedTypes: readonly GlobalSearchResultType[];
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
@@ -561,12 +612,13 @@ type FilterFragmentInput = {
 const buildSearchFilterFragments = ({
   query,
   types,
+  permittedTypes,
   editedByUserIds,
   mimeTypes,
   updatedFrom,
   updatedTo,
 }: FilterFragmentInput) => {
-  const selected = selectedTypes(types);
+  const selected = selectedTypes(types, permittedTypes);
   const hasEditorFilter = editedByUserIds.length > 0;
   const hasMimeTypeFilter = mimeTypes.length > 0;
   const hasSearchQuery = query.trim().length > 0;
@@ -585,7 +637,8 @@ const buildSearchFilterFragments = ({
           fractionalSecondDigits: 3,
         });
 
-  const entityTypes = [...selected].filter(isEntityKind);
+  const entityTypes = [...selected.searched].filter(isEntityKind);
+  const permittedEntityTypes = [...selected.permitted].filter(isEntityKind);
   const entityEditorFilter = sqlWhen(
     hasEditorFilter,
     () =>
@@ -680,13 +733,19 @@ const buildSearchFilterFragments = ({
       ? sql`tier DESC, score DESC, ${id} DESC`
       : sql`${updatedAt} DESC, ${id} DESC`;
   const entityTypeFilter = sqlWhen(
-    selected.size > 0,
+    selected.narrowed,
     () => sql`AND sd.kind = ANY(${typedPgArray(entityTypes, "text")})`,
   );
+  // The type facet counts every kind the caller may see, so a text search can
+  // offer the kinds it did not select; a kind outside the grant is never counted.
+  const permittedEntityTypeFilter = sqlWhen(
+    permittedEntityTypes.length < ENTITY_KINDS.length,
+    () => sql`AND sd.kind = ANY(${typedPgArray(permittedEntityTypes, "text")})`,
+  );
   const entityTypeFacetFilter =
-    selected.size > 0 && !hasSearchQuery && normalizedUpdatedFrom === undefined
+    selected.narrowed && !hasSearchQuery && normalizedUpdatedFrom === undefined
       ? entityTypeFilter
-      : sql``;
+      : permittedEntityTypeFilter;
 
   return {
     selected,
@@ -725,6 +784,7 @@ const readGlobalSearch = async (
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
     types,
+    grantedScopes,
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -799,6 +859,7 @@ const readGlobalSearch = async (
   } = buildSearchFilterFragments({
     query,
     types,
+    permittedTypes: permittedSearchResultTypes(grantedScopes),
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -968,7 +1029,7 @@ const readGlobalSearch = async (
   const chatSourceOrder = hasSearchQuery
     ? sql`ms.created_at, ms.message_id`
     : sql`ms.created_at DESC, ms.message_id DESC`;
-  const chatPromise = rowsWhen(
+  const chatPromise = readChatLeg(
     !restrictToEntities && shouldSearchType(selected, "chat"),
     async () => {
       const readPage = async (
@@ -1028,16 +1089,15 @@ const readGlobalSearch = async (
       LIMIT ${rowLimit}
     `);
       if (!hasSearchQuery) {
-        return await readPage(searchCursor, fetchLimit);
+        return {
+          rows: await readPage(searchCursor, fetchLimit),
+          coverage: GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE,
+        };
       }
-      const read = await readChatCandidateBatches({
+      return await readChatCandidateBatches({
         readBatch: async (batchCursor) =>
           await readPage(batchCursor, LIMITS.searchChatCandidateThreadsMax + 1),
       });
-      if (read.isErr()) {
-        return abortTransaction(read.error);
-      }
-      return read.value;
     },
   );
 
@@ -1159,6 +1219,7 @@ const readGlobalSearch = async (
   ): boolean =>
     isFirstPage &&
     !restrictToEntities &&
+    selected.permitted.has(type) &&
     !shouldSearchType(selected, type) &&
     hasAlternativeFacetPredicate;
 
@@ -1315,7 +1376,7 @@ const readGlobalSearch = async (
     matterRows,
     contactRows,
     caseLawRows,
-    chatRows,
+    chatRead,
     entityCount,
     matterCount,
     contactCount,
@@ -1348,7 +1409,7 @@ const readGlobalSearch = async (
 
   const projectedChatRows = await projectChatSearchCandidates({
     database,
-    rows: chatRows,
+    rows: chatRead.rows,
     query,
     cursor: searchCursor,
     limit: fetchLimit,
@@ -1430,6 +1491,7 @@ const readGlobalSearch = async (
       },
       totalCount,
       nextCursor: page.nextCursor,
+      chatCoverage: chatRead.coverage,
     },
     caseLawLanguageGroups,
   });
@@ -1465,6 +1527,7 @@ export const globalCaseLawHitsStatement = ({
     updatedFrom,
     updatedTo,
     types: ["case-law"],
+    permittedTypes: ["case-law"],
     editedByUserIds: [],
     mimeTypes: [],
   });
@@ -1588,6 +1651,8 @@ export type GlobalFacetSearchQuery = {
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   types: readonly GlobalSearchResultType[];
+  /** As on `GlobalSearchQuery`: the result types the buckets may count. */
+  grantedScopes: readonly string[] | undefined;
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
@@ -1613,6 +1678,7 @@ const readGlobalFacet = async (
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
     types,
+    grantedScopes,
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -1634,6 +1700,7 @@ const readGlobalFacet = async (
   } = buildSearchFilterFragments({
     query,
     types,
+    permittedTypes: permittedSearchResultTypes(grantedScopes),
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -2191,74 +2258,95 @@ export const reindexWorkspacesForContact = async (
 export const rebuildSupplementalSearchIndex = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
-  await rebuildSupplementalSearchDocuments(organizationId, rootDb);
+  // The owner connection reads contacts inside their organization only, so
+  // each page commits in its own organization-scoped transaction.
+  await rebuildSupplementalSearchDocuments(
+    organizationId,
+    rootDb,
+    async (database, run) =>
+      await withOwnerOrganizationScope(database, organizationId, run),
+  );
 };
 
 type KeysetPage<Id extends string> = { last: Id | null; more: boolean };
+
+/**
+ * Runs one page's read and projection writes; a caller that must scope them
+ * (the owner connection) wraps each page in its own transaction.
+ */
+type PageScope = <T>(
+  database: SearchDocumentDatabase,
+  run: (pageDatabase: SearchDocumentDatabase) => Promise<T>,
+) => Promise<T>;
 
 // One keyset page of an organization's contacts, rebuilt as one batch.
 const rebuildContactPage = async (
   organizationId: SafeId<"organization">,
   after: SafeId<"contact"> | null,
   database: SearchDocumentDatabase,
-): Promise<KeysetPage<SafeId<"contact">>> => {
-  const page = await database
-    .select({ id: contacts.id })
-    .from(contacts)
-    .where(
-      after
-        ? and(
-            eq(contacts.organizationId, organizationId),
-            gt(contacts.id, after),
-          )
-        : eq(contacts.organizationId, organizationId),
-    )
-    .orderBy(asc(contacts.id))
-    .limit(REINDEX_BATCH_SIZE);
-  await writeContactProjections(
-    page.map(({ id }) => id),
-    database,
-  );
-  return {
-    last: page.at(-1)?.id ?? after,
-    more: page.length === REINDEX_BATCH_SIZE,
-  };
-};
+  inPage: PageScope,
+): Promise<KeysetPage<SafeId<"contact">>> =>
+  await inPage(database, async (pageDatabase) => {
+    const page = await pageDatabase
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(
+        after
+          ? and(
+              eq(contacts.organizationId, organizationId),
+              gt(contacts.id, after),
+            )
+          : eq(contacts.organizationId, organizationId),
+      )
+      .orderBy(asc(contacts.id))
+      .limit(REINDEX_BATCH_SIZE);
+    await writeContactProjections(
+      page.map(({ id }) => id),
+      pageDatabase,
+    );
+    return {
+      last: page.at(-1)?.id ?? after,
+      more: page.length === REINDEX_BATCH_SIZE,
+    };
+  });
 
 // One keyset page of an organization's matters, rebuilt as one batch.
 const rebuildWorkspacePage = async (
   organizationId: SafeId<"organization">,
   after: SafeId<"workspace"> | null,
   database: SearchDocumentDatabase,
-): Promise<KeysetPage<SafeId<"workspace">>> => {
-  const page = await database
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(
-      after
-        ? and(
-            eq(workspaces.organizationId, organizationId),
-            gt(workspaces.id, after),
-          )
-        : eq(workspaces.organizationId, organizationId),
-    )
-    .orderBy(asc(workspaces.id))
-    .limit(REINDEX_BATCH_SIZE);
-  await writeWorkspaceProjections(
-    page.map(({ id }) => id),
-    database,
-  );
-  return {
-    last: page.at(-1)?.id ?? after,
-    more: page.length === REINDEX_BATCH_SIZE,
-  };
-};
+  inPage: PageScope,
+): Promise<KeysetPage<SafeId<"workspace">>> =>
+  await inPage(database, async (pageDatabase) => {
+    const page = await pageDatabase
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(
+        after
+          ? and(
+              eq(workspaces.organizationId, organizationId),
+              gt(workspaces.id, after),
+            )
+          : eq(workspaces.organizationId, organizationId),
+      )
+      .orderBy(asc(workspaces.id))
+      .limit(REINDEX_BATCH_SIZE);
+    await writeWorkspaceProjections(
+      page.map(({ id }) => id),
+      pageDatabase,
+    );
+    return {
+      last: page.at(-1)?.id ?? after,
+      more: page.length === REINDEX_BATCH_SIZE,
+    };
+  });
 
 // Keyset pages of one organization's contacts, then its matters. Each page
 // is one batch: a read of its sources and one projection transaction.
 export const rebuildSupplementalSearchDocuments = async (
   organizationId: SafeId<"organization">,
   database: SearchDocumentDatabase,
+  inPage: PageScope = async (pageDatabase, run) => await run(pageDatabase),
 ): Promise<void> => {
   let contactPage: KeysetPage<SafeId<"contact">> = { last: null, more: true };
   while (contactPage.more) {
@@ -2267,6 +2355,7 @@ export const rebuildSupplementalSearchDocuments = async (
       organizationId,
       contactPage.last,
       database,
+      inPage,
     );
   }
 
@@ -2280,6 +2369,7 @@ export const rebuildSupplementalSearchDocuments = async (
       organizationId,
       workspacePage.last,
       database,
+      inPage,
     );
   }
 };

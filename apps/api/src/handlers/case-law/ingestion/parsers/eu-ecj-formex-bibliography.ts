@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /**
  * Read the bibliographic block of the Publications Office's Formex encoding
  * of a CJEU decision.
@@ -17,7 +18,7 @@
  * new one would silently fall out of.
  */
 
-import * as cheerio from "cheerio";
+import { load } from "@stll/html";
 
 const BIBLIOGRAPHY_PREFIX = "BIB.";
 
@@ -48,7 +49,7 @@ const readBibliography = (
 ): BibliographyReader => {
   const children = (typeof xml === "string" ? [xml] : xml).flatMap(
     (document) => {
-      const $ = cheerio.load(document, { xml: true });
+      const $ = load(document, { xml: true });
       return $(":root")
         .children()
         .toArray()

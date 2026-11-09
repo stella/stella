@@ -1,0 +1,18 @@
+{
+  "id": "count-gated-completion",
+  "rules": ["count-gated-completion/count-gated-completion"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-13T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "count-gated-completion/count-gated-completion",
+    "."
+  ]
+}

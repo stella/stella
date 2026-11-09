@@ -2,12 +2,13 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic, Result } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import type { ScanEngine } from "@stll/scan-engine/types";
 import { ScanEngineError } from "@stll/scan-engine/types";
 
 import { ClientOperationError } from "@/lib/errors/client";
 import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { fakeRenderTask } from "@/lib/pdf/render-task.test-fixtures";
 
 import { runCleanScan } from "./clean-scan-run";
 import type { CleanScanFailure } from "./clean-scan-run";
@@ -36,15 +37,7 @@ const pageProxy = (promise: Promise<void>, onRender: () => void) =>
     getViewport: viewport,
     render: () => {
       onRender();
-      return {
-        _internalRenderTask: null,
-        onContinue: () => undefined,
-        onError: () => undefined,
-        promise,
-        cancel: () => undefined,
-        separateAnnots: false,
-        imageCoordinates: {},
-      };
+      return fakeRenderTask({ promise });
     },
   }) satisfies Parameters<typeof runCleanScan>[0]["pages"][number]["proxy"];
 

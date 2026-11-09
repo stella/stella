@@ -19,6 +19,8 @@ excluded_rules = [
   "ban-drop-table",
   "ban-drop-database",
   "ban-drop-function",
+  # Constraint drops require the statement-scoped check-migration-safety acknowledgement.
+  "ban-drop-constraint",
   "renaming-column",
   "renaming-table",
   "ban-truncate-cascade",

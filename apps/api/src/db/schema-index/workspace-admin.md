@@ -4,113 +4,116 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## business_registry_credentials · `businessRegistryCredentials` · workspace-admin.ts:39 · rls
+## business_registry_credentials · `businessRegistryCredentials` · workspace-admin.ts:42 · rls
 
 ```text
-business_registry_credentials.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:42
-business_registry_credentials.registry         text                not null          workspace-admin.ts:43
-business_registry_credentials.ciphertext       bytea               not null          workspace-admin.ts:46
-business_registry_credentials.iv               bytea               not null          workspace-admin.ts:47
-business_registry_credentials.updated_at       timestamptz         default,not null  workspace-admin.ts:48
+business_registry_credentials.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:45
+business_registry_credentials.registry         text                not null          workspace-admin.ts:46
+business_registry_credentials.ciphertext       bytea               not null          workspace-admin.ts:49
+business_registry_credentials.iv               bytea               not null          workspace-admin.ts:50
+business_registry_credentials.updated_at       timestamptz         default,not null  workspace-admin.ts:51
 ```
 
-## matter_counters · `matterCounters` · workspace-admin.ts:92 · rls
+## matter_counters · `matterCounters` · workspace-admin.ts:108 · rls
 
 ```text
-matter_counters.id               pUuid               pk,not null       workspace-admin.ts:95
-matter_counters.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:96
-matter_counters.scope_key        varchar             not null          workspace-admin.ts:99
-matter_counters.last_value       integer             default,not null  workspace-admin.ts:100
+matter_counters.id               pUuid               pk,not null       workspace-admin.ts:111
+matter_counters.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:112
+matter_counters.scope_key        varchar             not null          workspace-admin.ts:115
+matter_counters.last_value       integer             default,not null  workspace-admin.ts:116
 ```
 
-## document_counters · `documentCounters` · workspace-admin.ts:110
+## document_counters · `documentCounters` · workspace-admin.ts:126
 
 ```text
-document_counters.id            pUuid            pk,not null       workspace-admin.ts:113
-document_counters.workspace_id  safeWorkspaceId  fk,not null       workspace-admin.ts:114
-document_counters.last_value    integer          default,not null  workspace-admin.ts:117
+document_counters.id            pUuid            pk,not null       workspace-admin.ts:129
+document_counters.workspace_id  safeWorkspaceId  fk,not null       workspace-admin.ts:130
+document_counters.last_value    integer          default,not null  workspace-admin.ts:133
 ```
 
-## document_reference_counters · `documentReferenceCounters` · workspace-admin.ts:140 · rls
+## document_reference_counters · `documentReferenceCounters` · workspace-admin.ts:156 · rls
 
 Every matter reference documents have been numbered under, with the matter that owns it and how far its numbering has run.
 
 ```text
-document_reference_counters.id               pUuid               pk,not null       workspace-admin.ts:143
-document_reference_counters.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:144
-document_reference_counters.reference        varchar             not null          workspace-admin.ts:145
-document_reference_counters.workspace_id     safeWorkspaceId     fk,null           workspace-admin.ts:151  The matter that first numbered documents under this reference.
-document_reference_counters.last_value       integer             default,not null  workspace-admin.ts:152
+document_reference_counters.id               pUuid               pk,not null       workspace-admin.ts:159
+document_reference_counters.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:160
+document_reference_counters.reference        varchar             not null          workspace-admin.ts:161
+document_reference_counters.workspace_id     safeWorkspaceId     fk,null           workspace-admin.ts:167  The matter that first numbered documents under this reference.
+document_reference_counters.last_value       integer             default,not null  workspace-admin.ts:168
 ```
 
-## organization_settings · `organizationSettings` · workspace-admin.ts:179 · rls
+## organization_settings · `organizationSettings` · workspace-admin.ts:195 · rls
 
 ```text
-organization_settings.id                              pUuid               pk,not null         workspace-admin.ts:182
-organization_settings.organization_id                 safeOrganizationId  fk,unique,not null  workspace-admin.ts:183
-organization_settings.personal_api_key_policy         text                default,not null    workspace-admin.ts:187
-organization_settings.invoice_language                text                null                workspace-admin.ts:192  Default document language for invoices; null derives it from the seller.
-organization_settings.sanctions_monitoring_mode       text                default,not null    workspace-admin.ts:193
-organization_settings.matter_number_pattern           varchar             default,not null    workspace-admin.ts:197
-organization_settings.matter_number_padding           integer             default,not null    workspace-admin.ts:201
-organization_settings.matter_numbering_enabled        boolean             default,not null    workspace-admin.ts:210  When true, matter titles show the allocated reference beside the name.
-organization_settings.time_minimum_unit_minutes       integer             default,not null    workspace-admin.ts:214
-organization_settings.time_edit_window_days           integer             default,not null    workspace-admin.ts:218
-organization_settings.time_locked_through_month       date                null                workspace-admin.ts:222
-organization_settings.time_narrative_required         boolean             default,not null    workspace-admin.ts:223
-organization_settings.time_zone                       text                null                workspace-admin.ts:234  IANA zone whose calendar decides the organization's "today" (lock months, invoice dates, due work).
-organization_settings.document_stamp_enabled          boolean             default,not null    workspace-admin.ts:235
-organization_settings.document_processing_mode        text                default,not null    workspace-admin.ts:244  Whether uploaded documents may receive additional processing beyond their native text layer.
-organization_settings.practice_jurisdictions          jsonb               default,not null    workspace-admin.ts:250
-organization_settings.native_tool_overrides           jsonb               default,not null    workspace-admin.ts:261  Per-slug overrides for built-in native tools (e.g. ARES).
-organization_settings.disabled_native_tools           jsonb               default,not null    workspace-admin.ts:271  Legacy disable list kept for rolling deploy compatibility.
-organization_settings.ai_config_encrypted             bytea               null                workspace-admin.ts:276  Encrypted OrgAIConfig JSON (AES-256-GCM).
-organization_settings.ai_config_iv                    bytea               null                workspace-admin.ts:278  AES-GCM initialization vector for aiConfigEncrypted.
-organization_settings.deepl_api_key_encrypted         bytea               null                workspace-admin.ts:280  Encrypted DeepL API key (single opaque string, AES-256-GCM).
-organization_settings.deepl_api_key_iv                bytea               null                workspace-admin.ts:282  AES-GCM initialization vector for deeplApiKeyEncrypted.
-organization_settings.web_search_api_key_encrypted    bytea               null                workspace-admin.ts:284  Encrypted web-search provider (Tavily) BYOK key, AES-256-GCM.
-organization_settings.web_search_api_key_iv           bytea               null                workspace-admin.ts:286  AES-GCM initialization vector for webSearchApiKeyEncrypted.
-organization_settings.url_fetch_api_key_encrypted     bytea               null                workspace-admin.ts:288  Encrypted url-fetch provider (Jina) BYOK key, AES-256-GCM.
-organization_settings.url_fetch_api_key_iv            bytea               null                workspace-admin.ts:290  AES-GCM initialization vector for urlFetchApiKeyEncrypted.
-organization_settings.managed_ai_residency            text                default,not null    workspace-admin.ts:291
-organization_settings.prompt_caching_enabled          boolean             default,not null    workspace-admin.ts:302  Whether stella may annotate AI requests with prompt-cache markers (Anthropic `cacheControl`, OpenAI `promptCacheKey`).
-organization_settings.sharepoint_connection_enabled   boolean             default,not null    workspace-admin.ts:312  Org-level enablement for the delegated SharePoint / OneDrive connection.
-organization_settings.memory_extraction_enabled       boolean             default,not null    workspace-admin.ts:322  Whether stella may run background memory extraction over this organization's compacted chat threads.
-organization_settings.template_packs_hidden           boolean             default,not null    workspace-admin.ts:331  Whether the bundled template-pack catalogue is offered in this organization's template library.
-organization_settings.memory_extraction_enabled_at    timestamptz         null                workspace-admin.ts:336  Start of the current opt-in window; null while extraction is off.
-organization_settings.memory_extraction_scheduled_at  timestamptz         null                workspace-admin.ts:341  Durable tenant queue position for background extraction.
-organization_settings.updated_at                      timestamptz         default,not null    workspace-admin.ts:342
+organization_settings.id                              pUuid               pk,not null         workspace-admin.ts:198
+organization_settings.organization_id                 safeOrganizationId  fk,unique,not null  workspace-admin.ts:199
+organization_settings.ai_billing_drafts_mode          text                default,not null    workspace-admin.ts:203
+organization_settings.personal_api_key_policy         text                default,not null    workspace-admin.ts:207
+organization_settings.local_run_max_approval_mode     text                default,not null    workspace-admin.ts:216  The most a chat turn run on a member's computer may do without asking (`ask < auto < full_auto`).
+organization_settings.invoice_language                text                null                workspace-admin.ts:223  Default document language for invoices; null derives it from the seller.
+organization_settings.sanctions_monitoring_mode       text                default,not null    workspace-admin.ts:224
+organization_settings.matter_number_pattern           varchar             default,not null    workspace-admin.ts:228
+organization_settings.matter_number_padding           integer             default,not null    workspace-admin.ts:232
+organization_settings.matter_numbering_enabled        boolean             default,not null    workspace-admin.ts:241  When true, matter titles show the allocated reference beside the name.
+organization_settings.time_minimum_unit_minutes       integer             default,not null    workspace-admin.ts:245
+organization_settings.time_edit_window_days           integer             default,not null    workspace-admin.ts:249
+organization_settings.time_locked_through_month       date                null                workspace-admin.ts:253
+organization_settings.time_narrative_required         boolean             default,not null    workspace-admin.ts:254
+organization_settings.time_zone                       text                null                workspace-admin.ts:265  IANA zone whose calendar decides the organization's "today" (lock months, invoice dates, due work).
+organization_settings.document_stamp_enabled          boolean             default,not null    workspace-admin.ts:266
+organization_settings.document_processing_mode        text                default,not null    workspace-admin.ts:275  Whether uploaded documents may receive additional processing beyond their native text layer.
+organization_settings.practice_jurisdictions          jsonb               default,not null    workspace-admin.ts:281
+organization_settings.data_box_ids                    jsonb               default,not null    workspace-admin.ts:287  The organization's own data-box IDs (lowercase); they decide whether a filed data-box message is outgoing or incoming.
+organization_settings.native_tool_overrides           jsonb               default,not null    workspace-admin.ts:295  Per-slug overrides for built-in native tools (e.g. ARES).
+organization_settings.disabled_native_tools           jsonb               default,not null    workspace-admin.ts:305  Legacy disable list kept for rolling deploy compatibility.
+organization_settings.ai_config_encrypted             bytea               null                workspace-admin.ts:310  Encrypted OrgAIConfig JSON (AES-256-GCM).
+organization_settings.ai_config_iv                    bytea               null                workspace-admin.ts:312  AES-GCM initialization vector for aiConfigEncrypted.
+organization_settings.deepl_api_key_encrypted         bytea               null                workspace-admin.ts:314  Encrypted DeepL API key (single opaque string, AES-256-GCM).
+organization_settings.deepl_api_key_iv                bytea               null                workspace-admin.ts:316  AES-GCM initialization vector for deeplApiKeyEncrypted.
+organization_settings.web_search_api_key_encrypted    bytea               null                workspace-admin.ts:318  Encrypted web-search provider (Tavily) BYOK key, AES-256-GCM.
+organization_settings.web_search_api_key_iv           bytea               null                workspace-admin.ts:320  AES-GCM initialization vector for webSearchApiKeyEncrypted.
+organization_settings.url_fetch_api_key_encrypted     bytea               null                workspace-admin.ts:322  Encrypted url-fetch provider (Jina) BYOK key, AES-256-GCM.
+organization_settings.url_fetch_api_key_iv            bytea               null                workspace-admin.ts:324  AES-GCM initialization vector for urlFetchApiKeyEncrypted.
+organization_settings.managed_ai_residency            text                default,not null    workspace-admin.ts:325
+organization_settings.prompt_caching_enabled          boolean             default,not null    workspace-admin.ts:336  Whether stella may annotate AI requests with prompt-cache markers (Anthropic `cacheControl`, OpenAI `promptCacheKey`).
+organization_settings.sharepoint_connection_enabled   boolean             default,not null    workspace-admin.ts:346  Org-level enablement for the delegated SharePoint / OneDrive connection.
+organization_settings.memory_extraction_enabled       boolean             default,not null    workspace-admin.ts:356  Whether stella may run background memory extraction over this organization's compacted chat threads.
+organization_settings.template_packs_hidden           boolean             default,not null    workspace-admin.ts:365  Whether the bundled template-pack catalogue is offered in this organization's template library.
+organization_settings.memory_extraction_enabled_at    timestamptz         null                workspace-admin.ts:370  Start of the current opt-in window; null while extraction is off.
+organization_settings.memory_extraction_scheduled_at  timestamptz         null                workspace-admin.ts:375  Durable tenant queue position for background extraction.
+organization_settings.updated_at                      timestamptz         default,not null    workspace-admin.ts:376
 ```
 
-## anonymization_allowlist_entries · `anonymizationAllowlistEntries` · workspace-admin.ts:417 · rls
+## anonymization_allowlist_entries · `anonymizationAllowlistEntries` · workspace-admin.ts:469 · rls
 
 Anonymization allowlist — entries that the detection pipeline should NOT mask.
 
 ```text
-anonymization_allowlist_entries.{...entityFeatureGateColumns()}           spread                                workspace-admin.ts:420
-anonymization_allowlist_entries.{...entityFeatureWorkspaceGateColumns()}  spread                                workspace-admin.ts:421
-anonymization_allowlist_entries.id                                        pUuid               pk,not null       workspace-admin.ts:422
-anonymization_allowlist_entries.organization_id                           safeOrganizationId  fk,not null       workspace-admin.ts:423
-anonymization_allowlist_entries.workspace_id                              safeWorkspaceId     fk,null           workspace-admin.ts:424
-anonymization_allowlist_entries.entity_id                                 safeUuid            fk,null           workspace-admin.ts:428
-anonymization_allowlist_entries.label                                     varchar             not null          workspace-admin.ts:431
-anonymization_allowlist_entries.canonical                                 varchar             not null          workspace-admin.ts:432
-anonymization_allowlist_entries.created_by                                text                fk,null           workspace-admin.ts:433
-anonymization_allowlist_entries.created_at                                timestamptz         default,not null  workspace-admin.ts:436
+anonymization_allowlist_entries.{...entityFeatureGateColumns()}           spread                                workspace-admin.ts:472
+anonymization_allowlist_entries.{...entityFeatureWorkspaceGateColumns()}  spread                                workspace-admin.ts:473
+anonymization_allowlist_entries.id                                        pUuid               pk,not null       workspace-admin.ts:474
+anonymization_allowlist_entries.organization_id                           safeOrganizationId  fk,not null       workspace-admin.ts:475
+anonymization_allowlist_entries.workspace_id                              safeWorkspaceId     fk,null           workspace-admin.ts:476
+anonymization_allowlist_entries.entity_id                                 safeUuid            fk,null           workspace-admin.ts:480
+anonymization_allowlist_entries.label                                     varchar             not null          workspace-admin.ts:483
+anonymization_allowlist_entries.canonical                                 varchar             not null          workspace-admin.ts:484
+anonymization_allowlist_entries.created_by                                text                fk,null           workspace-admin.ts:485
+anonymization_allowlist_entries.created_at                                timestamptz         default,not null  workspace-admin.ts:488
 ```
 
-## anonymization_blacklist_entries · `anonymizationBlacklistEntries` · workspace-admin.ts:492 · rls
+## anonymization_blacklist_entries · `anonymizationBlacklistEntries` · workspace-admin.ts:544 · rls
 
 ```text
-anonymization_blacklist_entries.id               pUuid               pk,not null       workspace-admin.ts:495
-anonymization_blacklist_entries.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:496
-anonymization_blacklist_entries.workspace_id     safeWorkspaceId     fk,null           workspace-admin.ts:503  When set, the entry is scoped to a single workspace and is only consulted by detection runs for that workspace.
-anonymization_blacklist_entries.label            varchar             not null          workspace-admin.ts:507
-anonymization_blacklist_entries.canonical        varchar             not null          workspace-admin.ts:508
-anonymization_blacklist_entries.variants         jsonb               default,not null  workspace-admin.ts:509
-anonymization_blacklist_entries.enabled          boolean             default,not null  workspace-admin.ts:510
-anonymization_blacklist_entries.created_by       text                fk,null           workspace-admin.ts:511
-anonymization_blacklist_entries.updated_by       text                fk,null           workspace-admin.ts:514
-anonymization_blacklist_entries.created_at       timestamptz         default,not null  workspace-admin.ts:517
-anonymization_blacklist_entries.updated_at       timestamptz         default,not null  workspace-admin.ts:518
+anonymization_blacklist_entries.id               pUuid               pk,not null       workspace-admin.ts:547
+anonymization_blacklist_entries.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:548
+anonymization_blacklist_entries.workspace_id     safeWorkspaceId     fk,null           workspace-admin.ts:555  When set, the entry is scoped to a single workspace and is only consulted by detection runs for that workspace.
+anonymization_blacklist_entries.label            varchar             not null          workspace-admin.ts:559
+anonymization_blacklist_entries.canonical        varchar             not null          workspace-admin.ts:560
+anonymization_blacklist_entries.variants         jsonb               default,not null  workspace-admin.ts:561
+anonymization_blacklist_entries.enabled          boolean             default,not null  workspace-admin.ts:562
+anonymization_blacklist_entries.created_by       text                fk,null           workspace-admin.ts:563
+anonymization_blacklist_entries.updated_by       text                fk,null           workspace-admin.ts:566
+anonymization_blacklist_entries.created_at       timestamptz         default,not null  workspace-admin.ts:569
+anonymization_blacklist_entries.updated_at       timestamptz         default,not null  workspace-admin.ts:570
 ```

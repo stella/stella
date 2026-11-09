@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-kis] imports the shared PDF reader from its new owner, pdf-bands.ts, under its new names; the default reading is the same code.
 /**
  * Polish tax interpretations and rulings (EUREKA) document reader.
  *
@@ -10,12 +11,15 @@
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
-  assemblePlSnParagraphs,
-  extractPlSnLines,
-  plSnParagraphsToHtml,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  assemblePdfParagraphs,
+  extractPdfLines,
+  pdfParagraphsToHtml,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import {
+  parsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const PL_KIS_SOURCE_SYSTEM = "eureka.mf.gov.pl";
@@ -55,6 +59,7 @@ const parseContent = (
     statutes: input.statutes,
     documentId: input.documentId,
     sourceSystem: PL_KIS_SOURCE_SYSTEM,
+    markup: PL_DECISION_MARKUP.PRINTED_LINES,
   });
 
 /** The document's own HTML field. */
@@ -68,7 +73,7 @@ export const parsePlKisDocumentPdf = async (
 ): Promise<ParsePlKisDocumentOutput> =>
   parseContent(
     input,
-    plSnParagraphsToHtml(
-      assemblePlSnParagraphs(await extractPlSnLines(input.pdfBytes)),
+    pdfParagraphsToHtml(
+      assemblePdfParagraphs(await extractPdfLines(input.pdfBytes)),
     ),
   );

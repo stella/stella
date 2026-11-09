@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import { contacts, workspaces, workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -20,13 +21,12 @@ import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 const WORKSPACE_NAVIGATION_STATUS_SCOPE = {
   ACTIVE: "active",
   ACTIVE_AND_ARCHIVED: "active-and-archived",
 } as const;
-
-const NON_DELETING_WORKSPACE_STATUSES = ["active", "archived"] as const;
 
 export const workspaceNavigationCursor = createTimestampIdCursorCodec({
   column: workspaces.lastActivityAt,
@@ -88,8 +88,8 @@ const readWorkspaceNavigation = createSafeRootHandler(
     const conditions = [
       eq(workspaces.organizationId, session.activeOrganizationId),
       statusScope === WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE
-        ? eq(workspaces.status, "active")
-        : inArray(workspaces.status, NON_DELETING_WORKSPACE_STATUSES),
+        ? eq(workspaces.status, WORKSPACE_STATUS.active)
+        : visibleWorkspaceSql(),
     ];
 
     if (query.cursor) {

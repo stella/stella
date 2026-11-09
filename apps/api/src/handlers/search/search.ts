@@ -4,41 +4,28 @@ import { isEntityKind } from "@stll/api-contract";
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { ENTITY_KINDS } from "@/api/db/schema";
 import type { DocumentProcessingStatus } from "@/api/db/schema";
-import { entityKindSchema } from "@/api/db/schema-validators";
 import { searchProvenanceError } from "@/api/handlers/search/provenance-error";
 import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  paginationCursorSchema,
-  resourceIdSchema,
-  userIdSchema,
-} from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { getCurrentVersionProcessingStatuses } from "@/api/lib/entities/document-processing-status";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+import { searchFilterFields } from "@/api/lib/search/filter-schema";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import { parseGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { getSearchPreviewLocatorCandidates } from "@/api/lib/search/query";
-import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
 import type {
   EntityGlobalSearchHit,
   GlobalSearchHit,
 } from "@/api/lib/search/types";
+import { VISIBLE_WORKSPACE_FILTER } from "@/api/lib/workspaces/visible-workspace-sql";
 
 const isoDateTime = apiDateTimeSchema;
 
 export const searchBodySchema = v.object({
-  query: v.pipe(v.string(), v.maxLength(LIMITS.searchQueryMaxLength)),
-  workspaceIds: v.pipe(v.array(resourceIdSchema("workspace")), v.maxLength(64)),
-  types: v.pipe(
-    v.array(v.picklist(GLOBAL_SEARCH_RESULT_TYPES)),
-    v.maxLength(GLOBAL_SEARCH_RESULT_TYPES.length),
-  ),
-  kinds: v.pipe(v.array(entityKindSchema), v.maxLength(ENTITY_KINDS.length)),
-  editedByUserIds: v.pipe(v.array(userIdSchema), v.maxLength(64)),
-  mimeTypes: v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  ...searchFilterFields,
   updatedFrom: v.optional(isoDateTime),
   updatedTo: v.optional(isoDateTime),
   cursor: v.optional(paginationCursorSchema()),
@@ -131,7 +118,7 @@ export const resolveSelectedWorkspaceIds = async ({
       where: {
         id: { in: accessible },
         organizationId: { eq: organizationId },
-        status: { ne: "deleting" },
+        status: VISIBLE_WORKSPACE_FILTER,
       },
       columns: { id: true },
       limit: accessible.length,
@@ -152,6 +139,8 @@ type SearchHandlerProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  /** The caller's access-token scopes; `undefined` for a browser session. */
+  grantedScopes: readonly string[] | undefined;
   body: SearchBodySchema;
   search?: typeof searchGlobal;
 };
@@ -161,6 +150,7 @@ export const searchHandler = async ({
   organizationId,
   userId,
   accessibleWorkspaceIds,
+  grantedScopes,
   body,
   search = searchGlobal,
 }: SearchHandlerProps) => {
@@ -194,6 +184,7 @@ export const searchHandler = async ({
       accessibleWorkspaceIds,
       selectedWorkspaceIds: resolved.ids,
       types,
+      grantedScopes,
       editedByUserIds: body.editedByUserIds,
       mimeTypes: body.mimeTypes,
       updatedFrom: body.updatedFrom,

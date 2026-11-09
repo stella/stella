@@ -111,12 +111,6 @@ const inspect = (source: string, fileName: string) => {
             return true;
           }
           if (
-            fileName.endsWith("provision-ask-actions.tsx") &&
-            /\b(summarize|ask)\b/u.test(text)
-          ) {
-            return true;
-          }
-          if (
             fileName.endsWith("ai-column-run-controls.tsx") &&
             /\bonRun\b/u.test(text)
           ) {
@@ -230,7 +224,6 @@ describe("capability flow action declarations", () => {
   });
   test("generic callbacks are admitted by their production owner, not their name alone", () => {
     for (const [file, handler] of [
-      ["features/statutes/components/provision-ask-actions.tsx", "summarize"],
       ["components/workspaces/ai-column-run-controls.tsx", "onRun"],
       ["components/inspector/desktop-open-button.tsx", "() => gate.run(open)"],
     ] as const) {
@@ -258,11 +251,6 @@ describe("capability flow action declarations", () => {
         "components/inspector/desktop-open-button.tsx",
         "ToolbarIconAction",
         "() => gate.run(open)",
-      ],
-      [
-        "features/statutes/components/provision-ask-actions.tsx",
-        "Button",
-        "summarize",
       ],
       ["components/chat/composer-plus-menu.tsx", "MenuItem", "onNewThread"],
     ] as const) {

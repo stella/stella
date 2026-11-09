@@ -101,6 +101,7 @@ const projectHit = (hit: SearchHit, headnoteMaxChars: number): SearchHit => ({
     })),
   decisionDate: nullableText(hit.decisionDate, bytes.date),
   decisionType: nullableText(hit.decisionType, bytes.decisionType),
+  decisionTypeKind: hit.decisionTypeKind,
   sourceUrl: nullableText(hit.sourceUrl, bytes.sourceUrl),
   headnote: projectHeadnote(hit.headnote, headnoteMaxChars),
   keywords: hit.keywords === null ? null : projectKeywords(hit.keywords),
@@ -170,6 +171,9 @@ export const projectCaseLawSearchResponse = (
         },
   total: response.total,
   relaxedHitCount: response.relaxedHitCount,
+  ...(response.relaxedTopUp === undefined
+    ? {}
+    : { relaxedTopUp: response.relaxedTopUp }),
   nextCursor: nullableText(
     response.nextCursor,
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,

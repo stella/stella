@@ -81,6 +81,7 @@ describe("search handler workspace scoping", () => {
         facets: { editor: [], mimeType: [], type: [], workspace: [] },
         hits: [],
         nextCursor: null,
+        chatCoverage: "complete",
         totalCount: 0,
       }),
     );
@@ -89,6 +90,7 @@ describe("search handler workspace scoping", () => {
   test("passes the caller's accessible workspace allowlist for global searches", async () => {
     await searchHandler({
       accessibleWorkspaceIds,
+      grantedScopes: undefined,
       body: {
         ...emptySearchFilters(),
         query: "closing memo",
@@ -121,6 +123,7 @@ describe("search handler workspace scoping", () => {
   test("returns canonical positive locator candidates for native previews", async () => {
     const result = await searchHandler({
       accessibleWorkspaceIds,
+      grantedScopes: undefined,
       body: {
         ...emptySearchFilters(),
         query: '"closing memo" OR liability NOT superseded',
@@ -139,6 +142,7 @@ describe("search handler workspace scoping", () => {
   test("rejects a blank query scoped only to a workspace", async () => {
     const result = await searchHandler({
       accessibleWorkspaceIds,
+      grantedScopes: undefined,
       body: {
         ...emptySearchFilters(),
         query: "  ",
@@ -162,6 +166,7 @@ describe("search handler workspace scoping", () => {
   test("rejects an incompatible cursor instead of restarting pagination", async () => {
     const result = await searchHandler({
       accessibleWorkspaceIds,
+      grantedScopes: undefined,
       body: {
         ...emptySearchFilters(),
         cursor: "not-a-search-cursor",
@@ -183,6 +188,7 @@ describe("search handler workspace scoping", () => {
   test("runs a blank query when an entity-kind filter is selected", async () => {
     await searchHandler({
       accessibleWorkspaceIds,
+      grantedScopes: undefined,
       body: {
         ...emptySearchFilters(),
         kinds: ["document"],
@@ -208,6 +214,7 @@ describe("search handler workspace scoping", () => {
     async ({ query, values }) => {
       await searchHandler({
         accessibleWorkspaceIds,
+        grantedScopes: undefined,
         body: {
           ...emptySearchFilters(),
           ...values,
@@ -234,6 +241,7 @@ describe("search handler workspace scoping", () => {
 
     await searchHandler({
       accessibleWorkspaceIds,
+      grantedScopes: undefined,
       body: {
         ...emptySearchFilters(),
         query: "closing memo",
@@ -271,6 +279,7 @@ describe("search handler workspace scoping", () => {
 
     await searchHandler({
       accessibleWorkspaceIds,
+      grantedScopes: undefined,
       body: {
         ...emptySearchFilters(),
         query: "closing memo",
@@ -302,6 +311,7 @@ describe("search handler workspace scoping", () => {
   test("rejects workspace ids the caller cannot access", async () => {
     const result = await searchHandler({
       accessibleWorkspaceIds,
+      grantedScopes: undefined,
       body: {
         ...emptySearchFilters(),
         query: "closing memo",
@@ -323,6 +333,7 @@ describe("search handler workspace scoping", () => {
   test("passes editor, MIME, and date range filters to global search", async () => {
     await searchHandler({
       accessibleWorkspaceIds,
+      grantedScopes: undefined,
       body: {
         ...emptySearchFilters(),
         editedByUserIds: ["user_1", "user_2"],

@@ -47,6 +47,7 @@ import {
   testModelAdmission,
   testOrganizationStateDb,
 } from "@/api/tests/helpers/model-dispatch-admission";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -199,15 +200,15 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
       .delete(chatThreads)
       .where(eq(chatThreads.organizationId, foreignOrganizationId));
     await db
-      .delete(organization)
-      .where(eq(organization.id, foreignOrganizationId));
-    await db
       .delete(caseLawDecisions)
       .where(eq(caseLawDecisions.sourceId, sourceRegistryId));
     await db
       .delete(caseLawSources)
       .where(eq(caseLawSources.id, sourceRegistryId));
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [
+      organizationId,
+      foreignOrganizationId,
+    ]);
     await db.delete(user).where(eq(user.id, userId));
   });
   test("the owned write binds value, origin and source without changing legacy rows", async () => {

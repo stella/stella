@@ -24,9 +24,18 @@ import {
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const { scopedDb } = createScopedDbMock(rootDbTestDouble);
+type SearchQuery = Parameters<typeof searchGlobalWithDatabase>[0];
+// A browser session's search unless a test passes an access token's scopes.
 const searchGlobal = async (
-  query: Parameters<typeof searchGlobalWithDatabase>[0],
-) => (await searchGlobalWithDatabase(query, { scopedDb })).unwrap();
+  query: Omit<SearchQuery, "grantedScopes"> &
+    Partial<Pick<SearchQuery, "grantedScopes">>,
+) =>
+  (
+    await searchGlobalWithDatabase(
+      { grantedScopes: undefined, ...query },
+      { scopedDb },
+    )
+  ).unwrap();
 
 // The final SQL LIMIT bounds the source page; chat has earlier candidate limits.
 const sourcePageLimit = (compiled: ReturnType<PgDialect["sqlToQuery"]>) => {

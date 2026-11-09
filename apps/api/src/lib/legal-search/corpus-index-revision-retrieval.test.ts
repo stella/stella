@@ -17,10 +17,13 @@ import {
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { testRevisionOf } from "@/api/tests/helpers/corpus-projection-revisions";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const APPLIED_REVISION = testRevisionOf("applied");
@@ -122,9 +125,11 @@ const readRevisionFixture = async ({
       snippets: [],
     });
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
   const hitDispositions = createCorpusHitDispositionCounter();
   const page = await readCorpusIndexSearchPage({
     hitDispositions,
