@@ -294,7 +294,11 @@ test("reads with no caller keep the plain request order", async () => {
         queueMicrotask(result.release);
       }
     });
-  const reads = [read("late", 1), read("early", 0)];
+  // Two reads of one request, so the lane is what tells them apart.
+  const reads = runWithinRequestLatencyBudget(
+    { label: "one-request", budgetMs: 60_000, startedAtMs: 1 },
+    () => [read("late", 1), read("early", 0)],
+  );
   await Promise.resolve();
   held();
   await Promise.all(reads);
