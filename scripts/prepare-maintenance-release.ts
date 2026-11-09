@@ -306,6 +306,11 @@ export const foldSupersededChangelog = ({
   return `${older.body}\n${PACKAGES_HEADING}\n\n${entries.map((entry) => `${entry}\n`).join("")}`;
 };
 
+const isVersionAhead = (version: StableVersion, reference: StableVersion) =>
+  (version.major - reference.major ||
+    version.minor - reference.minor ||
+    version.patch - reference.patch) > 0;
+
 export const parseStableVersion = (value: string): StableVersion => {
   const match = STABLE_VERSION_PATTERN.exec(value);
   if (!match) {
@@ -1542,13 +1547,23 @@ export const cutMaintenanceRelease = async (
   const options = parseMaintenanceReleaseOptions(args);
   effects.assertCleanWorktree();
   effects.assertNoOpenRelease();
-  const current = parseStableVersion(effects.latestFinalVersion());
-  const previousFinalTag = `v${current.value}`;
+  const latestFinal = parseStableVersion(effects.latestFinalVersion());
+  const previousFinalTag = `v${latestFinal.value}`;
+  const versionOnMain = parseStableVersion(
+    readFileSync(nodePath.join(rootDir, "VERSION"), "utf-8").trim(),
+  );
+  // A release pull request merged before its final tag leaves VERSION ahead of
+  // every final. Its number cannot be cut again: the changelog already exists
+  // and the release tree must change VERSION. The cut supersedes it instead.
+  const current = isVersionAhead(versionOnMain, latestFinal)
+    ? versionOnMain
+    : latestFinal;
+  const previousTag = `v${current.value}`;
   const baseSha = effects.resolveHeadSha();
-  // GitHub's verdict on the previous final, read before any gate: the npm
+  // GitHub's verdict on the previous release, read before any gate: the npm
   // gate checks against the manifest the release PR will carry, which the
   // preparation writes.
-  const previousRelease = await effects.readPreviousRelease(previousFinalTag);
+  const previousRelease = await effects.readPreviousRelease(previousTag);
   const recordedDates = readReleaseManifest(rootDir).releases;
   await assertPreCutGates({
     allowUnprovenMain: options.allowUnprovenMain,
@@ -1558,7 +1573,7 @@ export const cutMaintenanceRelease = async (
       releaseDates: projectReleaseDates({
         dates: recordedDates,
         previousRelease,
-        previousTag: previousFinalTag,
+        previousTag,
       }),
       rootDir,
       write: effects.write,
