@@ -83,7 +83,11 @@ export const searchTotalProjection = v.variant("type", [
   projectionBranch(countedSearchTotalProjection(SEARCH_TOTAL_TYPE.EXACT)),
   projectionBranch(countedSearchTotalProjection(SEARCH_TOTAL_TYPE.ESTIMATE)),
   projectionBranch(
-    v.strictObject({ type: v.literal(SEARCH_TOTAL_TYPE.NOT_COUNTED) }),
+    v.strictObject({
+      type: v.literal(SEARCH_TOTAL_TYPE.NOT_COUNTED),
+      // What an uncounted total means, where a caller would read a number.
+      note: v.optional(v.string()),
+    }),
   ),
 ]);
 

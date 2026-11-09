@@ -468,7 +468,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_case_law",
-    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use `url` for the reader and `source_url` for the publisher.",
+    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["country"],
@@ -943,6 +943,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 9007199254740991
+            },
+            "note": {
+              "type": "string"
             }
           },
           "required": ["type"],
@@ -2930,6 +2933,9 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 9007199254740991
+            },
+            "note": {
+              "type": "string"
             }
           },
           "required": ["type"],
