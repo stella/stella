@@ -127,7 +127,7 @@ type Api = {
     workspaceId: string,
     propertyId: string,
     fileName: string,
-    bytes: Uint8Array,
+    bytes: Uint8Array<ArrayBuffer>,
   ) => Promise<unknown>;
 };
 

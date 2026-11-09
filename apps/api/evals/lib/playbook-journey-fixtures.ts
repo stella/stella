@@ -319,7 +319,9 @@ const PACKAGE_RELS =
   "</Relationships>";
 
 /** A minimal DOCX with one paragraph per line of `text`. */
-export const fixtureDocx = async (text: string): Promise<Uint8Array> => {
+export const fixtureDocx = async (
+  text: string,
+): Promise<Uint8Array<ArrayBuffer>> => {
   const paragraphs = text
     .split("\n")
     .filter((line) => line.trim().length > 0)
