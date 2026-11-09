@@ -462,7 +462,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links; matches.nextCursor continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links; matches.resumeAfter continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -520,10 +520,10 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "maxLength": 256,
           "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
         },
-        "cursor": {
+        "resume_after": {
           "type": "string",
           "maxLength": 128,
-          "description": "matches.nextCursor of a previous query; pass the same query and section, one decision id."
+          "description": "matches.resumeAfter of a previous query; pass the same query and section, one decision id."
         },
         "section": {
           "enum": [
@@ -7825,7 +7825,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links; matches.nextCursor continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links; matches.resumeAfter continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -7883,10 +7883,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "maxLength": 256,
           "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
         },
-        "cursor": {
+        "resume_after": {
           "type": "string",
           "maxLength": 128,
-          "description": "matches.nextCursor of a previous query; pass the same query and section, one decision id."
+          "description": "matches.resumeAfter of a previous query; pass the same query and section, one decision id."
         },
         "section": {
           "enum": [
@@ -15924,7 +15924,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links; matches.nextCursor continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links; matches.resumeAfter continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -15982,10 +15982,10 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "maxLength": 256,
           "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
         },
-        "cursor": {
+        "resume_after": {
           "type": "string",
           "maxLength": 128,
-          "description": "matches.nextCursor of a previous query; pass the same query and section, one decision id."
+          "description": "matches.resumeAfter of a previous query; pass the same query and section, one decision id."
         },
         "section": {
           "enum": [
@@ -18014,7 +18014,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links; matches.nextCursor continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links; matches.resumeAfter continues them. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -18072,10 +18072,10 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "maxLength": 256,
           "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
         },
-        "cursor": {
+        "resume_after": {
           "type": "string",
           "maxLength": 128,
-          "description": "matches.nextCursor of a previous query; pass the same query and section, one decision id."
+          "description": "matches.resumeAfter of a previous query; pass the same query and section, one decision id."
         },
         "section": {
           "enum": [

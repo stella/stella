@@ -1813,11 +1813,11 @@ const caseLawDecisionProjection = v.strictObject({
         }),
       ),
       truncated: v.optional(v.literal(true)),
-      nextCursor: v.optional(
+      resumeAfter: v.optional(
         v.pipe(
           v.string(),
           v.description(
-            "Pass as cursor with the same query and section to read the next matches.",
+            "Pass as resume_after with the same query and section to read the next matches.",
           ),
         ),
       ),

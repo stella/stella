@@ -108,7 +108,6 @@ import {
   SEARCH_CASE_LAW_PROJECTION,
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
 } from "@/api/lib/chat/projections";
-import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import {
   type ExtractedContentSourceProvenance,
@@ -807,12 +806,14 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         ),
       ),
     ),
-    cursor: v.optional(
-      paginationCursorSchema({
-        maxChars: LIMITS.caseLawDecisionQueryCursorMaxLength,
-        description:
-          "matches.nextCursor of a previous query; pass the same query and section, one decision id.",
-      }),
+    resume_after: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(LIMITS.caseLawDecisionQueryCursorMaxLength),
+        v.description(
+          "matches.resumeAfter of a previous query; pass the same query and section, one decision id.",
+        ),
+      ),
     ),
     section: v.optional(
       v.pipe(
@@ -1031,7 +1032,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as " +
       "text_version; versionChanged flags changed text. " +
       `\`full: true\` returns whole text up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} chars. ` +
-      "`query` returns matches, neighbours and deep links; matches.nextCursor continues them. Page 1 adds " +
+      "`query` returns matches, neighbours and deep links; matches.resumeAfter continues them. Page 1 adds " +
       "reader/publisher URL, metadata, textFields and citation summaries (top " +
       `citers may be bounded by ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges). ` +
       "Use read_case_law_citations for all citations. One id adds an outline. " +
@@ -3310,7 +3311,7 @@ const decisionTextPart = ({
         ...(found.nextAfter === null
           ? {}
           : {
-              nextCursor: encodeDecisionQueryCursor({
+              resumeAfter: encodeDecisionQueryCursor({
                 after: found.nextAfter,
                 query: position.query,
                 section: position.section,
@@ -3656,7 +3657,7 @@ const decisionReadArgumentRefusal = ({
   max_chars: maxChars,
   page,
   query,
-  cursor,
+  resume_after: resumeAfter,
   section,
   text_version: seenTextVersion,
 }: DecisionReadArgs) => {
@@ -3676,28 +3677,34 @@ const decisionReadArgumentRefusal = ({
     );
   }
   if (query === undefined) {
-    if (cursor !== undefined || section !== undefined) {
+    if (resumeAfter !== undefined || section !== undefined) {
       return decisionReadArgumentError(
-        cursor === undefined ? "section" : "cursor",
-        "cursor and section apply to a query.",
-        "Pass query, or drop cursor and section to read pages.",
+        resumeAfter === undefined ? "section" : "resume_after",
+        "resume_after and section apply to a query.",
+        "Pass query, or drop resume_after and section to read pages.",
       );
     }
     return null;
   }
-  if (cursor !== undefined) {
+  if (resumeAfter !== undefined) {
     if (decisionIds.length > 1) {
       return decisionReadArgumentError(
-        "cursor",
-        `A query cursor continues one decision; the call carries ${String(decisionIds.length)} decision ids.`,
-        "Pass cursor with the one decision id it came from.",
+        "resume_after",
+        `resume_after continues one decision; the call carries ${String(decisionIds.length)} decision ids.`,
+        "Pass resume_after with the one decision id it came from.",
       );
     }
-    if (decodeDecisionQueryCursor({ cursor, query, section }) === null) {
+    if (
+      decodeDecisionQueryCursor({
+        cursor: resumeAfter,
+        query,
+        section,
+      }) === null
+    ) {
       return decisionReadArgumentError(
-        "cursor",
-        "This cursor is unreadable or belongs to another query.",
-        "Pass the matches.nextCursor of this query unchanged, with the same section, or drop cursor to start over.",
+        "resume_after",
+        "This resume_after is unreadable or belongs to another query.",
+        "Pass matches.resumeAfter of this query unchanged, with the same section, or drop it to start over.",
       );
     }
   }
@@ -3720,7 +3727,7 @@ const decisionReadArgumentRefusal = ({
 
 /** Where each entry's text starts: a query replaces the page. */
 const decisionTextPositionOf = ({
-  cursor,
+  resume_after: resumeAfter,
   page,
   query,
   section,
@@ -3729,9 +3736,9 @@ const decisionTextPositionOf = ({
     return { type: "page", page: page ?? LIMITS.caseLawDecisionFirstPage };
   }
   const resumed =
-    cursor === undefined
+    resumeAfter === undefined
       ? null
-      : decodeDecisionQueryCursor({ cursor, query, section });
+      : decodeDecisionQueryCursor({ cursor: resumeAfter, query, section });
   return { type: "query", query, section, after: resumed?.after ?? 0 };
 };
 
@@ -3759,10 +3766,10 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   // A cursor carries the version it was issued against, so a text that
   // changed between its pages is marked without the caller passing it.
   const cursorTextVersion =
-    parsed.output.cursor === undefined || position.type !== "query"
+    parsed.output.resume_after === undefined || position.type !== "query"
       ? undefined
       : decodeDecisionQueryCursor({
-          cursor: parsed.output.cursor,
+          cursor: parsed.output.resume_after,
           query: position.query,
           section: position.section,
         })?.textVersion;
