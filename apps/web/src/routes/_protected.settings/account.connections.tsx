@@ -9,6 +9,7 @@ import { SearchField } from "@stll/ui/search-field";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { AssistantSetup } from "@/components/assistant-setup";
+import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
 import { externalApiOrigin } from "@/lib/api-origins";
 import {
   mcpConnectionsOptions,
@@ -21,6 +22,7 @@ import {
   useConnectedApps,
 } from "@/routes/_protected.settings/-components/account/connections/apps-group";
 import { BrowserExtensionGroup } from "@/routes/_protected.settings/-components/account/connections/browser-extension-group";
+import { BrowserSitesGroup } from "@/routes/_protected.settings/-components/account/connections/browser-sites-group";
 import { ClientSetupGroups } from "@/routes/_protected.settings/-components/account/connections/client-setup-groups";
 import {
   IntegrationsGroup,
@@ -53,6 +55,13 @@ export const Route = createFileRoute(
       ensureRouteQueryData(
         context.queryClient,
         mcpConnectorsOptions(organizationId),
+      ),
+      ensureRouteQueryData(
+        context.queryClient,
+        browserSiteGrantsOptions({
+          activeOrganizationId: organizationId,
+          userId: context.user.id,
+        }),
       ),
     ]);
   },
@@ -88,6 +97,7 @@ function ConnectionsPage() {
       {showIntegrations && <IntegrationsGroup integrations={integrations} />}
       {showApps && <AppsGroup apps={apps} />}
       {!isSearching && <BrowserExtensionGroup />}
+      {!isSearching && <BrowserSitesGroup />}
       {!isSearching && <ClientSetupGroups apiOrigin={externalApiOrigin()} />}
       {!showIntegrations && !showApps && (
         <div className="text-muted-foreground flex flex-col items-start gap-1 px-1 text-sm">

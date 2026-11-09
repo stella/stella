@@ -1,4 +1,9 @@
-import type { BrowserControlResult } from "@stll/api-contract/browser-control";
+import {
+  BROWSER_CONTROL_ERROR_CODE,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserControlResult,
+} from "@stll/api-contract/browser-control";
+import { isOnGrantedBrowserSite } from "@stll/api-contract/browser-site-grants";
 
 /** How a command runs: the chat turn it belongs to and its stop signal. */
 export type BrowserCommandRun = {
@@ -16,14 +21,44 @@ type BrowserCommandExecutor = (
 type BeginBrowserCommand = () => (succeeded: boolean) => void;
 
 /**
+ * The websites allowed when a website approval answered `toolCallId`, or
+ * null when the user answered it (or the reads mode did).
+ */
+type SiteGrantApprovalFor = (toolCallId: string) => ReadonlySet<string> | null;
+
+/**
+ * A command a website approval answered may only hand back a page on an
+ * allowed website. The extension reports where the tab ended up; a page
+ * elsewhere (a link, a redirect, going back, or the user moving the tab
+ * before it ran) is withheld from the model, and the command counts as
+ * failed so the next one asks.
+ */
+export const withinSiteGrant = (
+  result: BrowserControlResult,
+  grantedOrigins: ReadonlySet<string> | null,
+): BrowserControlResult =>
+  grantedOrigins === null ||
+  result.status !== "success" ||
+  isOnGrantedBrowserSite(result.snapshot.url, grantedOrigins)
+    ? result
+    : {
+        code: BROWSER_CONTROL_ERROR_CODE.redirected,
+        message:
+          "The tab is now on a website the user has not allowed, so the page was not read. Take a snapshot; the user is asked first.",
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        status: "error",
+      };
+
+/**
  * Coalesces same-runtime retries. Durable at-most-once enforcement lives in
  * the extension and receives this same tool-call id across reloads. Each real
  * execution (never a coalesced retry, whose outcome is already recorded) is
- * reported to `beginCommand`, which gates read auto-approval.
+ * reported to `beginCommand`, which gates auto-approval.
  */
 export const createBrowserToolExecutionCache = (
   execute: BrowserCommandExecutor,
   beginCommand: BeginBrowserCommand,
+  siteGrantApprovalFor: SiteGrantApprovalFor,
 ) => {
   const executions = new Map<string, Promise<BrowserControlResult>>();
 
@@ -35,7 +70,10 @@ export const createBrowserToolExecutionCache = (
     const finish = beginCommand();
     let succeeded = false;
     try {
-      const result = await execute(input, toolCallId, commandRun);
+      const result = withinSiteGrant(
+        await execute(input, toolCallId, commandRun),
+        siteGrantApprovalFor(toolCallId),
+      );
       succeeded = result.status === "success";
       return result;
     } finally {

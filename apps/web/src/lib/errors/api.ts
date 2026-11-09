@@ -24,6 +24,7 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { BROWSER_SITE_GRANT_REFUSAL_CODE } from "@stll/api-contract/browser-site-grants";
 import {
   CHAT_LOCAL_RUN_REFUSAL,
   type ChatLocalRunRefusal,
@@ -317,6 +318,8 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.organizationDataBoxLimitReached",
   [ORGANIZATION_DATA_BOX_REFUSAL_CODE.changedConcurrently]:
     "errors.apiCodes.organizationDataBoxesChanged",
+  [BROWSER_SITE_GRANT_REFUSAL_CODE.limitReached]:
+    "errors.apiCodes.browserSiteGrantLimitReached",
   [CHAT_MESSAGE_EMPTY_ERROR_CODE]: "chat.sendErrorMessageEmpty",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",

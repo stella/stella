@@ -32,6 +32,7 @@ import {
   caseLawResearchAnswers,
   caseLawResearchColumns,
   caseLawSources,
+  chatBrowserSiteGrants,
   chatMessageRevisions,
   chatMessages,
   chatThreads,
@@ -70,6 +71,8 @@ import { env } from "@/api/env";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
+import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
+import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import exportChatMessage from "@/api/handlers/chat/export/create";
@@ -585,6 +588,14 @@ const chatToolGrantConversationB = toSafeId<"chatToolGrant">(
 const chatToolGrantDeleteB = toSafeId<"chatToolGrant">(
   "22222222-2222-4222-8222-222222222299",
 );
+// Website approvals of user A1 in organization B: one listed, one the delete
+// case removes.
+const browserSiteGrantB = toSafeId<"chatBrowserSiteGrant">(
+  "22222222-2222-4222-8222-222222222311",
+);
+const browserSiteGrantDeleteB = toSafeId<"chatBrowserSiteGrant">(
+  "22222222-2222-4222-8222-222222222312",
+);
 const chatThreadTitleB = "Chat thread B";
 const chatRenameFromA = "Renamed from organization A";
 /** Thread B's stored model, so a foreign "auto" selection is observable. */
@@ -709,6 +720,16 @@ const chatToolGrantExists = async (grantId: SafeId<"chatToolGrant">) =>
       .select({ id: chatToolGrants.id })
       .from(chatToolGrants)
       .where(eq(chatToolGrants.id, grantId))
+  ).length > 0;
+
+const browserSiteGrantExists = async (
+  grantId: SafeId<"chatBrowserSiteGrant">,
+) =>
+  (
+    await testDb
+      .select({ id: chatBrowserSiteGrants.id })
+      .from(chatBrowserSiteGrants)
+      .where(eq(chatBrowserSiteGrants.id, grantId))
   ).length > 0;
 
 const countChatMessages = async (threadId: SafeId<"chatThread">) =>
@@ -2506,6 +2527,36 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expect(result).toEqual({ deleted: true }),
   },
   {
+    // The same person's website approvals in another firm stay with that firm.
+    name: "browser site grant list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listBrowserSiteGrants, workspaceA, {}),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listBrowserSiteGrants, sameUserWorkspaceB, {}),
+    expectDenied: (result) =>
+      expect(chatToolGrantIds(result)).not.toContain(browserSiteGrantB),
+    expectPositive: (result) =>
+      expect(chatToolGrantIds(result)).toContain(browserSiteGrantB),
+  },
+  {
+    name: "browser site grant delete",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(deleteBrowserSiteGrant, workspaceA, {
+        params: { grantId: browserSiteGrantDeleteB },
+      }),
+      exists: await browserSiteGrantExists(browserSiteGrantDeleteB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(deleteBrowserSiteGrant, sameUserWorkspaceB, {
+        params: { grantId: browserSiteGrantDeleteB },
+      }),
+    expectDenied: (result) => {
+      expect(recordField(result, "response")).toEqual({ deleted: false });
+      expect(recordField(result, "exists")).toBe(true);
+    },
+    expectPositive: (result) => expect(result).toEqual({ deleted: true }),
+  },
+  {
     name: "chat thread rename",
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(renameChatThread, workspaceA, {
@@ -3499,6 +3550,20 @@ testState.beforeAll(async () => {
       userId: ids.userA1,
       scope: "always",
       toolName: "fetch_url",
+    },
+  ]);
+  await testDb.insert(chatBrowserSiteGrants).values([
+    {
+      id: browserSiteGrantB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      origin: "https://example.com",
+    },
+    {
+      id: browserSiteGrantDeleteB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      origin: "https://example.org",
     },
   ]);
 });

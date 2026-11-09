@@ -1,7 +1,7 @@
 import { useRef, useState, useSyncExternalStore } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -11,6 +11,7 @@ import {
   parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
+import { browserSiteGrantHost } from "@stll/api-contract/browser-site-grants";
 import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
 import {
   requiresPerCallChatApproval,
@@ -80,20 +81,25 @@ import { readerAnnotationKeys } from "@/components/legal-reader/annotations/read
 import { useProxiedIconSrc } from "@/components/proxied-icon";
 import {
   BROWSER_APPROVAL_MODE,
+  browserCommandSite,
+  recordBrowserSiteGrantApproval,
   setBrowserApprovalMode,
   useBrowserApprovalMode,
-  useBrowserCommandAutoApproved,
+  useBrowserAutoApproval,
+  useBrowserObservedPage,
 } from "@/features/chat/browser-control/browser-approval-mode";
 import {
   type BrowserApprovalDetail,
   getBrowserApprovalDetails,
 } from "@/features/chat/browser-control/browser-approval-summary";
+import { useBrowserSiteGrants } from "@/features/chat/browser-control/browser-site-grants";
 import { useMountEffect } from "@/hooks/use-effect";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -407,6 +413,100 @@ export const PendingToolApprovalCard = ({
   );
 };
 
+/**
+ * How a browser command card relates to website approvals: the website its
+ * command acts on or moves to (by exact origin), whether the reads mode or a
+ * website approval may answer it, and the user's stored approvals. Like a
+ * stored tool grant, a website approval the API did not confirm (`unconfirmed`)
+ * answers nothing.
+ */
+const useBrowserCardApproval = ({
+  browserCommand,
+  unconfirmed,
+}: {
+  browserCommand: BrowserControlCommand | null;
+  unconfirmed: boolean;
+}) => {
+  const sites = useBrowserSiteGrants(browserCommand !== null);
+  const autoApproval = useBrowserAutoApproval({
+    command: browserCommand,
+    grantedOrigins: sites.grantedOrigins,
+  });
+  const observedPage = useBrowserObservedPage();
+  const site =
+    browserCommand === null
+      ? null
+      : browserCommandSite({ command: browserCommand, observedPage });
+  const siteGrantOrigin =
+    autoApproval.type === "site-grant" && !unconfirmed
+      ? autoApproval.origin
+      : null;
+  return {
+    /**
+     * Whether the API still allows the site, read past the cache. The sites
+     * allowed then are kept with the call, and its result is checked
+     * against them once the command ran.
+     */
+    confirmSiteGrant: async (toolCallId: string): Promise<boolean> => {
+      if (siteGrantOrigin === null) {
+        return false;
+      }
+      const fresh = await sites.readFresh();
+      return (
+        fresh !== null &&
+        fresh.has(siteGrantOrigin) &&
+        recordBrowserSiteGrantApproval(toolCallId, fresh)
+      );
+    },
+    isReadsAutoApproval: autoApproval.type === "reads-mode",
+    /** The site the card offers to always allow: known, and not yet allowed. */
+    offeredSite:
+      site !== null && sites.canGrant && !sites.grantedOrigins.has(site)
+        ? site
+        : null,
+    site,
+    siteGrantOrigin,
+    sites,
+  };
+};
+
+/**
+ * Allows this call and stores a website approval for `site`. The call is
+ * allowed either way; a failed save only means the next call asks again.
+ */
+const AlwaysAllowSiteButton = ({
+  allow,
+  approve,
+  site,
+}: {
+  allow: (origin: string) => Promise<void>;
+  /** Answers the card; false when it was already answered. */
+  approve: () => boolean;
+  site: string;
+}) => {
+  const t = useTranslations();
+  const allowSite = async () => {
+    const stored = await Result.tryPromise(async () => await allow(site));
+    if (stored.isErr()) {
+      notifyUserError(stored.error, t("chat.approval.browser.allowSiteFailed"));
+    }
+  };
+  return (
+    <Button
+      onClick={() => {
+        if (approve()) {
+          detached(allowSite(), "tool-approval-card.allow-browser-site");
+        }
+      }}
+      size="xs"
+      title={browserSiteGrantHost(site)}
+      variant="outline"
+    >
+      {t("chat.approval.browser.alwaysAllowSite")}
+    </Button>
+  );
+};
+
 const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
   useMountEffect(() => {
     respond();
@@ -477,10 +577,12 @@ export const ToolApprovalCard = ({
     name === BROWSER_CONTROL_TOOL_NAME
       ? parseBrowserControlCommand(getApprovalPartInput(part))
       : null;
-  const isBrowserCommandAutoApproved =
-    useBrowserCommandAutoApproved(browserCommand);
-  // A stored grant answers a card only once the API confirms it still holds;
-  // opted-in browser page reads need no grant.
+  const browserApproval = useBrowserCardApproval({
+    browserCommand,
+    unconfirmed: approvalId === unconfirmedGrantApprovalId,
+  });
+  // A stored grant or website approval answers a card only once the API
+  // confirms it still holds; opted-in browser page reads need no grant.
   const isGrantAutoApproval =
     approvalId !== unconfirmedGrantApprovalId &&
     hasAutomaticApproval({
@@ -489,10 +591,16 @@ export const ToolApprovalCard = ({
       conversationApprovedTools,
       name,
     });
+  const confirmAutoApproval =
+    browserApproval.siteGrantOrigin === null
+      ? async () => await confirmStoredApprovalGrant(name)
+      : async () => await browserApproval.confirmSiteGrant(part.id);
   const shouldAutoApprove =
     !isBlocked &&
     !requiresPerCallChatApproval(name) &&
-    (isGrantAutoApproval || isBrowserCommandAutoApproved);
+    (isGrantAutoApproval ||
+      browserApproval.isReadsAutoApproval ||
+      browserApproval.siteGrantOrigin !== null);
   const automaticResponse =
     approvalId === null
       ? null
@@ -502,9 +610,11 @@ export const ToolApprovalCard = ({
             setResponded(true);
             if (isBlocked) {
               onDeny(approvalId);
-            } else if (isGrantAutoApproval && !isBrowserCommandAutoApproved) {
-              const answerIfGrantHeld = async () => {
-                if (await confirmStoredApprovalGrant(name)) {
+            } else if (browserApproval.isReadsAutoApproval) {
+              onApprove(approvalId, name);
+            } else if (shouldAutoApprove) {
+              const answerIfConfirmed = async () => {
+                if (await confirmAutoApproval()) {
                   await onApprove(approvalId, name);
                   return;
                 }
@@ -512,11 +622,9 @@ export const ToolApprovalCard = ({
                 setResponded(false);
               };
               detached(
-                answerIfGrantHeld(),
+                answerIfConfirmed(),
                 "tool-approval-card.confirm-stored-grant",
               );
-            } else if (shouldAutoApprove) {
-              onApprove(approvalId, name);
             }
           },
           // A card the user already answered is not answered again.
@@ -599,6 +707,7 @@ export const ToolApprovalCard = ({
 
       <ToolApprovalSummary
         activeFileName={activeFileName}
+        browserSite={browserApproval.site}
         externalInput={showsExternalInput ? externalInput : undefined}
         isAwaitingDecision={isAwaitingDecision}
         part={part}
@@ -636,6 +745,19 @@ export const ToolApprovalCard = ({
           >
             {t("chat.approval.allowOnce")}
           </Button>
+          {browserApproval.offeredSite !== null && (
+            <AlwaysAllowSiteButton
+              allow={browserApproval.sites.allow}
+              approve={() => {
+                if (!beginManualResponse(approvalId)) {
+                  return false;
+                }
+                onApprove(approvalId, name);
+                return true;
+              }}
+              site={browserApproval.offeredSite}
+            />
+          )}
           {browserCommand !== null &&
             isReadOnlyBrowserCommand(browserCommand) &&
             browserApprovalMode === BROWSER_APPROVAL_MODE.askEveryTime && (
@@ -704,12 +826,14 @@ export const ToolApprovalCard = ({
 
 const ToolApprovalSummary = ({
   activeFileName,
+  browserSite,
   externalInput,
   isAwaitingDecision,
   part,
   providerName,
 }: {
   activeFileName: string | undefined;
+  browserSite: string | null;
   externalInput: unknown;
   isAwaitingDecision: boolean;
   part: ApprovalToolPart;
@@ -751,6 +875,7 @@ const ToolApprovalSummary = ({
         <BrowserControlInputSummary
           input={input}
           isAwaitingDecision={isAwaitingDecision}
+          site={browserSite}
         />
       )}
       {externalInput !== undefined && (
@@ -1128,9 +1253,12 @@ const BrowserApprovalModeNotice = ({ onReset }: { onReset: () => void }) => {
 const BrowserControlInputSummary = ({
   input,
   isAwaitingDecision,
+  site,
 }: {
   input: unknown;
   isAwaitingDecision: boolean;
+  /** The website the command acts on or moves to, by origin. */
+  site: string | null;
 }) => {
   const t = useTranslations();
   const command = parseBrowserControlCommand(input);
@@ -1157,15 +1285,25 @@ const BrowserControlInputSummary = ({
         return panic("Unhandled browser approval detail");
     }
   };
+  const details = getBrowserApprovalDetails(command);
+  // A read or going back names no address of its own; while it asks, the
+  // card names the website the tab is on, the one "always allow" covers.
+  const pageSite =
+    isAwaitingDecision &&
+    site !== null &&
+    !details.some(({ type }) => type === "website")
+      ? [{ label: t("common.website"), value: browserSiteGrantHost(site) }]
+      : [];
   const rows = [
     {
       label: t("common.action"),
       value: t(browserActionTranslationKey(command)),
     },
-    ...getBrowserApprovalDetails(command).map((detail) => ({
+    ...details.map((detail) => ({
       label: labelForDetail(detail),
       value: detail.value,
     })),
+    ...pageSite,
   ];
 
   return (
