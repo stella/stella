@@ -10,9 +10,14 @@ import {
   type ChatSkillContextNeed,
   type ChatSkillDocument,
 } from "@stll/api-contract";
+import {
+  workspaceAcceptsWrites,
+  workspaceIsVisible,
+} from "@stll/api-contract/workspace-status";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
-import { resolveBrowserClientCapability } from "@/api/handlers/chat/chat-schema";
+import { browserExtensionPolicy } from "@/api/handlers/chat/browser-extension-capability";
+import { resolveBrowserExtensionCapability } from "@/api/handlers/chat/chat-schema";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { resolveChatDocumentClients } from "@/api/handlers/chat/tools/chat-document-clients";
@@ -174,7 +179,15 @@ const chatContextToolNames = (
   const threadId = createSafeId<"chatThread">();
   const hasOpenFile = chatContext.document === CHAT_SKILL_DOCUMENT.file;
   const usableWorkspaceIds = workspaces.flatMap((workspace) =>
-    workspace.status === "deleting" ? [] : [workspace.id],
+    workspaceIsVisible(workspace.status) ? [workspace.id] : [],
+  );
+  const browserExtension = resolveBrowserExtensionCapability(
+    chatContext.browserExtension
+      ? {
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          status: "connected",
+        }
+      : undefined,
   );
   return chatToolNamesForSkills({
     threadId,
@@ -182,11 +195,9 @@ const chatContextToolNames = (
     recordReadAuditEvent: INERT_AUDIT_RECORDER,
     resolveMemorySourceWorkspaceIds: () => [],
     disabledNativeToolSlugs: inputs.disabledNativeToolSlugs,
-    browserClient: resolveBrowserClientCapability(
-      chatContext.browserExtension
-        ? { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION }
-        : undefined,
-    ),
+    browserExtension: browserExtensionPolicy(browserExtension).toolOffered
+      ? browserExtension
+      : undefined,
     activeFile:
       hasOpenFile && chatContext.activeFile !== undefined
         ? { ...chatContext.activeFile, supportsDocxEdits: true }
@@ -256,7 +267,8 @@ const widestChatContext = (
   document: CHAT_SKILL_DOCUMENT.file,
   editApplyMode: CHAT_EDIT_APPLY_MODE.manual,
   webSearch: true,
-  workspaceId: workspaces.find(({ status }) => status === "active")?.id ?? null,
+  workspaceId:
+    workspaces.find(({ status }) => workspaceAcceptsWrites(status))?.id ?? null,
 });
 
 /** The order needs are reported in, which is the order the web shows them. */
@@ -311,7 +323,7 @@ const contextNeeds = ({
         ? { editApplyMode: widest.editApplyMode }
         : null,
     [CHAT_SKILL_CONTEXT_NEED.matter]:
-      widest.workspaceId !== null && matterStatus !== "active"
+      widest.workspaceId !== null && !workspaceAcceptsWrites(matterStatus)
         ? { workspaceId: widest.workspaceId }
         : null,
     [CHAT_SKILL_CONTEXT_NEED.browserExtension]: chatContext.browserExtension

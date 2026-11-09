@@ -1,0 +1,17 @@
+{
+  "id": "no-raw-property-assert",
+  "rules": ["no-raw-property-assert/no-raw-property-assert"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-raw-property-assert/no-raw-property-assert",
+    "."
+  ]
+}

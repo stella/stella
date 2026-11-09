@@ -13,7 +13,7 @@ import {
   MCP_TOOL_NAME_PATTERN,
 } from "@stll/api-contract/mcp-tool-name";
 import type { PermissionInput } from "@stll/permissions";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { SKILL_SLUG_MAX_LENGTH } from "@/api/handlers/skills/slug";
@@ -207,6 +207,11 @@ test("every read tool permission declaration stays visible in review", () => {
         "kind": "open-read",
         "name": "list_capabilities",
         "reason": "reads the static capability catalog metadata",
+      },
+      {
+        "kind": "open-read",
+        "name": "list_case_law_courts",
+        "reason": "public case-law corpus",
       },
       {
         "kind": "all",
@@ -422,7 +427,9 @@ test("every surface's read declarations are covered by the census", () => {
 
 // A single tool must not consume an unreviewed multi-thousand-token block of
 // every tools/list. The largest measured schema is in the surface baseline.
-const OUTPUT_SCHEMA_CHAR_CEILING = 4000;
+// Raised for a search that can answer "still running": that branch is part of
+// the schema, so a client can tell it from an empty result.
+const OUTPUT_SCHEMA_CHAR_CEILING = 4500;
 
 // An editorial limit on one description; the largest measured one is in the
 // surface baseline.
@@ -724,17 +731,33 @@ const anonymizedTools: readonly McpToolDefinition[] =
   ANONYMIZED_MCP_TOOL_DEFINITIONS;
 
 describe("MCP registry access coherence", () => {
-  test("catalog-delegated writes use only the write executor on every audience", () => {
-    for (const { definitions } of SURFACES) {
+  test("delegated writes are exactly the capability executor and account creation entry point", () => {
+    const expectedDelegatedNames = {
+      advanced: ["create_organization", MCP_CAPABILITY_EXECUTORS.write],
+      default: [],
+      documents: [MCP_CAPABILITY_EXECUTORS.write],
+      anonymized: [],
+      law: [],
+    } as const satisfies Record<(typeof MCP_MODES)[number], readonly string[]>;
+    for (const { mode, definitions } of SURFACES) {
       const delegated = definitions.filter(
         (tool) =>
           tool.access === "write" &&
           tool.permissions.type === "delegated" &&
           isMcpToolVisibleTo(tool, "model"),
       );
+      expect(delegated.map(({ name }) => name).toSorted()).toEqual([
+        ...expectedDelegatedNames[mode],
+      ]);
       for (const tool of delegated) {
-        expect(tool.name).toBe(MCP_CAPABILITY_EXECUTORS.write);
         expect(tool.readClass).toBeUndefined();
+        if (tool.name === "create_organization") {
+          expect(tool).toMatchObject({
+            access: "write",
+            accountAccess: ACCOUNT_ACCESS.accountControl,
+            scope: "stella:organization_create",
+          });
+        }
       }
       for (const tool of definitions) {
         if (tool.name === MCP_CAPABILITY_EXECUTORS.read) {
@@ -976,6 +999,35 @@ describe("MCP registry input naming", () => {
     );
   });
 
+  // A corpus tool has one publisher link and it passes through the link rule,
+  // so no output can carry the stored value beside it.
+  test("no public-law tool declares a raw publisher link in its output", () => {
+    const declared = (node: unknown): string[] => {
+      if (Array.isArray(node)) {
+        return node.flatMap(declared);
+      }
+      if (typeof node !== "object" || node === null) {
+        return [];
+      }
+      return Object.entries(node).flatMap(([key, value]) => [
+        ...(key === "properties" &&
+        typeof value === "object" &&
+        value !== null &&
+        "sourceUrl" in value
+          ? ["sourceUrl"]
+          : []),
+        ...declared(value),
+      ]);
+    };
+    const tools = toMcpTools(listStaticMcpToolDefinitions("law"), {
+      mode: "law",
+    });
+    expect(tools.length).toBeGreaterThan(0);
+    for (const tool of tools) {
+      expect(declared(tool.outputSchema), tool.name).toEqual([]);
+    }
+  });
+
   // The other half of the same convention: inputs are snake_case, payloads are
   // camelCase. Property names are enforced structurally above; the payload half
   // cannot be, so every surface states the rule at connect time instead.
@@ -983,7 +1035,7 @@ describe("MCP registry input naming", () => {
     for (const [mode, instructions] of Object.entries(MCP_INSTRUCTIONS)) {
       expect(
         instructions,
-        `The ${mode} instructions must state the snake_case-in/camelCase-out rule`,
+        `The ${mode} instructions must state the casing rule`,
       ).toContain(MCP_CASING_RULE);
     }
   });
@@ -1127,7 +1179,8 @@ describe("MCP wire schemas under an independent validator", () => {
       const acceptsUncompacted = compileWireSchema(validator, uncompacted);
       let accepted = 0;
       let rejected = 0;
-      fc.assert(
+      assertProperty(
+        "every output schema accepts exactly what its uncompacted projection accepts",
         fc.property(
           schemaComparisonArbitrary([uncompacted, outputSchema]),
           (value) => {
@@ -1141,7 +1194,7 @@ describe("MCP wire schemas under an independent validator", () => {
             }
           },
         ),
-        propertyConfig({ numRuns: 200 }),
+        { numRuns: 200 },
       );
       // Both verdicts must occur, or the comparison proved nothing.
       expect(accepted, `${tool} accepted no drawn value`).toBeGreaterThan(0);

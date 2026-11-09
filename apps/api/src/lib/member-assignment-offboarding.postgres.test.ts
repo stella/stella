@@ -4,12 +4,14 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
 import { DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL } from "@stll/api-contract/desktop-handoff";
+import { createTestClock } from "@stll/test-kit";
 
 import { invitation, member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { abortableTx, safeDbFromScoped } from "@/api/db/safe-db";
 import {
   auditLogs,
+  billingDraftUserSettings,
   contacts,
   desktopEditHandoffs,
   desktopEditSessions,
@@ -51,6 +53,7 @@ import {
 import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { executeFlowStep } from "@/api/lib/flows/flow-executor";
 import { completeRequestReceipt } from "@/api/lib/idempotency/request-receipts";
 import {
@@ -67,8 +70,12 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
+
+const stateClock = createTestClock();
 
 setDefaultTimeout(60_000);
 const databaseUrl = process.env["DATABASE_URL"];
@@ -268,17 +275,21 @@ if (!databaseUrl || !runPostgresTests) {
         expect(remaining).toHaveLength(2);
         expect(remaining).toEqual(expect.arrayContaining(principals.slice(1)));
         expect(
-          await db.$count(
-            contacts,
-            eq(contacts.organizationId, organizationId),
+          await withOwnerOrganizationScope(
+            db,
+            organizationId,
+            async (tx) =>
+              await tx.$count(
+                contacts,
+                eq(contacts.organizationId, organizationId),
+              ),
           ),
         ).toBe(1);
       } finally {
-        await db
-          .delete(organization)
-          .where(
-            inArray(organization.id, [organizationId, otherOrganizationId]),
-          );
+        await deleteOrganizationsForTest(db, [
+          organizationId,
+          otherOrganizationId,
+        ]);
         await db.delete(user).where(inArray(user.id, [userId, actorUserId]));
       }
     });
@@ -374,6 +385,38 @@ if (!databaseUrl || !runPostgresTests) {
           userId,
           report: { ...report, desktopId: Bun.randomUUIDv7() },
         });
+        await Promise.all(
+          [
+            {
+              organizationId,
+              userId,
+              preference: "Concise",
+              consentAt: new Date(),
+            },
+            {
+              organizationId,
+              userId: actorUserId,
+              preference: "Detailed",
+              consentAt: new Date(),
+            },
+            {
+              organizationId: otherOrganizationId,
+              userId,
+              preference: "Other firm",
+              consentAt: new Date(),
+            },
+          ].map(
+            async (settings) =>
+              await createScopedDb(
+                markRlsDatabase(db),
+                [],
+                settings.organizationId,
+                settings.userId,
+              )(async (tx) => {
+                await tx.insert(billingDraftUserSettings).values(settings);
+              }),
+          ),
+        );
         const historyLookupKey = Bun.randomUUIDv7();
         await db.insert(searchHistoryEntries).values(
           [
@@ -442,6 +485,27 @@ if (!databaseUrl || !runPostgresTests) {
               ),
           ),
         ).toBe(1);
+        expect(
+          await scopedDb(
+            async (tx) => await tx.$count(billingDraftUserSettings),
+          ),
+        ).toBe(0);
+        expect(
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            organizationId,
+            actorUserId,
+          )(async (tx) => await tx.$count(billingDraftUserSettings)),
+        ).toBe(1);
+        expect(
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            otherOrganizationId,
+            userId,
+          )(async (tx) => await tx.$count(billingDraftUserSettings)),
+        ).toBe(1);
         const remainingHistory = await db
           .select({
             organizationId: searchHistoryEntries.organizationId,
@@ -477,12 +541,8 @@ if (!databaseUrl || !runPostgresTests) {
             .type,
         ).toBe("current");
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
-        await db
-          .delete(organization)
-          .where(eq(organization.id, otherOrganizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
+        await deleteOrganizationsForTest(db, [otherOrganizationId]);
         await db.delete(user).where(eq(user.id, userId));
         await db.delete(user).where(eq(user.id, actorUserId));
       }
@@ -519,7 +579,7 @@ if (!databaseUrl || !runPostgresTests) {
           const memberId = Bun.randomUUIDv7();
           const workspaceId = createSafeId<"workspace">();
           const taskId = createSafeId<"entity">();
-          const contactId = createSafeId<"contact">();
+          let contactId = createSafeId<"contact">();
           const contactWrite =
             kind === "contact-create" || kind === "contact-update";
           const recordAuditEvent = createBackgroundAuditRecorder({
@@ -592,25 +652,36 @@ if (!databaseUrl || !runPostgresTests) {
               role: "reviewer",
             });
             if (kind === "contact-update") {
-              await checkDb.insert(contacts).values({
-                id: contactId,
-                organizationId,
-                type: "person",
-                displayName: "Assignment contact",
-                responsibleAttorneyId: actorUserId,
-              });
+              await insertOwnerContacts(checkDb, [
+                {
+                  id: contactId,
+                  organizationId,
+                  type: "person",
+                  displayName: "Assignment contact",
+                  responsibleAttorneyId: actorUserId,
+                },
+              ]);
             }
+            // Each side runs on the owner connection inside the
+            // organization, as the handlers' scoped transactions do.
             const safe = (db: GatedTestDb, hold: boolean) =>
               safeDbFromScoped(
                 async (fn) =>
-                  await db.transaction(async (tx) => {
-                    const value = await fn(asTestRaw<Transaction>(tx));
-                    if (hold) {
-                      holding.resolve(undefined);
-                      await release.promise;
-                    }
-                    return value;
-                  }),
+                  await db.transaction(
+                    async (outer) =>
+                      await withOwnerOrganizationScope(
+                        outer,
+                        organizationId,
+                        async (tx) => {
+                          const value = await fn(asTestRaw<Transaction>(tx));
+                          if (hold) {
+                            holding.resolve(undefined);
+                            await release.promise;
+                          }
+                          return value;
+                        },
+                      ),
+                  ),
               );
             const assignment = async (
               db: GatedTestDb,
@@ -633,7 +704,9 @@ if (!databaseUrl || !runPostgresTests) {
                   addAssigneeHandler({
                     safeDb,
                     workspaceId,
+                    actorUserId,
                     recordAuditEvent,
+                    fileNotifications: () => {},
                     body: { taskId, userId: leaverUserId },
                   }),
                 );
@@ -643,7 +716,9 @@ if (!databaseUrl || !runPostgresTests) {
                   moveAssigneeHandler({
                     safeDb,
                     workspaceId,
+                    actorUserId,
                     recordAuditEvent,
+                    fileNotifications: () => {},
                     body: {
                       taskId,
                       fromUserId: actorUserId,
@@ -653,14 +728,13 @@ if (!databaseUrl || !runPostgresTests) {
                 );
               }
               if (kind === "contact-create") {
-                return await Result.gen(() =>
+                const result = await Result.gen(() =>
                   createContactHandler({
                     safeDb,
                     organizationId,
                     userId: actorUserId,
                     recordAuditEvent,
                     body: {
-                      id: contactId,
                       type: "person",
                       displayName: "Assignment contact",
                       originatingAttorneyId: leaverUserId,
@@ -668,6 +742,10 @@ if (!databaseUrl || !runPostgresTests) {
                     },
                   }),
                 );
+                if (Result.isOk(result)) {
+                  contactId = result.value.id;
+                }
+                return result;
               }
               return await Result.gen(() =>
                 updateContactHandler({
@@ -782,13 +860,18 @@ if (!databaseUrl || !runPostgresTests) {
                 ),
               ),
             ).toBe(0);
-            const rows = await checkDb
-              .select({
-                originatingAttorneyId: contacts.originatingAttorneyId,
-                responsibleAttorneyId: contacts.responsibleAttorneyId,
-              })
-              .from(contacts)
-              .where(eq(contacts.id, contactId));
+            const rows = await withOwnerOrganizationScope(
+              checkDb,
+              organizationId,
+              async (tx) =>
+                await tx
+                  .select({
+                    originatingAttorneyId: contacts.originatingAttorneyId,
+                    responsibleAttorneyId: contacts.responsibleAttorneyId,
+                  })
+                  .from(contacts)
+                  .where(eq(contacts.id, contactId)),
+            );
             if (
               contactWrite &&
               !(kind === "contact-create" && first === "removal")
@@ -804,9 +887,7 @@ if (!databaseUrl || !runPostgresTests) {
             }
           } finally {
             release.resolve(undefined);
-            await checkDb
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(checkDb, [organizationId]);
             await checkDb.delete(user).where(eq(user.id, actorUserId));
             await checkDb.delete(user).where(eq(user.id, leaverUserId));
           }
@@ -861,13 +942,15 @@ if (!databaseUrl || !runPostgresTests) {
               createdAt: new Date(),
             },
           ]);
-          await db.insert(contacts).values({
-            id: contactId,
-            organizationId,
-            type: "person",
-            displayName: "Contact assignment",
-            originatingAttorneyId: leaverUserId,
-          });
+          await insertOwnerContacts(db, [
+            {
+              id: contactId,
+              organizationId,
+              type: "person",
+              displayName: "Contact assignment",
+              originatingAttorneyId: leaverUserId,
+            },
+          ]);
           const holderResult = Result.tryPromise(
             async () =>
               await holdingDb.transaction(async (tx) => {
@@ -879,10 +962,17 @@ if (!databaseUrl || !runPostgresTests) {
                   ) VALUES (${contactId}, ${organizationId}, 'person', 'Contact assignment', '', ''::tsvector)
                 `);
                 } else {
-                  await tx
-                    .update(contacts)
-                    .set({ displayName: "Contact writer" })
-                    .where(eq(contacts.id, contactId));
+                  // The savepoint releases into the held transaction, which
+                  // keeps the row lock until it ends.
+                  await withOwnerOrganizationScope(
+                    tx,
+                    organizationId,
+                    async (scoped) =>
+                      await scoped
+                        .update(contacts)
+                        .set({ displayName: "Contact writer" })
+                        .where(eq(contacts.id, contactId)),
+                  );
                 }
                 held.resolve(undefined);
                 await release.promise;
@@ -925,10 +1015,17 @@ if (!databaseUrl || !runPostgresTests) {
             expect(await db.$count(member, eq(member.id, memberId))).toBe(
               holder === "projection" ? 0 : 1,
             );
-            const rows = await db
-              .select({ originatingAttorneyId: contacts.originatingAttorneyId })
-              .from(contacts)
-              .where(eq(contacts.id, contactId));
+            const rows = await withOwnerOrganizationScope(
+              db,
+              organizationId,
+              async (tx) =>
+                await tx
+                  .select({
+                    originatingAttorneyId: contacts.originatingAttorneyId,
+                  })
+                  .from(contacts)
+                  .where(eq(contacts.id, contactId)),
+            );
             expect(rows).toEqual([
               {
                 originatingAttorneyId:
@@ -941,9 +1038,7 @@ if (!databaseUrl || !runPostgresTests) {
           }
         } finally {
           release.resolve(undefined);
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, actorUserId));
           await db.delete(user).where(eq(user.id, leaverUserId));
         }
@@ -1098,6 +1193,7 @@ if (!databaseUrl || !runPostgresTests) {
           definitionId,
           definitionSnapshot: { name: "Removal flow", steps },
           status: "awaiting_review",
+          startedAt: new Date(stateClock.now()),
           triggerSource: { type: "manual", userId: leaver.userId },
         });
         await db.insert(flowRunSteps).values(
@@ -1107,8 +1203,12 @@ if (!databaseUrl || !runPostgresTests) {
             runId,
             index,
             kind,
-            status:
-              index === 0 ? ("awaiting_review" as const) : ("pending" as const),
+            ...(index === 0
+              ? {
+                  status: "awaiting_review" as const,
+                  startedAt: new Date(stateClock.now()),
+                }
+              : { status: "pending" as const }),
           })),
         );
         await db.insert(mcpConnectors).values({
@@ -1358,9 +1458,7 @@ if (!databaseUrl || !runPostgresTests) {
         });
         expect(accepted.status).toBe(200);
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         for (const browser of [owner, leaver, recipient]) {
           await db.delete(user).where(eq(user.id, browser.userId));
         }
@@ -1586,9 +1684,7 @@ if (!databaseUrl || !runPostgresTests) {
               : [],
           );
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, actorUserId));
           await db.delete(user).where(eq(user.id, userId));
         }
@@ -1665,13 +1761,15 @@ if (!databaseUrl || !runPostgresTests) {
             userId,
             role: "assignee",
           });
-          await holdingDb.insert(contacts).values({
-            id: contactId,
-            organizationId,
-            type: "person",
-            displayName: "Busy contact",
-            responsibleAttorneyId: userId,
-          });
+          await insertOwnerContacts(holdingDb, [
+            {
+              id: contactId,
+              organizationId,
+              type: "person",
+              displayName: "Busy contact",
+              responsibleAttorneyId: userId,
+            },
+          ]);
           writer = holdingDb.transaction(async (tx) => {
             if (lockedRow === "workspace") {
               await tx
@@ -1680,11 +1778,16 @@ if (!databaseUrl || !runPostgresTests) {
                 .where(eq(workspaces.id, workspaceId))
                 .for("update");
             } else {
-              await tx
-                .select({ id: contacts.id })
-                .from(contacts)
-                .where(eq(contacts.id, contactId))
-                .for("update");
+              await withOwnerOrganizationScope(
+                tx,
+                organizationId,
+                async (scoped) =>
+                  await scoped
+                    .select({ id: contacts.id })
+                    .from(contacts)
+                    .where(eq(contacts.id, contactId))
+                    .for("update"),
+              );
             }
             held.resolve(undefined);
             await release.promise;
@@ -1747,9 +1850,7 @@ if (!databaseUrl || !runPostgresTests) {
           if (writer) {
             await writer;
           }
-          await holdingDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(holdingDb, [organizationId]);
           await holdingDb.delete(user).where(eq(user.id, actorUserId));
           await holdingDb.delete(user).where(eq(user.id, userId));
         }

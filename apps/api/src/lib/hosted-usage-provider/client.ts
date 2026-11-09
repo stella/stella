@@ -1,6 +1,6 @@
 /** Thin client for the hosted usage provider's outbound HTTP API. */
 
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
@@ -85,29 +85,93 @@ const sessionExpirySchema = v.nullish(
   null,
 );
 
+type ProviderRequest =
+  | { method: "POST"; path: string; body: Record<string, unknown> }
+  | { method: "DELETE"; path: string };
+
 /**
- * POST a JSON body to the provider API. The one outbound boundary of this
- * client: every endpoint is a path under the configured base URL.
+ * The one outbound boundary of this client: every endpoint is a path under
+ * the configured base URL, with the same credentials, version pin and
+ * timeout.
  */
+const sendProviderRequest = async (
+  credentials: HostedUsageProviderApiCredentials,
+  providerRequest: ProviderRequest,
+): Promise<Response> => {
+  const headers = {
+    authorization: `Bearer ${credentials.apiKey}`,
+    "Polar-Version": getHostedUsageProviderApiVersion(),
+  };
+  const init = (() => {
+    switch (providerRequest.method) {
+      case "POST":
+        return {
+          method: providerRequest.method,
+          headers: { ...headers, "content-type": "application/json" },
+          body: JSON.stringify(providerRequest.body),
+          timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
+        };
+      case "DELETE":
+        return {
+          method: providerRequest.method,
+          headers,
+          timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
+        };
+      default:
+        providerRequest satisfies never;
+        return panic("Unhandled provider request method");
+    }
+  })();
+  return await fetchWithTimeout(
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
+    `${credentials.baseUrl}/v1/${providerRequest.path}`,
+    init,
+  );
+};
+
+/** POST a JSON body to the provider API. */
 const postProviderJson = async (
   credentials: HostedUsageProviderApiCredentials,
   path: string,
   body: Record<string, unknown>,
 ): Promise<Response> =>
-  await fetchWithTimeout(
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
-    `${credentials.baseUrl}/v1/${path}`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${credentials.apiKey}`,
-        "content-type": "application/json",
-        "Polar-Version": getHostedUsageProviderApiVersion(),
-      },
-      body: JSON.stringify(body),
-      timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
-    },
+  await sendProviderRequest(credentials, { method: "POST", path, body });
+
+export const eraseHostedCustomer = async ({
+  credentials,
+  externalCustomerRef,
+}: {
+  credentials: HostedUsageProviderApiCredentials;
+  externalCustomerRef: string;
+}): Promise<Result<void, HostedUsageProviderApiError>> => {
+  // Deletes the customer, cancels its subscriptions and anonymizes its
+  // personal data; the provider keeps historic orders and subscriptions.
+  const sent = await Result.tryPromise({
+    try: async () =>
+      await sendProviderRequest(credentials, {
+        method: "DELETE",
+        path: `customers/external/${encodeURIComponent(externalCustomerRef)}?anonymize=true`,
+      }),
+    catch: (cause) =>
+      new HostedUsageProviderApiError({
+        message: "Hosted customer erasure failed",
+        cause,
+      }),
+  });
+  if (Result.isError(sent)) {
+    return Result.err(sent.error);
+  }
+  const { status } = sent.value;
+  if (status === 204 || status === 404) {
+    return Result.ok(undefined);
+  }
+  return Result.err(
+    new HostedUsageProviderApiError({
+      message: `Hosted customer erasure returned ${status}`,
+      status,
+    }),
   );
+};
 
 const createNeutralSetupSession = async ({
   credentials,

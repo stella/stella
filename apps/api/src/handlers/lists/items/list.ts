@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, ne, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
@@ -129,6 +129,17 @@ const readListPropertyIds = async ({
   }
 };
 
+/** The detail row's join key is read only to tell a match from no row. */
+const withoutJoinKey = <T extends { itemEntityId: unknown }>(
+  details: T | null,
+): Omit<T, "itemEntityId"> | null => {
+  if (details === null) {
+    return null;
+  }
+  const { itemEntityId: _matched, ...rest } = details;
+  return rest;
+};
+
 const readListItems = createSafeHandler(config, async function* (context) {
   const { safeDb, workspaceId, params, query } = context;
   const accessStatus = avtViewAccessStatus({
@@ -220,9 +231,10 @@ const readListItems = createSafeHandler(config, async function* (context) {
             reviewStatus: legalListItems.reviewStatus,
             createdAt: legalListItems.createdAt,
             updatedAt: legalListItems.updatedAt,
-            // Drizzle reads a left-joined object as absent when its first
-            // column is null, so a non-null column must lead.
+            // Drizzle reads a left-joined object as absent when all of its
+            // columns are NULL; the join key is never NULL on a matched row.
             factDetails: {
+              itemEntityId: legalListFactDetails.itemEntityId,
               scoring: legalListFactDetails.scoring,
               confidence: legalListFactDetails.confidence,
               occurredOn: legalListFactDetails.occurredOn,
@@ -255,7 +267,9 @@ const readListItems = createSafeHandler(config, async function* (context) {
               eq(legalListFactDetails.workspaceId, workspaceId),
             ),
           )
-          .leftJoinLateral(firstSource, sql`true`)
+          // Every source row has a document, so this matches whenever the
+          // subquery found one, and the nested object carries the key.
+          .leftJoinLateral(firstSource, isNotNull(firstSource.documentId))
           .where(and(...conditions))
           .orderBy(asc(legalListItems.position), asc(legalListItems.entityId))
           .limit(limit + 1),
@@ -317,7 +331,10 @@ const readListItems = createSafeHandler(config, async function* (context) {
     createCursorPage({
       rows: result.map((row) => ({
         ...row,
-        factDetails: projectListFactDetails(row.factDetails, accessStatus),
+        factDetails: projectListFactDetails(
+          withoutJoinKey(row.factDetails),
+          accessStatus,
+        ),
       })),
       limit,
       cursorForItem: (item) => encodePaginationCursor([item.position, item.id]),

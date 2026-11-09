@@ -1472,11 +1472,11 @@ export default eslintCompatPlugin({
         ],
         messages: {
           privateCaseLawImport:
-            "Public case-law data files may only import the explicit public-law table allowlist from '@/api/db/schema'.",
+            "Public case-law data files may only import the explicit public-law table allowlist from '@/api/db/schema'. Put the corpus read in apps/api/src/lib/case-law/ (or the legislation owner) and call it from the tenant handler.",
           privateTxQuery:
-            "Public case-law data files may only use the explicit public tx.query relation allowlist.",
+            "Public case-law data files may only use the explicit public tx.query relation allowlist. Put the corpus read in apps/api/src/lib/case-law/ (or the legislation owner) and call it from the tenant handler.",
           privateSqlText:
-            "Public case-law SQL must not mention private workspace, user, organization, matter, file, chat, task, or contact tables.",
+            "Public case-law SQL must not mention private workspace, user, organization, matter, file, chat, task, or contact tables. Put the corpus read in apps/api/src/lib/case-law/ (or the legislation owner) and call it from the tenant handler.",
           unlistedRelation:
             "Public-law SQL may only read relations in the public-law relation map (`public-law-relations.ts`), a CTE the same statement defines, or a system catalog; '{{relation}}' is none of them.",
           uninspectableRelation:

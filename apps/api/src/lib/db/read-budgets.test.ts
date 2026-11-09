@@ -9,7 +9,10 @@ import {
   readBudgetPages,
   UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING,
 } from "@/api/lib/db/read-budgets";
-import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import {
+  SCHEDULER_BACKFILL_IDS,
+  SCHEDULER_REPAIR_BACKFILL_IDS,
+} from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
 import {
@@ -25,6 +28,11 @@ import unmeasuredLedger from "./read-budgets-unmeasured.json";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const LEDGER = "apps/api/src/lib/db/read-budgets-unmeasured.json";
+/** Every scheduler job that batches through the backfill runtime. */
+const GOVERNED_BACKFILL_IDS = [
+  ...Object.values(SCHEDULER_BACKFILL_IDS),
+  ...Object.values(SCHEDULER_REPAIR_BACKFILL_IDS),
+];
 const unmeasured = new Set(
   parseReasonedLedger(JSON.stringify(unmeasuredLedger), LEDGER),
 );
@@ -37,7 +45,7 @@ const unmeasured = new Set(
  */
 describe("read budget declarations", () => {
   test("every scheduled job declares its reads", () => {
-    const governed = new Set<string>(Object.values(SCHEDULER_BACKFILL_IDS));
+    const governed = new Set<string>(GOVERNED_BACKFILL_IDS);
     const violations = DECLARED_SCHEDULER_JOBS.flatMap((job) => {
       const listed = unmeasured.has(`job:${job.id}`);
       if (job.reads === "unmeasured") {
@@ -115,7 +123,7 @@ describe("read budget declarations", () => {
   });
 
   test("every governed backfill is declared as governed", () => {
-    for (const id of Object.values(SCHEDULER_BACKFILL_IDS)) {
+    for (const id of GOVERNED_BACKFILL_IDS) {
       expect(
         DECLARED_SCHEDULER_JOBS.find((job) => job.id === id)?.reads,
         id,

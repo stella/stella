@@ -21,6 +21,8 @@ not use the in-process database.
 
 Tenant and corpus profiles run in fresh databases cloned from the migrated
 template; each fixture database is dropped after its clients close. The
+corpus is seeded once per run into a kept database (`corpus-template.ts`),
+and each corpus test measures its own clone of it, dropped after the suite. The
 coverage profile uses an isolated schema with a single connection and drops
 it before closing the connection.
 
@@ -36,7 +38,14 @@ it before closing the connection.
   shape at a fraction of its size, measured as the owner role scheduled jobs
   run as. Statements run against it with fixed inputs. A scheduled job is
   measured per run: its registered task runs once through a client that
-  records every statement, and each recorded read is analyzed. Each case-law
+  records every statement, and each recorded statement is analyzed. A
+  statement whose plan modifies rows, or that calls a routine listed in
+  `QUERY_PERF_WRITING_FUNCTIONS`, is a write; every other statement is a read.
+  The job's `reads.pages` bounds its read pages; a job that writes declares
+  `writes` (pages per written row and a per-run ceiling), a job that writes
+  nothing declares none, and `combinedPagesPerRun` keeps an existing whole-run
+  envelope. Rows written come from the plan's row counts, not from returned
+  rows. Each case-law
   scenario (a converged generation, and a generation whose whole queue is
   waiting) exists at one size and at twice that size; the run must stay in
   its budget at both and read the same pages at both (10% plus 64 pages for
@@ -86,7 +95,8 @@ Each statement runs once to warm the cache, then five times; the maximum
 block count is the measurement. Row counts must match exactly. Fixture
 sessions use a 3-second lock timeout and a 30-second statement timeout. Each
 profile shares one deadline across database creation, seed and measurements
-(150 seconds for a tenant profile, 300 for the corpus profile); teardown has
+(150 seconds for a tenant profile, 300 for each corpus test, which also pays
+for the shared seed when it is the first to need it); teardown has
 its own 35-second deadline. Phase logs identify pending work; failures dump
 bounded activity and lock diagnostics through a separate connection.
 
@@ -95,3 +105,19 @@ Declarations are checked without a database by
 every MCP tool has a budget or an entry in the shrink-only ledger
 `apps/api/src/lib/db/read-budgets-unmeasured.json`, and a job outside the shared
 load governor stays under the per-run page ceiling.
+
+Registry declarations live in one file per entry: read budgets and MCP tool
+assignments under `src/lib/db/*-entries/`, and measurements, profiles, and owner
+deadlines beside this file in `*-entries/`. Each file default-exports its entry;
+its filename is the registry key. Add the corresponding profile and deadline
+when adding a budget so total type coverage remains enforced.
+
+Run `bun scripts/db-registry-entries.ts` from the repository root after adding or
+removing entries, and commit the generated indices. Editing an existing entry
+does not change an index. The indices contain only re-exports (and the aggregate
+identity type projection). Independent additions at separate positions merge
+normally. If adjacent exports conflict, retain both entry modules and regenerate
+the index; never resolve generated exports by hand. Freshness and layout checks
+reject inline declarations and stale indices. Measurement arrays sort by budget
+id; lock ordering comes from declared ranks and chains. Filesystem enumeration
+never determines execution order.

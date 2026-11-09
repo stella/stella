@@ -2,10 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
 import type { AccountDataExportStatus } from "@/lib/account/account-data-export-queries";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/settings/account/profile",
@@ -150,9 +150,7 @@ test("a person requests, waits for, and downloads their account export", async (
     status: "ready",
     expiresAt: "2099-01-01T12:00:00.000Z",
   };
-  expect(
-    await screen.findByText("Your export is ready.", {}, { timeout: 5000 }),
-  ).toBeTruthy();
+  expect(await screen.findByText("Your export is ready.")).toBeTruthy();
   expect(screen.getByText(/Available until/u)).toBeTruthy();
 
   const downloadLink = screen.getByRole("link", { name: "Download" });
@@ -246,13 +244,10 @@ test("a replacement request supersedes an older in-flight status read", async ()
   });
   expect(screen.getByText("Preparing your export…")).toBeTruthy();
   deferredPoll.resolve(Response.json({ latest: latestExport }));
-  await waitFor(
-    () => {
-      expect(
-        requestedPaths.filter((path) => path === "GET /v1/me/data-exports")
-          .length,
-      ).toBeGreaterThanOrEqual(4);
-    },
-    { timeout: 5000 },
-  );
+  await waitFor(() => {
+    expect(
+      requestedPaths.filter((path) => path === "GET /v1/me/data-exports")
+        .length,
+    ).toBeGreaterThanOrEqual(4);
+  });
 });

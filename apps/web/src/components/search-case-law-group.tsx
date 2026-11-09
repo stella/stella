@@ -132,30 +132,37 @@ const SearchCaseLawResults = ({
         )}
       {hits.map((hit) => (
         <div className="flex min-w-0 items-start gap-1" key={hit.id}>
-          <button
+          <Button
             aria-pressed={selectedHitId === hit.id}
-            className="hover:bg-muted focus-visible:ring-ring aria-pressed:bg-muted min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-start outline-none focus-visible:ring-2"
+            className="min-w-0 flex-1"
             onClick={() => onPreview(hit)}
             onFocus={() => onPreview(hit)}
-            type="button"
+            variant="plain"
           >
-            <span className="block truncate text-sm font-medium" dir="auto">
-              {hit.title || hit.id}
+            <span
+              className={cn(
+                "hover:bg-muted block min-h-11 rounded-md px-2 py-2",
+                selectedHitId === hit.id && "bg-muted",
+              )}
+            >
+              <span className="block truncate text-sm font-medium" dir="auto">
+                {hit.title || hit.id}
+              </span>
+              {hit.headline && (
+                <span
+                  className={cn(
+                    "text-muted-foreground mt-0.5 line-clamp-2 text-xs",
+                    SEARCH_HIT_DESCENDANT_MARK_CLASS,
+                  )}
+                  dangerouslySetInnerHTML={{
+                    // safe-html: server-escaped + <mark>-highlighted by global search mappers
+                    __html: hit.headline,
+                  }}
+                  dir="auto"
+                />
+              )}
             </span>
-            {hit.headline && (
-              <span
-                className={cn(
-                  "text-muted-foreground mt-0.5 line-clamp-2 text-xs",
-                  SEARCH_HIT_DESCENDANT_MARK_CLASS,
-                )}
-                dangerouslySetInnerHTML={{
-                  // safe-html: server-escaped + <mark>-highlighted by global search mappers
-                  __html: hit.headline,
-                }}
-                dir="auto"
-              />
-            )}
-          </button>
+          </Button>
           <Button
             aria-label={t("common.open")}
             className="min-h-11 min-w-11 shrink-0"

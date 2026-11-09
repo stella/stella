@@ -12,6 +12,7 @@ import {
 } from "@/lib/tools-catalogue";
 import { routeSearchSchema } from "@/route-search-params";
 import { PublicToolsIndex } from "@/routes/tools/-components/public-tools-index";
+import { PublicToolsIndexPending } from "@/routes/tools/-components/public-tools-index-pending";
 
 // Public SEO page: a bad `?kind=` value (e.g. `?kind=skills`) must degrade
 // to the default "all" filter, not throw into the router's default error
@@ -37,6 +38,7 @@ export const Route = createFileRoute("/tools/")({
     });
   },
   component: PublicToolsIndexRoute,
+  pendingComponent: PublicToolsIndexPending,
 });
 
 function PublicToolsIndexRoute() {

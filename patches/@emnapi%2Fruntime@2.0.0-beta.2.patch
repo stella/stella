@@ -1,0 +1,29 @@
+The web app's content security policy blocks string evaluation. emnapi 2
+probes `new Function()` each time it detects a context's features, and the
+regex-set, aho-corasick and fuzzy-search WASM packages load it in the browser,
+so every page using them reported a violation. Under the policy the probe
+already failed, which selects the fallback that names functions with
+`Object.defineProperty`; the module now selects it without probing.
+Browser regression: apps/web/e2e/specs/content-security-policy-surfaces.spec.ts.
+
+diff --git a/dist/emnapi.js b/dist/emnapi.js
+--- a/dist/emnapi.js
++++ b/dist/emnapi.js
+@@ -4,16 +4,7 @@ function detectFinalizer() {
+ }
+ const supportFinalizer = detectFinalizer();
+ function detectFeatures(features) {
+-    const supportNewFunction = (function () {
+-        let f;
+-        try {
+-            f = new Function();
+-        }
+-        catch (_) {
+-            return false;
+-        }
+-        return typeof f === 'function';
+-    })();
++    const supportNewFunction = false;
+     const canSetFunctionName = (function () {
+         try {
+             return Boolean(Object.getOwnPropertyDescriptor(Function.prototype, 'name')?.configurable);

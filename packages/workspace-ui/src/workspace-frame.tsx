@@ -258,7 +258,10 @@ const DescribedWorkspaceFrame = ({
       </SidebarProvider>
     );
 
-  if (inspector?.mobile === undefined) {
+  if (inspector === undefined) {
+    return frame;
+  }
+  if (inspector.mobile === undefined) {
     return frame;
   }
 

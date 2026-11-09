@@ -180,11 +180,6 @@ export const TRACKED_SUPPRESSION_RULES = [
     guards: "unbounded Drizzle list reads",
   },
   {
-    rule: "no-raw-zip-load/no-raw-zip-load",
-    tier: "data-volume",
-    guards: "archive entries inflated without the loadDocxArchive size caps",
-  },
-  {
     rule: "no-network-await-in-loop/no-network-await-in-loop",
     tier: "data-volume",
     guards: "per-iteration network round-trips inside a loop",

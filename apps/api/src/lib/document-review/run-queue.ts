@@ -25,7 +25,7 @@ import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
@@ -53,11 +53,13 @@ import type {
   DocumentReviewRunBasis,
   DocumentReviewRunErrorCode,
 } from "@/api/lib/document-review/run-contract";
-import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
+import { finalizeWorkerRun } from "@/api/lib/document-review/run-finalize";
 import { resolveDocumentReviewRunInputs } from "@/api/lib/document-review/run-inputs";
 import type { PinnedDocument } from "@/api/lib/document-review/run-inputs";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import type { ReviewRunPlan } from "@/api/lib/document-review/run-plan";
+import { recordRunWithheldSources } from "@/api/lib/document-review/table-run-findings";
+import { DocumentTooLargeError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -83,9 +85,14 @@ import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 import type { ResolvedTiers } from "@/api/lib/workflow/playbook-positions";
 import {
+  answerShapeForPosition,
   isTierStandard,
   resolveEffectiveAsk,
 } from "@/api/lib/workflow/position-runtime";
+import {
+  fitDocxFilesToRequestBudget,
+  requestBudgetBytesForTask,
+} from "@/api/lib/workflow/request-budget";
 import {
   loadClauseSnapshots,
   resolveTiers,
@@ -372,18 +379,22 @@ export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
     // The job body already persists failures onto the row; this is the last
     // resort if the process itself threw before that could run.
     if (job) {
-      markRunFailed(job.data, "internal").catch((markError: unknown) => {
-        captureError(
-          markError,
-          handlerErrorContext(
-            "documentreview.initDocumentReviewRunWorker.markError",
-            {
-              runId: job.data.runId,
-              workspaceId: job.data.workspaceId,
-            },
-          ),
-        );
-      });
+      detached(
+        async () =>
+          markRunFailed(job.data, "internal").catch((markError: unknown) => {
+            captureError(
+              markError,
+              handlerErrorContext(
+                "documentreview.initDocumentReviewRunWorker.markError",
+                {
+                  runId: job.data.runId,
+                  workspaceId: job.data.workspaceId,
+                },
+              ),
+            );
+          }),
+        "document-review.mark-run-failed",
+      );
     }
     const runId = job ? job.data.runId : "";
     const workspaceId = job ? job.data.workspaceId : "";
@@ -759,6 +770,29 @@ const runGradingPass = async ({
     return null;
   }
 
+  const fit = fitDocxFilesToRequestBudget({
+    files: [target],
+    budgetBytes: requestBudgetBytesForTask("pdf", deps.orgAIConfig, {
+      dataClass: "customer",
+      organizationId: actor.organizationId,
+      modelTier: deps.admission.modelTier,
+    }),
+  });
+  if (Result.isError(fit)) {
+    return "document_too_large";
+  }
+  if (fit.value.type === "cut") {
+    const { withheld } = fit.value;
+    await actor.writeDb(
+      async (tx) =>
+        await recordRunWithheldSources(tx, {
+          workspaceId: actor.workspaceId,
+          runId: actor.runId,
+          withheld,
+        }),
+    );
+  }
+
   const positions = plan.positions.map((planned) => planned.position);
   const clauseSnapshots = await actor.writeDb(
     async (tx) =>
@@ -787,6 +821,7 @@ const runGradingPass = async ({
       sourceId: position.sourceId,
       question: ask.question.trim(),
       content,
+      answerShape: answerShapeForPosition(position),
     });
   }
 
@@ -796,7 +831,9 @@ const runGradingPass = async ({
     ...deps,
   });
   if (Result.isError(extraction)) {
-    return "playbook_check_failed";
+    return DocumentTooLargeError.is(extraction.error)
+      ? "document_too_large"
+      : "playbook_check_failed";
   }
 
   const plannedByPositionId = new Map(
@@ -826,8 +863,10 @@ const runGradingPass = async ({
     positions,
     passageTextById,
     contentBySourceId: extraction.value.contentBySourceId,
+    refusedSourceIds: extraction.value.refusedSourceIds,
     tiersBySourceId,
     target,
+    documentRead: fit.value.type,
     perspective: run.basis.perspective,
     referenceEntityVersionIds: run.basis.references.map(
       (reference) => reference.entityVersionId,
@@ -910,18 +949,13 @@ const finalizeRun = async (
   run: ClaimedRun,
   plan: ReviewRunPlan,
 ): Promise<DocumentReviewRunErrorCode | null> => {
-  const finalized = await actor.writeDb(
-    async (tx) =>
-      await finalizeReviewRun({
-        tx,
-        workspaceId: actor.workspaceId,
-        runId: actor.runId,
-        entityId: run.entityId,
-        fileFieldId: run.fileFieldId,
-        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
-        expectedFindingCount: plan.expectedFindingCount,
-      }),
-  );
+  const finalized = await finalizeWorkerRun({
+    actor,
+    basis: run.basis,
+    entityId: run.entityId,
+    fileFieldId: run.fileFieldId,
+    expectedFindingCount: plan.expectedFindingCount,
+  });
   if (finalized.type === "incomplete") {
     return "internal";
   }
@@ -935,6 +969,13 @@ const finalizeRun = async (
   if (finalized.skippedForPendingLimit > 0) {
     logger.warn("document_review_run.fixes_unstaged_pending_limit", {
       count: String(finalized.skippedForPendingLimit),
+      runId: actor.runId,
+      workspaceId: actor.workspaceId,
+    });
+  }
+  if (finalized.skippedForUnreadableReference > 0) {
+    logger.warn("document_review_run.fixes_unstaged_unreadable_reference", {
+      count: String(finalized.skippedForUnreadableReference),
       runId: actor.runId,
       workspaceId: actor.workspaceId,
     });

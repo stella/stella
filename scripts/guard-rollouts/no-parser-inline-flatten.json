@@ -1,0 +1,18 @@
+{
+  "id": "no-parser-inline-flatten",
+  "rules": ["no-parser-inline-flatten/no-parser-inline-flatten"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-parser-inline-flatten/no-parser-inline-flatten",
+    "apps/api/src/handlers/case-law/ingestion/parsers",
+    "apps/api/src/lib/legal-search/parsers"
+  ]
+}

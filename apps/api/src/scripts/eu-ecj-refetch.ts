@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { printError } from "@stll/errors";
@@ -21,7 +21,7 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { holdCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { runEcjFormexRefresh } from "@/api/scripts/eu-ecj-formex-refresh";
 import { runEuEcjLanguageBackfill } from "@/api/scripts/eu-ecj-language-backfill";
@@ -79,6 +79,47 @@ type FormexOnlyOptions = {
 type StoredFormexRefreshOptions = Omit<FormexOnlyOptions, "flagValue"> & {
   idsFile: string;
 };
+
+type AcquireFormexBatchOptions<TDb, TLease> = {
+  enterLane: () => Promise<{ ingestionDb: TDb; release: () => Promise<void> }>;
+  acquireSourceLease: (
+    ingestionDb: TDb,
+  ) => Promise<{ lease: TLease; release: () => Promise<void> } | null>;
+};
+
+export const acquireFormexBatch = async <TDb, TLease>({
+  enterLane,
+  acquireSourceLease,
+}: AcquireFormexBatchOptions<TDb, TLease>): Promise<{
+  ingestionDb: TDb;
+  sourceLease: TLease;
+  release: () => Promise<void>;
+} | null> => {
+  const lane = await enterLane();
+  let held: Awaited<ReturnType<typeof acquireSourceLease>>;
+  try {
+    held = await acquireSourceLease(lane.ingestionDb);
+  } catch (error) {
+    await lane.release();
+    throw error;
+  }
+  if (held === null) {
+    await lane.release();
+    return null;
+  }
+  return {
+    ingestionDb: lane.ingestionDb,
+    sourceLease: held.lease,
+    release: async () => {
+      try {
+        await held.release();
+      } finally {
+        await lane.release();
+      }
+    },
+  };
+};
+
 const runStoredFormexRefresh = async ({
   idsFile,
   apply,
@@ -119,37 +160,15 @@ const runStoredFormexRefresh = async ({
       apply,
       after,
       limit,
-      acquireBatch: async () => {
-        const lane = await enterCaseLawMaintenanceLane();
-        const acquired = await Result.tryPromise({
-          try: async () =>
-            await acquireCaseLawSourceIngestionLease({
-              scopedDb: lane.ingestionDb,
+      acquireBatch: async () =>
+        await acquireFormexBatch({
+          enterLane: enterCaseLawMaintenanceLane,
+          acquireSourceLease: async (batchDb) =>
+            await holdCaseLawSourceIngestionLease({
+              scopedDb: batchDb,
               sourceId: source.id,
             }),
-          catch: (cause) => cause,
-        });
-        if (Result.isError(acquired)) {
-          await lane.release();
-          throw acquired.error;
-        }
-        const sourceLease = acquired.value;
-        if (sourceLease === null) {
-          await lane.release();
-          return null;
-        }
-        return {
-          ingestionDb: lane.ingestionDb,
-          sourceLease,
-          release: async () => {
-            try {
-              await sourceLease.release();
-            } finally {
-              await lane.release();
-            }
-          },
-        };
-      },
+        }),
     });
   } finally {
     process.removeListener("SIGINT", interrupt);
@@ -351,16 +370,17 @@ const runCelexRefresh = async ({
     process.exit(1);
   }
 
-  const sourceLease = await acquireCaseLawSourceIngestionLease({
+  const held = await holdCaseLawSourceIngestionLease({
     scopedDb: ingestionDb,
     sourceId: source.id,
   });
-  if (sourceLease === null) {
+  if (held === null) {
     console.error(
       "Source eu-ecj is being ingested right now (lease held). Retry later.",
     );
     process.exit(1);
   }
+  const sourceLease = held.lease;
 
   // Object-held so the flag's cross-callback mutation is visible to
   // per-site flow analysis; a plain boolean reads as always-false.
@@ -475,7 +495,7 @@ const runCelexRefresh = async ({
       await Bun.sleep(delayMs);
     }
   } finally {
-    await sourceLease.release();
+    await held.release();
   }
 
   console.log("--- outcomes ---");

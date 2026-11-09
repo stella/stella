@@ -18,6 +18,7 @@ import {
   classifyCitationsBeforeWrite,
   reopenCitationsForDecisionKey,
   reopenCitationsForKeys,
+  reopenCitationsFrom,
   reopenCitationsResolvedTo,
   resolveCitationBatch,
   resolveCitationsForDecision,
@@ -1244,7 +1245,7 @@ test("a resolved link with no target is unsettled, not settled", async () => {
   });
 });
 
-test("a decision whose identity changes retracts the edges drawn to it", async () => {
+test("a decision whose identity changes re-queues the edges drawn to it and keeps them until answered", async () => {
   // The complement of the arriving-decision path, which deliberately excludes
   // the decision's own links. Case number, jurisdiction and date are all
   // filters in the candidate join, so an edge decided against the old values
@@ -1293,8 +1294,29 @@ test("a decision whose identity changes retracts the edges drawn to it", async (
       reopenCitationsResolvedTo(tx, movedTarget),
     ),
   ).toBe(1);
+  // Queued for another answer, and still linked until it comes: the decision
+  // must not lose its incoming citations for as long as the queue takes.
   expect(await rowOf(movedCitation)).toMatchObject({
-    cited: null,
+    cited: movedTarget,
+    status: CITATION_RESOLUTION_STATUS.PENDING,
+  });
+
+  // The resolver's answer replaces the kept link. This target still holds the
+  // key, so it answers with the same decision.
+  await drain();
+  expect(await rowOf(movedCitation)).toMatchObject({
+    cited: movedTarget,
+    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+  });
+
+  // The citing side is put back the same way.
+  expect(
+    await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+      reopenCitationsFrom(tx, movedCiting),
+    ),
+  ).toBe(1);
+  expect(await rowOf(movedCitation)).toMatchObject({
+    cited: movedTarget,
     status: CITATION_RESOLUTION_STATUS.PENDING,
   });
 });

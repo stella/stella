@@ -349,7 +349,10 @@ fn resume(app: &AppHandle) {
   }
   reregister_if_paused(app, &mut shortcut);
   drop(shortcut);
-  let _ = app.emit(CHANGED_EVENT, ());
+  crate::logging::best_effort(
+    app.emit(CHANGED_EVENT, ()),
+    "emit clipboard shortcut change",
+  );
 }
 
 /// Resumes after a recording window closed. Window events arrive on the main
@@ -458,7 +461,10 @@ pub async fn shortcut_set(
   }
   let snapshot = shortcut.snapshot();
   drop(shortcut);
-  let _ = app.emit(CHANGED_EVENT, ());
+  crate::logging::best_effort(
+    app.emit(CHANGED_EVENT, ()),
+    "emit clipboard shortcut change",
+  );
   Ok(ShortcutUpdate::Saved { snapshot })
 }
 

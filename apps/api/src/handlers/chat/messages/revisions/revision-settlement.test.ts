@@ -9,7 +9,8 @@ const states = {
   "input-streaming": { state: "input-streaming", settled: false },
   "input-complete": { state: "input-complete", settled: false },
   "approval-requested": { state: "approval-requested", settled: false },
-  "approval-responded": { state: "approval-responded", settled: true },
+  // Approved, still to run.
+  "approval-responded": { state: "approval-responded", settled: false },
   complete: { state: "complete", settled: true },
   error: { state: "error", settled: true },
 } as const satisfies Record<
@@ -39,9 +40,24 @@ describe("answer edit tool settlement", () => {
         settledCall({
           ...call,
           state,
-          approval: { id: "approval", needsApproval: true, approved: false },
+          approval: { id: "approval", needsApproval: true, approved: true },
         }),
       ).toBe(settled);
+    },
+  );
+
+  // As turn settlement reads it: a declined call never runs, whatever state
+  // it was declined in.
+  test.each(Object.values(states))(
+    "a call declined in $state is settled",
+    ({ state }) => {
+      expect(
+        settledCall({
+          ...call,
+          state,
+          approval: { id: "approval", needsApproval: true, approved: false },
+        }),
+      ).toBe(true);
     },
   );
 

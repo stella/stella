@@ -938,14 +938,16 @@ test("the dependency audit installs only the root workspace", () => {
 const installFreeJobs = [
   [".github/workflows/autofix.yml", "regenerate-scope"],
 ] as const;
+// setup-bun caches only the Bun executable, which an install-free job
+// still wants: no-cache would download Bun from GitHub releases every run.
 const setupSchema = v.looseObject({
   uses: v.string(),
-  with: v.looseObject({ "no-cache": v.literal(true) }),
+  with: v.looseObject({ "no-cache": v.optional(v.literal(false)) }),
 });
 const installCommand = /\bbun (?:ci|i|install)\b/u;
 
 for (const [file, job] of installFreeJobs) {
-  test(`${job} sets up Bun without restoring the package cache`, () => {
+  test(`${job} sets up a cached Bun and installs no packages`, () => {
     const steps = workflowJobSteps(workflowFile(file), job);
     const setups = steps.filter(
       (step) =>

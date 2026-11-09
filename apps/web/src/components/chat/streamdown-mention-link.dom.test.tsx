@@ -3,8 +3,7 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { ChatSourceCitationTarget } from "@stll/api-contract";
 import { sleep } from "@stll/concurrency/sleep";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const originalFetch = globalThis.fetch;
@@ -19,8 +18,7 @@ const { isFolioBlockId } = await import("@stll/folio-react");
 const { toChatSourceCitationHref } = await import("@stll/api-contract");
 const { toSafeId } = await import("@/lib/safe-id");
 const { DocumentIcon } = await import("@/components/document-icon");
-const { getDocumentIconKind } =
-  await import("@/components/document-icon.logic");
+const { documentFormat } = await import("@stll/api-contract/document-format");
 const { DOCX_MIME, PDF_MIME, PPTX_MIME, XLSX_MIME } =
   await import("@/lib/consts");
 const { sourceCitationMimeType } = await import("./citation-file-type.logic");
@@ -117,7 +115,7 @@ describe("inline citation chips draw the cited file's type", () => {
       Object.fromEntries(
         Object.values(TARGETS).map((target) => [
           target.type,
-          getDocumentIconKind(sourceCitationMimeType(target.type)),
+          documentFormat(sourceCitationMimeType(target.type)).kind,
         ]),
       ),
     ).toEqual({ "docx-folio": "word", "pdf-bates": "pdf" });

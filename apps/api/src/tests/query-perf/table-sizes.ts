@@ -15,6 +15,10 @@ export const QUERY_PERF_TABLE_SIZES = {
   case_law_provision_repair_cursors: "small",
   case_law_provision_scope_transitions: "small",
   case_law_sources: "small",
+  // Source/country/court/year populations grow with the registry, not corpus rows.
+  case_law_population_counts: "small",
+  case_law_population_seed_state: "small",
+  case_law_population_projections: "large",
   // One row per country-month or broad invalidation target currently being retired.
   case_law_sitemap_drain_progress: "small",
   // The slot=0 primary-key/check contract permits exactly one discovery cursor.
