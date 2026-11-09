@@ -3107,6 +3107,7 @@
       "organizationMemberLimitReached": "See organisatsioon on jõudnud liikmete piirangu täitumiseni.",
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",
       "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",
+      "skillSourceUnreachable": "Oskuse allikat ei saanud laadida. Kontrollige, kas link viitab avalikule GitHubi hoidlale, või proovige hiljem uuesti.",
       "thirdPartyBoundaryRefusal": "Päring üritas kasutada sisu väljaspool lubatud tööruumi konteksti.",
       "usageLimitExceeded": "Kasutuslimiit on täis.",
       "validationInvalid": "Väljal on väärtus, mida ei saa salvestada.",

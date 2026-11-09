@@ -3107,6 +3107,7 @@
       "organizationMemberLimitReached": "Diese Organisation hat ihr Mitgliederlimit erreicht.",
       "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
+      "skillSourceUnreachable": "Die Skill-Quelle konnte nicht geladen werden. Prüfen Sie, ob der Link auf ein öffentliches GitHub-Repository verweist, oder versuchen Sie es später erneut.",
       "thirdPartyBoundaryRefusal": "Die Anfrage hat versucht, Inhalte außerhalb des erlaubten Arbeitsbereichs-Kontexts zu verwenden.",
       "usageLimitExceeded": "Nutzungslimit erreicht.",
       "validationInvalid": "Ein Feld enthält einen Wert, der nicht gespeichert werden kann.",

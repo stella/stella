@@ -289,6 +289,8 @@ describe("GitHub skill package discovery", () => {
         throw new Error("Expected retryable source failure to propagate");
       }
       expect(result.error.message).toBe(message);
+      expect(result.error.status).toBe(400);
+      expect(result.error.code).toBe("skill_source_unreachable");
     }
   });
 

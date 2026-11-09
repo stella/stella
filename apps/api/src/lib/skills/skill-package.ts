@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { SKILL_SOURCE_UNREACHABLE_CODE } from "@stll/api-contract";
 import type { ZipEntry } from "@stll/docx-core/zip";
 import {
   isAllowedResourcePath,
@@ -1332,24 +1333,26 @@ const fetchSafeBytes = async ({
   });
   if (Result.isError(response)) {
     return Result.err(
-      new HandlerError({
-        status: access.source === "catalogue" ? 503 : 400,
-        code: "internal_error",
-        message: response.error.message,
-        cause: response.error,
-      }),
+      access.source === "catalogue"
+        ? new HandlerError({
+            status: 503,
+            code: "internal_error",
+            message: response.error.message,
+            cause: response.error,
+          })
+        : skillSourceUnreachable(response.error.message, response.error),
     );
   }
   if (!response.value.ok) {
+    const message = `Skill source returned HTTP ${response.value.status}`;
     return Result.err(
-      new HandlerError({
-        status:
-          access.source === "catalogue"
-            ? catalogueUpstreamStatus(response.value.status)
-            : 400,
-        code: "internal_error",
-        message: `Skill source returned HTTP ${response.value.status}`,
-      }),
+      access.source === "catalogue"
+        ? new HandlerError({
+            status: catalogueUpstreamStatus(response.value.status),
+            code: "internal_error",
+            message,
+          })
+        : skillSourceUnreachable(message),
     );
   }
   return Result.ok(response.value);
@@ -1423,19 +1426,17 @@ const githubRefKindExists = async ({
   });
   if (Result.isError(response)) {
     return Result.err(
-      new HandlerError({
-        status: 400,
-        message: response.error.message,
-        cause: response.error,
-      }),
+      skillSourceUnreachable(response.error.message, response.error),
     );
   }
   if (response.value.status === 404) {
     return Result.ok(false);
   }
   if (!response.value.ok) {
-    return rejectSkillPackage(
-      `Skill source returned HTTP ${response.value.status}`,
+    return Result.err(
+      skillSourceUnreachable(
+        `Skill source returned HTTP ${response.value.status}`,
+      ),
     );
   }
   return Result.ok(true);
@@ -2072,19 +2073,17 @@ const fetchGithubSkillSourceBytes = async ({
       return Result.ok(null);
     }
     return Result.err(
-      new HandlerError({
-        status: 400,
-        message: response.error.message,
-        cause: response.error,
-      }),
+      skillSourceUnreachable(response.error.message, response.error),
     );
   }
   if (!response.value.ok) {
     if (response.value.status === 404) {
       return Result.ok(null);
     }
-    return rejectSkillPackage(
-      `Skill source returned HTTP ${response.value.status}`,
+    return Result.err(
+      skillSourceUnreachable(
+        `Skill source returned HTTP ${response.value.status}`,
+      ),
     );
   }
   return Result.ok(response.value.body);
@@ -2273,3 +2272,16 @@ const checkSkillResourcePath = (path: string): Result<void, HandlerError> =>
 
 const rejectSkillPackage = (message: string) =>
   Result.err(new HandlerError({ status: 400, message }));
+
+/**
+ * A source the person linked could not be fetched. It stays a 400, the
+ * person's link to fix or retry, but carries its own code so the import
+ * dialog can say so instead of a generic failure.
+ */
+const skillSourceUnreachable = (message: string, cause?: unknown) =>
+  new HandlerError({
+    status: 400,
+    code: SKILL_SOURCE_UNREACHABLE_CODE,
+    message,
+    cause,
+  });

@@ -3107,6 +3107,7 @@
       "organizationMemberLimitReached": "Ta organizacja osiągnęła limit członków.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",
+      "skillSourceUnreachable": "Nie udało się wczytać źródła umiejętności. Sprawdź, czy link prowadzi do publicznego repozytorium GitHub, lub spróbuj ponownie później.",
       "thirdPartyBoundaryRefusal": "Żądanie próbowało użyć treści spoza dozwolonego kontekstu obszaru roboczego.",
       "usageLimitExceeded": "Osiągnięto limit użycia.",
       "validationInvalid": "Pole zawiera wartość, której nie można zapisać.",

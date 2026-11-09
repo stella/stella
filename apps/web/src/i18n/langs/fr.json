@@ -3107,6 +3107,7 @@
       "organizationMemberLimitReached": "Cette organisation a atteint sa limite de membres.",
       "providerKeyRejected": "Le fournisseur a refusé la clé API.",
       "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",
+      "skillSourceUnreachable": "La source de la compétence n’a pas pu être chargée. Vérifiez que le lien mène à un dépôt GitHub public, ou réessayez plus tard.",
       "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
       "usageLimitExceeded": "Limite d’utilisation atteinte.",
       "validationInvalid": "Un champ contient une valeur qui ne peut pas être enregistrée.",

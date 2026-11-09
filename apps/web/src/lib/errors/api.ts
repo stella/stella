@@ -19,6 +19,7 @@ import {
   parseApiErrorValue,
   parseApiValidationIssues,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
+  SKILL_SOURCE_UNREACHABLE_CODE,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
@@ -337,6 +338,7 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.mcpAuthorizationApprovalRequired",
   provider_key_rejected: "errors.apiCodes.providerKeyRejected",
   provider_rate_limited: "errors.apiCodes.providerRateLimited",
+  [SKILL_SOURCE_UNREACHABLE_CODE]: "errors.apiCodes.skillSourceUnreachable",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
   usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",
   validation: STATUS_ERROR_KEYS.validation,
