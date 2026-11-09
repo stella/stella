@@ -1,7 +1,7 @@
 import { POLARITY, POLARITY_RULE_KIND } from "./consts";
 import type { ClassifiablePolarity } from "./consts";
 import { POLARITY_GUIDANCE } from "./guidance";
-import type { ValidRuleKindPolarity } from "./rule-engine";
+import type { ValidRuleKindPolarity } from "./rule-kind";
 
 // One choice binds kind, polarity, confidence and evidence to the same reading.
 export const POLARITY_READINGS = {

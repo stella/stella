@@ -35,10 +35,8 @@ import {
   incrementMatchCount,
   matchRule,
 } from "@/api/handlers/case-law/polarity/rule-engine";
-import type {
-  RuleCache,
-  ValidRuleKindPolarity,
-} from "@/api/handlers/case-law/polarity/rule-engine";
+import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
+import type { ValidRuleKindPolarity } from "@/api/handlers/case-law/polarity/rule-kind";
 import { classifyWithSystemOne } from "@/api/handlers/case-law/polarity/system-one-classifier";
 import type { CitationTextRevision } from "@/api/handlers/case-law/polarity/text-revision";
 import { citationTextRevisionFence } from "@/api/handlers/case-law/polarity/text-revision";
