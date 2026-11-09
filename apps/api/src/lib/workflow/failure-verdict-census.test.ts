@@ -27,10 +27,14 @@ import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import { VERDICT_TIERS } from "@/api/lib/workflow/verdict-tiers";
 
+import { guardEnforcesLine } from "../../../../../scripts/guard-rollouts.ts";
+
 const apiRoot = path.resolve(import.meta.dir, "../../..");
 const repoRoot = path.resolve(apiRoot, "../..");
 const CENSUS_FILE = "apps/api/src/lib/workflow/failure-verdict-census.test.ts";
 const GOVERNED_DIRECTORIES = ["src/lib/workflow", "src/lib/document-review"];
+// Registered in scripts/guard-rollouts: enforced on changed lines first.
+const FAILURE_VERDICT_GUARD = "failure-verdict-census";
 
 // Reviewed sites, keyed `file::owner::shape#n`. Remove an entry when its site
 // goes; a new site is fixed, not added.
@@ -259,10 +263,13 @@ const shapeOf = (node: Node, parent: Node | undefined): Shape | undefined => {
 };
 
 /** Every failure-as-verdict site in one source, keyed like the exceptions. */
-const failureVerdictSites = (file: string, source: string): string[] => {
-  const sites: string[] = [];
+type Site = { key: string; line: number };
+
+const failureVerdictSites = (file: string, source: string): Site[] => {
+  const sites: Site[] = [];
   const ordinals = new Map<string, number>();
-  walk(parseSource(file, source).program, (node, ancestors) => {
+  const parsed = parseSource(file, source);
+  walk(parsed.program, (node, ancestors) => {
     const shape = shapeOf(node, ancestors.at(-1));
     if (shape === undefined) {
       return;
@@ -270,7 +277,10 @@ const failureVerdictSites = (file: string, source: string): string[] => {
     const site = `${file}::${ownerName(ancestors)}::${shape}`;
     const ordinal = (ordinals.get(site) ?? 0) + 1;
     ordinals.set(site, ordinal);
-    sites.push(`${site}#${String(ordinal)}`);
+    sites.push({
+      key: `${site}#${String(ordinal)}`,
+      line: parsed.locate(node.start).line,
+    });
   });
   return sites;
 };
@@ -291,25 +301,41 @@ const governedSources = async (): Promise<string[]> => {
 };
 
 test("grading and extraction never turn a failure into a verdict", async () => {
-  const observed: string[] = [];
+  const exceptions: ReadonlySet<string> = new Set(
+    Object.keys(FAILURE_VERDICT_EXCEPTIONS),
+  );
+  const observed = new Set<string>();
+  const unexpected: string[] = [];
   for (const file of await governedSources()) {
-    observed.push(
-      ...failureVerdictSites(
-        file,
-        await Bun.file(path.join(apiRoot, file)).text(),
-      ),
+    const sites = failureVerdictSites(
+      file,
+      await Bun.file(path.join(apiRoot, file)).text(),
     );
+    for (const { key, line } of sites) {
+      observed.add(key);
+      if (
+        !exceptions.has(key) &&
+        guardEnforcesLine({
+          guard: FAILURE_VERDICT_GUARD,
+          file: `apps/api/${file}`,
+          line,
+        })
+      ) {
+        unexpected.push(`${key} (line ${String(line)})`);
+      }
+    }
   }
 
-  // A new site: carry the failure as an error or a failed outcome instead. A
-  // missing one: delete its exception.
-  expect(observed.toSorted()).toEqual(
-    Object.keys(FAILURE_VERDICT_EXCEPTIONS).toSorted(),
-  );
+  // A new site: carry the failure as an error or a failed outcome instead.
+  expect(unexpected).toEqual([]);
+  // A site that is gone: delete its exception.
+  expect([...exceptions].filter((key) => !observed.has(key))).toEqual([]);
 });
 
 const lint = (lines: readonly string[]) =>
-  failureVerdictSites("src/lib/workflow/example.ts", lines.join("\n"));
+  failureVerdictSites("src/lib/workflow/example.ts", lines.join("\n")).map(
+    ({ key }) => key,
+  );
 
 test("the census flags a verdict standing in for a missing value", () => {
   expect(
