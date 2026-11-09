@@ -5,9 +5,22 @@ import {
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
+import type { ConstantMap } from "@/api/lib/constant-map";
 import { LIMITS } from "@/api/lib/limits";
 
 import { cursorInput, nullAsAbsent, uuidInputSchema } from "./input-schemas";
+
+/**
+ * How much of each citation a read returns: the whole row, or a compact one
+ * whose passage is cut to a cue, for reading many citations in one reply.
+ */
+export const CITATION_READ_DETAILS = ["full", "compact"] as const;
+type CitationReadDetail = (typeof CITATION_READ_DETAILS)[number];
+
+export const CITATION_READ_DETAIL = {
+  FULL: "full",
+  COMPACT: "compact",
+} as const satisfies ConstantMap<CitationReadDetail>;
 
 // Shared by the tool definition and the citation graph app input contract,
 // so the app contract loads no handlers.
@@ -32,6 +45,24 @@ export const readCaseLawCitationsArgsSchema = nullAsAbsent(
       v.pipe(
         v.picklist(CITATION_TREATMENTS),
         v.description("Only citations with this polarity reading."),
+      ),
+    ),
+    detail: v.optional(
+      v.pipe(
+        v.picklist(CITATION_READ_DETAILS),
+        v.description(
+          `Defaults to 'full'. 'compact' cuts each passage to ${LIMITS.caseLawCitationCompactPassageChars} characters around the citation, without evidenceQuote.`,
+        ),
+      ),
+    ),
+    passage_query: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(LIMITS.mcpNonEmptyMin),
+        v.maxLength(LIMITS.caseLawCitationPassageQueryChars),
+        v.description(
+          "Only citations whose citing paragraph holds every word, in any inflection. Filters page by page: `scannedCitations` is how many the page read; an empty page with `nextCursor` may still match later.",
+        ),
       ),
     ),
     limit: v.optional(

@@ -78,6 +78,7 @@ import type {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
+import type { readPreferredLanguageVersionIds } from "@/api/lib/case-law/language-alternates";
 import type {
   readCaseLawProvisionScope,
   readProvisionWorkLinked,
@@ -225,6 +226,7 @@ export type McpRequestContext = {
     resolveDecision?: typeof resolveDecision;
     resolveLawCitation?: typeof resolveLawCitation;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
+    readPreferredLanguageVersionIds?: typeof readPreferredLanguageVersionIds;
     readDecisionReaderSource?: typeof readDecisionReaderSource;
     readProvisionPreviewHandler?: typeof readProvisionPreviewHandler;
     readsSharedPublicLawCorpus?: typeof readsSharedPublicLawCorpus;

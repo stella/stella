@@ -15,6 +15,7 @@ import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/errors/action-admission-error";
+import { runAsCorpusSearchCaller } from "@/api/lib/legal-search/corpus-index-admission";
 import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
 import { runWithPublicReadScope } from "@/api/lib/legal-search/public-read-timeout-context";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
@@ -25,7 +26,10 @@ import {
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
+import {
+  mcpPublicReadCallerKey,
+  withMcpPublicReadAdmission,
+} from "@/api/lib/rate-limit/mcp-public-read-admission";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   bindApprovedMcpAuditContext,
@@ -843,7 +847,10 @@ const runAuthorizedMcpToolCall = async ({
     caller: context,
     signal: context.request?.signal,
     run: async (signal) =>
-      await runWithPublicReadScope({ budgetMs, signal }, run),
+      await runAsCorpusSearchCaller(
+        mcpPublicReadCallerKey(context),
+        async () => await runWithPublicReadScope({ budgetMs, signal }, run),
+      ),
   });
   if (Result.isOk(admitted)) {
     const outcome = admitted.value;

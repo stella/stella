@@ -880,6 +880,7 @@ const admissionRefusal = (
   });
   switch (refused.reason) {
     case "busy":
+    case "deadline":
       return new CorpusIndexError({
         message: `corpus index ${requestLabel(request)} was not queued: ${String(refused.queued)} reads are already waiting`,
         rejection: "transient",
@@ -936,6 +937,7 @@ const withSearchAdmission = async <T>(
       : AbortSignal.any([read.signal, scopeSignal]);
   const admitted = await admission.acquire({
     waitLimit: AbortSignal.timeout(waiting.timeoutMs),
+    maxWaitMs: waiting.timeoutMs,
     signal,
   });
   if (admitted.type === "refused") {

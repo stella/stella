@@ -1730,6 +1730,8 @@ const caseLawDecisionProjection = v.strictObject({
   courtAbbreviation: v.optional(v.string()),
   decisionDate: v.optional(v.string()),
   decisionId: passthroughId(),
+  // Set when the entry was read as another language's version of this id.
+  requestedDecisionId: v.optional(passthroughId()),
   decisionType: v.optional(v.string()),
   ecli: v.optional(v.string()),
   identifiers: decisionIdentifiersProjection,

@@ -18,7 +18,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import type { ReviewPerspective } from "@/api/lib/document-review/contract";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
-import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
+import type {
+  PlaybookPositions,
+  PlaybookScope,
+} from "@/api/lib/workflow/playbook-positions";
 import { VERDICT_TIERS } from "@/api/lib/workflow/verdict-tiers";
 
 /** Lifecycle of one review execution. `queued` on insert, `running` once the
@@ -178,13 +181,33 @@ export const PLAYBOOK_PIN_PROVENANCE = {
  * carried even when `versionId` is set so a run stays intelligible after the
  * definition (and its versions) are deleted; there is deliberately no foreign
  * key from a run to a playbook. `definitionId` is null exactly when the
- * provenance is `ephemeral`: there is no definition to point at yet.
+ * provenance is `ephemeral`: there is no definition to point at yet. The
+ * scope is part of the snapshot, not just the positions: a run grades the
+ * approved positions against the documents the approved scope picks, so a
+ * scope edited after approval must not redirect a run still pinned to that
+ * approval.
  */
 export type PinnedPlaybook = {
   definitionId: SafeId<"playbookDefinition"> | null;
   versionId: SafeId<"playbookDefinitionVersion"> | null;
   provenance: PlaybookPinProvenance;
-  definitionSnapshot: { name: string; positions: PlaybookPositions };
+  definitionSnapshot: {
+    name: string;
+    positions: PlaybookPositions;
+    scope: PlaybookScope | null;
+  };
+};
+
+/** A pin as a stored run carries it. Runs stored before the snapshot carried
+ *  the scope have no `scope` key, so a reader treats a missing scope as
+ *  `null`; every pin written since sets it. */
+export type StoredPinnedPlaybook = Omit<
+  PinnedPlaybook,
+  "definitionSnapshot"
+> & {
+  definitionSnapshot: Omit<PinnedPlaybook["definitionSnapshot"], "scope"> & {
+    scope?: PlaybookScope | null;
+  };
 };
 
 /** One reference document pinned to the exact version it was read from. */
@@ -212,7 +235,7 @@ export type PinnedReference = {
  * two places and force every reader to branch on it.
  */
 export type DocumentReviewRunBasis = {
-  playbook: PinnedPlaybook;
+  playbook: StoredPinnedPlaybook;
   references: PinnedReference[];
   perspective: ReviewPerspective;
 };
