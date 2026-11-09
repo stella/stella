@@ -2727,6 +2727,7 @@ const readCaseLawQueryPages = (
   }
   const pages: CaseLawQueryOutcome[] = [];
   let timeout: InternalToolErrorResult | null = null;
+  let rejectedTimeout: { error: unknown } | null = null;
   for (const outcome of outcomes) {
     switch (outcome.type) {
       case "exhausted":
@@ -2734,9 +2735,7 @@ const readCaseLawQueryPages = (
         break;
       case "rejected":
         // Only a time-budget rejection reaches here.
-        timeout ??=
-          caseLawSearchTimeoutResult(outcome.error) ??
-          panic("A rejection kept with the phrasings is not a timeout");
+        rejectedTimeout ??= { error: outcome.error };
         pages.push({ type: "timed_out", subCursor: outcome.subCursor });
         break;
       case "answered": {
@@ -2762,10 +2761,20 @@ const readCaseLawQueryPages = (
         return panic("Unhandled case-law search call outcome");
     }
   }
-  if (timeout !== null && !pages.some(({ type }) => type === "page")) {
-    return { type: "none_finished", result: timeout };
+  if (pages.some(({ type }) => type === "page")) {
+    return { type: "pages", pages };
   }
-  return { type: "pages", pages };
+  // A thrown expiry keeps the answer the tool boundary gives it, so a search
+  // reads the same whichever phrasing count it ran with.
+  const expired =
+    rejectedTimeout === null
+      ? timeout
+      : (searchRefusalResult(rejectedTimeout.error) ??
+        caseLawSearchTimeoutResult(rejectedTimeout.error) ??
+        panic("A rejection kept with the phrasings is not a timeout"));
+  return expired === null
+    ? { type: "pages", pages }
+    : { type: "none_finished", result: expired };
 };
 /**
  * Each phrasing's page or the call's failure. A rejected search the call

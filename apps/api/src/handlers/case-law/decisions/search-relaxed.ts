@@ -121,17 +121,18 @@ export const readRelaxedTopUp = async <TRead, TError>({
   if (mode !== "best_effort" || strictHitCount === 0) {
     return { type: "read", read: await read() };
   }
+  const run = runOptionalRequestSlice(
+    { label: "case_law.relaxed_top_up", budgetMs: RELAXED_TOP_UP_SLICE_MS },
+    read,
+  );
   const attempt = await Result.tryPromise({
-    try: async () =>
-      await runOptionalRequestSlice(
-        { label: "case_law.relaxed_top_up", budgetMs: RELAXED_TOP_UP_SLICE_MS },
-        read,
-      ),
+    try: async () => await run,
     catch: (cause) => cause,
   });
   if (Result.isError(attempt)) {
+    // Read again, any other failure rejects unchanged.
     return publicReadTimeoutError(attempt.error) === null
-      ? await Promise.reject(attempt.error)
+      ? { type: "read", read: await run }
       : { type: "shed", cause: attempt.error };
   }
   const topUp = attempt.value;

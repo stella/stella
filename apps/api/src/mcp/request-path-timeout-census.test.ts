@@ -482,6 +482,14 @@ const CENSUS: readonly CensusEntry[] = [
     why: "A local-development route, not mounted in deployments.",
   },
   {
+    site: "apps/api/src/handlers/case-law/decisions/search-relaxed.ts#RELAXED_TOP_UP_SLICE_MS",
+    path: "request",
+    tools: ["search_case_law"],
+    bound: "own",
+    onExpiry: "degrades",
+    why: "An agent search's optional any-word top-up, also clamped to the request's deadline; past it the strict hits answer and a warning says the partial matches were given up.",
+  },
+  {
     site: "apps/api/src/handlers/case-law/decisions/search-expand.ts#4000",
     path: "off-request",
     why: "The authenticated web route /case/decisions/search/expand; neither an MCP tool nor a public corpus route reaches it.",

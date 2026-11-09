@@ -90,6 +90,23 @@ describe("an agent search's relaxed top-up under a deadline", () => {
     ).toEqual({ type: "read", read: Result.err(failure) });
   });
 
+  test("rethrows any other thrown failure unchanged", async () => {
+    const failure = new HandlerError({
+      status: 400,
+      message: "Search term coverage is invalid",
+    });
+
+    expect(
+      await rejectionOf(
+        readRelaxedTopUp({
+          mode: "best_effort",
+          strictHitCount: 2,
+          read: async () => await Promise.reject(failure),
+        }),
+      ),
+    ).toBe(failure);
+  });
+
   test("a caller that did not opt in keeps the timeout", async () => {
     const expired = budgetExpiry();
 

@@ -1539,7 +1539,7 @@ describe("OpenAI-compatible MCP tools", () => {
         cursor: {
           type: "string",
           description:
-            "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId. A phrasing that ran out of time runs again from where it stopped.",
+            "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
           // Derived from the engine cursor codec's own maximum times the query
           // cap, so the tool takes back the longest cursor it can emit.
           maxLength: CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
@@ -2935,6 +2935,7 @@ describe("OpenAI-compatible MCP tools", () => {
           headnotePresentation: "expanded",
           query: "shareholder dispute",
           facets: [],
+          relaxedTopUp: "best_effort",
           sort: "newest",
           sourceId: "11111111-1111-4111-8111-111111111111",
         },
@@ -4046,7 +4047,7 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(JSON.stringify(result)).not.toContain("private read diagnostics");
     });
 
-    test("answers one retryable timeout however the phrasings expired", async () => {
+    test("fails retryably when every phrasing hit the request's deadline", async () => {
       searchDecisionsHandlerMock.mockImplementation(
         async ({ body: { query } }: { body: { query: string } }) => {
           if (query === "thrown") {
@@ -4056,19 +4057,18 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       );
 
-      expectErrorEnvelope(
-        await handleMcpToolCall({
-          args: { country: "CZE", queries: ["thrown", "answered"] },
-          context: createContext(),
-          toolName: "search_case_law",
-        }),
-        {
-          code: "upstream_unavailable",
-          message: "Case-law search exceeded its time budget.",
-          hint: "Retry search_case_law with fewer queries or a narrower court, date range or provision filter. If it still times out, retry shortly.",
-          retryable: true,
-        },
-      );
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["thrown", "answered"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(validationEnvelope(result)).toMatchObject({
+        code: "public_read_timeout",
+        retryable: true,
+      });
+      expect(JSON.stringify(result)).not.toContain("private read diagnostics");
     });
 
     test("stops each phrasing a reserve before the request's deadline", async () => {
@@ -4154,7 +4154,7 @@ describe("OpenAI-compatible MCP tools", () => {
         encodePaginationCursor(["engine-fast-2", "engine-slow-2"]),
       );
       expect(page.searches.at(1)?.warnings.at(0)?.hint).toContain(
-        "returned cursor",
+        "returned nextCursor",
       );
     });
 
