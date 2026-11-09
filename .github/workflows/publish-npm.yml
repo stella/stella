@@ -908,7 +908,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-html
