@@ -1224,6 +1224,46 @@ export const chatToolGrantPolicies = () => [
   }),
 ];
 
+// A chat limit reminder is the member's own: only they set, read or cancel
+// it in the active org. Moving the time is a delete and a new insert.
+const chatLimitReminderCheck = sql`(
+  ${organizationCheck} AND ${userCheck}
+)`;
+
+// Row security is forced on this table, so the owner role the reminder sweep
+// and member offboarding use needs its own policy to reach every row.
+const chatLimitReminderOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_limit_reminders'::regclass)`;
+
+export const chatLimitReminderPolicies = () => [
+  p.pgPolicy("chat_limit_reminder_owner", {
+    for: "all",
+    to: "public",
+    using: chatLimitReminderOwnerCheck,
+    withCheck: chatLimitReminderOwnerCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_select", {
+    for: "select",
+    to: stella,
+    using: chatLimitReminderCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatLimitReminderCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_delete", {
+    for: "delete",
+    to: stella,
+    using: chatLimitReminderCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
 const workspaceViewTemplateCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;

@@ -1,0 +1,3 @@
+{
+  "add-constraint": "The widened notification kind and entity-type CHECKs are added NOT VALID without scanning existing notifications, and the new table's foreign keys are added while it is empty, under 1s lock_timeout and 5s statement_timeout; the online phase validates the CHECKs after the schema lock is released."
+}

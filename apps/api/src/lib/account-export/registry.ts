@@ -95,6 +95,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
+  chat_limit_reminders: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
+  },
   chat_threads: { type: "exported" },
   chat_tool_grants: {
     type: "exempt",

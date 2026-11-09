@@ -54,6 +54,7 @@
     "./chat-connector": "./src/chat-connector.ts",
     "./internal-ui-transport": "./src/internal-ui-transport.ts",
     "./chat-secret": "./src/chat-secret.ts",
+    "./chat-limit-reminder": "./src/chat-limit-reminder.ts",
     "./chat-tool-grants": "./src/chat-tool-grants.ts",
     "./chat-tool-policy": "./src/chat-tool-policy.ts",
     "./visual-theme": "./src/visual-theme.ts",

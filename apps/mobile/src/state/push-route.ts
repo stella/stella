@@ -13,8 +13,8 @@ const pushDataSchema = v.object({
 });
 
 /**
- * Where a tapped notification leads: the item it points at in its matter,
- * else the matter, else the app's first tab. Data the app cannot read opens
+ * Where a tapped notification leads: the chat it points at, or the item it
+ * points at in its matter, else the matter, else the app's first tab. Data the app cannot read opens
  * the app and nothing more.
  */
 export const routeForPush = (data: unknown): Href => {
@@ -24,6 +24,14 @@ export const routeForPush = (data: unknown): Href => {
     return "/";
   }
   const { entityId, entityType, workspaceId } = parsed.output.stella;
+  // A chat opens by its id, inside or outside a matter.
+  if (
+    entityType === "chat_thread" &&
+    entityId !== null &&
+    entityId !== undefined
+  ) {
+    return { pathname: "/thread/[threadId]", params: { threadId: entityId } };
+  }
   if (workspaceId === null || workspaceId === undefined) {
     return "/";
   }

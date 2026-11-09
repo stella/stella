@@ -155,6 +155,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "chat-turn-reaper.ts",
     "Ends chat turns whose lease expired; reads no content.",
   ),
+  "chat.sendLimitReminders": platform(
+    "chat-limit-reminders.ts",
+    "Files the reminders members asked for when their agent's usage limit resets; reads ids and times only.",
+  ),
   "chat.purgeSecrets": platform(
     "chat-secret-retention.ts",
     "Clears expired encrypted chat payloads while retaining request receipts.",

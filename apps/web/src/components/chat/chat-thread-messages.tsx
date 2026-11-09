@@ -119,6 +119,7 @@ import {
   ContextNotice,
   LocalRunFilesNotSharedNotice,
 } from "@/components/chat/context-notice";
+import { LocalRunLimitReminder } from "@/components/chat/local-run-limit-reminder";
 import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
 import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
@@ -646,6 +647,7 @@ export const ChatThreadMessages = ({
             isGenerating={generationActive}
             onResend={onResend}
             onSendWithoutAnonymization={onSendWithoutAnonymization}
+            threadRef={threadRef}
           />
         )}
         {generationActive && waitingForComputer && <ComputerWaitingIndicator />}
@@ -1244,9 +1246,12 @@ export const ChatErrorMessage = ({
   isGenerating,
   onResend,
   onSendWithoutAnonymization,
+  threadRef,
 }: {
   error: Error;
   isGenerating: boolean;
+  /** The chat the error belongs to; offers the limit reminder when set. */
+  threadRef?: ChatThreadRef | undefined;
   onResend?:
     ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
@@ -1323,6 +1328,12 @@ export const ChatErrorMessage = ({
             >
               {t("chat.sendWithoutAnonymization")}
             </Button>
+          )}
+          {limitResetsAt !== null && threadRef !== undefined && (
+            <LocalRunLimitReminder
+              disabled={isGenerating}
+              threadRef={threadRef}
+            />
           )}
           {onResend && canRetryChatRequest(error) && (
             <Button

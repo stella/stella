@@ -21,6 +21,7 @@ import { abortTransaction } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   billingDraftUserSettings,
+  chatLimitReminders,
   chatToolGrants,
   contacts,
   correspondence,
@@ -1767,6 +1768,14 @@ export const removeOrganizationMemberInTransaction = async (
       ),
     );
   await tx
+    .delete(chatLimitReminders)
+    .where(
+      and(
+        eq(chatLimitReminders.organizationId, organizationId),
+        eq(chatLimitReminders.userId, userId),
+      ),
+    );
+  await tx
     .delete(mcpOAuthState)
     .where(
       and(
@@ -1867,6 +1876,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [sharepointConnections.userId, "cleared"],
   [sharepointOAuthState.userId, "cleared"],
   [chatToolGrants.userId, "cleared"],
+  [chatLimitReminders.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],
   // Revoked by `removeOrganizationMemberWithAuthArtifacts`.
