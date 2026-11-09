@@ -182,6 +182,13 @@ const seedRun = async (
       sourceEntityVersionId: versionId,
     });
   });
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    ...env.API_FEATURE_ACCESS_GRANTS,
+    "legal-lists": [
+      ...(env.API_FEATURE_ACCESS_GRANTS["legal-lists"] ?? []),
+      { type: "organization", organizationId },
+    ],
+  });
   seededOrganizationIds.push(organizationId);
   return {
     organizationId,
