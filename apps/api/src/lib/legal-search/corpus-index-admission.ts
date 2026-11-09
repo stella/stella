@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { sleep } from "@stll/concurrency/sleep";
@@ -228,13 +227,9 @@ export const createCorpusSearchAdmission = ({
         result.reason === "busy" &&
         !waitSignal.aborted
       ) {
-        const slept = await Result.tryPromise(
-          async () => await sleep(FULL_QUEUE_RETRY_MS, { signal: waitSignal }),
-        );
-        // A failed sleep is the wait limit firing: the next acquire reports it.
-        if (Result.isOk(slept) || waitSignal.aborted) {
-          result = await budget.acquire(request);
-        }
+        // Not cancelled by the wait limit: the next acquire reports it.
+        await sleep(FULL_QUEUE_RETRY_MS);
+        result = await budget.acquire(request);
       }
     }
     leaveFlow(caller);
