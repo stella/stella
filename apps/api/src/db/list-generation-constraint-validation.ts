@@ -10,7 +10,7 @@ const INTRODUCED_BY = "20261109180000_list_generation_fact_details";
  * 20261109180000_list_generation_fact_details adds NOT VALID. Each only
  * constrains columns that migration adds, so existing rows already pass.
  */
-export const LIST_GENERATION_CONSTRAINTS = [
+const LIST_GENERATION_CONSTRAINTS = [
   "legal_list_generation_runs_workspace_organization_fk",
   "legal_list_generation_runs_producer_check",
   "legal_list_generation_runs_item_type_check",
@@ -22,7 +22,7 @@ export const LIST_GENERATION_CONSTRAINTS = [
   introducedBy: INTRODUCED_BY,
 }));
 
-export const LIST_GENERATION_CANDIDATE_CONSTRAINTS = [
+const LIST_GENERATION_CANDIDATE_CONSTRAINTS = [
   "legal_list_generation_candidates_confidence_check",
   "legal_list_generation_candidates_scoring_check",
   "legal_list_generation_candidates_occurred_on_canonical_check",

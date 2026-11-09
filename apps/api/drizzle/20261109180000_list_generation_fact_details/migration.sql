@@ -17,6 +17,94 @@ ALTER TABLE "legal_list_generation_runs" ADD CONSTRAINT "legal_list_generation_r
 ALTER TABLE "legal_list_generation_runs" ADD CONSTRAINT "legal_list_generation_runs_stella_shape_check" CHECK ("producer" = 'external' or ("organization_id" is not null and "item_type" is not null)) NOT VALID;--> statement-breakpoint
 ALTER TABLE "legal_list_generation_runs" ADD CONSTRAINT "legal_list_generation_runs_error_code_check" CHECK (("error_code" is null or ("status" = 'failed' and "error_code" in ('source_unavailable', 'unsupported_format', 'no_text', 'ai_unavailable', 'extraction_failed', 'enqueue_failed', 'access_revoked', 'run_limit_reached', 'internal'))) and ("producer" = 'external' or ("status" = 'failed') = ("error_code" is not null))) NOT VALID;--> statement-breakpoint
 
+-- A run that records its organization is pinned to it as well as to its
+-- workspace; a run written before the column carries none and keeps its
+-- workspace pin, so its history and pending candidates stay reachable.
+-- stella-migration-safety: reviewed alter-policy - the run now records its organization; a row that records one must match the session organization and the workspace pin is unchanged, so access only narrows
+ALTER POLICY "workspace_select" ON "legal_list_generation_runs" USING ((CASE
+  WHEN workspace_id = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          'app.workspace_ids', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE workspace_id IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.stella_authorized_workspaces aw
+  )
+END) AND (organization_id IS NULL OR organization_id = (SELECT current_setting(
+  'app.organization_id', true
+))));--> statement-breakpoint
+-- stella-migration-safety: reviewed alter-policy - the run now records its organization; a row that records one must match the session organization and the workspace pin is unchanged, so access only narrows
+ALTER POLICY "workspace_insert" ON "legal_list_generation_runs" WITH CHECK ((CASE
+  WHEN workspace_id = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          'app.workspace_ids', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE workspace_id IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.stella_authorized_workspaces aw
+  )
+END) AND organization_id = (SELECT current_setting(
+  'app.organization_id', true
+)));--> statement-breakpoint
+-- stella-migration-safety: reviewed alter-policy - the run now records its organization; a row that records one must match the session organization and the workspace pin is unchanged, so access only narrows
+ALTER POLICY "workspace_update" ON "legal_list_generation_runs" USING ((CASE
+  WHEN workspace_id = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          'app.workspace_ids', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE workspace_id IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.stella_authorized_workspaces aw
+  )
+END) AND (organization_id IS NULL OR organization_id = (SELECT current_setting(
+  'app.organization_id', true
+))));--> statement-breakpoint
+-- stella-migration-safety: reviewed alter-policy - the run now records its organization; a row that records one must match the session organization and the workspace pin is unchanged, so access only narrows
+ALTER POLICY "workspace_delete" ON "legal_list_generation_runs" USING ((CASE
+  WHEN workspace_id = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          'app.workspace_ids', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE workspace_id IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.stella_authorized_workspaces aw
+  )
+END) AND (organization_id IS NULL OR organization_id = (SELECT current_setting(
+  'app.organization_id', true
+))));--> statement-breakpoint
+
 -- The fact details a fact candidate proposes, with the checks
 -- legal_list_fact_details carries, so acceptance copies a valid row.
 ALTER TABLE "legal_list_generation_candidates" ADD COLUMN "occurred_on" date;--> statement-breakpoint

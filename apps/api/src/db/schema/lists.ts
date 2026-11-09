@@ -38,6 +38,7 @@ import {
   user,
   workspaceCheck,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 } from "./common";
 import type { SafeId } from "./common";
 import { workspaces } from "./contacts";
@@ -723,7 +724,8 @@ export const legalListGenerationRuns = p.pgTable(
       "legal_list_generation_runs_error_code_check",
       sql`(${table.errorCode} is null or (${table.status} = 'failed' and ${table.errorCode} in (${sql.join(LIST_GENERATION_RUN_ERROR_CODE_SQL_VALUES, sql`, `)}))) and (${table.producer} = 'external' or (${table.status} = 'failed') = (${table.errorCode} is not null))`,
     ),
-    ...wsPolicies({ columns: table }),
+    // Runs started before the organization was recorded carry none.
+    ...wsRecordedOrganizationPolicies(),
   ],
 );
 
