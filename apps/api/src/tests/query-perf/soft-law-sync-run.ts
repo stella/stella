@@ -12,7 +12,10 @@ import type {
   SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
-import { SYNC_SOFT_LAW_TASK } from "@/api/lib/scheduler/tasks/soft-law-sync";
+import {
+  createSoftLawSyncTask,
+  SYNC_SOFT_LAW_TASK,
+} from "@/api/lib/scheduler/tasks/soft-law-sync";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { GatedTestClientScope } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -132,8 +135,10 @@ export const measureSoftLawSyncHistory = async (
       label: "soft-law sync",
       execute: async (tx) => {
         const task =
-          createSchedulerTaskRegistry(noopTask, noopTask, {
-            softLawSyncDependencies: {
+          createSchedulerTaskRegistry({
+            reapOwnerlessChatTurns: noopTask,
+            refreshCaseLawCoverage: noopTask,
+            syncSoftLaw: createSoftLawSyncTask({
               authorities: () => [FIXTURE_AUTHORITY],
               sync: async ({ signal }) =>
                 await runSoftLawIngestion({
@@ -142,9 +147,10 @@ export const measureSoftLawSyncHistory = async (
                   scopedDb: async (work) =>
                     await withAggregateSavepoint(tx, work),
                   signal,
-                  writeRaw: async (options) => rawSourcePayloadKey(options),
+                  writeRaw: (options) =>
+                    Promise.resolve(rawSourcePayloadKey(options)),
                 }),
-            },
+            }),
           }).get(SYNC_SOFT_LAW_TASK) ?? panic("Soft-law sync is unregistered");
         await task(
           asTestRaw<SchedulerTaskContext>({

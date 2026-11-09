@@ -169,26 +169,32 @@ const measureHostedErasureRun = async (
 ) => {
   const now = new Date("2026-10-29T00:00:00Z");
   const task =
-    createSchedulerTaskRegistry(noopTask, noopTask, {
-      hostedCustomerErasureDependencies: {
-        credentials: { apiKey: "fixture", baseUrl: "https://provider.test" },
-        provider: "polar",
-        erase: async ({ externalCustomerRef }) =>
-          await Promise.resolve(
-            externalCustomerRef.endsWith("0")
-              ? Result.err(
-                  new HostedUsageProviderApiError({
-                    message: "Fixture refusal",
-                    status: 503,
-                  }),
-                )
-              : Result.ok(undefined),
-          ),
-        observe: noopTask,
-        now: () => now,
+    createSchedulerTaskRegistry(
+      {
+        reapOwnerlessChatTurns: noopTask,
+        refreshCaseLawCoverage: noopTask,
+        syncSoftLaw: noopTask,
       },
-    }).get(ERASE_HOSTED_CUSTOMERS_TASK) ??
-    panic("Erasure task is unregistered");
+      {
+        hostedCustomerErasureDependencies: {
+          credentials: { apiKey: "fixture", baseUrl: "https://provider.test" },
+          provider: "polar",
+          erase: async ({ externalCustomerRef }) =>
+            await Promise.resolve(
+              externalCustomerRef.endsWith("0")
+                ? Result.err(
+                    new HostedUsageProviderApiError({
+                      message: "Fixture refusal",
+                      status: 503,
+                    }),
+                  )
+                : Result.ok(undefined),
+            ),
+          observe: noopTask,
+          now: () => now,
+        },
+      },
+    ).get(ERASE_HOSTED_CUSTOMERS_TASK) ?? panic("Erasure task is unregistered");
   return await measureCapturedRun({
     openClient,
     label: "erasure",
