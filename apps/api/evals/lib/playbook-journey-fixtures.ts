@@ -1,5 +1,5 @@
 /**
- * Fixtures for the playbook journey (`evals/playbook-journey.ts`): one
+ * Fixtures for the playbook journey (`evals/e2e/playbook-journey.ts`): one
  * playbook with a position for each check kind, the contracts it runs on, and
  * the verdict tiers each contract should get. Every party, name and figure is
  * fictional.
@@ -256,6 +256,7 @@ const LONG_CONTRACT = [
     "Governing law",
     "This Agreement is governed by the laws of Sweden, and the courts of Stockholm have exclusive jurisdiction over any dispute arising out of it.",
   ),
+  "Schedule 2. Fees\nThe hosted reporting services are charged at a fixed fee of EUR 4,800 per month, which covers up to 50 named users. Each additional named user is charged at EUR 60 per month.",
 ].join("\n");
 
 // The precedent and the reference contract share these two clauses word for
@@ -274,6 +275,7 @@ const REFERENCE_CONTRACT = [
   `3. Confidentiality\n3.1 ${SHARED_CONFIDENTIALITY}`,
   "4. Limitation of liability\n4.1 Supplier's aggregate liability arising out of or in connection with this Agreement shall not exceed the fees paid by Customer in the one (1) month preceding the event giving rise to the claim.",
   `5. Governing law\n5.1 ${SHARED_GOVERNING_LAW}`,
+  "Schedule 2. Fees\nThe route-planning data services are charged at a fixed fee of EUR 2,500 per month for the whole term.",
 ].join("\n");
 
 const PRECEDENT = [

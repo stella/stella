@@ -26,7 +26,7 @@
  * cells hold known tiers that agree with the table run's findings.
  *
  * Usage (from apps/api, with the stack up):
- *   bun evals/playbook-journey.ts [--api-url http://localhost:3001]
+ *   bun evals/e2e/playbook-journey.ts [--api-url http://localhost:3001]
  *     [--storage-state ../../.playwright/storage-state.json] [--json out.json]
  *     [--model claude-sonnet-5-5]
  */
@@ -37,6 +37,7 @@ import * as v from "valibot";
 
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
+import { positionSchema } from "@/api/lib/workflow/playbook-positions";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 
 import {
@@ -45,12 +46,12 @@ import {
   checkRunProgress,
   pollOf,
   runDetailSchema,
-} from "./lib/playbook-journey-checks";
+} from "../lib/playbook-journey-checks";
 import type {
   ExpectedTiers,
   RunDetail,
   RunPoll,
-} from "./lib/playbook-journey-checks";
+} from "../lib/playbook-journey-checks";
 import {
   EXPECTED_REFERENCE_TIERS,
   EXPECTED_TIERS,
@@ -59,13 +60,13 @@ import {
   JOURNEY_CONTRACT,
   JOURNEY_DOCUMENTS,
   JOURNEY_POSITIONS,
-} from "./lib/playbook-journey-fixtures";
-import type { JourneyContract } from "./lib/playbook-journey-fixtures";
+} from "../lib/playbook-journey-fixtures";
+import type { JourneyContract } from "../lib/playbook-journey-fixtures";
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const REQUEST_TIMEOUT_MS = 180_000;
-const RUN_TIMEOUT_MS = 15 * 60_000;
+const RUN_TIMEOUT_MS = 9 * 60_000;
 const POLL_INTERVAL_MS = 5000;
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 
@@ -83,7 +84,7 @@ const parseArgs = (argv: readonly string[]): Options => {
     apiUrl: "http://localhost:3001",
     storageStatePath: path.resolve(
       import.meta.dir,
-      "../../../.playwright/storage-state.json",
+      "../../../../.playwright/storage-state.json",
     ),
     jsonPath: null,
     model: null,
@@ -268,7 +269,7 @@ const uploadDocument = async (
 
 const playbookSchema = v.object({
   id: v.string(),
-  positions: v.object({ items: v.array(v.looseObject({})) }),
+  positions: v.object({ items: v.array(positionSchema) }),
 });
 
 /** Saves the playbook (deriving each auto ask) and reads back what the panel
@@ -289,8 +290,7 @@ const savePlaybook = async (
     playbookSchema,
     (await api.send("GET", `/playbooks/${id}`)).json,
   );
-  // The API validated these on save; the journey sends them back unchanged.
-  const positions = stored.positions.items as Position[];
+  const positions: Position[] = stored.positions.items;
   const problems = positions.flatMap((position) =>
     position.mode === "graded" &&
     position.ask.mode === "auto" &&
@@ -417,7 +417,7 @@ const startPanelRun = async (
 };
 
 const proposedSchema = v.object({
-  positions: v.array(v.looseObject({ mode: v.string() })),
+  positions: v.array(positionSchema),
 });
 
 // --------------- Journey ---------------
@@ -592,8 +592,7 @@ const runJourney = async (api: Api): Promise<RunReport[]> => {
         )
       ).json,
     );
-    // The API validated these when it pinned them.
-    const positions = proposed.positions as Position[];
+    const positions: Position[] = proposed.positions;
     const referencePositions = positions.filter(
       (position) =>
         position.mode === "graded" && position.standard.source === "reference",

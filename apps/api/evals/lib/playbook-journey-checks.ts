@@ -59,6 +59,28 @@ export const pollOf = ({ run, findings }: RunDetail): RunPoll => ({
   findings: findings.length,
 });
 
+const nonEmpty = v.pipe(v.string(), v.minLength(1));
+
+/** An executable redline, in the shape `GroundedReviewFix` gives it. */
+const fixSchema = v.variant("kind", [
+  v.object({
+    kind: v.literal("replaceInBlock"),
+    blockId: nonEmpty,
+    find: nonEmpty,
+    replace: v.string(),
+  }),
+  v.object({
+    kind: v.literal("replaceBlock"),
+    blockId: nonEmpty,
+    text: nonEmpty,
+  }),
+  v.object({
+    kind: v.literal("insertAfterBlock"),
+    blockId: nonEmpty,
+    text: nonEmpty,
+  }),
+]);
+
 const isVerdictTier = (value: string | null): value is VerdictTier =>
   value !== null && (VERDICT_TIERS as readonly string[]).includes(value);
 
@@ -182,7 +204,7 @@ export const checkFindings = ({
       expectFixes &&
       verdict === "deviation" &&
       expected.fixPositionIds.has(finding.positionId) &&
-      fix === null &&
+      !v.is(fixSchema, fix) &&
       finding.suggestionId === null
     ) {
       problems.push(`${label}: deviation without a proposed fix`);

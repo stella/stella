@@ -134,7 +134,11 @@ describe("checkFindings", () => {
           finding({
             positionId: "p-liability",
             verdict: "deviation",
-            fix: { ops: [] },
+            fix: {
+              kind: "replaceBlock",
+              blockId: "b-8",
+              text: "Each Party's aggregate liability shall not exceed the fees of twelve months.",
+            },
           }),
         ],
         expected,
@@ -184,6 +188,13 @@ describe("checkFindings", () => {
     expect(
       checkFindings({
         findings: [finding(deviation)],
+        expected,
+        expectFixes: true,
+      }),
+    ).toEqual(["p-liability: deviation without a proposed fix"]);
+    expect(
+      checkFindings({
+        findings: [finding({ ...deviation, fix: { ops: [] } })],
         expected,
         expectFixes: true,
       }),

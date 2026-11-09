@@ -6,7 +6,7 @@ defaults:
 
 # Weekly, with a live model: runs a playbook from the table and from the review
 # panel on fixture contracts through the API, and checks how every run ends
-# (apps/api/evals/playbook-journey.ts). One run of one model per week; start it
+# (apps/api/evals/e2e/playbook-journey.ts). One run of one model per week; start it
 # by hand after a change to the review pipeline. Sonnet by default: Haiku
 # returned output the extraction batch schema rejects.
 on:
@@ -29,7 +29,9 @@ jobs:
   playbook-journey:
     name: Playbook journey
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 75
+    # Uses repository secrets, so a manual run starts only from main.
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: read
       packages: read
@@ -69,7 +71,7 @@ jobs:
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Run the journey
-        timeout-minutes: 30
+        timeout-minutes: 45
         working-directory: apps/api
         env:
           NODE_ENV: development
@@ -79,7 +81,7 @@ jobs:
         run: |
           report="$RUNNER_TEMP/playbook-journey"
           status=0
-          bun evals/playbook-journey.ts --model "$JOURNEY_MODEL" --json "$report.json" | tee "$report.md" || status=$?
+          bun evals/e2e/playbook-journey.ts --model "$JOURNEY_MODEL" --json "$report.json" | tee "$report.md" || status=$?
           {
             cat "$report.md"
             echo

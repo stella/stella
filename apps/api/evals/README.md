@@ -92,7 +92,7 @@ the default provider chain (see `getTanStackTextModelById`).
   contract never states come back empty rather than as prose, and does a
   constraint position still read a number? Scored on `gpt-5.6-luna` and
   `gpt-6-sol`.
-- `playbook-journey.ts`: the same path end to end, through the HTTP API of a
+- `e2e/playbook-journey.ts`: the same path end to end, through the HTTP API of a
   running stack. It saves a playbook with a position per check kind, runs it
   from the table and from the review panel on two fixture contracts (a long
   clause, and a precedent in another matter as reference), and checks that
