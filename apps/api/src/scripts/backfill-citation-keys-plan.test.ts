@@ -8,14 +8,14 @@ import { decisionKeysToWrite } from "@/api/scripts/backfill-citation-keys-plan";
 import type { StoredDecisionKeys } from "@/api/scripts/backfill-citation-keys-plan";
 
 const unkeyed = (
-  caseNumber: string,
-  caseNumberType: string = DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  storedReference: string,
+  storedReferenceType: string = DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
 ): StoredDecisionKeys => ({
-  caseNumber,
-  caseNumberType,
-  citationKey: null,
+  storedReference,
+  storedReferenceType,
+  storedCitationKey: null,
   country: "CZE",
-  docketFamilyKey: null,
+  storedDocketFamilyKey: null,
 });
 
 describe("decisionKeysToWrite", () => {
@@ -43,7 +43,10 @@ describe("decisionKeysToWrite", () => {
   });
 
   test("fills a missing case-file key beside a citation key already stored", () => {
-    const row = { ...unkeyed("6 Ads 21/2026"), citationKey: "stored-key" };
+    const row = {
+      ...unkeyed("6 Ads 21/2026"),
+      storedCitationKey: "stored-key",
+    };
     expect(decisionKeysToWrite(row, "missing")).toEqual({
       citationKey: "stored-key",
       docketFamilyKey: docketFamilyKeyOf("6 Ads 21/2026", "CZE"),
@@ -53,8 +56,8 @@ describe("decisionKeysToWrite", () => {
   test("a recanonicalization rewrites both keys from the docket", () => {
     const row = {
       ...unkeyed("6 Ads 21/2026"),
-      citationKey: "old-key",
-      docketFamilyKey: "old-family",
+      storedCitationKey: "old-key",
+      storedDocketFamilyKey: "old-family",
     };
     const written = decisionDocketColumns({
       caseNumber: "6 Ads 21/2026",

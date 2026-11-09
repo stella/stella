@@ -142,11 +142,11 @@ await runScriptWithErrorOutput(async () => {
                     const storedFamily = storedText(row["stored_family"]);
                     const next = decisionKeysToWrite(
                       {
-                        caseNumber: row["text"],
-                        caseNumberType: row["type"],
-                        citationKey: stored,
+                        storedReference: row["text"],
+                        storedReferenceType: row["type"],
+                        storedCitationKey: stored,
                         country,
-                        docketFamilyKey: storedFamily,
+                        storedDocketFamilyKey: storedFamily,
                       },
                       scope,
                     );

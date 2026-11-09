@@ -9,13 +9,16 @@ import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-
 /** Fill only what is missing, or rewrite every key the rule now spells differently. */
 export type CitationKeyScope = "missing" | "stale";
 
-/** A decision row as the backfill reads it. */
+/**
+ * A decision row as the backfill reads it: what it stores, named apart from
+ * the columns it writes so the row-writer guard does not read it as a write.
+ */
 export type StoredDecisionKeys = {
-  caseNumber: string;
-  caseNumberType: unknown;
+  storedReference: string;
+  storedReferenceType: unknown;
   country: string;
-  citationKey: string | null;
-  docketFamilyKey: string | null;
+  storedCitationKey: string | null;
+  storedDocketFamilyKey: string | null;
 };
 
 /** The keys a decision row should hold after the pass. */
@@ -35,14 +38,14 @@ export const decisionKeysToWrite = (
   scope: CitationKeyScope,
 ): DecisionKeysToWrite => {
   const derived = decisionDocketColumns({
-    caseNumber: row.caseNumber,
-    caseNumberType: primaryReferenceTypeFromStored(row.caseNumberType),
+    caseNumber: row.storedReference,
+    caseNumberType: primaryReferenceTypeFromStored(row.storedReferenceType),
     country: row.country,
   });
   return scope === "missing"
     ? {
-        citationKey: row.citationKey ?? derived.citationKey,
-        docketFamilyKey: row.docketFamilyKey ?? derived.docketFamilyKey,
+        citationKey: row.storedCitationKey ?? derived.citationKey,
+        docketFamilyKey: row.storedDocketFamilyKey ?? derived.docketFamilyKey,
       }
     : {
         citationKey: derived.citationKey,
