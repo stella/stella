@@ -821,6 +821,76 @@ describe("a run folder's checkpoint", () => {
       expect(recoveries(workspaceDir)).toEqual([]);
     });
 
+    /** A restore that stops after it wrote the folder, as a crash would. */
+    const interruptedRestore = async (workspaceDir: string, runId: string) => {
+      lockManifests(workspaceDir);
+      const interrupted = await restoreCheckpoint({
+        workspaceDir,
+        runId,
+        log: logLine,
+        beforeRollback: () => {
+          throw new Error("the holder stopped");
+        },
+      });
+      expect(interrupted.outcome).toBe("failed");
+      chmodSync(path.join(store(workspaceDir), "manifests"), 0o700);
+    };
+
+    test("a restore stopped between removing a folder and writing the file in its place is put back", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "p", "a file before the turn");
+      const { runId } = await capture(workspaceDir);
+      rmSync(path.join(workspaceDir, "p"));
+      write(workspaceDir, "p/x.txt", "the turn made p a folder");
+      const saved = treeOf(workspaceDir);
+      await interruptedRestore(workspaceDir, runId);
+      // Where the restore stopped: the folder removed, the file not written.
+      rmSync(path.join(workspaceDir, "p"));
+
+      expect((await capture(workspaceDir)).report).toEqual({
+        status: "taken",
+      });
+      expect(treeOf(workspaceDir)).toEqual(saved);
+      expect(recoveries(workspaceDir)).toEqual([]);
+    });
+
+    test("a restore stopped between removing a file and making the folder in its place is put back", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "p/y.txt", "in a folder before the turn");
+      const { runId } = await capture(workspaceDir);
+      rmSync(path.join(workspaceDir, "p"), { recursive: true });
+      write(workspaceDir, "p", "the turn made p a file");
+      const saved = treeOf(workspaceDir);
+      await interruptedRestore(workspaceDir, runId);
+      // Where the restore stopped: the file removed, the folder not made.
+      rmSync(path.join(workspaceDir, "p"), { recursive: true });
+
+      expect((await capture(workspaceDir)).report).toEqual({
+        status: "taken",
+      });
+      expect(treeOf(workspaceDir)).toEqual(saved);
+      expect(recoveries(workspaceDir)).toEqual([]);
+    });
+
+    test("a temp file left by a write the restore did not finish is removed", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "d/f.txt", "old");
+      const { runId } = await capture(workspaceDir);
+      write(workspaceDir, "d/f.txt", "new");
+      const saved = treeOf(workspaceDir);
+      await interruptedRestore(workspaceDir, runId);
+      write(
+        workspaceDir,
+        `d/.stella-restore-${crypto.randomUUID()}`,
+        "half written",
+      );
+
+      expect((await capture(workspaceDir)).report).toEqual({
+        status: "taken",
+      });
+      expect(treeOf(workspaceDir)).toEqual(saved);
+    });
+
     test("settling an interrupted restore keeps what changed since, attachments included", async () => {
       const { workspaceDir } = place();
       write(workspaceDir, "d/f.txt", "old");

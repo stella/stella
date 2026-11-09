@@ -677,6 +677,14 @@ const isStaleLock = async (lock: string, limits: CheckpointLimits) => {
  * reclaimer that died and is removed; it is held for a few file operations,
  * so a live reclaimer losing it that way is not a practical case.
  *
+ * Known limit: if a reclaimer dies inside the mutex, two later reclaimers
+ * can both remove the stale mutex and, with delayed file operations, both
+ * end up holding the lock. That needs a crash inside a mutex held for a few
+ * file operations and two more holders racing within microseconds; the
+ * desktop runs one instance, so a second holder only overlaps during a
+ * restart. Closing it needs an OS lock (flock or LockFileEx), which Node and
+ * Bun do not expose.
+ *
  * Answers `gone` once the stale lock is removed, `kept` when it is not this
  * reclaimer's to remove (now or yet), `failed` when the mutex cannot be had.
  */
@@ -745,6 +753,7 @@ const sweepLockLeftovers = async (store: string, limits: CheckpointLimits) => {
 const takeLock = async (
   store: string,
   limits: CheckpointLimits,
+  signal: AbortSignal | undefined,
 ): Promise<Result<Lock, CheckpointRefused>> => {
   const lock = path.join(store, LOCK_FILE);
   const mine: Lock = { pid: process.pid, token: crypto.randomUUID() };
@@ -825,6 +834,9 @@ const takeLock = async (
       if (taken.value === "failed") {
         return Result.err(lockFailed());
       }
+      if (signal?.aborted === true) {
+        return Result.err(refused("failed", "The capture was stopped.")());
+      }
       if (performance.now() >= deadline) {
         return Result.err(
           refused("failed", "Another process holds the checkpoint store.")(),
@@ -883,24 +895,61 @@ const releaseLock = async (store: string, mine: Lock) =>
 /** Work on one store, in this process queued after the work before it. */
 const storeQueues = new Map<string, Promise<null>>();
 
+/** Settles once `signal` is aborted; never without one. */
+const whenAborted = async (signal: AbortSignal | undefined) =>
+  await new Promise<null>((resolve) => {
+    if (signal === undefined) {
+      return;
+    }
+    if (signal.aborted) {
+      resolve(null);
+      return;
+    }
+    signal.addEventListener(
+      "abort",
+      () => {
+        resolve(null);
+      },
+      { once: true },
+    );
+  });
+
+type StoreAccess = {
+  store: string;
+  limits: CheckpointLimits;
+  log: (line: string) => void;
+  /** Ends the wait for the store when the run is stopped. */
+  signal?: AbortSignal | undefined;
+};
+
 /**
  * Run `work` with the store to itself: after earlier work on it in this
- * process, and holding its lock file against other processes.
+ * process, and holding its lock file against other processes. A stopped run
+ * stops waiting for either at once.
  */
 const withStore = async <T>(
-  store: string,
-  limits: CheckpointLimits,
-  log: (line: string) => void,
+  { store, limits, log, signal }: StoreAccess,
   work: () => Promise<Result<T, CheckpointRefused>>,
 ): Promise<Result<T, CheckpointRefused>> => {
   const before = storeQueues.get(store) ?? Promise.resolve(null);
-  const { promise: done, resolve: finish } = Promise.withResolvers<null>();
+  const { promise: ours, resolve: finish } = Promise.withResolvers<null>();
+  // The next in line waits for this work and for everything before it, also
+  // when this one stopped waiting early.
+  const done: Promise<null> = Promise.all([before, ours]).then(() => {
+    if (storeQueues.get(store) === done) {
+      storeQueues.delete(store);
+    }
+    return null;
+  });
   storeQueues.set(store, done);
-  await before;
   try {
+    await Promise.race([before, whenAborted(signal)]);
+    if (signal?.aborted === true) {
+      return Result.err(refused("failed", "The capture was stopped.")());
+    }
     return await Result.gen(async function* () {
       yield* Result.await(openStore(store));
-      const mine = yield* Result.await(takeLock(store, limits));
+      const mine = yield* Result.await(takeLock(store, limits, signal));
       const stopBeating = keepLock(store, mine, limits, log);
       const swept = await Result.tryPromise({
         try: async () => {
@@ -923,9 +972,6 @@ const withStore = async <T>(
     });
   } finally {
     finish(null);
-    if (storeQueues.get(store) === done) {
-      storeQueues.delete(store);
-    }
   }
 };
 
@@ -1580,6 +1626,40 @@ const openedFrom = (before: Entry | undefined, now: Entry | undefined) =>
 
 const parentOf = (entryPath: string) => path.posix.dirname(entryPath);
 
+/** A temp file a restore writes next to an entry before renaming it over. */
+const isRestoreTemp = (entryPath: string) =>
+  path.posix.basename(entryPath).startsWith(RESTORE_TEMP_PREFIX);
+
+/**
+ * What a rollback keeps at one path, from how it was before the restore
+ * (`was`), how it is now (`is`) and what the restore was writing (`wanted`).
+ */
+const settleEntry = (
+  entryPath: string,
+  was: Entry | undefined,
+  is: Entry | undefined,
+  wanted: Entry | undefined,
+): { keep: Entry | undefined; changedSince: boolean } => {
+  if (sameEntry(is, was)) {
+    return { keep: is, changedSince: false };
+  }
+  // A write the restore did not finish left its temp file.
+  if (was === undefined && wanted === undefined && isRestoreTemp(entryPath)) {
+    return { keep: undefined, changedSince: false };
+  }
+  // As the restore wrote it, or a folder it opened for writing.
+  if (sameEntry(is, wanted) || openedFrom(was, is)) {
+    return { keep: was, changedSince: false };
+  }
+  // Removed by the restore on the way to something else (a file becoming a
+  // folder, say) and not written yet: it comes back. Bringing back what was
+  // deleted since is the safe side; losing it is not.
+  if (is === undefined && was !== undefined && !sameEntry(wanted, was)) {
+    return { keep: was, changedSince: false };
+  }
+  return { keep: is, changedSince: true };
+};
+
 /**
  * Undo what a restore wrote, and only that. For each path, with `before` the
  * folder as the restore found it and `desired` what the restore was writing:
@@ -1627,18 +1707,17 @@ const rollBack = async ({
       ...desired.keys(),
       ...current.keys(),
     ])) {
-      const was = saved.get(entryPath);
-      const is = current.get(entryPath);
-      const chosen =
-        sameEntry(is, was) ||
-        !(sameEntry(is, desired.get(entryPath)) || openedFrom(was, is))
-          ? is
-          : was;
-      if (!sameEntry(is, was) && chosen === is) {
+      const settled = settleEntry(
+        entryPath,
+        saved.get(entryPath),
+        current.get(entryPath),
+        desired.get(entryPath),
+      );
+      if (settled.changedSince) {
         changedSince.push(entryPath);
       }
-      if (chosen !== undefined) {
-        target.set(entryPath, chosen);
+      if (settled.keep !== undefined) {
+        target.set(entryPath, settled.keep);
       }
     }
     // What is left as it is keeps the folders it lies in.
@@ -1903,33 +1982,39 @@ export const restoreCheckpoint = async (
   if (!found.value) {
     return { outcome: "no_checkpoint", detail: null };
   }
-  const restored = await withStore(store, limits, options.log, async () => {
-    // An interrupted restore is settled first; until it is, nothing else.
-    const settled = await reconcile(
-      store,
-      options.workspaceDir,
-      limits,
-      options.log,
-    );
-    if (Result.isError(settled)) {
-      const unsettled: CheckpointRestore = {
-        outcome: "failed",
-        detail: "an interrupted restore could not be settled",
-      };
-      return Result.ok(unsettled);
-    }
-    const outcome = await restoreHeld(store, options, limits);
-    // A store that cannot be read removes nothing.
-    const collected = await Result.gen(async function* () {
-      const state = yield* Result.await(readStore(store, limits));
-      return await collectGarbage(store, state.manifests, state.recoveries);
-    });
-    return Result.ok(
-      Result.isOk(collected) || outcome.detail !== null
-        ? outcome
-        : { ...outcome, detail: "files the restore no longer needs were kept" },
-    );
-  });
+  const restored = await withStore(
+    { store, limits, log: options.log },
+    async () => {
+      // An interrupted restore is settled first; until it is, nothing else.
+      const settled = await reconcile(
+        store,
+        options.workspaceDir,
+        limits,
+        options.log,
+      );
+      if (Result.isError(settled)) {
+        const unsettled: CheckpointRestore = {
+          outcome: "failed",
+          detail: "an interrupted restore could not be settled",
+        };
+        return Result.ok(unsettled);
+      }
+      const outcome = await restoreHeld(store, options, limits);
+      // A store that cannot be read removes nothing.
+      const collected = await Result.gen(async function* () {
+        const state = yield* Result.await(readStore(store, limits));
+        return await collectGarbage(store, state.manifests, state.recoveries);
+      });
+      return Result.ok(
+        Result.isOk(collected) || outcome.detail !== null
+          ? outcome
+          : {
+              ...outcome,
+              detail: "files the restore no longer needs were kept",
+            },
+      );
+    },
+  );
   return Result.isOk(restored)
     ? restored.value
     : { outcome: "failed", detail: "the checkpoint store could not be held" };
@@ -1975,7 +2060,7 @@ export const captureCheckpoint = async ({
     return { status: "unavailable", reason: "unsupported" };
   }
   const store = checkpointStoreOf(workspaceDir);
-  const taken = await withStore(store, limits, log, async () => {
+  const taken = await withStore({ store, limits, log, signal }, async () => {
     // An interrupted restore is settled first; until it is, nothing else.
     const settled = await reconcile(store, workspaceDir, limits, log);
     if (Result.isError(settled)) {

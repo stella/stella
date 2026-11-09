@@ -334,8 +334,8 @@ describe("undoing a local run's file changes", () => {
           : undefined,
       { description: "the run to wait for the folder's checkpoints" },
     );
+    // The other holder never lets go: the stop alone ends the wait.
     host.handle({ type: "run.cancel", runId: start.runId });
-    rmSync(lock);
     expect((await finished).outcome).toBe("cancelled");
     expect(existsSync(at.fakeLog)).toBe(false);
   });
