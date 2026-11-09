@@ -431,6 +431,9 @@ describe("code pages", () => {
       expect(text).toContain(String.fromCodePoint(0xff_fd));
       expect(document.warnings).toEqual([warning]);
     }
+  });
+
+  test("no byte under any code page decodes to a C1 control character", () => {
     assertProperty(
       "no byte under any code page decodes to a C1 control character",
       fc.property(

@@ -46,10 +46,11 @@ describe("restoreHungarianLetters", () => {
           expect(restored).not.toMatch(/[õÕûÛ]/u);
           expect(restored.length).toBe(text.length);
           expect(restoreHungarianLetters(restored)).toBe(restored);
-          const kept = [...text].filter((letter) => !/[õÕûÛ]/u.test(letter));
-          expect(
-            [...restored].filter((letter) => !/[őŐűŰ]/u.test(letter)),
-          ).toEqual(kept.filter((letter) => !/[őŐűŰ]/u.test(letter)));
+          // With every stand-in and every letter it becomes taken out, the
+          // two texts are the same: nothing else was touched.
+          expect(restored.replaceAll(/[őŐűŰ]/gu, "")).toBe(
+            text.replaceAll(/[õÕûÛőŐűŰ]/gu, ""),
+          );
         },
       ),
       { numRuns: 300 },
