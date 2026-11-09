@@ -12,8 +12,10 @@
  *    judgment standing.
  */
 
+import { panic } from "better-result";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   describe,
   expect,
@@ -25,6 +27,7 @@ import { and, count, eq, inArray } from "drizzle-orm";
 import type { PlaybookRunProjection } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentReviewFindings,
   documentReviewRuns,
@@ -42,6 +45,7 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import { recordTableRunDocumentRead } from "@/api/lib/document-review/table-run-findings";
 import {
   deletePlaybookColumns,
   deletePlaybookPositionColumns,
@@ -543,6 +547,128 @@ describe("opening runs for a files table", () => {
     expect(carried).toEqual([{ decision: "accepted", decidedBy: ids.userA1 }]);
 
     await clearRuns();
+  });
+});
+
+describe("telling a table run how its document was read", () => {
+  const scopedDb: ScopedDb = async (run) =>
+    await run(asTestRaw<Transaction>(testDb));
+  const source = (charactersWithheld: number) => ({
+    fileFieldId: ids.fileFieldA1,
+    passagesCut: 1,
+    charactersWithheld,
+    charactersTotal: 1000,
+  });
+  const openRun = async () => {
+    const definitionId = await seedPlaybookDefinition();
+    const { askId } = await seedMaterializedColumns(definitionId);
+    const opened = await openTableRuns(definitionId);
+    const runId = opened.runs.at(0)?.runId ?? panic("No run was opened");
+    await testDb
+      .update(documentReviewRuns)
+      .set({
+        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+        status: "running",
+      })
+      .where(eq(documentReviewRuns.id, runId));
+    const read = async () =>
+      (
+        await testDb
+          .select({
+            status: documentReviewRuns.status,
+            errorCode: documentReviewRuns.errorCode,
+            withheldSources: documentReviewRuns.withheldSources,
+          })
+          .from(documentReviewRuns)
+          .where(eq(documentReviewRuns.id, runId))
+      ).at(0);
+    const [pinned] = await testDb
+      .select({ entityVersionId: documentReviewRuns.entityVersionId })
+      .from(documentReviewRuns)
+      .where(eq(documentReviewRuns.id, runId));
+    const batch: BatchRead = {
+      entityVersionId: pinned?.entityVersionId ?? panic("No pinned version"),
+      propertyIds: [askId],
+    };
+    return { read, batch };
+  };
+  type BatchRead = Pick<
+    Parameters<typeof recordTableRunDocumentRead>[0],
+    "entityVersionId" | "propertyIds"
+  >;
+  const report = async (
+    batch: BatchRead,
+    read: Parameters<typeof recordTableRunDocumentRead>[0]["read"],
+  ) =>
+    await recordTableRunDocumentRead({
+      scopedDb,
+      workspaceId: ids.wsA1,
+      entityId: ids.entityA1,
+      ...batch,
+      read,
+    });
+
+  afterEach(clearRuns);
+
+  test("a later batch repeats a file's record instead of adding to it", async () => {
+    const { read, batch } = await openRun();
+
+    await report(batch, { type: "cut", withheld: [source(100)] });
+    await report(batch, { type: "cut", withheld: [source(200)] });
+
+    expect(await read()).toMatchObject({
+      withheldSources: [source(200)],
+    });
+  });
+
+  test("a document too large fails the run with its own code", async () => {
+    const { read, batch } = await openRun();
+
+    await report(batch, { type: "tooLarge" });
+
+    expect(await read()).toMatchObject({
+      status: "failed",
+      errorCode: "document_too_large",
+    });
+  });
+
+  test("a batch for a column outside the run leaves the run alone", async () => {
+    const { read, batch } = await openRun();
+
+    await report(
+      { ...batch, propertyIds: [toSafeId<"property">(Bun.randomUUIDv7())] },
+      { type: "tooLarge" },
+    );
+
+    expect(await read()).toMatchObject({ status: "running", errorCode: null });
+  });
+
+  test("a batch that read another version leaves the run alone", async () => {
+    const { read, batch } = await openRun();
+
+    await report(
+      {
+        ...batch,
+        entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
+      },
+      { type: "tooLarge" },
+    );
+
+    expect(await read()).toMatchObject({ status: "running", errorCode: null });
+  });
+
+  test("a cut records only the file the run reviews", async () => {
+    const { read, batch } = await openRun();
+    const otherFile = {
+      ...source(900),
+      fileFieldId: Bun.randomUUIDv7(),
+    };
+
+    await report(batch, { type: "cut", withheld: [otherFile, source(100)] });
+    expect(await read()).toMatchObject({ withheldSources: [source(100)] });
+
+    await report(batch, { type: "cut", withheld: [otherFile] });
+    expect(await read()).toMatchObject({ withheldSources: [source(100)] });
   });
 });
 

@@ -80,6 +80,7 @@ export const SOFT_LAW_AUTHORITY_POLICIES = {
       other: eligible,
     },
   },
+  "cz-suip": pendingPolicy,
   "eu-edpb": {
     expression: "required",
     referenceStyle: "literal",

@@ -278,6 +278,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/account-export/organization-audit-gate.ts",
     "apps/api/src/lib/account-export/store.ts",
     "apps/api/src/lib/agent-skills/*",
+    "apps/api/src/lib/ai-generation/token-estimate.ts",
     "apps/api/src/lib/analytics/*",
     "apps/api/src/lib/auth/*",
     "apps/api/src/lib/auth/feature-access/context.ts",

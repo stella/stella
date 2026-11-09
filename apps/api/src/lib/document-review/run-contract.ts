@@ -72,6 +72,8 @@ export const DOCUMENT_REVIEW_RUN_ERROR_CODES = [
   "unsupported_format",
   /** No model is configured or usage is unavailable for this organization. */
   "ai_unavailable",
+  /** The documents cannot fit the model's request, even trimmed. */
+  "document_too_large",
   /** The extraction or grading pass failed. */
   "playbook_check_failed",
   /** The reference comparison pass failed. */

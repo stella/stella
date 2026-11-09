@@ -122,6 +122,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "document_review_parties.parties",
   "document_review_runs.basis",
   "document_review_runs.skipped",
+  "document_review_runs.withheld_sources",
   "document_translation_runs.warnings",
   "document_translation_units.application",
   "document_translation_units.warnings",

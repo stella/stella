@@ -59,6 +59,10 @@ import {
   startsDecisionBody,
 } from "@stll/legal-ast/document-ast";
 import {
+  stripInlinePrefix,
+  stripInlineSuffix,
+} from "@stll/legal-ast/inline-line";
+import {
   containsPlOperativeVerb,
   isPlAppealInstruction,
   isPlAuthorityDecisionTitle,
@@ -78,6 +82,7 @@ import {
   namesPlDocumentType,
   opensPlRuling,
   opensWithPlSignatureTitle,
+  plRulingClauseStart,
 } from "@stll/legal-ast/polish-document-roles";
 // parser-output-unchanged: the subheading outline number moved unchanged into the printed-label grammar.
 import { SUBHEADING_OUTLINE_NUMBER_RE } from "@stll/legal-ast/printed-paragraph-labels";
@@ -1173,13 +1178,75 @@ const parseParagraphElement = (
     itemMarker === undefined
       ? plainText
       : normalizeWhitespace(inlinesToPlainText(marked));
+  pushClassifiedParagraph(state, markedText, marked);
+  return true;
+};
+
+/** Whether no paragraph of the ruling read so far has ruled. */
+const rulingNotYetStated = (state: ParserState): boolean =>
+  !state.blocks.some(
+    (block) =>
+      block.type === "paragraph" &&
+      block.role === "holding" &&
+      containsPlOperativeVerb(block.plainText),
+  );
+
+/**
+ * The paragraphs read as the ruling before it states anything (its legal
+ * basis, `w imieniu Prezesa Urzędu …`) are the head matter the ruling
+ * follows, once a recital shows the ruling has not begun.
+ */
+const demoteUnstatedRuling = (state: ParserState): void => {
+  for (let index = state.blocks.length - 1; index >= 0; index -= 1) {
+    const block = state.blocks[index];
+    if (block?.type !== "paragraph" || block.role !== "holding") {
+      return;
+    }
+    state.blocks[index] = { ...block, role: "intro" };
+  }
+};
+
+/**
+ * Push a paragraph with its role. A paragraph that opens on the recital and
+ * rules in its last clause (`po przeprowadzeniu postępowania … , uznaje
+ * się, że …`) is two: the recital the ruling follows, then the ruling. The
+ * text stays as printed; only the paragraph break between them is added.
+ */
+const pushClassifiedParagraph = (
+  state: ParserState,
+  plainText: string,
+  inlines: Inline[],
+): void => {
+  const printed = inlinesToPlainText(inlines);
+  const rulingStart =
+    state.section !== "reasoning" && rulingNotYetStated(state)
+      ? plRulingClauseStart(printed)
+      : undefined;
+  if (rulingStart === undefined) {
+    pushParagraph(
+      state,
+      plainText,
+      inlines,
+      classifyParagraph(state, plainText),
+    );
+    return;
+  }
+  demoteUnstatedRuling(state);
+  const recitalInlines = stripInlineSuffix(
+    inlines,
+    printed.length - rulingStart,
+  );
+  const recitalText = normalizeWhitespace(inlinesToPlainText(recitalInlines));
+  pushParagraph(state, recitalText, recitalInlines, "intro");
+  state.section = "recital";
+  const rulingInlines = stripInlinePrefix(inlines, rulingStart);
+  const rulingText = normalizeWhitespace(inlinesToPlainText(rulingInlines));
   pushParagraph(
     state,
-    markedText,
-    marked,
-    classifyParagraph(state, markedText),
+    rulingText,
+    rulingInlines,
+    classifyParagraph(state, rulingText),
   );
-  return true;
 };
 
 const parseTableElement = (

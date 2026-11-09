@@ -1018,9 +1018,9 @@ describe("thread context usage", () => {
       summary: null,
     });
 
-    // "hello" (5 chars) and "hi there" (8 chars) round up to 2 tokens each,
+    // "hello" (5 bytes) and "hi there" (8 bytes) round up to 2 and 3 tokens,
     // plus the per-message overhead.
-    const expected = 2 * MESSAGE_OVERHEAD_TOKENS + 2 + 2;
+    const expected = 2 * MESSAGE_OVERHEAD_TOKENS + 2 + 3;
     expect(usage.breakdown).toEqual({
       promptTokens: 0,
       toolTokens: 0,
@@ -1081,9 +1081,9 @@ describe("thread context usage", () => {
       summary: null,
     });
 
-    // "see attached" is 12 chars -> 3 tokens, plus the message overhead.
+    // "see attached" is 12 bytes -> 4 tokens, plus the message overhead.
     expect(usage.breakdown.conversationTokens).toBe(
-      MESSAGE_OVERHEAD_TOKENS + 3,
+      MESSAGE_OVERHEAD_TOKENS + 4,
     );
     expect(usage.breakdown.attachmentTokens).toBe(
       2 * FILE_PART_ESTIMATED_TOKENS,
