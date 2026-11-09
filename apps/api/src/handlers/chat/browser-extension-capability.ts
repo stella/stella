@@ -50,7 +50,7 @@ export const BROWSER_EXTENSION_CAPABILITY = {
     availability:
       "Browser tools are not available in this run because it runs on the user's computer, where stella cannot reach their browser extension.",
     recoveryStep:
-      "that stella can use their browser in a chat that runs on stella rather than on their computer",
+      "that stella can use their browser in a chat that runs on stella rather than on their computer, once the stella browser extension is connected there",
   },
   // The tab's page and the stella server run different versions: the tab was
   // open across an update, and a reload brings it to the server's version.
