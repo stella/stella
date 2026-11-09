@@ -5,6 +5,7 @@ import {
   encodeSidecarMessage,
   parseSidecarHelloPreamble,
   parseSidecarHostLine,
+  SIDECAR_CHECKPOINT_STORE_SUFFIX,
   SIDECAR_HOLDER_MODES,
   SIDECAR_HOST_MESSAGE,
   SIDECAR_MAX_HELD_RUNS,
@@ -37,6 +38,7 @@ describe("sidecar protocol fixtures", () => {
       probeFailures: [...SIDECAR_PROBE_FAILURES],
       holderModes: [...SIDECAR_HOLDER_MODES],
       restoreOutcomes: [...SIDECAR_RESTORE_OUTCOMES],
+      checkpointStoreSuffix: SIDECAR_CHECKPOINT_STORE_SUFFIX,
     });
   });
 

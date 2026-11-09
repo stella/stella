@@ -54,7 +54,8 @@
       "not_newest",
       "folder_busy",
       "failed"
-    ]
+    ],
+    "checkpointStoreSuffix": ".checkpoints"
   },
   "valid": {
     "host": [

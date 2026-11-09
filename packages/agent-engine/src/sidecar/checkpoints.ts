@@ -25,6 +25,8 @@ import {
 } from "@stll/api-contract/desktop-runner";
 import { createSha256 } from "@stll/sha256/bun";
 
+import { SIDECAR_CHECKPOINT_STORE_SUFFIX } from "./protocol";
+
 /**
  * A run's folder as it stood before its turn, so the member can undo what the
  * turn changed there. The sidecar saves the folder once per run, after the
@@ -89,7 +91,6 @@ export type CheckpointRestore = {
   detail: string | null;
 };
 
-const STORE_SUFFIX = ".checkpoints";
 const OBJECTS = "objects";
 const MANIFESTS = "manifests";
 const MANIFEST_VERSION = 1;
@@ -123,7 +124,7 @@ export const checkpointStoreOf = (workspaceDir: string) => {
   const folder = path.resolve(workspaceDir);
   return path.join(
     path.dirname(folder),
-    `${path.basename(folder)}${STORE_SUFFIX}`,
+    `${path.basename(folder)}${SIDECAR_CHECKPOINT_STORE_SUFFIX}`,
   );
 };
 

@@ -59,8 +59,8 @@ use tokio::sync::{mpsc, oneshot};
 pub(crate) use endpoint::EndpointError;
 use endpoint::Endpoints;
 pub(crate) use protocol::{
-  HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
-  SidecarRunStart, SkillFolderRef,
+  CHECKPOINT_STORE_SUFFIX, HarnessLaunchSettings, HarnessProbe, HarnessProcess,
+  HeldRun, ProbeOutcome, SidecarRunStart, SkillFolderRef,
 };
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProbeFailure,

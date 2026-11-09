@@ -23,6 +23,9 @@ pub(crate) const SIDECAR_PROTOCOL: u32 = 4;
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Runs one `hello` may resume or list.
 pub(crate) const MAX_HELD_RUNS: usize = 1000;
+/// Beside a run's folder, the sidecar's checkpoints live under the folder's
+/// name with this suffix; removing a folder removes them too.
+pub(crate) const CHECKPOINT_STORE_SUFFIX: &str = ".checkpoints";
 /// Hex characters of the holder's secret.
 pub(crate) const SECRET_HEX_LENGTH: usize = 64;
 
@@ -566,6 +569,10 @@ mod tests {
     assert_eq!(
       fixtures["vocabulary"]["maxHeldRuns"].as_u64(),
       u64::try_from(MAX_HELD_RUNS).ok()
+    );
+    assert_eq!(
+      fixtures["vocabulary"]["checkpointStoreSuffix"].as_str(),
+      Some(CHECKPOINT_STORE_SUFFIX)
     );
   }
 
