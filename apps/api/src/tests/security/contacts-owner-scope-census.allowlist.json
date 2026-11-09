@@ -7,6 +7,14 @@
       "seed.seedContacts": 2
     }
   },
+  "apps/api/scripts/seed-route-smoke-scale.ts::names-contacts-table": {
+    "reason": "Route-scale fixture seed for an isolated route-smoke matter: every contacts statement (the cardinality count, the template lookup and the scaled insert) runs inside `createRootMembershipScopedDb` for the fixture's own organization and owner, so row policies confine it to that organization.",
+    "sites": {
+      "readSmokeCardinalities.contacts": 1,
+      "contact": 1,
+      "<module>": 1
+    }
+  },
   "apps/api/scripts/seed-slovak-firm.ts::names-contacts-table": {
     "reason": "Development seed: `persistSlovakFirmSeed` runs inside the seed transaction after a `set_config` that switches to the application role and names the fixture's organization, so its contacts statements run under that organization's row policies.",
     "sites": {

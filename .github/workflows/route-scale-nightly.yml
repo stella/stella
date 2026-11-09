@@ -1,0 +1,151 @@
+name: Route matter scale
+
+defaults:
+  run:
+    shell: bash
+
+# Walks every enrolled route on a small and a tenfold matter and compares their
+# cost. Three walks per route take several times the pull-request route smoke,
+# so main measures them once a night instead of on every change.
+on:
+  schedule:
+    - cron: "47 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: cp apps/web/.env.example apps/web/.env
+
+      - name: Build web with the comparison flags
+        uses: ./.github/actions/build-e2e-web
+
+      - name: Upload production web build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-web-build
+          path: apps/web/dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  measure:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      # The same stack, build artifact, seed and browser as the pull-request
+      # route smoke.
+      - name: Setup production browser stack
+        timeout-minutes: 9
+        id: stack
+        uses: ./.github/actions/setup-production-e2e
+        with:
+          expected-sha: ${{ github.sha }}
+
+      - name: Login to GitHub Container Registry for browser images
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull the pinned browser image and clear registry credentials
+        timeout-minutes: 2
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" --prepare
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
+      - name: Compare routes on a small and a large matter
+        timeout-minutes: 30
+        env:
+          E2E_EXECUTION_PROFILE: network-baseline
+          E2E_EXPECT_DEV_ROUTES: "false"
+          E2E_ROUTE_SCALE: "1"
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-route-scale.zip
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts --project=route-smoke
+
+      - name: Upload route scale report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: route-scale-report-${{ github.run_id }}
+          path: apps/web/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload server logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: route-scale-server-logs-${{ github.run_id }}
+          path: |
+            /tmp/api.log
+            /tmp/web-production.log
+          if-no-files-found: ignore
+          retention-days: 7
