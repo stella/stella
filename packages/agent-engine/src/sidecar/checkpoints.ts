@@ -713,6 +713,8 @@ type CaptureOptions = {
   /** Ends a capture in progress when the run is stopped. */
   signal?: AbortSignal;
   limits?: CheckpointLimits;
+  /** One line in the holder's log; never given a path or a file name. */
+  log: (line: string) => void;
 };
 
 /**
@@ -726,6 +728,7 @@ export const captureCheckpoint = async ({
   protectedPaths,
   signal,
   limits = CHECKPOINT_LIMITS,
+  log,
 }: CaptureOptions): Promise<DesktopRunnerCheckpointEvent> => {
   if (
     protectedPaths.some(
@@ -772,7 +775,10 @@ export const captureCheckpoint = async ({
     return Result.ok();
   });
   // Also after a refusal: files stored before it are named by nothing.
-  await prune(store, limits);
+  const pruned = await prune(store, limits);
+  if (Result.isError(pruned)) {
+    log("older checkpoints could not be removed");
+  }
   return Result.isOk(taken)
     ? { status: "taken" }
     : { status: "unavailable", reason: taken.error.reason };
@@ -1212,10 +1218,12 @@ const restoreFromStore = async ({
     };
   })();
   // The state saved before the restore is named by no checkpoint.
-  await Result.tryPromise(async () => {
+  const collected = await Result.tryPromise(async () => {
     await collectGarbage(store, (await readManifests(store)).manifests);
   });
-  return outcome;
+  return Result.isOk(collected) || outcome.detail !== null
+    ? outcome
+    : { ...outcome, detail: "files the restore no longer needs were kept" };
 };
 
 export const restoreCheckpoint = async (

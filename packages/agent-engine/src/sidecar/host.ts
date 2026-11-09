@@ -641,7 +641,7 @@ export class SidecarHost {
         runId: message.runId,
       });
       if (restored.detail !== null) {
-        this.options.log(`a folder restore failed: ${restored.detail}`);
+        this.options.log(`a folder restore: ${restored.detail}`);
       }
       answer(restored.outcome);
     } finally {
@@ -773,6 +773,7 @@ export class SidecarHost {
         ...message.skillFolders.map((folder) => folder.path),
       ],
       signal: run.stopCopying.signal,
+      log: this.options.log,
     });
     if (run.checkpoint.status === "unavailable") {
       this.options.log(

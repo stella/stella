@@ -118,6 +118,12 @@ type Capture = {
   limits?: Partial<CheckpointLimits>;
 };
 
+/** What captures logged; nothing in these folders fails a cleanup. */
+const logged: string[] = [];
+afterEach(() => {
+  expect(logged.splice(0)).toEqual([]);
+});
+
 const capture = async (
   workspaceDir: string,
   { memberFiles = [], protectedPaths = [], limits = {} }: Capture = {},
@@ -129,6 +135,9 @@ const capture = async (
     memberFiles,
     protectedPaths,
     limits: { ...CHECKPOINT_LIMITS, ...limits },
+    log: (line) => {
+      logged.push(line);
+    },
   });
   return { runId, report };
 };
