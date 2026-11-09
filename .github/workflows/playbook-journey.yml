@@ -58,22 +58,15 @@ jobs:
       - name: Prepare environment
         run: cp apps/api/.env.example apps/api/.env
 
-      # The stack's API answers every AI task with the live model below
-      # instead of the mock the other journeys use.
+      # The stack is the mock-model one the browser journeys use; the journey
+      # saves the organization's own Anthropic key, and requests made with an
+      # organization's key always reach the real provider.
       - name: Start docker stack and API server
         id: stack
         uses: ./.github/actions/setup-e2e-stack
         with:
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
-        env:
-          USE_MOCK_AI: "false"
-          AI_PROVIDER: anthropic
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AI_MODEL_FAST: ${{ inputs.model || 'claude-sonnet-5-5' }}
-          AI_MODEL_CHAT: ${{ inputs.model || 'claude-sonnet-5-5' }}
-          AI_MODEL_REASONING: ${{ inputs.model || 'claude-sonnet-5-5' }}
-          AI_MODEL_PDF: ${{ inputs.model || 'claude-sonnet-5-5' }}
 
       - name: Run the journey
         timeout-minutes: 30
@@ -81,11 +74,12 @@ jobs:
         env:
           NODE_ENV: development
           STELLA_LOCAL_DEV: "1"
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           JOURNEY_MODEL: ${{ inputs.model || 'claude-sonnet-5-5' }}
         run: |
           report="$RUNNER_TEMP/playbook-journey"
           status=0
-          bun evals/playbook-journey.ts --json "$report.json" | tee "$report.md" || status=$?
+          bun evals/playbook-journey.ts --model "$JOURNEY_MODEL" --json "$report.json" | tee "$report.md" || status=$?
           {
             cat "$report.md"
             echo

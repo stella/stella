@@ -99,9 +99,11 @@ the default provider chain (see `getTanStackTextModelById`).
   every run completes, progress counts every finding, no verdict is `missing`
   or unfinished, tiers match the fixture, panel deviations carry a fix and the
   table's verdict cells hold known tiers. Unlike the others it runs weekly in
-  CI (`.github/workflows/playbook-journey.yml`) on one small model; locally,
-  start the dev stack with `USE_MOCK_AI=false`, seed the test user, then
-  `bun run eval:playbook-journey`.
+  CI (`.github/workflows/playbook-journey.yml`) on one model. It saves the
+  organization's own Anthropic key first, so the stack itself can stay on the
+  mock; locally, start the dev stack, seed the test user, then
+  `bun run eval:playbook-journey -- --model claude-sonnet-5-5` with
+  `ANTHROPIC_API_KEY` set.
 - `agent-orientation.ts`: given stella's MCP tool list or CLI skill, does a
   model pick the right tool or command and arguments for a natural-language
   task, scored without executing anything?

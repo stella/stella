@@ -3,9 +3,13 @@
  * model, from the matter table and from the review panel, through the HTTP
  * API a person's browser uses, and check how every run ends.
  *
- * Against a running API (the e2e stack: migrated, seeded with the test user,
- * models configured through the instance environment), it:
+ * Against a running API (the e2e stack: migrated, seeded with the test user),
+ * it:
  *
+ *   0. with `--model`, saves the organization's own Anthropic key
+ *      (`ANTHROPIC_API_KEY`) and points every model role at that model, as an
+ *      admin does in AI settings; customer documents only reach a model
+ *      through an organization's key or the managed provider,
  *   1. creates two matters, uploads two contracts into the first and a signed
  *      precedent into the second (fixtures in `lib/playbook-journey-fixtures`),
  *   2. saves a playbook with a position for each check kind, so its asks are
@@ -24,12 +28,14 @@
  * Usage (from apps/api, with the stack up):
  *   bun evals/playbook-journey.ts [--api-url http://localhost:3001]
  *     [--storage-state ../../.playwright/storage-state.json] [--json out.json]
+ *     [--model claude-sonnet-5-5]
  */
 import { panic } from "better-result";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 
@@ -69,6 +75,7 @@ type Options = {
   apiUrl: string;
   storageStatePath: string;
   jsonPath: string | null;
+  model: string | null;
 };
 
 const parseArgs = (argv: readonly string[]): Options => {
@@ -79,6 +86,7 @@ const parseArgs = (argv: readonly string[]): Options => {
       "../../../.playwright/storage-state.json",
     ),
     jsonPath: null,
+    model: null,
   };
   for (let index = 0; index < argv.length; index += 2) {
     const flag = argv[index];
@@ -92,6 +100,9 @@ const parseArgs = (argv: readonly string[]): Options => {
         break;
       case "--json":
         options.jsonPath = value;
+        break;
+      case "--model":
+        options.model = value;
         break;
       default:
         return panic(`Unknown flag ${String(flag)}`);
@@ -643,12 +654,32 @@ const renderReport = (reports: readonly RunReport[]): string =>
     `${String(reports.filter((report) => report.problems.length === 0).length)}/${String(reports.length)} runs passed`,
   ].join("\n");
 
+const MODEL_ROLES = ["fast", "chat", "reasoning", "pdf"] as const;
+
+/** Saves the organization's Anthropic key and points every role at `model`,
+ *  through the same settings call an admin makes. */
+const configureModel = async (api: Api, model: string): Promise<void> => {
+  const apiKey =
+    env.ANTHROPIC_API_KEY ??
+    panic("--model needs ANTHROPIC_API_KEY for the organization's key");
+  const selection = { provider: "anthropic", modelId: model };
+  await api.send("POST", "/organization-settings/ai-config", {
+    providers: [{ provider: "anthropic", apiKey }],
+    overrideModels: Object.fromEntries(
+      MODEL_ROLES.map((role) => [role, selection]),
+    ),
+  });
+};
+
 const main = async () => {
   const options = parseArgs(process.argv.slice(2));
   const api = createApi(
     options.apiUrl,
     await readSessionCookie(options.storageStatePath),
   );
+  if (options.model !== null) {
+    await configureModel(api, options.model);
+  }
   const reports = await runJourney(api);
   process.stdout.write(`${renderReport(reports)}\n`);
   if (options.jsonPath !== null) {
