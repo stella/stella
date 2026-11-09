@@ -25,6 +25,7 @@ import { CASE_LAW_COURT_PROJECTION } from "./case-law-court-projection";
 import {
   passthroughId,
   projectionBranch,
+  publicReadRunningFields,
   publicUrl,
 } from "./projection-fields";
 
@@ -125,6 +126,45 @@ const caseLawSearchIdentityFields = {
   match: v.picklist(DECISION_SEARCH_MATCHES),
 } as const;
 
+/** One decision on a search page, whether its text may be shown or is withheld. */
+const caseLawSearchResultProjection = v.union([
+  projectionBranch(
+    v.strictObject({
+      ...caseLawSearchIdentityFields,
+      snippet: v.nullable(v.string()),
+      // Classifications are not headnotes; when included, null means none was stated.
+      keywords: v.nullable(
+        v.strictObject({
+          type: v.literal(DECISION_HEADNOTE_KEYWORDS),
+          items: v.array(v.string()),
+          omitted: v.number(),
+        }),
+      ),
+      // Publisher prose uses the expanded reading budget (up to 4000 characters).
+      headnote: v.nullable(
+        v.strictObject({
+          type: v.literal(TEXT_FIELD_TYPE.PRESENT),
+          text: v.string(),
+          truncated: v.boolean(),
+        }),
+      ),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      ...caseLawSearchIdentityFields,
+      excerpt: v.strictObject({
+        type: v.literal("withheld"),
+        reason: v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+      }),
+      // The licence that withholds the excerpt withholds the source's
+      // headnote and classifications too.
+      keywords: v.null(),
+      headnote: v.null(),
+    }),
+  ),
+]);
+
 /**
  * search_case_law. Source of truth: `handleSearchCaseLawTool`
  * (`stella-tools.ts`) merging one `searchDecisionsHandler` page per query.
@@ -184,49 +224,31 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
           ),
         }),
       ),
-      results: v.array(
-        v.union([
-          projectionBranch(
-            v.strictObject({
-              ...caseLawSearchIdentityFields,
-              snippet: v.nullable(v.string()),
-              // Classifications are not headnotes; when included, null means none was stated.
-              keywords: v.nullable(
-                v.strictObject({
-                  type: v.literal(DECISION_HEADNOTE_KEYWORDS),
-                  items: v.array(v.string()),
-                  omitted: v.number(),
-                }),
-              ),
-              // Publisher prose uses the expanded reading budget (up to 4000 characters).
-              headnote: v.nullable(
-                v.strictObject({
-                  type: v.literal(TEXT_FIELD_TYPE.PRESENT),
-                  text: v.string(),
-                  truncated: v.boolean(),
-                }),
-              ),
-            }),
-          ),
-          projectionBranch(
-            v.strictObject({
-              ...caseLawSearchIdentityFields,
-              excerpt: v.strictObject({
-                type: v.literal("withheld"),
-                reason: v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
-              }),
-              // The licence that withholds the excerpt withholds the source's
-              // headnote and classifications too.
-              keywords: v.null(),
-              headnote: v.null(),
-            }),
-          ),
-        ]),
-      ),
+      results: v.array(caseLawSearchResultProjection),
       total: searchTotalProjection,
       // Only on an empty result while the organization has no practice
       // jurisdictions: how to set them.
       nextStep: v.optional(v.string()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      ...publicReadRunningFields,
+      // What the phrasings that finished found so far. Never a complete
+      // answer: `status` stays `running`, and `pendingQueries` names the rest.
+      partial: v.nullable(
+        v.strictObject({
+          finishedQueries: v.array(v.string()),
+          pendingQueries: v.array(v.string()),
+          decisions: v.array(
+            v.strictObject({
+              decisionId: passthroughId(),
+              caseNumber: v.string(),
+              decisionDate: v.nullable(v.string()),
+            }),
+          ),
+        }),
+      ),
     }),
   ),
 ]);

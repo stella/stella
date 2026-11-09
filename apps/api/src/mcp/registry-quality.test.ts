@@ -427,7 +427,9 @@ test("every surface's read declarations are covered by the census", () => {
 
 // A single tool must not consume an unreviewed multi-thousand-token block of
 // every tools/list. The largest measured schema is in the surface baseline.
-const OUTPUT_SCHEMA_CHAR_CEILING = 4000;
+// Raised for a search that can answer "still running": that branch is part of
+// the schema, so a client can tell it from an empty result.
+const OUTPUT_SCHEMA_CHAR_CEILING = 4500;
 
 // An editorial limit on one description; the largest measured one is in the
 // surface baseline.

@@ -57,6 +57,7 @@ import {
 } from "@/api/mcp/input-normalization";
 import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
+import { CONTINUABLE_PUBLIC_READ_TOOLS } from "@/api/mcp/public-read-continuation";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolHandler,
@@ -838,6 +839,22 @@ const runAuthorizedMcpToolCall = async ({
   const budgetMs = corpusBudgetByTool.get(toolName);
   if (budgetMs === undefined) {
     return await run();
+  }
+  // The continuation owns these tools' concurrency, per work and per caller:
+  // a call over the limit is queued and told so, not refused.
+  if (CONTINUABLE_PUBLIC_READ_TOOLS.has(toolName)) {
+    const finished = await runWithPublicReadScope(
+      { budgetMs, signal: context.request?.signal },
+      run,
+    );
+    return Result.isOk(finished)
+      ? finished.value
+      : internalErrorResult({
+          mode,
+          context,
+          toolName,
+          error: finished.error,
+        });
   }
   const admitted = await (
     dependencies?.admitPublicRead ??
