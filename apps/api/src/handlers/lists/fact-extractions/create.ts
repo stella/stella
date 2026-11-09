@@ -33,6 +33,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
@@ -462,5 +463,11 @@ const createFactExtraction = createSafeHandler(
     );
   },
 );
+
+declareAggregateMutation(createFactExtraction, {
+  type: "independent",
+  reason:
+    "Inserts a new queued run and its pinned sources in one transaction; the organization run budget serializes concurrent starts on its counter row.",
+});
 
 export default createFactExtraction;
