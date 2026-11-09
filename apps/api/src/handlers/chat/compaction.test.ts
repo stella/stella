@@ -956,6 +956,121 @@ Continue drafting the termination analysis.
     ]);
   });
 
+  const agenticTurn = (steps: number): ModelMessage[] => [
+    { role: "user", content: "earlier question" },
+    { role: "assistant", content: "earlier answer" },
+    { role: "user", content: "najdi komentář k § 88" },
+    ...Array.from({ length: steps }, (_, step): ModelMessage[] => [
+      {
+        role: "assistant",
+        content: null,
+        toolCalls: [
+          {
+            id: `call_${step}`,
+            type: "function",
+            function: { name: "use-browser", arguments: "{}" },
+          },
+        ],
+      },
+      {
+        role: "tool",
+        content: `page ${step} ${"text ".repeat(400)}`,
+        toolCallId: `call_${step}`,
+      },
+    ]).flat(),
+  ];
+
+  const toolResultsFollowTheirCalls = (messages: readonly ModelMessage[]) => {
+    const called = new Set<string>();
+    return messages.every((message) => {
+      for (const call of message.toolCalls ?? []) {
+        called.add(call.id);
+      }
+      return (
+        message.role !== "tool" ||
+        (message.toolCallId !== undefined && called.has(message.toolCallId))
+      );
+    });
+  };
+
+  test("cuts between the steps of one turn that outgrows the budget, keeping its request", async () => {
+    const messages = agenticTurn(6);
+    const request = messages[2];
+
+    const plan = planModelCompaction({
+      messages,
+      preserveTokens: 1000,
+      triggerTokens: 2000,
+    });
+
+    expect(plan.type).toBe("compact");
+    if (plan.type === "none") {
+      return;
+    }
+    expect(plan.requestPinned).toBe(true);
+    expect(plan.recentMessages.at(0)).toBe(request);
+    expect(plan.recentMessages.at(1)?.role).toBe("assistant");
+    expect(plan.messagesToSummarize).not.toContain(request);
+    expect(plan.messagesToSummarize.at(-1)?.role).toBe("tool");
+
+    const result = await compactModelMessages({
+      messages,
+      preserveTokens: 1000,
+      triggerTokens: 2000,
+      summarizeTranscript: async () => "pages 0..3 read",
+    });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    const compactedMessages = result.value.messages;
+    expect(compactedMessages.at(0)).toBe(request);
+    expect(compactedMessages.at(1)?.content).toContain("pages 0..3 read");
+    expect(compactedMessages.at(-1)).toBe(messages.at(-1));
+  });
+
+  test("every in-turn cut keeps tool results with their calls and fits the budget", async () => {
+    for (const steps of [1, 2, 5, 12, 40]) {
+      for (const preserveTokens of [1, 500, 1500, 5000]) {
+        const messages = agenticTurn(steps);
+        const result = await compactModelMessages({
+          messages,
+          preserveTokens,
+          triggerTokens: preserveTokens,
+          summarizeTranscript: async () => "summary",
+        });
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+        const kept = result.value.messages;
+        expect(toolResultsFollowTheirCalls(kept)).toBe(true);
+        expect(kept.at(-1)).toBe(messages.at(-1));
+        expect(kept.some((message) => message === messages[2])).toBe(true);
+        expect(kept.at(0)?.role).toBe("user");
+        const plan = planModelCompaction({
+          messages,
+          preserveTokens,
+          triggerTokens: preserveTokens,
+        });
+        if (plan.type === "compact") {
+          // Over budget only when the newest step alone (with its request)
+          // is bigger than the budget: that step is never cut.
+          // The pinned request rides on top of the step budget.
+          const newestStepOnly = plan.recentMessages.length === 3;
+          const requestTokens = plan.requestPinned
+            ? planModelCompaction({
+                messages: plan.recentMessages.slice(0, 1),
+                triggerTokens: Number.MAX_SAFE_INTEGER,
+              }).totalTokens
+            : 0;
+          expect(
+            newestStepOnly ||
+              plan.preservedTokens - requestTokens <= preserveTokens,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
   test("skips model-message compaction below the token trigger", () => {
     const plan = planModelCompaction({
       messages: [{ role: "user", content: "small" }],

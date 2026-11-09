@@ -77,6 +77,12 @@ type ModelCompactionPlan =
       messagesToSummarize: ModelMessage[];
       preservedTokens: number;
       recentMessages: ModelMessage[];
+      /**
+       * The cut falls between steps of the turn the newest user message
+       * opened: `recentMessages` starts with that request, kept verbatim,
+       * and the summary goes after it because it covers steps taken for it.
+       */
+      requestPinned: boolean;
       totalTokens: number;
       type: "compact";
     };
@@ -299,43 +305,97 @@ export const planModelCompaction = ({
     return { totalTokens, type: "none" };
   }
 
-  const recentMessages: ModelMessage[] = [];
+  // The kept tail is whole turns. A single agentic turn can outgrow the
+  // budget on its own, so when the newest turn (opened by the last user
+  // message) does, it is also cut between its steps: an assistant message
+  // with the tool results that follow it. A result is never kept without its
+  // call, and the newest unit is always kept.
+  const requestIndex = messages.findLastIndex(
+    (message) => message.role === "user",
+  );
+  const newestTurn = messages.slice(requestIndex + 1);
+  // Splitting pays only when a step of the newest turn can be summarized,
+  // which takes a step before the newest one.
+  const splitIndex =
+    newestTurn.filter((message) => message.role === "assistant").length > 1 &&
+    estimateModelMessagesTokens(messages.slice(Math.max(requestIndex, 0))) >
+      preserveTokens
+      ? requestIndex
+      : messages.length;
+  let cut = messages.length;
   let preservedTokens = 0;
-
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages.at(index);
-    if (!message) {
-      continue;
-    }
-
-    const messageTokens = estimateModelMessageTokens(message);
+  while (cut > 0) {
+    const unitStart = modelUnitStart(messages, cut, splitIndex);
+    const unitTokens = estimateModelMessagesTokens(
+      messages.slice(unitStart, cut),
+    );
     if (
-      recentMessages.length > 0 &&
-      preservedTokens + messageTokens > preserveTokens &&
-      startsWithUserMessage(recentMessages)
+      cut < messages.length &&
+      preservedTokens + unitTokens > preserveTokens
     ) {
       break;
     }
-
-    preservedTokens += messageTokens;
-    recentMessages.unshift(message);
+    preservedTokens += unitTokens;
+    cut = unitStart;
   }
 
-  const messagesToSummarize = messages.slice(
-    0,
-    messages.length - recentMessages.length,
-  );
-  if (messagesToSummarize.length === 0) {
+  const tail = messages.slice(cut);
+  const head = messages.slice(0, cut);
+  if (head.length === 0) {
     return { totalTokens, type: "none" };
   }
 
+  // A tail that starts inside the newest turn keeps the request that opened it.
+  const request =
+    requestIndex !== -1 && cut > requestIndex
+      ? messages.at(requestIndex)
+      : undefined;
+  if (request === undefined) {
+    return {
+      messagesToSummarize: head,
+      preservedTokens,
+      recentMessages: tail,
+      requestPinned: false,
+      totalTokens,
+      type: "compact",
+    };
+  }
+
+  const messagesToSummarize = head.filter((_, index) => index !== requestIndex);
+  if (messagesToSummarize.length === 0) {
+    return { totalTokens, type: "none" };
+  }
   return {
     messagesToSummarize,
-    preservedTokens,
-    recentMessages,
+    preservedTokens: preservedTokens + estimateModelMessageTokens(request),
+    recentMessages: [request, ...tail],
+    requestPinned: true,
     totalTokens,
     type: "compact",
   };
+};
+
+/**
+ * Start of the unit that ends right before `end`: a whole turn up to
+ * `splitIndex`, one step after it.
+ */
+const modelUnitStart = (
+  messages: readonly ModelMessage[],
+  end: number,
+  splitIndex: number,
+): number => {
+  const last = end - 1;
+  const bySteps = last > splitIndex;
+  const floor = bySteps ? splitIndex + 1 : 0;
+  let start = last;
+  while (start > floor) {
+    const role = messages.at(start)?.role;
+    if (role === "user" || (bySteps && role === "assistant")) {
+      break;
+    }
+    start -= 1;
+  }
+  return start;
 };
 
 /**
@@ -563,13 +623,19 @@ export const compactModelMessages = async ({
     return Result.ok(trimmedModelHistory(messages, triggerTokens));
   }
 
+  const summaryMessage = createModelCompactionSummaryMessage({
+    summarizedMessageCount: plan.messagesToSummarize.length,
+    summary,
+  });
+  if (!plan.requestPinned) {
+    return Result.ok(compacted([summaryMessage, ...plan.recentMessages]));
+  }
+  const [request, ...steps] = plan.recentMessages;
   return Result.ok(
     compacted([
-      createModelCompactionSummaryMessage({
-        summarizedMessageCount: plan.messagesToSummarize.length,
-        summary,
-      }),
-      ...plan.recentMessages,
+      request ?? panic("A pinned compaction plan keeps its request"),
+      summaryMessage,
+      ...steps,
     ]),
   );
 };
