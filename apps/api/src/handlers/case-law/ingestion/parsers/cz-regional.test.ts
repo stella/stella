@@ -789,6 +789,38 @@ test("quote repair preserves the publisher span owning every surviving character
   ]);
 });
 
+describe("the court's paragraph numbers", () => {
+  test("136 C 2/2019: a gapless run among quoted evidence and list items is numbered", async () => {
+    const [decision] = await PROCESSED_FIELD_EVIDENCE_READERS["cz-regional"](
+      "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-regional-136-c-2-2019.finaldoc.json.gz",
+    );
+    const body = (decision?.ast.blocks ?? []).filter(
+      (block): block is ParagraphBlock =>
+        block.type === "paragraph" && block.role === undefined,
+    );
+    expect(
+      body.flatMap((block) =>
+        block.number === undefined ? [] : [block.number],
+      ),
+    ).toEqual(Array.from({ length: 22 }, (_, index) => index + 1));
+    const first = body.find((block) => block.number === 1);
+    expect(first?.plainText).toStartWith("Žalobce se svou žalobou");
+    expect(body.find((block) => block.number === 10)?.plainText).toStartWith(
+      "Po provedeném dokazování",
+    );
+    // The evidence and the list items between the numbers stay unnumbered,
+    // and no printed label is left in the text.
+    expect(body.filter((block) => block.number === undefined).length).toBe(
+      body.length - 22,
+    );
+    expect(
+      body
+        .map(({ plainText }) => plainText)
+        .filter((text) => /^\d+\.\s/u.test(text)),
+    ).toEqual([]);
+  });
+});
+
 describe("a line break typed inside a paragraph", () => {
   test("12 C 183/2022: the citation the publisher's entries split reads as one paragraph", async () => {
     const [decision] = await PROCESSED_FIELD_EVIDENCE_READERS["cz-regional"](

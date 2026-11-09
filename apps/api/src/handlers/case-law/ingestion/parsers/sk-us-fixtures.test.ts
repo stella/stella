@@ -372,3 +372,28 @@ test("IV. ÚS 344/2012: a parenthesis left open at a page break goes on onto the
     ),
   ).toBe(true);
 });
+
+test("III. ÚS 298/2018: the unlabelled paragraph that opens the reasoning is paragraph 1 of the printed run", async () => {
+  const blocks = await parsedFixture(
+    "sk-us-iii-us-298-2018",
+    "III. ÚS 298/2018",
+  );
+  const numbered = paragraphs(blocks).filter(
+    (block) => block.number !== undefined,
+  );
+  expect(numbered.map((block) => block.number)).toEqual(
+    Array.from({ length: 36 }, (_, index) => index + 1),
+  );
+  const texts = numbered.map(textOf);
+  // The court printed no "1.": that paragraph keeps its text whole.
+  expect(texts[0]).toStartWith("Ústavný súd Slovenskej republiky");
+  expect(texts[1]).toStartWith("Zo sťažnosti");
+  expect(texts[3]).toStartWith("So");
+  // No printed label is left at the start of a reasoning paragraph.
+  expect(
+    paragraphs(blocks)
+      .filter((block) => block.role !== "holding")
+      .map(textOf)
+      .filter((text) => /^\d+\.\s/u.test(text)),
+  ).toEqual([]);
+});

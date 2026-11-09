@@ -28,5 +28,53 @@
     "parserVersion": 14,
     "type": "pending-enrolment-wave",
     "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-uohs",
+    "parserVersion": 15,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-ns",
+    "parserVersion": 30,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-nss",
+    "parserVersion": 36,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-uokik",
+    "parserVersion": 32,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-regional",
+    "parserVersion": 25,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "sk-us",
+    "parserVersion": 27,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-us",
+    "parserVersion": 41,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "sk-courts",
+    "parserVersion": 31,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
   }
 ]

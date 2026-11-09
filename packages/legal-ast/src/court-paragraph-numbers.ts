@@ -92,9 +92,28 @@ export const COURT_PARAGRAPH_NUMBERING_LIMITS = {
    * Share of the body paragraphs from the first number to the end of its
    * part that the numbering itself accounts for, nested lists aside. Below
    * it the markers are scattered or leading items, not the reasoning's
-   * paragraphs.
+   * paragraphs, unless the run spans its part (`maxTail`).
    */
   minDensity: 0.4,
+  /**
+   * Unnumbered body paragraphs after the last number of a run that counts
+   * up one by one: a closing line or two. A run that opens its part within
+   * `maxLeadIn`, steps by one throughout and ends within this many
+   * paragraphs of the part's end (and within the widest gap between two of
+   * its own numbers) is the court numbering its reasoning, however many
+   * unnumbered paragraphs (quoted evidence, the items of a list) it carries
+   * between its numbers. A list read as numbering ends early, with the
+   * reasoning running on after it; that is what the density protects
+   * against, and a run that reaches the end is not one.
+   */
+  maxTail: 4,
+  /**
+   * Fewest numbers of a run read by its span rather than its density. Two
+   * numbers spread over a part are as often the part's two halves, each
+   * titled "1." and "2." ("1. K výroku …", "2. K výroku …"), as the court
+   * counting its paragraphs; a third makes it a count.
+   */
+  minSpanningRun: 3,
 } as const;
 
 /** Local evidence never invalidates another paragraph's printed label. */
@@ -115,6 +134,15 @@ export type CourtParagraphNumberingEvidence =
       readonly type: "unassigned";
       readonly blockIndex: number;
       readonly number: number;
+    }
+  | {
+      /**
+       * The court printed no 1: the one paragraph that opens the reasoning
+       * stands before its printed 2, and is given the 1 the run implies.
+       */
+      readonly type: "implied";
+      readonly blockIndex: number;
+      readonly number: 1;
     };
 
 type ScopeStart =
@@ -146,7 +174,7 @@ type Candidate = {
   /** Position in the document's blocks. */
   readonly blockIndex: number;
   readonly number: number;
-  readonly source: "printed" | "ocr" | "structured";
+  readonly source: "printed" | "ocr" | "structured" | "implied";
   readonly marker: string;
 };
 
@@ -174,6 +202,14 @@ type Body = {
   readonly opinionStarts: ReadonlySet<number>;
   /** Body positions inside a closed quotation begun before them. */
   readonly quotedStarts: ReadonlySet<number>;
+  /**
+   * Body positions that open the text after an operative part: the
+   * reasoning, which a court's numbering opens. Head matter printed before
+   * the ruling is not its lead-in, whatever role a parser gave it.
+   */
+  readonly reasoningStarts: ReadonlySet<number>;
+  /** Body positions a heading or a separate opinion opens. */
+  readonly sectionStarts: ReadonlySet<number>;
 };
 
 /**
@@ -191,7 +227,13 @@ const bodyOf = (blocks: readonly Block[]): Body => {
   let opinionBoundary: "role" | "heading" = "role";
   let inDissent = false;
   let inInstruction = false;
+  const reasoningStarts = new Set<number>();
+  let holdingSinceBody = false;
   for (const [index, block] of blocks.entries()) {
+    if (block.type === "paragraph" && block.role === "holding") {
+      holdingSinceBody = true;
+      continue;
+    }
     if (block.type === "heading") {
       headingSinceBody = true;
       const opinionHeading =
@@ -226,15 +268,25 @@ const bodyOf = (blocks: readonly Block[]): Body => {
     if (headingSinceBody) {
       sectionStarts.add(paragraphs.length);
     }
+    if (holdingSinceBody) {
+      reasoningStarts.add(paragraphs.length);
+    }
     inDissent = dissent;
     headingSinceBody = false;
+    holdingSinceBody = false;
     paragraphs.push(index);
   }
   const quotedStarts = closedQuotationParagraphStarts(
     paragraphs.map((blockIndex) => blocks[blockIndex]?.plainText ?? ""),
     new Set([...sectionStarts, ...opinionStarts]),
   );
-  return { paragraphs, opinionStarts, quotedStarts };
+  return {
+    paragraphs,
+    opinionStarts,
+    quotedStarts,
+    reasoningStarts,
+    sectionStarts,
+  };
 };
 
 /**
@@ -621,6 +673,54 @@ const bridgeScope = ({
   }
 };
 
+type ImpliedFirstOptions = {
+  readonly blocks: readonly Block[];
+  readonly body: Body;
+  /** The run's first printed paragraph. */
+  readonly first: Candidate;
+  /** Where the reasoning that run opens begins. */
+  readonly leadInFrom: number;
+  readonly start: ScopeStart;
+};
+
+/**
+ * Paragraph 1 of a run the court printed from 2, when it can be proven: the
+ * run starts the decision's numbering afresh at 2, and exactly one paragraph
+ * stands before that 2, the one that opens the reasoning after the operative
+ * part, in the same section, quoting nothing and opening with no label of its
+ * own. Courts that leave the first paragraph of the reasoning unlabelled
+ * still cite it as paragraph 1. Anything short of that proof leaves the
+ * paragraph unnumbered: no number is given that the court's text does not
+ * fix.
+ */
+const impliedFirst = ({
+  blocks,
+  body,
+  first,
+  leadInFrom,
+  start,
+}: ImpliedFirstOptions): Candidate | null => {
+  const bodyIndex = first.bodyIndex - 1;
+  const blockIndex = body.paragraphs[bodyIndex];
+  const block = blockIndex === undefined ? undefined : blocks[blockIndex];
+  if (
+    start.type !== "fresh-start" ||
+    first.number !== 2 ||
+    first.source === "structured" ||
+    bodyIndex !== leadInFrom ||
+    !body.reasoningStarts.has(bodyIndex) ||
+    body.sectionStarts.has(first.bodyIndex) ||
+    body.quotedStarts.has(bodyIndex) ||
+    blockIndex === undefined ||
+    block?.type !== "paragraph" ||
+    block.number !== undefined ||
+    opensWithMarker(block)
+  ) {
+    return null;
+  }
+  return { bodyIndex, blockIndex, number: 1, source: "implied", marker: "" };
+};
+
 type ScopeReading = Walk & {
   readonly scopeIndex: number;
   readonly style: CourtParagraphMarkerStyle;
@@ -662,8 +762,96 @@ const corroboratedReadings = (
   });
 };
 
-const readNumbering = (blocks: readonly Block[]): Reading => {
+type ProvenRunOptions = {
+  readonly blocks: readonly Block[];
+  readonly body: Body;
+  readonly numbers: ReadonlyMap<number, NumberAssignment>;
+  /** The scope's best reading of one style. */
+  readonly best: Walk & {
+    readonly style: CourtParagraphMarkerStyle;
+    readonly start: ScopeStart;
+  };
+  readonly from: number;
+  readonly to: number;
+};
+
+/**
+ * The court's paragraphs a scope's best reading proves, with an implied 1
+ * where `impliedFirst` proves one, or null when the markers do not read as
+ * the reasoning's numbering.
+ */
+const provenRun = ({
+  blocks,
+  body,
+  numbers,
+  best,
+  from,
+  to,
+}: ProvenRunOptions): Candidate[] | null => {
   const limits = COURT_PARAGRAPH_NUMBERING_LIMITS;
+  const first = best.accepted.at(0);
+  const last = best.accepted.at(-1);
+  if (first === undefined || last === undefined) {
+    return null;
+  }
+  // The lead-in is counted from where the reasoning opens: the scope's
+  // start, or the first paragraph after the operative part before the run.
+  const leadInFrom = Math.max(
+    from,
+    ...[...body.reasoningStarts].filter((start) => start <= first.bodyIndex),
+  );
+  if (first.bodyIndex - leadInFrom > limits.maxLeadIn) {
+    return null;
+  }
+  const implied = impliedFirst({
+    blocks,
+    body,
+    first,
+    leadInFrom,
+    start: best.start,
+  });
+  const accepted =
+    implied === null ? best.accepted : [implied, ...best.accepted];
+  const span = body.paragraphs
+    .slice(first.bodyIndex, to)
+    .filter(
+      (blockIndex) =>
+        !opensWithMarker(blocks[blockIndex]) && !numbers.has(blockIndex),
+    ).length;
+  const density = best.accepted.length / (best.accepted.length + span);
+  if (density >= limits.minDensity) {
+    return accepted;
+  }
+  // Counting up one by one from where the scope starts, with nothing left
+  // unread, and running on to the scope's end: the unnumbered paragraphs
+  // after the last number are a closing line or two, and no more than the
+  // run itself carries between two of its numbers. A list the reasoning
+  // runs on after leaves more text after its last item than between any
+  // two of its items.
+  const tail = to - 1 - last.bodyIndex;
+  const widestGap = Math.max(
+    0,
+    ...accepted.map((candidate, position) =>
+      position === 0
+        ? 0
+        : candidate.bodyIndex - (accepted[position - 1]?.bodyIndex ?? 0) - 1,
+    ),
+  );
+  const spansScope =
+    best.unassigned.length === 0 &&
+    accepted.length >=
+      Math.max(limits.minParagraphs[best.style], limits.minSpanningRun) &&
+    accepted.at(0)?.number === best.start.startingAt &&
+    accepted.every(
+      (candidate, position) =>
+        position === 0 ||
+        candidate.number === (accepted[position - 1]?.number ?? 0) + 1,
+    ) &&
+    tail <= Math.min(limits.maxTail, widestGap);
+  return spansScope ? accepted : null;
+};
+
+const readNumbering = (blocks: readonly Block[]): Reading => {
   const body = bodyOf(blocks);
   const numbers = new Map<number, NumberAssignment>();
   const evidence: CourtParagraphNumberingEvidence[] = [];
@@ -767,30 +955,21 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
           left.startPriority - right.startPriority,
       )
       .at(0);
-    const first = best?.accepted.at(0);
-    if (best === undefined || first === undefined) {
+    const last = best?.accepted.at(-1);
+    if (best === undefined || last === undefined) {
       continue;
     }
-    const span = body.paragraphs
-      .slice(first.bodyIndex, to)
-      .filter(
-        (blockIndex) =>
-          !opensWithMarker(blocks[blockIndex]) && !numbers.has(blockIndex),
-      ).length;
-    const density = best.accepted.length / (best.accepted.length + span);
-    if (
-      first.bodyIndex - from > limits.maxLeadIn ||
-      density < limits.minDensity
-    ) {
+    const accepted = provenRun({ blocks, body, numbers, best, from, to });
+    if (accepted === null) {
       continue;
     }
     style = best.style;
-    previousScopeLast = best.accepted.at(-1)?.number ?? previousScopeLast;
+    previousScopeLast = last.number;
     readings.push({
       scopeIndex: index,
       style: best.style,
       start: best.start,
-      accepted: best.accepted,
+      accepted,
       unassigned: best.unassigned,
     });
   }
@@ -822,6 +1001,13 @@ const readNumbering = (blocks: readonly Block[]): Reading => {
           marker: candidate.marker,
         });
       }
+      if (candidate.source === "implied") {
+        evidence.push({
+          type: "implied",
+          blockIndex: candidate.blockIndex,
+          number: 1,
+        });
+      }
     }
     for (const candidate of reading.unassigned) {
       evidence.push({
@@ -844,6 +1030,10 @@ const withNumber = (
 ): ParagraphBlock => {
   if (candidate.source === "structured") {
     return block;
+  }
+  // The court printed no label to move: the paragraph keeps its text whole.
+  if (candidate.source === "implied") {
+    return { ...block, number: candidate.number };
   }
   const { line } = stripInlineLinePrefix(
     normalizeInlineLine(block.inlines),
