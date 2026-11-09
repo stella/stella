@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 
 import type { DecisionQueryIntent } from "@stll/api-contract/decision-query-intent";
-import { observeRegistryRequest } from "@stll/business-registries/shared/request-observer";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 
 import type { CorpusAggregateCacheOutcome } from "@/api/lib/legal-search/corpus-aggregate-cache";
@@ -308,14 +307,19 @@ export const runTracedCaseLawSearch = async <TAnswer>({
   run,
 }: RunTracedCaseLawSearchOptions<TAnswer>): Promise<TAnswer> => {
   const trace = createCaseLawSearchTrace(country);
-  const counted = {
+  // The corpus client contains whatever these throw, through `onError`.
+  const counted: RegistryRequestObservation = {
     onRequest: () => {
       trace.engineRequests += 1;
-      observeRegistryRequest(observer);
+      if (observer !== "unobserved") {
+        observer.onRequest();
+      }
     },
-    // Unused: `onRequest` above cannot throw, `observeRegistryRequest` having
-    // contained whatever the observer it forwards to does.
-    onError: () => undefined,
+    onError: (cause) => {
+      if (observer !== "unobserved") {
+        observer.onError(cause);
+      }
+    },
   };
   let settled = false;
   try {
