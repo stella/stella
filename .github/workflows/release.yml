@@ -1505,6 +1505,7 @@ jobs:
             scripts/api-health.ts
             apps/api/src/db-components.ts
             apps/api/src/deploy-env-contract.ts
+            apps/api/src/bullmq-queue-hosts.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -1524,11 +1525,57 @@ jobs:
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/scripts/api-health.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/db-components.ts" "$RUNNER_TEMP/apps/api/src/db-components.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/bullmq-queue-hosts.ts" "$RUNNER_TEMP/apps/api/src/bullmq-queue-hosts.ts"
 
       - name: Checkout workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # The queue consumers a release needs must already be deployed: the
+      # promote ships the image, not the infra that runs its workers. The gate
+      # comes from main, never from the release tree it judges.
+      - name: Checkout deploy contract gate from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: main
+          path: .trusted-main
+          persist-credentials: false
+          sparse-checkout: |
+            package.json
+            scripts/gh-retry.sh
+            scripts/check-deploy-env-contract.ts
+            apps/api/src/db-components.ts
+            apps/api/src/deploy-env-contract.ts
+            apps/api/src/bullmq-queue-hosts.ts
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Bun for the deploy contract gate
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .trusted-main/package.json
+          no-cache: true
+
+      - name: Mint deployment contract read token
+        id: contract-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: stella-infra
+          permission-contents: read
+
+      # Run inside the main checkout: Bun reads bunfig.toml (preloads) from its
+      # working directory, and the release tree must never configure the check.
+      - name: Refuse a deploy whose queues have no consumer container
+        timeout-minutes: 5
+        working-directory: .trusted-main
+        env:
+          GH_TOKEN: ${{ steps.contract-token.outputs.token }}
+          DEPLOY_ENV_CONTRACT_INFRA_REPOSITORY: ${{ github.repository_owner }}/stella-infra
+        run: bun --no-install --no-env-file scripts/check-deploy-env-contract.ts
 
       - name: Promote to production
         # Waits for the infra promote, online migrations included: only the
@@ -1803,7 +1850,9 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/gh-dispatch-workflow.sh
           sparse-checkout-cone-mode: false
 
       - name: Dispatch release-health.yml
@@ -1814,15 +1863,13 @@ jobs:
         run: |
           runs="$(bash scripts/gh-retry.sh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/workflows/release-health.yml/runs?event=workflow_dispatch&per_page=100")"
           if jq -e --arg title "Release health $RELEASE_REF" 'any(.[].workflow_runs[]; .display_title == $title)' <<< "$runs" >/dev/null; then exit 0; fi
-          bash scripts/gh-retry.sh api --method POST \
-            "repos/${GITHUB_REPOSITORY}/actions/workflows/release-health.yml/dispatches" \
-            -f ref=main \
-            -f "inputs[release_ref]=${RELEASE_REF}"
+          bash scripts/gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" release-health.yml main \
+            "Release health $RELEASE_REF" "release_ref=$RELEASE_REF"
 
   promote-staging:
     name: Dispatch RC proofs
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     needs: [resolve, manifest]
     if: ${{ success() && needs.resolve.outputs.channel == 'rc' }}
     permissions:
@@ -1844,15 +1891,18 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-actions: write
       - name: Dispatch staging and heavy on the candidate SHA
-        timeout-minutes: 5
+        # Each dispatch may wait out a few unconfirmed attempts.
+        timeout-minutes: 15
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           SHA: ${{ needs.resolve.outputs.release_sha }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
-          bash scripts/gh-retry.sh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-staging.yml/dispatches" -f ref=main -f "inputs[sha]=$SHA" -f "inputs[release_candidate]=true" -f "inputs[release_ref]=$RELEASE_REF"
-          bash scripts/gh-retry.sh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/main-heavy.yml/dispatches" -f ref=main -f "inputs[sha]=$SHA" -f "inputs[release_candidate]=true"
-          bash scripts/gh-retry.sh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/main-pr-depth.yml/dispatches" -f ref=main -f "inputs[sha]=$SHA"
+          # Titles are the targets' run-names: a dispatch GitHub answers with a
+          # server error is repeated only when no run with its title appeared.
+          bash scripts/gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" deploy-staging.yml main "Staging release proof $RELEASE_REF $SHA" "sha=$SHA" release_candidate=true "release_ref=$RELEASE_REF"
+          bash scripts/gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" main-heavy.yml main "Main heavy suites $SHA" "sha=$SHA" release_candidate=true
+          bash scripts/gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" main-pr-depth.yml main "Main PR-depth checks $SHA" "sha=$SHA"
 
   release-complete:
     name: Reconcile final release receipts

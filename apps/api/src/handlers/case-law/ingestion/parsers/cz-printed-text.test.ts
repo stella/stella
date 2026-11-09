@@ -31,7 +31,7 @@ const gunzipText = async (name: string): Promise<string> =>
     Bun.gunzipSync(await Bun.file(new URL(name, FIXTURES)).bytes()),
   );
 
-const readNss = async (name: string): Promise<DocumentAst> =>
+const readNss = async (name: string, directory = ""): Promise<DocumentAst> =>
   parseNssDecisionHtml({
     caseNumber: name,
     ecli: undefined,
@@ -39,7 +39,7 @@ const readNss = async (name: string): Promise<DocumentAst> =>
     decisionDate: undefined,
     decisionType: undefined,
     sourceUrl: undefined,
-    html: await gunzipText(`cz-nss-${name}.html.gz`),
+    html: await gunzipText(`${directory}cz-nss-${name}.html.gz`),
     detailMetadata: {},
   }).documentAst;
 
@@ -54,14 +54,19 @@ const readRegional = async (name: string): Promise<DocumentAst> => {
   return document.ast;
 };
 
-const readNs = async (name: string): Promise<DocumentAst> =>
+const readNs = async (name: string, directory = ""): Promise<DocumentAst> =>
   parseNsDecisionHtml({
     documentId: name,
     webUrl: name,
     printUrl: name,
     webHtml: "",
-    printHtml: await gunzipText(`cz-ns-${name}.print.html.gz`),
+    printHtml: await gunzipText(`${directory}cz-ns-${name}.print.html.gz`),
   }).documentAst;
+
+const rolesOf = (ast: DocumentAst, role: string): string[] =>
+  paragraphs(ast)
+    .filter((block) => block.role === role)
+    .map((block) => block.plainText);
 
 const texts = (ast: DocumentAst): string[] =>
   ast.blocks.map((block) => block.plainText);
@@ -234,6 +239,79 @@ describe("structure", () => {
     ).toEqual([]);
   });
 
+  test("NSS: a separate opinion headed by the docket it names is headed, numbered from 1 and signed", async () => {
+    const ast = await readNss("7-as-155-2015", "decision-roles/");
+    expect(
+      headings(ast, 2).filter((heading) =>
+        heading.startsWith("Odlišné stanovisko"),
+      ),
+    ).toEqual([
+      "Odlišné stanovisko podle § 55a s. ř. s. soudce Karla Šimky k odůvodnění rozsudku rozšířeného senátu Nejvyššího správního soudu ze dne 21. 11. 2017, č. j. 7 As 155/2015 – 160.",
+      "Odlišné stanovisko podle § 55a s. ř. s. soudce Aleše Roztočila k odůvodnění rozsudku rozšířeného senátu Nejvyššího správního soudu ze dne 21. 11. 2017, č. j. 7 As 155/2015 – 160.",
+    ]);
+    const dissents = paragraphs(ast).filter(
+      (block) => block.role === "dissent",
+    );
+    expect(numbersOf(dissents)).toEqual([...range(1, 13), ...range(1, 8)]);
+    expect(
+      paragraphs(ast).filter((block) => /^\[\d+\]/u.test(block.plainText)),
+    ).toEqual([]);
+    // The report that an opinion was filed stays a sentence of the decision.
+    expect(
+      paragraphs(ast).some((block) =>
+        block.plainText.startsWith(
+          "Odlišné stanovisko k rozsudku v souladu s § 55a s. ř. s. uplatnil soudce Karel Šimka.",
+        ),
+      ),
+    ).toBe(true);
+    // The president signs the judgment, each member his own opinion.
+    expect(
+      paragraphs(ast)
+        .filter((block) => block.role === "signature")
+        .map((block) => block.plainText),
+    ).toEqual([
+      "Josef Baxa",
+      "předseda rozšířeného senátu",
+      "Karel Šimka",
+      "člen rozšířeného senátu",
+      "Aleš Roztočil",
+      "člen rozšířeného senátu",
+    ]);
+  });
+
+  test("NSS: a name with its academic degree signs under the closing", async () => {
+    const ast = await readNss("2-afs-31-2005", "decision-roles/");
+    expect(rolesOf(ast, "closing")).toEqual(["V Brně dne 24. ledna 2006"]);
+    expect(rolesOf(ast, "signature")).toEqual([
+      "JUDr. Miluše Došková",
+      "předsedkyně senátu",
+    ]);
+  });
+
+  test("Nejvyšší soud: the judge signs above the certification of the copy, after a recital that introduces the ruling", async () => {
+    const ast = await readNs("22-cdo-61-2001", "decision-roles/");
+    expect(rolesOf(ast, "closing")).toEqual(["V Brně dne 2. února 2001"]);
+    expect(rolesOf(ast, "signature")).toEqual([
+      "JUDr. František Balák, v.r.",
+      "předseda senátu",
+    ]);
+    // The office certifies the copy; it signs nothing of the decision.
+    expect(
+      paragraphs(ast).find((block) =>
+        block.plainText.startsWith("Za správnost vyhotovení"),
+      )?.role,
+    ).toBeUndefined();
+    expect(rolesOf(ast, "intro")).toEqual([
+      expect.stringMatching(
+        /^Nejvyšší soud České republiky rozhodl v senátě složeném z předsedy JUDr\. Františka Baláka .* takto:$/u,
+      ),
+    ]);
+    expect(rolesOf(ast, "holding")).toEqual([
+      "I. Dovolání se odmítá.",
+      "II. Žádný z účastníků nemá právo na náhradu nákladů dovolacího řízení.",
+    ]);
+  });
+
   test("NSS: a decision set in a layout table reads paragraph by paragraph, with the list's numbers", async () => {
     const ast = await readNss("57-af-17-2023");
     expect(numbersOf(ast.blocks)).toEqual(range(1, 35));
@@ -275,14 +353,13 @@ describe("structure", () => {
           : [],
       ),
     ).toEqual(["25 Cdo 803/2003", "ROZSUDEK"]);
-    // The state and the formula beside the title are the opening's lines.
-    expect(
-      ast.blocks.flatMap((block) =>
-        block.type === "paragraph" && block.role === "intro"
-          ? [block.plainText]
-          : [],
-      ),
-    ).toEqual(["ČESKÁ REPUBLIKA", "JMÉNEM REPUBLIKY"]);
+    // The state and the formula beside the title are the opening's lines,
+    // and the bench recital introduces the ruling after them.
+    expect(rolesOf(ast, "intro")).toEqual([
+      "ČESKÁ REPUBLIKA",
+      "JMÉNEM REPUBLIKY",
+      expect.stringMatching(/^Nejvyšší soud .* takto:$/u),
+    ]);
   });
 });
 

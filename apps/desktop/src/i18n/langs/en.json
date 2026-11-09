@@ -38,7 +38,7 @@
     "reconnectAccount": "Reconnect to stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Changes stay local and will retry automatically",
+    "checkpointDelayedBody": "{fileName}: Changes stay local and will retry automatically",
     "checkpointDelayedTitle": "Checkpoint sync delayed",
     "diagnosticsCopiedBody": "Paste it into your support request when needed.",
     "diagnosticsCopiedTitle": "Diagnostics copied",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Local recovery data was reset",
     "revisionCreatedBody": "{fileName} saved as version {versionNumber}. Desktop editing finished",
     "revisionCreatedTitle": "stella revision created",
-    "sessionClosedUnsaved": "{fileName} — You have unsaved local edits. Find your copy in Temporary working copies.",
-    "sessionClosedSaved": "{fileName} — Local copy stays preserved in Temporary working copies",
-    "takenOverBody": "{fileName} — Reopen from stella here to take editing back",
+    "sessionClosedUnsaved": "{fileName}: You have unsaved local edits. Find your copy in Temporary working copies.",
+    "sessionClosedSaved": "{fileName}: Local copy stays preserved in Temporary working copies",
+    "takenOverBody": "{fileName}: Reopen from stella here to take editing back",
     "takenOverTitle": "Editing moved to another device",
     "takenOverLocalError": "Desktop editing moved to another device. This local copy is preserved.",
     "editsSetAsideTitle": "Edits set aside",
@@ -501,6 +501,10 @@
     "evidenceTitles": "Titles",
     "evidenceApps": "Apps",
     "rangeEmpty": "Nothing was recorded in this range.",
+    "entryStart": "Start",
+    "entryEnd": "End",
+    "rangeEndBeforeStart": "Set an end time after the start.",
+    "rangeDraftedLeftOut": "{duration}, not counting time already drafted",
     "calendarHint": "Open a dashed suggestion to review it, or drag across Time entries to draft an entry for any range.",
     "aiDraftWrite": "Draft with stella AI",
     "aiDraftAgain": "Draft again",
@@ -728,6 +732,61 @@
     "callbackConnectedTitle": "ChatGPT is connected",
     "callbackConnectedBody": "You can close this tab and go back to stella.",
     "callbackNotConnectedTitle": "ChatGPT was not connected",
-    "callbackNotConnectedBody": "Go back to stella to see what happened and try again."
+    "callbackNotConnectedBody": "Go back to stella to see what happened and try again.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Use your Claude subscription for local agents in stella. Usage counts toward your Claude plan, separately from your stella subscription.",
+      "notInstalled": "Claude Code is not installed on this computer yet.",
+      "signIn": "Sign in with Claude",
+      "openSignInPage": "Open sign-in page",
+      "signedIn": "Signed in to Claude",
+      "signedInAs": "Signed in to Claude · {email}",
+      "signOut": "Sign out",
+      "apiKey": "Claude Code is signed in with an API key, which stella does not use. Sign out, then sign in with your Claude subscription.",
+      "failure": {
+        "notCompleted": "The sign-in did not finish. Try again.",
+        "timedOut": "The sign-in took too long. Try again.",
+        "unavailable": "Claude Code could not be started on this computer. Try again."
+      }
+    },
+    "install": {
+      "notInstalled": "{name} is not installed on this computer yet.",
+      "install": "Install",
+      "downloading": "Downloading {name} {version}: {percent}%",
+      "verifying": "Checking {name} {version}",
+      "ready": "{name} {version} is installed.",
+      "retry": "Try again",
+      "activeStays": "Version {version} stays in use.",
+      "failure": {
+        "download": "{name} could not be downloaded. Check your internet connection and try again.",
+        "verification": "{name} could not be verified, so it was not installed.",
+        "storage": "{name} could not be saved on this computer. Check that the disk has free space."
+      }
+    }
+  },
+  "localSkills": {
+    "title": "Local skills",
+    "description": "Skill folders on this computer. Local runs on this computer can use them, and nothing in them is uploaded.",
+    "add": "Add folder",
+    "remove": "Remove",
+    "removeFolder": "Remove {path}",
+    "unusable": "Not usable",
+    "notice": {
+      "action_failed": "That did not work. Try again.",
+      "too_many": "This computer already has as many skill folders as it can use. Remove one first.",
+      "already_listed": "This folder is already listed.",
+      "missing": "This folder is gone.",
+      "not_a_folder": "This is no longer a folder.",
+      "no_skill_file": "This folder has no SKILL.md.",
+      "skill_file_not_regular": "SKILL.md must be a regular file, not a link.",
+      "skill_file_too_large": "SKILL.md is too large to read.",
+      "unreadable": "This folder could not be read.",
+      "no_name": "The header of SKILL.md has no name.",
+      "invalid_name": "The name in SKILL.md may use only letters, digits, dots, dashes and underscores, and must start with a letter or digit.",
+      "duplicate_name": "Another listed folder has a skill with this name.",
+      "runs_can_write": "Local runs can write to this folder, so it cannot hold a skill.",
+      "network_folder": "This folder is on a network share. Skills must be on this computer's own disk.",
+      "path_changed": "A folder on the way to this one has changed. Remove it and add it again."
+    }
   }
 }

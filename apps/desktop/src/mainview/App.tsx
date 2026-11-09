@@ -51,6 +51,7 @@ import type {
   RecoveryTarget,
 } from "../shared/rpc";
 import { StellaAppIcon } from "../shared/StellaAppIcon";
+import { WindowDragRegion } from "../shared/WindowDragRegion";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
@@ -62,6 +63,7 @@ import type { DesktopAccountState } from "./account-presentation";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
 import { DictationSetting } from "./DictationSetting";
+import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { ShortcutSetting } from "./ShortcutSetting";
 
@@ -440,6 +442,7 @@ const GeneralPane = ({
   const format = useFormatter();
   const t = useTranslations("settings");
   const tSubscriptions = useTranslations("agentSubscriptions");
+  const tLocalSkills = useTranslations("localSkills");
   const presentation = accountPresentation(accountState);
   const linkedAccount =
     accountState.status === "connected" ? accountState.account : null;
@@ -538,6 +541,11 @@ const GeneralPane = ({
       <AgentSubscriptionsSection
         renderGroup={(content) => (
           <PanelGroup title={tSubscriptions("title")}>{content}</PanelGroup>
+        )}
+      />
+      <LocalSkillFoldersSection
+        renderGroup={(content) => (
+          <PanelGroup title={tLocalSkills("title")}>{content}</PanelGroup>
         )}
       />
       <PanelGroup title={t("permissions")}>
@@ -1090,6 +1098,7 @@ const App = () => {
 
   return (
     <main className="bg-background text-foreground min-h-dvh">
+      <WindowDragRegion />
       <div
         className={cn(
           "mx-auto flex h-dvh max-w-[30rem] flex-col px-4 pb-4",

@@ -146,6 +146,8 @@ const openLaneConnection = async (): Promise<MaintenanceLaneSql> => {
 type CaseLawSchemaLaneHandleOptions = {
   signal?: AbortSignal;
   laneWaitMs?: number;
+  /** Test seam: how a refused try waits before the next. */
+  sleep?: (ms: number) => Promise<void>;
 };
 
 export const caseLawRootHandleUnderCorpusSchemaLane = (

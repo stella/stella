@@ -35,6 +35,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       excluded: true,
       scope: "read",
     },
+    list_case_law_courts: {
+      command: ["case-law", "courts"],
+      excluded: true,
+      scope: "read",
+    },
     search: { command: ["search"], excluded: true, scope: "search" },
     fetch: { command: ["fetch"], excluded: true, scope: "read" },
 
@@ -390,6 +395,16 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["legislation", "search"],
       scope: "search",
       itemsKey: "results",
+    },
+    search_guidance: {
+      command: ["guidance", "search"],
+      scope: "search",
+      itemsKey: "results",
+    },
+    // No windowedText: the attribution must stay with the text in every output.
+    read_guidance: {
+      command: ["guidance", "read"],
+      scope: "read",
     },
     read_statute: {
       command: ["legislation", "read"],

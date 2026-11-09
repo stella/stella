@@ -1,4 +1,4 @@
-// parser-output-unchanged: Existing line-wrap behavior is unchanged; the pre-nominal title predicate is now shared with PDF ingestion.
+// parser-output-unchanged: the wrapped-date rule and the point openings moved unchanged into the printed-label grammar, which this planner reads them from.
 /**
  * Hard-wrapped source text: the one classifier, and a display fallback.
  *
@@ -41,6 +41,11 @@
 
 // parser-output-unchanged: [cz-us] that parser reads only `classifyLineWrap`, which is unchanged; the date rule is in `lineJoinOf`, which it does not call.
 import type { Block, ParagraphBlock, ParagraphRole } from "./document-ast.js";
+import {
+  NUMERIC_DATE_START_RE,
+  splitsDate,
+  WRAPPED_LINE_POINT_STARTS,
+} from "./printed-paragraph-labels.js";
 
 export const LINE_WRAP_TYPE = {
   FIXED_WIDTH_WRAPPED: "fixed-width-wrapped",
@@ -114,21 +119,6 @@ const HYPHEN_END_RE = /\p{L}-$/u;
 const LOWERCASE_START_RE = /^\p{Ll}/u;
 const LETTER_START_RE = /^\p{L}/u;
 const DIGIT_START_RE = /^\d/u;
-
-/**
- * Line openings that start a new unit whatever came before: numbered points
- * ("1. Stěžovatel", "2) ", "(3) "; "4. listopadu" is a date, not a point),
- * Roman points ("II. ", "IV."), letter items ("a) ", "(b) "), bullets and
- * dashes, and an indented line.
- */
-const STRUCTURAL_START_RES = [
-  /^\(?\d{1,3}\.(?:\s+(?!\p{Ll})|$)/u,
-  /^\(?\d{1,3}\)(?:\s|$)/u,
-  /^\(?[IVXLC]{1,6}[.)](?:\s|$)/u,
-  /^\(?\p{L}\)(?:\s|$)/u,
-  /^[-–—•*·](?:\s|$)/u,
-  /^\s/u,
-] as const;
 
 /** Every letter uppercase, at least two of them: "N Á L E Z", "ODŮVODNĚNÍ". */
 const isAllCaps = (line: string): boolean => {
@@ -237,29 +227,9 @@ const isHeadingLike = (line: string, width: number): boolean =>
   line.length <= width * SHORT_LINE_SHARE &&
   (isAllCaps(line) || line.trimEnd().endsWith(":"));
 
-/** A numeric date ("12. 3. 1998", "1.2.1999") continues a sentence. */
-const NUMERIC_DATE_START_RE = /^\d{1,2}\.\s?\d{1,2}\.\s?\d{2,4}\b/u;
-/**
- * A day number ending a line after a word that introduces a date: "dňa 22.",
- * "zo 22.", "od 22.", "do 22." (Slovak, Czech and Polish). A bare number
- * ("v bode 22.") is not a day: the next line may open the next point.
- */
-const DAY_END_RE =
-  /(?:^|\s)(?:dňa|dna|dne|dnia|od|do|zo|ze|z|k|ku)\s+(?:0?[1-9]|[12]\d|3[01])\.$/iu;
-/** A month and a year opening a line: "10. 2003". */
-const MONTH_YEAR_START_RE = /^(?:0?[1-9]|1[0-2])\.\s?\d{4}\b/u;
-
-/**
- * A numeric date the wrapper split after its day ("dňa 22." / "10. 2003"):
- * the month opens the next line like a numbered point would, but a point is
- * not introduced by "dňa" and followed by a year.
- */
-export const splitsDate = (previous: string, next: string): boolean =>
-  DAY_END_RE.test(previous) && MONTH_YEAR_START_RE.test(next);
-
 const startsStructurally = (line: string): boolean =>
   !NUMERIC_DATE_START_RE.test(line) &&
-  STRUCTURAL_START_RES.some((pattern) => pattern.test(line));
+  WRAPPED_LINE_POINT_STARTS.some((pattern) => pattern.test(line));
 
 /**
  * What a reader draws between two adjacent prose lines of a wrapped document.

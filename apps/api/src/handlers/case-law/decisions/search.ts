@@ -62,10 +62,12 @@ import {
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import {
   CASE_LAW_SEARCH_DB_READ,
-  createCaseLawSearchDbTimer,
+  type CaseLawSearchTrace,
+  createCaseLawSearchTrace,
   decisionQueryClass,
   reportCaseLawFunctionWordsExcluded,
   reportCaseLawSearchCompleted,
+  runTracedCaseLawSearch,
 } from "@/api/handlers/case-law/decisions/search-telemetry";
 import { status } from "@/api/http/status";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -122,8 +124,10 @@ import {
   readCaseLawSourceNames,
 } from "@/api/lib/case-law/decision-search-facets";
 import {
+  decisionDocketRegisterSql,
   decisionHasLegalSentenceSql,
   decisionSearchCategorySql,
+  docketFilterRefusal,
 } from "@/api/lib/case-law/decision-search-metadata-sql";
 import {
   decisionSearchCursorAfterSql,
@@ -148,7 +152,7 @@ import {
   provisionLinkMatchSql,
   type ProvisionLinkReadOutcome,
   provisionLinkReadOutcomeSql,
-  readCaseLawProvisionScope,
+  readCaseLawProvisionScopeWithinBudget,
   readProvisionCitingSentences,
 } from "@/api/lib/case-law/provision-filter";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
@@ -172,7 +176,6 @@ import { publicRowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { readOnlineIndexesReady } from "@/api/lib/db/online-index-readiness";
 import type { OnlineIndexName } from "@/api/lib/db/online-index-readiness";
 import { POSTGRES_INTEGER_MAX } from "@/api/lib/db/postgres-integer";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
@@ -181,9 +184,14 @@ import {
   caseLawCorpusAppliedRevision,
   caseLawCorpusDocumentCanRecur,
   caseLawCorpusServingGeneration,
-  currentCaseLawCorpusProjection,
+  servedCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import {
+  CASE_LAW_RANKING_SCAN_FIELDS,
+  indexedCaseLawCandidateRow,
+} from "@/api/lib/legal-search/case-law-indexed-candidates";
+import {
+  canonicalCorpusJson,
   type CorpusAggregateCacheOutcome,
   createCorpusAggregateCache,
 } from "@/api/lib/legal-search/corpus-aggregate-cache";
@@ -202,11 +210,15 @@ import {
   readServingCorpusIndexTargetTx,
   type ServingCorpusIndexTargetError,
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  corpusIndexRankingSignals,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import type {
   CorpusCandidateRankingInput,
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
+  ScannedProjection,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -277,10 +289,7 @@ import {
 } from "@/api/lib/legal-search/legal-alternatives";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import { readPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
-import {
-  publicReadTimeoutError,
-  publicReadTimeoutResponse,
-} from "@/api/lib/legal-search/public-read-timeout";
+import { createPublicSearchCoalescer } from "@/api/lib/legal-search/public-search-coalescer";
 import {
   blendStableCitationAuthority,
   courtTierSignal,
@@ -292,14 +301,12 @@ import type {
   RankedHit,
   ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
-import {
-  isSearchIndexUnavailable,
-  searchIndexUnavailableResponse,
-} from "@/api/lib/legal-search/search-index-unavailable";
+import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { runBoundedRequestStep } from "@/api/lib/load/request-latency-budget";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
-import { observedStatus } from "@/api/lib/observability/server-error-answer";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -320,7 +327,11 @@ import {
   readTermCoverage,
   type RelaxedExclusions,
   relaxedFetchLimit,
+  type RelaxedTopUpOutcome,
+  relaxedTopUpOutcome,
+  type RelaxedTopUpState,
   shouldRelaxCaseLawSearch,
+  termsForCoverage,
 } from "./search-relaxed";
 import { projectCaseLawSearchResponse } from "./search-response";
 
@@ -386,20 +397,95 @@ type SearchDecisionsBody = v.InferOutput<typeof searchDecisionsBodySchema> & {
    * search reads it once for all its phrasings and warns when it is broad).
    */
   provisionScope?: CaseLawProvisionScope;
+  /**
+   * Internal: `false` when the caller keeps only the page and drops the
+   * facets and the total (an agent search's later phrasings, the
+   * OpenAI-compatible search). The aggregations behind them scan the whole
+   * result set, so a caller that discards them should not pay for them.
+   */
+  describeResultSet?: false;
 };
 
 type PostgresSearchBody = Omit<
   SearchDecisionsBody,
-  "category" | "hasLegalSentence"
+  "category" | "hasLegalSentence" | "docketRegisters" | "senate"
 > & {
   category?: never;
   hasLegalSentence?: never;
+  docketRegisters?: never;
+  senate?: never;
 };
 
 type SearchDecisionsHandlerArgs = Omit<
   SearchCorpusIndexDecisionsOptions,
   "dependencies"
 >;
+
+/**
+ * Answers an API process keeps per search it has answered. The time to live is
+ * a burst's length, so a revoked source or a withdrawn decision leaves the
+ * cache as fast as it leaves a request already in flight; the byte bound holds
+ * a storm of distinct queries to a few percent of the process heap.
+ */
+const CASE_LAW_SEARCH_COALESCER_TTL_MS = 30 * 1000;
+const CASE_LAW_SEARCH_COALESCER_MAX_ENTRIES = 512;
+const CASE_LAW_SEARCH_COALESCER_MAX_BYTES = 32 * 1024 * 1024;
+
+type CorpusIndexCaseLawSearchAnswer = Awaited<
+  ReturnType<typeof tracedCorpusIndexSearch>
+>;
+
+const caseLawSearchCoalescer =
+  createPublicSearchCoalescer<CorpusIndexCaseLawSearchAnswer>({
+    limits: {
+      maxEntries: CASE_LAW_SEARCH_COALESCER_MAX_ENTRIES,
+      maxBytes: CASE_LAW_SEARCH_COALESCER_MAX_BYTES,
+      ttlMs: CASE_LAW_SEARCH_COALESCER_TTL_MS,
+    },
+    now: () => Temporal.Now.instant().epochMilliseconds,
+  });
+
+/**
+ * The identity of a search's answer: the normalized request and the
+ * generation it reads. A caller's identity is deliberately absent, because
+ * nothing below this point reads it; the one per-tenant input the handler
+ * applies, the page limit, is in the key as the value it resolves to. The
+ * provision's citing set is derived from `provision`, which the key carries.
+ */
+export const caseLawSearchCoalescingKey = (
+  {
+    provisionDecisionIds: _provisionDecisionIds,
+    provisionScope: _provisionScope,
+    limit,
+    ...request
+  }: SearchDecisionsBody,
+  serving: ServingCorpusIndexGeneration,
+): string =>
+  sha256Hex(
+    canonicalCorpusJson({
+      family: "case_law",
+      serving,
+      request: {
+        ...request,
+        limit: normalizeTenantPageLimit(
+          limit ?? LIMITS.caseLawSearchPageSizeDefault,
+        ),
+      },
+    }),
+  );
+
+/**
+ * Whether a search answer may be kept for the next caller. Only a page the
+ * search finished: a non-200 answer, a page cut short, or one whose relaxed
+ * top-up was skipped says something about the load of the moment and must not
+ * outlive it.
+ */
+const isCacheableCaseLawSearch = (
+  answer: CorpusIndexCaseLawSearchAnswer,
+): boolean =>
+  "hits" in answer &&
+  answer.paginationOutcome.type === "complete" &&
+  answer.relaxedTopUp === undefined;
 
 export const searchDecisionsHandler = async ({
   body,
@@ -451,32 +537,70 @@ export const searchDecisionsHandler = async ({
     });
   }
 
+  const docketRefusal = docketFilterRefusal({ ...body, country });
+  if (docketRefusal !== null) {
+    return status(400, { message: docketRefusal });
+  }
+
   const scopedBody = { ...body, country };
   if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
-    const { provision } = scopedBody;
-    const provisionScope =
-      scopedBody.provisionScope ??
-      (provision === undefined
-        ? null
-        : await caseLawDb(
-            async (tx) =>
-              await readCaseLawProvisionScope(tx, {
-                jurisdiction: country,
-                provision,
-              }),
-          ));
-    return await searchCorpusIndexDecisions({
-      body:
-        provisionScope?.type === "decisions"
-          ? { ...scopedBody, provisionDecisionIds: provisionScope.decisionIds }
-          : scopedBody,
+    const readServingTarget = corpusIndexRequestConfiguration({
+      body: scopedBody,
       caseLawDb,
-      observer,
+      dependencies: {},
+    }).readServingTarget;
+    const servingTarget = await readServingTarget();
+    const dependencies = {
+      readServingTarget: async () => await Promise.resolve(servingTarget),
+    };
+    const run = async (searchSignal?: AbortSignal) => {
+      const { provision } = scopedBody;
+      const provisionScope =
+        scopedBody.provisionScope ??
+        (provision === undefined
+          ? null
+          : await readCaseLawProvisionScopeWithinBudget(caseLawDb, {
+              jurisdiction: country,
+              provision,
+            }));
+      return await tracedCorpusIndexSearch({
+        body:
+          provisionScope?.type === "decisions"
+            ? {
+                ...scopedBody,
+                provisionDecisionIds: provisionScope.decisionIds,
+              }
+            : scopedBody,
+        caseLawDb,
+        observer,
+        signal: searchSignal,
+        dependencies,
+      });
+    };
+    if (Result.isError(servingTarget)) {
+      return await run(signal);
+    }
+    return await caseLawSearchCoalescer.search({
+      key: caseLawSearchCoalescingKey(scopedBody, servingTarget.value.serving),
       signal,
+      cacheable: isCacheableCaseLawSearch,
+      run,
     });
   }
 
-  const { category, hasLegalSentence, ...postgresBody } = scopedBody;
+  const {
+    category,
+    hasLegalSentence,
+    docketRegisters,
+    senate,
+    ...postgresBody
+  } = scopedBody;
+  if (docketRegisters !== undefined || senate !== undefined) {
+    return status(400, {
+      message:
+        "Docket register and senate filters require corpus-index search. Remove docketRegisters and senate from this request.",
+    });
+  }
   if (category !== undefined || hasLegalSentence !== undefined) {
     return status(400, {
       message:
@@ -1553,6 +1677,8 @@ type CaseLawSearchRowFilterBody = Pick<
   | "courts"
   | "category"
   | "hasLegalSentence"
+  | "docketRegisters"
+  | "senate"
   | "provision"
   | "dateFrom"
   | "dateTo"
@@ -1577,16 +1703,40 @@ const withoutProvision = ({
   ...body
 }: CaseLawSearchRowFilterBody): CaseLawNonProvisionRowFilterBody => body;
 
+/**
+ * Which published rows a read admits.
+ *
+ * `indexed`: the ids came from the serving index, and the page shows text
+ * read from that copy, so only a decision the serving generation holds a
+ * copy of may stand for a hit. A queued upsert keeps the applied copy
+ * standing (its snippet may be one parse old); a queued erasure, a copy in
+ * an index the decision's country no longer routes to, or no copy at all
+ * does not.
+ *
+ * `published`: the database named the ids itself (a docket or an ECLI), and
+ * the page shows no index text for them. Every published row answers, as on
+ * the reader: a projection that lags or failed must never make a decision
+ * the reader opens look absent from search. Redaction needs no index state
+ * here; the published view already excludes a redacted row.
+ */
+type CaseLawRowAdmission = "indexed" | "published";
+
 const caseLawNonProvisionRowFilters = (
   body: CaseLawNonProvisionRowFilterBody,
   generation: string,
+  admission: CaseLawRowAdmission,
 ): SQL[] => {
-  const filters: SQL[] = [
-    redistributableCaseLawSource,
-    // The generation's projection state rejects a scrubbed or pending row, so
-    // a stale physical copy cannot serve outdated or erased snippets.
-    currentCaseLawCorpusProjection(generation),
-  ];
+  const filters: SQL[] = [redistributableCaseLawSource];
+  switch (admission) {
+    case "indexed":
+      filters.push(servedCaseLawCorpusProjection(generation));
+      break;
+    case "published":
+      break;
+    default:
+      admission satisfies never;
+      return panic(`Unhandled row admission: ${String(admission)}`);
+  }
   if (body.court) {
     filters.push(eq(publishedCaseLawDecisions.court, body.court));
   }
@@ -1601,6 +1751,11 @@ const caseLawNonProvisionRowFilters = (
   if (body.hasLegalSentence !== undefined) {
     filters.push(
       sql`${decisionHasLegalSentenceSql(publishedCaseLawDecisions.metadata)} = ${body.hasLegalSentence}`,
+    );
+  }
+  if (body.docketRegisters !== undefined || body.senate !== undefined) {
+    filters.push(
+      decisionDocketRegisterSql(publishedCaseLawDecisions.caseNumber, body),
     );
   }
   filters.push(eq(publishedCaseLawDecisions.country, body.country));
@@ -1632,6 +1787,7 @@ const caseLawNonProvisionRowFilters = (
 };
 
 type DecisionRowsQueryOptions = {
+  admission: CaseLawRowAdmission;
   body: CaseLawSearchRowFilterBody;
   generation: string;
   ids: SafeId<"caseLawDecision">[];
@@ -1747,7 +1903,13 @@ const partitionProvisionRecords = async <
  */
 export const unresolvedCandidateDecisionRowsStatement = (
   tx: CaseLawPublicReadTransaction,
-  { body, generation, ids, provisionProofs }: DecisionRowsQueryOptions,
+  {
+    admission,
+    body,
+    generation,
+    ids,
+    provisionProofs,
+  }: DecisionRowsQueryOptions,
 ) => {
   const requestedIds = sql`(SELECT unnest(ARRAY[${sql.join(
     ids.map((id) => sql`${id}::uuid`),
@@ -1789,7 +1951,11 @@ export const unresolvedCandidateDecisionRowsStatement = (
     .where(
       and(
         inArray(publishedCaseLawDecisions.id, ids),
-        ...caseLawNonProvisionRowFilters(withoutProvision(body), generation),
+        ...caseLawNonProvisionRowFilters(
+          withoutProvision(body),
+          generation,
+          admission,
+        ),
       ),
     )
     // Bounds the content branch and keeps its subplans behind eligibility.
@@ -1817,6 +1983,31 @@ type CandidateDecisionRow = Awaited<
 >["rows"][number];
 
 /**
+ * The candidate rows of a generation that stores the ranking signals, read
+ * off the scanned passages. The row shape is the database read's, so the
+ * blend, the fold and the cursor groups run unchanged on either source; a
+ * hit without a well-formed signal set is excluded like a row the database
+ * did not return.
+ */
+const indexedCandidateDecisionRows = (
+  projections: ReadonlyMap<string, ScannedProjection>,
+  ids: readonly string[],
+  generation: string,
+) =>
+  partitionReturnedCorpusRecords<CandidateDecisionRow>(
+    ids.map((id) => {
+      const projection = projections.get(id);
+      return {
+        id,
+        row:
+          projection === undefined
+            ? null
+            : indexedCaseLawCandidateRow(id, projection, generation),
+      };
+    }),
+  );
+
+/**
  * Everything a result card shows, read only for the ids the page emits. The
  * publisher summary and the identifier aggregate are the expensive parts, and
  * a page of ten is the only place they are wanted.
@@ -1826,7 +2017,13 @@ type CandidateDecisionRow = Awaited<
  */
 export const unresolvedPageDecisionRowsStatement = (
   tx: CaseLawPublicReadTransaction,
-  { body, generation, ids, provisionProofs }: DecisionRowsQueryOptions,
+  {
+    admission,
+    body,
+    generation,
+    ids,
+    provisionProofs,
+  }: DecisionRowsQueryOptions,
 ) => {
   const requestedIds = sql`(SELECT unnest(ARRAY[${sql.join(
     ids.map((id) => sql`${id}::uuid`),
@@ -1871,7 +2068,11 @@ export const unresolvedPageDecisionRowsStatement = (
     .where(
       and(
         inArray(publishedCaseLawDecisions.id, ids),
-        ...caseLawNonProvisionRowFilters(withoutProvision(body), generation),
+        ...caseLawNonProvisionRowFilters(
+          withoutProvision(body),
+          generation,
+          admission,
+        ),
       ),
     )
     // Bounds the content branch and keeps its subplans behind eligibility.
@@ -1926,21 +2127,17 @@ type ReadCaseLawPageDecisionRowsOptions = {
   hitDispositions?: CorpusHitDispositionCounter | undefined;
 };
 
-/**
- * The wide read, for one page. Kept independently callable for the same
- * reason the candidate read is: the restricted-role census executes the exact
- * production projection without a live search engine.
- */
-export const readCaseLawPageDecisionRows = async ({
-  body,
-  caseLawDb,
-  generation,
-  ids,
-  timeDbRead = untimedDbRead,
-  hitDispositions = createCorpusHitDispositionCounter(),
-}: ReadCaseLawPageDecisionRowsOptions): Promise<
-  Map<string, PageDecisionRow>
-> => {
+const readPageDecisionRowsAdmitting = async (
+  admission: CaseLawRowAdmission,
+  {
+    body,
+    caseLawDb,
+    generation,
+    ids,
+    timeDbRead = untimedDbRead,
+    hitDispositions = createCorpusHitDispositionCounter(),
+  }: ReadCaseLawPageDecisionRowsOptions,
+): Promise<Map<string, PageDecisionRow>> => {
   if (ids.length === 0) {
     return new Map();
   }
@@ -1949,6 +2146,7 @@ export const readCaseLawPageDecisionRows = async ({
       await caseLawDb(
         async (tx) =>
           await pageDecisionRowsQuery(tx, {
+            admission,
             body,
             generation,
             ids: ids.map((id) => toSafeId<"caseLawDecision">(id)),
@@ -1958,6 +2156,22 @@ export const readCaseLawPageDecisionRows = async ({
   recordCorpusRehydrationDispositions(read.dispositions, hitDispositions);
   return new Map(read.rows.map((row) => [String(row.id), row]));
 };
+
+/**
+ * The wide read, for one page of search hits. Kept independently callable for
+ * the same reason the candidate read is: the restricted-role census executes
+ * the exact production projection without a live search engine.
+ */
+export const readCaseLawPageDecisionRows = async (
+  options: ReadCaseLawPageDecisionRowsOptions,
+): Promise<Map<string, PageDecisionRow>> =>
+  await readPageDecisionRowsAdmitting("indexed", options);
+
+/** The wide read for decisions an identifier named: every published row answers. */
+export const readNamedCaseLawPageDecisionRows = async (
+  options: ReadCaseLawPageDecisionRowsOptions,
+): Promise<Map<string, PageDecisionRow>> =>
+  await readPageDecisionRowsAdmitting("published", options);
 
 type RehydrateCaseLawCandidatesOptions = CorpusCandidateRankingInput & {
   body: SearchDecisionsBody;
@@ -1971,6 +2185,12 @@ type RehydrateCaseLawCandidatesOptions = CorpusCandidateRankingInput & {
   generation: string;
   /** The request's record of rows read so far; only ids absent from it are read. */
   hydrated?: HydratedDecisionRows | undefined;
+  /**
+   * The scanned passages of a generation that stores the ranking signals on
+   * every passage: the candidate rows are read off them instead of from
+   * PostgreSQL (`indexedCaseLawCandidateRow`). Absent: the database read.
+   */
+  indexedProjections?: ReadonlyMap<string, ScannedProjection> | undefined;
   timeDbRead?: TimeDbRead | undefined;
   hitDispositions?: CorpusHitDispositionCounter | undefined;
   excludedGroups?: ReadonlySet<string> | undefined;
@@ -2065,35 +2285,59 @@ const rankCaseLawCandidates = ({
  * callable lets the restricted-role census execute the exact production
  * projection without needing a live search engine.
  */
-export const rehydrateCaseLawCandidates = async ({
-  body,
-  candidates,
-  selectAppliedCandidates,
-  caseLawDb,
-  courtWeights,
-  generation,
-  hydrated = new Map(),
-  timeDbRead = untimedDbRead,
-  hitDispositions = createCorpusHitDispositionCounter(),
-  excludedGroups = new Set(),
-}: RehydrateCaseLawCandidatesOptions) => {
+export const rehydrateCaseLawCandidates = async (
+  options: RehydrateCaseLawCandidatesOptions,
+) => await rehydrateAdmitting("indexed", options);
+
+/**
+ * The decisions an identifier named, ranked like search hits. Every published
+ * row answers (`CaseLawRowAdmission`), so a decision the reader opens is never
+ * dropped because the serving index has not applied it.
+ */
+export const rehydrateNamedCaseLawDecisions = async (
+  options: RehydrateCaseLawCandidatesOptions,
+) => await rehydrateAdmitting("published", options);
+
+const rehydrateAdmitting = async (
+  admission: CaseLawRowAdmission,
+  {
+    body,
+    candidates,
+    selectAppliedCandidates,
+    caseLawDb,
+    courtWeights,
+    generation,
+    hydrated = new Map(),
+    indexedProjections,
+    timeDbRead = untimedDbRead,
+    hitDispositions = createCorpusHitDispositionCounter(),
+    excludedGroups = new Set(),
+  }: RehydrateCaseLawCandidatesOptions,
+) => {
   const ids = candidates
     .filter((candidate) => !hydrated.has(candidate.id))
     .map((candidate) => toSafeId<"caseLawDecision">(candidate.id));
-  const read =
-    ids.length === 0
-      ? { rows: [], dispositions: [] }
-      : await timeDbRead(
-          async () =>
-            await caseLawDb(
-              async (tx) =>
-                await candidateDecisionRowsQuery(tx, {
-                  body,
-                  generation,
-                  ids,
-                }),
-            ),
-        );
+  const readCandidateRows = async () => {
+    if (ids.length === 0) {
+      return { rows: [], dispositions: [] };
+    }
+    if (indexedProjections !== undefined) {
+      return indexedCandidateDecisionRows(indexedProjections, ids, generation);
+    }
+    return await timeDbRead(
+      async () =>
+        await caseLawDb(
+          async (tx) =>
+            await candidateDecisionRowsQuery(tx, {
+              admission,
+              body,
+              generation,
+              ids,
+            }),
+        ),
+    );
+  };
+  const read = await readCandidateRows();
   recordCorpusRehydrationDispositions(read.dispositions, hitDispositions);
   for (const id of ids) {
     hydrated.set(id, null);
@@ -2104,7 +2348,12 @@ export const rehydrateCaseLawCandidates = async ({
 
   const byId = new Map<string, CandidateDecisionRow>();
   for (const [id, row] of hydrated) {
-    if (row !== null && row.appliedRevision !== null) {
+    // A search hit stands only on a copy the index applied; a named decision
+    // stands on its published row and shows no index text.
+    if (
+      row !== null &&
+      (admission === "published" || row.appliedRevision !== null)
+    ) {
       byId.set(id, row);
     }
   }
@@ -2266,9 +2515,9 @@ export const findDecisionIdsByIdentity = async ({
     case "none":
       return [];
     case "unique":
+    case "incomplete_identifier":
       return [resolution.decision.id];
     case "ambiguous":
-    case "incomplete_identifier":
       return resolution.candidates.map((hit) => hit.id);
     default: {
       resolution satisfies never;
@@ -2507,6 +2756,8 @@ const readCaseLawSearchFacets = async ({
     queryFor === null ||
     body.category !== undefined ||
     body.hasLegalSentence !== undefined ||
+    body.docketRegisters !== undefined ||
+    body.senate !== undefined ||
     // An id-set provision filter is the engine's own; only the candidate
     // check a broad provision falls back to is invisible to aggregations.
     (body.provision !== undefined && body.provisionDecisionIds === undefined)
@@ -2713,6 +2964,15 @@ const cursorMatchesCorpusReadTarget = (
   target: string | null,
 ): boolean => cursor === null || cursor.target === target;
 
+/**
+ * Whether a page reads the facets and total: only a first page describes its
+ * result set, and only for a caller that keeps the description.
+ */
+const readsResultSetDescription = (
+  body: SearchDecisionsBody,
+  isFirstPage: boolean,
+): boolean => isFirstPage && body.describeResultSet !== false;
+
 type SearchCorpusIndexDecisionsOptions = {
   signal?: AbortSignal | undefined;
   body: SearchDecisionsBody;
@@ -2769,38 +3029,104 @@ const decodeCaseLawCorpusCursor = (
   return parsedCursor;
 };
 
-const TERM_COVERAGE_FAILURE_SINK = failureSink({
-  event: "case_law.search_term_coverage.failed",
+const RELAXED_TOP_UP_SKIPPED_SINK = failureSink({
+  event: "case_law.search_relaxed_top_up.skipped",
   expected: [],
 });
 
 /**
- * The answer to a failed term coverage read. A refusal the corpus index read
- * answered with (an expired request budget, an unavailable index) is returned
- * as its own envelope, which every route and tool reads with its own code;
- * any other failure is the coverage read's. Each 5xx answer observes its
- * cause on the request itself.
+ * The share of a request's budget the relaxed top-up may spend. It starts
+ * with a strict page in hand and repeats a whole search, so it never gets
+ * everything that is left.
  */
-const termCoverageFailure = (error: HandlerError<502 | 503>) => {
-  // An expired budget is read first: it is never the index being down.
-  const timedOut = publicReadTimeoutError(error) !== null;
-  if (!timedOut && isSearchIndexUnavailable(error)) {
-    // The index refusal observes its own cause.
-    return searchIndexUnavailableResponse(error);
+const CASE_LAW_RELAXED_TOP_UP_BUDGET_MS = 4000;
+
+/** The request's signal, ended early by the top-up's own budget. */
+const topUpSignal = (
+  signal: AbortSignal | undefined,
+  stepSignal: AbortSignal,
+): AbortSignal =>
+  signal === undefined ? stepSignal : AbortSignal.any([signal, stepSignal]);
+
+/**
+ * The top-up's hits and how it ended. One that did not finish adds no hits and
+ * is reported, and its state goes back to the caller, so a page short of its
+ * partial matches does not read as a complete one.
+ */
+const settledRelaxedTopUp = <Hits>(
+  outcome: RelaxedTopUpOutcome<Hits> | null,
+  none: Hits,
+): { value: Hits; state: RelaxedTopUpState } => {
+  if (outcome === null) {
+    return { value: none, state: "not_run" };
   }
-  const answer = { sink: TERM_COVERAGE_FAILURE_SINK, cause: error };
-  return timedOut
-    ? publicReadTimeoutResponse(answer)
-    : observedStatus(answer, error.status, { message: error.message });
+  switch (outcome.type) {
+    case "read":
+      return { value: outcome.value, state: "read" };
+    case "skipped":
+      observeFailure(outcome.error, { sink: RELAXED_TOP_UP_SKIPPED_SINK });
+      reportCaseLawIncompleteAnswer({
+        surface: "search",
+        reason: "relaxed_top_up_skipped",
+        count: 1,
+      });
+      return { value: none, state: "skipped" };
+    default:
+      outcome satisfies never;
+      return panic("Unhandled relaxed top-up outcome");
+  }
 };
 
-export const searchCorpusIndexDecisions = async ({
-  signal,
+/**
+ * Whether a search blends its candidates from the engine's hits. A
+ * generation that stores the ranking signals answers the blend from its own
+ * hits, so the candidates cost no database read; only the page is read. A
+ * filter the engine cannot apply (a provision, a category, a legal sentence)
+ * and a read spanning another generation's indexes keep the database read,
+ * which decides them per row.
+ */
+const caseLawIndexRanking = ({
   body,
-  caseLawDb,
-  observer,
-  dependencies = {},
-}: SearchCorpusIndexDecisionsOptions) => {
+  generation,
+  indexId,
+}: {
+  body: SearchDecisionsBody;
+  generation: string;
+  indexId: string;
+}): {
+  scanFields: readonly string[] | undefined;
+  projections: (
+    scanned: () => ReadonlyMap<string, ScannedProjection>,
+  ) => ReadonlyMap<string, ScannedProjection> | undefined;
+} => {
+  const fromIndex =
+    corpusIndexRankingSignals(
+      requireCorpusIndexManifest("case_law", generation),
+    ) !== null &&
+    body.provision === undefined &&
+    body.category === undefined &&
+    body.hasLegalSentence === undefined &&
+    body.docketRegisters === undefined &&
+    body.senate === undefined &&
+    !indexId.includes(",");
+  return fromIndex
+    ? {
+        scanFields: CASE_LAW_RANKING_SCAN_FIELDS,
+        projections: (scanned) => scanned(),
+      }
+    : { scanFields: undefined, projections: () => undefined };
+};
+
+export const searchCorpusIndexDecisions = async (
+  {
+    signal,
+    body,
+    caseLawDb,
+    observer,
+    dependencies = {},
+  }: SearchCorpusIndexDecisionsOptions,
+  trace: CaseLawSearchTrace = createCaseLawSearchTrace(body.country),
+) => {
   const {
     readServingTarget,
     configuredVariant,
@@ -2813,7 +3139,7 @@ export const searchCorpusIndexDecisions = async ({
     caseLawDb,
     dependencies,
   });
-  const startedAt = performance.now();
+  const { startedAt } = trace;
   // Only the first page of a result set describes it (its total, its facets,
   // the decisions a reference pins above it); a page reached by cursor or by
   // offset is a slice of a set the first page already described.
@@ -2835,11 +3161,14 @@ export const searchCorpusIndexDecisions = async ({
   // the numbers are wait, not work: the candidate read hands the timer down to
   // where it opens its transaction, because the ranking, folding and
   // collapsing around it are not database time.
-  const dbTimer = createCaseLawSearchDbTimer();
+  const { dbTimer } = trace;
   const hitDispositions = createCorpusHitDispositionCounter();
-  // Shared by the identity path and the scan, so `hydrated.size` counts the
-  // candidates the whole request read, once each.
+  // The scan's record of rows read. The identity path keeps its own: it
+  // admits every published row, which must never stand in for a search hit
+  // whose index copy is not current. Together they count the candidates the
+  // whole request read, once each.
   const hydrated: HydratedDecisionRows = new Map();
+  const namedHydrated: HydratedDecisionRows = new Map();
   let pageRowsRead = 0;
   // The concurrent phase's two numbers, zero until it runs: a request answered
   // by identity, or one whose entry left nothing to query, never enters it.
@@ -2861,9 +3190,11 @@ export const searchCorpusIndexDecisions = async ({
     configuredVariant,
   });
   const queryClass = decisionQueryClass(intent);
+  trace.queryClass = queryClass;
   const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {
+    trace.reported = true;
     reportCaseLawSearchCompleted({
-      candidatesHydrated: hydrated.size,
+      candidatesHydrated: hydrated.size + namedHydrated.size,
       hitDispositions: hitDispositions.snapshot(),
       country: body.country,
       db: dbTimer.timing(),
@@ -2914,11 +3245,16 @@ export const searchCorpusIndexDecisions = async ({
       await dbTimer.time(CASE_LAW_SEARCH_DB_READ.courtWeights, run),
   });
 
-  /** The wide read, for the ids a page emits and no others. */
+  /**
+   * The wide read, for the ids a page emits and no others: search hits through
+   * `readCaseLawPageDecisionRows`, decisions an identifier named through
+   * `readNamedCaseLawPageDecisionRows`.
+   */
   const readPageRows = async (
+    read: typeof readCaseLawPageDecisionRows,
     pageRanked: readonly RankedHit[],
   ): Promise<Map<string, PageDecisionRow>> => {
-    const rows = await readCaseLawPageDecisionRows({
+    const rows = await read({
       hitDispositions,
       body,
       caseLawDb,
@@ -2943,6 +3279,7 @@ export const searchCorpusIndexDecisions = async ({
   let pinned: readonly RankedHit[] = [];
   let pinnedIds: ReadonlySet<string> = new Set();
   if (intent.type === "identifier" && identityRole !== "none") {
+    trace.phase = "identity";
     const ids = await findDecisionIdsByIdentity({
       caseLawDb,
       country: body.country,
@@ -2956,7 +3293,7 @@ export const searchCorpusIndexDecisions = async ({
       pinnedIds = new Set(ids.map(String));
     }
     if (ids.length > 0 && (identityRole === "answer" || isFirstPage)) {
-      const identityRanking = await rehydrateCaseLawCandidates({
+      const identityRanking = await rehydrateNamedCaseLawDecisions({
         hitDispositions,
         // Always the blended order here, whatever the request asked for: the
         // identity read has no order of its own to preserve, so the unblended
@@ -2966,7 +3303,7 @@ export const searchCorpusIndexDecisions = async ({
         caseLawDb,
         courtWeights,
         generation,
-        hydrated,
+        hydrated: namedHydrated,
         excludedGroups: new Set(parsedCursor?.excludedGroups),
         timeDbRead: async (run) =>
           await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
@@ -2992,7 +3329,10 @@ export const searchCorpusIndexDecisions = async ({
         pinned = identityRanking.ranked.slice(0, limit);
       } else if (identityAnswer.type === "answer") {
         const identityPage = identityAnswer.page;
-        const byId = await readPageRows(identityPage);
+        const byId = await readPageRows(
+          readNamedCaseLawPageDecisionRows,
+          identityPage,
+        );
         // Timed around the call rather than through the timer's thunk: the
         // alternates read must stay a direct call in this function, which a
         // lint rule enforces so no search path can drop it.
@@ -3059,6 +3399,7 @@ export const searchCorpusIndexDecisions = async ({
   // read may reach (`corpusIndexReadTarget`).
   const { indexId, jurisdictionClause } = route;
 
+  trace.phase = "query_resolve";
   const { facetQueries, resolved } = await resolveCorpusIndexQuery({
     body,
     generation,
@@ -3120,16 +3461,18 @@ export const searchCorpusIndexDecisions = async ({
     language: body.language,
   });
   const excerptTokens = tokenizeCorpusFreeText(body.query);
+  const indexRanking = caseLawIndexRanking({ body, generation, indexId });
 
   // The strict page and the relaxed top-up are the same scan over different
-  // queries; `omit` names decisions the relaxed one must leave out.
+  // queries; `omit` names decisions the relaxed one must leave out, and its
+  // signal ends the scan when the top-up's own budget runs out.
   const readTextPage = async (
     query: string,
     pageLimit: number,
-    omit: RelaxedExclusions | null,
+    relaxed: { omit: RelaxedExclusions; signal: AbortSignal } | null,
   ) =>
     readCorpusIndexSearchPage({
-      signal,
+      signal: relaxed === null ? signal : topUpSignal(signal, relaxed.signal),
       hitDispositions,
       observer,
       cluster: serving.cluster,
@@ -3160,11 +3503,13 @@ export const searchCorpusIndexDecisions = async ({
           tokens: excerptTokens,
         }),
       unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
+      // The signals a ranking from the index reads off each hit.
+      scanFields: indexRanking.scanFields,
       // The scan names the groups to leave out: a page addressed by offset
       // walks windows the request's own cursor never named.
       rankCandidates: async (
         candidates,
-        { excludedGroups, selectAppliedCandidates },
+        { excludedGroups, selectAppliedCandidates, scannedProjections },
       ) => {
         const ranking = await rehydrateCaseLawCandidates({
           hitDispositions,
@@ -3175,18 +3520,19 @@ export const searchCorpusIndexDecisions = async ({
           courtWeights,
           generation,
           hydrated,
+          indexedProjections: indexRanking.projections(scannedProjections),
           excludedGroups,
           timeDbRead: async (run) =>
             await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
         });
-        return omit === null
+        return relaxed === null
           ? ranking
           : {
               ...ranking,
               ranked: ranking.ranked.filter(
                 (hit) =>
-                  !omit.ids.has(hit.id) &&
-                  !omit.languageGroupKeys.has(
+                  !relaxed.omit.ids.has(hit.id) &&
+                  !relaxed.omit.languageGroupKeys.has(
                     hydrated.get(hit.id)?.languageGroupKey ?? "",
                   ),
               ),
@@ -3194,10 +3540,14 @@ export const searchCorpusIndexDecisions = async ({
       },
     });
   const concurrentStartedAt = performance.now();
-  const pageRead = readTextPage(resolved.query, limit, null);
+  trace.phase = "scan_and_facets";
+  const pageRead = readTextPage(resolved.query, limit, null).then((read) => {
+    trace.scanSettled = true;
+    return read;
+  });
   // Stamped where it resolves rather than after the phase: the reader waits on
   // the slower arm, and which arm that was is the whole point of the pair.
-  const facetRead = isFirstPage
+  const facetRead = readsResultSetDescription(body, isFirstPage)
     ? readCaseLawSearchFacets({
         signal,
         observer,
@@ -3217,6 +3567,7 @@ export const searchCorpusIndexDecisions = async ({
         totalQuery: resolved.query,
       }).then((read) => {
         facetMs = performance.now() - concurrentStartedAt;
+        trace.facetMs = facetMs;
         return read;
       })
     : null;
@@ -3243,9 +3594,21 @@ export const searchCorpusIndexDecisions = async ({
   // A row the candidate read saw and this one no longer answers for was
   // scrubbed mid-request; it drops out of the page rather than being served
   // from a stale copy, and the cursor keeps pointing past it.
-  const byId = await readPageRows(pageRanked);
+  // The pinned decisions were named by an identifier, the rest are hits.
+  trace.phase = "page_rows";
+  const byId = new Map([
+    ...(await readPageRows(
+      readCaseLawPageDecisionRows,
+      pageRanked.filter((hit) => !pinnedIds.has(hit.id)),
+    )),
+    ...(await readPageRows(
+      readNamedCaseLawPageDecisionRows,
+      pageRanked.filter((hit) => pinnedIds.has(hit.id)),
+    )),
+  ]);
 
   // Timed around the call for the same reason as on the identity path.
+  trace.phase = "alternates";
   const alternatesStartedAt = performance.now();
   const alternatesByGroupKey =
     await readPublicDecisionLanguageAlternatesByGroup({
@@ -3257,6 +3620,7 @@ export const searchCorpusIndexDecisions = async ({
     performance.now() - alternatesStartedAt,
   );
 
+  trace.phase = "partial_top_up";
   const page = decisionHitsPage({
     alternatesByGroupKey,
     anchorIdById,
@@ -3277,7 +3641,7 @@ export const searchCorpusIndexDecisions = async ({
     interpretation.functionWords,
   ).required;
   // The strict hits stay first and untouched; partial matches only follow.
-  const readRelaxedHits = async () => {
+  const readRelaxedHits = async (stepSignal: AbortSignal) => {
     const relaxedQuery = await resolveCorpusIndexQuery({
       body,
       generation,
@@ -3296,13 +3660,16 @@ export const searchCorpusIndexDecisions = async ({
       relaxedQuery.resolved.query,
       relaxedFetchLimit(needed),
       {
-        ids: new Set(pageRanked.map((hit) => hit.id)),
-        languageGroupKeys: new Set(
-          pageRanked.flatMap((hit) => {
-            const key = hydrated.get(hit.id)?.languageGroupKey;
-            return key === null || key === undefined ? [] : [key];
-          }),
-        ),
+        signal: stepSignal,
+        omit: {
+          ids: new Set(pageRanked.map((hit) => hit.id)),
+          languageGroupKeys: new Set(
+            pageRanked.flatMap((hit) => {
+              const key = hydrated.get(hit.id)?.languageGroupKey;
+              return key === null || key === undefined ? [] : [key];
+            }),
+          ),
+        },
       },
     );
     const revisionField = requireCorpusIndexManifest("case_law", generation)
@@ -3323,10 +3690,11 @@ export const searchCorpusIndexDecisions = async ({
       )
       .join(" OR ");
     const coverageStartedAt = performance.now();
-    const queries = relaxedQuery.termQueries(requiredTerms);
+    const queries = relaxedQuery.termQueries(termsForCoverage(requiredTerms));
     const coverageById = await readTermCoverage({
       aggregate: getCorpusIndexClient(serving.cluster).aggregate,
       observer,
+      signal: stepSignal,
       indexId,
       ids: candidates.map(({ id }) => id),
       queries: queries.map((query) => `(${query}) AND (${candidateQuery})`),
@@ -3343,7 +3711,7 @@ export const searchCorpusIndexDecisions = async ({
       ranked: relaxedPage.pageRanked,
       coverageById: coverageById.value,
     }).slice(0, needed);
-    const relaxedById = await readPageRows(ranked);
+    const relaxedById = await readPageRows(readCaseLawPageDecisionRows, ranked);
     const relaxedAlternates = await readPublicDecisionLanguageAlternatesByGroup(
       {
         caseLawDb,
@@ -3372,22 +3740,27 @@ export const searchCorpusIndexDecisions = async ({
       scan: sumCorpusIndexScans(relaxedPage.scan, coverageScan),
     });
   };
-  const relaxed = shouldRelaxCaseLawSearch({
-    body,
-    intentType: intent.type,
-    isFirstPage,
-    requiredTermCount: requiredTerms.length,
-    sort,
-    strictHitCount: page.hits.length,
-    limit,
-    strictEnd: searchPageEnd(searchPage),
-  })
-    ? await readRelaxedHits()
-    : Result.ok({ hits: [], scan: emptyCorpusIndexScan() });
-  if (Result.isError(relaxed)) {
-    return termCoverageFailure(relaxed.error);
-  }
-  const relaxedHits = relaxed.value.hits;
+  const { value: relaxed, state: relaxedTopUp } = settledRelaxedTopUp(
+    shouldRelaxCaseLawSearch({
+      body,
+      intentType: intent.type,
+      isFirstPage,
+      requiredTermCount: requiredTerms.length,
+      sort,
+      strictHitCount: page.hits.length,
+      limit,
+      strictEnd: searchPageEnd(searchPage),
+    })
+      ? relaxedTopUpOutcome(
+          await runBoundedRequestStep(readRelaxedHits, {
+            label: "case-law-relaxed-top-up",
+            budgetMs: CASE_LAW_RELAXED_TOP_UP_BUDGET_MS,
+          }),
+        )
+      : null,
+    { hits: [], scan: emptyCorpusIndexScan() },
+  );
+  const relaxedHits = relaxed.hits;
   const servedIds = new Set(page.hits.map((hit) => String(hit.decisionId)));
   const dispositions = hitDispositions.snapshot();
   reportCaseLawIncompleteAnswer({
@@ -3419,17 +3792,15 @@ export const searchCorpusIndexDecisions = async ({
   });
   const hits = [...page.hits, ...relaxedHits];
   // An unrelaxed request adds the empty scan, which changes nothing.
-  report(hits.length, sumCorpusIndexScans(scan, relaxed.value.scan));
-  if (interpretation.droppedFunctionWords.length > 0) {
-    reportCaseLawFunctionWordsExcluded({
-      country: body.country,
-      excludedTokens: interpretation.droppedFunctionWords.length,
-      hitsReturned: hits.length,
-      queryTokens:
-        tokenizeCorpusFreeText(interpretation.queryUsed).length +
-        interpretation.droppedFunctionWords.length,
-    });
-  }
+  report(hits.length, sumCorpusIndexScans(scan, relaxed.scan));
+  reportCaseLawFunctionWordsExcluded({
+    country: body.country,
+    excludedTokens: interpretation.droppedFunctionWords.length,
+    hitsReturned: hits.length,
+    queryTokens:
+      tokenizeCorpusFreeText(interpretation.queryUsed).length +
+      interpretation.droppedFunctionWords.length,
+  });
   const answer = searchAnswer({
     body,
     interpretation,
@@ -3437,6 +3808,7 @@ export const searchCorpusIndexDecisions = async ({
     partialHitCount: relaxedHits.length,
     countsResultSet:
       isFirstPage && searchPageEnd(searchPage) === SEARCH_PAGE_END.COMPLETE,
+    relaxedTopUp,
   });
   return projectCaseLawSearchResponse(
     {
@@ -3450,6 +3822,17 @@ export const searchCorpusIndexDecisions = async ({
     decisionHeadnoteMaxChars(body.headnotePresentation),
   );
 };
+
+/** The corpus search, leaving a record of itself when it does not complete. */
+const tracedCorpusIndexSearch = async (
+  options: SearchCorpusIndexDecisionsOptions,
+) =>
+  await runTracedCaseLawSearch({
+    country: options.body.country,
+    observer: options.observer,
+    run: async (trace, observer) =>
+      await searchCorpusIndexDecisions({ ...options, observer }, trace),
+  });
 
 type ListCaseLawProvisionDecisionsOptions = {
   body: SearchDecisionsBody & { provision: CaseLawProvisionFilter };
@@ -3772,7 +4155,11 @@ const provisionDecisionPageQuery = (
     .where(
       and(
         inArray(publishedCaseLawDecisions.id, decisionIds),
-        ...caseLawNonProvisionRowFilters(withoutProvision(body), generation),
+        ...caseLawNonProvisionRowFilters(
+          withoutProvision(body),
+          generation,
+          "indexed",
+        ),
         after,
       ),
     )
@@ -3785,7 +4172,7 @@ type BroadProvisionBody = SearchDecisionsBody & {
 
 /** The row filters a broad walk checks per examined row; the provision is probed. */
 const broadCandidateFilters = (body: BroadProvisionBody, generation: string) =>
-  caseLawNonProvisionRowFilters(withoutProvision(body), generation);
+  caseLawNonProvisionRowFilters(withoutProvision(body), generation, "indexed");
 
 type ProvisionDecisionWalkQueryOptions = {
   body: BroadProvisionBody;
@@ -4131,6 +4518,10 @@ export const listCaseLawProvisionDecisions = async ({
   const limit = normalizeTenantPageLimit(
     body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
   );
+  const docketRefusal = docketFilterRefusal(body);
+  if (docketRefusal !== null) {
+    return status(400, { message: docketRefusal });
+  }
   const sort = body.sort ?? DEFAULT_SEARCH_SORT;
   const scope = { jurisdiction: body.country, provision: body.provision };
   // Total over the row filters the page applies, so a filter added there
@@ -4141,6 +4532,8 @@ export const listCaseLawProvisionDecisions = async ({
     courts: body.courts ?? null,
     category: body.category ?? null,
     hasLegalSentence: body.hasLegalSentence ?? null,
+    docketRegisters: body.docketRegisters ?? null,
+    senate: body.senate ?? null,
     provision: body.provision,
     dateFrom: body.dateFrom ?? null,
     dateTo: body.dateTo ?? null,
@@ -4183,41 +4576,56 @@ export const listCaseLawProvisionDecisions = async ({
   }
   const candidateBudget =
     dependencies.candidateBudget ?? LIMITS.caseLawProvisionCandidateBudget;
-  // The page, citing sentences and hydrated rows share one snapshot.
-  const read = await caseLawDb(async (tx) => {
-    const provisionScope = await readCaseLawProvisionScope(tx, {
+  // Read outside the page's snapshot: it only chooses the path, and the page
+  // keeps only rows that still cite the provision in that snapshot.
+  const provisionScope = await readCaseLawProvisionScopeWithinBudget(
+    caseLawDb,
+    {
       ...scope,
       ...(dependencies.provisionIdSetMax === undefined
         ? {}
         : { idSetMax: dependencies.provisionIdSetMax }),
-    });
+    },
+  );
+  // The page, citing sentences and hydrated rows share one snapshot.
+  const read = await caseLawDb(async (tx) => {
     // Without its index the walk sorts the whole country per request, the
     // unbounded read it replaces; it waits for the online build instead.
     if (
-      provisionScope.type === "broad" &&
+      provisionScope.type !== "decisions" &&
       order.walkIndexes.length > 0 &&
       !(await readOnlineIndexesReady(tx, order.walkIndexes))
     ) {
       return { type: "walkIndexNotReady" } as const;
     }
     const page =
-      provisionScope.type === "broad"
-        ? await readBroadProvisionPage(tx, {
-            body,
-            candidateBudget,
-            generation,
-            order,
-            limit,
-          })
-        : await readProvisionIdSetPage(tx, {
+      provisionScope.type === "decisions"
+        ? await readProvisionIdSetPage(tx, {
             body,
             decisionIds: provisionScope.decisionIds,
             generation,
             order,
             limit,
+          })
+        : await readBroadProvisionPage(tx, {
+            body,
+            candidateBudget,
+            generation,
+            order,
+            limit,
           });
-    const pageIds = page.rows.map(({ id }) => id);
+    const sentences = await readProvisionCitingSentences(
+      tx,
+      scope,
+      page.rows.map(({ id }) => id),
+    );
+    // The scope predates this snapshot: a decision whose citation has gone
+    // since has no citing link here, so it is not a match. The cursor still
+    // moves past it, and a short page with a cursor is an ordinary page.
+    const emitted = page.rows.filter(({ id }) => sentences.has(String(id)));
+    const pageIds = emitted.map(({ id }) => id);
     const hydrated = await pageDecisionRowsQuery(tx, {
+      admission: "indexed",
       body,
       generation,
       ids: pageIds,
@@ -4227,9 +4635,9 @@ export const listCaseLawProvisionDecisions = async ({
     });
     return {
       type: "page",
-      emitted: page.rows,
+      emitted,
       nextCursor: page.nextCursor,
-      sentences: await readProvisionCitingSentences(tx, scope, pageIds),
+      sentences,
       byId: new Map(hydrated.rows.map((row) => [String(row.id), row])),
     } as const;
   });

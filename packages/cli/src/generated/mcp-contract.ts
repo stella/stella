@@ -83,6 +83,8 @@ export const MCP_ERROR_CODES = [
   "upstream_unavailable",
   "public_read_timeout",
   "search_index_unavailable",
+  "continuation_expired",
+  "public_read_unfinished",
   "unknown_tool",
   "internal_error",
 ] as const;

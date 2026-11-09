@@ -182,20 +182,17 @@ export const WorkspaceBreadcrumb = ({
   const changeColorLabel = t("common.changeColor");
 
   const colorPicker = match ? (
-    <MatterColorPicker matter={workspace}>
-      {/* Icon buttons name themselves in their tooltip. Held to the
-          breadcrumb's glyph scale so the trail does not grow a taller row. */}
-      <Button
-        aria-label={changeColorLabel}
-        className="size-5 sm:size-5"
-        size="icon-xs"
-        variant="ghost"
-      >
-        <MatterIcon
-          className="size-3.5 shrink-0"
-          matter={{ id: workspaceId, color: workspace.color }}
-        />
-      </Button>
+    // Held to the breadcrumb's glyph scale so the trail does not grow a
+    // taller row.
+    <MatterColorPicker
+      className="size-5 sm:size-5"
+      label={changeColorLabel}
+      matter={workspace}
+    >
+      <MatterIcon
+        className="size-3.5 shrink-0"
+        matter={{ id: workspaceId, color: workspace.color }}
+      />
     </MatterColorPicker>
   ) : (
     <MatterIcon
@@ -310,6 +307,7 @@ export const WorkspaceBreadcrumb = ({
               return (
                 <>
                   <MatterColorContextPicker
+                    className="pointer-coarse:size-6"
                     label={changeColorLabel}
                     matter={workspace}
                   >
@@ -338,6 +336,7 @@ export const WorkspaceBreadcrumb = ({
             return (
               <>
                 <MatterColorContextPicker
+                  className="pointer-coarse:size-6"
                   label={changeColorLabel}
                   matter={workspace}
                 >
@@ -354,7 +353,7 @@ export const WorkspaceBreadcrumb = ({
                   activeProps={{
                     className: "text-foreground font-semibold",
                   }}
-                  className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold"
+                  className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5 font-semibold"
                   onContextMenu={(e) => {
                     e.preventDefault();
                     startEditingName();

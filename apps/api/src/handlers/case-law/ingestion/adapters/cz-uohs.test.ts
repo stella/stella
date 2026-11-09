@@ -13,15 +13,17 @@ import {
   czUohsAdapter,
   czUohsCollectionOf,
   czUohsDecisionIdentifiers,
+  czUohsFileNumber,
   czUohsLetterheadDate,
+  czUohsPrintedDecisionType,
   encodeCzUohsCursor,
   parseCzUohsDocumentPdf as uncheckedParseCzUohsDocumentPdf,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
-  extractPlPdfSeparatedContent,
-  PL_PDF_PARAGRAPH_START,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
@@ -228,6 +230,154 @@ describe("ÚOHS JSON-LD", () => {
     },
   );
 
+  describe("a decision set with the docket as its running header", () => {
+    const read = async (fixture: string) =>
+      await parseCzUohsDocumentPdf(
+        new Uint8Array(
+          await Bun.file(
+            new URL(`__fixtures__/${fixture}`, import.meta.url),
+          ).arrayBuffer(),
+        ),
+        { caseNumber: fixture, sourceUrl: fixture },
+      );
+    const bodyOf = (ast: Awaited<ReturnType<typeof read>>) =>
+      ast.blocks.filter(
+        (block) => !(block.type === "paragraph" && block.note !== undefined),
+      );
+    const notesOf = (ast: Awaited<ReturnType<typeof read>>) =>
+      ast.blocks.flatMap((block) =>
+        block.type === "paragraph" && block.note !== undefined ? [block] : [],
+      );
+
+    test.each([
+      [
+        "cz-uohs-2015-S0569.pdf",
+        "Č.j.: ÚOHS-S0569/2015/KD-42098/2016/852/MAd",
+        "UOHSX008YFQ5",
+      ],
+      [
+        "cz-uohs-2018-R0003.pdf",
+        "Č.j.: ÚOHS-R0003/2018/HS-31751/310/MHf",
+        "UOHSX00BKPME",
+      ],
+    ] as const)(
+      "%s keeps the running header and the barcode out of the text, and the barcode's payload in it",
+      async (fixture, header, payload) => {
+        const body = bodyOf(await read(fixture));
+        const text = body.map(({ plainText }) => plainText).join("\n");
+        expect(text).not.toContain(header);
+        expect(text).not.toContain(`*${payload}*`);
+        expect(body.at(0)?.plainText).toBe(payload);
+        // The letterhead's own docket line, printed once, stays.
+        expect(text).toContain(header.replace("Č.j.:", "Č. j.:"));
+      },
+    );
+
+    test("a paragraph the running header cut at a page break reads whole", async () => {
+      const text = bodyOf(await read("cz-uohs-2015-S0569.pdf"))
+        .map(({ plainText }) => plainText)
+        .join("\n");
+      expect(text).toContain(
+        "Praha 4, IČO 22671617, tím že, schválil dokument nazvaný",
+      );
+      expect(text).toContain(
+        "o právním posouzení šetřeného případu Úřadem a předal mu také informace",
+      );
+    });
+
+    test.each([
+      [
+        "cz-uohs-2018-R0003.pdf",
+        "uvedených v její Příloze č. 1, a s účinností od",
+        "11. února 2015",
+      ],
+      [
+        "cz-uohs-2015-S0569.pdf",
+        "jednání konaném v rámci správního řízení ve dnech",
+        "29. 4. 2016",
+      ],
+      [
+        "cz-uohs-2024-R0145.pdf",
+        "v zadávacím řízení“ ze dne",
+        "29. 8. 2024, které je ve správním spise",
+      ],
+    ] as const)(
+      "%s: a date wrapped after its day goes on in its paragraph",
+      async (fixture, sentence, date) => {
+        const body = bodyOf(await read(fixture));
+        expect(
+          body.filter(({ plainText }) => plainText.startsWith(date)),
+        ).toEqual([]);
+        expect(
+          body.find(({ plainText }) => plainText.includes(sentence))?.plainText,
+        ).toContain(date);
+      },
+    );
+
+    test("every footnote is a note, in order, and none is left in the text", async () => {
+      const ast = await read("cz-uohs-2018-R0003.pdf");
+      const notes = notesOf(ast);
+      expect(notes.map(({ note }) => note?.label)).toEqual(
+        Array.from({ length: 69 }, (_, index) => String(index + 1)),
+      );
+      // Set in two type sizes on one line, and once read as text.
+      expect(notes.at(26)?.plainText).toBe(
+        "Rozhodnutí Nejvyššího správního soudu ze dne 7. 4. 2006, č.j. 6 As 23/2005-66.",
+      );
+      const text = bodyOf(ast)
+        .map(({ plainText }) => plainText)
+        .join("\n");
+      for (const { plainText } of notes) {
+        expect(text).not.toContain(plainText);
+      }
+    });
+
+    test("the footnotes are searchable text of the decision", async () => {
+      const bytes = new Uint8Array(
+        await Bun.file(
+          new URL("__fixtures__/cz-uohs-2018-R0003.pdf", import.meta.url),
+        ).arrayBuffer(),
+      );
+      testFetchState.set(asFetchMock(async () => new Response(bytes)));
+      const decision = await buildCzUohsDecision((await records())[0]!);
+      expect(decision.fulltext).toContain(
+        "Rozhodnutí Nejvyššího správního soudu ze dne 7. 4. 2006, č.j. 6 As 23/2005-66.",
+      );
+    });
+
+    test("a footnote's mark is a linked superscript, not a digit glued to its word", async () => {
+      const body = bodyOf(await read("cz-uohs-2018-R0003.pdf"));
+      expect(body.map(({ plainText }) => plainText)).toContain("II. ROZKLAD");
+      const appeal = body.find(({ plainText }) =>
+        plainText.startsWith("Účastník řízení podal proti všem výrokům"),
+      );
+      expect(
+        appeal?.type === "paragraph" ? appeal.inlines.slice(0, 2) : [],
+      ).toEqual([
+        {
+          type: "text",
+          text: "Účastník řízení podal proti všem výrokům napadeného rozhodnutí včas rozklad",
+        },
+        {
+          type: "link",
+          href: "#footnote-2",
+          children: [
+            { type: "superscript", children: [{ type: "text", text: "2" }] },
+          ],
+        },
+      ]);
+    });
+
+    test("the head matter's printed lines join into its paragraphs", async () => {
+      const text = bodyOf(await read("cz-uohs-2018-R0003.pdf"))
+        .map(({ plainText }) => plainText)
+        .join("\n");
+      expect(text).toContain(
+        "č. j. ÚOHS-S0595/2016/VS-37308/2017/830/ESk ze dne 20. 12. 2017 podalo statutární město Karlovy Vary,",
+      );
+    });
+  });
+
   test("keeps a raised reference immediately after its claim inside a line", async () => {
     const pdf = PDF.create();
     const page = pdf.addPage({ size: "letter" });
@@ -282,7 +432,7 @@ describe("ÚOHS JSON-LD", () => {
     ]);
   });
 
-  test("keeps an unlabelled page-top continuation in the previous footnote until body resumes", async () => {
+  test("keeps a small unlabelled line atop the next page as text, never filed under a note", async () => {
     const pdf = PDF.create();
     const first = pdf.addPage({ size: "letter" });
     first.drawText("First body paragraph with a reference", {
@@ -319,13 +469,18 @@ describe("ÚOHS JSON-LD", () => {
     if (saved.status !== "saved") {
       return;
     }
-    const separated = await extractPlPdfSeparatedContent(
+    const separated = await extractPdfBodyAndNotes(
       saved.bytes,
-      PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+      PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
     );
+    // The note's number on a line of its own, then its one line of text.
     expect(separated.notes).toMatchObject([
       { type: "text", footnote: { label: "1", noteId: "footnote-1" } },
-      { type: "text", footnote: { label: "1", noteId: "footnote-1" } },
+      {
+        type: "text",
+        footnote: { label: "1", noteId: "footnote-1" },
+        runs: [{ text: "Note begins on the first page" }],
+      },
     ]);
     const ast = await parseCzUohsDocumentPdf(saved.bytes, {
       caseNumber: "synthetic-continuation",
@@ -337,15 +492,16 @@ describe("ÚOHS JSON-LD", () => {
     expect(notes).toHaveLength(1);
     expect(notes.at(0)).toMatchObject({
       note: { type: "footnote", label: "1", noteId: "footnote-1" },
-      plainText:
-        "Note begins on the first page and continues at the next page top.",
+      plainText: "Note begins on the first page",
     });
     const bodyText = ast.blocks
       .filter((block) => block.type === "paragraph" && block.note === undefined)
       .map(({ plainText }) => plainText)
       .join(" ");
     expect(bodyText).not.toContain("Note begins");
-    expect(bodyText).not.toContain("and continues at the next page top.");
+    // Small type atop a page shows no note it continues: the reader keeps it
+    // in the text rather than guess which note it belongs to.
+    expect(bodyText).toContain("and continues at the next page top.");
     expect(bodyText).toContain("Small body text after the body resumes.");
   });
 
@@ -401,6 +557,113 @@ describe("ÚOHS JSON-LD", () => {
     );
   });
 
+  test("the file number keeps its year in both export layouts", () => {
+    // Older export rows state only the serial and carry the whole file
+    // number at the head of the reference number.
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "R0003",
+        číslo_jednací: "R0003/2018/HS-31751/310/MHf",
+      }),
+    ).toBe("ÚOHS-R0003/2018/HS");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S0196/2026/KS",
+        číslo_jednací: "14168/2026/890",
+      }),
+    ).toBe("ÚOHS-S0196/2026/KS");
+    // The same serial in two years names two files.
+    const [first] = czUohsDecisionIdentifiers({
+      spisová_značka: "R0003",
+      číslo_jednací: "R0003/2018/HS-31751/310/MHf",
+    });
+    const [second] = czUohsDecisionIdentifiers({
+      spisová_značka: "R0003",
+      číslo_jednací: "R0003/2017/VZ-12345/2017/321/ABc",
+    });
+    expect(first.value).not.toBe(second.value);
+    // The decision's own number may follow without a hyphen.
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S817,818,819",
+        číslo_jednací: "S817,818,819/2014/VZ 26112/2014/533/ZPr",
+      }),
+    ).toBe("ÚOHS-S817,818,819/2014/VZ");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "R4",
+        číslo_jednací: "R4/2016/VZ29770/2016/321/TNo",
+      }),
+    ).toBe("ÚOHS-R4/2016/VZ");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "R449,450",
+        číslo_jednací: "R449,450/2015/38132/2016/321/EDy/HBa",
+      }),
+    ).toBe("ÚOHS-R449,450/2015");
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S0049",
+        číslo_jednací: "S0049/2013",
+      }),
+    ).toBe("ÚOHS-S0049/2013");
+    // A serial the reference does not extend is kept as stated.
+    expect(
+      czUohsFileNumber({
+        spisová_značka: "S0904",
+        číslo_jednací: "1/2026/500",
+      }),
+    ).toBe("ÚOHS-S0904");
+  });
+
+  test("reads the date beside the reference number in older letterheads", () => {
+    expect(
+      czUohsLetterheadDate(
+        "PŘEDSEDA ÚŘADU PRO OCHRANU HOSPODÁŘSKÉ SOUTĚŽE\nROZHODNUTÍ\nČ. j.: ÚOHS-R0003/2018/HS-31751/310/MHf Brno 1. listopadu 2018\nV řízení o rozkladu",
+      ),
+    ).toBe("2018-11-01");
+    expect(
+      czUohsLetterheadDate(
+        "Č. j.: ÚOHS-R0007/2017/HS-33348/2017/310/AŠi Brno: 13. listopadu 2017\n",
+      ),
+    ).toBe("2017-11-13");
+    expect(
+      czUohsLetterheadDate(
+        "Č. j.: ÚOHS-S0569/2015/KD-42098/2016/852/MAd Brno: 17. 10. 2016\n",
+      ),
+    ).toBe("2016-10-17");
+    // The 2023 and 2024 letterheads label both references, in either order.
+    expect(
+      czUohsLetterheadDate(
+        "ROZHODNUTÍ\nSpisová značka: ÚOHS-R0145/2024/VZ Číslo jednací: ÚOHS-37007/2024/163 Brno 1. 10. 2024\n",
+      ),
+    ).toBe("2024-10-01");
+    expect(
+      czUohsLetterheadDate(
+        "ROZHODNUTÍ\nSpisová značka: ÚOHS-S0876/2023/KS Brno 8. 1. 2024 Číslo jednací: ÚOHS-00750/2024/873\n",
+      ),
+    ).toBe("2024-01-08");
+    // A cited reference in the body is followed by "ze dne", not the place.
+    expect(
+      czUohsLetterheadDate(
+        "rozhodnutí č. j. ÚOHS-S0595/2016/VS-37308/2017/830/ESk ze dne 20. 12. 2017",
+      ),
+    ).toBeUndefined();
+  });
+
+  test("the type is the decision's printed title", () => {
+    expect(
+      czUohsPrintedDecisionType(
+        "*UOHSX00BKPME*\n PŘEDSEDA ÚŘADU\n\n ROZHODNUTÍ \nČ. j.: ÚOHS-R0003/2018/HS",
+      ),
+    ).toBe("rozhodnutí");
+    expect(czUohsPrintedDecisionType("USNESENÍ\n")).toBe("usnesení");
+    expect(czUohsPrintedDecisionType(" Rozhodnutí \n")).toBe("rozhodnutí");
+    expect(
+      czUohsPrintedDecisionType("Úřad vydal rozhodnutí ve věci"),
+    ).toBeUndefined();
+  });
+
   test("emits citation-shaped authority identifiers", async () => {
     expect(czUohsDecisionIdentifiers((await records())[0]!)).toEqual([
       { type: "authority-decision-number", value: "úohs-r0901/2026/vz" },
@@ -439,8 +702,13 @@ describe("ÚOHS JSON-LD", () => {
     expect(JSON.stringify(decision.metadata["participants"])).toBe(
       JSON.stringify([{ typ: "Osoba", jméno: { cs: "obec Fiktivní Lhota" } }]),
     );
-    expect(String(decision.decisionType)).toBe(
-      "https://uohs.gov.cz/cs/ciselniky/typy-rozhodnuti/36.html",
+    // The synthetic text prints no title, so no type is claimed; the
+    // code-list address the export names stays in metadata.
+    expect(decision.decisionType).toBeUndefined();
+    expect(JSON.stringify(decision.metadata["decisionTypes"])).toBe(
+      JSON.stringify([
+        "https://uohs.gov.cz/cs/ciselniky/typy-rozhodnuti/36.html",
+      ]),
     );
   });
 

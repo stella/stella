@@ -429,11 +429,13 @@
       "Download planned Postgres test durations",
       "Install dependencies",
       "Prepare the dev seed database",
+      "Replay the local dev seed",
       "Run Postgres-gated API suites",
       "Setup Bun",
       "Upload Postgres test timings",
       "Upload failed Bun install logs",
-      "Verify planned Postgres test durations"
+      "Verify planned Postgres test durations",
+      "Verify shared worker Postgres history and cleanup"
     ],
     "steps": ["Checkout", "Post Checkout", "Post Setup Bun", "Setup Bun"]
   },
@@ -669,6 +671,7 @@
     "displayName": { "prefix": "route-smoke", "suffix": "" },
     "declaredStepNames": [
       "Cancel merge group after failure in this job",
+      "Check phone layouts",
       "Check route network baseline",
       "Checkout",
       "Explain network baseline failure",
@@ -678,6 +681,7 @@
       "Setup Bun",
       "Setup production browser stack",
       "Upload browser test timings",
+      "Upload phone layout report",
       "Upload route smoke report",
       "Upload server logs"
     ],
@@ -934,7 +938,10 @@
       "Check generated WebAssembly from a fresh Cargo cache",
       "Checkout",
       "Fetch Rust dependencies and wasm-bindgen",
+      "Fetch license audit inputs",
+      "Install cargo-deny",
       "Install dependencies",
+      "License audit",
       "Record fresh WebAssembly checksums",
       "Restore Rust build cache",
       "Save Rust build cache",

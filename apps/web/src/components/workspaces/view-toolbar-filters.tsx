@@ -744,7 +744,7 @@ const useFilterFields = (properties: WorkspaceProperty[]): FieldOption[] => {
 
   for (const property of properties) {
     const content = property.content;
-    if (content.type === "file") {
+    if (content.type === "file" || content.type === "record") {
       continue;
     }
     if (content.type === "single-select" || content.type === "multi-select") {

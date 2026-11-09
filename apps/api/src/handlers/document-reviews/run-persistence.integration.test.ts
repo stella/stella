@@ -27,8 +27,9 @@ import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-ove
 import {
   buildDocumentReviewFindingRow,
   recountDocumentReviewFindingProgress,
-  upsertDocumentReviewFindings,
+  writeReviewFindingBatch,
 } from "@/api/lib/document-review/finding-write";
+import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewDecision,
   DocumentReviewFindingPayload,
@@ -109,6 +110,7 @@ const referenceBasis: DocumentReviewRunBasis = {
           },
         ],
       },
+      scope: null,
     },
   },
   perspective: { type: "party", role: "Buyer", name: null },
@@ -402,9 +404,13 @@ describe("document review run persistence", () => {
       rows.map(async (row) => {
         await testDb.transaction(
           async (tx) =>
-            await upsertDocumentReviewFindings(asTestRaw<Transaction>(tx), [
-              row,
-            ]),
+            await writeReviewFindingBatch({
+              tx: asTestRaw<Transaction>(tx),
+              workspaceId: ids.wsA1,
+              rows: [row],
+              executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
+              runId,
+            }),
         );
         // Deterministically model the lost-count result: each overlapping
         // pass observed only its own row when it wrote intermediate progress.

@@ -41,6 +41,7 @@ import {
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
   CZ_TAKTO,
   CZ_TAKTO_TAIL_RE,
+  isCzechSignatoryName,
   isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -52,17 +53,19 @@ import type {
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
-import { normalizeUnicode } from "@stll/text-normalize";
+import { BRACKET_PARAGRAPH_MARKER_RE } from "@stll/legal-ast/printed-paragraph-labels";
+import {
+  collapseLetterSpacing,
+  isLetterSpacedEmphasis,
+  normalizeUnicode,
+} from "@stll/text-normalize";
 
 import {
   inlineStyleDeclaresProperty,
   inlineStyleValue,
 } from "@/api/lib/legal-search/document-builders/inline-style";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import {
-  collapseLetterSpacing,
-  withAttestedLetterSpacing,
-} from "@/api/lib/legal-search/parsers/letter-spacing";
+import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   continuesAcrossPageBreak,
   CZ_RUNNING_HEADER_SOURCE,
@@ -71,6 +74,7 @@ import {
 import {
   type OpinionHeadingKind,
   separateOpinionHeading,
+  separateOpinionHeadingEndsAsSentence,
 } from "@/api/lib/legal-search/parsers/separate-opinion-heading";
 
 import {
@@ -192,9 +196,7 @@ const footnoteOf = (el: cheerio.Cheerio<AnyNode>): PChunk["footnote"] => {
     : { anchorId: id, label };
 };
 
-const SPACED_EMPHASIS_RE = /^(?:\p{L} +)+\p{L}(?: *[,:;.!?])?$/u;
 const SINGLE_LETTER_RE = /^\p{L}$/u;
-const MULTI_SPACE_MARKER = "\u0000";
 
 type SpacedBoldRun = {
   children: Inline[];
@@ -289,7 +291,7 @@ const collectSpacedBoldRun = (
   }
 
   const text = inlinesToPlainText(children).replace(/\s/gu, " ").trim();
-  return SPACED_EMPHASIS_RE.test(text) ? { children, endIndex } : null;
+  return isLetterSpacedEmphasis(text) ? { children, endIndex } : null;
 };
 
 /**
@@ -358,20 +360,14 @@ const normalizeNssInlines = (
         /\s/gu,
         " ",
       );
-      const trimmed = whitespaceNormalized.trim();
-      // The gap around a spaced word is the word boundary: "n e j s o u"
-      // and the spaces after it read as "nejsou ", not "nejsou".
-      const text =
-        spacedEmphasis && SPACED_EMPHASIS_RE.test(trimmed)
-          ? `${whitespaceNormalized.startsWith(" ") ? " " : ""}${trimmed
-              .replace(/ {2,}/gu, () => MULTI_SPACE_MARKER)
-              .replace(/(?<=\p{L}) (?=\p{L})/gu, "")
-              .replaceAll(MULTI_SPACE_MARKER, " ")
-              .replace(
-                /(?<=\p{L}) +(?=[,:;.!?])/gu,
-                "",
-              )}${whitespaceNormalized.endsWith(" ") ? " " : ""}`
-          : collapseLetterSpacing(whitespaceNormalized).replace(/ {2,}/gu, " ");
+      // A bold node set wholly in spaced letters is emphasis however short
+      // its words: every run in it is a spaced word. The gap around a spaced
+      // word is the word boundary: "n e j s o u" and the spaces after it
+      // read as "nejsou ", not "nejsou".
+      const text = collapseLetterSpacing(whitespaceNormalized, {
+        emphasis:
+          spacedEmphasis && isLetterSpacedEmphasis(whitespaceNormalized),
+      }).replace(/ {2,}/gu, " ");
       return node.anonymized === true
         ? { type: "text", text, anonymized: true }
         : { type: "text", text };
@@ -947,18 +943,16 @@ const SEPARATE_OPINION_HEADING_MAX_CHARS = 300;
 /**
  * The heading of a separate opinion printed after the decision. A title, so
  * it does not end the way a sentence reporting the opinions does
- * ("Odlišná stanoviska k rozsudku … uplatnili soudci …").
+ * ("Odlišná stanoviska k rozsudku … uplatnili soudci …."); it may end on the
+ * docket it names ("… č. j. 7 As 155/2015 – 160.").
  */
 const separateOpinionHeadingKind = (
   plainText: string,
 ): OpinionHeadingKind | undefined =>
-  plainText.endsWith(".")
+  separateOpinionHeadingEndsAsSentence(plainText)
     ? undefined
     : separateOpinionHeading(plainText, SEPARATE_OPINION_HEADING_MAX_CHARS)
         ?.kind;
-
-/** Numbered paragraph: [1], [2], ... */
-const NUMBERED_PARA_RE = /^\[(?:\d+)\]\s*/u;
 
 const DOCUMENT_PHASE = {
   PREAMBLE: "preamble",
@@ -994,6 +988,34 @@ const PHASE_PARAGRAPH_ROLE = {
  * or just "City + date" pattern.
  */
 // ── Block classification ───────────────────────────────────
+
+type NamesSignatoryOptions = {
+  centered: boolean;
+  plainText: string;
+  phase: DocumentPhase;
+  previous: Block | undefined;
+};
+
+/**
+ * Whether a short line can be the name a judge signs above the office: set
+ * centred like the signature, or a bare name directly under the closing,
+ * however the editor indented it. The closing ends the instruction, so a
+ * name under it is no longer part of the instruction.
+ */
+const namesSignatory = ({
+  centered,
+  plainText,
+  phase,
+  previous,
+}: NamesSignatoryOptions): boolean => {
+  const underClosing =
+    previous?.type === "paragraph" && previous.role === "closing";
+  return (
+    (centered || (underClosing && isCzechSignatoryName(plainText))) &&
+    plainText.length < 60 &&
+    (phase !== DOCUMENT_PHASE.INSTRUCTION || underClosing)
+  );
+};
 
 const makeAnchorId = (prefix: string, index: number): string =>
   `${prefix}-${index}`;
@@ -1426,13 +1448,14 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
-    // Judge name: short centered text right before signature
-    // (check next chunk for signature pattern)
+    // Judge name: short text right before the signature line.
     if (
-      centered &&
-      plainText.length < 60 &&
-      phase !== DOCUMENT_PHASE.INSTRUCTION &&
-      chunks.indexOf(chunk) < chunks.length - 1
+      namesSignatory({
+        centered,
+        plainText,
+        phase,
+        previous: blocks.at(-1),
+      })
     ) {
       const nextChunk = chunks[chunks.indexOf(chunk) + 1];
       if (nextChunk && SIGNATURE_RE.test(nextChunk.plainText)) {
@@ -1499,7 +1522,10 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // A numbered paragraph starts reasoning even when the publisher omitted
     // or misspelled its separator. Keep the phase transition durable so later
     // unnumbered reasoning cannot leak back into the holding section.
-    if (phase === DOCUMENT_PHASE.HOLDING && NUMBERED_PARA_RE.test(plainText)) {
+    if (
+      phase === DOCUMENT_PHASE.HOLDING &&
+      BRACKET_PARAGRAPH_MARKER_RE.test(plainText)
+    ) {
       phase = DOCUMENT_PHASE.REASONING;
     }
 

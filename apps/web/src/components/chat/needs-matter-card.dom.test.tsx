@@ -10,10 +10,11 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 let fetch: Mock<typeof globalThis.fetch>;

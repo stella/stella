@@ -14,11 +14,13 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {
   lockCaseLawProjectionRepairIdentifiers,
   lockCaseLawProjectionRepairRows,
   lockCaseLawProjectionRepairStates,
 } from "@/api/lib/db/aggregate-lock";
+import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
@@ -34,6 +36,7 @@ import {
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
+import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
@@ -116,6 +119,7 @@ export type CaseLawProjectionCanonicalInput = {
   ecli: string | null;
   metadata: Record<string, unknown> | null;
   provisionKeys: readonly string[];
+  rankingSignals: CaseLawRankingSignals;
   vacatedFrom: string | null;
   sourceDescriptor: Parameters<typeof isRedistributable>[0];
 };
@@ -136,6 +140,7 @@ export const caseLawProjectionInputFromCanonical = ({
   ecli,
   metadata,
   provisionKeys,
+  rankingSignals,
   vacatedFrom,
   sourceDescriptor,
 }: CaseLawProjectionCanonicalInput): CaseLawProjectionInput => ({
@@ -159,6 +164,7 @@ export const caseLawProjectionInputFromCanonical = ({
   ecli,
   metadata,
   provisionKeys,
+  rankingSignals,
   vacatedFrom,
 });
 
@@ -453,6 +459,9 @@ const lockCaseLawProjectionInput = async (
     (await readCaseLawJurisdictionVacatedTx(tx, [row.jurisdiction])).get(
       row.jurisdiction,
     ) ?? null;
+  const rankingSignals = (
+    await readCaseLawRankingSignals(tx, [row.documentId])
+  ).get(String(row.documentId));
   return {
     epoch: row.projectionEpoch,
     input: caseLawProjectionInputFromCanonical({
@@ -461,6 +470,10 @@ const lockCaseLawProjectionInput = async (
       provisionKeys:
         provisionKeys ??
         panic(`Provision keys were not loaded for ${row.documentId}`),
+      // The row is locked, so it cannot have disappeared since.
+      rankingSignals:
+        rankingSignals ??
+        panic(`Ranking signals were not loaded for ${row.documentId}`),
       vacatedFrom,
       sourceDescriptor: source.sourceDescriptor,
     }),
@@ -548,34 +561,45 @@ const setCanonicalProjectionEpoch = async (
   update: CanonicalProjectionEpochUpdate,
 ): Promise<void> => {
   switch (update.family) {
-    case "case_law":
+    case "case_law": {
       if (update.epochs.length === 0) {
         return;
       }
+      const write = replayWrite(caseLawDecisions, {
+        projectionEpoch: sqlCaseFragment({
+          branches: update.epochs.map(
+            ({ id, epoch }) =>
+              sql`WHEN ${caseLawDecisions.id} = ${id} THEN ${epoch.toString()}::bigint`,
+          ),
+          fallback: sql`${caseLawDecisions.projectionEpoch}`,
+        }),
+      });
       await tx
         .update(caseLawDecisions)
-        .set({
-          projectionEpoch: sqlCaseFragment({
-            branches: update.epochs.map(
-              ({ id, epoch }) =>
-                sql`WHEN ${caseLawDecisions.id} = ${id} THEN ${epoch.toString()}::bigint`,
-            ),
-            fallback: sql`${caseLawDecisions.projectionEpoch}`,
-          }),
-        })
+        .set(write.set)
         .where(
-          inArray(
-            caseLawDecisions.id,
-            update.epochs.map(({ id }) => id),
+          and(
+            write.setWhere,
+            inArray(
+              caseLawDecisions.id,
+              update.epochs.map(({ id }) => id),
+            ),
           ),
         );
       return;
-    case "legislation":
+    }
+    case "legislation": {
+      const write = replayWrite(legislationDocuments, {
+        projectionEpoch: update.epoch,
+      });
       await tx
         .update(legislationDocuments)
-        .set({ projectionEpoch: update.epoch })
-        .where(eq(legislationDocuments.id, update.entityId));
+        .set(write.set)
+        .where(
+          and(write.setWhere, eq(legislationDocuments.id, update.entityId)),
+        );
       return;
+    }
     default:
       update satisfies never;
       return panic(`Unhandled projection epoch update: ${String(update)}`);
@@ -838,7 +862,7 @@ export const buildCorpusIndexProjectionDesiredStateValues = ({
   desiredIndexId: descriptor.action === "upsert" ? descriptor.indexId : null,
 });
 
-const writeDesiredStates = async (
+export const writeDesiredStates = async (
   tx: Transaction,
   values: (typeof corpusIndexProjectionStates.$inferInsert)[],
 ): Promise<void> => {
@@ -865,22 +889,30 @@ const writeDesiredStates = async (
         corpusIndexProjectionStates.generation,
         corpusIndexProjectionStates.entityId,
       ],
-      set: {
-        desiredAction: sql`excluded.desired_action`,
-        desiredEpoch: sql`excluded.desired_epoch`,
-        desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
-        desiredFingerprint: sql`excluded.desired_fingerprint`,
-        desiredIndexId: sql`excluded.desired_index_id`,
-        workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
-        retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
-        failureAttempts: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.failureAttempts} ELSE 0 END`,
-        appendMode: sql<
-          "batchable" | "single"
-        >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
-        lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
-        lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
-        updatedAt: sql<Date>`statement_timestamp()`,
-      },
+      ...replayWrite(
+        corpusIndexProjectionStates,
+        {
+          desiredAction: sql`excluded.desired_action`,
+          desiredEpoch: sql`excluded.desired_epoch`,
+          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
+          desiredFingerprint: sql`excluded.desired_fingerprint`,
+          desiredIndexId: sql`excluded.desired_index_id`,
+          workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
+          retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
+          failureAttempts: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.failureAttempts} ELSE 0 END`,
+          appendMode: sql<
+            "batchable" | "single"
+          >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
+          lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
+          lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
+        },
+        {
+          modifiedAt: {
+            column: corpusIndexProjectionStates.updatedAt,
+            value: sql`statement_timestamp()`,
+          },
+        },
+      ),
     });
 };
 
@@ -1319,6 +1351,7 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
     tx,
     rows.map(({ jurisdiction }) => jurisdiction),
   );
+  const rankingSignals = await readCaseLawRankingSignals(tx, ids);
   const manifests = await projectionManifests(tx, "case_law");
   const states = await lockCaseLawProjectionRepairStates(tx, {
     decisionIds: ids,
@@ -1338,6 +1371,9 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
       provisionKeys:
         provisionKeys.get(row.documentId) ??
         panic("Projection repair provision keys missing"),
+      rankingSignals:
+        rankingSignals.get(row.documentId) ??
+        panic("Projection repair ranking signals missing"),
       vacatedFrom: vacated.get(row.jurisdiction) ?? null,
       sourceDescriptor: source.descriptor,
     });

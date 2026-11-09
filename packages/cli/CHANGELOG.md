@@ -1,5 +1,45 @@
 # @stll/cli
 
+## 6.8.3
+
+### Patch Changes
+
+- [#7940](https://github.com/stella/stella/pull/7940) [`ad81543`](https://github.com/stella/stella/commit/ad81543e9c85c79cc921caa5b72d7ee39cde94c3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `properties create` and `properties batch-create` accept `toolType: "ai-model"` for a money column, and `properties prompt-suggest` accepts the `money` content type. An AI money column requires the `table-analysis` feature.
+
+- [#7948](https://github.com/stella/stella/pull/7948) [`f0bb587`](https://github.com/stella/stella/commit/f0bb587b3b56b0f59c2e366c6fbf844a1d85a123) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `fields cell-metadata-update` accepts `overrideReason`: why a person replaced the value a run produced in a cell. It is refused with `cell_override_absent` on a cell that holds no such replacement.
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible runtime dependencies: `@stll/time` 0.4.2, `temporal-polyfill` 1.0.6, `lucide-react` 1.65.0, Tiptap 3.32.1 and the MCP client 2.4.0.
+
+- [#8045](https://github.com/stella/stella/pull/8045) [`f89caa2`](https://github.com/stella/stella/commit/f89caa2e730c7da753ccd0efe2e67785e77732cf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law read --query` says which words a query with no match could not find together, and which query to try next. It still returns no paragraph unless one holds every word.
+
+- [#8046](https://github.com/stella/stella/pull/8046) [`34d9234`](https://github.com/stella/stella/commit/34d923482605050a0c62be2e17b3e820886cea0d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law search`, `stella legislation search` and `stella legislation read` results carry the publisher link once, as `source_url`. The duplicate `sourceUrl` field is gone.
+
+- [#8041](https://github.com/stella/stella/pull/8041) [`72ba870`](https://github.com/stella/stella/commit/72ba8701d59996f51b43a4f77b3aa42411f355f1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law resolve` returns a decision's identity and whether its text can be read, not the text. Read the text with `stella case-law read`.
+- Updated dependencies [[`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88)]:
+  - @stll/agent-input@0.4.2
+
+## 6.8.2
+
+### Patch Changes
+
+- Carry the current generated tool registry. No command changes.
+
+## 6.8.1
+
+### Patch Changes
+
+- [#7887](https://github.com/stella/stella/pull/7887) [`f902f3b`](https://github.com/stella/stella/commit/f902f3b736adb0ac24e749876e319ad554cdc710) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `search_case_law` returns the phrasings that finished when another phrasing runs out of its time budget; that phrasing reports a `time_budget` truncated outcome and a `phrasing_timed_out` warning instead of failing the call.
+
+## 6.8.0
+
+### Minor Changes
+
+- [#5808](https://github.com/stella/stella/pull/5808) [`620ff13`](https://github.com/stella/stella/commit/620ff13b01484e4863fdc938a6ee9bf1a2db5a52) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add organization data-box settings commands and expose data-box messages through matter correspondence reads and channel filtering.
+
+### Patch Changes
+
+- [#6937](https://github.com/stella/stella/pull/6937) [`3fdce69`](https://github.com/stella/stella/commit/3fdce69a4490b2d55483c1c6b8e56dd4eb722a57) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A reader mark keeps the words either side of its quote, and listing marks reports each passage as placed at the anchor where its words are now or as orphaned when the document's current text has no single place for them.
+
 ## 6.7.1
 
 ### Patch Changes

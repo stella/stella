@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: cursor counters are validated before fetching; decision parsing is unchanged.
@@ -78,9 +79,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -383,7 +384,6 @@ type CzRegionalFinaldoc = {
     affectedDocs?: unknown;
     regulations?: unknown[] | null;
     flags?: string[] | null;
-    [key: string]: unknown;
   } | null;
 };
 
@@ -547,6 +547,59 @@ const czRegionalIdentityItem = (raw: unknown): CzRegionalApiItem | null => {
     jednaciCislo,
     soud,
     ...(typeof raw["odkaz"] === "string" ? { odkaz: raw["odkaz"] } : {}),
+    // The docket's registry spelling comes from the row's ECLI, so the
+    // identity reads it too and keys the row by the same docket.
+    ...(typeof raw["ecli"] === "string" ? { ecli: raw["ecli"] } : {}),
+  };
+};
+
+/** `16 CO 179/2022`: senate, registry, number and year of a regional docket. */
+const REGIONAL_DOCKET =
+  /^(?<senate>\d+) (?<registry>\p{L}+) (?<number>\d+)\/(?<year>\d{4})$/u;
+
+/**
+ * The docket and sheet of a listing row, the registry spelled as the court
+ * spells it. The listing prints the registry in capitals (`16 CO 179/2022`)
+ * while the court's own ECLI keeps its spelling (`…:16.Co.179.2022.1`), and
+ * the same court's rows otherwise read both ways. The ECLI's spelling is
+ * taken only when its senate, number and year are this docket's, so an ECLI
+ * filed against another decision never renames the docket. The listing row
+ * and its identity both read through here, so a row is keyed by the docket it
+ * is stored under.
+ */
+export const czRegionalCaseNumberOf = (
+  item: Pick<CzRegionalApiItem, "ecli"> & { jednaciCislo: string },
+): { caseNumber: string; sheetNumber: string | undefined } => {
+  const reference = splitCaseReference(item.jednaciCislo);
+  const docket = REGIONAL_DOCKET.exec(reference.caseNumber)?.groups;
+  const senate = docket?.["senate"];
+  const printedRegistry = docket?.["registry"];
+  const number = docket?.["number"];
+  const year = docket?.["year"];
+  // ECLI:CZ:KSOS:2022:16.Co.179.2022.1: the fifth part names the docket.
+  const ecliDocket = toOptionalValue(item.ecli)?.split(":").at(4);
+  if (ecliDocket === undefined) {
+    return reference;
+  }
+  const [ecliSenate, ecliRegistry, ecliNumber, ecliYear] =
+    ecliDocket.split(".");
+  if (
+    senate === undefined ||
+    printedRegistry === undefined ||
+    number === undefined ||
+    year === undefined ||
+    ecliRegistry === undefined ||
+    ecliSenate !== senate ||
+    ecliNumber !== number ||
+    ecliYear !== year ||
+    ecliRegistry.toLocaleLowerCase("cs") !==
+      printedRegistry.toLocaleLowerCase("cs")
+  ) {
+    return reference;
+  }
+  return {
+    ...reference,
+    caseNumber: `${senate} ${ecliRegistry} ${number}/${year}`,
   };
 };
 
@@ -1035,7 +1088,10 @@ export const czRegionalListingIdentity = (raw: unknown): ListingIdentity => {
   }
   return {
     type: "case-number",
-    caseNumber: splitCaseReference(item.jednaciCislo).caseNumber,
+    caseNumber: czRegionalCaseNumberOf({
+      ...item,
+      jednaciCislo: item.jednaciCislo,
+    }).caseNumber,
     language: CZ_REGIONAL_LANGUAGE,
   };
 };
@@ -1177,7 +1233,10 @@ export const assembleCzRegionalDecision = ({
   }
 
   // This source publishes the docket with the sheet number appended.
-  const { caseNumber, sheetNumber } = splitCaseReference(item.jednaciCislo);
+  const { caseNumber, sheetNumber } = czRegionalCaseNumberOf({
+    ...item,
+    jednaciCislo: item.jednaciCislo,
+  });
   const publishedDocumentUrl = toOptionalValue(item.odkaz);
   const documentUrl = publishedDocumentUrl
     ? restrictCzRegionalFinaldocUrl(publishedDocumentUrl)
@@ -1463,7 +1522,10 @@ export const buildCzRegionalDecision = async (
   if (publishedDocumentUrl === undefined) {
     return assembleCzRegionalDecision({ item, document: null, chain: null });
   }
-  const caseNumber = splitCaseReference(item.jednaciCislo).caseNumber;
+  const caseNumber = czRegionalCaseNumberOf({
+    ...item,
+    jednaciCislo: item.jednaciCislo,
+  }).caseNumber;
   const finaldoc = finaldocOf({
     read: await fetchFinaldoc(publishedDocumentUrl, caseNumber, signal),
     caseNumber,
@@ -1856,6 +1918,16 @@ const SOURCE_FIELDS = [
  * its own ECLI and dates, and a listing row reached without its document is
  * the only statement of the judge, the keywords and the statutes in words.
  */
+type CzRegionalPublisherRecord = Readonly<
+  Record<
+    | (typeof SOURCE_FIELDS)[number]
+    | `listing.${keyof CzRegionalApiItem}`
+    | `document.${keyof CzRegionalFinaldoc}`
+    | `document.metadata.${keyof NonNullable<CzRegionalFinaldoc["metadata"]>}`,
+    unknown
+  >
+>;
+
 const CZ_REGIONAL_SOURCE_FIELDS = {
   "listing.jednaciCislo": {
     disposition: "stored",
@@ -1919,7 +1991,7 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     target: { type: "document" },
   },
   "document.styles": { disposition: "stored", target: { type: "document" } },
-  "document.metadata": excludedSourceField(
+  "document.metadata": legacyExcludedSourceField(
     "the object holding the thirteen metadata keys below, each of which carries its own disposition",
   ),
   "document.texts[].text": {
@@ -1936,20 +2008,20 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "document" },
   },
-  "document.tableCellInfo": excludedSourceField(
+  "document.tableCellInfo": legacyExcludedSourceField(
     "a paragraph's placement inside a table; every payload sampled states it as null, so the shape a non-null value would take is unstated and nothing can be read from it",
   ),
   "document.styles[].localId": {
     disposition: "stored",
     target: { type: "document" },
   },
-  "document.styles[].alignment": excludedSourceField(
+  "document.styles[].alignment": legacyExcludedSourceField(
     "how the paragraph was aligned on the printed page; the document model carries the text and its emphasis, not its layout",
   ),
-  "document.styles[].hasSpaceBefore": excludedSourceField(
+  "document.styles[].hasSpaceBefore": legacyExcludedSourceField(
     "vertical spacing above the paragraph on the printed page, which the document model does not represent",
   ),
-  "document.styles[].hasSpaceAfter": excludedSourceField(
+  "document.styles[].hasSpaceAfter": legacyExcludedSourceField(
     "vertical spacing below the paragraph on the printed page, which the document model does not represent",
   ),
   "document.styles[].bold": {
@@ -2042,7 +2114,7 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     target: { type: "metadata", key: "affectingDocs" },
   },
 } as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
+  keyof CzRegionalPublisherRecord,
   SourceFieldDisposition
 >;
 

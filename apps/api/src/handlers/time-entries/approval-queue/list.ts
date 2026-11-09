@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, gte, isNull, lte, ne, or } from "drizzle-orm";
+import { and, asc, eq, gt, gte, isNull, lte, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
@@ -46,6 +46,7 @@ import {
   type ValidatedOrgUserId,
   validateOrgUserId,
 } from "@/api/lib/validated-org-user-id";
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 const queueColumns = {
   id: timeEntries.id,
@@ -135,7 +136,7 @@ const queueScope = ({
       eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
       and(
         eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
-        ne(workspaces.status, "deleting"),
+        visibleWorkspaceSql(),
       ),
     ),
     canApproveTimeEntries(memberRole)

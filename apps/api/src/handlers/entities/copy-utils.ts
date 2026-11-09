@@ -5,8 +5,15 @@ import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
-import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import {
+  cellMetadata,
+  entities,
+  entityVersions,
+  fields,
+  justifications,
+  workspaces,
+} from "@/api/db/schema";
+import type { EntityKind } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -26,6 +33,15 @@ import {
   lockWorkspacesForEntityCap,
   lockWorkspacesForEntityTransfer,
 } from "@/api/lib/entity-cap-lock";
+import {
+  CELL_COMPANION_BATCH,
+  planCellCompanions,
+} from "@/api/lib/entity-versions/cell-companions";
+import {
+  CARRIED_FIELD_COLUMNS,
+  type CarriedFieldColumns,
+  carriedFieldValues,
+} from "@/api/lib/entity-versions/field-clone-policy";
 import {
   type CurrentVersionAssignment,
   insertEntityBatch,
@@ -68,10 +84,8 @@ import type {
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 
-export type EntityFieldSnapshot = {
+export type EntityFieldSnapshot = CarriedFieldColumns & {
   id: SafeId<"field">;
-  propertyId: SafeId<"property">;
-  content: FieldContent;
 };
 
 /**
@@ -141,9 +155,7 @@ export type EntitySnapshot = {
   versions: EntityVersionSnapshot[];
 };
 
-type WritableEntityFieldSnapshot = {
-  id: SafeId<"field">;
-  propertyId: SafeId<"property">;
+type WritableEntityFieldSnapshot = Omit<EntityFieldSnapshot, "content"> & {
   content: WritableFieldContent;
 };
 
@@ -178,7 +190,7 @@ const VERSION_FIELDS_SELECT = {
   // `findExtractionFileField` requires, so the copy resolves the
   // same extraction source as the entity it came from. At most
   // one field per property bounds the read.
-  columns: { id: true, propertyId: true, content: true },
+  columns: { id: true, ...CARRIED_FIELD_COLUMNS },
   orderBy: { id: "asc" },
   limit: LIMITS.propertiesCount,
 } as const;
@@ -264,10 +276,9 @@ export type CopiedField = {
   fieldId: SafeId<"field">;
 };
 
-type CopiedFieldInsert = {
+type CopiedFieldInsert = Omit<CarriedFieldColumns, "content"> & {
   id: SafeId<"field">;
   workspaceId: SafeId<"workspace">;
-  propertyId: SafeId<"property">;
   entityVersionId: SafeId<"entityVersion">;
   content: WritableFieldContent;
 };
@@ -518,11 +529,7 @@ const remapFieldFileId = ({
   idMap,
 }: RemapFieldFileIdOptions): WritableEntityFieldSnapshot => {
   if (field.content.type !== "file") {
-    return {
-      id: field.id,
-      content: field.content,
-      propertyId: field.propertyId,
-    };
+    return { ...field, content: field.content };
   }
 
   const newFileId = idMap.get(
@@ -683,6 +690,12 @@ type CopyEntitiesProps = {
   targetRootName?: string | undefined;
   /** Source workspace ID for audit log (cross-workspace only). */
   sourceWorkspaceId?: SafeId<"workspace">;
+  /**
+   * Source property to target property for a copy into another matter. The
+   * snapshot's fields already carry target properties; a cell's lock and
+   * override are read from the source, so they map through this.
+   */
+  propertyIds?: ReadonlyMap<SafeId<"property">, SafeId<"property">> | undefined;
   /**
    * Whether the target rows are a new document (a copy) or the same
    * document in another matter (a move, whose source rows the caller
@@ -1211,6 +1224,8 @@ type CopyRows = {
   versionTransfers: VersionTransfer[];
   currentVersions: CurrentVersionAssignment[];
   fieldRows: CopiedFieldInsert[];
+  /** Every source cell and the id of its clone. */
+  fieldClones: Map<SafeId<"field">, SafeId<"field">>;
   copiedEntities: CopiedEntity[];
   copiedField: CopiedField | null;
   entityIdsBySearchIndexOwner: Record<SearchIndexOwner, SafeId<"entity">[]>;
@@ -1386,13 +1401,14 @@ const appendFieldRows = ({
             }
           : field.content;
       const fieldRow = {
+        ...carriedFieldValues(field),
         id: fieldId,
         workspaceId: targetWorkspaceId,
-        propertyId: field.propertyId,
         entityVersionId,
         content,
       };
       rows.fieldRows.push(fieldRow);
+      rows.fieldClones.set(field.id, fieldId);
       if (isCurrentVersion) {
         currentFieldRows.push(fieldRow);
       }
@@ -1518,6 +1534,7 @@ const planEntityCopies = async ({
     versionTransfers: [],
     currentVersions: [],
     fieldRows: [],
+    fieldClones: new Map(),
     copiedEntities: [],
     copiedField: null,
     // Split by which mechanism owns each copy's search projection, so every
@@ -1561,6 +1578,7 @@ const planEntityCopies = async ({
 
 type WriteCopyPlanOptions = {
   tx: Transaction;
+  propertyIds: ReadonlyMap<SafeId<"property">, SafeId<"property">> | undefined;
   plan: CopyPlan;
   transfer: EntityTransfer;
   targetWorkspaceId: SafeId<"workspace">;
@@ -1575,6 +1593,7 @@ const writeCopyPlan = async ({
   transfer,
   targetWorkspaceId,
   sourceWorkspaceId,
+  propertyIds,
   recordAuditEvent,
 }: WriteCopyPlanOptions): Promise<void> => {
   await insertEntityBatch({
@@ -1585,6 +1604,26 @@ const writeCopyPlan = async ({
     currentVersions: plan.currentVersions,
     fieldRows: plan.fieldRows,
   });
+  // A cell's lock, override and citations travel with it; a move deletes the
+  // source rows afterwards, so they are carried before that.
+  const companions = await planCellCompanions({
+    tx,
+    kind: transfer.type,
+    sourceWorkspaceId: sourceWorkspaceId ?? targetWorkspaceId,
+    targetWorkspaceId,
+    versions: plan.versionTransfers,
+    fieldClones: plan.fieldClones,
+    propertyIds,
+  });
+  for (const rows of chunkItems(companions.metadata, CELL_COMPANION_BATCH)) {
+    await tx.insert(cellMetadata).values(rows);
+  }
+  for (const rows of chunkItems(
+    companions.justifications,
+    CELL_COMPANION_BATCH,
+  )) {
+    await tx.insert(justifications).values(rows);
+  }
 
   // A copy's versions were minted their own codes by the insert above. A move
   // is the same document elsewhere, so the codes already printed on its
@@ -1641,6 +1680,7 @@ export const copyEntities = async ({
   sourceEntityId,
   sourceEntities,
   sourceWorkspaceId: copySourceWorkspaceId,
+  propertyIds,
   targetRootEntityId,
   targetRootName,
   transfer,
@@ -1726,6 +1766,7 @@ export const copyEntities = async ({
     transfer,
     targetWorkspaceId,
     sourceWorkspaceId,
+    propertyIds,
     recordAuditEvent,
   });
 

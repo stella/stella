@@ -14,6 +14,7 @@ import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 import { compareCodeUnit } from "@stll/collation";
 import { Temporal } from "@stll/time";
 
+import { ACCOUNT_ERASURE_USER_SETTING } from "@/api/db/account-erasure-policies";
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
   account,
@@ -36,6 +37,7 @@ import {
   accountExports,
   agentSkills,
   aiMemories,
+  billingDraftUserSettings,
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
   chatThreads,
@@ -46,10 +48,12 @@ import {
   desktopEditHandoffs,
   desktopEditSessions,
   entities,
+  feedbackReports,
   fileChatThreads,
   fileComparisonUploads,
   folioCollabRooms,
   folioCollabRoomTokens,
+  legalReaderAnnotations,
   mcpOAuthState,
   mcpUserConnections,
   mcpWebHandoff,
@@ -58,13 +62,18 @@ import {
   pendingUploads,
   pushDevices,
   rateEntries,
+  savedSearches,
+  savedTimeNarratives,
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
   sharepointConnections,
   sharepointOAuthState,
   taskAssignees,
+  templateLookupFormatUserDefaults,
+  timerActivityDevices,
   userFiles,
+  userProfessionalUseAcceptances,
   WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
   workObligationEvents,
@@ -1419,10 +1428,12 @@ export const deleteSearchHistory = async (
 
 const DELETE_PUSH_DEVICES_TABLES = [
   pushDevices,
+  timerActivityDevices,
 ] as const satisfies readonly PgTable[];
 
 /**
- * 15. Mobile push devices, in every organization. A device token is personal
+ * 15. Mobile push devices and the phones that show the person's timer, in
+ * every organization. A device token is personal
  * data with no history value, and the user row is soft-deleted, so the
  * `user_id` cascade never fires.
  */
@@ -1432,6 +1443,73 @@ export const deletePushDevices = async (
 ): Promise<void> => {
   // audit: skip - the account deletion request records this erasure
   await tx.delete(pushDevices).where(eq(pushDevices.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(timerActivityDevices)
+    .where(eq(timerActivityDevices.userId, currentUserId));
+};
+
+const DELETE_PERSONAL_RECORDS_TABLES = [
+  legalReaderAnnotations,
+  savedTimeNarratives,
+  billingDraftUserSettings,
+  savedSearches,
+  templateLookupFormatUserDefaults,
+  userProfessionalUseAcceptances,
+  feedbackReports,
+] as const satisfies readonly PgTable[];
+
+/**
+ * 16. Personal records the account export returns: private reader notes,
+ * saved narratives and searches, billing-draft and template preferences, and
+ * the professional-use acceptance. Shared reader notes stay with the
+ * organization. Filed feedback stays with the maintainers without its
+ * reporter link. The user row is soft-deleted, so none of these foreign-key
+ * actions fire on their own.
+ */
+export const deletePersonalRecords = async (
+  tx: Transaction,
+  currentUserId: SafeId<"user">,
+): Promise<void> => {
+  // These tables admit the owner connection only for the erasing account.
+  await tx.execute(
+    sql`SELECT set_config(${ACCOUNT_ERASURE_USER_SETTING}, ${currentUserId}, true)`,
+  );
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(legalReaderAnnotations)
+    .where(
+      and(
+        eq(legalReaderAnnotations.userId, currentUserId),
+        eq(legalReaderAnnotations.visibility, "private"),
+      ),
+    );
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(savedTimeNarratives)
+    .where(eq(savedTimeNarratives.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(billingDraftUserSettings)
+    .where(eq(billingDraftUserSettings.userId, currentUserId));
+  await tx.execute(
+    sql`SELECT set_config(${ACCOUNT_ERASURE_USER_SETTING}, '', true)`,
+  );
+  // audit: skip - the account deletion request records this erasure
+  await tx.delete(savedSearches).where(eq(savedSearches.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(templateLookupFormatUserDefaults)
+    .where(eq(templateLookupFormatUserDefaults.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(userProfessionalUseAcceptances)
+    .where(eq(userProfessionalUseAcceptances.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .update(feedbackReports)
+    .set({ userId: null })
+    .where(eq(feedbackReports.userId, currentUserId));
 };
 
 export type RecordAccountDeletionRequestParams = {
@@ -1528,6 +1606,7 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...DELETE_BILLING_RATES_TABLES,
   ...DELETE_SEARCH_HISTORY_TABLES,
   ...DELETE_PUSH_DEVICES_TABLES,
+  ...DELETE_PERSONAL_RECORDS_TABLES,
 ] as const satisfies readonly PgTable[];
 
 type AccountDeletionNonFkOwnership = {

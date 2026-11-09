@@ -1,4 +1,7 @@
-import { REQUEST_ID_HEADER } from "@stll/api-contract";
+import {
+  REQUEST_ID_HEADER,
+  RESOURCE_MUTATION_ID_HEADER,
+} from "@stll/api-contract";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 
 import { env } from "@/api/env";
@@ -26,6 +29,7 @@ import {
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
+import { corpusRetryAfter } from "@/api/lib/legal-search/corpus-retry-after";
 import {
   extractLangFromRequest,
   FORMATTING_LOCALE_HEADER,
@@ -193,10 +197,13 @@ export const apiPipeline: readonly Middleware[] = [
       SESSION_ID_HEADER,
       TANSTACK_RUN_ID_HEADER,
       CAPABILITY_REQUEST_HEADER,
+      RESOURCE_MUTATION_ID_HEADER,
     ],
     exposedHeaders: CORS_EXPOSED_HEADERS,
     maxAgeSeconds: CORS_PREFLIGHT_MAX_AGE_SECONDS,
   }),
+  // Outside the error boundary, so a refusal it renders gets the header too.
+  corpusRetryAfter,
   errorBoundary,
   clientTooOld,
   browserOriginGuard,

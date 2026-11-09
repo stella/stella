@@ -177,7 +177,7 @@ export const FileTree = ({
                 rename input — interactive elements can't nest inside a button. */}
             <div
               className={cn(
-                "hover:bg-muted flex h-full min-w-0 flex-1 cursor-pointer items-center rounded px-2 text-start text-sm",
+                "hover:bg-muted flex h-full min-w-0 flex-1 cursor-pointer items-center rounded-sm px-2 text-start text-sm",
                 selectedId === node.id && "bg-accent",
               )}
               onClick={() => (isFolder ? onToggle(node.id) : onSelect(node))}

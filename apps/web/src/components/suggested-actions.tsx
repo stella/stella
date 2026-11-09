@@ -5,9 +5,8 @@ import { panic } from "better-result";
 
 import { Button } from "@stll/ui/button";
 import { HorizontalScroller } from "@stll/ui/horizontal-scroller";
+import { usePrefersReducedMotion } from "@stll/ui/use-prefers-reduced-motion";
 import { cn } from "@stll/ui/utils";
-
-import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 
 type SuggestedAction = {
   id: string;

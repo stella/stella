@@ -15,14 +15,14 @@ docx_suggestions.workspace_id                     safeWorkspaceId  fk,not null  
 docx_suggestions.entity_id                        safeUuid         fk,not null             docx-suggestions.ts:108
 docx_suggestions.origin_thread_id                 safeUuid         fk,null                 docx-suggestions.ts:111  Nullable + set-null: the suggestion outlives the chat thread it came from, keeping the audit trail intact if the thread is later deleted.
 docx_suggestions.origin_review_finding_id         safeUuid         fk,null                 docx-suggestions.ts:120  The review finding this suggestion carries the fix for, when a document review staged it.
-docx_suggestions.source_data_workspace_ids        safeWorkspaceId  array,default,not null  docx-suggestions.ts:131  Matters whose content contributed to this suggestion, carried over from the originating thread's own data scope (or, for a review-staged fix, the run's referen…
-docx_suggestions.op_payload                       jsonb            not null                docx-suggestions.ts:136  Opaque durable JSON; validate at every read and write boundary.
-docx_suggestions.comment                          text             null                    docx-suggestions.ts:138  AI rationale / reviewer note, when the model supplied one.
-docx_suggestions.severity                         text             not null                docx-suggestions.ts:139
-docx_suggestions.area                             varchar          not null                docx-suggestions.ts:142
-docx_suggestions.status                           text             default,not null        docx-suggestions.ts:143
-docx_suggestions.applied_mode                     text             null                    docx-suggestions.ts:148  Mode the op was applied in; null until resolved as accepted.
-docx_suggestions.resolved_by_user_id              text             fk,null                 docx-suggestions.ts:151  Nullable + set-null on user delete, like entities.createdBy: an account deletion is never blocked by an old resolution record.
-docx_suggestions.resolved_at                      timestamptz      null                    docx-suggestions.ts:154
-docx_suggestions.created_at                       timestamptz      default,not null        docx-suggestions.ts:155
+docx_suggestions.source_data_workspace_ids        safeWorkspaceId  array,default,not null  docx-suggestions.ts:132  Matters whose content contributed to this suggestion, carried over from the originating thread's own data scope, narrowed to what the author could read at the…
+docx_suggestions.op_payload                       jsonb            not null                docx-suggestions.ts:137  Opaque durable JSON; validate at every read and write boundary.
+docx_suggestions.comment                          text             null                    docx-suggestions.ts:139  AI rationale / reviewer note, when the model supplied one.
+docx_suggestions.severity                         text             not null                docx-suggestions.ts:140
+docx_suggestions.area                             varchar          not null                docx-suggestions.ts:143
+docx_suggestions.status                           text             default,not null        docx-suggestions.ts:144
+docx_suggestions.applied_mode                     text             null                    docx-suggestions.ts:149  Mode the op was applied in; null until resolved as accepted.
+docx_suggestions.resolved_by_user_id              text             fk,null                 docx-suggestions.ts:152  Nullable + set-null on user delete, like entities.createdBy: an account deletion is never blocked by an old resolution record.
+docx_suggestions.resolved_at                      timestamptz      null                    docx-suggestions.ts:155
+docx_suggestions.created_at                       timestamptz      default,not null        docx-suggestions.ts:156
 ```

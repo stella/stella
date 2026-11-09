@@ -3,6 +3,8 @@ import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+
 import { member, organization } from "@/api/db/auth-schema";
 import { entityFeatureGateMetadata } from "@/api/db/entity-feature-gate-metadata";
 import { SETTING_ORGANIZATION_DELETION_IDS } from "@/api/db/rls";
@@ -279,6 +281,9 @@ const WORKSPACE_DERIVED_REFERENCE_DISPOSITION = {
     "delete-derived-row",
   "chat_threads.context_matter_ids": "prune-reference",
   "chat_threads.data_workspace_ids": "delete-derived-thread",
+  // A run's MCP token only narrows the live access set; an id of a deleted
+  // workspace in it grants nothing.
+  "desktop_runner_runs.workspace_ids": "attenuation-only",
   "docx_suggestions.source_data_workspace_ids": "delete-derived-row",
 } as const;
 
@@ -940,7 +945,7 @@ export const recordOrganizationStorageTeardown = async ({
     // endpoint already answers for.
     await tx
       .update(workspaces)
-      .set({ status: "deleting" })
+      .set({ status: WORKSPACE_STATUS.deleting })
       .where(inArray(workspaces.id, workspaceIds));
   }
   await cancelRecoverableUploads(tx, workspaceIds);

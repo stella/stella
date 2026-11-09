@@ -1,10 +1,30 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { MARKETING_LOCALES } from "@stll/playwright-tools/marketing-locales";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import {
+  propertyContentSchema,
+  propertyToolSchema,
+} from "@/api/db/schema-validators";
+import { playbookDefinitionBodySchema } from "@/api/handlers/playbooks/schema";
+import { getPropertyExecutionPlan } from "@/api/lib/workflow/get-execution-plan";
+import {
+  findDuplicatePositionSourceId,
+  findDuplicateTierId,
+  gradedPositionHasContent,
+} from "@/api/lib/workflow/playbook-positions-validation";
+import { isTierStandard } from "@/api/lib/workflow/position-runtime";
+
 import { SEED_CONTENT_BY_LOCALE } from "./seed-content/locales";
 import {
+  buildAllPropertySeeds,
+  buildCzPlaybookDefinition,
+  buildDdGeneralPlaybookDefinition,
+  buildPropertySeedDependencies,
   createMockDocx,
   createSeedEmail,
   seedRequiredCaseLaw,
@@ -27,9 +47,8 @@ const nonEmptyBlockTexts = (title: string, bodyText: string): string[] =>
 // text list, so the guard exercises the real generator instead of only
 // re-deriving the same layout by hand.
 const paragraphTextsFromDocx = async (docx: Buffer): Promise<string[]> => {
-  const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(docx);
-  const documentXml = await zip.file("word/document.xml")?.async("string");
+  const zip = await ZipArchive.read(docx);
+  const documentXml = await zip.entry("word/document.xml")?.text();
   if (documentXml === undefined) {
     throw new Error("seeded docx is missing word/document.xml");
   }
@@ -142,4 +161,72 @@ test("a case-law backfill failure rejects the dev seed phase", async () => {
 
   expect(await rejectionOf(outcome)).toBe(unitFailure);
   expect(marketingStarted).toBe(false);
+});
+
+test("the workflow planner accepts every seeded column", () => {
+  const seeds = buildAllPropertySeeds();
+  const dependencies = buildPropertySeedDependencies(seeds);
+
+  const planned = getPropertyExecutionPlan({
+    properties: seeds.map(({ id, content, tool }) => ({
+      id,
+      content,
+      tool,
+      status: "stale",
+    })),
+    dependencies,
+  });
+
+  expect(Result.isOk(planned)).toBe(true);
+  expect(dependencies.length).toBeGreaterThan(0);
+});
+
+const issueMessages = <TSchema extends v.GenericSchema>(
+  result: v.SafeParseResult<TSchema>,
+): string[] =>
+  result.success ? [] : result.issues.map((issue) => issue.message);
+
+// The seed writes rows directly, so it never passes through the API's
+// validators. Each test below holds the seeded rows to the same owner the API
+// applies, so a seeded state the product could never create fails here.
+test("every seeded column stores content and a tool the API accepts", () => {
+  const rejected = buildAllPropertySeeds().flatMap((seed) => {
+    const problems = [
+      ...issueMessages(v.safeParse(propertyContentSchema, seed.content)),
+      ...issueMessages(v.safeParse(propertyToolSchema, seed.tool)),
+    ];
+    return problems.length === 0
+      ? []
+      : [`${seed.name}: ${problems.join("; ")}`];
+  });
+
+  expect(rejected).toEqual([]);
+});
+
+describe.each([
+  ["Czech commercial", buildCzPlaybookDefinition()],
+  ["general due diligence", buildDdGeneralPlaybookDefinition()],
+])("seeded %s playbook", (_label, definition) => {
+  test("is a body the playbook API accepts", () => {
+    const { id: _id, ...body } = definition;
+
+    expect(
+      issueMessages(v.safeParse(playbookDefinitionBodySchema, body)),
+    ).toEqual([]);
+  });
+
+  test("meets the position rules the playbook API enforces on save", () => {
+    const { positions } = definition;
+
+    expect(findDuplicatePositionSourceId(positions)).toBeNull();
+    for (const position of positions.items) {
+      if (position.mode !== "graded") {
+        continue;
+      }
+      expect(gradedPositionHasContent(position)).toBe(true);
+      if (isTierStandard(position)) {
+        expect(findDuplicateTierId(position)).toBeNull();
+      }
+    }
+  });
 });

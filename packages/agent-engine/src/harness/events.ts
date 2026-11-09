@@ -7,6 +7,7 @@
 
 import * as v from "valibot";
 
+import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
 import type {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
@@ -49,14 +50,21 @@ export type HarnessContinuation =
     };
 
 /**
- * A tool the harness ran itself. `name` follows the cloud engine's naming:
- * MCP tools are `mcp__<server>__<tool>`, harness-native actions use the
- * native item kind (`command_execution`, `file_change`, `web_search`).
+ * A tool the harness ran itself. `name` is the name a cloud chat turn gives
+ * the same tool, built by `tool-parts.ts`: a stella tool by its registry name,
+ * any other MCP tool as `mcp__<server>__<tool>`, and a harness-native action
+ * by a name no stella tool uses (`HARNESS_TOOL_NAMES`).
  */
 export type HarnessToolCall = {
   id: string;
   name: string;
   input: unknown;
+  /**
+   * What the harness asked of a native tool whose record leaves it out, such
+   * as the file a read opened. It stays in this process: only the skill filter
+   * reads it, and it is not part of what a turn reports.
+   */
+  localInput?: unknown;
 };
 
 export type HarnessToolResult = {
@@ -83,15 +91,32 @@ export type HarnessApprovalRequest = {
   options: readonly HarnessApprovalOption[];
 };
 
-export type HarnessQuestion = {
-  id: string;
-  header: string;
-  prompt: string;
-  /** Answers name an option by its `label`, which is the native reply. */
-  options: readonly { label: string; description: string }[];
-  allowsFreeText: boolean;
-  secret: boolean;
+/**
+ * What an approval asks the user to allow. A command approval names the
+ * command itself, since that is what runs, not the harness's summary of it
+ * (as t3code, MIT, shows command approvals); anything else uses the
+ * harness's reason, or names the tool.
+ */
+export const approvalMessage = (request: HarnessApprovalRequest): string => {
+  const { input } = request.toolCall;
+  if (
+    request.kind === "command" &&
+    typeof input === "object" &&
+    input !== null &&
+    "command" in input &&
+    typeof input.command === "string" &&
+    input.command.trim() !== ""
+  ) {
+    return input.command;
+  }
+  if (request.reason !== null && request.reason.trim() !== "") {
+    return request.reason;
+  }
+  return `Approval required to run ${request.toolCall.name}`;
 };
+
+/** One question of a blocking question, as the chat contract carries it. */
+export type HarnessQuestion = ChatLocalRunQuestion;
 
 /**
  * `response` questions block the turn and are answered through `respond`.
@@ -105,11 +130,39 @@ export type HarnessQuestionRequest = {
   answerWith: "response" | "next_message";
 };
 
+/**
+ * How full the model's context was after the turn's last model request, and
+ * the model's context window, both as the harness reported them.
+ */
+export type HarnessContextUsage = {
+  usedTokens: number;
+  windowTokens: number;
+};
+
+/**
+ * The context a harness reported, or `null` without a window to measure it
+ * against: a count that is not a whole number of tokens reports nothing.
+ */
+export const harnessContextUsage = (
+  usedTokens: number,
+  windowTokens: number | null | undefined,
+): HarnessContextUsage | null =>
+  windowTokens === null ||
+  windowTokens === undefined ||
+  !Number.isSafeInteger(windowTokens) ||
+  windowTokens <= 0 ||
+  !Number.isSafeInteger(usedTokens) ||
+  usedTokens < 0
+    ? null
+    : { usedTokens, windowTokens };
+
 export type HarnessUsage = {
   inputTokens: number;
   cachedInputTokens: number;
   outputTokens: number;
   reasoningOutputTokens: number;
+  /** `null` when the harness reported no context window. */
+  context: HarnessContextUsage | null;
 };
 
 /**
@@ -127,7 +180,12 @@ export type HarnessFailure =
       exitCode: number | null;
       signal: string | null;
     }
-  | { type: "protocol_violation"; message: string };
+  | { type: "protocol_violation"; message: string }
+  /**
+   * The run's approval mode needs the harness's OS sandbox and the sandbox
+   * could not start; the run never runs without it.
+   */
+  | { type: "sandbox_unavailable"; message: string };
 
 export type HarnessEvent =
   | {
@@ -164,4 +222,5 @@ export const HARNESS_FAILURE_OUTCOME = {
   provider_error: "failed",
   harness_exited: "failed",
   protocol_violation: "failed",
+  sandbox_unavailable: "failed",
 } as const satisfies Record<HarnessFailure["type"], DesktopRunnerRunOutcome>;

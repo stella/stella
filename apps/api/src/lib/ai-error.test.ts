@@ -171,6 +171,25 @@ describe("classifyAIError", () => {
     expect(classifyAIError(apiCallError(404))).toBe("model_unavailable");
   });
 
+  test("maps a provider 403 naming the model to model_unavailable", () => {
+    const body = { code: "model_not_found", type: "invalid_request_error" };
+
+    expect(classifyAIError({ status: 403, error: body })).toBe(
+      "model_unavailable",
+    );
+    expect(
+      classifyAIError(
+        new Error(`got status: 403. ${JSON.stringify({ error: body })}`),
+      ),
+    ).toBe("model_unavailable");
+    expect(
+      classifyAIError({
+        status: 403,
+        error: { code: "access_denied", type: "invalid_request_error" },
+      }),
+    ).toBe("unknown");
+  });
+
   test("finds a model-not-found 404 through wrapped causes", () => {
     const error = new Error("generation failed", {
       cause: apiCallError(404),
@@ -320,12 +339,40 @@ describe("classifyAIError", () => {
     expect(classifyAIError(error)).toBe("provider_unavailable");
   });
 
+  test.each([
+    { code: "credit_balance_exhausted", type: "insufficient_quota" },
+    { code: "insufficient_quota" },
+    { type: "insufficient_quota" },
+    { error: { code: "credit_balance_exhausted" } },
+  ])(
+    "a statusless body naming an account out of credit (%j) is its billing",
+    (body) => {
+      expect(classifyAIError(body)).toBe("provider_billing");
+      expect(
+        classifyAIError(
+          new HandlerError({
+            status: 502,
+            code: "upstream_unavailable",
+            message: "Provider run failed",
+            cause: body,
+          }),
+        ),
+      ).toBe("provider_billing");
+    },
+  );
+
+  test("a provider status still owns a body naming the account's credit", () => {
+    expect(classifyAIError({ status: 429, code: "insufficient_quota" })).toBe(
+      "quota_exhausted",
+    );
+  });
+
   test("ignores a nested code that is not an HTTP status", () => {
     // OpenAI-shaped bodies put a symbolic code where Google puts the status,
     // and gRPC-shaped ones put a small application code there.
     expect(
       classifyAIError({
-        error: { code: "insufficient_quota", message: "out of credits" },
+        error: { code: "invalid_value", message: "unsupported value" },
       }),
     ).toBe("unknown");
     expect(

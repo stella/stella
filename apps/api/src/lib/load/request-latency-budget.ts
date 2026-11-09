@@ -55,12 +55,45 @@ export const runWithinRequestLatencyBudget = <T>(
     fn,
   );
 
+/**
+ * Run `fn` under a deadline `reserveMs` before the request's, so everything
+ * it waits on gives up with time left to answer from what did finish. Its
+ * reads keep the request's place in shared queues. Outside a scope, `fn` runs
+ * as it is.
+ */
+export const runBeforeRequestDeadline = <T>(
+  { label, reserveMs }: { label: string; reserveMs: number },
+  fn: () => T,
+): T => {
+  const scope = requestLatencyScope.getStore();
+  return scope === undefined
+    ? fn()
+    : requestLatencyScope.run(
+        {
+          label,
+          budgetMs: scope.budgetMs - reserveMs,
+          deadlineAtMs: scope.deadlineAtMs - reserveMs,
+        },
+        fn,
+      );
+};
+
 /** What is left of the current request's budget; undefined outside a scope. */
 export const remainingRequestBudgetMs = (): number | undefined => {
   const scope = requestLatencyScope.getStore();
   return scope === undefined
     ? undefined
     : Math.max(0, scope.deadlineAtMs - performance.now());
+};
+
+/**
+ * The `performance.now()` at which the current request began, the start its
+ * budget is counted from; undefined outside a scope. Shared work queues
+ * order by it, so the request that has waited longest goes first.
+ */
+export const requestStartedAtMs = (): number | undefined => {
+  const scope = requestLatencyScope.getStore();
+  return scope === undefined ? undefined : scope.deadlineAtMs - scope.budgetMs;
 };
 
 /**

@@ -567,6 +567,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `skills.update` | write | stella:skills | — | generic invoke → `stella capability skills update` |
 | `skills.upload` | write | stella:skills | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. Use uploads.create then uploads.update instead: presign with purpose agent_skill, PUT the skill pack to the returned URL, then finalize |
 
+## soft-law
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `soft-law.get` | read | stella:read | FEATURE_PUBLIC_LAW | curated tool `read_guidance` |
+| `soft-law.search` | read | stella:search | FEATURE_PUBLIC_LAW | curated tool `search_guidance` |
+
 ## style-sets
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -767,17 +774,18 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 | account_lifecycle | 6 |
-| assistant_chat | 15 |
+| agent_autonomy_ceiling | 1 |
+| assistant_chat | 16 |
 | auth_plumbing | 38 |
 | billing_ui | 1 |
-| chat_thread_ui | 18 |
+| chat_thread_ui | 21 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 26 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
-| native_device | 2 |
+| native_device | 5 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
 | public_indexing | 9 |
@@ -785,5 +793,5 @@ mechanics, and similar), not gaps in coverage.
 | search_ui | 20 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 21 |
+| upload_mechanics | 22 |
 | url_preview | 2 |

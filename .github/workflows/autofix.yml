@@ -192,7 +192,7 @@ jobs:
       # autofix-ci/action v1.3.4 declares Node 24 support, but its action
       # metadata still names node20 for compatibility with older runners.
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RUSTUP_TOOLCHAIN: 1.99.0
+      RUSTUP_TOOLCHAIN: 1.99.1
 
     steps:
       - name: Checkout Dependabot head
@@ -387,12 +387,11 @@ jobs:
             /package.json
           sparse-checkout-cone-mode: false
 
-      # No install follows, so the shared package cache would only cost time.
+      # No install follows, so this job needs no shared package store.
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
-          no-cache: true
 
       - name: Check planner availability
         id: planner
@@ -462,7 +461,7 @@ jobs:
     timeout-minutes: 20
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RUSTUP_TOOLCHAIN: 1.99.0
+      RUSTUP_TOOLCHAIN: 1.99.1
 
     steps:
       - name: Checkout lockfile tooling

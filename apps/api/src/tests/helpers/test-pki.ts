@@ -229,12 +229,21 @@ export const createTestCrl = async (
       ({ certificate }) =>
         new pkijs.RevokedCertificate({
           userCertificate: certificate.serialNumber,
-          revocationDate: new pkijs.Time({ type: 0, value: new Date() }),
+          revocationDate: new pkijs.Time({
+            type: pkijs.TimeType.UTCTime,
+            value: new Date(),
+          }),
         }),
     );
   }
-  crl.thisUpdate = new pkijs.Time({ type: 0, value: thisUpdate });
-  crl.nextUpdate = new pkijs.Time({ type: 0, value: nextUpdate });
+  crl.thisUpdate = new pkijs.Time({
+    type: pkijs.TimeType.UTCTime,
+    value: thisUpdate,
+  });
+  crl.nextUpdate = new pkijs.Time({
+    type: pkijs.TimeType.UTCTime,
+    value: nextUpdate,
+  });
   await crl.sign(issuer.privateKey, "SHA-256");
   const schema: unknown = crl.toSchema(true);
   if (!(schema instanceof asn1js.Sequence)) {

@@ -38,7 +38,7 @@
     "reconnectAccount": "Połącz ponownie ze stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Zmiany pozostają lokalne i zostaną automatycznie ponowione",
+    "checkpointDelayedBody": "{fileName}: zmiany pozostają lokalne i zostaną automatycznie ponowione",
     "checkpointDelayedTitle": "Synchronizacja punktu kontrolnego opóźniona",
     "diagnosticsCopiedBody": "Wklej ją do zgłoszenia wsparcia, gdy będzie potrzebna.",
     "diagnosticsCopiedTitle": "Diagnostyka skopiowana",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Lokalne dane odzyskiwania zostały zresetowane",
     "revisionCreatedBody": "{fileName} zapisany jako wersja {versionNumber}. Edycja pulpitu zakończona",
     "revisionCreatedTitle": "Wersja stella utworzona",
-    "sessionClosedSaved": "{fileName} — Lokalna kopia pozostaje zachowana w Tymczasowych kopiach roboczych",
-    "sessionClosedUnsaved": "{fileName} — Masz niezapisane lokalne edycje. Swoją kopię znajdziesz w Tymczasowych kopiach roboczych.",
-    "takenOverBody": "{fileName} — Otwórz ponownie ze stella, aby odzyskać edycję",
+    "sessionClosedSaved": "{fileName}: lokalna kopia pozostaje zachowana w Tymczasowych kopiach roboczych",
+    "sessionClosedUnsaved": "{fileName}: masz niezapisane lokalne edycje. Swoją kopię znajdziesz w Tymczasowych kopiach roboczych.",
+    "takenOverBody": "{fileName}: otwórz ponownie ze stella, aby odzyskać edycję",
     "takenOverLocalError": "Edycja pulpitu przeniesiona na inne urządzenie. Ta lokalna kopia jest zachowana.",
     "takenOverTitle": "Edycja przeniesiona na inne urządzenie",
     "editsSetAsideTitle": "Zmiany odłożone",
@@ -501,6 +501,10 @@
     "evidenceTitles": "Tytuły",
     "evidenceApps": "Aplikacje",
     "rangeEmpty": "W tym przedziale nic nie zapisano.",
+    "entryStart": "Początek",
+    "entryEnd": "Koniec",
+    "rangeEndBeforeStart": "Ustaw koniec później niż początek.",
+    "rangeDraftedLeftOut": "{duration}, bez czasu ujętego już w wersjach roboczych",
     "calendarHint": "Otwórz propozycję z przerywaną ramką, aby ją sprawdzić, albo przeciągnij w kolumnie Wpisy czasu, aby przygotować wpis dla dowolnego przedziału.",
     "aiDraftWrite": "Zaproponuj z stella AI",
     "aiDraftAgain": "Zaproponuj ponownie",
@@ -728,6 +732,61 @@
     "callbackConnectedTitle": "ChatGPT jest połączony",
     "callbackConnectedBody": "Możesz zamknąć tę kartę i wrócić do stelli.",
     "callbackNotConnectedTitle": "Nie połączono z ChatGPT",
-    "callbackNotConnectedBody": "Wróć do stelli, aby zobaczyć, co się stało, i spróbuj ponownie."
+    "callbackNotConnectedBody": "Wróć do stelli, aby zobaczyć, co się stało, i spróbuj ponownie.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Korzystaj ze swojej subskrypcji Claude w lokalnych agentach w stelli. Wykorzystanie jest liczone w ramach planu Claude, niezależnie od subskrypcji stelli.",
+      "notInstalled": "Claude Code nie jest jeszcze zainstalowany na tym komputerze.",
+      "signIn": "Zaloguj się przez Claude",
+      "openSignInPage": "Otwórz stronę logowania",
+      "signedIn": "Zalogowano do Claude",
+      "signedInAs": "Zalogowano do Claude · {email}",
+      "signOut": "Wyloguj się",
+      "apiKey": "Claude Code jest zalogowany kluczem API, którego stella nie używa. Wyloguj się, a następnie zaloguj się swoją subskrypcją Claude.",
+      "failure": {
+        "notCompleted": "Logowanie nie zostało dokończone. Spróbuj ponownie.",
+        "timedOut": "Logowanie trwało zbyt długo. Spróbuj ponownie.",
+        "unavailable": "Nie udało się uruchomić Claude Code na tym komputerze. Spróbuj ponownie."
+      }
+    },
+    "install": {
+      "notInstalled": "{name} nie jest jeszcze zainstalowany na tym komputerze.",
+      "install": "Zainstaluj",
+      "downloading": "Pobieranie {name} {version}: {percent}%",
+      "verifying": "Sprawdzanie {name} {version}",
+      "ready": "{name} {version} jest zainstalowany.",
+      "retry": "Spróbuj ponownie",
+      "activeStays": "Nadal używana jest wersja {version}.",
+      "failure": {
+        "download": "Nie udało się pobrać {name}. Sprawdź połączenie z internetem i spróbuj ponownie.",
+        "verification": "Nie udało się zweryfikować {name}, więc nie został zainstalowany.",
+        "storage": "Nie udało się zapisać {name} na tym komputerze. Sprawdź, czy na dysku jest wolne miejsce."
+      }
+    }
+  },
+  "localSkills": {
+    "title": "Umiejętności lokalne",
+    "description": "Foldery z umiejętnościami na tym komputerze. Lokalne uruchomienia na tym komputerze mogą z nich korzystać, a nic z ich zawartości nie jest przesyłane.",
+    "add": "Dodaj folder",
+    "remove": "Usuń",
+    "removeFolder": "Usuń {path}",
+    "unusable": "Nie można użyć",
+    "notice": {
+      "action_failed": "Nie udało się. Spróbuj ponownie.",
+      "too_many": "Ten komputer ma już tyle folderów z umiejętnościami, ile może wykorzystać. Najpierw usuń jeden.",
+      "already_listed": "Ten folder jest już na liście.",
+      "missing": "Ten folder już nie istnieje.",
+      "not_a_folder": "To już nie jest folder.",
+      "no_skill_file": "Ten folder nie zawiera pliku SKILL.md.",
+      "skill_file_not_regular": "SKILL.md musi być zwykłym plikiem, a nie dowiązaniem.",
+      "skill_file_too_large": "SKILL.md jest za duży, aby go odczytać.",
+      "unreadable": "Nie udało się odczytać tego folderu.",
+      "no_name": "Nagłówek SKILL.md nie zawiera nazwy.",
+      "invalid_name": "Nazwa w SKILL.md może zawierać tylko litery, cyfry, kropki, myślniki i podkreślenia i musi zaczynać się od litery lub cyfry.",
+      "duplicate_name": "Inny folder na liście ma umiejętność o tej nazwie.",
+      "runs_can_write": "Lokalne uruchomienia mogą zapisywać w tym folderze, więc nie może on zawierać umiejętności.",
+      "network_folder": "Ten folder znajduje się w udziale sieciowym. Umiejętności muszą być na dysku tego komputera.",
+      "path_changed": "Zmienił się folder nadrzędny. Usuń ten folder i dodaj go ponownie."
+    }
   }
 }

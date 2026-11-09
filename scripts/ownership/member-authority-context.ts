@@ -34,6 +34,11 @@ export default {
         reason: "Builds the authenticated desktop account context.",
       },
       {
+        path: "apps/api/src/lib/push/timer-activity-actions.ts",
+        reason:
+          "Builds the authority a Lock Screen timer key acts with, from the person's current membership.",
+      },
+      {
         path: "apps/api/src/lib/business-registries/desktop/link-grants.ts",
         reason: "Builds the linked desktop account context.",
       },

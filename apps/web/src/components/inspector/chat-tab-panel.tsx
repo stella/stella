@@ -27,6 +27,7 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -66,6 +67,7 @@ import {
   PromptBarPlaceholderContent,
 } from "@/components/chat/docked-composer";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
+import { useEffectiveRunTarget } from "@/components/chat/use-effective-run-target";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import {
   boundLegalDocumentLabel,
@@ -257,9 +259,14 @@ export const ChatTabPanel = ({
       context: chatThreadContext,
     }),
   );
+  // Read at send time, so a follow-up carries the thread's stored target as
+  // the chat page sends it. The cache key never depends on it, so the
+  // runtime addresses the entry read above.
+  const runTarget = useEffectiveRunTarget(activeOrganizationId, data.runTarget);
+  const getRunTarget = useLatestCallback((): ChatRunTarget => runTarget);
   const chat = useChatThreadRuntime({
     activeOrganizationId,
-    context: chatThreadContext,
+    context: { ...chatThreadContext, getRunTarget },
     data,
     key: threadRef,
   });
@@ -282,6 +289,7 @@ export const ChatTabPanel = ({
     leave,
     isGenerating,
     turnAbandoned,
+    waitingForComputer,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -740,9 +748,9 @@ export const ChatTabPanel = ({
                     sendNow: sendQueuedMessageNow,
                   }}
                   queuedMessages={queuedMessages}
-                  showThinkingIndicator
                   streamdownComponents={streamdownComponents}
                   userMessageEdit={userMessageEdit}
+                  waitingForComputer={waitingForComputer}
                   workspaceId={tabWorkspaceId}
                 />
               )}

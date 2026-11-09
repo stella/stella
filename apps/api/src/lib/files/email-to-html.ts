@@ -40,6 +40,8 @@ import { type Element, isTag, isText } from "@stll/html/nodes";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
+import { EMAIL_PREVIEW_PALETTE as PALETTE } from "@/api/lib/files/email-preview-palette";
+import { EMAIL_SENDER_CLASS_CSS } from "@/api/lib/files/email-sender-styles";
 import { parseOutlookMsg } from "@/api/lib/files/outlook-msg";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -635,7 +637,7 @@ const isSafeInlineImage = (
 
 // ── HTML rendering + sanitization ───────────────────────
 
-const HR_STYLE = "border: none; border-top: 1px solid #d4d4d8; margin: 12px 0;";
+const HR_STYLE = `border: none; border-top: 1px solid ${PALETTE.divider}; margin: 12px 0;`;
 const PRE_STYLE =
   "white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, monospace; font-size: 13px; margin: 0;";
 const EMAIL_PREVIEW_CSP =
@@ -645,12 +647,12 @@ const EMAIL_PREVIEW_CSS = `
   color-scheme: light;
 }
 html {
-  background: #fff;
-  color: #18181b;
+  background: ${PALETTE.paper};
+  color: ${PALETTE.ink};
 }
 body {
-  background: #fff;
-  color: #18181b;
+  background: ${PALETTE.paper};
+  color: ${PALETTE.ink};
   color-scheme: light;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
@@ -659,27 +661,10 @@ body {
 }
 body, table, td, div, p, span {
   color-scheme: light;
-}
-.primary-text {
-  color: #3c4043;
-}
-.secondary-text, .grey-button-text {
-  color: #70757a;
-}
-.accent-text {
-  color: #1a73e8;
-}
-.primary-button {
-  background: #1a73e8;
-  border-radius: 4px;
-  color: #fff;
-}
-.primary-button-text {
-  color: #fff;
-}
+}${EMAIL_SENDER_CLASS_CSS}
 .postal-email-header {
-  background: #fafafa;
-  border: 1px solid #e4e4e7;
+  background: ${PALETTE.headerSurface};
+  border: 1px solid ${PALETTE.headerBorder};
   border-radius: 8px 8px 0 0;
   font-size: 13px;
   margin: 16px 0 0;
@@ -692,7 +677,7 @@ body, table, td, div, p, span {
   padding: 2px 0;
 }
 .postal-email-header-key {
-  color: #71717a;
+  color: ${PALETTE.label};
   white-space: nowrap;
 }
 .postal-email-header-value {
@@ -700,7 +685,7 @@ body, table, td, div, p, span {
   overflow-wrap: anywhere;
 }
 .postal-email-header + div {
-  border: 1px solid #e4e4e7;
+  border: 1px solid ${PALETTE.headerBorder};
   border-radius: 0 0 8px 8px;
   border-top: 0;
   margin: 0 0 14px;
@@ -716,7 +701,7 @@ body, table, td, div, p, span {
 [data-stella-email-fold] > summary {
   align-items: center;
   border-radius: 6px;
-  color: #71717a;
+  color: ${PALETTE.label};
   cursor: pointer;
   display: inline-flex;
   justify-content: center;
@@ -726,8 +711,8 @@ body, table, td, div, p, span {
   user-select: none;
 }
 [data-stella-email-fold] > summary:hover {
-  background: #f4f4f5;
-  color: #3f3f46;
+  background: ${PALETTE.foldHoverSurface};
+  color: ${PALETTE.foldHoverInk};
 }
 [data-stella-email-fold] > summary::-webkit-details-marker {
   display: none;
@@ -745,9 +730,9 @@ body, table, td, div, p, span {
   margin-bottom: 8px;
 }
 [data-stella-email-citation-active] {
-  background: #fef3c7;
+  background: ${PALETTE.citationSurface};
   border-radius: 3px;
-  outline: 2px solid #f59e0b;
+  outline: 2px solid ${PALETTE.citationOutline};
   outline-offset: 2px;
 }
 .stella-email-plain-line {
@@ -1544,7 +1529,7 @@ const buildHeaderHtml = (parsed: ParsedEmail): string => {
   const addRow = (label: string, value: string | null) => {
     if (value && value.trim().length > 0) {
       rows.push(
-        `<tr><td style="padding: 2px 12px 2px 0; color: #71717a; vertical-align: top; white-space: nowrap;">${escapeHtml(label)}</td><td style="padding: 2px 0; color: #18181b;">${escapeHtml(value)}</td></tr>`,
+        `<tr><td style="padding: 2px 12px 2px 0; color: ${PALETTE.label}; vertical-align: top; white-space: nowrap;">${escapeHtml(label)}</td><td style="padding: 2px 0; color: ${PALETTE.ink};">${escapeHtml(value)}</td></tr>`,
       );
     }
   };
