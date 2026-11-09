@@ -6,7 +6,10 @@ import type { Pluggable } from "unified";
 import { useTranslations } from "use-intl";
 
 import { rehypeChatLinks } from "@stll/chat/link-markdown";
+import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { CheckIcon, HelpCircleIcon, PencilIcon } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 import { Step, Steps } from "@stll/ui/steps";
 import { contentDir } from "@stll/ui/use-content-dir";
@@ -378,15 +381,15 @@ export const AskUserCard = ({
           <CheckIcon className="text-success ms-auto size-3.5 shrink-0" />
         )}
         {isDone && canRerun && answeredOutput !== null && (
-          <button
+          <Button
             aria-label={t("chat.askUser.edit")}
-            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
             onClick={handleStartEdit}
-            type="button"
+            size="xs"
+            variant="muted"
           >
             <PencilIcon className="size-3" />
             {t("chat.askUser.edit")}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -403,118 +406,115 @@ export const AskUserCard = ({
         </div>
       )}
 
-      <form onSubmit={handleFormSubmit}>
-        {/* Questions */}
-        <div className="border-border/50 border-t px-3 py-3">
-          <Steps lang={formattingLocale} markerStyle={markerStyle}>
-            {input.questions.map((q, i) => {
-              const hasOptions = (q.options?.length ?? 0) > 0;
-              return (
-                <Step key={q.question}>
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-medium" dir="auto">
-                      {renderAnonPills(q.question, pairs)}
-                    </p>
-
-                    {!isDone && hasOptions && !customMode[i] && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {q.options?.map((opt) => (
-                          <button
-                            className={cn(
-                              "rounded-md border px-2 py-1 text-xs",
-                              answers[i] === opt
-                                ? "border-foreground bg-foreground text-background"
-                                : "hover:bg-muted",
-                            )}
-                            key={opt}
-                            onClick={() => setAnswer(i, opt)}
-                            type="button"
-                          >
-                            {renderAnonPills(opt, pairs, {
-                              interactive: false,
-                            })}
-                          </button>
-                        ))}
-                        <button
-                          className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
-                          onClick={() => toggleCustom(i)}
-                          type="button"
-                        >
-                          <PencilIcon className="size-2.5" />
-                          {t("chat.askUser.custom")}
-                        </button>
-                      </div>
-                    )}
-
-                    {!isDone && (!hasOptions || customMode[i]) && (
-                      <div className="flex gap-1.5">
-                        <input
-                          className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
-                          dir={contentDir(answers[i] ?? "")}
-                          onChange={(e) => setAnswer(i, e.target.value)}
-                          placeholder={
-                            q.default ?? t("chat.askUser.placeholder")
-                          }
-                          type="text"
-                          value={answers[i] ?? ""}
-                        />
-                        {hasOptions && customMode[i] && (
-                          <button
-                            className="text-muted-foreground hover:text-foreground text-xs"
-                            onClick={() => toggleCustom(i)}
-                            type="button"
-                          >
-                            A/B/C
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {isDone && (
-                      <p className="text-muted-foreground text-xs">
-                        {renderAnonPills(
-                          answeredOutput?.answers[i]?.answer ||
-                            answers[i] ||
-                            t("chat.askUser.noAnswer"),
-                          pairs,
-                        )}
+      <Form onSubmit={handleFormSubmit}>
+        {/* One child: the card's sections are divided by their own borders,
+            so the form's gap between children would open a seam. */}
+        <div>
+          {/* Questions */}
+          <div className="border-border/50 border-t px-3 py-3">
+            <Steps lang={formattingLocale} markerStyle={markerStyle}>
+              {input.questions.map((q, i) => {
+                const hasOptions = (q.options?.length ?? 0) > 0;
+                return (
+                  <Step key={q.question}>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium" dir="auto">
+                        {renderAnonPills(q.question, pairs)}
                       </p>
-                    )}
-                  </div>
-                </Step>
-              );
-            })}
-          </Steps>
-        </div>
 
-        {/* Submit */}
-        {!isDone && !isLoading && (
-          <div className="border-border/50 border-t px-3 py-2">
-            {isEditing && discardsDownstream && (
-              <p className="text-muted-foreground mb-2 text-xs">
-                {t("chat.askUser.editWarning")}
-              </p>
-            )}
-            <div className="flex items-center gap-2">
-              <button
-                className="bg-foreground text-background focus-visible:ring-ring rounded-md px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
-                type="submit"
-              >
-                {isEditing ? t("chat.askUser.rerun") : t("chat.askUser.submit")}
-              </button>
-              {isEditing && (
-                <button
-                  className="text-muted-foreground hover:text-foreground text-xs"
-                  onClick={handleCancelEdit}
-                  type="button"
-                >
-                  {t("common.cancel")}
-                </button>
-              )}
-            </div>
+                      {!isDone && hasOptions && !customMode[i] && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {q.options?.map((opt) => (
+                            <Button
+                              aria-pressed={answers[i] === opt}
+                              key={opt}
+                              onClick={() => setAnswer(i, opt)}
+                              selected={answers[i] === opt}
+                              size="xs"
+                              variant="outline"
+                            >
+                              {renderAnonPills(opt, pairs, {
+                                interactive: false,
+                              })}
+                            </Button>
+                          ))}
+                          <Button
+                            onClick={() => toggleCustom(i)}
+                            size="xs"
+                            variant="outline"
+                          >
+                            <PencilIcon className="size-2.5" />
+                            {t("chat.askUser.custom")}
+                          </Button>
+                        </div>
+                      )}
+
+                      {!isDone && (!hasOptions || customMode[i]) && (
+                        <div className="flex gap-1.5">
+                          <Input
+                            className="flex-1"
+                            dir={contentDir(answers[i] ?? "")}
+                            onChange={(e) => setAnswer(i, e.target.value)}
+                            placeholder={
+                              q.default ?? t("chat.askUser.placeholder")
+                            }
+                            size="sm"
+                            type="text"
+                            value={answers[i] ?? ""}
+                          />
+                          {hasOptions && customMode[i] && (
+                            <Button
+                              onClick={() => toggleCustom(i)}
+                              size="xs"
+                              variant="muted"
+                            >
+                              A/B/C
+                            </Button>
+                          )}
+                        </div>
+                      )}
+
+                      {isDone && (
+                        <p className="text-muted-foreground text-xs">
+                          {renderAnonPills(
+                            answeredOutput?.answers[i]?.answer ||
+                              answers[i] ||
+                              t("chat.askUser.noAnswer"),
+                            pairs,
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </Step>
+                );
+              })}
+            </Steps>
           </div>
-        )}
-      </form>
+
+          {/* Submit */}
+          {!isDone && !isLoading && (
+            <div className="border-border/50 border-t px-3 py-2">
+              {isEditing && discardsDownstream && (
+                <p className="text-muted-foreground mb-2 text-xs">
+                  {t("chat.askUser.editWarning")}
+                </p>
+              )}
+              <div className="flex items-center gap-2">
+                <Button size="xs" type="submit">
+                  {isEditing
+                    ? t("chat.askUser.rerun")
+                    : t("chat.askUser.submit")}
+                </Button>
+                {isEditing && (
+                  <Button onClick={handleCancelEdit} size="xs" variant="muted">
+                    {t("common.cancel")}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </Form>
     </div>
   );
 };

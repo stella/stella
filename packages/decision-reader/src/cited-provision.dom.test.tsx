@@ -11,9 +11,9 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { section72aSubsection1Blocks } from "@stll/legal-ast/fixtures/cz-141-1961-section-72a";
 import { section128Subsection2Blocks } from "@stll/legal-ast/fixtures/sk-300-2005-section-128";
 import {
-  E_SBIRKA_LIST_SCHEME,
-  SLOV_LEX_LIST_SCHEME,
-} from "@stll/legal-ast/statute-list";
+  E_SBIRKA_ANCHORS,
+  SLOV_LEX_ANCHORS,
+} from "@stll/legal-ast/statute-anchor-scheme";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
@@ -301,7 +301,7 @@ describe("a cited provision's wording", () => {
             block={block}
             key={block.id}
             rangesByPieceId={{}}
-            statuteLists={E_SBIRKA_LIST_SCHEME}
+            statuteAnchors={E_SBIRKA_ANCHORS}
             variant="statute"
           />
         ))}
@@ -324,7 +324,7 @@ describe("a cited provision's wording", () => {
             block={block}
             key={block.id}
             rangesByPieceId={{}}
-            statuteLists={SLOV_LEX_LIST_SCHEME}
+            statuteAnchors={SLOV_LEX_ANCHORS}
             variant="statute"
           />
         ))}

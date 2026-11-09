@@ -54,6 +54,10 @@ const VIEW_QUERY_KEYS = {
     entityQueries.workspaceFoldersOptions(WORKSPACE_ID).queryKey,
   workspaceFilesOptions:
     entityQueries.workspaceFilesOptions(WORKSPACE_ID).queryKey,
+  workspaceFileSearchOptions: entityQueries.workspaceFileSearchOptions({
+    workspaceId: WORKSPACE_ID,
+    search: "",
+  }).queryKey,
 } satisfies Record<
   Exclude<
     Extract<keyof typeof entityQueries, `${string}Options`>,

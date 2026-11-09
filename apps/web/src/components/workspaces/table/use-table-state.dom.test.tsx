@@ -3,8 +3,7 @@ import type { ColumnSizingState } from "@tanstack/react-table";
 import { afterAll, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/table" });
 const { act, cleanup, renderHook } = await import("@testing-library/react");

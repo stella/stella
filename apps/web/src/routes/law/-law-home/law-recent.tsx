@@ -264,13 +264,18 @@ const ScopedLawRecentList = ({
                       key={entry.id}
                     >
                       {entry.kind === "search" ? (
-                        <button
-                          className={cn(LANDING_ROW_CLASS, "min-w-0 flex-1")}
+                        <Button
+                          className="group/row group flex min-w-0 flex-1"
                           onClick={() => onSearch(entry.query)}
-                          type="button"
+                          variant="plain"
                         >
-                          {text}
-                        </button>
+                          {/* The landing row's inset and hover tint, so a
+                              search row lines up and lights like the page
+                              links beside it. */}
+                          <span className="group-hover/row:bg-accent/50 min-w-0 flex-1 rounded-md px-2 py-1.5">
+                            {text}
+                          </span>
+                        </Button>
                       ) : (
                         <a
                           className={cn(LANDING_ROW_CLASS, "min-w-0 flex-1")}

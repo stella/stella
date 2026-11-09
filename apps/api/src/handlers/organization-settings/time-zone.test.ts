@@ -330,6 +330,7 @@ describe("reading the organization time zone", () => {
         aiInstructions: "",
         managedAIResidency: "eu",
         memoryExtractionEnabled: false,
+        localRunMaxApprovalMode: "full_auto",
         timeMinimumUnitMinutes: 6,
         timeEditWindowDays: 90,
         timeLockedThroughMonth: null,

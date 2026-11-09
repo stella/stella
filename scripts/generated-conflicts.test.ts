@@ -1300,6 +1300,31 @@ describe("resolution across runs", () => {
     expect(git(origin, "rev-parse", "HEAD")).toBe(head);
   });
 
+  test("local regeneration discards declared generator caches", () => {
+    const cache = ".cache/fixture-local/runtime.json";
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => write(repo, ".gitignore", "/.cache/\n"),
+    });
+    git(origin, "switch", "-q", "feature");
+    const generator = localGenerator(
+      `fs.mkdirSync(${JSON.stringify(path.dirname(cache))}, { recursive: true }); fs.writeFileSync(${JSON.stringify(cache)}, "disposable")`,
+    );
+    generator.cacheOutputs = [".cache/fixture-local/**"];
+
+    resolveDerived({ repo: origin, main, generators: [generator] });
+
+    expect(existsSync(path.join(origin, cache))).toBe(false);
+    expect(
+      git(origin, "status", "--porcelain", "--untracked-files=all"),
+    ).not.toContain(cache);
+    expect(
+      git(origin, "ls-files", "--others", "--ignored", "--exclude-standard"),
+    ).not.toContain(cache);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    git(origin, "merge", "--abort");
+  });
+
   test("local regeneration refuses a new ignored file outside generator outputs", () => {
     const ignored = "ignored-outside.txt";
     const { origin, head, main } = fixture({
@@ -1610,6 +1635,61 @@ describe("branch update", () => {
     }
     expect(String(refusal)).toContain("GraphQL refused");
   });
+
+  test.each([
+    { failures: 1, published: true },
+    { failures: 3, published: false },
+  ])(
+    "GitHub's transient GraphQL failure, $failures times, retries the ref update",
+    async ({ failures, published }) => {
+      const { calls, fetch: answer } = github(null);
+      let remaining = failures;
+      const fetch = async (url: string, init: RequestInit) => {
+        const isMutation =
+          url.endsWith("/graphql") &&
+          typeof init.body === "string" &&
+          init.body.includes("updateRefs(input");
+        if (isMutation && remaining > 0) {
+          remaining -= 1;
+          calls.push({ route: "/graphql", body: null });
+          return new Response(
+            JSON.stringify({
+              errors: [
+                {
+                  message:
+                    "Something went wrong while executing your query. Please include `F00:BAA` when reporting this issue.",
+                },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        return await answer(url, init);
+      };
+      const directory = requests();
+      const outcome = await push({
+        requests: directory,
+        repository: "stella/stella",
+        branch: "feat/x",
+        token: "token",
+        api: "https://api.example",
+        fetch,
+        retryDelayMs: 0,
+      })
+        .catch((error: unknown) => error)
+        .finally(() => {
+          rmSync(directory, { recursive: true, force: true });
+        });
+      if (published) {
+        expect(outcome).toBe(commit);
+      } else {
+        expect(String(outcome)).toContain("GraphQL refused");
+      }
+      expect(calls.filter(({ route }) => route === "/graphql").length).toBe(
+        published ? failures + 2 : failures + 1,
+      );
+    },
+  );
 
   test("a large tree is built in batches on top of each other", async () => {
     const { calls, fetch } = github(null);

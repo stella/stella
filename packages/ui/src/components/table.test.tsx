@@ -129,7 +129,15 @@ describe("Table", () => {
     expect(markup).toContain('aria-sort="ascending"');
     expect(markup).toContain('data-slot="button"');
     expect(markup).toContain('type="button"');
-    expect(markup).toContain("-ms-3");
+    // The button cancels the head's own padding (px-2.5) and no more, so it
+    // stays inside the first column instead of reaching past the table edge.
+    const buttonClasses =
+      /<button[^>]*class="(?<classes>[^"]*)"/u
+        .exec(markup)
+        ?.groups?.["classes"]?.split(" ") ?? [];
+    expect(buttonClasses).toContain("px-2.5");
+    expect(buttonClasses).toContain("-ms-2.5");
+    expect(markup).not.toContain("-ms-3");
     expect(markup).not.toContain("flex-row-reverse");
   });
 
@@ -142,6 +150,45 @@ describe("Table", () => {
 
     expect(markup).toContain('aria-sort="none"');
     expect(markup).toMatch(/<th class="[^"]*text-end[^"]*tabular-nums/u);
-    expect(markup).toContain("-me-3 flex-row-reverse");
+    expect(markup).toContain("-me-2.5 flex-row-reverse");
+  });
+});
+
+const matrix = (density?: "compact") =>
+  renderToStaticMarkup(
+    <Table {...(density === undefined ? {} : { density })}>
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col">Item</TableHead>
+          <TableHead scope="col">Contract</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow>
+          <TableHead scope="row">Indemnity</TableHead>
+          <TableCell>Present</TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>,
+  );
+
+describe("Table density", () => {
+  test("a data table is the default", () => {
+    expect(matrix()).toContain('data-density="default"');
+  });
+
+  test("a compact table marks itself so its cells can tighten", () => {
+    const markup = matrix("compact");
+    expect(markup).toContain('data-density="compact"');
+    expect(markup).toContain("in-data-[density=compact]:py-1.5");
+    expect(markup).toContain("in-data-[density=compact]:whitespace-normal");
+    // Rows hold no row-wide target, so they do not highlight.
+    expect(markup).toContain("in-data-[density=compact]:hover:bg-transparent");
+    // A row header reads as the row's first cell.
+    expect(markup).toContain(
+      "in-data-[density=compact]:[tbody_&amp;]:font-normal",
+    );
+    expect(markup.match(/<th\b/gu)).toHaveLength(3);
+    expect(markup).toContain('scope="row"');
   });
 });

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 import type { TimeZoneId } from "@stll/time";
 
 import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
@@ -19,6 +20,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { localRunApprovalCeilingOf } from "@/api/lib/chat/local-run-approval-ceiling";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   isFeatureAccessSnapshotForPrincipal,
@@ -40,12 +42,15 @@ const config = {
   description:
     "Read the organization's general settings: document processing mode, " +
     "matter-number pattern, padding, and whether titles show that number, practice jurisdictions, prompt " +
-    "caching, organization AI instructions, memory extraction, time policy, and the time zone whose calendar " +
-    "decides the organization's day. declaredFeatureIds identifies policies in force; " +
+    "caching, organization AI instructions, memory extraction, time policy, the time zone whose calendar " +
+    "decides the organization's day, and localRunMaxApprovalMode, the most a " +
+    "chat turn run on a member's computer may do without asking. declaredFeatureIds identifies policies in force; " +
     "capabilities contains caller decisions; deploymentFeatures supplies deployment availability. " +
     "timeZoneSource says whether the zone was " +
     "chosen or derived from the primary practice jurisdiction (Europe/Prague " +
-    "for CZ and SK, UTC otherwise). An organization that has never saved " +
+    "for CZ and SK, UTC otherwise). primaryJurisdictionTimeZone is the " +
+    "zone the primary jurisdiction implies, regardless of an organization " +
+    "override. An organization that has never saved " +
     "settings gets the defaults rather than an error.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -68,6 +73,7 @@ type OrganizationSettingsRow = {
   aiInstructions: string;
   managedAIResidency: ManagedAIResidency;
   memoryExtractionEnabled: boolean;
+  localRunMaxApprovalMode: DesktopRunnerApprovalMode;
   timeMinimumUnitMinutes: number;
   timeEditWindowDays: number;
   timeLockedThroughMonth: string | null;
@@ -113,34 +119,49 @@ const projectTimePolicy = (
     row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
 });
 
-export const projectOrganizationSettingsRow = (
+const projectTimeZone = (
   row: OrganizationSettingsRow | null | undefined,
-  snapshot: FeatureAccessSnapshot,
+  practiceJurisdictions: PracticeJurisdiction[],
 ) => ({
-  ...projectFeatureAccess(snapshot),
-  documentProcessingMode:
-    row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
-  matterNumberPattern:
-    row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
-  matterNumberPadding:
-    row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
-  matterNumberingEnabled: row?.matterNumberingEnabled ?? false,
-  practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
-  promptCachingEnabled: row?.promptCachingEnabled ?? true,
-  aiInstructions: row?.aiInstructions ?? "",
-  aiInstructionsMaxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
-  managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
-  memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
-  ...projectTimePolicy(row),
   timeZone: effectiveOrganizationTimeZone({
     timeZone: row?.timeZone ?? null,
-    practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
+    practiceJurisdictions,
+  }),
+  primaryJurisdictionTimeZone: effectiveOrganizationTimeZone({
+    timeZone: null,
+    practiceJurisdictions,
   }),
   timeZoneSource:
     (row?.timeZone ?? null) === null
       ? ORGANIZATION_TIME_ZONE_SOURCE.PRACTICE_JURISDICTION
       : ORGANIZATION_TIME_ZONE_SOURCE.ORGANIZATION,
 });
+
+export const projectOrganizationSettingsRow = (
+  row: OrganizationSettingsRow | null | undefined,
+  snapshot: FeatureAccessSnapshot,
+) => {
+  const practiceJurisdictions = arrayOrEmpty(row?.practiceJurisdictions);
+  return {
+    ...projectFeatureAccess(snapshot),
+    documentProcessingMode:
+      row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
+    matterNumberPattern:
+      row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
+    matterNumberPadding:
+      row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
+    matterNumberingEnabled: row?.matterNumberingEnabled ?? false,
+    practiceJurisdictions,
+    promptCachingEnabled: row?.promptCachingEnabled ?? true,
+    aiInstructions: row?.aiInstructions ?? "",
+    aiInstructionsMaxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
+    managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
+    memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
+    localRunMaxApprovalMode: localRunApprovalCeilingOf(row),
+    ...projectTimePolicy(row),
+    ...projectTimeZone(row, practiceJurisdictions),
+  };
+};
 
 const readOrganizationSettings = createSafeRootHandler(
   config,
@@ -159,6 +180,7 @@ const readOrganizationSettings = createSafeRootHandler(
             aiInstructions: true,
             managedAIResidency: true,
             memoryExtractionEnabled: true,
+            localRunMaxApprovalMode: true,
             timeMinimumUnitMinutes: true,
             timeEditWindowDays: true,
             timeLockedThroughMonth: true,

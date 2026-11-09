@@ -29,10 +29,12 @@ import {
   PROVIDER_CALL_FAILURE_REASON,
   ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
+import { isProviderAccountOutOfCredit } from "@/api/lib/errors/provider-error-catalogue";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+  DocumentTooLargeError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import type {
@@ -49,6 +51,7 @@ import {
   readEvidence,
   readProviderStatus,
 } from "@/api/lib/observability/failure-evidence";
+import { providerErrorBodyOf } from "@/api/lib/observability/provider-error-reason";
 
 export type { AIErrorKind };
 
@@ -69,6 +72,17 @@ const TRANSIENT_PROVIDER_NETWORK_CODES = new Set(
 const INCOMPLETE_STREAM_CODES: ReadonlySet<string> = new Set([
   INCOMPLETE_STREAM_CODE,
   "incomplete-stream",
+]);
+
+/**
+ * The run error codes a local chat turn ends with when the computer it ran on
+ * reports why it stopped (`local-run-chunks.ts`), by the kind each names.
+ */
+const LOCAL_RUNNER_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
+  [AI_FAILURE_CODES.local_runner_needs_login, "local_runner_needs_login"],
+  [AI_FAILURE_CODES.local_runner_limit_reached, "local_runner_limit_reached"],
+  [AI_FAILURE_CODES.local_runner_unavailable, "local_runner_unavailable"],
+  [AI_FAILURE_CODES.local_runner_turn_too_large, "local_runner_turn_too_large"],
 ]);
 
 /**
@@ -387,6 +401,12 @@ const classifyAIErrorInternal = (
     }
   }
 
+  if (isNonNullObject(error) && typeof error["code"] === "string") {
+    const localRunnerKind = LOCAL_RUNNER_KIND_BY_CODE.get(error["code"]);
+    if (localRunnerKind !== undefined) {
+      return localRunnerKind;
+    }
+  }
   if (ChatLoopDetectedError.is(error)) {
     return "loop_detected";
   }
@@ -406,6 +426,15 @@ const classifyAIErrorInternal = (
   const providerKind = providerResponseKind(error);
   if (providerKind !== null) {
     return providerKind;
+  }
+  // An adapter can forward the provider's error body without its status. The
+  // body still names an account out of credit, which only its owner can fix.
+  const providerBody = providerErrorBodyOf(error);
+  if (
+    providerBody !== undefined &&
+    isProviderAccountOutOfCredit(providerBody)
+  ) {
+    return "provider_billing";
   }
   // TanStack wraps provider RUN_ERROR events in a 502 HandlerError. Preserve a
   // recognised provider cause so a permanent provider response does not look
@@ -699,6 +728,12 @@ const aiKindHandlerError = (
           "The AI model returned an empty reply. Please try again, or rephrase the request.",
         cause: error,
       });
+    // A computer's run ends a chat turn, never a request this maps; its
+    // code still names the reason for whoever reads one.
+    case "local_runner_needs_login":
+    case "local_runner_limit_reached":
+    case "local_runner_unavailable":
+    case "local_runner_turn_too_large":
     case "unknown":
       return new HandlerError({ ...fallback, code, cause: error });
     default: {
@@ -724,6 +759,15 @@ export const aiHandlerError = (
   error: unknown,
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
+  // Raised before any model call, so no provider failure kind describes it.
+  if (DocumentTooLargeError.is(error)) {
+    return new HandlerError({
+      code: "document_too_large",
+      status: 413,
+      message: error.message,
+      cause: error,
+    });
+  }
   const kind = classifyAIBoundaryFailure(error);
   const mapped = aiKindHandlerError(kind, error, fallback);
   const handlerError =

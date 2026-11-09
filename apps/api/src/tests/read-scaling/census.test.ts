@@ -15,15 +15,22 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
+import { chatActiveRunsScalingScenario } from "./chat-active-runs";
+import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
+import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
+import { dictationScalingScenario } from "./dictation";
 import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
 } from "./document-annotations";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
+import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
@@ -31,6 +38,9 @@ import { mcpScalingScenarios } from "./mcp-scenarios";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
+import { organizationAuditExportScalingScenario } from "./organization-audit-export";
+import { organizationCreateScalingScenario } from "./organization-create";
+import { organizationSlugScalingScenario } from "./organization-slug";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -43,11 +53,13 @@ import {
   scalingCoverageViolations,
   withNewWriteRoutes,
 } from "./surface";
+import { timeEntryReportScalingScenario } from "./time-entry-report";
 import { suggestionRangeScalingScenario } from "./time-suggestion-range";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
@@ -55,15 +67,25 @@ const measuredApiScenarios = [
   decisionSummaryScalingScenario,
   decisionFilterValidationScalingScenario,
   accountExportDownloadScalingScenario,
+  desktopRunnerUpgradeScalingScenario,
+  chatLocalRunnersScalingScenario,
+  chatActiveRunsScalingScenario,
+  chatMcpAppBundleScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
+  ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
+  timeEntryReportScalingScenario,
   mobileClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  ...legislationMatterLinkScalingScenarios,
+  dictationScalingScenario,
+  organizationSlugScalingScenario,
+  organizationAuditExportScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>
@@ -228,9 +250,9 @@ for (const { kind, surface, ledger, measured } of [
           repoRoot,
           parseLedger: parseScalingLedger,
           // A write route this change mounts may enter with its reason.
-          normalizeBaseEntries: (base) =>
+          normalizeBaseEntries: ({ entries }) =>
             withNewWriteRoutes({
-              base,
+              base: entries,
               current: parseScalingLedger(
                 JSON.stringify(ledger),
                 `${kind}-scaling`,

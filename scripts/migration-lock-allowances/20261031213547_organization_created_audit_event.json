@@ -1,0 +1,6 @@
+{
+  "add-constraint": "The expanded account-audit CHECK is added NOT VALID without scanning existing audit rows; the preceding drop and replacement are atomic. ACCESS EXCLUSIVE acquisition is bounded by 1s lock_timeout and each statement by 10s statement_timeout. The registered account-audit online validation runs after the schema transaction releases its lock.",
+  "create-table-references": "The foreign keys belong to a newly created empty receipt table and reference the existing organization and user tables, so validation scans no receipt rows. SHARE ROW EXCLUSIVE on those parents lasts until the migration commits; acquisition is bounded by 1s lock_timeout and each statement by 10s statement_timeout. Rollback removes the unpublished receipt table.",
+  "row-level-security": "ENABLE and FORCE RLS affect only the new empty receipt table before publication. ACCESS EXCLUSIVE lasts until the migration commits, with 1s lock_timeout and 10s statement_timeout; rollback removes the unpublished table.",
+  "create-policy": "The owner-only policy is installed on the new empty receipt table before publication and scans no rows. ACCESS EXCLUSIVE lasts until the migration commits, with 1s lock_timeout and 10s statement_timeout; rollback removes the unpublished table and policy."
+}

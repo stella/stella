@@ -3,7 +3,8 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KEY } from "@stll/agent-input";
-import { propertyConfig } from "@stll/property-testing";
+import { uuidSchema } from "@stll/api-contract/uuid";
+import { assertProperty } from "@stll/property-testing";
 
 import { ANALYSIS_OUTPUT_JSON_SCHEMA } from "@/api/handlers/case-law/analysis/analysis-output";
 import { fileSchema, uniqueItems } from "@/api/lib/custom-schema";
@@ -223,24 +224,36 @@ const { schema: schemaArbitrary } = fc.letrec<{ schema: v.GenericSchema }>(
 );
 
 describe("toJsonSchema", () => {
+  test("UUID canonicalization keeps the uppercase-capable input contract", () => {
+    expect(toJsonSchema(uuidSchema)).toMatchObject({
+      type: "string",
+      minLength: 36,
+      maxLength: 36,
+      pattern:
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+    });
+  });
+
   test("emits only JSON Schema keywords, whatever metadata a schema carries", () => {
-    fc.assert(
+    assertProperty(
+      "emits only JSON Schema keywords, whatever metadata a schema carries",
       fc.property(schemaArbitrary, (schema) => {
         expect(findNonKeywordKeys(toJsonSchema(schema))).toEqual([]);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("keeps the JSON Schema annotations metadata carries", () => {
-    fc.assert(
+    assertProperty(
+      "keeps the JSON Schema annotations metadata carries",
       fc.property(leafArbitrary, metadataArbitrary, (make, metadata) => {
         const emitted = toJsonSchema(annotate(make(), metadata));
         expect(emitted.title).toEqual(metadata?.title);
         expect(emitted.description).toEqual(metadata?.description);
         expect(emitted.examples).toEqual(metadata?.examples);
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });

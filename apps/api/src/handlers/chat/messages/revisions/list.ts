@@ -175,6 +175,7 @@ export const readChatMessageRevisionsOnTx = async ({
   if (
     !message ||
     !(await hasChatWorkspaceAccess({
+      admitted: "active-or-archived",
       workspaceId: message.workspaceId,
       getWorkspaceAccess,
     }))

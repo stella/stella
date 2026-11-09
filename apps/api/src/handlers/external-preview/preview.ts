@@ -1,7 +1,10 @@
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import type { Element } from "domhandler";
 import * as v from "valibot";
+
+import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { Element } from "@stll/html/nodes";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -9,7 +12,6 @@ import { fetchWithResolvedAddress } from "@/api/lib/auth/authorized-outbound-fet
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 import {
   OUTBOUND_PROTOCOL_POLICY,
   validateOutboundFetchTarget,
@@ -201,7 +203,7 @@ export const extractReadableMarkdownFromHtml = (
   html: string,
   baseUrl: URL,
 ): string => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   sanitizePreviewHtml($, baseUrl);
 
   const root = findReadableRoot($);
@@ -327,7 +329,7 @@ const renderReadableBlockMarkdown = (
 };
 
 const extractHtmlTitle = (html: string): string | null => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const title =
     $("meta[property='og:title']").attr("content") ??
     $("meta[name='twitter:title']").attr("content") ??

@@ -7,6 +7,7 @@ import { REVIEW_SKIPPED_MAX } from "@/api/lib/document-review/contract";
 import type {
   ReviewParty,
   ReviewSkippedTerm,
+  ReviewWithheldSource,
 } from "@/api/lib/document-review/contract";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
@@ -117,6 +118,12 @@ export const documentReviewRuns = p.pgTable(
     // the other half were compliant, and that stays true when the review is
     // reopened tomorrow. Empty for a run with no proposal behind it.
     skipped: jsonb().$type<ReviewSkippedTerm[]>().notNull().default([]),
+    // Sources this run read only in part because they exceed the model's
+    // request budget. Sizes only, never text. Empty when all were read whole.
+    withheldSources: jsonb("withheld_sources")
+      .$type<ReviewWithheldSource[]>()
+      .notNull()
+      .default([]),
     status: p
       .text("status", { enum: DOCUMENT_REVIEW_RUN_STATUSES })
       .notNull()

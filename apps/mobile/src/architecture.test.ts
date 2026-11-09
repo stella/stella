@@ -129,6 +129,17 @@ describe("the app's builds", () => {
     },
   );
 
+  // iOS opens an app only in a language its bundle declares, so every build
+  // declares every interface language the app ships, and nothing else.
+  test.each(configs)(
+    "$variant declares every interface language to iOS",
+    ({ config }) => {
+      const declared: unknown =
+        config.ios?.infoPlist?.["CFBundleLocalizations"];
+      expect(declared).toEqual([...UI_LOCALES]);
+    },
+  );
+
   test("a signed release leaves out the Live Activity extension it cannot sign yet", () => {
     const signed = appConfigFor({
       buildNumber: 7,
@@ -172,6 +183,7 @@ describe("the app's builds", () => {
       {
         bundleIdentifier: "app.stll.mobile.preview.widgets",
         groupIdentifier: "group.app.stll.mobile.preview",
+        enablePushNotifications: true,
       },
     ]);
   });
@@ -369,6 +381,43 @@ describe("the app's colours", () => {
         [],
     ).toEqual([]);
   });
+});
+
+describe("the app's links", () => {
+  /**
+   * The modules that may hand a link to the system: the opener, which opens
+   * only what `state/links.ts` accepted and shows a web link's host first,
+   * and the decision reader, which opens the court's own web pages through
+   * `isWebUrl` from the same module.
+   */
+  const OPENERS = new Set([
+    path.join("components", "open-link.ts"),
+    path.join("components", "decision-reader.tsx"),
+  ]);
+
+  const opensLinks = (source: string): string[] =>
+    source.match(/\bopenURL\s*\(|\bopenURL\b(?=\s*[,}])/gu) ?? [];
+
+  test("finds the opener, and the scan sees the calls it forbids elsewhere", () => {
+    for (const name of OPENERS) {
+      expect(appModules).toContain(name);
+      expect(
+        opensLinks(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
+      ).not.toEqual([]);
+    }
+    expect(opensLinks("const { openURL } = Linking;")).not.toEqual([]);
+  });
+
+  // A link from an answer or a document can name any scheme: a call, a
+  // message, another app. Opening one anywhere else would skip the rule.
+  test.each(appModules.filter((name) => !OPENERS.has(name)))(
+    "%s opens no link itself",
+    (name) => {
+      expect(
+        opensLinks(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
+      ).toEqual([]);
+    },
+  );
 });
 
 describe("the app's text", () => {

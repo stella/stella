@@ -228,7 +228,7 @@ export const createTestTimestampResponder = async ({
     });
     return new Uint8Array(
       new pkijs.TimeStampResp({
-        status: new pkijs.PKIStatusInfo({ status: 0 }),
+        status: new pkijs.PKIStatusInfo({ status: pkijs.PKIStatus.granted }),
         timeStampToken: pkijs.ContentInfo.fromBER(token),
       })
         .toSchema()

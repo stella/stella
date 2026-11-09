@@ -75,8 +75,8 @@
   "allowWebsiteAccess": {
     "message": "Website-Zugriff erlauben"
   },
-  "connectTab": {
-    "message": "Diesen stella-Tab verbinden"
+  "connectStella": {
+    "message": "stella verbinden"
   },
   "adoptTab": {
     "message": "Diesen Tab mit stella verwenden"
@@ -97,9 +97,9 @@
     "message": "Verbindung wird geprüft…"
   },
   "statusConnectedElsewhere": {
-    "message": "Ein anderer stella-Tab ist verbunden"
+    "message": "stella ist unter einer anderen Adresse verbunden"
   },
-  "connectTabInstead": {
-    "message": "Stattdessen diesen stella-Tab verbinden"
+  "connectStellaInstead": {
+    "message": "stella stattdessen hier verbinden"
   }
 }

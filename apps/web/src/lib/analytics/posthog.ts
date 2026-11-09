@@ -42,7 +42,11 @@ import type {
   ErrorCaptureContext,
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
-import { APIError, isCancellation } from "@/lib/errors/api";
+import { APIError, isCancellation, isTypedCodeRefusal } from "@/lib/errors/api";
+import {
+  isNativeFetchFailure,
+  isNativeFetchTimeout,
+} from "@/lib/errors/native-fetch-failure";
 import { logDevError } from "@/lib/errors/telemetry";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
@@ -149,10 +153,12 @@ const CANCELLED_REQUEST_CLASS = "AbortError";
 // Errors whose type names an expected outcome, handled where it happens: no
 // desktop app running, a public-law source down, a signed-out session, a
 // model provider's failure the chat shows with its setup guidance (the API
-// reports the provider failures it does not classify itself).
+// reports the provider failures it does not classify itself), a coding agent
+// on the member's computer at its usage limit.
 const EXPECTED_OUTCOME_TYPES: ReadonlySet<string> = new Set([
   "AuthClientError",
   "DesktopBridgeUnavailableError",
+  "LocalRunLimitError",
   "ProviderDiagnosticError",
   "PublicLawUnavailableError",
 ]);
@@ -389,6 +395,11 @@ const sanitizeExceptionEntry = (
   };
 };
 
+// The same finite dimensions the fingerprint carries, kept readable so an
+// issue's events can be filtered by them.
+const exceptionFieldsProperty = (fields: Record<string, string>) =>
+  Object.keys(fields).length === 0 ? undefined : { exception_fields: fields };
+
 type RouteTemplateHistory = Map<string, string>;
 
 type TemplateUrl = { url: string; pathname: string };
@@ -497,6 +508,7 @@ export const sanitizeExceptionEvent = (
       }),
       $exception_list: sanitizedList,
       $exception_type: type,
+      ...exceptionFieldsProperty(fields),
       ...(properties["exception_identity_status"] === "read_failed"
         ? { exception_identity_status: "read_failed" }
         : {}),
@@ -799,6 +811,19 @@ const registerBuildProperties = () => {
   });
 };
 
+// Clients outside the API client (the auth client) reject with the native
+// fetch error or deadline reason. It must be classified here, before redaction
+// blanks the message that tells it apart from a TypeError of ours.
+const transportFailureKind = (error: unknown): APIError["transportKind"] => {
+  if (APIError.is(error)) {
+    return error.transportKind;
+  }
+  if (isNativeFetchFailure(error)) {
+    return "network";
+  }
+  return isNativeFetchTimeout(error) ? "timeout" : undefined;
+};
+
 const captureError: Analytics["captureError"] = (
   error,
   { fingerprintKey, scope, context },
@@ -806,15 +831,21 @@ const captureError: Analytics["captureError"] = (
   // Transport failures have no HTTP response and describe client connectivity,
   // not an application exception. Keep the fixed query owner and kind only:
   // neither a resolved URL nor request/user content belongs in this signal.
-  if (APIError.is(error) && error.transportKind !== undefined) {
+  const transportKind = transportFailureKind(error);
+  if (transportKind !== undefined) {
     posthog.capture(WEB_ANALYTICS_EVENTS.clientTransient, {
       query_owner: fingerprintKey,
-      transport_kind: error.transportKind,
+      transport_kind: transportKind,
     });
     return;
   }
   // A cancelled request is expected control flow, not an operational failure.
   if (isCancellation(error)) {
+    return;
+  }
+  // A mistyped or expired code is the form's to answer, wherever it is captured:
+  // the status and code the tracker keeps cannot tell this 400 from a defect.
+  if (isTypedCodeRefusal(error)) {
     return;
   }
   // Cheap guards before the SDK call: a stray `captureError(null)`

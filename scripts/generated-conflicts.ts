@@ -313,6 +313,10 @@ export const GENERATED_MERGE_HEADLINE =
   "chore: merge main and regenerate conflicted generated files";
 
 const SHA = /^[0-9a-f]{40}$/u;
+/** GitHub's own transient failure, which it reports as a 200 with errors. */
+const GRAPHQL_TRANSIENT_FAILURE_PREFIX =
+  "Something went wrong while executing your query";
+const GRAPHQL_ATTEMPTS = 3;
 
 const ownersOf = (
   file: string,
@@ -1391,7 +1395,7 @@ export const push = async ({
     return fail("Invalid repository or branch");
   }
   // Git object writes are content-addressed, so repeating one after a server
-  // error stores the same object; the ref update is never repeated.
+  // error stores the same object.
   const call = async (route: string, body: unknown, attempts = 1) => {
     for (let attempt = 1; ; attempt += 1) {
       const response = await send(`${api}${route}`, {
@@ -1488,13 +1492,27 @@ export const push = async ({
   ) {
     return fail("GitHub created a different merge commit");
   }
+  // Repeating is safe: the only mutation moves a ref from a stated head, so one
+  // that landed answers the repeat with a refusal and moves nothing twice.
   const graphql = async (query: string, variables: Record<string, unknown>) => {
-    const answer = await call("/graphql", { query, variables });
-    const errors = field(answer, "errors");
-    if (Array.isArray(errors) && errors.length > 0) {
-      return fail(`GraphQL refused: ${JSON.stringify(errors)}`);
+    for (let attempt = 1; ; attempt += 1) {
+      const answer = await call("/graphql", { query, variables }, 3);
+      const errors = field(answer, "errors");
+      if (!Array.isArray(errors) || errors.length === 0) {
+        return answer;
+      }
+      if (
+        attempt >= GRAPHQL_ATTEMPTS ||
+        !errors.every((error: unknown) =>
+          String(field(error, "message")).startsWith(
+            GRAPHQL_TRANSIENT_FAILURE_PREFIX,
+          ),
+        )
+      ) {
+        return fail(`GraphQL refused: ${JSON.stringify(errors)}`);
+      }
+      await Bun.sleep(retryDelayMs * attempt);
     }
-    return answer;
   };
   const repo = await graphql(
     "query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { id } }",
@@ -1636,6 +1654,28 @@ export const resolveDerived = ({
           env: { ...process.env, STELLA_LOCAL_AUTOFIX: "true" },
         }).exitCode,
     );
+    const generatedCaches = run([
+      "ls-files",
+      "--others",
+      "--ignored",
+      "--exclude-standard",
+      "-z",
+      "--",
+      ".",
+    ])
+      .stdout.toString()
+      .split("\0")
+      .filter(
+        (file) =>
+          file !== "" &&
+          !ignoredBefore.has(file) &&
+          selected.some(({ cacheOutputs = [] }) =>
+            cacheOutputs.some((output) => matchesGeneratedGlob(output, file)),
+          ),
+      );
+    for (const file of generatedCaches) {
+      rmSync(path.join(repo, file));
+    }
     // Stage even a failed generator's writes so ordinary merge --abort can
     // restore tracked files rather than refusing unstaged output edits.
     run(["add", "-A", "--", "."]);

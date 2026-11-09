@@ -43,8 +43,8 @@ import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { errorTag } from "@/api/lib/errors/utils";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
-  acquireCaseLawSourceIngestionLease,
   type CaseLawSourceIngestionLease,
+  withCaseLawSourceIngestionLease,
 } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { operatorFlags } from "@/api/scripts/operator-flags";
@@ -437,31 +437,6 @@ const runBackfillSession = async ({
   return report.status === "held" ? 1 : 0;
 };
 
-type UnderSourceLeaseOptions<T> = {
-  /** Null in a plan run, which holds no lease. */
-  sourceLease: { release: () => Promise<void> } | null;
-  prepare: () => Promise<void>;
-  work: () => Promise<T>;
-};
-
-/**
- * Prepare and run the work under an acquired source lease, releasing it
- * however either ends: a lease left held blocks the source's ingestion
- * until it expires.
- */
-export const underSourceLease = async <T>({
-  sourceLease,
-  prepare,
-  work,
-}: UnderSourceLeaseOptions<T>): Promise<T> => {
-  try {
-    await prepare();
-    return await work();
-  } finally {
-    await sourceLease?.release();
-  }
-};
-
 export const runEuEcjLanguageBackfill = async (
   argv: readonly string[],
 ): Promise<number> => {
@@ -489,35 +464,33 @@ export const runEuEcjLanguageBackfill = async (
       console.error("No case-law source configured for adapter eu-ecj");
       return 1;
     }
-    const sourceLease = flags.apply
-      ? await acquireCaseLawSourceIngestionLease({
-          scopedDb: ingestionDb,
-          sourceId: source.id,
-        })
-      : null;
-    if (flags.apply && sourceLease === null) {
+    const run = async (sourceLease: CaseLawSourceIngestionLease | null) => {
+      if (flags.apply) {
+        await refreshS3();
+        await refreshCorpusS3();
+      }
+      return await runBackfillSession({
+        flags,
+        rootDb,
+        ingestionDb,
+        sourceId: source.id,
+        sourceLease,
+      });
+    };
+    if (!flags.apply) {
+      return await run(null);
+    }
+    const exit = await withCaseLawSourceIngestionLease(
+      { scopedDb: ingestionDb, sourceId: source.id },
+      run,
+    );
+    if (exit === null) {
       console.error(
         "Source eu-ecj is being ingested right now (lease held). Retry later.",
       );
       return 1;
     }
-    return await underSourceLease({
-      sourceLease,
-      prepare: async () => {
-        if (flags.apply) {
-          await refreshS3();
-          await refreshCorpusS3();
-        }
-      },
-      work: async () =>
-        await runBackfillSession({
-          flags,
-          rootDb,
-          ingestionDb,
-          sourceId: source.id,
-          sourceLease,
-        }),
-    });
+    return exit;
   } finally {
     await lane.release();
   }

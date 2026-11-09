@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -130,6 +130,52 @@ describe("resolveAccessToken", () => {
         expect(result.token).toBe("old-access-token");
       }
       expect(provider.getRequestCount()).toBe(0);
+    } finally {
+      provider.close();
+    }
+  });
+
+  test("concurrent processes share one refresh and subsequent processes reuse its cache", async () => {
+    let refreshes = 0;
+    const provider = startMockProvider(async () => {
+      refreshes += 1;
+      // real-time: keep the network exchange in flight while independent processes contend on the filesystem lock.
+      await Bun.sleep(100);
+      return Response.json({
+        access_token: "shared-token",
+        refresh_token: "rotated-token",
+        expires_in: 900,
+        token_type: "Bearer",
+      });
+    });
+    try {
+      const now = Date.now();
+      await seedCredential(
+        buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
+      );
+      const resolveModule = new URL("resolve-access-token.ts", import.meta.url)
+        .href;
+      const code = `import { resolveAccessToken } from ${JSON.stringify(resolveModule)};
+        process.stdout.write(JSON.stringify(await resolveAccessToken(${JSON.stringify({ configDir, serverUrl: provider.serverUrl, now, env: {} })})));`;
+      const invoke = async () => {
+        const child = Bun.spawn([process.execPath, "--eval", code], {
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const output = await new Response(child.stdout).text();
+        const error = await new Response(child.stderr).text();
+        expect(await child.exited).toBe(0);
+        expect(error).toBe("");
+        expect(JSON.parse(output)).toEqual({
+          status: "ok",
+          token: "shared-token",
+        });
+      };
+      await Promise.all(Array.from({ length: 4 }, invoke));
+      expect(refreshes).toBe(1);
+      const requestsAfterRefresh = provider.getRequestCount();
+      await invoke();
+      expect(provider.getRequestCount()).toBe(requestsAfterRefresh);
     } finally {
       provider.close();
     }
@@ -587,7 +633,7 @@ describe("resolveAccessToken", () => {
     }
   });
 
-  test("returns the fresh token with a warning instead of failing when the credential store can't be written", async () => {
+  test("fails closed before rotating a token when the refresh lock cannot be created", async () => {
     if (process.getuid?.() === 0) {
       return;
     }
@@ -609,14 +655,68 @@ describe("resolveAccessToken", () => {
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );
 
-      const result = await resolveAccessToken({
-        configDir,
-        serverUrl: provider.serverUrl,
-        now,
-        persistCredential: async () => {
-          throw new Error("forced credential write failure");
-        },
-      });
+      // A read-only directory cannot coordinate refresh across processes.
+      // Refuse to rotate the shared token before contacting the token endpoint.
+      await chmod(configDir, 0o500);
+
+      let result: Awaited<ReturnType<typeof resolveAccessToken>>;
+      try {
+        result = await resolveAccessToken({
+          configDir,
+          serverUrl: provider.serverUrl,
+          now,
+        });
+      } finally {
+        await chmod(configDir, 0o700);
+      }
+
+      expect(result.status).toBe("refresh-failed");
+      if (result.status === "refresh-failed") {
+        expect(result.error._tag).toBe("TokenRefreshError");
+        expect(result.error.message).toContain("refresh lock");
+      }
+
+      const persisted = await readCredentialFile(configDir);
+      expect(persisted.credentials.at(0)?.accessToken).toBe("old-access-token");
+    } finally {
+      provider.close();
+    }
+  });
+  test("returns the fresh token with a warning instead of failing when the credential store can't be written", async () => {
+    if (process.getuid?.() === 0) {
+      return;
+    }
+    const provider = startMockProvider(async (body) => {
+      await chmod(configDir, 0o500);
+      return body.get("grant_type") === "refresh_token" &&
+        body.get("refresh_token") === "old-refresh-token"
+        ? Response.json({
+            access_token: "new-access-token",
+            expires_in: 900,
+            refresh_token: "new-refresh-token",
+            scope: "openid stella:read",
+            token_type: "Bearer",
+          })
+        : Response.json({ error: "invalid_grant" }, { status: 400 });
+    });
+    try {
+      const now = Date.now();
+      await seedCredential(
+        buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
+      );
+
+      // The provider makes the directory read-only after the lock is acquired,
+      // exercising persistence failure independently of lock acquisition.
+      let result: Awaited<ReturnType<typeof resolveAccessToken>>;
+      try {
+        result = await resolveAccessToken({
+          configDir,
+          serverUrl: provider.serverUrl,
+          now,
+        });
+      } finally {
+        await chmod(configDir, 0o700);
+      }
 
       // The refresh itself succeeded — the in-memory token is valid and
       // must not be discarded just because it couldn't be saved.

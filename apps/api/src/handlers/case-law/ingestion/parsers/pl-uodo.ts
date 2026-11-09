@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: a failed validateAst verdict still fails the parse; only the logging moved to the pipeline.
 /**
  * Reader for the decision XML the data-protection authority's portal serves.
@@ -15,9 +16,16 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import {
+  type AnyNode,
+  type Element,
+  isCDATA,
+  isTag,
+  isText,
+} from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -28,9 +36,11 @@ import type {
   ParagraphListDepth,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import { isPlRecitalLine } from "@stll/legal-ast/polish-document-roles";
 
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   buildValidationHtml,
   validateAst,
@@ -214,7 +224,7 @@ const inlinesOf = (state: ParseState, node: AnyNode): Inline[] => {
   } else {
     walk(node, inlines);
   }
-  return trimInlines(inlines);
+  return trimInlines(readInlineLetterSpacing(inlines));
 };
 
 type ParagraphContext = {
@@ -411,18 +421,38 @@ const walkUnit = (
 };
 
 /**
+ * The head matter an operative branch opens with, before its first point:
+ * the legal basis the authority decides on and the recital naming the
+ * proceedings. The portal prints them as unmarked units of the same branch;
+ * they introduce the ruling and are not part of it.
+ */
+const markOperativeLeadIn = (blocks: readonly Block[]): void => {
+  for (const block of blocks) {
+    if (block.type !== "paragraph" || !isPlRecitalLine(block.plainText)) {
+      return;
+    }
+    block.role = "intro";
+  }
+};
+
+/**
  * The branches of the decision. The one without a title is the operative
- * part, which is what the reader sets as the holding; a titled branch is the
- * reasons, read as body text.
+ * part, which is what the reader sets as the holding once its lead-in is
+ * read off; a titled branch is the reasons, read as the authority's
+ * argumentation.
  */
 const walkBranches = (state: ParseState, block: Element): void => {
   for (const branch of block.children) {
     if (isTag(branch) && branch.tagName === "xUnit") {
       const titled = ownText(state.$, childElements(branch, "xTitle").at(0));
+      const start = state.blocks.length;
       walkUnit(state, branch, 0, {
-        role: titled === "" ? "holding" : undefined,
+        role: titled === "" ? "holding" : "argumentation",
         listDepth: 0,
       });
+      if (titled === "") {
+        markOperativeLeadIn(state.blocks.slice(start));
+      }
       continue;
     }
     if (isTag(branch) && branch.tagName === "xText") {
@@ -530,7 +560,7 @@ const sourceTextsOf = ($: cheerio.CheerioAPI, root: Element): string[] => {
 
 /** What the validator measures a parse against, read from the XML alone. */
 export const plUodoSourceTexts = (xml: string): string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const root = $("xPart").get(0);
   return root === undefined ? [] : sourceTextsOf($, root);
 };
@@ -538,7 +568,7 @@ export const plUodoSourceTexts = (xml: string): string[] => {
 export const parsePlUodoDecisionXml = (
   input: ParsePlUodoDecisionInput,
 ): Result<ParsePlUodoDecisionOutput, ParseXmlError> => {
-  const $ = cheerio.load(input.xml, { xml: true });
+  const $ = load(input.xml, { xml: true });
   const root = $("xPart").get(0);
   if (root === undefined) {
     return Result.err(

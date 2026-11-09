@@ -6,6 +6,7 @@ import { SortChips as WorkspaceSortChips } from "@stll/workspace-ui/sorts";
 import { sortDirectionLabels } from "@/components/workspaces/properties/sort-property.logic";
 import { PROPERTY_SORT_KINDS } from "@/components/workspaces/property-utils";
 import type { ViewLayout, WorkspaceProperty } from "@/lib/types";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 
 type SortChipsProps = {
   sorts: ViewLayout["sorts"];
@@ -16,6 +17,7 @@ type SortChipsProps = {
 /** The view's sort chips, with this app's wording and property list. */
 export const SortChips = ({ sorts, properties, onUpdate }: SortChipsProps) => {
   const t = useTranslations();
+  const displayName = usePropertyDisplayName();
 
   return (
     <WorkspaceSortChips
@@ -26,12 +28,19 @@ export const SortChips = ({ sorts, properties, onUpdate }: SortChipsProps) => {
       }}
       maxSorts={VIEW_SORTS_MAX}
       onUpdate={onUpdate}
-      properties={properties.map((property) => ({
-        id: property.id,
-        name: property.name,
-        type: property.content.type,
-        sortKind: PROPERTY_SORT_KINDS[property.content.type],
-      }))}
+      properties={properties.flatMap((property) => {
+        const sortKind = PROPERTY_SORT_KINDS[property.content.type];
+        return sortKind === null
+          ? []
+          : [
+              {
+                id: property.id,
+                name: displayName(property),
+                type: property.content.type,
+                sortKind,
+              },
+            ];
+      })}
       sorts={sorts}
     />
   );

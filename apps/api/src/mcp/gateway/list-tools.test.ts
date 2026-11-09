@@ -578,6 +578,9 @@ describe("MCP app-only discovery", () => {
     };
     const wire = toMcpTools([definition]);
     expect(wire.map(({ name }) => name)).toEqual([definition.name]);
-    expect(wire.at(0)?._meta).toEqual(definition._meta);
+    expect(wire.at(0)?._meta).toEqual({
+      ...definition._meta,
+      schemaVersion: expect.stringMatching(/^[a-f0-9]{16}$/u),
+    });
   });
 });
