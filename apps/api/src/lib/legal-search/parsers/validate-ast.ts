@@ -1,3 +1,4 @@
+// parser-output-unchanged: the bracketed-number word test moved unchanged into the printed-label grammar.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: Aspose writes `-aw-headerfooter-type` only as a nonempty declaration, which the former substring selector and the declaration read select alike.
 // parser-output-unchanged: delegates validation text to the shared owner with the same raw digits, text-node newlines, space breaks and zero-width page anchors.
@@ -25,6 +26,7 @@ import { type AnyNode, isTag } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { flattenInlineText } from "@stll/legal-ast/inline";
+import { BRACKET_PARAGRAPH_MARKER_WORD_RE } from "@stll/legal-ast/printed-paragraph-labels";
 
 import { inlineStyleDeclaresProperty } from "@/api/lib/legal-search/document-builders/inline-style";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
@@ -183,7 +185,10 @@ export const extractValidationWords = (text: string): Set<string> => {
     // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
     // non-letter chars from edges.
     const clean = validationWord(w);
-    if (isMeaningfulWord(clean) && !/^\[\d+\]$/u.test(w.toLowerCase())) {
+    if (
+      isMeaningfulWord(clean) &&
+      !BRACKET_PARAGRAPH_MARKER_WORD_RE.test(w.toLowerCase())
+    ) {
       words.add(clean);
     }
   }

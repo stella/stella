@@ -31,6 +31,10 @@
       "types": "./src/analysis.ts",
       "import": "./src/analysis.ts"
     },
+    "./answer-quote": {
+      "types": "./src/answer-quote.ts",
+      "import": "./src/answer-quote.ts"
+    },
     "./case-law-heading": {
       "types": "./src/case-law-heading.ts",
       "import": "./src/case-law-heading.ts"
@@ -107,6 +111,10 @@
       "types": "./src/closed-quotation-paragraphs.ts",
       "import": "./src/closed-quotation-paragraphs.ts"
     },
+    "./contents-entry": {
+      "types": "./src/contents-entry.ts",
+      "import": "./src/contents-entry.ts"
+    },
     "./court-paragraph-numbers": {
       "types": "./src/court-paragraph-numbers.ts",
       "import": "./src/court-paragraph-numbers.ts"
@@ -123,6 +131,18 @@
       "types": "./src/line-wrap.ts",
       "import": "./src/line-wrap.ts"
     },
+    "./printed-paragraph-labels": {
+      "types": "./src/printed-paragraph-labels.ts",
+      "import": "./src/printed-paragraph-labels.ts"
+    },
+    "./polish-document-roles": {
+      "types": "./src/polish-document-roles.ts",
+      "import": "./src/polish-document-roles.ts"
+    },
+    "./decision-role-grammar": {
+      "types": "./src/decision-role-grammar.ts",
+      "import": "./src/decision-role-grammar.ts"
+    },
     "./provision-preview": {
       "types": "./src/provision-preview.ts",
       "import": "./src/provision-preview.ts"
@@ -138,6 +158,10 @@
     "./quote-locate": {
       "types": "./src/quote-locate.ts",
       "import": "./src/quote-locate.ts"
+    },
+    "./reader-text-quote": {
+      "types": "./src/reader-text-quote.ts",
+      "import": "./src/reader-text-quote.ts"
     },
     "./slovak-document-roles": {
       "types": "./src/slovak-document-roles.ts",

@@ -16,9 +16,18 @@
   },
   "admin": {
     "ai": "AI",
+    "auditArchiveDescription": "Smazáním organizace se smaže i její záznam všech aktivit. Nejprve si záznam aktivit uložte a stáhněte archiv; bude vám k dispozici jednu hodinu.",
+    "auditArchiveDownloadFirst": "Před smazáním organizace si stáhněte archiv záznamu aktivit.",
+    "auditArchiveFailed": "Archiv záznamu aktivit se nepodařilo připravit.",
+    "auditArchiveOutdated": "Od vytvoření tohoto archivu přibyly v záznamu aktivit nové položky. Před smazáním organizace ho uložte znovu.",
+    "auditArchiveReady": "Archiv záznamu aktivit je připraven. Nyní můžete organizaci smazat.",
+    "auditArchiveRequest": "Uložit záznam aktivit",
+    "auditArchiveRequestNew": "Znovu uložit záznam aktivit",
+    "auditArchiveWorking": "Připravuje se archiv záznamu aktivit…",
     "billingProfiles": "Fakturační profily",
     "deleteDescription": "Trvale smažete tuto organizaci a její data. Tuto akci nelze vrátit zpět.",
     "deleteOrganization": "Smazat organizaci",
+    "deleteRefusedAuditArchive": "Před smazáním organizace si uložte její záznam aktivit.",
     "deleteRefusedSubscription": "Tato organizace má předplatné, které se obnovuje. Nejprve ho zrušte v sekci Tarif a využití, poté organizaci smažte.",
     "deleteTypeToConfirm": "Pro potvrzení zadejte {name}.",
     "firmSetup": "Nastavení kanceláře",
@@ -31,7 +40,6 @@
     "organizationId": "ID organizace",
     "organizationLeft": "Opustili jste organizaci.",
     "planAndUsage": "Tarif a využití",
-    "title": "Správa organizace",
     "toolsDescription": "Zapněte nebo vypněte vestavěné nástroje pro všechny v této organizaci."
   },
   "agentClaim": {
@@ -84,6 +92,7 @@
     "countSummary": "{columns} sloupců × {rows} řádků = {answers, plural, one {# odpověď} few {# odpovědi} many {# odpovědi} other {# odpovědí}}. Odpovědi čerpají rozpočet.",
     "modelRefused": "Model odmítl odpovědět",
     "nothingFound": "Nic nenalezeno",
+    "nothingFoundInCutDocument": "V přečtené části nebylo nic nalezeno",
     "refusedBudget": "Nespuštěno: rozpočet na odpovědi není k dispozici",
     "rerunAllPage": "Spustit vše znovu (tato stránka)",
     "rerunColumnPage": "Spustit sloupec znovu (tato stránka)",
@@ -144,6 +153,7 @@
     "emailPlaceholder": "vy@priklad.cz",
     "error": {
       "generic": "Při přihlašování se něco pokazilo. Zkuste to prosím znovu.",
+      "providerUnavailable": "Poskytovatel přihlášení teď neodpovídá. Zkuste to prosím znovu za minutu.",
       "title": "Nepodařilo se vás přihlásit"
     },
     "handoffAccount": "Pokračovat jako <account>{email}</account> v organizaci <organization>{organizationName}</organization>?",
@@ -154,7 +164,9 @@
       "declinedDescription": "Odmítli jste tuto pozvánku. Můžete tuto stránku zavřít.",
       "description": "{inviterEmail} vás pozval/a do organizace {organizationName} jako {role}.",
       "goToWorkspaces": "Přejít na spisy",
-      "title": "Pozvánka do organizace"
+      "title": "Pozvánka do organizace",
+      "verifyEmailHint": "Chcete-li ověřit adresu {email}, odhlaste se a přihlaste se jednorázovým kódem, který na ni odešleme.",
+      "wrongAccountHint": "Jste přihlášeni jako {email}. Odhlaste se a přihlaste se adresou, na kterou byla pozvánka odeslána."
     },
     "lastUsed": "Naposledy použito",
     "oneTimeCodeExpired": "Platnost jednorázového kódu vypršela. Požádejte o nový kód.",
@@ -201,12 +213,12 @@
   "avt": {
     "anchorFacts": {
       "addInterpretationNote": "Přidat poznámku k výkladu",
-      "description": "Přímé důkazy — e-maily, zprávy, bankovní záznamy, nesporné skutečnosti — zpracované do souboru referenčních faktů, s nimiž se porovnávají tvrzení. Fakta můžete kontrolovat, upravovat nebo ručně přidávat.",
+      "description": "Přímé důkazy (e-maily, zprávy, bankovní záznamy, nesporné skutečnosti) zpracované do souboru referenčních faktů, s nimiž se porovnávají tvrzení. Fakta můžete kontrolovat, upravovat nebo ručně přidávat.",
       "editInterpretationNote": "Upravit poznámku k výkladu",
       "empty": "Označte položky tohoto seznamu jako fakta, proti nimž se budou kontrolovat dokumenty.",
       "extractionAndReview": "Extrakce a kontrola",
       "factCount": "{count, plural, one {# fakt} few {# fakty} other {# faktů} many {# faktu}}",
-      "heldDescription": "Význam těchto extrahovaných údajů je <strong>skutečně nejistý</strong> — jejich obsah je předběžný nebo nepotvrzený, nejde pouze o ručně psaný text. Do hodnocení se nezahrnou, dokud je kontrolující osoba nepotvrdí, neupraví nebo nepřepíše. Čitelný zdroj se nikdy nezařadí do fronty jen kvůli svému médiu.",
+      "heldDescription": "Význam těchto extrahovaných údajů je <strong>skutečně nejistý</strong>: jejich obsah je předběžný nebo nepotvrzený, nejde pouze o ručně psaný text. Do hodnocení se nezahrnou, dokud je kontrolující osoba nepotvrdí, neupraví nebo nepřepíše. Čitelný zdroj se nikdy nezařadí do fronty jen kvůli svému médiu.",
       "heldForReview": "Pozastaveno ke kontrole",
       "holdOutOfScoring": "Vyloučit z hodnocení",
       "inScoring": "Zahrnuto do hodnocení",
@@ -220,10 +232,10 @@
       "title": "Referenční fakta"
     },
     "claimDetail": {
-      "escalatedReview": "Předáno týmu pro důkazy — dokud nebude vyřešen související rozpor, nelze zde žádný závěr potvrdit ani zpochybnit.",
+      "escalatedReview": "Předáno týmu pro důkazy; dokud nebude vyřešen související rozpor, nelze zde žádný závěr potvrdit ani zpochybnit.",
       "flagDispute": "Označit rozpor",
       "humanReview": "Lidská kontrola",
-      "interpretationCaveat": "Jedno z použitých fakt nese závažnou výkladovou výhradu — nejistý je význam důkazu, nikoli médium, z něhož pochází.",
+      "interpretationCaveat": "Jedno z použitých fakt nese závažnou výkladovou výhradu: nejistý je význam důkazu, nikoli médium, z něhož pochází.",
       "notVerifiable": {
         "reopen": "Znovu otevřít → porovnat se záznamy",
         "reopenExplanation": "<strong>Odloženo jako neověřitelné.</strong> Pokud lze toto tvrzení ve skutečnosti ověřit, znovu je otevřete: AVT zachová vaši změnu klasifikace a provede pouze dříve přeskočené porovnání se záznamy.",
@@ -233,15 +245,15 @@
         "add": "Přidat poznámku / opravu",
         "heading": "Vaše poznámka · {savedAt}",
         "headingUndated": "Vaše poznámka",
-        "placeholder": "Zaznamenejte opravu nebo vysvětlení. Uložená poznámka se vztahuje pouze k tomuto tvrzení — nemění závěr ani soubor referenčních faktů.",
+        "placeholder": "Zaznamenejte opravu nebo vysvětlení. Uložená poznámka se vztahuje pouze k tomuto tvrzení; nemění závěr ani soubor referenčních faktů.",
         "saveCorrection": "Uložit opravu"
       },
       "overridden": "Změněno",
-      "overrideNotice": "Závěr změněn na <strong>{verdict}</strong> — níže je beze změny zobrazena vlastní analýza nástroje.",
+      "overrideNotice": "Závěr změněn na <strong>{verdict}</strong>; níže je beze změny zobrazena vlastní analýza nástroje.",
       "overrideTooltip": "Kontrolující osoba zaznamenala jiný závěr. Níže je beze změny zobrazena vlastní analýza nástroje.",
       "overrideVerdict": "Změnit závěr",
       "recordConflict": {
-        "description": "Dva referenční fakty se týkají stejné otázky — <strong>{subject}</strong> — ale odporují si. Oba pocházejí ze zdrojů s <strong>vysokou mírou jistoty</strong>, nejde tedy o problém spolehlivosti: vnitřně rozporné jsou samotné záznamy. AVT nevydá závěr ani tvrzení neohodnotí, protože volba rozhodujícího záznamu vyžaduje váš úsudek a jeho zaznamenání — nástroj ji nesmí provést bez upozornění.",
+        "description": "Dva referenční fakty se týkají stejné otázky (<strong>{subject}</strong>), ale odporují si. Oba pocházejí ze zdrojů s <strong>vysokou mírou jistoty</strong>, nejde tedy o problém spolehlivosti: vnitřně rozporné jsou samotné záznamy. AVT nevydá závěr ani tvrzení neohodnotí, protože volba rozhodujícího záznamu vyžaduje váš úsudek a jeho zaznamenání; nástroj ji nesmí provést bez upozornění.",
         "escalatedNotice": "Označeno pro tým pro důkazy. Rozpor v záznamech zůstává otevřený a započítaný, dokud nebude vybrán rozhodující záznam.",
         "flagForEvidenceTeam": "Označit pro tým pro důkazy",
         "governed": "<strong>{value}</strong> je rozhodující: tvrzení se posuzuje podle tohoto záznamu. Druhý záznam zůstává evidován.",
@@ -258,46 +270,46 @@
       "score": {
         "anchorFactsDisagree": "Referenční fakta si odporují",
         "conflictCount": "{count, plural, one {# rozpor} few {# rozpory} other {# rozporů} many {# rozporu}}",
-        "noCoverage": "<strong>Záznamy o tom mlčí.</strong> Žádný referenční fakt v databázi se tohoto tvrzení netýká. Nejde o nízké hodnocení — zatím jednoduše není s čím tvrzení porovnat.",
-        "notVerifiable": "<strong>Nejde o ověřitelné tvrzení.</strong> Takové tvrzení nelze rozhodnout žádným dokumentem — jde například o hypotetickou situaci, předpověď, prohlášení o úmyslu, právní závěr nebo příliš neurčité tvrzení. Odkládá se bez hodnocení.",
+        "noCoverage": "<strong>Záznamy o tom mlčí.</strong> Žádný referenční fakt v databázi se tohoto tvrzení netýká. Nejde o nízké hodnocení: zatím jednoduše není s čím tvrzení porovnat.",
+        "notVerifiable": "<strong>Nejde o ověřitelné tvrzení.</strong> Takové tvrzení nelze rozhodnout žádným dokumentem: jde například o hypotetickou situaci, předpověď, prohlášení o úmyslu, právní závěr nebo příliš neurčité tvrzení. Odkládá se bez hodnocení.",
         "outOf100": "<strong>/ 100</strong> míra podpory",
         "supportCount": "{count, plural, one {# podpůrný fakt} few {# podpůrné fakty} other {# podpůrných faktů} many {# podpůrného faktu}}",
         "verdictWithheld": "Závěr nevydán"
       },
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdroje} other {# zdrojů}}",
-      "whyScore": "Odůvodnění hodnocení — referenční fakta"
+      "whyScore": "Odůvodnění hodnocení: referenční fakta"
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektivní, ověřitelné tvrzení — hodnotí se podle záznamů. Patří sem i tvrzení formulovaná jako přiznání nebo popření: posuzuje se jejich podstata, nikoli samotná slova."
+        "hint": "Objektivní, ověřitelné tvrzení; hodnotí se podle záznamů. Patří sem i tvrzení formulovaná jako přiznání nebo popření: posuzuje se jejich podstata, nikoli samotná slova."
       },
       "opinion": {
-        "hint": "Hodnotící soud nebo charakteristika — žádný dokument je nemůže potvrdit ani vyvrátit, proto se odkládá bez hodnocení.",
+        "hint": "Hodnotící soud nebo charakteristika: žádný dokument je nemůže potvrdit ani vyvrátit, proto se odkládá bez hodnocení.",
         "label": "Názor"
       },
       "setAside": "odloženo",
       "unverifiable": {
-        "hint": "Tvrzení, které nelze rozhodnout žádným dokumentem — hypotetická situace, předpověď, prohlášení o úmyslu či přesvědčení, právní závěr nebo příliš neurčité tvrzení. Odkládá se bez hodnocení. Liší se od stavu Bez pokrytí, kdy je fakt ověřitelný, ale záznamy o něm pouze mlčí.",
+        "hint": "Tvrzení, které nelze rozhodnout žádným dokumentem: hypotetická situace, předpověď, prohlášení o úmyslu či přesvědčení, právní závěr nebo příliš neurčité tvrzení. Odkládá se bez hodnocení. Liší se od stavu Bez pokrytí, kdy je fakt ověřitelný, ale záznamy o něm pouze mlčí.",
         "label": "Neověřitelné"
       }
     },
     "confidence": {
       "interpretation": "Výklad",
-      "tooltip": "Jistota výkladu — nakolik je význam tohoto důkazu jednoznačný. Nezávisí na médiu zdroje (rukopis, sken apod.)."
+      "tooltip": "Jistota výkladu: nakolik je význam tohoto důkazu jednoznačný. Nezávisí na médiu zdroje (rukopis, sken apod.)."
     },
     "confirm": {
       "acknowledge": "Vzít na vědomí",
       "recordConflict": "Potvrdit řešení",
-      "supported": "Potvrdit — připraveno",
+      "supported": "Potvrdit: připraveno",
       "verdict": "Potvrdit závěr"
     },
     "disposition": {
-      "contested": "Závěr je jednoznačný, ale výklad jednoho z použitých faktů je sporný — před schválením si zaslouží vaši pozornost.",
+      "contested": "Závěr je jednoznačný, ale výklad jednoho z použitých faktů je sporný; před schválením si zaslouží vaši pozornost.",
       "contradicted": "Záznamy se od tohoto tvrzení odchylují. Než bude možné závěr potvrdit, musí rozhodnout člověk.",
       "nocover": "Žádný referenční fakt se tohoto tvrzení netýká, takže je nelze s ničím porovnat. Schválení je nepovinné.",
-      "notverifiable": "Odloženo jako neověřitelné — schválení je nepovinné. Pokud lze tvrzení ve skutečnosti ověřit, znovu je otevřete níže.",
-      "recordconflict": "Dva důkazní materiály ve spise si odporují. Výše určete, který je rozhodující, nebo věc označte pro tým pro důkazy — nástroj nerozhodne za vás.",
-      "supported": "Záznamy toto tvrzení potvrzují. Svým schválením potvrdíte, že je nástroj vyložil správně — není třeba žádný hodnotící úsudek.",
+      "notverifiable": "Odloženo jako neověřitelné; schválení je nepovinné. Pokud lze tvrzení ve skutečnosti ověřit, znovu je otevřete níže.",
+      "recordconflict": "Dva důkazní materiály ve spise si odporují. Výše určete, který je rozhodující, nebo věc označte pro tým pro důkazy; nástroj nerozhodne za vás.",
+      "supported": "Záznamy toto tvrzení potvrzují. Svým schválením potvrdíte, že je nástroj vyložil správně; není třeba žádný hodnotící úsudek.",
       "tension": "Záznamy toto tvrzení podporují jen částečně. Než bude možné závěr potvrdit, zvažte výše uvedená podpůrná a odporující fakta."
     },
     "documents": {
@@ -356,7 +368,7 @@
       "failed": "Neuloženo",
       "failedTitle": "Vaše změna nebyla uložena"
     },
-    "sourceMediumTooltip": "Médium zdroje — neutrální popis. Samo o sobě nesnižuje míru jistoty.",
+    "sourceMediumTooltip": "Médium zdroje: neutrální popis. Samo o sobě nesnižuje míru jistoty.",
     "states": {
       "contradicted": {
         "chip": "V rozporu",
@@ -386,7 +398,7 @@
     "verification": {
       "acceptRoutine": "Přijmout {count, plural, one {# rutinní tvrzení} few {# rutinní tvrzení} other {# rutinních tvrzení} many {# rutinního tvrzení}}",
       "attentionComplete": "<strong>Všechna tvrzení vyžadující úsudek byla vyřízena.</strong> {count, plural, one {Zbývající # rutinní závěr nevyžaduje samostatnou kontrolu.} few {Zbývající # rutinní závěry nevyžadují samostatnou kontrolu.} other {Zbývajících # rutinních závěrů nevyžaduje samostatnou kontrolu.} many {Zbývající # rutinního závěru nevyžaduje samostatnou kontrolu.}}",
-      "attentionOpen": "<strong>{count, plural, one {# tvrzení vyžaduje} few {# tvrzení vyžadují} other {# tvrzení vyžaduje} many {# tvrzení vyžaduje}} váš úsudek</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.} few {Zbývající # tvrzení jsou rutinní a nevyžadují samostatné schválení.} other {Zbývajících # tvrzení je rutinních a nevyžaduje samostatné schválení.} many {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.}}",
+      "attentionOpen": "<strong>{count, plural, one {# tvrzení vyžaduje} few {# tvrzení vyžadují} other {# tvrzení vyžaduje} many {# tvrzení vyžaduje}} váš úsudek</strong>: rozpory a sporné výklady. {routineCount, plural, one {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.} few {Zbývající # tvrzení jsou rutinní a nevyžadují samostatné schválení.} other {Zbývajících # tvrzení je rutinních a nevyžaduje samostatné schválení.} many {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} other {}})",
       "documentView": {
         "label": "Zobrazení dokumentu",
@@ -625,6 +637,7 @@
     },
     "hourlyRateMustBeNonNegative": "Hodinová sazba nesmí být záporná",
     "hours": "Hodiny",
+    "invalidNumberFormat": "Zkontrolujte formát čísla",
     "invoiceComposer": {
       "addSellerProfile": "Přidejte profil dodavatele v nastavení fakturace",
       "billedHours": "Účtované hodiny",
@@ -820,12 +833,14 @@
       "effectiveFrom": "Platnost od",
       "effectiveRateRequired": "Pro tento spis, osobu a datum není nastavena platná sazba. Přidejte sazbu nebo zaznamenejte čas jako nefakturovatelný.",
       "effectiveTo": "Platnost do",
+      "firstTableIsDefault": "První tabulka sazeb ve spisu je výchozí.",
       "hourlyRate": "Hodinová sazba",
       "logNonBillable": "Zaznamenat jako nefakturovatelný",
       "noRateEntries": "Zatím žádné sazby",
       "noRateFound": "Není nastavena žádná sazba",
       "noRateTables": "Zatím žádné tabulky sazeb",
       "ongoing": "Průběžně",
+      "onlyDefaultApplies": "Sazby se uplatní jen z výchozí tabulky spisu.",
       "override": "Přepsat",
       "perHour": "/h",
       "rateCount": "{count, plural, one {# sazba} few {# sazby} other {# sazeb} many {# sazby}}",
@@ -1401,6 +1416,18 @@
     "aiPrompt": "Pole pro zprávu AI",
     "aiThread": "Konverzace s AI",
     "analyzingSources": "Analyzuji zdroje",
+    "anonymizationPreview": {
+      "answer": "<person1>Jana Dvořáková</person1> může po <person2>Petru Svobodovi</person2> požadovat zaplacení dluhu i s úroky z prodlení.",
+      "off": "Anonymizovaný režim AI je vypnutý: AI dostane text tak, jak jste ho napsali, i s osobními údaji.",
+      "on": "Anonymizovaný režim AI je zapnutý: osobní údaje se před odesláním nahradí zástupnými hodnotami a v odpovědi se zase doplní.",
+      "prompt": "Připrav odpověď <person1>Janě Dvořákové</person1> (r. č. <nationalId>856212/1234</nationalId>, <address>Lipová 14, Brno</address>) ohledně dluhu <person2>Petra Svobody</person2>.",
+      "steps": {
+        "answered": "AI odpoví",
+        "restored": "Čtete",
+        "sent": "AI dostane",
+        "written": "Píšete"
+      }
+    },
     "anonymizedMode": "Anonymizovaný režim AI",
     "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
     "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",
@@ -1438,6 +1465,8 @@
     },
     "answerQuote": {
       "showInDecision": "Zobrazit v rozhodnutí",
+      "unverified": "Citaci se nepodařilo ověřit",
+      "unverifiedHint": "Citovaná rozhodnutí tento text doslovně neobsahují",
       "verified": "Ověřená citace",
       "verifiedHint": "Doslovně v {source}"
     },
@@ -1507,7 +1536,7 @@
       "updatingDescription": "Vaše rozšíření stella je ve starší verzi. Chrome jej aktualizuje automaticky, obvykle během několika hodin, a pak pro vás stella bude moct znovu otevírat a číst weby."
     },
     "cancelQueuedMessage": "Zrušit zařazenou zprávu",
-    "caseLawGreeting": "Zeptejte se na toto rozhodnutí — plný text je k dispozici.",
+    "caseLawGreeting": "Zeptejte se na toto rozhodnutí; plný text je k dispozici.",
     "chatAbout": "Vložit do AI chatu",
     "choosePromptImprovementStrategy": "Možnosti vylepšení zadání",
     "commandsSection": "Příkazy",
@@ -1557,6 +1586,8 @@
       "full": "{percent} % zaplněno",
       "instructions": "Systémové pokyny",
       "percent": "{percent} %",
+      "reported": "Podle údajů programovacího agenta ve vašem počítači po jeho poslední odpovědi. Agent si kontext spravuje sám.",
+      "reportedTokens": "{used} / {total} tokenů",
       "summary": "Shrnutí starších zpráv",
       "summaryWithCount": "Shrnutí {count} starších zpráv",
       "title": "Kontext konverzace",
@@ -1657,6 +1688,50 @@
     "loadEarlierMessages": "Načíst starší zprávy",
     "loadEarlierMessagesError": "Starší zprávy se nepodařilo načíst",
     "loadingEarlierMessages": "Načítání starších zpráv…",
+    "localRun": {
+      "cloud": "Cloud stella",
+      "errorLimitReached": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Zkuste to znovu, až se limit obnoví.",
+      "errorLimitResetsAt": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Znovu to můžete zkusit po {time}.",
+      "errorNeedsLogin": "Programovací agent ve vašem počítači vyžaduje nové přihlášení. Přihlaste se přes stella desktop a zkuste to znovu.",
+      "errorUnavailable": "Váš počítač přestal tuto odpověď zpracovávat. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
+      "filesNotShared": "Soubory, které se nepodařilo sdílet, zůstávají ve vašem počítači: {fileNames}",
+      "onThisComputer": "{harness} v tomto počítači",
+      "permissionAboveLimit": "Vaše organizace to nepovoluje",
+      "permissionAskDescription": "Soubory ve složce chatu upravuje sám; na vše ostatní se zeptá.",
+      "permissionAutoDescription": "Co považuje za bezpečné, udělá sám; na zbytek se zeptá.",
+      "permissionFullAuto": "Plně automaticky",
+      "permissionFullAutoDescription": "Na nic uvnitř složky chatu se neptá; než změní něco ve vašem počítači, vždy se zeptá.",
+      "permissionSandboxed": "Běží v izolovaném prostředí; než změní něco ve vašem počítači, zeptá se.",
+      "permissionUnavailable": "V tomto počítači není k dispozici",
+      "permissions": "Oprávnění",
+      "refusalConflictingRunMode": "Tento požadavek se má spustit zároveň v cloudovém agentovi i ve vašem počítači. Vyberte jedno v nabídce Spustit na.",
+      "refusalHarnessUnavailable": "Programovací agent ve vašem počítači teď tento požadavek nemůže převzít. Zkontrolujte ho ve stella desktop.",
+      "refusalModelUnavailable": "Programovací agent ve vašem počítači už tento model nenabízí. Vyberte jiný v nabídce Spustit na.",
+      "refusalNoComputer": "Žádný z vašich počítačů není připojen. Otevřete stella desktop a odešlete zprávu znovu.",
+      "refusalPermissionAboveLimit": "Vaše organizace tato oprávnění programovacímu agentovi ve vašem počítači nepovoluje. Vyberte jinou možnost v nabídce Oprávnění.",
+      "refusalPermissionUnavailable": "Programovací agent ve vašem počítači s těmito oprávněními běžet nemůže. Vyberte jinou možnost v nabídce Oprávnění.",
+      "refusalTooLarge": "Tato konverzace je příliš dlouhá na předání do vašeho počítače. Pro spuštění tam začněte nový chat.",
+      "refusalUnavailable": "Spouštění chatů ve vašem počítači není pro váš účet dostupné.",
+      "runOn": "Spustit na",
+      "selectionLabel": "{harness} · {model}",
+      "stateLimitUntil": "Limit vyčerpán do {time}",
+      "stateNeedsLogin": "Vyžaduje přihlášení",
+      "stateNotInstalled": "Není nainstalováno",
+      "stateOffline": "Počítač je offline",
+      "stateUnavailable": "Momentálně nedostupné",
+      "stateUnsupported": "Tato verze není podporována",
+      "waitingForComputer": "Čeká se, až se váš počítač znovu připojí…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Vyberte vše, co platí",
+      "dismiss": "Zamítnout a zastavit",
+      "secretAnswer": "Odpověď je skrytá",
+      "secretPlaceholder": "Vaše odpověď zůstane skrytá"
+    },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {Na vás čeká # chat} few {Na vás čekají # chaty} many {Na vás čeká # chatu} other {Na vás čeká # chatů}}",
+      "working": "{count, plural, one {Pracuje # chat} few {Pracují # chaty} many {Pracuje # chatu} other {Pracuje # chatů}}"
+    },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# další} few {+# další} many {+# další} other {+# dalších}}",
@@ -1754,7 +1829,7 @@
       "tryOne": "Začni s jedním z těchto"
     },
     "queuedAttachmentCount": "{count, plural, one {# příloha} few {# přílohy} other {# příloh} many {# přílohy}}",
-    "queuedNotice": "Zařazeno — odešle se po dokončení aktuální odpovědi",
+    "queuedNotice": "Zařazeno: odešle se po dokončení aktuální odpovědi",
     "reasoning": "Uvažování",
     "reasoningTokens": "{count, plural, one {# token uvažování} few {# tokeny uvažování} other {# tokenů uvažování} many {# tokenu uvažování}}",
     "recapLoading": "Shrnutí konverzace…",
@@ -1798,11 +1873,20 @@
       "toolbarLabel": "Vybraný text"
     },
     "sendError": "Při odesílání zprávy došlo k problému. Pokud chyba přetrvává, kontaktujte podporu.",
+    "sendErrorActiveFileNoText": "V otevřeném souboru není text, který by stella dokázala přečíst. Zavřete ho, nebo otevřete jiný soubor.",
+    "sendErrorActiveFileTooLarge": "Otevřený soubor je pro chat příliš velký. Zavřete ho, nebo otevřete menší soubor.",
+    "sendErrorAgentRunsDisabled": "Běhy agenta tu nejsou k dispozici. Obraťte se na správce pracovního prostoru.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovat jednu přílohu, takže se nic neodeslalo. Odeberte soubor, nebo odešlete zprávu bez anonymizace.",
+    "sendErrorAttachmentNoText": "V přiloženém souboru není text, který by stella dokázala přečíst. Odeberte ho, nebo přiložte jiný soubor.",
+    "sendErrorAttachmentUnsupported": "Tento typ souboru nelze přiložit k chatu. Přiložte jiný soubor.",
     "sendErrorConnectionFailed": "Připojení k chatu selhalo. Zkontrolujte připojení a zkuste to znovu.",
     "sendErrorContinuationRejected": "V chatu se nepodařilo pokračovat. Začněte znovu odesláním nové zprávy.",
+    "sendErrorDocumentUnsupported": "Tento model nedokáže přečíst jeden z přiložených dokumentů. Odeberte přílohu, nebo přepněte na model, který ji podporuje.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnou odpověď. Zkuste to znovu, nebo zprávu přeformulujte.",
+    "sendErrorImageInvalid": "Tento obrázek se pro model nepodařilo připravit. Nahrajte menší obrázek, nebo přepněte model.",
+    "sendErrorImageUnsupported": "Tento model nedokáže přečíst přiložené obrázky. Odeberte obrázek, nebo přepněte na model, který obrázky podporuje.",
     "sendErrorLoopDetected": "Odpověď AI se příliš opakovala. Zkuste to znovu s užším požadavkem.",
+    "sendErrorMessageEmpty": "Zpráva neobsahuje žádný text k odeslání. Napište dotaz nebo přiložte soubor a pak ji odešlete.",
     "sendErrorModelUnavailable": "Nastavený AI model už není dostupný. Požádejte správce pracovního prostoru, aby model aktualizoval v nastavení organizace.",
     "sendErrorNotStarted": "Konverzace je stále zaneprázdněná. Chvíli počkejte a zkuste to znovu.",
     "sendErrorPreparationFailed": "Zprávu se nepodařilo připravit. Znovu otevřete chat a zkuste to znovu.",
@@ -1812,6 +1896,7 @@
     "sendErrorQuotaExhausted": "Kvóta poskytovatele AI je vyčerpaná. Zkuste to za minutu znovu nebo se obraťte na správce pracovního prostoru.",
     "sendErrorStreamIncomplete": "Odpověď AI se přerušila dřív, než byla dokončena. Zkuste to znovu.",
     "sendErrorTimedOut": "Chat neodpověděl včas. Zkuste to znovu.",
+    "sendErrorToolsUnsupported": "Tento model neumí používat nástroje, takže nemůže odpovídat na otázky k vašemu spisu. Přepněte na model, který nástroje podporuje.",
     "sendPrompt": "Odeslat zprávu",
     "sendQueuedMessageNow": "Odeslat hned",
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
@@ -1858,7 +1943,7 @@
       "unavailable": "Graf se nepodařilo vybrat. Zobrazuje se tabulka.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Pracuji s kontextem",
+    "thinking": "Přemýšlení",
     "threadFiles": {
       "title": "Soubory v tomto chatu"
     },
@@ -1876,6 +1961,7 @@
       "boe_search_legislation": "Vyhledávání v BOE",
       "borme_get_summary": "Denní souhrn BORME",
       "business_registry_lookup": "Vyhledávání v obchodním rejstříku",
+      "command_execution": "Spouštění příkazu",
       "compare_versions": "Porovnávání verzí",
       "configure_template_fields": "Nastavit pole vzoru",
       "connect_connector": "Žádost o připojení konektoru",
@@ -1901,9 +1987,12 @@
       "execute_typescript": "Čtu data spisu",
       "expand-chat-history": "Čtení historie chatu",
       "fetch_url": "Čtení stránky",
+      "file_change": "Úprava souborů",
       "fill_template": "Vyplňování vzoru",
       "find_text": "Vyhledávání textu v dokumentu",
       "get_document_outline": "Čtení osnovy dokumentu",
+      "harness_unsupported_item": "Krok, který stella nedokáže zobrazit",
+      "harness_web_search": "Hledání na webu",
       "infosoud_lookup_case": "Vyhledání spisu v InfoSoudu",
       "link_matter_contact": "Propojit kontakt se spisem",
       "list_stories": "Výpis částí dokumentu",
@@ -1920,7 +2009,9 @@
       "remember": "Ukládání do paměti",
       "remove_matter_member": "Odebrat člena spisu",
       "reply_comment": "Odpovídání na komentář",
+      "request_permissions": "Žádost o oprávnění",
       "request_secret": "Žádost o soukromý přístupový údaj",
+      "request_user_input": "Žádost o upřesnění",
       "resolve_comment": "Řešení komentáře",
       "review_folder_consistency": "Kontrola konzistence složky",
       "run-stella-query": "Čtu data spisu",
@@ -1939,6 +2030,7 @@
       "search-past-chats": "Prohledávání předchozích chatů",
       "set_field_value": "Nastavit hodnotu pole",
       "set_practice_jurisdictions": "Nastavit jurisdikce",
+      "show_app": "Zobrazení interaktivního přehledu",
       "show_in_document": "Zobrazení v dokumentu",
       "spawn_subagents": "Delegování na dílčí agenty",
       "suggestChangesApplied": "{applied, plural, one {Použita # úprava} few {Použity # úpravy} other {Použito # úprav} many {Použito # úpravy}}",
@@ -1962,7 +2054,7 @@
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znaků} many {# znaku}}",
       "consoleLogs": "Výstup konzole",
       "exactCall": "Přesné volání",
-      "failed": "Tento krok selhal — stella si poradí jinak.",
+      "failed": "Tento krok selhal; stella si poradí jinak.",
       "field": "Pole",
       "input": "Vstup",
       "interrupted": "Přerušeno před dokončením",
@@ -1980,15 +2072,19 @@
       "replyReadyBody": "stella dokončila odpověď ve vašem chatu.",
       "replyReadyTitle": "Odpověď je hotová"
     },
+    "turnStatus": {
+      "waitingForApproval": "Čekání na schválení",
+      "waitingForInput": "Čekání na zadání",
+      "writing": "Psaní"
+    },
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
-    "usageFallbackNotice": "Denní příděl AI je vyčerpán — odpovědi pokračují na standardním modelu.",
+    "usageFallbackNotice": "Denní příděl AI je vyčerpán; odpovědi pokračují na standardním modelu.",
     "videoContent": "Vygenerované video",
     "webSearch": {
       "answer": "Shrnutí webového vyhledávání",
       "answerDisclaimer": "Sestaveno z výsledků veřejného webu níže. Ověřte si je proti uvedeným zdrojům.",
       "fetchedFrom": "z {source}",
-      "openSource": "Otevřít {source} na nové kartě",
       "sources": "Zdroje",
       "toggleDescription": "Umožnit modelu v této konverzaci vyhledávat na veřejném webu a číst stránky.",
       "toggleLabel": "Vyhledávání na webu",
@@ -2342,6 +2438,7 @@
     "notes": "Poznámky",
     "open": "Otevřít",
     "openInNewTab": "Otevřít na nové kartě",
+    "openInSidePanel": "Otevřít v bočním panelu",
     "openInStella": "Otevřít ve stelle",
     "openOriginalSource": "Otevřít originál",
     "options": "Možnosti",
@@ -2594,9 +2691,16 @@
       "value": "Hodnota pole"
     },
     "datePrecision": "Přesnost data",
+    "deleteBlockedByMattersCount": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
+    "deleteBlockedCount": "Neodebrané kontakty: {count}",
     "deleteContact": "Smazat kontakt",
     "deleteContactBlockedByMatters": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
     "deleteContactConfirmDescription": "Opravdu chcete smazat tento kontakt? Tuto akci nelze vrátit.",
+    "deleteNotFoundCount": "Nenalezené kontakty: {count}.",
+    "deleteSelected": "Smazat {count, plural, one {# kontakt} few {# kontakty} many {# kontaktu} other {# kontaktů}}",
+    "deleteSelectedConfirm": "Trvale smazat {count, plural, one {tento kontakt} few {tyto # kontakty} many {# kontaktu} other {těchto # kontaktů}}? Tuto akci nelze vrátit zpět.",
+    "deleteSelectedLimit": "Vyberte nejvýše {limit} kontaktů, které chcete smazat najednou.",
+    "deletedCount": "Smazáno {count, plural, one {# kontakt} few {# kontakty} many {# kontaktu} other {# kontaktů}}",
     "editContact": "Upravit kontakt",
     "emailTypes": {
       "other": "Jiný",
@@ -2727,6 +2831,12 @@
       "taxIdSchemeBrCpfCnpj": "Brazilské CPF/CNPJ (kontrolní součet)",
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktů",
+      "undoImport": "Vrátit import ({count})",
+      "undoImportConfirm": "Trvale smazat {count, plural, one {kontakt vytvořený} few {# kontakty vytvořené} many {# kontaktu vytvořeného} other {# kontaktů vytvořených}} tímto importem? Tuto akci nelze vrátit zpět.",
+      "undoImportTitle": "Vrátit tento import?",
+      "undoneRow": "Odstraněno vrácením importu",
+      "undoneSummary": "Vrácení importu odstranilo {count, plural, one {# vytvořený kontakt} few {# vytvořené kontakty} many {# vytvořeného kontaktu} other {# vytvořených kontaktů}}.",
+      "undoneToast": "Import vrácen: {count, plural, one {smazán # kontakt} few {smazány # kontakty} many {smazáno # kontaktu} other {smazáno # kontaktů}}",
       "validateFailed": "Kontakty se nepodařilo zkontrolovat.",
       "warning": {
         "ignored_populated_column": "Sloupec „{column}“ obsahuje data, ale je ignorován.",
@@ -2756,6 +2866,7 @@
     "saved": "Údaje kontaktu byly uloženy.",
     "search": "Hledat v kontaktech...",
     "searchCountries": "Hledat země",
+    "selectContact": "Vybrat {name}",
     "title": "Klienti",
     "type": {
       "organization": "Organizace",
@@ -2772,6 +2883,28 @@
     },
     "backToList": "Zpět na korespondenci",
     "createAddress": "Vytvořit adresu",
+    "dataBox": {
+      "acceptedAt": "Doručeno",
+      "acceptedByFiction": "fikcí",
+      "acceptedByLogin": "přihlášením",
+      "channel": "Datová schránka",
+      "contact": "Kontakt: {name}",
+      "deliveredAt": "Dodáno do schránky",
+      "delivery": "Doručení",
+      "directionUnknown": "Směr neznámý",
+      "messageId": "ID zprávy",
+      "moreContacts": "Této datové schránce odpovídají další kontakty.",
+      "openFile": "Otevřít soubor .zfo",
+      "personalDelivery": "Do vlastních rukou",
+      "recipient": "Adresát",
+      "recipientReference": "Č. j. / sp. zn. adresáta",
+      "sealNotVerified": "Elektronická pečeť souboru se uchovává spolu s ním a neověřuje se.",
+      "senderReference": "Č. j. / sp. zn. odesílatele",
+      "sent": "Odeslaná",
+      "statedInFile": "Datová zpráva (dle údajů v souboru)",
+      "toHands": "K rukám: {name}",
+      "uploaded": "Nahraná datová zpráva"
+    },
     "deliveredBy": "Doručil <address>{sender}</address>",
     "deliveredByAuthenticated": "Doručil <address>{sender}</address> · ověřeno",
     "deliveryAuthentication": "Ověření doručení",
@@ -2942,6 +3075,7 @@
       "clauseDirectivesInvalid": "Propojené ustanovení obsahuje neplatné direktivy. Před vyplněním vzoru ustanovení opravte.",
       "clauseDirectivesInvalidDetails": "Ustanovení {clauseName} na pozici {slotName} obsahuje neplatné direktivy. Otevřete editor ustanovení, opravte uvedené odstavce a znovu vyplňte vzor.",
       "clauseDirectivesOverrideInvalidDetails": "Přepsané ustanovení {clauseName} na pozici {slotName} obsahuje neplatné direktivy. Před dalším vyplněním opravte přepsané znění v tomto vyplnění.",
+      "correspondenceSourceChanged": "Tato korespondence se mezitím změnila. Načtěte stránku znovu a akci zopakujte.",
       "deeplKeyRejected": "Uložený klíč DeepL byl odmítnut. Nahraďte ho v nastavení organizace.",
       "deeplQuotaExceeded": "Limit znaků DeepL pro tuto organizaci byl vyčerpán.",
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nejsou povoleny. Použijte trvalou e-mailovou adresu.",
@@ -2967,6 +3101,8 @@
       "matterContactCapacityReached": "Tento spis dosáhl limitu kontaktů. Před přidáním dalšího kontaktu odeberte jedno propojení s kontaktem.",
       "mcpAuthorizationApprovalRequired": "Než se budete moci připojit, správce musí tento konektor schválit.",
       "notOrganizationMember": "Nejste členem této organizace.",
+      "organizationDataBoxLimitReached": "Tato organizace dosáhla limitu datových schránek. Než přidáte další, jednu odeberte.",
+      "organizationDataBoxesChanged": "Datové schránky organizace se mezitím změnily. Načtěte stránku znovu a akci zopakujte.",
       "organizationLastOwner": "Organizace musí mít vlastníka. Nejprve převeďte vlastnictví.",
       "organizationMemberLimitReached": "Tato organizace dosáhla limitu členů.",
       "providerKeyRejected": "Poskytovatel odmítl klíč API.",
@@ -3142,7 +3278,6 @@
     "noFileInVersion": "V této verzi není žádný soubor",
     "noFullScreenPreview": "Tento typ souboru nemá náhled na celou obrazovku.",
     "noLabel": "Bez označení",
-    "openInSidePanel": "Otevřít v bočním panelu",
     "redlinePreview": "Sledované změny",
     "removeLabel": "Odebrat označení",
     "saveComparison": "Uložit porovnání",
@@ -3382,7 +3517,7 @@
     "doubleClickFooter": "Dvojklikem přidáte zápatí",
     "doubleClickHeader": "Dvojklikem přidáte záhlaví",
     "downloadCheckpoint": "Stáhnout kontrolní kopii",
-    "editAuthRequired": "Před úpravou dokumentu obnovte Stellu a znovu se přihlaste.",
+    "editAuthRequired": "Před úpravou dokumentu obnovte stellu a znovu se přihlaste.",
     "editDownloadFailed": "Dokument se nepodařilo stáhnout pro úpravy.",
     "editLink": "Upravit odkaz",
     "editOpenFailed": "Dokument se nepodařilo otevřít pro úpravy.",
@@ -3455,8 +3590,8 @@
     "redoShortcut": "Znovu (Ctrl+Y)",
     "rejectChange": "Odmítnout změnu",
     "removeLink": "Odebrat odkaz",
-    "renderErrorDescription": "Při vykreslování této komponenty došlo k chybě. Zkuste to znovu nebo kontaktujte podporu, pokud problém přetrvává.",
-    "saveCheckpointFailedDescription": "DOCX se lokálně vytvořil, ale Stelle se nepodařilo nahrát checkpoint. Nechte editor otevřený a zkuste uložit znovu.",
+    "renderErrorDescription": "Tuto část dokumentu se nepodařilo zobrazit. Načtěte stránku znovu, a pokud se to bude opakovat, dejte nám vědět.",
+    "saveCheckpointFailedDescription": "DOCX se lokálně vytvořil, ale stelle se nepodařilo nahrát checkpoint. Nechte editor otevřený a zkuste uložit znovu.",
     "saveCheckpointFailedTitle": "Uložení se nepodařilo nahrát",
     "saveEditorUnavailableDescription": "Editor ještě není připravený. Počkejte, až se dokument načte, a zkuste uložit znovu.",
     "saveEditorUnavailableTitle": "Editor není připravený",
@@ -3863,6 +3998,8 @@
     "reopenTab": "Znovu otevřít {name}",
     "resizePane": "Změnit šířku panelu",
     "review": {
+      "acceptChange": "Přijmout změnu",
+      "acceptFinding": "Přijmout zjištění",
       "actionNeeded": "K řešení",
       "addComment": "Přidat jako komentář",
       "addNote": "Přidat komentář pro protistranu",
@@ -3903,7 +4040,10 @@
         "dismissed": "Zamítnuto"
       },
       "description": "Vyberte schválený playbook, referenční dokumenty nebo obojí.",
+      "dismissFinding": "Zamítnout zjištění",
       "documentChanged": "Dokument se od této kontroly změnil.",
+      "documentCutNotice": "<strong>Dokument {documentName} nebyl přečten celý.</strong> Je pro tento model příliš dlouhý, proto bylo vynecháno přibližně {percent} jeho textu. Pozice bez odpovědi je označena ke kontrole, protože odpověď může být ve vynechané části.",
+      "documentTooLarge": "Tento dokument je příliš dlouhý na to, aby z něj tento model přečetl dostatečnou část. Zkuste model s větším kontextovým oknem.",
       "export": {
         "counterparty": "Stáhnout pro protistranu",
         "counterpartyFailed": "Dokument se nepodařilo uložit",
@@ -3926,6 +4066,7 @@
       "history": {
         "backToLatest": "Zpět na poslední",
         "decided": "rozhodnuto {decided, number} z {total, number}",
+        "fromTable": "Z tabulky",
         "references": "{count, plural, one {# reference} few {# reference} other {# referencí} many {# reference}}"
       },
       "impact": {
@@ -3950,7 +4091,6 @@
         "unanchored": "Bez vazby na ustanovení"
       },
       "newTopic": "Nové téma kontroly",
-      "noChangeNeeded": "Není třeba měnit",
       "noEditor": "Změny přijmete po otevření dokumentu",
       "noMaterialDifferences": "Nenalezeny žádné podstatné rozdíly",
       "noPassage": "Žádná pasáž",
@@ -4033,6 +4173,11 @@
         "noSide": "bez strany",
         "proposedFromReferences": "pozice navržené z referencí",
         "unnamedReferences": "{count, plural, one {# referenční dokument} few {# referenční dokumenty} other {# referenčních dokumentů} many {# referenčního dokumentu}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Úplná kontrola této verze</link> s odkazy a navrhovanými změnami je k dispozici v historii kontrol.",
+        "origin": "<strong>Spuštěno z tabulky.</strong> Tato zjištění byla vyhodnocena podle hodnot vytěžených pro tabulku, proto neodkazují na dokument a neobsahují navrhované změny.",
+        "runAnotherReview": "Odkazy a navrhované změny získáte přes tlačítko <action>{label}</action>."
       },
       "targetAsReference": "Kontrolovaný dokument nemůže být vlastní referencí.",
       "targetColumn": "Tento dokument",
@@ -4262,7 +4407,7 @@
       "derivedQuestion": "Otázka pro získání odpovědi",
       "derivedType": "Formát odpovědi",
       "descriptionPlaceholder": "Co tento playbook kontroluje?",
-      "disabledBadge": "Vypnuto — při spuštění se přeskočí",
+      "disabledBadge": "Vypnuto: při spuštění se přeskočí",
       "discardChanges": "Zahodit změny",
       "duplicatePosition": "Duplikovat pozici",
       "empty": "Zatím žádné playbooky",
@@ -4277,7 +4422,7 @@
         "restricted": "Odpověď nesmí být uvedena"
       },
       "extractOnlyBadge": "Pouze extrakce",
-      "extractOnlyDescription": "Bez hodnocení — hodnota se zapíše do tabulky.",
+      "extractOnlyDescription": "Bez hodnocení; hodnota se zapíše do tabulky.",
       "extraction": "Extrakce",
       "extractionAuto": "Automatická",
       "extractionManual": "Ruční",
@@ -4447,7 +4592,7 @@
         },
         "insideLabel": "Uvnitř",
         "startBlank": "Začít od nuly",
-        "startBlankHint": "Prázdná dovednost — když přesně víte, co chcete.",
+        "startBlankHint": "Prázdná dovednost: když přesně víte, co chcete.",
         "subtitle": "Vyberte výchozí podobu. Připravíme složky a provedeme vás jejich vyplněním.",
         "title": "Jak má vaše dovednost fungovat?"
       },
@@ -4522,6 +4667,10 @@
         "textRestored": "Text komentáře obnoven",
         "undoShortcut": "Vrátit změnu zvýraznění nebo komentáře",
         "visibilityRestored": "Sdílení obnoveno"
+      },
+      "orphaned": {
+        "description": "Text tohoto dokumentu se od jejich vytvoření změnil: označené pasáže se v něm už nepodařilo najít, nebo se v něm nyní vyskytují na více místech. V textu se proto nezobrazují.",
+        "summary": "{count, plural, one {# zvýraznění nebo komentář už neodpovídá textu} few {# zvýraznění nebo komentáře už neodpovídají textu} many {# zvýraznění nebo komentáře už neodpovídá textu} other {# zvýraznění a komentářů už neodpovídá textu}}"
       },
       "removeHighlight": "Odebrat zvýraznění",
       "sharedBadge": "Sdíleno",
@@ -4600,7 +4749,7 @@
     "chat": "Chat",
     "contacts": "Kontakty",
     "inbox": "Doručené",
-    "knowledge": "Znalosti",
+    "knowledge": "Analytika",
     "myTodos": "Moje úkoly",
     "pinned": "Připnuté",
     "recentMatters": "Nedávné spisy",
@@ -4675,7 +4824,7 @@
     "continue": "Pokračovat",
     "enterTeamName": "Zadejte výše název týmu",
     "getStarted": "Začít",
-    "inviteExternal": "Externí uživatel — bude mít přístup k vašim dokumentům",
+    "inviteExternal": "Externí uživatel: bude mít přístup k vašim dokumentům",
     "inviteHint": "Více adres oddělte čárkou, nebo vložte seznam.",
     "inviteInvalidEmail": "Neplatný e-mail: {value}",
     "inviteSubtitle": "Kolegové dostanou e-mail s odkazem pro připojení.",
@@ -5149,6 +5298,8 @@
       "betaDescription": "Vyzkoušejte funkce, které jsou stále ve vývoji",
       "betaInbox": "Doručené a oznámení",
       "betaInboxDescription": "Zobrazit Doručené a zvonek oznámení",
+      "betaLocalAgents": "Agenti na vašem počítači",
+      "betaLocalAgentsDescription": "Spouštět chaty s Codexem nebo Claude Code na vašem počítači přes stella desktop",
       "betaTimeBillingDescription": "Zobrazit sledování času, faktury a výdaje",
       "chatNotifications": "Oznámení z chatu",
       "chatNotificationsBlocked": "Oznámení jsou pro stellu v tomto prohlížeči zablokovaná. Povolte je v nastavení webu v prohlížeči.",
@@ -5338,11 +5489,16 @@
       "auditLogsActionDownload": "Stažení",
       "auditLogsActionExecute": "Spuštění",
       "auditLogsActionUpdate": "Úprava",
+      "auditLogsActorId": "ID aktéra",
+      "auditLogsAfter": "Po",
       "auditLogsAllActions": "Všechny akce",
+      "auditLogsAnyone": "Kdokoli",
+      "auditLogsBefore": "Před",
       "auditLogsChanges": "Změny",
       "auditLogsDeletedResource": "smazaná položka: {kind}",
       "auditLogsDescription": "Kdo co v této organizaci udělal a kdy.",
       "auditLogsEmpty": "Zatím žádná aktivita.",
+      "auditLogsEmptyValue": "(prázdné)",
       "auditLogsError": "Záznam aktivit se nepodařilo načíst.",
       "auditLogsExport": "Uložit záznamy",
       "auditLogsExportFailed": "Záznam aktivit se nepodařilo uložit.",
@@ -5350,6 +5506,13 @@
       "auditLogsExporting": "Ukládá se...",
       "auditLogsFrom": "Datum od",
       "auditLogsLoading": "Načítání protokolů...",
+      "auditLogsMoreChanges": "+{count, plural, one {# další} few {# další} many {# další} other {# dalších}}",
+      "auditLogsNoChanges": "Nebyly zaznamenány žádné změny polí.",
+      "auditLogsPerformer": "Původce aktivity",
+      "auditLogsPerformerAll": "Lidé i automatizace",
+      "auditLogsPerformerAutomations": "Automatizace",
+      "auditLogsPerformerPeople": "Lidé",
+      "auditLogsPersonPlaceholder": "Hledat podle jména nebo e-mailu",
       "auditLogsResourceId": "ID prostředku",
       "auditLogsResourceIdentifier": "ID prostředku: {id}",
       "auditLogsResourceType": "Typ prostředku",
@@ -5372,8 +5535,6 @@
       "auditLogsTo": "Datum do",
       "auditLogsUnavailableResource": "{kind} (není k dispozici)",
       "auditLogsUnknownResource": "neznámá položka",
-      "auditLogsUserId": "ID uživatele",
-      "auditLogsUserIdPlaceholder": "Filtrovat podle ID uživatele",
       "auditResourceKinds": {
         "agent_skill": "dovednost",
         "agent_skill_comment": "komentář k dovednosti",
@@ -5463,6 +5624,12 @@
         "ledes": "Elektronická fakturace (LEDES)",
         "title": "AI návrhy výkazů práce"
       },
+      "dataBoxes": {
+        "description": "Datová zpráva odeslaná z některé z těchto schránek se založí jako odchozí, zpráva do nich jako příchozí. Každá změna znovu odvodí směr zpráv již založených ve spisech, ke kterým máte přístup.",
+        "invalid": "ID datové schránky má sedm písmen nebo číslic.",
+        "remove": "Odebrat datovou schránku {address}",
+        "title": "Datové schránky organizace"
+      },
       "documentProcessing": {
         "description": "Automaticky rozpoznávejte text v naskenovaných PDF, aby v nich šlo vyhledávat.",
         "title": "Rozpoznávání textu v dokumentech",
@@ -5477,6 +5644,11 @@
         "reorder": "Změnit pořadí typu dokumentu",
         "title": "Typy dokumentů"
       },
+      "localRuns": {
+        "description": "Nejvíc, co smí programovací agent udělat bez ptaní, když spouští chat v počítači člena. Nižší limit platí od další zprávy každého člena; běh, který už probíhá, si svá oprávnění ponechá.",
+        "title": "Programovací agenti v počítačích členů",
+        "updated": "Oprávnění programovacích agentů byla aktualizována"
+      },
       "matterNumbering": "Číslování spisů",
       "matterNumberingDescription": "Nastavte, jak se generují referenční čísla nových spisů",
       "membersDescription": "Spravujte, kdo má přístup k této organizaci, a čekající pozvánky",
@@ -5490,7 +5662,7 @@
       "practiceJurisdictions": "Jurisdikce",
       "practiceJurisdictionsDescription": "Vyberte jurisdikce, které jsou pro vás relevantní.",
       "promptCaching": {
-        "description": "Pokud je zapnuto, stella přidává cache značky tak, aby opakované AI dotazy nad stejným dokumentem nebo vláknem stály ~10× méně a byly rychlejší. Cachované prompty zůstávají u poskytovatele AI až 5 minut a jsou omezené na vaši organizaci. Vypnutí zastaví zasílání cache značek, ale poskytovatelé si mohou prompty stále cachovat oportunisticky — pouze smlouva Zero Data Retention s poskytovatelem zcela vypne cachování na straně serveru.",
+        "description": "Pokud je zapnuto, stella přidává cache značky tak, aby opakované AI dotazy nad stejným dokumentem nebo vláknem stály ~10× méně a byly rychlejší. Cachované prompty zůstávají u poskytovatele AI až 5 minut a jsou omezené na vaši organizaci. Vypnutí zastaví zasílání cache značek, ale poskytovatelé si mohou prompty stále cachovat oportunisticky; pouze smlouva Zero Data Retention s poskytovatelem zcela vypne cachování na straně serveru.",
         "title": "Cachování promptů",
         "toggleLabel": "Povolit cachování promptů u poskytovatelů AI"
       },
@@ -5604,6 +5776,7 @@
     "citingDecisionsSortCitations": "Zmínky o tomto ustanovení",
     "citingDecisionsSortDate": "Datum rozhodnutí",
     "citingDecisionsYear": "Rok rozhodnutí",
+    "citingDecisionsYearOutOfRange": "Zadejte rok od {min} do {max}.",
     "citingDecisionsYearPlaceholder": "Všechny roky",
     "columns": {
       "act": "Předpis",
@@ -5649,7 +5822,6 @@
     "leadingDecisionsExplanation": "První zmínka v každém rozhodnutí, seřazená podle váhy citace: vážené příchozí citace zohledňující úroveň soudu, povahu citace a její stáří.",
     "noVersionInForce": "K vybranému dni nebylo účinné žádné znění tohoto předpisu.",
     "openEnded": "současnost",
-    "openProvision": "Otevřít ustanovení",
     "outline": "Obsah",
     "outlineJumpLabel": "Přejít na ustanovení",
     "outlineJumpPlaceholder": "§ 10 nebo název",
@@ -6131,7 +6303,7 @@
       "fieldSettingBrackets": "Značka ve vzoru nemůže obsahovat složené závorky. Odstraňte je z nastavení pole „{fieldPath}“.",
       "fieldWithoutMarker": "Pole „{fieldPath}“ nemá v dokumentu žádnou značku, jeho nastavení se proto neuložilo.",
       "fillFormPreview": "Jak se zobrazí ve formuláři",
-      "fillStale": "Neuložené změny — uložte, aby se vyplňovala aktuální pole.",
+      "fillStale": "Neuložené změny; uložte, aby se vyplňovala aktuální pole.",
       "filledByPerson": "Osoba",
       "formulaExampleLabel": "Příklad",
       "formulaNoFields": "Nejdříve přidejte číselné pole, aby měl vzorec co počítat.",
@@ -6341,6 +6513,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Tento spis je archivovaný a lze jej pouze číst.",
     "calculations": {
       "choose": "Vypočítat",
       "kinds": {
@@ -6360,6 +6533,10 @@
       },
       "noProperties": "Žádná vlastnost k výpočtu",
       "unavailable": "—"
+    },
+    "cellOverride": {
+      "machineValue": "Původní hodnota z AI",
+      "reasonPlaceholder": "Důvod změny (nepovinné)"
     },
     "copyToMatter": {
       "copied": "Zkopírováno do spisu",
@@ -6427,8 +6604,12 @@
       "calculating": "Načítá se…",
       "errored": "Chyba",
       "formatNotSupported": "Formát není podporován",
+      "recordChoose": "{count, plural, one {Potvrďte # shodu} few {Vyberte z # shod} many {Vyberte z # shody} other {Vyberte z # shod}}",
+      "recordCount": "{count, plural, one {# záznam} few {# záznamy} many {# záznamu} other {# záznamů}}",
+      "recordNotFound": "Nenalezeno",
       "selectAValue": "Vyberte hodnotu",
-      "selectValues": "Vyberte hodnoty"
+      "selectValues": "Vyberte hodnoty",
+      "wholeNumberOnly": "Zadejte celé číslo"
     },
     "files": {
       "addFilePropertyToUpload": "Přidejte vlastnost typu soubor pro nahrávání souborů",
@@ -6892,7 +7073,7 @@
       "personalDescription": "Osobní spisy jsou jen pro vás. Povýšením na klientský spis je sdílíte s týmem.",
       "personalLabel": "Osobní",
       "promoteCta": "Povýšit na klientský spis",
-      "promoteDescription": "Přidělením klienta sdílíte spis s týmem. Změna je nevratná — spis nelze vrátit na osobní.",
+      "promoteDescription": "Přidělením klienta sdílíte spis s týmem. Změna je nevratná: spis nelze vrátit na osobní.",
       "promoteToClientConfirm": "Spis <bdi>{matterName}</bdi> bude přidělen klientovi <bdi>{clientName}</bdi> a sdílen s týmem. Na osobní ho už nepůjde vrátit.",
       "promotedSuccess": "Spis povýšen",
       "recentClients": "Nedávní klienti",
@@ -7112,12 +7293,13 @@
       "optionsLabel": "Možnosti",
       "person": "Osoba",
       "previewEmpty": "AI nevrátila žádnou hodnotu.",
-      "previewMockNotice": "Falešný náhled — backend ještě není napojený.",
+      "previewMockNotice": "Falešný náhled: backend ještě není napojený.",
       "previewOnFirst": "Náhled na: {document}",
       "previewSkipped": "Na tomto dokumentu není žádný použitelný vstup.",
       "previewSubject": "Vyzkoušej na vzorku",
       "previewUnsupported": "Náhled není pro tento typ dokumentu podporovaný.",
       "readingFrom": "AI čerpá informace z",
+      "record": "Záznam",
       "referencesItself": "Vlastnost odkazuje sama na sebe přes jiné vlastnosti",
       "resultType": "Typ výsledku",
       "returnsLabel": "Formát",
@@ -7197,6 +7379,7 @@
       "aiModel": "AI model",
       "manualInput": "Ručně"
     },
+    "unarchiveBeforeDelete": "Před odstraněním tohoto spisu zrušte jeho archivaci.",
     "unarchiveMatter": "Obnovit z archivu",
     "uploadDocuments": "Nahrát dokumenty",
     "views": {

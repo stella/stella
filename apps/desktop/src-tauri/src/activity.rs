@@ -14,6 +14,7 @@
 //! and the names of one day's apps also reach the Settings window, through
 //! `ActivitySettingsCaller`.
 
+use crate::logging::best_effort;
 use chrono::{DateTime, Days, FixedOffset, Local, NaiveDate, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -2555,7 +2556,10 @@ fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) 
 }
 
 pub(crate) fn emit_changed(app: &AppHandle) {
-  let _ = app.emit(CHANGED_EVENT, ());
+  best_effort(
+    app.emit(CHANGED_EVENT, ()),
+    "activity change was not announced",
+  );
   refresh_tray(app);
 }
 
@@ -2969,6 +2973,10 @@ pub fn start(app: AppHandle, state: ActivityAppState) {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
 

@@ -143,6 +143,11 @@ test.each(cases)(
           "changed.ts\0generated.html.txt\0apps/landing/changed.js\0changed.json\0",
         );
       }
+      writeFileSync(
+        path.join(root, "autofix-format-paths"),
+        "./changed.ts\0./generated.html.txt\0./apps/landing/changed.js\0./changed.json\0",
+      );
+      writeFileSync(path.join(root, "autofix-lint-paths"), "./changed.ts\0");
       const finding = Bun.spawnSync(
         [
           process.execPath,
@@ -167,6 +172,7 @@ test.each(cases)(
         path.join(root, "bin/bun"),
         `#!/bin/bash
 if [[ "$1" == scripts/ci-generated-sources.ts && "$2" == prepare ]]; then touch prepared; exit "$PREPARE_EXIT"; fi
+if [[ "$1" == "$GITHUB_WORKSPACE/scripts/generate-tailwind-classes.ts" && "$2" == --write ]]; then touch tailwind_cache_generated; exit 0; fi
 if [[ "$1" == scripts/autofix-plan.ts && "$2" == run ]]; then cp changed.ts generated.html.txt; exit 0; fi
 if [[ "$2" == oxlint && "$*" != *--type-aware* && -n "$PRECHECK_EXIT" ]]; then exit "$PRECHECK_EXIT"; fi
 if [[ "$2" == oxlint && "$*" == *--type-aware* && ! -f prepared ]]; then exit 2; fi
@@ -202,6 +208,7 @@ exec '${process.execPath}' "$@"
         env: {
           ...process.env,
           RUNNER_TEMP: root,
+          GITHUB_WORKSPACE: root,
           GENERATOR_IDS: "fixture",
           PREPARE_EXIT: failure === "prepare" ? "1" : "0",
           PRECHECK_EXIT: failure === "precheck" ? "2" : "",
@@ -217,6 +224,9 @@ exec '${process.execPath}' "$@"
         ).toBe(0);
         expect(readFileSync(path.join(root, "changed.ts"), "utf-8")).toBe(
           source.replace('value["name"]', "value.name"),
+        );
+        expect(existsSync(path.join(root, "tailwind_cache_generated"))).toBe(
+          true,
         );
       } else if (clean) {
         expect(

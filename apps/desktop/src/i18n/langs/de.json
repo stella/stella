@@ -38,7 +38,7 @@
     "reconnectAccount": "Erneut mit stella web verbinden…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Änderungen bleiben lokal und werden automatisch erneut versucht",
+    "checkpointDelayedBody": "{fileName}: Änderungen bleiben lokal und werden automatisch erneut versucht",
     "checkpointDelayedTitle": "Checkpoint-Synchronisierung verzögert",
     "diagnosticsCopiedBody": "Fügen Sie sie bei Bedarf in Ihre Supportanfrage ein.",
     "diagnosticsCopiedTitle": "Diagnose kopiert",
@@ -54,11 +54,13 @@
     "recoveryResetTitle": "Lokale Wiederherstellungsdaten wurden zurückgesetzt",
     "revisionCreatedBody": "{fileName} als Version {versionNumber} gespeichert. Desktop-Bearbeitung abgeschlossen",
     "revisionCreatedTitle": "stella-Revision erstellt",
-    "sessionClosedSaved": "{fileName} — Lokale Kopie bleibt in Temporäre Arbeitskopien erhalten",
-    "sessionClosedUnsaved": "{fileName} — Sie haben nicht gespeicherte lokale Änderungen. Ihre Kopie finden Sie in Temporäre Arbeitskopien.",
-    "takenOverBody": "{fileName} — Öffnen Sie erneut aus stella, um die Bearbeitung zurückzuholen",
+    "sessionClosedSaved": "{fileName}: Lokale Kopie bleibt in Temporäre Arbeitskopien erhalten",
+    "sessionClosedUnsaved": "{fileName}: Sie haben nicht gespeicherte lokale Änderungen. Ihre Kopie finden Sie in Temporäre Arbeitskopien.",
+    "takenOverBody": "{fileName}: Öffnen Sie erneut aus stella, um die Bearbeitung zurückzuholen",
     "takenOverLocalError": "Desktop-Bearbeitung auf anderes Gerät verschoben. Diese lokale Kopie bleibt erhalten.",
-    "takenOverTitle": "Bearbeitung auf anderes Gerät verschoben"
+    "takenOverTitle": "Bearbeitung auf anderes Gerät verschoben",
+    "editsSetAsideTitle": "Änderungen zurückgestellt",
+    "editsSetAsideBody": "Nicht gespeicherte Änderungen wurden zurückgestellt. Verbinden Sie dasselbe Konto erneut, um den Wiederherstellungsordner in den Einstellungen zu öffnen."
   },
   "dialog": {
     "accountWindowTitle": "Konto verbinden",
@@ -232,7 +234,16 @@
     "permissionDenied": "In den Systemeinstellungen ausgeschaltet.",
     "permissionManaged": "Von Ihrer Organisation verwaltet",
     "errorUpdateAutostart": "stella desktop konnte den Start bei der Anmeldung nicht aktualisieren.",
-    "errorPermissions": "stella desktop konnte diese Berechtigung nicht lesen oder ändern."
+    "errorPermissions": "stella desktop konnte diese Berechtigung nicht lesen oder ändern.",
+    "recoveryTitle": "Zurückgestellte Änderungen",
+    "recoveryBody": "Ungespeicherte Änderungen werden hier für Ihr Konto aufbewahrt. Öffnen Sie den Ordner, um sie wiederherzustellen.",
+    "recoverySignIn": "Änderungen wurden für das betreffende Konto zurückgestellt. Verbinden Sie dieses Konto erneut, um seinen Ordner zu öffnen.",
+    "recoveryUnassigned": "Für einige Änderungen ist kein Konto vermerkt. Öffnen Sie ihren Ordner, um sie manuell wiederherzustellen.",
+    "recoveryPending": "Einige Änderungen werden noch zurückgestellt. Versuchen Sie es erneut, um den Vorgang abzuschließen.",
+    "recoveryOpenFolder": "Wiederherstellungsordner öffnen",
+    "recoveryOpenUnassigned": "Nicht zugeordnete Änderungen öffnen",
+    "recoveryFilePending": "Warten auf Zurückstellung",
+    "recoveryError": "Der Wiederherstellungsordner konnte nicht geöffnet werden. Versuchen Sie es erneut."
   },
   "clipboard": {
     "registryUnavailable": "Für Ihre Tätigkeitsgebiete sind keine Register aktiviert.",
@@ -321,6 +332,12 @@
     "save": "Speichern",
     "search": "Zwischenablageverlauf durchsuchen",
     "searchPlaceholder": "Zwischenablageverlauf durchsuchen",
+    "searchOptions": "Suchoptionen",
+    "searchOptionExactPhrase": "Exakte Wortgruppe",
+    "searchOptionWholeWords": "Nur ganze Wörter",
+    "searchOptionMatchCase": "Groß-/Kleinschreibung beachten",
+    "searchOptionMatchDiacritics": "Diakritische Zeichen beachten",
+    "searchOptionsReset": "Suchoptionen zurücksetzen",
     "registrySearch": "Handelsregister durchsuchen",
     "registrySearchPlaceholder": "Firmenname oder Registernummer",
     "registryPreview": "Handelsregistervorschau",
@@ -484,6 +501,10 @@
     "evidenceTitles": "Titel",
     "evidenceApps": "Apps",
     "rangeEmpty": "In diesem Zeitraum wurde nichts erfasst.",
+    "entryStart": "Beginn",
+    "entryEnd": "Ende",
+    "rangeEndBeforeStart": "Wählen Sie ein Ende nach dem Beginn.",
+    "rangeDraftedLeftOut": "{duration}, ohne bereits als Entwurf erfasste Zeit",
     "calendarHint": "Öffnen Sie einen gestrichelten Vorschlag, um ihn zu prüfen, oder ziehen Sie in der Spalte Zeiteinträge über einen beliebigen Zeitraum, um einen Eintrag zu entwerfen.",
     "aiDraftWrite": "Mit stella AI entwerfen",
     "aiDraftAgain": "Neu entwerfen",
@@ -711,6 +732,61 @@
     "callbackConnectedTitle": "ChatGPT ist verbunden",
     "callbackConnectedBody": "Sie können diesen Tab schließen und zu stella zurückkehren.",
     "callbackNotConnectedTitle": "ChatGPT wurde nicht verbunden",
-    "callbackNotConnectedBody": "Kehren Sie zu stella zurück, um zu sehen, was passiert ist, und versuchen Sie es erneut."
+    "callbackNotConnectedBody": "Kehren Sie zu stella zurück, um zu sehen, was passiert ist, und versuchen Sie es erneut.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Nutzen Sie Ihr Claude-Abonnement für lokale Agenten in stella. Die Nutzung wird auf Ihren Claude-Tarif angerechnet, getrennt von Ihrem stella-Abonnement.",
+      "notInstalled": "Claude Code ist auf diesem Computer noch nicht installiert.",
+      "signIn": "Mit Claude anmelden",
+      "openSignInPage": "Anmeldeseite öffnen",
+      "signedIn": "Bei Claude angemeldet",
+      "signedInAs": "Bei Claude angemeldet · {email}",
+      "signOut": "Abmelden",
+      "apiKey": "Claude Code ist mit einem API-Schlüssel angemeldet, den stella nicht verwendet. Melden Sie sich ab und danach mit Ihrem Claude-Abonnement wieder an.",
+      "failure": {
+        "notCompleted": "Die Anmeldung wurde nicht abgeschlossen. Versuchen Sie es erneut.",
+        "timedOut": "Die Anmeldung hat zu lange gedauert. Versuchen Sie es erneut.",
+        "unavailable": "Claude Code konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut."
+      }
+    },
+    "install": {
+      "notInstalled": "{name} ist auf diesem Computer noch nicht installiert.",
+      "install": "Installieren",
+      "downloading": "{name} {version} wird heruntergeladen: {percent} %",
+      "verifying": "{name} {version} wird geprüft",
+      "ready": "{name} {version} ist installiert.",
+      "retry": "Erneut versuchen",
+      "activeStays": "Version {version} bleibt in Verwendung.",
+      "failure": {
+        "download": "{name} konnte nicht heruntergeladen werden. Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+        "verification": "{name} konnte nicht verifiziert werden und wurde daher nicht installiert.",
+        "storage": "{name} konnte auf diesem Computer nicht gespeichert werden. Prüfen Sie, ob auf dem Datenträger genügend Speicherplatz frei ist."
+      }
+    }
+  },
+  "localSkills": {
+    "title": "Lokale Skills",
+    "description": "Skill-Ordner auf diesem Computer. Lokale Ausführungen auf diesem Computer können sie nutzen, und nichts daraus wird hochgeladen.",
+    "add": "Ordner hinzufügen",
+    "remove": "Entfernen",
+    "removeFolder": "{path} entfernen",
+    "unusable": "Nicht nutzbar",
+    "notice": {
+      "action_failed": "Das hat nicht funktioniert. Versuchen Sie es erneut.",
+      "too_many": "Dieser Computer hat bereits so viele Skill-Ordner, wie er nutzen kann. Entfernen Sie zuerst einen.",
+      "already_listed": "Dieser Ordner ist bereits aufgeführt.",
+      "missing": "Dieser Ordner existiert nicht mehr.",
+      "not_a_folder": "Dies ist kein Ordner mehr.",
+      "no_skill_file": "Dieser Ordner enthält keine SKILL.md.",
+      "skill_file_not_regular": "SKILL.md muss eine normale Datei sein, keine Verknüpfung.",
+      "skill_file_too_large": "SKILL.md ist zu groß zum Lesen.",
+      "unreadable": "Dieser Ordner konnte nicht gelesen werden.",
+      "no_name": "Der Kopf von SKILL.md enthält keinen Namen.",
+      "invalid_name": "Der Name in SKILL.md darf nur Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche enthalten und muss mit einem Buchstaben oder einer Ziffer beginnen.",
+      "duplicate_name": "Ein anderer aufgeführter Ordner hat einen Skill mit diesem Namen.",
+      "runs_can_write": "Lokale Ausführungen können in diesen Ordner schreiben, daher kann er keinen Skill enthalten.",
+      "network_folder": "Dieser Ordner liegt auf einer Netzwerkfreigabe. Skills müssen auf dem eigenen Laufwerk dieses Computers liegen.",
+      "path_changed": "Ein übergeordneter Ordner hat sich geändert. Entfernen Sie diesen Ordner und fügen Sie ihn erneut hinzu."
+    }
   }
 }

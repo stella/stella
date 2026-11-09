@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "The gateway sweep queues a run.cancel for runs whose chat turn already ended; like every other runner command insert in the desktop runner store it is socket bookkeeping, and the stop, failure or supersede that ended the turn is the audited action."
+}

@@ -14,17 +14,12 @@ import { createMembershipScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
-import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
-import {
-  generateTanStackObjectForTask,
-  generateTanStackTextForTask,
-} from "@/api/lib/tanstack-ai-generate";
-import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import {
   claimFixtureDeviceProof,
@@ -41,9 +36,7 @@ import {
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
 import { createDesktopBillingDraftEndpoint } from "./billing-drafts";
-import type { ObjectGeneration, TextGeneration } from "./drafting-model";
-import { createDesktopTimeEntryNarrativeEndpoint } from "./narrative";
-import { generateDesktopTimeEntryNarrative } from "./narrative-model";
+import type { ObjectGeneration } from "./drafting-model";
 
 // The real gate, context and endpoints on the real database; the model is a
 // generator that records a call only once the gate let its request leave.
@@ -135,9 +128,7 @@ const authorizeAccount = async (request: Request) => {
 };
 
 const post = async (
-  endpoint:
-    | ReturnType<typeof createDesktopBillingDraftEndpoint>
-    | ReturnType<typeof createDesktopTimeEntryNarrativeEndpoint>,
+  endpoint: ReturnType<typeof createDesktopBillingDraftEndpoint>,
   body: unknown,
 ) => {
   await using server = serveForTest(
@@ -176,12 +167,7 @@ const unreachableModel = () => {
         }),
       ),
   );
-  const generateText: TextGeneration = async (options) =>
-    await generateTanStackTextForTask({
-      ...options,
-      resolveTextModel: provider.resolveTextModel,
-    });
-  return { sent: provider.requests, generateObject, generateText };
+  return { sent: provider.requests, generateObject };
 };
 
 type UnreachableModel = ReturnType<typeof unreachableModel>;
@@ -228,18 +214,13 @@ test("drafting refuses an organization switched off and a member without consent
   }
 });
 
-test("a consenting member's draft and narrative reach the provider", async () => {
+test("a consenting member's draft reaches the provider", async () => {
   // The control: the same wiring sends the request once the gate allows it.
   const drafts = unreachableModel();
   expect(
     (await post(draftEndpoint({ model: drafts }), draftBody())).status,
   ).toBe(502);
   expect(drafts.sent).toEqual(["structuredOutput"]);
-  const narrative = unreachableModel();
-  expect(
-    (await post(narrativeEndpoint({ model: narrative }), narrativeBody)).status,
-  ).toBe(502);
-  expect(narrative.sent).toEqual(["chatStream"]);
 });
 
 test("a consent withdrawn after the context loaded stops the drafting request", async () => {
@@ -247,81 +228,6 @@ test("a consent withdrawn after the context loaded stops the drafting request", 
   const answer = await post(
     draftEndpoint({ model, beforeRun: withdrawConsent }),
     draftBody(),
-  );
-  expect(answer).toMatchObject({
-    status: 403,
-    body: { code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.consentRequired },
-  });
-  expect(model.sent).toEqual([]);
-});
-
-const narrativeEndpoint = ({
-  model,
-  beforeRun,
-}: {
-  model: UnreachableModel;
-  beforeRun?: () => Promise<void>;
-}) =>
-  createDesktopTimeEntryNarrativeEndpoint({
-    authorizeAccount,
-    narrate: async ({ account, drafting, request, signal }) => {
-      await beforeRun?.();
-      const admission = testModelAdmission(
-        account.organizationId,
-        "desktop-time-entries.narrative",
-      );
-      return await generateDesktopTimeEntryNarrative(
-        {
-          request,
-          drafting,
-          admission,
-          organizationId: account.organizationId,
-          userId: account.userId,
-          orgAIConfig: null,
-          managedAIResidency: "eu",
-          caching: { enabled: false, reason: "org-disabled" },
-          analytics: createTanStackAIAnalyticsCallbacks({
-            dataClass: "customer",
-            feature: "desktop_time_entries.narrative",
-            modelTier: MANAGED_MODEL_TIER.standard,
-            organizationId: account.organizationId,
-            traceId: "drafting-gate-db-test",
-          }),
-          abortSignal: signal,
-        },
-        model.generateText,
-      );
-    },
-  });
-
-const narrativeBody = {
-  titles: ["Smlouva o dílo – návrh.docx"],
-  locale: "cs-CZ",
-  matterName: null,
-};
-
-test("the narrative route refuses an organization switched off and a member without consent before the model", async () => {
-  for (const [prepare, code] of [
-    [switchOff, DESKTOP_BILLING_DRAFT_REFUSAL_CODE.organizationOff],
-    [withdrawConsent, DESKTOP_BILLING_DRAFT_REFUSAL_CODE.consentRequired],
-  ] as const) {
-    await prepare();
-    const model = unreachableModel();
-    const answer = await post(narrativeEndpoint({ model }), narrativeBody);
-    expect(answer).toMatchObject({ status: 403, body: { code } });
-    expect(model.sent).toEqual([]);
-    await db
-      .update(organizationSettings)
-      .set({ aiBillingDraftsMode: "enabled" })
-      .where(eq(organizationSettings.organizationId, ids.orgA));
-  }
-});
-
-test("a consent withdrawn after the narrative was admitted stops its request", async () => {
-  const model = unreachableModel();
-  const answer = await post(
-    narrativeEndpoint({ model, beforeRun: withdrawConsent }),
-    narrativeBody,
   );
   expect(answer).toMatchObject({
     status: 403,

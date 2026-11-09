@@ -681,6 +681,9 @@
     "navigation.contacts": [
       "fr"
     ],
+    "navigation.knowledge": [
+      "fr"
+    ],
     "navigation.shortcutCategories.navigation": [
       "de",
       "fr"
@@ -936,6 +939,9 @@
     "workspaces.parties.personalLabel": [
       "es"
     ],
+    "workspaces.pdf.evidence": [
+      "fr"
+    ],
     "workspaces.pdf.selection.pageLocator": [
       "es",
       "fr",
@@ -1123,7 +1129,6 @@
     "workspaces.deleteSelectedRowsDescription",
     "workspaces.deleteSelection",
     "workspaces.exportToCsv",
-    "workspaces.fields.formatNotSupported",
     "workspaces.files.desktopEdit.forceRelease",
     "workspaces.files.desktopEdit.opening",
     "workspaces.files.desktopEdit.takeoverNoResponse",

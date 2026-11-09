@@ -2,7 +2,7 @@
 // Regenerate from the repository root with `bun --filter @stll/desktop rpc:generate`.
 // Do not edit by hand.
 
-export type AppSnapshot = { bridgePort: number,
+export type AppSnapshot = { documentRecovery: DocumentRecoverySnapshot, bridgePort: number,
 /**
  * See [`BRIDGE_VERSION`].
  */
@@ -26,6 +26,8 @@ export type DesktopUpdateSnapshot = { baseUrl: string | null, channel: string | 
 
 export type DesktopUpdateStatus = "idle" | "checking" | "available" | "downloading" | "ready" | "applying" | "up_to_date" | "error" | "disabled";
 
+export type DocumentRecoverySnapshot = { edits: RecoveryEdit[], unassigned: boolean, pending: boolean, access: RecoveryAccess, };
+
 export type LinkAccountRequest = { apiBaseUrl: string, credential: DesktopAccountCredential, };
 
 export type LinkedAccountSnapshot = { email: string, name: string | null, verifiedAt: string, };
@@ -35,6 +37,14 @@ export type OpenFileRemoteSession = { baseVersionNumber: number, downloadUrl: st
 export type OpenFileRequest = { apiBaseUrl: string, entityId: string, handoffId?: string | null, linkedAccount: LinkedAccountSnapshot | null, propertyId: string, remoteSession: OpenFileRemoteSession, workspaceId: string, };
 
 export type OpenFileResponse = { alreadyOpen: boolean, filePath: string, sessionId: string, };
+
+export type RecoveryAccess = "available" | "signInRequired";
+
+export type RecoveryEdit = { id: string, fileName: string, status: RecoveryStatus, };
+
+export type RecoveryStatus = "pending" | "available";
+
+export type RecoveryTarget = "account" | "unassigned";
 
 export type SessionSnapshot = { baseVersionNumber: number, entityId: string, fileType: DesktopEditFileType, fileName: string, filePath: string, id: string, lastError: string | null, lastCheckpointAt: string | null, pendingFinalize: boolean, propertyId: string, status: SessionStatus, takeoverDetected: boolean, workspaceId: string, };
 

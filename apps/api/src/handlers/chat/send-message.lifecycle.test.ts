@@ -157,6 +157,7 @@ describe("send lifecycle checkpoint indexing", () => {
                     id: "turn_lifecycle",
                     organizationId: "organization_lifecycle",
                     runId: null,
+                    userId: "user_lifecycle",
                   },
                 ],
               };

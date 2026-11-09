@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { HTTP_FAILURE, HttpFailureError } from "@/api/http/errors";
 import { reframeBoundedRequest } from "@/api/http/request-body";
 import type { Middleware } from "@/api/http/route";
@@ -75,14 +77,17 @@ export const deploymentFeatureGateExcept = (
     if (isEnabled()) {
       return await inner();
     }
-    const bounded = await reframeBoundedRequest(
-      ctx.request,
-      exception.maxBytes,
+    // A body over the bound, or one that cannot be read at all (an upload
+    // cut off midway, a broken chunk), is refused like any other request the
+    // exception does not admit: a disabled route answers only its absence.
+    const bounded = await Result.tryPromise(
+      async () => await reframeBoundedRequest(ctx.request, exception.maxBytes),
     );
-    if (bounded.isErr()) {
+    if (bounded.isErr() || bounded.value.isErr()) {
       throw new HttpFailureError(HTTP_FAILURE.notFound);
     }
-    const { request } = bounded.value;
+    const { request } = bounded.value.value;
+    // The re-framed body is held in memory; reading it cannot fail.
     const bytes = new Uint8Array(await request.arrayBuffer());
     if (!exception.admits(new TextDecoder().decode(bytes))) {
       throw new HttpFailureError(HTTP_FAILURE.notFound);

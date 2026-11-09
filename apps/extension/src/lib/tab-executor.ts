@@ -1413,7 +1413,7 @@ const listChatTabs = async (
   const tabs = await Promise.all(
     others.map(async (tabId): Promise<BrowserControlTab | null> => {
       const tab = await chrome.tabs.get(tabId).catch(() => null);
-      const url = tab?.url === undefined ? null : listedTabUrl(tab.url);
+      const url = tab?.url !== undefined ? listedTabUrl(tab.url) : null;
       return url === null ? null : { active: false, tabId, url };
     }),
   );

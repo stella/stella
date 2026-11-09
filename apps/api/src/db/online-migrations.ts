@@ -36,6 +36,7 @@ import type {
   OnlineIndexReplacement,
 } from "./online-migration-entry";
 import { ONLINE_MIGRATION_ENTRIES } from "./online-migration-registry";
+import type { OnlineRepairRehearsalRecord } from "./online-migration-rehearsal-guard";
 
 // Catalog work keeps a short lock budget; every statement that locks a table
 // runs through the gate in `online-ddl.ts`, which lifts it and watches the
@@ -212,6 +213,8 @@ type OnlineMigrationMode =
 
 type OnlineMigrationOptions = {
   repairs: readonly OnlineRepair[];
+  /** Actual migrator checks and calls; startup validation contributes no proof. */
+  observeRepair?: ((record: OnlineRepairRehearsalRecord) => void) | undefined;
   log?: (record: {
     event: "online_repair_pending";
     repair: string;
@@ -316,6 +319,19 @@ type ReportPendingStepOptions = {
   reason: string;
 };
 
+const recordPendingStep = (
+  report: OnlineMigrationStartupReport,
+  step: PendingOnlineMigrationStep,
+): void => {
+  if (
+    !report.pending.some(
+      ({ kind, name }) => kind === step.kind && name === step.name,
+    )
+  ) {
+    report.pending.push(step);
+  }
+};
+
 const reportPendingStep = ({
   report,
   step,
@@ -331,12 +347,42 @@ const reportPendingStep = ({
       `Online ${step.kind} ${step.name} introduced by ${step.introducedBy} is not complete: ${reason}`,
     );
   }
-  if (
-    !report.pending.some(
-      ({ kind, name }) => kind === step.kind && name === step.name,
-    )
-  ) {
-    report.pending.push(step);
+  recordPendingStep(report, step);
+};
+
+/**
+ * A migration-owned repair with a durable pending checkpoint is deployable
+ * under any release, so a newer applied migration never refuses boot over
+ * it: its readers already serve the pending state (the newest release boots
+ * beside it the same way), and the migrate run or the repair's scheduled
+ * owner resumes the checkpoint after boot. Refusing would only stop every
+ * task, of every version, until something else finished the walk. Work with
+ * no checkpoint has nothing durable to resume, so it keeps the newest-release
+ * rule.
+ */
+type ReportPendingRepairOptions = Omit<ReportPendingStepOptions, "reason"> & {
+  completion: Exclude<OnlineRepairCompletion, { type: "complete" }>;
+};
+
+const reportPendingRepair = ({
+  report,
+  step,
+  completion,
+}: ReportPendingRepairOptions): void => {
+  switch (completion.type) {
+    case "pending":
+      if (typeof step.introducedBy === "string") {
+        recordPendingStep(report, step);
+        return;
+      }
+      reportPendingStep({ report, step, reason: completion.reason });
+      return;
+    case "incomplete":
+      reportPendingStep({ report, step, reason: completion.reason });
+      return;
+    default:
+      completion satisfies never;
+      return panic(`Online repair ${step.name}: unexpected completion state`);
   }
 };
 
@@ -406,6 +452,7 @@ const walkOnlineMigrations = async ({
     connection,
     mode,
     repairs: options.repairs,
+    observeRepair: options.observeRepair,
     log:
       options.log ??
       ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),
@@ -550,6 +597,7 @@ type OnlineRepairWalkOptions = {
   mode: OnlineMigrationMode;
   repairs: readonly OnlineRepair[];
   log: NonNullable<OnlineMigrationOptions["log"]>;
+  observeRepair: OnlineMigrationOptions["observeRepair"];
   offset?: number;
 };
 
@@ -558,6 +606,7 @@ const processOnlineRepairAt = async ({
   mode,
   repairs,
   log,
+  observeRepair,
   offset = 0,
 }: OnlineRepairWalkOptions): Promise<OnlineMigrationOutcome> => {
   const repair = repairs.at(offset);
@@ -568,24 +617,30 @@ const processOnlineRepairAt = async ({
   const completion = await repair.readCompletion(connection);
   if (mode.operation === "validate") {
     if (completion.type !== "complete") {
-      reportPendingStep({
+      reportPendingRepair({
         report: mode.report,
         step: {
           kind: "repair",
           name: repair.name,
           introducedBy: repair.introducedBy,
         },
-        reason: completion.reason,
+        completion,
       });
     }
     return await processOnlineRepairAt({
       connection,
       mode,
       repairs,
+      observeRepair,
       log,
       offset: offset + 1,
     });
   }
+  observeRepair?.({
+    type: "checked",
+    name: repair.name,
+    completion: completion.type,
+  });
   if (completion.type !== "complete") {
     const step = {
       event: "migrate.online_step_duration",
@@ -601,15 +656,15 @@ const processOnlineRepairAt = async ({
         | Extract<OnlineMigrationOutcome, { type: "deferred" }>
       > => {
         const attempt = await Result.tryPromise({
-          try: async () =>
-            await repair.repair(
+          try: async () => {
+            const tables = createOnlineTableGate({
               connection,
-              createOnlineTableGate({
-                connection,
-                gate: mode.indexGate,
-                reserveObserver: mode.reserveObserver,
-              }),
-            ),
+              gate: mode.indexGate,
+              reserveObserver: mode.reserveObserver,
+            });
+            observeRepair?.({ type: "attempted", name: repair.name });
+            return await repair.repair(connection, tables);
+          },
           catch: (cause: unknown) => cause,
         });
         await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
@@ -657,6 +712,7 @@ const processOnlineRepairAt = async ({
     mode,
     repairs,
     log,
+    observeRepair,
     offset: offset + 1,
   });
 };

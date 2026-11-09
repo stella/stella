@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { OUTBOUND_ACTION_STATUSES } from "@stll/api-contract/outbound-action";
+import { createTestClock } from "@stll/test-kit";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { chatThreads, outboundActions } from "@/api/db/schema";
@@ -14,6 +15,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 const databaseUrl = process.env["DATABASE_URL"];
 
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const clock = createTestClock();
 
 describe.skipIf(!runPostgres)("outbound action offboarding", () => {
   test("member removal clears pending outbound actions and retains every delivery outcome", async () => {
@@ -37,14 +39,14 @@ describe.skipIf(!runPostgres)("outbound action offboarding", () => {
           id: organizationId,
           name: "Action organization",
           slug: organizationId,
-          createdAt: new Date(),
+          createdAt: new Date(clock.now()),
         });
         await db.insert(member).values({
           id: memberId,
           organizationId,
           userId,
           role: "member",
-          createdAt: new Date(),
+          createdAt: new Date(clock.now()),
         });
         await db.insert(chatThreads).values({
           id: threadId,

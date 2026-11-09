@@ -15,6 +15,7 @@ import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/errors/action-admission-error";
+import { runAsCorpusSearchCaller } from "@/api/lib/legal-search/corpus-index-admission";
 import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
 import { runWithPublicReadScope } from "@/api/lib/legal-search/public-read-timeout-context";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
@@ -25,7 +26,10 @@ import {
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
+import {
+  mcpPublicReadCallerKey,
+  withMcpPublicReadAdmission,
+} from "@/api/lib/rate-limit/mcp-public-read-admission";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   bindApprovedMcpAuditContext,
@@ -53,6 +57,7 @@ import {
 } from "@/api/mcp/input-normalization";
 import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
+import { CONTINUABLE_PUBLIC_READ_TOOLS } from "@/api/mcp/public-read-continuation";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolHandler,
@@ -705,7 +710,8 @@ const MCP_OUTPUT_CONTRACT_SINK = failureSink({
  * failure owner instead, which grades it a defect and logs it at ERROR: the
  * caller sees an ordinary tool error, so nothing else would surface it. A
  * search index that could not be reached is not a defect of the call, so it
- * keeps its own retryable `search_index_unavailable` envelope.
+ * keeps its own retryable `search_index_unavailable` envelope, and a public
+ * read the request's latency budget ended keeps `public_read_timeout`.
  */
 const internalErrorResult = ({
   mode,
@@ -730,17 +736,19 @@ const internalErrorResult = ({
       ),
     );
   }
+  // A read the request's budget ended is a timeout, not the index being
+  // unavailable, whatever the read was waiting on.
+  if (publicReadTimeoutError(error) !== null) {
+    return serializeToolResult(
+      internalFailureResult(error, "mcp.internalErrorResult"),
+    );
+  }
   if (isSearchIndexUnavailable(error)) {
     return serializeToolResult(
       scopeToolResultToSurface(searchIndexUnavailableResult(error), {
         mode,
         context,
       }),
-    );
-  }
-  if (publicReadTimeoutError(error) !== null) {
-    return serializeToolResult(
-      internalFailureResult(error, "mcp.internalErrorResult"),
     );
   }
   const timeout =
@@ -832,6 +840,23 @@ const runAuthorizedMcpToolCall = async ({
   if (budgetMs === undefined) {
     return await run();
   }
+  // The continuation owns these tools' concurrency and takes the caller's
+  // fleet-wide slot for the detached run: a call over the limit is queued and
+  // told so, not refused.
+  if (CONTINUABLE_PUBLIC_READ_TOOLS.has(toolName)) {
+    const finished = await runWithPublicReadScope(
+      { budgetMs, signal: context.request?.signal },
+      run,
+    );
+    return Result.isOk(finished)
+      ? finished.value
+      : internalErrorResult({
+          mode,
+          context,
+          toolName,
+          error: finished.error,
+        });
+  }
   const admitted = await (
     dependencies?.admitPublicRead ??
     context.testDependencies?.admitPublicRead ??
@@ -840,7 +865,10 @@ const runAuthorizedMcpToolCall = async ({
     caller: context,
     signal: context.request?.signal,
     run: async (signal) =>
-      await runWithPublicReadScope({ budgetMs, signal }, run),
+      await runAsCorpusSearchCaller(
+        mcpPublicReadCallerKey(context),
+        async () => await runWithPublicReadScope({ budgetMs, signal }, run),
+      ),
   });
   if (Result.isOk(admitted)) {
     const outcome = admitted.value;

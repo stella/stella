@@ -56,7 +56,7 @@ import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vw
 import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
+import { buildCzNssDecision as uncheckedBuildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import {
   buildCzRegionalDecision,
   czRegionalAdapter,
@@ -65,7 +65,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import {
-  buildCzUohsDecision,
+  buildCzUohsDecision as uncheckedBuildCzUohsDecision,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { buildCzUsListedRecord } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
@@ -85,12 +85,12 @@ import {
   buildPlDecision,
   normalizeSaosDumpItem,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { assemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { assemblePlKioDecision as uncheckedAssemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import {
-  assemblePlKisDecision,
+  assemblePlKisDecision as uncheckedAssemblePlKisDecision,
   plKisRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
-import { assemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import {
@@ -110,7 +110,7 @@ import {
   plUodoRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import {
-  assemblePlUokikDecision,
+  assemblePlUokikDecision as uncheckedAssemblePlUokikDecision,
   assemblePlUokikRuling,
   parsePlUokikDetail,
   PL_UOKIK_FILE_STATUS,
@@ -143,8 +143,17 @@ import {
   sourceBinaryRef,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const buildCzNssDecision = guardParser(uncheckedBuildCzNssDecision);
+const assemblePlKisDecision = guardParser(uncheckedAssemblePlKisDecision);
+const assemblePlUokikDecision = guardParser(uncheckedAssemblePlUokikDecision);
+
+const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
+const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);
+const buildCzUohsDecision = guardParser(uncheckedBuildCzUohsDecision);
 
 /** What a guard has to drive one adapter with. */
 export type EnrolledAdapterFixture = {
@@ -1358,48 +1367,63 @@ const readGzipText = async (url: URL): Promise<string> =>
  */
 export const euEcjFixture = (
   documentUrl = new URL(`${EU_ECJ_CELEX}.en.html.gz`, EU_ECJ_PARSER_FIXTURES),
-): EnrolledAdapterFixture => ({
-  buildDecision: async () => {
-    const parts = ecjRawParts({
-      binding: { ...EU_ECJ_BINDING },
-      html: await readGzipText(documentUrl),
-      notice: await readGzipText(
+): EnrolledAdapterFixture => {
+  const rawFieldValues: Record<string, unknown> = {};
+  return {
+    rawFieldValues,
+    buildDecision: async () => {
+      const notice = await readGzipText(
         new URL("eu-ecj-notice-en.xml.gz", EU_ECJ_ADAPTER_FIXTURES),
-      ),
-      formex: await readGzipText(
+      );
+      const formex = await readGzipText(
         new URL(`${EU_ECJ_CELEX}.en.fmx.xml.gz`, EU_ECJ_PARSER_FIXTURES),
-      ),
-    });
+      );
+      const parts = ecjRawParts({
+        binding: { ...EU_ECJ_BINDING },
+        html: await readGzipText(documentUrl),
+        notice,
+        formex,
+      });
 
-    const reparsed = await euEcjAdapter.reparseStoredRaw?.({
-      raw: new TextEncoder().encode(encodeSourceRawEnvelope(parts)),
-      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      caseNumber: "C-128/22",
-      sourceDocumentId: `${EU_ECJ_CELEX}:en`,
-      language: "en",
-      // What the crawl read off the ECLI before the notice stated it, so the
-      // fixture proves the notice replaces the inference rather than agreeing
-      // with a value handed to it.
-      court: "",
-      ecli: EU_ECJ_BINDING.ecli.value,
-      decisionDate: EU_ECJ_BINDING.date.value,
-      decisionType: "judgment",
-      sourceUrl: `https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:${EU_ECJ_CELEX}`,
-      documentUrl: `https://publications.europa.eu/resource/cellar/${EU_ECJ_EXPRESSION}.05`,
-      metadata: {
-        celex: EU_ECJ_CELEX,
-        manifestationUri: EU_ECJ_BINDING.manifestation.value,
-        languageUri: EU_ECJ_BINDING.language.value,
-        cdmType: EU_ECJ_BINDING.type.value,
-      },
-    });
-    return reparsed?.type === "parsed"
-      ? reparsed.result
-      : panic(
-          `eu-ecj fixture did not re-parse: ${reparsed?.type ?? "adapter has no reparseStoredRaw"}`,
-        );
-  },
-});
+      for (const field of await euEcjAdapter.sourceFields.listSourceFields(
+        parts,
+      )) {
+        if (field.startsWith("notice.")) {
+          rawFieldValues[field] = notice;
+        }
+      }
+      rawFieldValues["formex.body"] = formex;
+
+      const reparsed = await euEcjAdapter.reparseStoredRaw?.({
+        raw: new TextEncoder().encode(encodeSourceRawEnvelope(parts)),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        caseNumber: "C-128/22",
+        sourceDocumentId: `${EU_ECJ_CELEX}:en`,
+        language: "en",
+        // What the crawl read off the ECLI before the notice stated it, so the
+        // fixture proves the notice replaces the inference rather than agreeing
+        // with a value handed to it.
+        court: "",
+        ecli: EU_ECJ_BINDING.ecli.value,
+        decisionDate: EU_ECJ_BINDING.date.value,
+        decisionType: "judgment",
+        sourceUrl: `https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:${EU_ECJ_CELEX}`,
+        documentUrl: `https://publications.europa.eu/resource/cellar/${EU_ECJ_EXPRESSION}.05`,
+        metadata: {
+          celex: EU_ECJ_CELEX,
+          manifestationUri: EU_ECJ_BINDING.manifestation.value,
+          languageUri: EU_ECJ_BINDING.language.value,
+          cdmType: EU_ECJ_BINDING.type.value,
+        },
+      });
+      return reparsed?.type === "parsed"
+        ? reparsed.result
+        : panic(
+            `eu-ecj fixture did not re-parse: ${reparsed?.type ?? "adapter has no reparseStoredRaw"}`,
+          );
+    },
+  };
+};
 
 // ── SK courts fixture ────────────────────────────────────
 
@@ -1470,6 +1494,19 @@ const SK_COURTS_REGISTRY_RECORD = {
  * reads them, so the read-fault guard drives both reads.
  */
 export const skCourtsFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    "sud.adresaString": SK_COURTS_LISTING_ROW.sud.adresaString,
+    "sud.suradnice.zemepisnaDlzka":
+      SK_COURTS_LISTING_ROW.sud.suradnice.zemepisnaDlzka,
+    "sud.suradnice.zemepisnaSirka":
+      SK_COURTS_LISTING_ROW.sud.suradnice.zemepisnaSirka,
+    zvyraznenie: SK_COURTS_LISTING_ROW.zvyraznenie,
+    "povodnySud.adresaString": SK_COURTS_DETAIL_RECORD.povodnySud.adresaString,
+    "povodnySud.suradnice.zemepisnaDlzka":
+      SK_COURTS_DETAIL_RECORD.povodnySud.suradnice.zemepisnaDlzka,
+    "povodnySud.suradnice.zemepisnaSirka":
+      SK_COURTS_DETAIL_RECORD.povodnySud.suradnice.zemepisnaSirka,
+  },
   buildDecision: async () =>
     await withTestFetch(
       asFetchMock(async (input: string | URL | Request) => {
@@ -1607,8 +1644,10 @@ const SK_US_COURT_FILE = JSON.stringify({
 });
 
 /** The two rosters the decision's judge fields are drawn from. */
+const SK_US_ACT_VOCABULARY = ["[nezadané]", "Aarhuský dohovor"];
 const SK_US_CODELIST = JSON.stringify({
   codelist: {
+    mkComplainedLegalRegulationAct: SK_US_ACT_VOCABULARY,
     mkJudgeReporter: ["Martin Vernarský", "Peter Straka"],
     mkDifferentViewJudges: ["Martin Vernarský", "Peter Straka"],
   },
@@ -1658,6 +1697,14 @@ export const skUsFixture = (
   documentUrl?: URL,
   identity?: ParserParityIdentity,
 ): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    mkComplainedLegalRegulationAct: SK_US_ACT_VOCABULARY,
+    content: SK_US_LISTING_ROW.content,
+    index: SK_US_LISTING_ROW.index,
+    extension: SK_US_LISTING_ROW.extension,
+    size: SK_US_LISTING_ROW.size,
+    mkDecisionInTermsOfForSort: SK_US_LISTING_ROW.mkDecisionInTermsOfForSort,
+  },
   buildDecision: async () => {
     if (documentUrl !== undefined) {
       const payload = await readGzipJson(documentUrl);
@@ -2150,6 +2197,20 @@ const atRisHeadnoteListing = (adapter: AtRisFixtureAdapter): string => {
 export const atRisFixture = (
   adapter: AtRisFixtureAdapter,
 ): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    "Technisch/Applikation": AT_RIS_APPLICATIONS[adapter].application,
+    "Technisch/ImportTimestamp": { "@xsi:nil": "true" },
+    "Judikatur/GesamteEntscheidungUrl": `https://ogd.ris.bka.gv.at/JudikaturEntscheidung.wxe?Abfrage=${AT_RIS_APPLICATIONS[adapter].application}&IncludeSelf=True`,
+    "Judikatur/RechtssaetzeUrl": `https://ogd.ris.bka.gv.at/JudikaturEntscheidung.wxe?Abfrage=${AT_RIS_APPLICATIONS[adapter].application}&IncludeSelf=False`,
+    [`Judikatur/${AT_RIS_APPLICATIONS[adapter].application}/RechtssatzketteUrl`]:
+      AT_RIS_BRANCH_VALUES.Rechtssatzkette,
+    ...Object.fromEntries(
+      AT_RIS_APPLICATIONS[adapter].document.map((field) => [
+        `Dokument/${field}`,
+        atRisDocumentXml(adapter),
+      ]),
+    ),
+  },
   buildDecision: async () =>
     await Promise.resolve(
       assembleAtRisDecision(
@@ -2238,6 +2299,21 @@ const AT_FINDOK_HEADNOTE_XML =
   `</Segk></Segment></Segmente>`;
 
 export const atFindokFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    gueltig: true,
+    inFindokSeit: "17.09.2026 02:15:26",
+    ...Object.fromEntries(
+      load(AT_FINDOK_DECISION_XML, { xml: true })("Grundk > *, Segk > *")
+        .toArray()
+        .flatMap((node) => {
+          const parent = node.parent;
+          if (parent === null || !("name" in parent)) {
+            return [];
+          }
+          return [[`${parent.name}/${node.name}`, AT_FINDOK_DECISION_XML]];
+        }),
+    ),
+  },
   buildDecision: async () => {
     const manifest = parseFindokManifest("bfg", AT_FINDOK_MANIFEST);
     const item = manifest.items.at(0);
@@ -2305,12 +2381,21 @@ const HU_BHGY_DOCUMENT = new URL(
 export const huBhgyFixture = (
   documentUrl = HU_BHGY_DOCUMENT,
 ): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    Szoveg: HU_BHGY_LISTING_ROW.Szoveg,
+    RezumeSzovegKornyezet: HU_BHGY_LISTING_ROW.RezumeSzovegKornyezet,
+    DownloadLink: HU_BHGY_LISTING_ROW.DownloadLink,
+  },
   buildDecision: async () => {
     const bytes = new Uint8Array(await Bun.file(documentUrl).arrayBuffer());
     const document =
       huBhgyDocumentOf(bytes) ??
       panic("the hu-bhgy fixture is not a decision file");
-    const row = { ...HU_BHGY_LISTING_ROW };
+    // Exercise a non-empty restriction; the captured listing leaves it null.
+    const row = {
+      ...HU_BHGY_LISTING_ROW,
+      NemHivatkozhatoSzoveg: "Nem hivatkozható",
+    };
     const built = await assembleHuBhgyDecision({
       row: normalizeHuBhgyRow(row),
       document,

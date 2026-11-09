@@ -9,14 +9,17 @@ import {
   buildValidationHtml,
   validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseRegionalDecision } from "./cz-regional";
+import { parseRegionalDecision as uncheckedParseRegionalDecision } from "./cz-regional";
 import type { ParseRegionalInput } from "./cz-regional";
 import {
   expectMarkerRetention,
   injectMarkupMarkers,
   markerPlan,
 } from "./marker-injection.test-helper";
+
+const parseRegionalDecision = guardParser(uncheckedParseRegionalDecision);
 
 const paragraph = fc.record({
   styleLocalId: fc.integer({ min: 1, max: 4 }),

@@ -121,6 +121,13 @@ test("state-column ownership covers every scoped runtime transition", () => {
         stateColumn: "phase",
       },
       outboundAction,
+      // A provider event receipt moves by its event id.
+      {
+        tableName: "hostedUsageWebhookEvents",
+        key: "eventId",
+        scope: [],
+        stateColumn: "result",
+      },
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
       ...Object.values(FOLIO_COLLAB_TRANSITION_IDENTITIES),
     ].toSorted(order),

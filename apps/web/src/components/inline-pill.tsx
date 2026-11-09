@@ -85,7 +85,7 @@ const SIZE: Record<InlinePillSize, string> = {
   inherit: "font-[inherit] text-[inherit] leading-[inherit] py-0.5",
 };
 
-const BASE = "inline-flex items-center gap-0.5 align-middle rounded px-1";
+const BASE = "inline-flex items-center gap-0.5 align-middle rounded-sm px-1";
 
 export const InlinePill = ({
   tone = "accent",

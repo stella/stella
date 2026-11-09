@@ -512,7 +512,7 @@ pub fn feature_enabled(app: &AppHandle, feature: DesktopFeature) {
 
 pub fn show(app: &AppHandle) {
   #[cfg(target_os = "macos")]
-  let _ = app.show();
+  crate::logging::best_effort(app.show(), "show onboarding application");
   if let Some(window) = app.get_webview_window(ONBOARDING_WINDOW_LABEL) {
     if window.show().and_then(|()| window.set_focus()).is_err() {
       tracing::warn!("onboarding window could not be focused");
@@ -578,7 +578,10 @@ pub fn shortcut_pressed(app: &AppHandle) {
       .await
       .is_ok()
     {
-      let _ = app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ());
+      crate::logging::best_effort(
+        app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ()),
+        "emit onboarding change",
+      );
     }
   });
 }
@@ -701,7 +704,10 @@ pub async fn onboarding_restart(app: AppHandle) -> Result<(), String> {
     let progress = restarted(onboarding.progress);
     onboarding.save(progress);
   }
-  let _ = app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ());
+  crate::logging::best_effort(
+    app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ()),
+    "emit onboarding change",
+  );
   show(&app);
   Ok(())
 }
@@ -711,6 +717,17 @@ pub async fn onboarding_restart(app: AppHandle) -> Result<(), String> {
 pub async fn onboarding_open_settings(app: AppHandle) -> Result<(), String> {
   crate::ensure_main_window(&app, crate::PreferencesTab::General);
   Ok(())
+}
+
+/// Where the document-app probe is created. Private files open only under the
+/// app's own roots in production; the temp directory is approved in tests alone.
+#[cfg(target_os = "macos")]
+fn document_app_probe_dir() -> Option<std::path::PathBuf> {
+  dirs::cache_dir().map(|root| {
+    root
+      .join(crate::config::APP_DATA_DIR_NAME)
+      .join("document-app-probe")
+  })
 }
 
 /// The screen edge the app's status icon sits on: the menu bar on macOS,
@@ -777,21 +794,27 @@ fn read_tray_location(app: &AppHandle) -> Option<TrayLocation> {
 }
 
 /// The default app for `.docx`, read from the OS. macOS answers for a file,
-/// so a short-lived empty probe file in the temp directory carries the type.
+/// so a short-lived empty probe file in the app cache carries the type.
 #[cfg(target_os = "macos")]
 fn document_app() -> Option<DocumentApp> {
   use objc2_app_kit::NSWorkspace;
   use objc2_foundation::{NSString, NSURL};
 
-  let probe = std::env::temp_dir()
-    .join(format!("stella-document-app-{}.docx", uuid::Uuid::new_v4()));
-  std::fs::write(&probe, []).ok()?;
+  let directory = document_app_probe_dir()?;
+  crate::local_store::create_private_dir(&directory).ok()?;
+  let probe =
+    directory.join(format!("stella-document-app-{}.docx", uuid::Uuid::new_v4()));
+  crate::local_store::open_private(crate::local_store::OpenMode::CreateNew, &probe)
+    .ok()?;
   let url = NSURL::fileURLWithPath(&NSString::from_str(probe.to_str()?));
   let app_path = NSWorkspace::sharedWorkspace()
     .URLForApplicationToOpenURL(&url)
     .and_then(|app| app.path())
     .map(|path| std::path::PathBuf::from(path.to_string()));
-  let _ = std::fs::remove_file(&probe);
+  crate::logging::best_effort(
+    std::fs::remove_file(&probe),
+    "remove document application probe",
+  );
   let app_path = app_path?;
   let info = plist::Value::from_file(app_path.join("Contents/Info.plist")).ok()?;
   let info = info.as_dictionary()?;
@@ -809,6 +832,23 @@ fn document_app() -> Option<DocumentApp> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  /// The probe must sit under a root the production private-file policy
+  /// approves: the temp directory is approved only in test builds, so a probe
+  /// there passes every test while detection fails in the shipped app.
+  #[cfg(target_os = "macos")]
+  #[test]
+  fn document_app_probe_uses_an_approved_production_root() {
+    let directory = document_app_probe_dir().unwrap();
+    assert!(
+      directory.starts_with(
+        dirs::cache_dir()
+          .unwrap()
+          .join(crate::config::APP_DATA_DIR_NAME)
+      )
+    );
+    assert!(!directory.starts_with(std::env::temp_dir()));
+  }
 
   /// Every combination with clipboard history; its absence has its own test.
   const CONTEXTS: [FlowContext; 8] = {

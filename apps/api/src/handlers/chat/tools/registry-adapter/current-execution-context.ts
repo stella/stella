@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { intersectAccessibleWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { ChatRegistryContextDeps } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
@@ -72,8 +74,8 @@ export const resolveCurrentChatRegistryContext = async ({
     );
   }
 
-  const usableWorkspaces = current.accessibleWorkspaces.filter(
-    ({ status }) => status !== "deleting",
+  const usableWorkspaces = current.accessibleWorkspaces.filter(({ status }) =>
+    workspaceIsVisible(status),
   );
   const toolWorkspaceIds = intersectAccessibleWorkspaceIds({
     pinnedIds: contextDeps.toolWorkspaceIds,

@@ -2,6 +2,9 @@ import {
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
   INVOICE_LANGUAGES,
 } from "@stll/api-contract";
+import { CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS } from "@stll/api-contract/chat-run-target";
+import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
+import { DESKTOP_RUNNER_APPROVAL_MODES } from "@stll/api-contract/desktop-runner";
 import type { TimeZoneId } from "@stll/time";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -205,6 +208,17 @@ export const organizationSettings = p.pgTable(
       .text("personal_api_key_policy", { enum: PERSONAL_API_KEY_POLICIES })
       .notNull()
       .default("enabled"),
+    /**
+     * The most a chat turn run on a member's computer may do without asking
+     * (`ask < auto < full_auto`). A turn above it is refused when it starts;
+     * a run already going keeps the mode it started with.
+     */
+    localRunMaxApprovalMode: p
+      .text("local_run_max_approval_mode", {
+        enum: DESKTOP_RUNNER_APPROVAL_MODES,
+      })
+      .notNull()
+      .default(CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS),
     /** Default document language for invoices; null derives it from the seller. */
     invoiceLanguage: p.text("invoice_language", { enum: INVOICE_LANGUAGES }),
     sanctionsMonitoringMode: p
@@ -268,6 +282,9 @@ export const organizationSettings = p.pgTable(
       .$type<PracticeJurisdiction[]>()
       .notNull()
       .default([]),
+    // The organization's own data-box IDs (lowercase); they decide whether a
+    // filed data-box message is outgoing or incoming.
+    dataBoxIds: jsonb("data_box_ids").$type<string[]>().notNull().default([]),
     /**
      * Per-slug overrides for built-in native tools (e.g. ARES). The
      * effective state of a tool is `overrides[slug] ?? jurisdictionDefault`,
@@ -381,6 +398,10 @@ export const organizationSettings = p.pgTable(
       )})`,
     ),
     p.check(
+      "organization_settings_data_box_ids_check",
+      sql`jsonb_typeof(${table.dataBoxIds}) = 'array' AND jsonb_array_length(${table.dataBoxIds}) <= ${sql.raw(String(ORGANIZATION_DATA_BOX_LIMIT))}`,
+    ),
+    p.check(
       "organization_settings_invoice_language_check",
       sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
         INVOICE_LANGUAGES.map((value) => sql`${value}`),
@@ -413,6 +434,13 @@ export const organizationSettings = p.pgTable(
       "organization_settings_sanctions_monitoring_mode_check",
       sql`${table.sanctionsMonitoringMode} IN (${sql.join(
         SANCTIONS_MONITORING_MODES.map((mode) => sql`${mode}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "organization_settings_local_run_max_approval_mode_check",
+      sql`${table.localRunMaxApprovalMode} IN (${sql.join(
+        DESKTOP_RUNNER_APPROVAL_MODES.map((mode) => sql`${mode}`),
         sql`, `,
       )})`,
     ),

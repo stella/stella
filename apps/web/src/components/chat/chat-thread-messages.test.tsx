@@ -6,11 +6,13 @@ import { Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
+import { createFormatter } from "use-intl/core";
 
 import {
   AI_ERROR_KINDS,
   AI_FAILURE_CODES,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
@@ -30,6 +32,7 @@ import type {
   ChatUIMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { withLocalRunLimitResetsAt } from "@/features/chat/chat-local-run-limit";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
@@ -40,6 +43,7 @@ import {
   translateError,
 } from "@/lib/errors/localization";
 import { ProviderDiagnosticError } from "@/lib/errors/provider-diagnostic";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
@@ -373,7 +377,6 @@ describe("chat thread messages", () => {
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
-        showThinkingIndicator
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
@@ -397,7 +400,6 @@ describe("chat thread messages", () => {
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
-        showThinkingIndicator={false}
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
@@ -426,6 +428,61 @@ describe("chat thread messages", () => {
       expect(renderedText(html)).not.toContain(messages.chat.sendError);
     },
   );
+
+  test("a local run's usage limit says when it resets, in the member's locale and time zone, live and after a reload", () => {
+    const resetsAt = "2026-11-08T09:30:00.000Z";
+    const inZone = (timeZone: string, error: Error) =>
+      renderedText(
+        renderToStaticMarkup(
+          <IntlProvider locale="en" messages={messages} timeZone={timeZone}>
+            <FormattingProvider locale="en" timeZone={timeZone}>
+              <ChatErrorMessage error={error} isGenerating={false} />
+            </FormattingProvider>
+          </IntlProvider>,
+        ),
+      );
+    const expected = (timeZone: string) =>
+      messages.chat.localRun.errorLimitResetsAt.replace("{time}", () =>
+        createFormatter({ locale: "en", timeZone }).dateTime(
+          new Date(resetsAt),
+          MEDIUM_DATE_SHORT_TIME_FORMAT,
+        ),
+      );
+    const stored = {
+      id: "assistant-limited",
+      role: "assistant",
+      parts: [],
+      metadata: {
+        turnOutcome: {
+          type: "failed",
+          error: "local_runner_limit_reached",
+          limitResetsAt: resetsAt,
+        },
+      },
+    } satisfies PersistedChatMessage;
+    const reloaded =
+      getChatAssistantTurnError(structuredClone(stored)) ??
+      new Error("no turn error");
+    const live = withLocalRunLimitResetsAt(
+      new Error("local_runner_limit_reached"),
+      resetsAt,
+    );
+    for (const error of [reloaded, live]) {
+      expect(inZone("Europe/Prague", error)).toContain(
+        expected("Europe/Prague"),
+      );
+      expect(inZone("America/New_York", error)).toContain(
+        expected("America/New_York"),
+      );
+    }
+    // The fixture differs by zone, so the zone is what changed the text.
+    expect(expected("Europe/Prague")).not.toBe(expected("America/New_York"));
+
+    // Without a known reset the notice keeps its plain copy.
+    expect(inZone("UTC", new Error("local_runner_limit_reached"))).toContain(
+      messages.chat.localRun.errorLimitReached,
+    );
+  });
 
   test("an unknown AI failure keeps the chat's own copy", () => {
     const html = renderWithProviders(
@@ -999,7 +1056,7 @@ describe("chat thread messages", () => {
     expect(html).not.toContain("3 steps");
     expect(disclosureExpanded(html, "1 analysis")).toBe("false");
     expect(disclosureExpanded(html, "Show details")).toBe("false");
-    expect(html).toContain("This step failed — stella will work around it.");
+    expect(html).toContain("This step failed; stella will work around it.");
     expect(html).toContain(">Show details<");
     expect(html).toContain("Here is the answer.");
   });
@@ -1084,8 +1141,9 @@ describe("chat thread messages", () => {
         "Reading cited documents with create-document.",
       );
       expect(output).not.toContain("**");
-      expect(output).not.toContain('data-slot="loader"');
-      expect(output).not.toContain("Working with context");
+      expect(output.match(/data-slot="loader"/gu)).toHaveLength(1);
+      expect(output.match(/data-turn-live-status/gu)).toHaveLength(1);
+      expect(renderedText(output)).toContain(messages.chat.thinking);
     }
   });
 
@@ -1291,6 +1349,58 @@ describe("chat thread messages", () => {
     expect(html).toContain('aria-label="Preview: evidence.png"');
     expect(html).not.toContain('target="_blank"');
     expect(html).not.toContain('href="/v1/user-files/file_test123/content"');
+  });
+
+  describe("an answer's files", () => {
+    const fileUrl = "stella://file::file_report";
+    const documentPart = {
+      type: "document",
+      source: { type: "url", value: fileUrl, mimeType: "text/html" },
+      metadata: { filename: "report.html" },
+    } as const;
+    const render = (message: Partial<ChatUIMessage>) =>
+      renderWithProviders(
+        <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+          approvalPendingMessageId={null}
+          messages={[
+            {
+              id: "answer",
+              role: "assistant",
+              parts: [{ type: "text", content: "It is ready." }, documentPart],
+              ...message,
+            },
+          ]}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+
+    test("opens from a chip under the answer", () => {
+      const html = render({});
+      expect(html).toContain("It is ready.");
+      expect(html).toContain("report.html");
+      expect(html).toContain('/v1/user-files/file_report/content"');
+    });
+
+    test("an answer holding only a file still shows it", () => {
+      const html = render({ parts: [documentPart] });
+      expect(html).toContain("report.html");
+    });
+
+    test("names what could not be shared", () => {
+      const html = render({
+        parts: [{ type: "text", content: "It is ready." }],
+        metadata: { localRunFilesNotShared: ["data.zip", "dump.bin"] },
+      });
+      expect(html).toContain(
+        "Files that could not be shared stay on your computer: data.zip, dump.bin",
+      );
+    });
   });
 
   test("does not render remote image attachment URLs", () => {
@@ -1817,7 +1927,7 @@ describe("buildMessageTurns", () => {
 });
 
 test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
-  "runtime chat error %s renders full provider reason and guidance after reload",
+  "runtime chat error %s renders its typed message and setup fix, never the provider's wording",
   (code) => {
     const provider =
       code === null
@@ -1826,7 +1936,7 @@ test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
     const diagnostic = {
       provider,
       code,
-      message: `The exact upstream reason\n${"full detail ".repeat(30)}`,
+      message: "messages.0: user messages must have non-empty content",
     };
     const stored = {
       id: "failed-diagnostic",
@@ -1849,13 +1959,19 @@ test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
     }
     const restored = error;
     const html = renderWithProviders(
-      <ChatErrorMessage error={restored} isGenerating={false} />,
+      <ChatErrorMessage
+        error={restored}
+        isGenerating={false}
+        onResend={() => {}}
+      />,
     );
-    expect(renderedText(html)).toContain(`${provider}: ${diagnostic.message}`);
-    expect(html).toContain(messages.common.copy);
-    expect(html).not.toContain(
-      messages.chat.sendErrorProviderCredentialsRejected,
-    );
+    const text = renderedText(html);
+    expect(text).toContain(messages.chat.sendErrorProviderCredentialsRejected);
+    expect(text).not.toContain(diagnostic.message);
+    expect(text).not.toContain(`${provider}:`);
+    expect(html).not.toContain(messages.common.copy);
+    // A provider failure is worth sending again.
+    expect(text).toContain(messages.chat.resend);
     if (code !== null) {
       expect(html).toContain(
         PROVIDER_SETUP_ERROR_CATALOGUE[code].url.replaceAll("&", "&amp;"),
@@ -1863,6 +1979,27 @@ test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
     }
   },
 );
+
+test("a message refused as empty says what to do and offers no resend", () => {
+  const refusal = toAPIError({
+    status: 422,
+    value: {
+      code: CHAT_MESSAGE_EMPTY_ERROR_CODE,
+      message: "Chat message has no text or attachment",
+    },
+  });
+  const html = renderWithProviders(
+    <ChatErrorMessage
+      error={new Error("Chat request failed", { cause: refusal })}
+      isGenerating={false}
+      onResend={() => {}}
+    />,
+  );
+  const text = renderedText(html);
+  expect(text).toContain(messages.chat.sendErrorMessageEmpty);
+  expect(text).not.toContain("Chat message has no text or attachment");
+  expect(text).not.toContain(messages.chat.resend);
+});
 test("sent pasted text renders once as a collapsed attachment", () => {
   const text = "First line\n  <literal> & whitespace\n";
   const html = renderWithProviders(

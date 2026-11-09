@@ -189,8 +189,11 @@
       "notSaved": "Veel salvestamata",
       "done": "Valmis",
       "openFailed": "Seda dokumenti ei saa praegu muuta",
+      "resumed": "Sellel dokumendil on pooleli jäänud muudatus, nii et jätkate sealt. Äsja kirjutatut ei säilitatud.",
+      "newerVersion": "Vahepeal salvestati selle dokumendi uuem versioon, nii et muutmine jätkub sellest. Äsja kirjutatut ei säilitatud.",
       "takenOver": "Seda dokumenti muudab nüüd keegi teine. Teie muudatusi pärast viimast salvestamist ei säilitatud.",
       "finishFailed": "Teie muudatused on salvestatud, kuid neist ei saanud veel uut versiooni. Puudutage uuesti Valmis või lahkuge: järgmine muutmine jätkab neist.",
+      "notStored": "Viimaseid muudatusi ei õnnestunud salvestada. Jää ja proovi uuesti või lahku ilma nendeta.",
       "stay": "Jää",
       "leave": "Lahku"
     }
@@ -222,7 +225,10 @@
     "signOut": "Logi välja",
     "deleteAccount": "Kustuta konto",
     "deleteAccountHint": "Avab teie konto veebis, kus saate selle koos kõigega, mis on teie oma, kustutada.",
-    "signOutFailed": "Väljalogimist ei saanud lõpule viia. Proovige uuesti."
+    "signOutFailed": "Väljalogimist ei saanud lõpule viia. Proovige uuesti.",
+    "lockScreenTitle": "Lukustuskuva",
+    "timerDetails": "Taimeri üksikasjad",
+    "timerDetailsHint": "Kui taimer muutub teises seadmes, toob Apple'i teavitusteenus selle kirjelduse ja asja lukustuskuvale. Väljalülitatuna näidatakse ainult aega, kuni rakenduse avate."
   },
   "header": {
     "search": "Otsing"
@@ -236,7 +242,6 @@
     "headnote": "Lühikokkuvõte",
     "textUnavailable": "Selle lahendi teksti ei ole saadaval",
     "openSource": "Ava algallikas",
-    "openFailed": "Linki ei õnnestunud avada.",
     "loadFailed": "Kohtupraktikat ei õnnestunud laadida.",
     "share": "Jaga"
   },
@@ -262,12 +267,6 @@
     "newTimer": "Uus taimer",
     "description": "Mille kallal töötate?",
     "matterTitle": "Asi",
-    "noMatter": "Asjata",
-    "noDescription": "Kirjelduseta",
-    "running": "Käib",
-    "paused": "Peatatud",
-    "pause": "Peata",
-    "resume": "Jätka",
     "save": "Salvesta",
     "discard": "Loobu",
     "emptyTitle": "Taimereid pole",
@@ -276,8 +275,7 @@
     "retry": "Proovi uuesti",
     "unavailable": "Teie organisatsioonis pole ajaarvestus sisse lülitatud.",
     "startFailed": "Taimerit ei õnnestunud käivitada. Proovige uuesti.",
-    "changeFailed": "Taimerit ei õnnestunud muuta. Proovige uuesti.",
-    "more": "{count, plural, one {veel # taimer} other {veel # taimerit}}"
+    "changeFailed": "Taimerit ei õnnestunud muuta. Proovige uuesti."
   },
   "scan": {
     "title": "Skanni dokument",
@@ -347,5 +345,11 @@
   "pane": {
     "showList": "Näita loendit",
     "hideList": "Peida loend"
+  },
+  "link": {
+    "open": "Ava",
+    "share": "Jaga",
+    "cancel": "Loobu",
+    "openFailed": "Linki ei õnnestunud avada."
   }
 }

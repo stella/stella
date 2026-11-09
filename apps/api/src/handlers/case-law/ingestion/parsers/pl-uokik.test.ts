@@ -14,12 +14,12 @@ import { describe, expect, spyOn, test } from "bun:test";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import {
-  extractPlPdfLetterheadContent,
-  PL_PDF_PARAGRAPH_START,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
-import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import type { PdfLine } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
 import {
-  parsePlUokikDocument,
+  parsePlUokikDocument as uncheckedParsePlUokikDocument,
   PL_UOKIK_RULING_UNREAD,
   plUokikDocumentLines,
   readPlUokikRulingHeader,
@@ -39,6 +39,9 @@ import {
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { logger } from "@/api/lib/observability/logger";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlUokikDocument = guardParser(uncheckedParsePlUokikDocument);
 
 /** A 2011 decision whose embedded fonts name no weight. */
 const DOK_9_2011 = new URL(
@@ -70,6 +73,15 @@ const DDK_2_2017 = new URL(
   import.meta.url,
 );
 
+/**
+ * A 2018 decision whose first page alone prints the office's letterhead
+ * footer, under a list of the operative part that runs on to the next page.
+ */
+const RBG_11_2018 = new URL(
+  "__fixtures__/pl-uokik-rbg-11-2018.pdf",
+  import.meta.url,
+);
+
 /** A 2017 decision numbering its pages `Strona N z M`, indented with spaces. */
 const DIH_48_2017 = new URL(
   "__fixtures__/pl-uokik-dih-48-2017.pdf",
@@ -94,9 +106,10 @@ const inputOf = (pdfs: Uint8Array[]): ParsePlUokikDocumentInput => ({
 
 /**
  * The lines the reader drops on purpose, named one by one: the Gdańsk
- * delegation's footer. Page numbers additionally need their own page's
- * number in the centered footer position. All other numeric text remains
- * in the oracle, including separately extracted raised spans.
+ * delegation's running footer and the Bydgoszcz delegation's first-page
+ * letterhead footer. Page numbers additionally need their own page's number
+ * in the centered footer position. All other numeric text remains in the
+ * oracle, including separately extracted raised spans.
  */
 const DROPPED_ON_PURPOSE: readonly RegExp[] = [
   /^Strona \d+ z \d+$/u,
@@ -106,6 +119,10 @@ const DROPPED_ON_PURPOSE: readonly RegExp[] = [
   /^gdansk@uokik\.gov\.pl/u,
   /^ul\. Podwale Przedmiejskie 30/u,
   /^80-824 Gdańsk, ul\. Podwale Przedmiejskie 30/u,
+  /^Sprawę prowadził:$/u,
+  /^\p{Lu}\p{Ll}+ \p{Lu}\p{Ll}+ – Zastępca Dyrektora Delegatury$/u,
+  /^Delegatura w Bydgoszczy bydgoszcz@uokik\.gov\.pl/u,
+  /^ul\. Długa 47 85-034 Bydgoszcz$/u,
 ];
 
 /**
@@ -181,6 +198,7 @@ describe("a UOKiK decision PDF", () => {
     ["a 2026 decision", RGD_9_2026],
     ["a 2017 decision set apart by spacing", DDK_2_2017],
     ["a 2017 decision numbering its pages", DIH_48_2017],
+    ["a 2018 decision with a first-page letterhead footer", RBG_11_2018],
   ])("%s keeps every word its text layer prints", async (_, fixture) => {
     const pdfs = [await bytesOf(fixture)];
     const parsed = await parsePlUokikDocument(inputOf(pdfs));
@@ -192,6 +210,27 @@ describe("a UOKiK decision PDF", () => {
     expect(result.issues.filter(({ code }) => LOSS_CODES.has(code))).toEqual(
       [],
     );
+  });
+
+  test("the authority's bracketed paragraph numbers [1] to [61] are block numbers", async () => {
+    const parsed = await parsePlUokikDocument(
+      inputOf([await bytesOf(RGD_16_2024)]),
+    );
+    const blocks = parsed?.documentAst.blocks ?? [];
+    expect(
+      blocks.flatMap((block) =>
+        block.type === "paragraph" && block.number !== undefined
+          ? [block.number]
+          : [],
+      ),
+    ).toEqual(Array.from({ length: 61 }, (_, index) => index + 1));
+    expect(
+      blocks.filter(
+        (block) =>
+          block.type === "paragraph" && /^\[\d{1,3}\]/u.test(block.plainText),
+      ),
+    ).toEqual([]);
+    expect(parsed?.fulltext).not.toMatch(/(?:^|\n)\[1\] /u);
   });
 
   test("states the decision it is", async () => {
@@ -441,7 +480,129 @@ describe("a UOKiK decision read as the office sets its pages", () => {
   });
 });
 
+describe("a UOKiK decision's numbered subheadings", () => {
+  const subheadings = (blocks: readonly Block[]): string[] =>
+    blocks.flatMap((block) =>
+      block.type === "heading" && block.level === 3 ? [block.plainText] : [],
+    );
+
+  test("DDK-2/2017: a subheading numbered in the outline heads its part", async () => {
+    const { blocks } = await parsedOf(DDK_2_2017);
+    expect(subheadings(blocks)).toEqual(
+      expect.arrayContaining([
+        "1. Status przedsiębiorcy",
+        "2. Zbiorowy interes konsumentów",
+        "3. Bezprawność działań",
+        "Działanie Spółki opisane w pkt I.1 sentencji decyzji",
+      ]),
+    );
+  });
+
+  test("RGD-9/2026: a bold abbreviation in the distribution list heads nothing", async () => {
+    const { blocks } = await parsedOf(RGD_9_2026);
+    expect(subheadings(blocks)).not.toContain("2. a/a");
+  });
+});
+
+describe("a UOKiK decision's title and ruling", () => {
+  const titlesOf = (blocks: readonly Block[]): string[] =>
+    blocks.flatMap((block) =>
+      block.type === "heading" && block.role === "decision-title"
+        ? [block.plainText]
+        : [],
+    );
+  const firstHolding = (blocks: readonly Block[]): string | undefined =>
+    blocks.find(
+      (block) => block.type === "paragraph" && block.role === "holding",
+    )?.plainText;
+
+  test("DIH-48/2017 is titled by its docket alone, once, and rules under it", async () => {
+    const { blocks } = await parsedOf(DIH_48_2017);
+    expect(titlesOf(blocks)).toEqual(["DECYZJA DIH-1/48/2017"]);
+    expect(firstHolding(blocks)).toStartWith("Na podstawie art. 138 § 1 pkt 1");
+  });
+
+  test("RBG-11/2018 rules under its numbered title printed below the bare title", async () => {
+    const { blocks } = await parsedOf(RBG_11_2018);
+    expect(titlesOf(blocks)).toEqual(["DECYZJA"]);
+    expect(firstHolding(blocks)).toStartWith(
+      "I. Na podstawie art. 27 ust. 1 i 2 ustawy z dnia 16 lutego 2007 r.",
+    );
+  });
+});
+
+/** A 2009 decision whose recital runs on into the ruling, recorded for its roles. */
+const RWA_26_2009 = new URL(
+  "__fixtures__/decision-roles/pl-uokik-rwa-26-2009.pdf",
+  import.meta.url,
+);
+
+describe("a UOKiK decision whose recital runs on into its ruling", () => {
+  test("RWA-26/2009: the legal basis and the recital introduce the ruling, which opens at its verb", async () => {
+    const { blocks } = await parsedOf(RWA_26_2009);
+    const opening = bodyOf(blocks)
+      .filter((block) => block.type === "paragraph")
+      .slice(7, 12)
+      .map((block) => `${block.role ?? "-"} ${block.plainText.slice(0, 30)}`);
+
+    expect(opening).toEqual([
+      "intro I. Na podstawie art. 27 ust. 2",
+      "intro − w imieniu Prezesa Urzędu Och",
+      "intro po przeprowadzeniu postępowani",
+      "holding uznaje się, że działanie poleg",
+      "holding 1. „Koszty ponoszone przez ucz",
+    ]);
+    // The text stays as printed: the two paragraphs read as the one.
+    const all = blocks.map(({ plainText }) => plainText).join(" ");
+    expect(all).toContain(
+      "z siedzibą w Warszawie, uznaje się, że działanie polegające",
+    );
+  });
+});
+
 // ── Each rule that drops a line, on a PDF built for it ───
+
+describe("a UOKiK decision whose first page carries the office's letterhead footer", () => {
+  test("the footer leaves the text, and the list it was printed under runs on", async () => {
+    const parsed = await parsePlUokikDocument(
+      inputOf([await bytesOf(RBG_11_2018)]),
+    );
+    const texts = (parsed?.documentAst.blocks ?? []).map(
+      ({ plainText }) => plainText,
+    );
+    const all = texts.join("\n");
+    expect(all).not.toContain("Sprawę prowadził");
+    expect(all).not.toContain("bydgoszcz@uokik.gov.pl");
+    expect(all).not.toContain("ul. Długa 47");
+    const point = texts.indexOf("c) karty płatnicze,");
+    expect(point).toBeGreaterThan(-1);
+    expect(texts.at(point + 1)).toStartWith(
+      "- istotnych informacji umożliwiających ustalenie przez konsumentów",
+    );
+    // The office's place and name in the text itself stay.
+    expect(all).toContain("Bydgoszcz, dnia 27 sierpnia 2018 r.");
+  });
+});
+
+describe("a UOKiK decision's instruction on appeal", () => {
+  test("is neither the ruling nor its reasons", async () => {
+    const { blocks } = await parsedOf(RBG_11_2018);
+    const instruction = blocks.find(
+      (block) =>
+        block.type === "paragraph" &&
+        block.plainText.includes(
+          "od niniejszej decyzji przysługuje stronie odwołanie",
+        ),
+    );
+
+    expect(instruction?.plainText).toStartWith(
+      "Stosownie do treści art. 81 ust. 1 ustawy o ochronie konkurencji i konsumentów",
+    );
+    expect(
+      instruction?.type === "paragraph" ? instruction.role : "not a paragraph",
+    ).toBeUndefined();
+  });
+});
 
 type Drawn = { text: string; x: number; y: number; size: number };
 
@@ -467,11 +628,11 @@ const builtPdf = async (pages: readonly (readonly Drawn[])[]) => {
 };
 
 const readBuilt = async (pages: readonly (readonly Drawn[])[]) => {
-  const { body, notes } = await extractPlPdfLetterheadContent(
+  const { body, notes } = await extractPdfBodyAndNotes(
     await builtPdf(pages),
-    PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+    PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
   );
-  const textOf = (lines: readonly PlSnLine[]) =>
+  const textOf = (lines: readonly PdfLine[]) =>
     lines.flatMap((line) =>
       line.type === "text" ? [line.runs.map(({ text }) => text).join("")] : [],
     );
@@ -731,7 +892,7 @@ const headerOf = async (fixture: URL) =>
   readPlUokikRulingHeader(await plUokikDocumentLines([await bytesOf(fixture)]));
 
 /** Lines as a text layer states them, for headers no capture holds. */
-const typeset = (lines: readonly string[]): PlSnLine[] =>
+const typeset = (lines: readonly string[]): PdfLine[] =>
   lines.map((text) => ({
     type: "text",
     runs: [{ text, bold: false }],
@@ -764,6 +925,17 @@ describe("a court ruling's header", () => {
         divisionAsPrinted: undefined,
       },
     });
+  });
+
+  test("a ruling's text reads through its font's letter substitution too", async () => {
+    const supreme = await parsedOf(RULING_FIXTURES.supreme);
+    const appeal = await parsedOf(RULING_FIXTURES.appeal);
+    expect(supreme.fulltext).toContain("Sąd Najwyższy");
+    expect(appeal.fulltext).toContain("Wielobranżowego");
+    for (const { fulltext, blocks } of [supreme, appeal]) {
+      expect(fulltext).not.toContain("Ŝ");
+      expect(JSON.stringify(blocks)).not.toContain("Ŝ");
+    }
   });
 
   test("a scan states nothing, and says so", async () => {

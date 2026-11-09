@@ -128,6 +128,11 @@ export const caseLawSearchWarnings = ({
  * - `provision_cited_widely`: the provision filter is cited by more decisions
  *   than one search can filter by, so the page holds the topic's best matches
  *   that cite it rather than every one; the count and the narrowing are said.
+ * - `phrasing_timed_out`: one of several phrasings ran out of the call's time
+ *   budget, so the page holds the phrasings that finished and none of its
+ *   hits; the hint names how to run it again.
+ * - `partial_matches_unread`: the partial matches a short page tops up with
+ *   were due and could not be read, so the list is shorter than usual.
  */
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
@@ -135,6 +140,8 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_unread",
   "many_required_terms",
   "provision_cited_widely",
+  "phrasing_timed_out",
+  "partial_matches_unread",
 ] as const;
 
 type AgentCaseLawSearchWarningCode =
@@ -145,6 +152,75 @@ export type AgentCaseLawSearchWarning = {
   readonly message: string;
   readonly hint: string;
 };
+
+/**
+ * Why a `query` inside one decision found no paragraph. The answer stays empty:
+ * a paragraph holding only some of the words must not read as a match, so the
+ * words are reported and the caller chooses the narrower call.
+ *
+ * - `query_words_apart`: at least one word occurs, but no paragraph holds them
+ *   all; the hint carries the largest set one paragraph does hold.
+ * - `query_words_absent`: no word of the query occurs in this decision.
+ */
+export const DECISION_QUERY_WARNING_CODES = [
+  "query_words_apart",
+  "query_words_absent",
+] as const;
+
+type DecisionQueryWarningCode = (typeof DECISION_QUERY_WARNING_CODES)[number];
+
+export type DecisionQueryWarning = {
+  readonly code: DecisionQueryWarningCode;
+  readonly message: string;
+  readonly hint: string;
+};
+
+export const queryWordsApartWarning = ({
+  absentWords,
+  presentWords,
+  retry,
+}: {
+  absentWords: readonly string[];
+  presentWords: readonly string[];
+  retry: { query: string; hitCount: number };
+}): DecisionQueryWarning => ({
+  code: "query_words_apart",
+  message: [
+    "No paragraph of this decision holds every word of this query.",
+    ...(absentWords.length === 0
+      ? []
+      : [`Nowhere in the decision: ${absentWords.join(", ")}.`]),
+    `In the decision, but without the rest: ${presentWords.join(", ")}.`,
+  ].join(" "),
+  hint: `Call read_case_law_decision for this decision with query ${JSON.stringify(retry.query)}: ${String(retry.hitCount)} ${retry.hitCount === 1 ? "paragraph holds" : "paragraphs hold"} those words, which is not the whole query.`,
+});
+
+export const queryWordsAbsentWarning = ({
+  language,
+  words,
+}: {
+  language: string;
+  words: readonly string[];
+}): DecisionQueryWarning => ({
+  code: "query_words_absent",
+  message: `None of these words occurs in this decision: ${words.join(", ")}.`,
+  hint: `Query in the decision's language (${language}), read it by page, or call search_case_law to find decisions that use these words.`,
+});
+
+/** Each decision-query code's producer, total over its set like the others. */
+export const DECISION_QUERY_WARNING_PRODUCERS = {
+  query_words_apart: () =>
+    queryWordsApartWarning({
+      absentWords: ["zzvz"],
+      presentWords: ["změna", "nabídky"],
+      retry: { query: "změna nabídky", hitCount: 2 },
+    }),
+  query_words_absent: () =>
+    queryWordsAbsentWarning({ language: "cs", words: ["innocence"] }),
+} as const satisfies Record<
+  DecisionQueryWarningCode,
+  () => DecisionQueryWarning
+>;
 
 /**
  * A court the corpus stores under several spellings (with and without the
@@ -188,6 +264,30 @@ export const filterDroppedWarning = ({
 });
 
 /**
+ * The filter named one value the data knows, but no stored record carries
+ * it: a court no decision in the corpus is filed under. Narrowing to it would
+ * empty the search, and narrowing to a neighbour would answer for a value the
+ * caller did not name, so the filter is dropped and both are said.
+ */
+export const filterNotHeldWarning = ({
+  filter,
+  received,
+  value,
+  known,
+}: {
+  filter: string;
+  received: string;
+  /** The value the filter was read as. */
+  value: string;
+  /** The stored values the caller could narrow to instead; bounded. */
+  known: string;
+}): AgentCaseLawSearchWarning => ({
+  code: "filter_dropped",
+  message: `${received} names ${filter} "${value}", which no stored decision is filed under, so this search ran without the ${filter} filter.`,
+  hint: `To narrow by ${filter}, pass one of the stored values. ${known}`,
+});
+
+/**
  * The stored values a filter is read against were unavailable in time, so
  * the search compared the value as sent: an exact stored spelling still
  * matches, any other spelling matches nothing.
@@ -200,6 +300,45 @@ export const filterUnreadWarning = ({
   code: "filter_unread",
   message: `The stored ${filter} values could not be read in time, so the ${filter} filter was used exactly as sent.`,
   hint: `If this page looks narrower than expected, pass ${filter} as the corpus stores it, or search again.`,
+});
+
+/**
+ * A phrasing of a several-phrasing search stopped on the call's time budget
+ * while the others finished. Its absence from the page is not "nothing
+ * matched", so it is said: a continuation of the page retries it, and a
+ * phrasing that had not returned a page yet is rerun by name, since the
+ * cursor cannot hold a first page that never ran.
+ */
+export const phrasingTimedOutWarning = ({
+  query,
+  retriedByCursor,
+}: {
+  query: string;
+  /** Whether the page's cursor carries this phrasing's continuation. */
+  retriedByCursor: boolean;
+}): AgentCaseLawSearchWarning => ({
+  code: "phrasing_timed_out",
+  // The phrasing is named: two phrasings can time out on one page, and the
+  // call keeps each distinct note once, so identical wording would merge them.
+  message: `The phrasing ${JSON.stringify(query)} ran out of the search's time budget, so the page holds none of its hits; the phrasings that finished are on the page.`,
+  hint: retriedByCursor
+    ? "Pass the returned cursor to retry this phrasing with the others, or search it on its own."
+    : `Search this phrasing on its own (queries: [${JSON.stringify(query)}]), or narrow it with a court, date range or provision filter.`,
+});
+
+/**
+ * A short page whose top-up with partial matches did not finish. What it holds
+ * is correct but not everything it would normally hold, which the caller cannot
+ * tell from the hits. The phrasing is named for the same reason as above.
+ */
+export const partialMatchesUnreadWarning = ({
+  query,
+}: {
+  query: string;
+}): AgentCaseLawSearchWarning => ({
+  code: "partial_matches_unread",
+  message: `Decisions holding only some of the words of ${JSON.stringify(query)} could not be read in time, so this page may hold fewer "some_terms" hits than usual, or none. Do not read the shorter list as all there is.`,
+  hint: "Repeat this search to read the partial matches, or narrow it with a court or date range. Pass strict: true if only decisions holding every word are wanted.",
 });
 
 export const manyRequiredTermsWarning = ({
@@ -318,6 +457,13 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       wordCount: 6,
       slots: 5,
     }),
+  phrasing_timed_out: () =>
+    phrasingTimedOutWarning({
+      query: "náhrada škody promlčení",
+      retriedByCursor: false,
+    }),
+  partial_matches_unread: () =>
+    partialMatchesUnreadWarning({ query: "náhrada škody promlčení" }),
 } as const satisfies Record<
   AgentCaseLawSearchWarningCode,
   () => AgentCaseLawSearchWarning

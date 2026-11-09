@@ -582,11 +582,33 @@ const extractKeywords = ($document: cheerio.Cheerio<AnyNode>): string[] => {
     ? KEYWORD_SEPARATOR
     : LOOSE_KEYWORD_SEPARATOR;
 
-  return inner
-    .split(separator)
+  const keywords: string[] = [];
+  let previousSeparator = "";
+  // Capture each separator, so a dash that closes a range keeps its spacing.
+  for (const [index, piece] of inner
+    .split(new RegExp(`(${separator.source})`, "u"))
+    .entries()) {
+    if (index % 2 === 1) {
+      previousSeparator = piece;
+      continue;
+    }
+    const last = keywords.at(-1);
+    // A bare number after a dash closes a range inside the keyword before
+    // it (`Artikli 1 lõiked 1 – 3`, paragraphs 1 to 3): a number alone is
+    // never a keyword of its own.
+    if (last !== undefined && BARE_NUMBER.test(piece.trim())) {
+      keywords[keywords.length - 1] = `${last}${previousSeparator}${piece}`;
+    } else {
+      keywords.push(piece);
+    }
+  }
+  return keywords
     .map((part) => part.replace(/\s+/gu, " ").trim())
     .filter((part) => part.length > 0);
 };
+
+/** A number with nothing else: the end of a range, not a keyword. */
+const BARE_NUMBER = /^\d{1,4}$/u;
 
 /**
  * Whether a normalized historical payload lost spacing that determines ECJ
@@ -616,7 +638,7 @@ export const ecjKeywordSpacingNeedsVerbatim = (html: string): boolean => {
 
 // ── Block building ─────────────────────────────────────────
 
-type Zone = "header" | "body" | "operative" | "footnotes";
+type Zone = "header" | "body" | "operative" | "footnotes" | "contents";
 
 /**
  * Which of the publisher's two markups the document is in.
@@ -703,6 +725,11 @@ const roleOf = (zone: Zone, signature = false): { role?: ParagraphRole } => {
   }
   if (zone === "operative") {
     return { role: "holding" };
+  }
+  if (zone === "contents") {
+    // The converter's table of contents, appended after the signatures:
+    // publisher navigation printed after the decision, never head matter.
+    return { role: "publisher-note" };
   }
   return {};
 };
@@ -856,6 +883,53 @@ const classListOf = (el: cheerio.Cheerio<AnyNode>): string[] =>
       name.startsWith(CLASS_PREFIX) ? name.slice(CLASS_PREFIX.length) : name,
     );
 
+/**
+ * One title the court sets over several lines ("OPINION OF ADVOCATE
+ * GENERAL" / "KOKOTT" / "delivered on 26 April 2018", or the chamber and the
+ * date): the line joins the decision title before it, its printed lines kept
+ * apart. Returns whether the line was folded.
+ */
+const foldTitleLine = (
+  builder: BlockBuilder,
+  inlines: Inline[],
+  plainText: string,
+): boolean => {
+  const previous = builder.blocks.at(-1);
+  if (
+    !builder.inTitleRun ||
+    previous?.type !== "heading" ||
+    previous.role !== "decision-title"
+  ) {
+    return false;
+  }
+  builder.blocks[builder.blocks.length - 1] = {
+    ...previous,
+    inlines: [...previous.inlines, { type: "line-break" }, ...inlines],
+    plainText: `${previous.plainText} ${plainText}`,
+  };
+  // The line still takes its place in the anchor sequence, so every later
+  // block keeps the anchor a link or an annotation already names.
+  nextAnchor(builder, "h");
+  return true;
+};
+
+/** A table-of-contents entry, `coj-NTOC2`, `coj-NTOC3`, …, at any depth. */
+const CONTENTS_ENTRY_CLASS = /^NTOC\d+$/u;
+
+/** A table whose every paragraph is a contents entry. */
+const isContentsTable = (
+  $: cheerio.CheerioAPI,
+  $el: cheerio.Cheerio<AnyNode>,
+): boolean => {
+  const paragraphs = $el.find("p").toArray();
+  return (
+    paragraphs.length > 0 &&
+    paragraphs.every((paragraph) =>
+      classListOf($(paragraph)).some((name) => CONTENTS_ENTRY_CLASS.test(name)),
+    )
+  );
+};
+
 type VisitChildOptions = {
   $: cheerio.CheerioAPI;
   builder: BlockBuilder;
@@ -887,6 +961,18 @@ const visitChild = ({
   const sectionZone = node === undefined ? undefined : sectionAnchorZone(node);
   if (sectionZone !== undefined) {
     builder.zone = sectionZone;
+    return;
+  }
+
+  if (tag === "table" && isContentsTable($, $el)) {
+    // The table of contents the converter appends after the signatures
+    // lists the headings above; it neither opens nor continues the
+    // operative part, so the zone it interrupts resumes after it.
+    const resumed = builder.zone;
+    builder.zone = "contents";
+    visitTable($, builder, $el);
+    builder.zone = resumed;
+    builder.inTitleRun = false;
     return;
   }
 
@@ -957,6 +1043,9 @@ const visitChild = ({
   }
 
   if (classes.includes(CLASS.title)) {
+    if (foldTitleLine(builder, inlines, plainText)) {
+      return;
+    }
     pushHeading(builder, {
       level: 1,
       role: builder.inTitleRun ? "decision-title" : "section-heading",
@@ -995,8 +1084,53 @@ const visitChild = ({
     return;
   }
 
+  if (builder.zone === "footnotes" && classes.includes(CLASS.note)) {
+    pushFootnote(builder, $el, { inlines, plainText });
+    return;
+  }
+
   pushParagraph(builder, {
     ...roleOf(builder.zone),
+    inlines,
+    plainText,
+  });
+};
+
+/**
+ * One entry of the footnote list (`<p class="note">(<span class="note"><a
+ * id="t-…">1</a></span>)\tText</p>`): a footnote block keyed by the anchor
+ * the body's reference points at, its printed mark as the label. An entry
+ * continued in a further paragraph without its own anchor shares the note it
+ * continues.
+ */
+const pushFootnote = (
+  builder: BlockBuilder,
+  $el: cheerio.Cheerio<AnyNode>,
+  { inlines, plainText }: { inlines: Inline[]; plainText: string },
+): void => {
+  const anchor = $el.find("a[id]").first();
+  const noteId = anchor.attr("id");
+  const label = visibleHtmlText(anchor).trim();
+  const previous = builder.blocks.at(-1);
+  const continued =
+    previous?.type === "paragraph" && previous.note !== undefined
+      ? previous.note
+      : undefined;
+  const note =
+    noteId !== undefined && label.length > 0
+      ? { type: "footnote" as const, label, noteId }
+      : continued;
+  if (note === undefined) {
+    pushParagraph(builder, { inlines, plainText });
+    return;
+  }
+  // The entry keys its first block by the anchor the body's reference
+  // names; it still takes its place in the sequence, so later anchors stay.
+  const sequenced = nextAnchor(builder, "p");
+  const firstOfNote = note !== continued;
+  pushParagraph(builder, {
+    anchorId: firstOfNote && noteId !== undefined ? noteId : sequenced,
+    note,
     inlines,
     plainText,
   });
@@ -1281,7 +1415,8 @@ const visitLegacyParagraph = (
     printedNumbers.candidates.push({
       index,
       number: printed.value,
-      marker: match?.groups?.["dot"] === undefined ? "bare" : "dotted",
+      // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
+      marker: match?.groups?.["dot"] !== undefined ? "dotted" : "bare",
       dated:
         printed.value <= DAYS_IN_MONTH_MAX &&
         MONTH_AND_YEAR.test(body.plainText),

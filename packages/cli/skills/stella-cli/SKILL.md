@@ -185,7 +185,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - via `--input` only: change
   - change: type="body": body:string; type="color": color:"yellow" | "green" | "sky" | "violet" | "red"; type="style": style:string; type="visibility": visibility:"private" | "shared". Example: `--input '{"change":{"type":"body","body":"x"}}'`
 - `stella audit-log list`
-  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
+  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --performer (people|automations), --from, --to
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
 - `stella capability list`
@@ -201,7 +201,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
-  - optional: --doctrine (distinguishes|limits), --polarity (negative|neutral|positive|supportive|mixed|unclassified)
+  - optional: --doctrine (distinguishes|limits), --polarity (negative|neutral|positive|supportive|mixed|unclassified), --detail (full|compact), --passage-query
 - `stella case-law coverage`
   - optional: --country
 - `stella case-law open`
@@ -209,13 +209,13 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --paragraphs
 - `stella case-law read`
   - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
-  - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
+  - optional: --max-chars, --page, --full, --text-version, --preferred-language, --query, --resume-after, --section (court_reasoning), --include (details|metadata|textFields|source|citations|outline)
 - `stella case-law resolve`
   - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - `--identifier` — Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions. (string)
 - `stella case-law search`
   - `--country` — Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
+  - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --continuation-token, --court, --courts, --category, --docket-registers, --senate, --provision, --has-legal-sentence, --language, --preferred-language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
 - `stella clause list`
@@ -268,7 +268,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--entity-id` — Document entity ID whose cell to set (string)
   - `--property-id` — Property ID, as returned by list_properties (string)
   - via `--input` only: content
-  - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
+  - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer|null, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
 - `stella document list`
   - `--matter-id` — Matter ID to list documents in. (string)
   - optional: --mode (flat|children), --parent-id
@@ -313,7 +313,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella legislation search`
   - `--query` — Search query (string)
   - `--country` — Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --document-type, --status, --language, --date-from, --date-to, --as-of
+  - optional: --document-type, --status, --language, --date-from, --date-to, --as-of, --continuation-token
 - `stella matter add-member`
   - `--matter-id` — Matter ID (string)
   - `--user-id` — Existing organization member ID (string)

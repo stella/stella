@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import path from "node:path";
-import { SymbolFlags, type Type } from "tsrs/unstable/async";
+import { SymbolFlags, type Type } from "tsrs/async";
 
 import { printContract, verifyDeterminism } from "./generate-web-api-types";
 import { nameAliases } from "./lib/web-api-alias-names";

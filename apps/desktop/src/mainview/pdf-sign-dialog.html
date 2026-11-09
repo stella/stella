@@ -21,6 +21,12 @@
         -webkit-user-select: none;
         user-select: none;
       }
+      .window-drag-region {
+        height: 28px;
+        inset: 0 0 auto;
+        position: fixed;
+        z-index: 1;
+      }
       .dialog {
         flex-shrink: 0;
         padding: 56px 24px 20px;
@@ -184,6 +190,11 @@
     </style>
   </head>
   <body>
+    <div
+      aria-hidden="true"
+      class="window-drag-region"
+      data-tauri-drag-region
+    ></div>
     <main class="dialog">
       <div class="mark">
         <svg
@@ -235,6 +246,11 @@
         <button class="sign" hidden id="signBtn"></button>
       </div>
     </main>
+    <script type="module">
+      import { installNativeContextMenuPolicy } from "../shared/native-context-menu";
+
+      installNativeContextMenuPolicy(document);
+    </script>
     <script type="module">
       import { fitStaticDialog } from "./static-dialog-fit.js";
       // Everything the dialog renders arrives in the URL hash, set by Rust

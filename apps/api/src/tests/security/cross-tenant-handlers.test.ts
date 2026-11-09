@@ -15,7 +15,10 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
 import { desktopBillingDraftSettingsResponseSchema } from "@stll/api-contract/desktop-billing-drafts";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
-import type { OutboundActionPreview } from "@stll/api-contract/outbound-action";
+import {
+  OUTBOUND_ACTION_TTL_MS,
+  type OutboundActionPreview,
+} from "@stll/api-contract/outbound-action";
 import {
   SIGNAL_KIND,
   SIGNAL_KIND_ORIGIN,
@@ -23,6 +26,8 @@ import {
 } from "@stll/api-contract/signals";
 import { VAT_RATE_PRESETS } from "@stll/invoicing";
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestClock } from "@stll/test-kit";
+import { dbClock } from "@stll/test-kit/db";
 import { createTestState } from "@stll/test-state";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
@@ -55,6 +60,7 @@ import {
   notifications,
   numberSeries,
   organizationSettings,
+  outboundActions,
   savedSearches,
   savedTimeNarratives,
   searchHistoryEntries,
@@ -91,6 +97,7 @@ import readFileChatThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileChatThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateChatThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateChatThread from "@/api/handlers/chat/rotate-template-thread";
+import listActiveChatRuns from "@/api/handlers/chat/runs/list";
 import readSavedChatSecret from "@/api/handlers/chat/saved-secret";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
@@ -2204,6 +2211,17 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expect(result).toEqual({ unreadCount: 0 }),
   },
   {
+    name: "active chat run list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listActiveChatRuns, workspaceA, { query: {} }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listActiveChatRuns, sameUserWorkspaceB, { query: {} }),
+    expectDenied: (result) =>
+      expect(activeChatRunThreadIds(result)).not.toContain(chatTurnThreadB),
+    expectPositive: (result) =>
+      expect(activeChatRunThreadIds(result)).toContain(chatTurnThreadB),
+  },
+  {
     name: "chat thread list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listChatThreads, workspaceA, { query: {} }),
@@ -3511,19 +3529,27 @@ testState.beforeAll(async () => {
     chatThreadOfB(chatSendThreadB),
     { ...chatThreadOfB(chatDecisionThreadB), subjectDecisionId: chatDecisionB },
   ]);
+  const outboundClock = createTestClock();
   const prepareAction = async () => {
-    const prepared = await testDb.transaction(
-      async (tx) =>
-        await prepareOutboundAction({
-          tx: asTestRaw<Transaction>(tx),
-          organizationId: ids.orgB,
-          userId: ids.userA1,
-          chatThreadId: chatThreadB,
-          preview: outboundPreview,
-          now: new Date(),
-          recordAuditEvent: noopAuditRecorder,
-        }),
-    );
+    const prepared = await testDb.transaction(async (tx) => {
+      const action = await prepareOutboundAction({
+        tx: asTestRaw<Transaction>(tx),
+        organizationId: ids.orgB,
+        userId: ids.userA1,
+        chatThreadId: chatThreadB,
+        preview: outboundPreview,
+        now: new Date(outboundClock.now()),
+        recordAuditEvent: noopAuditRecorder,
+      });
+      if (Result.isOk(action)) {
+        // Expiry is judged by the database clock, so it is set from it.
+        await tx
+          .update(outboundActions)
+          .set({ expiresAt: dbClock.fromNow(OUTBOUND_ACTION_TTL_MS) })
+          .where(eq(outboundActions.id, action.value.id));
+      }
+      return action;
+    });
     if (Result.isError(prepared)) {
       throw prepared.error;
     }
@@ -4032,6 +4058,15 @@ function chatToolGrantIds(result: unknown): unknown[] {
     throw new TypeError("Expected a chat tool grant list response");
   }
   return grants.map((grant) => recordField(grant, "id"));
+}
+
+function activeChatRunThreadIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const runs = recordField(result, "items");
+  if (!Array.isArray(runs)) {
+    throw new TypeError("Expected an active chat run list response");
+  }
+  return runs.map((run) => recordField(run, "threadId"));
 }
 
 function globalChatThreadIds(result: unknown): unknown[] {

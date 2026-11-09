@@ -1155,6 +1155,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "DELETE /v1/contacts",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "DELETE /v1/contacts/:contactId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1208,6 +1212,10 @@
     },
     {
       "id": "DELETE /v1/me/push-devices/:token",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/me/timer-activity-devices/:deviceId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -1667,6 +1675,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/chat/local-runs/:runId/outputs",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/chat/table-chart",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1689,6 +1701,10 @@
     {
       "id": "POST /v1/chat/threads/:threadId/fork",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/mcp-apps/:toolCallId/call",
+      "reason": "Runs one bounded read an app asks for through the MCP read path; awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
       "id": "POST /v1/chat/threads/:threadId/messages/:messageId/revisions",
@@ -1837,10 +1853,6 @@
     {
       "id": "POST /v1/desktop/presence",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
-    },
-    {
-      "id": "POST /v1/desktop/time-entries/narrative",
-      "reason": "Model-backed surface over a bounded request; it reads only organization AI settings and persists nothing, awaiting the write harness for statements and emitted response bytes."
     },
     {
       "id": "POST /v1/dev/clean",
@@ -2159,6 +2171,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/me/timer-activity-devices/:deviceId/actions",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/me/two-factor/send-otp",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2223,6 +2239,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/organization-settings/local-runs",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/organization-settings/practice-jurisdictions",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2236,6 +2256,10 @@
     },
     {
       "id": "POST /v1/organization-settings/web-search-key",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organizations/audit-export",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -2876,6 +2900,10 @@
     },
     {
       "id": "PUT /v1/me/push-devices",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/me/timer-activity-devices/:deviceId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {

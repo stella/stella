@@ -25,7 +25,10 @@ type StripDirectionalControlsAction = v.BaseTransformation<
   never
 > & {
   readonly type: "strip_directional_controls";
-  readonly reference: typeof stripDirectionalControlsAction;
+  // Typed as the base transformation, not `typeof` the factory: a
+  // self-referential type cannot be written into another module's
+  // declarations, and every display name schema carries this action.
+  readonly reference: () => v.BaseTransformation<string, string, never>;
 };
 
 /**

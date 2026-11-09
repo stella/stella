@@ -198,9 +198,9 @@ export const oneClickSkillNeeds = (
     ...(chat?.webSearch?.available === true
       ? [CHAT_SKILL_CONTEXT_NEED.webSearch]
       : []),
-    ...(chat?.onReviewEdits === undefined
-      ? []
-      : [CHAT_SKILL_CONTEXT_NEED.reviewEdits]),
+    ...(chat?.onReviewEdits !== undefined
+      ? [CHAT_SKILL_CONTEXT_NEED.reviewEdits]
+      : []),
   ]);
 
 /**

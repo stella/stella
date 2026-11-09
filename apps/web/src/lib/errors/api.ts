@@ -5,6 +5,10 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  type ApiValidationIssue,
+  CHAT_INPUT_REFUSAL_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
+  type ChatInputRefusalCode,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
@@ -16,11 +20,16 @@ import {
   parseApiValidationIssues,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
-import type { ApiValidationIssue } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import {
+  CHAT_LOCAL_RUN_REFUSAL,
+  type ChatLocalRunRefusal,
+} from "@stll/api-contract/chat-run-target";
+import { CORRESPONDENCE_SOURCE_CHANGED_CODE } from "@stll/api-contract/correspondence";
+import { ORGANIZATION_DATA_BOX_REFUSAL_CODE } from "@stll/api-contract/data-box";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
@@ -233,11 +242,47 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
     "errors.apiCodes.verificationDailyLimitReached",
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
+/** Why a chat turn bound for the member's computer was refused. */
+const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
+  [CHAT_LOCAL_RUN_REFUSAL.unavailable]: "chat.localRun.refusalUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.noComputer]: "chat.localRun.refusalNoComputer",
+  [CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable]:
+    "chat.localRun.refusalHarnessUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.modelUnavailable]:
+    "chat.localRun.refusalModelUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable]:
+    "chat.localRun.refusalPermissionUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit]:
+    "chat.localRun.refusalPermissionAboveLimit",
+  [CHAT_LOCAL_RUN_REFUSAL.tooLarge]: "chat.localRun.refusalTooLarge",
+  [CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode]:
+    "chat.localRun.refusalConflictingRunMode",
+} as const satisfies Record<ChatLocalRunRefusal, TranslationKey>;
+
+/** Why a chat turn was refused before it started, with what the person can do. */
+const CHAT_INPUT_REFUSAL_ERROR_KEYS = {
+  [CHAT_INPUT_REFUSAL_CODE.activeFileNoText]: "chat.sendErrorActiveFileNoText",
+  [CHAT_INPUT_REFUSAL_CODE.activeFileTooLarge]:
+    "chat.sendErrorActiveFileTooLarge",
+  [CHAT_INPUT_REFUSAL_CODE.agentRunsDisabled]:
+    "chat.sendErrorAgentRunsDisabled",
+  [CHAT_INPUT_REFUSAL_CODE.attachmentNoText]: "chat.sendErrorAttachmentNoText",
+  [CHAT_INPUT_REFUSAL_CODE.attachmentUnsupported]:
+    "chat.sendErrorAttachmentUnsupported",
+  [CHAT_INPUT_REFUSAL_CODE.documentUnsupported]:
+    "chat.sendErrorDocumentUnsupported",
+  [CHAT_INPUT_REFUSAL_CODE.imageInvalid]: "chat.sendErrorImageInvalid",
+  [CHAT_INPUT_REFUSAL_CODE.imageUnsupported]: "chat.sendErrorImageUnsupported",
+  [CHAT_INPUT_REFUSAL_CODE.toolsUnsupported]: "chat.sendErrorToolsUnsupported",
+} as const satisfies Record<ChatInputRefusalCode, TranslationKey>;
+
 const CODE_ERROR_KEYS = {
   [TIME_ENTRY_RATE_REQUIRED_CODE]: "billing.rates.effectiveRateRequired",
   [IDEMPOTENCY_IN_PROGRESS_CODE]: "errors.apiCodes.idempotencyInProgress",
   [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
   ...AI_FAILURE_ERROR_KEYS,
+  ...CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS,
+  ...CHAT_INPUT_REFUSAL_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   ...INVOICE_ISSUE_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
@@ -246,6 +291,13 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.matterContactCapacityReached",
   [MATTER_CONTACT_CAPACITY_CODE.exceeded]:
     "errors.apiCodes.matterContactCapacityExceeded",
+  [CORRESPONDENCE_SOURCE_CHANGED_CODE]:
+    "errors.apiCodes.correspondenceSourceChanged",
+  [ORGANIZATION_DATA_BOX_REFUSAL_CODE.limitReached]:
+    "errors.apiCodes.organizationDataBoxLimitReached",
+  [ORGANIZATION_DATA_BOX_REFUSAL_CODE.changedConcurrently]:
+    "errors.apiCodes.organizationDataBoxesChanged",
+  [CHAT_MESSAGE_EMPTY_ERROR_CODE]: "chat.sendErrorMessageEmpty",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
   [MEMBER_REMOVAL_BUSY_CODE]: "errors.actionAdmission.concurrencyBusy",
@@ -369,12 +421,32 @@ const AUTH_REFUSAL_CODES: ReadonlySet<string> = new Set([
 type AuthRefusalCandidate = { code?: string | undefined; status: number };
 
 /** Whether this is a plain refusal of who is asking, whatever the action. */
-export const isAuthRefusal = ({
-  code,
-  status,
-}: AuthRefusalCandidate): boolean =>
+const isAuthRefusal = ({ code, status }: AuthRefusalCandidate): boolean =>
   (status === 401 || status === 403) &&
   (code === undefined || AUTH_REFUSAL_CODES.has(code));
+
+/** The session behind this request is gone; signing in again answers it. */
+export const isSessionRefusal = (candidate: AuthRefusalCandidate): boolean =>
+  candidate.status === 401 && isAuthRefusal(candidate);
+
+/**
+ * Codes the auth server sets when it turns down a code the person typed. Each
+ * form that asks for one says so in place and lets them try again.
+ */
+const TYPED_CODE_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  "INVALID_BACKUP_CODE",
+  "INVALID_CODE",
+  "INVALID_OTP",
+  "OTP_EXPIRED",
+]);
+
+/** Whether the auth server turned down a code the person typed. */
+export const isTypedCodeRefusal = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  typeof error.code === "string" &&
+  TYPED_CODE_REFUSAL_CODES.has(error.code);
 
 /** The server has nothing to show for this file; retrying cannot help. */
 export const isPreviewUnavailableError = (error: unknown): boolean =>

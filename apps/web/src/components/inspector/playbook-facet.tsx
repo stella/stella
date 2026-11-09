@@ -99,7 +99,6 @@ import {
   saveRunAsPlaybook,
 } from "@/components/ai-suggestions/document-review-queries";
 import type {
-  DecidedReviewDecision,
   DocumentReviewDecision,
   DocumentReviewFindingRow,
   DocumentReviewRunStatus,
@@ -111,12 +110,14 @@ import {
   applyFindingDecision,
   resolveReviewRunFreshness,
   resolveReviewRunRestore,
+  resolveTableRunNotice,
   restoredRunId,
   restoreReviewRun,
   reviewDecisionProgress,
   reviewHistoryPresentation,
   reviewRunView,
   reviewSkeletonCardCount,
+  withheldTextShare,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   PinnedPosition,
@@ -124,6 +125,8 @@ import type {
   RestoredReviewFinding,
   ReviewPlaybookFreshness,
   ReviewRunFreshness,
+  ReviewRunWithheldSource,
+  TableRunNotice,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import {
   reviewSessionKey,
@@ -202,6 +205,7 @@ import {
   buildReviewResultItems,
   buildRunHistoryBasisSentence,
   buildRunSummarySentence,
+  decisionLabel,
   firstSentence,
   isReviewDeviation,
   isUndecidedDeviation,
@@ -1404,7 +1408,11 @@ const ReviewRunPanel = ({
     return (
       <ErrorState
         detail={run.errorCode}
-        message={t("inspector.review.failed")}
+        message={t(
+          run.errorCode === "document_too_large"
+            ? "inspector.review.documentTooLarge"
+            : "inspector.review.failed",
+        )}
         onChangeBasis={onReviewAgain}
         onRetry={() => onRetry(restored.basis)}
       />
@@ -1467,8 +1475,14 @@ const ReviewRunPanel = ({
       runId={run.id}
       saveAsPlaybookPending={saveAsPlaybook.isPending}
       suggestions={suggestions}
+      tableRunNotice={resolveTableRunNotice({
+        shownRun: run,
+        runs: history.runs,
+        currentEntityVersionId,
+      })}
       targetFileFieldId={targetFileFieldId}
       targetName={reviewedVersion?.file?.fileName ?? ""}
+      withheldSources={run.withheldSources}
       targetVersionNumber={reviewedVersion?.versionNumber ?? null}
       workspaceId={workspaceId}
     />
@@ -2009,7 +2023,7 @@ const NotComparedDisclosure = ({
         <ul className="mt-1 basis-full space-y-0.5">
           {skipped.map((entry) => (
             <li className="leading-6" key={entry.subject}>
-              <BidiText as="span">{`${entry.subject} — ${reasonText(entry.reason)}`}</BidiText>
+              <BidiText as="span">{`${entry.subject}: ${reasonText(entry.reason)}`}</BidiText>
             </li>
           ))}
         </ul>
@@ -2744,6 +2758,8 @@ type ResultsViewProps = {
   decisionCounts: Parameters<typeof reviewDecisionProgress>[0];
   decisionPending: boolean;
   freshness: ReviewRunFreshness;
+  tableRunNotice: TableRunNotice;
+  withheldSources: readonly ReviewRunWithheldSource[];
   history: ReviewRunHistoryView;
   /** Set while the worker is still committing findings; `null` once the run
    *  has settled. */
@@ -2802,6 +2818,8 @@ const ResultsView = ({
   decisionCounts,
   decisionPending,
   freshness,
+  tableRunNotice,
+  withheldSources,
   history,
   progress: runProgress,
   readOnly,
@@ -3029,6 +3047,14 @@ const ResultsView = ({
 
       <ReviewHistorySection history={history} />
 
+      <DocumentCutNotice documentName={targetName} sources={withheldSources} />
+
+      <TableRunNoticeSection
+        notice={tableRunNotice}
+        onOpenRun={history.onSelect}
+        onReviewAgain={onReviewAgain}
+      />
+
       {resultsBody}
     </div>
   );
@@ -3174,6 +3200,17 @@ const ReviewHistorySection = ({
   );
 };
 
+/** What the History row says about where a run came from. A panel review is
+ *  the default kind and says nothing; a table run says so, because its
+ *  findings carry no citations or proposed changes. */
+const RUN_ORIGIN_LABEL_KEY = {
+  worker: null,
+  table: "inspector.review.history.fromTable",
+} as const satisfies Record<
+  DocumentReviewRunSummary["executor"],
+  TranslationKey | null
+>;
+
 const ReviewHistoryRow = ({
   run,
   shown,
@@ -3187,7 +3224,9 @@ const ReviewHistoryRow = ({
   const format = useFormatter();
   const runBasisLabels = useRunBasisLabels();
   const decisions = reviewDecisionProgress(run.decisionCounts);
+  const originKey = RUN_ORIGIN_LABEL_KEY[run.executor];
   const basis = buildRunHistoryBasisSentence({
+    originLabel: originKey === null ? null : t(originKey),
     playbookName: run.basis.playbookName,
     playbookProposed: run.basis.playbookProvenance === "ephemeral",
     references:
@@ -3400,6 +3439,127 @@ const ReviewFreshnessNotice = ({
         </Button>
       )}
     </div>
+  );
+};
+
+const TableRunNextStep = ({
+  notice,
+  onOpenRun,
+  onReviewAgain,
+}: {
+  notice: Exclude<TableRunNotice, { type: "none" | "explanation-only" }>;
+  onOpenRun: (runId: string) => void;
+  onReviewAgain: () => void;
+}) => {
+  const t = useTranslations();
+  switch (notice.type) {
+    case "open-full-review":
+      return (
+        <>
+          {t.rich("inspector.review.tableRunNotice.openFullReview", {
+            link: (chunks) => (
+              <Button
+                onClick={() => onOpenRun(notice.runId)}
+                size="inline"
+                variant="link"
+              >
+                {chunks}
+              </Button>
+            ),
+          })}
+        </>
+      );
+    case "run-another-review":
+      return (
+        <>
+          {t.rich("inspector.review.tableRunNotice.runAnotherReview", {
+            label: t("inspector.review.reviewAgain"),
+            action: (chunks) => (
+              <Button onClick={onReviewAgain} size="inline" variant="link">
+                {chunks}
+              </Button>
+            ),
+          })}
+        </>
+      );
+    default:
+      notice satisfies never;
+      return panic("Unhandled table run notice");
+  }
+};
+
+/**
+ * Says the findings rest on part of the document. It sits with the table-run
+ * notice so the margin layout shows it too.
+ */
+const DocumentCutNotice = ({
+  documentName,
+  sources,
+}: {
+  documentName: string;
+  sources: readonly ReviewRunWithheldSource[];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const share = withheldTextShare(sources);
+  if (share === null) {
+    return null;
+  }
+  return (
+    <section
+      className="text-muted-foreground shrink-0 border-b px-3 py-1.5 text-xs"
+      role="note"
+    >
+      <p>
+        {t.rich("inspector.review.documentCutNotice", {
+          documentName,
+          percent: format.number(share, { style: "percent" }),
+          strong: (chunks) => (
+            <strong className="text-foreground font-medium">{chunks}</strong>
+          ),
+        })}
+      </p>
+    </section>
+  );
+};
+
+/**
+ * Why these findings have no links or proposed changes. It sits outside the
+ * findings list so the margin layout shows it too: that is where findings with
+ * nothing to pin to are most puzzling.
+ */
+const TableRunNoticeSection = ({
+  notice,
+  onOpenRun,
+  onReviewAgain,
+}: {
+  notice: TableRunNotice;
+  onOpenRun: (runId: string) => void;
+  onReviewAgain: () => void;
+}) => {
+  const t = useTranslations();
+  if (notice.type === "none") {
+    return null;
+  }
+  return (
+    <section className="text-muted-foreground shrink-0 space-y-1 border-b px-3 py-1.5 text-xs">
+      <p>
+        {t.rich("inspector.review.tableRunNotice.origin", {
+          strong: (chunks) => (
+            <strong className="text-foreground font-medium">{chunks}</strong>
+          ),
+        })}
+      </p>
+      {notice.type !== "explanation-only" && (
+        <p>
+          <TableRunNextStep
+            notice={notice}
+            onOpenRun={onOpenRun}
+            onReviewAgain={onReviewAgain}
+          />
+        </p>
+      )}
+    </section>
   );
 };
 
@@ -3905,7 +4065,7 @@ const ReviewResultCard = ({
                 />
                 {item.decision !== REVIEW_DECISION.OPEN && (
                   <span className={POSITION_HEADER_META_CLASS}>
-                    {t(DECISION_LABEL[item.decision])}
+                    {t(decisionLabel(item.decision))}
                   </span>
                 )}
                 <span className={cn(POSITION_HEADER_META_CLASS, "text-end")}>
@@ -4134,14 +4294,6 @@ const WhyDisclosure = ({
     </div>
   );
 };
-
-/** How a recorded decision reads on the card. Total over the decisions a
- *  reviewer can take, so a new disposition must state its label here rather
- *  than rendering as nothing. */
-const DECISION_LABEL = {
-  accepted: "inspector.review.decisions.accepted",
-  dismissed: "inspector.review.decisions.dismissed",
-} as const satisfies Record<DecidedReviewDecision, TranslationKey>;
 
 type ReviewCardActionsProps = {
   item: ReviewResultItem;
@@ -4373,8 +4525,8 @@ const FindingResolution = ({
       />
     );
   }
-  // The run staged a redline for this finding, but the document has not been
-  // opened in this session yet, so the suggestion it lives on is not loaded.
+  // The run staged a redline for this finding, but the suggestion it lives on
+  // is not loaded: the document's editor is not open, or not ready to build it.
   // Deciding here would answer the finding without touching the change it
   // stands for; the reviewer opens the document and resolves it there.
   return (
@@ -4417,7 +4569,7 @@ const FindingDecisionButtons = ({
         size="sm"
       >
         <CheckIcon className="me-1 size-3.5" />
-        {t("common.accept")}
+        {t("inspector.review.acceptFinding")}
       </Button>
       <Button
         className="h-7 px-2.5"
@@ -4427,7 +4579,7 @@ const FindingDecisionButtons = ({
         variant="ghost"
       >
         <XIcon className="me-1 size-3.5" />
-        {t("inspector.review.noChangeNeeded")}
+        {t("inspector.review.dismissFinding")}
       </Button>
     </>
   );
@@ -4482,7 +4634,7 @@ const SuggestionButtons = ({
               : { tooltip: t("inspector.review.noEditor") })}
           >
             <CheckIcon className="me-1 size-3.5" />
-            {t("common.accept")}
+            {t("inspector.review.acceptChange")}
           </Button>
           <Button
             className="h-7 px-2.5"

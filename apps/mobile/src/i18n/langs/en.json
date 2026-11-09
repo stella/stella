@@ -189,8 +189,11 @@
       "notSaved": "Not saved yet",
       "done": "Done",
       "openFailed": "This document cannot be edited right now",
+      "resumed": "You have an unfinished edit of this document, so it continues from there. What you typed just now was not kept.",
+      "newerVersion": "A newer version of this document was saved meanwhile, so the edit continues from it. What you typed just now was not kept.",
       "takenOver": "Someone else is now editing this document. Your changes since the last save were not kept.",
       "finishFailed": "Your changes are saved, but they could not become a new version yet. Tap Done again, or leave: the next edit continues from them.",
+      "notStored": "Your latest changes could not be saved. Stay to try again, or leave without them.",
       "stay": "Stay",
       "leave": "Leave"
     }
@@ -222,7 +225,10 @@
     "signOut": "Sign out",
     "deleteAccount": "Delete account",
     "deleteAccountHint": "Opens your account on the web, where you can delete it and everything in it that is yours.",
-    "signOutFailed": "Sign-out could not be completed. Try again."
+    "signOutFailed": "Sign-out could not be completed. Try again.",
+    "lockScreenTitle": "Lock Screen",
+    "timerDetails": "Timer details",
+    "timerDetailsHint": "When a timer changes on another device, Apple's notification service carries its description and matter to the Lock Screen. Off, it shows only the time until you open the app."
   },
   "header": {
     "search": "Search"
@@ -236,7 +242,6 @@
     "headnote": "Headnote",
     "textUnavailable": "No text is available for this decision",
     "openSource": "Open original source",
-    "openFailed": "The link could not be opened.",
     "loadFailed": "Case law could not be loaded.",
     "share": "Share"
   },
@@ -262,12 +267,6 @@
     "newTimer": "New timer",
     "description": "What are you working on?",
     "matterTitle": "Matter",
-    "noMatter": "No matter",
-    "noDescription": "No description",
-    "running": "Running",
-    "paused": "Paused",
-    "pause": "Pause",
-    "resume": "Resume",
     "save": "Save",
     "discard": "Discard",
     "emptyTitle": "No timers",
@@ -276,8 +275,7 @@
     "retry": "Try again",
     "unavailable": "Time tracking is not turned on for your organization.",
     "startFailed": "The timer could not be started. Try again.",
-    "changeFailed": "The timer could not be changed. Try again.",
-    "more": "{count, plural, one {# more timer} other {# more timers}}"
+    "changeFailed": "The timer could not be changed. Try again."
   },
   "scan": {
     "title": "Scan a document",
@@ -347,5 +345,11 @@
   "pane": {
     "showList": "Show the list",
     "hideList": "Hide the list"
+  },
+  "link": {
+    "open": "Open",
+    "share": "Share",
+    "cancel": "Cancel",
+    "openFailed": "The link could not be opened."
   }
 }

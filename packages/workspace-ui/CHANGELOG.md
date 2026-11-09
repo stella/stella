@@ -1,5 +1,62 @@
 # @stll/workspace-ui
 
+## 0.17.0
+
+### Minor Changes
+
+- [#6940](https://github.com/stella/stella/pull/6940) [`704ca22`](https://github.com/stella/stella/commit/704ca22912cd096ae056e181286e4a7aefc03064) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Corner radii name a scale step: bare `rounded` is now `rounded-sm`, and the checkbox, segmented toggle and input-group keycap use scale steps instead of pixel radii. `--radius` is 0.5rem. Light text is neutral-900, dark muted text neutral-400, and sidebar text is stronger in both themes.
+
+  `@stll/workspace-ui`: `./field-value#getIntClassName` returns the kanban class string with `rounded-sm` in place of `rounded`, so its literal return type changes.
+
+### Patch Changes
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible runtime dependencies: `@stll/time` 0.4.2, `temporal-polyfill` 1.0.6, `lucide-react` 1.65.0, Tiptap 3.32.1 and the MCP client 2.4.0.
+- Updated dependencies [[`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88), [`26a454c`](https://github.com/stella/stella/commit/26a454c7de75da7fabf3ac4c7746e68f09bdb1a1), [`3978f45`](https://github.com/stella/stella/commit/3978f45cea7b4a37d42882f1be9075ea933d2f39), [`ad81543`](https://github.com/stella/stella/commit/ad81543e9c85c79cc921caa5b72d7ee39cde94c3), [`5afd089`](https://github.com/stella/stella/commit/5afd0899278f2dd459ad8789b7d8b94d6e1de2c5), [`faad54b`](https://github.com/stella/stella/commit/faad54bc23ee324f40fbcffa36094197fd2a0b1d), [`704ca22`](https://github.com/stella/stella/commit/704ca22912cd096ae056e181286e4a7aefc03064), [`e06b815`](https://github.com/stella/stella/commit/e06b81538abe018cd8015a5ba2732e84981ff9a2)]:
+  - @stll/ui@0.68.0
+  - @stll/money@0.4.0
+  - @stll/calculations@0.1.4
+
+## 0.16.0
+
+### Minor Changes
+
+- [#7941](https://github.com/stella/stella/pull/7941) [`c06a3b7`](https://github.com/stella/stella/commit/c06a3b75576febd3108abf6c769c62ecf5d47624) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `record` field content type: a cell holding typed records from a data source or a structured AI answer. `FieldValue` renders it as a summary (the record's values, a record count, a prompt to choose among unselected candidates, or a review or not-found note), and `RecordFieldValue`, `summarizeRecordField` and the `RecordField*` types are exported. `GenericProperty` and `PropertyIconType` accept `record`.
+
+### Patch Changes
+
+- Updated dependencies [[`4c623bb`](https://github.com/stella/stella/commit/4c623bbc19a13167e06f819783849e10c8cbddc0), [`61932c3`](https://github.com/stella/stella/commit/61932c325b3ce81881dbd917961a301891b7d949), [`50c904c`](https://github.com/stella/stella/commit/50c904c50877280367403165f00ef5d92663b23c), [`fa90f18`](https://github.com/stella/stella/commit/fa90f18c69c45e42359e2c5dc2e4511bf69466df), [`b137d1b`](https://github.com/stella/stella/commit/b137d1b048e6d36123ba60d24ab99baaf8208de7)]:
+  - @stll/ui@0.67.0
+
+## 0.15.8
+
+### Patch Changes
+
+- [#7427](https://github.com/stella/stella/pull/7427) [`d05a124`](https://github.com/stella/stella/commit/d05a124a296d0426288f86684f0c77c1b1072db4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ChatModelSelector` now renders the `@stll/ui` select (a button and a popup list) instead of a native `<select>`: a host must load the `@stll/ui` stylesheet (`@stll/ui/theme.css` with Tailwind scanning `@stll/ui`) for it to draw. `ChatLink` shows its new-tab notice or source title as a tooltip and as the link's accessible description. The condition builder's number fields use `NumberInput` without locale grouping.
+- Updated dependencies [[`21f18d7`](https://github.com/stella/stella/commit/21f18d7eae6c328149c77ebf2a1baff624de33c6), [`e5ee9a9`](https://github.com/stella/stella/commit/e5ee9a9c120441b0bea4476df78e1432ace3146d), [`254bf05`](https://github.com/stella/stella/commit/254bf058b481c2ea137f8e37664a37b80c537190), [`72b68c8`](https://github.com/stella/stella/commit/72b68c8fc423618a9e060ead157dc3f2f30e1583)]:
+  - @stll/ui@0.66.0
+
+## 0.15.7
+
+### Patch Changes
+
+- [#7844](https://github.com/stella/stella/pull/7844) [`f630d4c`](https://github.com/stella/stella/commit/f630d4c14cffb0b8e8ccef327601ba4d2760c217) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ViewSwitcher` renders view names isolated and without directional controls.
+- Updated dependencies [[`b94d282`](https://github.com/stella/stella/commit/b94d282e58eb483f7abf6cc7e81b859c7709ce3b)]:
+  - @stll/ui@0.65.0
+
+## 0.15.6
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/ui@0.64.0
+
+## 0.15.5
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/ui@0.63.0
+
 ## 0.15.4
 
 ### Patch Changes

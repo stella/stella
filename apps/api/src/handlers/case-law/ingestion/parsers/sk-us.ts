@@ -52,6 +52,10 @@ import {
   stripInlineSuffix,
 } from "@stll/legal-ast/inline-line";
 import {
+  COURT_PARAGRAPH_OPENING_RE,
+  NUMBERED_LINE_RE,
+} from "@stll/legal-ast/printed-paragraph-labels";
+import {
   isSkDecisionTitle,
   isSkHoldingMarker,
   isSkInstructionMarker,
@@ -63,7 +67,12 @@ import {
   skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
-import { normalizeUnicode } from "@stll/text-normalize";
+import {
+  documentWordCounts,
+  joinWordSeams,
+  letterGapCounts,
+  normalizeUnicode,
+} from "@stll/text-normalize";
 
 import {
   ANONYMIZED_CLASS,
@@ -71,8 +80,9 @@ import {
   isExcludedHtmlTag,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { createBlockAnchorAllocator } from "@/api/lib/legal-search/parsers/block-anchors";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 
 /**
  * What a dropped anonymized run reads as.
@@ -302,7 +312,17 @@ type FooterCandidate = {
    * may hold only the closing lines.
    */
   readonly last: boolean;
+  /**
+   * The page opens a new part of the document with the court's docket on a
+   * line of its own (a separate opinion): the page before it may hold only
+   * the closing lines of the part it ends.
+   */
+  readonly opensPart: boolean;
 };
+
+/** The court's docket alone on a line: `III. ÚS 86/05`, `PL. ÚS 1/2021-45`. */
+const DOCKET_LINE =
+  /^(?:PL|[IVX]{1,4})\.\s?ÚS\s\d{1,4}\/\d{2,4}(?:-\d{1,4})?$/u;
 
 const PAGE_SEQUENCE = {
   /** No page of a decision holds less text than this. */
@@ -348,6 +368,7 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
         form: "alone",
         length: text.length,
         last: index === lastText,
+        opensPart: false,
       });
     } else if (leading !== null) {
       candidates.push({
@@ -359,6 +380,7 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
         form: "leading",
         length: leading[0].length,
         last: false,
+        opensPart: DOCKET_LINE.test(text.slice(leading[0].length).trim()),
       });
     } else if (trailing !== null) {
       candidates.push({
@@ -368,6 +390,7 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
         form: "trailing",
         length: trailing.length,
         last: index === lastText,
+        opensPart: false,
       });
     }
     offset += text.length;
@@ -410,6 +433,7 @@ const pageRuns = (
         step.length === 0 ||
         previous.number !== candidate.number - 1 ||
         (!candidate.last &&
+          !candidate.opensPart &&
           candidate.offset - previous.offset < PAGE_SEQUENCE.minPageChars)
       ) {
         continue;
@@ -514,6 +538,7 @@ const pageSequence = (
     const gap = candidate.offset - last.offset;
     if (
       candidate.last ||
+      (candidate.opensPart && gap <= PAGE_SEQUENCE.maxPageChars) ||
       (gap >= PAGE_SEQUENCE.minPageChars && gap <= PAGE_SEQUENCE.maxPageChars)
     ) {
       run.push(candidate);
@@ -601,9 +626,6 @@ const setInlines = (line: MarkupLine, inlines: readonly Inline[]): void => {
  */
 type WordGap = "no-break" | "plain";
 
-/** A gap between two letters, and which space sets it. */
-const LETTER_GAP = /\p{L}\p{M}*(?<gap>[  ])(?=\p{L})/gu;
-
 /**
  * No-break gaps between letters outnumber plain ones by at least this much
  * in a file that sets its words apart with no-break spaces. The recorded
@@ -613,17 +635,7 @@ const LETTER_GAP = /\p{L}\p{M}*(?<gap>[  ])(?=\p{L})/gu;
 const NO_BREAK_GAP_DOMINANCE = 50;
 
 const wordGapOf = (lines: readonly MarkupLine[]): WordGap => {
-  let noBreak = 0;
-  let plain = 0;
-  for (const { text } of lines) {
-    for (const match of text.matchAll(LETTER_GAP)) {
-      if (match.groups?.["gap"] === " ") {
-        plain += 1;
-      } else {
-        noBreak += 1;
-      }
-    }
-  }
+  const { plain, noBreak } = letterGapCounts(lines.map(({ text }) => text));
   return noBreak > 0 && plain * NO_BREAK_GAP_DOMINANCE <= noBreak
     ? "no-break"
     : "plain";
@@ -635,19 +647,9 @@ const wordGapOf = (lines: readonly MarkupLine[]): WordGap => {
  */
 const LOST_LINE_BREAK = /(?<=[.!?][“”"»)]{0,3}) (?=\d{1,3}\.[  ]{1,4}\p{Lu})/gu;
 
-/**
- * A seam inside a word: a letter (with at most a few combining marks), then
- * the lowercase rest of the word. Bounded repeats keep every match linear.
- */
-const SPACED_WORD_SEAM = /(?<=\p{L}\p{M}{0,4}) (?=\p{Ll})/gu;
-
 /** A word's letters, read the same however the file composed or cased them. */
 const wordKey = (word: string): string =>
   normalizeUnicode(word, "NFC").toLowerCase();
-
-/** The word that ends a text, and the one that opens it, at most 64 letters. */
-const LAST_WORD = /\p{L}[\p{L}\p{M}]{0,63}$/u;
-const FIRST_WORD = /^\p{L}[\p{L}\p{M}]{0,63}/u;
 
 /**
  * The words a file prints whole: letter runs in stretches no plain space
@@ -667,23 +669,6 @@ const wholeWordsOf = (lines: readonly MarkupLine[]): Set<string> => {
   }
   return words;
 };
-
-/**
- * A text with each plain space inside a word removed. A plain space between
- * two words the file prints whole is a gap the court set (`v súde`), and
- * stays.
- */
-const joinWordSeams = (text: string, words: ReadonlySet<string>): string =>
-  text.replaceAll(SPACED_WORD_SEAM, (seam: string, offset: number) => {
-    const before = LAST_WORD.exec(text.slice(Math.max(0, offset - 64), offset));
-    const after = FIRST_WORD.exec(text.slice(offset + 1, offset + 65));
-    return before !== null &&
-      after !== null &&
-      words.has(wordKey(before[0])) &&
-      words.has(wordKey(after[0]))
-      ? seam
-      : "";
-  });
 
 /** A line split before the given offsets of its text. */
 const splitLineAt = (
@@ -737,14 +722,10 @@ const readTextLayerSeams = (lines: readonly MarkupLine[]): MarkupLine[] => {
 /** U+00AD, the soft hyphen, spelled out: a formatter writes the escape as the character. */
 const SOFT_HYPHEN = String.fromCodePoint(0xad);
 
-/** Intact document words and section markers recognized by the shared vocabulary. */
+/** The document's words and section markers recognized by the shared vocabulary. */
 const typographyWords = (lines: readonly MarkupLine[]) => {
-  const words = new Set<string>();
   const spacedWords = new Set<string>();
   for (const { text } of lines) {
-    for (const [word] of text.matchAll(/\p{L}[\p{L}\p{M}]*/gu)) {
-      words.add(normalizeUnicode(word, "NFC").toLowerCase());
-    }
     const colon = text.indexOf(":");
     if (colon === -1) {
       continue;
@@ -771,7 +752,10 @@ const typographyWords = (lines: readonly MarkupLine[]) => {
       }
     }
   }
-  return { attestedWords: words, spacedWords };
+  return {
+    documentWords: documentWordCounts(lines.map(({ text }) => text)),
+    spacedWords,
+  };
 };
 
 /**
@@ -792,10 +776,9 @@ const readTypography = (
   inlines: readonly Inline[],
   evidence: ReturnType<typeof typographyWords>,
 ): Inline[] =>
-  rewriteInlineWhitespace(
+  readInlineLetterSpacing(
     mapInlineText(inlines, (text) => text.replaceAll(SOFT_HYPHEN, "-")),
-    // Over the whole line: a wrapper's edge is not a gap between words.
-    (text) => collapseLetterSpacing(text, { setApart: true, ...evidence }),
+    { setApart: true, ...evidence },
   );
 
 type Section = SkDocumentSection;
@@ -947,22 +930,37 @@ const joinRange = (
   return joined;
 };
 
-/** A line opening with a number that numbers it: `4.`, `28.1.`. */
-const NUMBERED_LINE = /^\d{1,3}(?:\.\d{1,3})*\.\s/u;
+/**
+ * Whether a paragraph's last parenthesis is still open (`(rozsudok … vo veci
+ * Banif Plus Bank Zrt proti Csaba Csipai a spol.`): what follows belongs
+ * inside it, whatever the full stop of an abbreviation before it says.
+ */
+const opensUnclosedBracket = (text: string): boolean => {
+  let depth = 0;
+  for (const char of text) {
+    if (char === "(") {
+      depth += 1;
+    } else if (char === ")" && depth > 0) {
+      depth -= 1;
+    }
+  }
+  return depth > 0;
+};
 
 /**
  * Whether a paragraph open at the foot of a page goes on at the top of the
  * next one: the page broke a sentence (the next page opens with a lowercase
  * word, or with a number that numbers nothing, as in `zákona č.` /
- * `480/2002 Z. z.`), or the paragraph stopped where no sentence stops and
- * the next page opens neither a numbered paragraph nor a part of the
- * decision.
+ * `480/2002 Z. z.`), a parenthesis the page left open goes on, or the
+ * paragraph stopped where no sentence stops and the next page opens neither
+ * a numbered paragraph nor a part of the decision.
  */
 const continuesOnNextPage = (open: string, next: string): boolean =>
   /^\p{Ll}/u.test(next) ||
-  (/^\d/u.test(next) && !NUMBERED_LINE.test(next)) ||
+  (opensUnclosedBracket(open) && !NUMBERED_LINE_RE.test(next)) ||
+  (/^\d/u.test(next) && !NUMBERED_LINE_RE.test(next)) ||
   (!/[.!?:;][“”"»)]*$/u.test(open) &&
-    !NUMBERED_LINE.test(next) &&
+    !NUMBERED_LINE_RE.test(next) &&
     openingNumberOf(next) === undefined &&
     !OUTLINE_HEADING_RE.test(next) &&
     !endsReasoningPart(next));
@@ -970,6 +968,7 @@ const continuesOnNextPage = (open: string, next: string): boolean =>
 /** The blocks read so far, the paragraph still open, and where the reading is. */
 type BlockBuilder = {
   readonly blocks: Block[];
+  readonly makeAnchor: ReturnType<typeof createBlockAnchorAllocator>;
   section: Section;
   blockCount: number;
   paragraph: MarkupLine | null;
@@ -1000,7 +999,7 @@ const flushParagraph = (builder: BlockBuilder): void => {
   })();
   builder.blocks.push({
     id: nextBlockId(builder),
-    anchorId: `p${builder.blockCount}`,
+    anchorId: builder.makeAnchor(`p${builder.blockCount}`),
     type: "paragraph",
     ...(role === null ? {} : { role }),
     inlines: line.inlines,
@@ -1022,7 +1021,12 @@ const pushHeading = (
   anchorId = `h${builder.blocks.length + 1}`,
 ): void => {
   builder.blocks.push(
-    headingBlock({ id: nextBlockId(builder), anchorId, level, line }),
+    headingBlock({
+      id: nextBlockId(builder),
+      anchorId: builder.makeAnchor(anchorId),
+      level,
+      line,
+    }),
   );
 };
 
@@ -1077,6 +1081,20 @@ const readPartMarker = (builder: BlockBuilder, line: MarkupLine): boolean => {
     (line.fontSize > TITLE_FONT_SIZE || isSkDecisionTitle(line.text))
   ) {
     flushParagraph(builder);
+    const previous = builder.blocks.at(-1);
+    if (previous?.type === "heading" && previous.role === "decision-title") {
+      const joined = joinLines(
+        {
+          inlines: previous.inlines,
+          text: previous.plainText,
+          fontSize: line.fontSize,
+        },
+        line,
+      );
+      previous.inlines = joined.inlines;
+      previous.plainText = joined.text;
+      return true;
+    }
     pushHeading(builder, line, 1, "h-title");
     return true;
   }
@@ -1137,7 +1155,7 @@ const readClosingMarker = (
     builder.blockCount += 1;
     builder.blocks.push({
       id: nextBlockId(builder),
-      anchorId: `p${builder.blockCount}`,
+      anchorId: builder.makeAnchor(`p${builder.blockCount}`),
       type: "paragraph",
       role: "closing",
       inlines: line.inlines,
@@ -1282,6 +1300,78 @@ const readParagraphLine = (
   openParagraph(builder, line);
 };
 
+/** A finished sentence, then the gap before whatever the source ran on. */
+const SENTENCE_THEN_GAP = /[.!?][“”"»)]{0,3}(?<gap>\s+)/gu;
+
+/**
+ * The word a sentence-ending full stop follows, read from a bounded tail:
+ * an abbreviation is a few letters, and a longer word is no abbreviation.
+ */
+const LAST_WORD_LENGTH = 32;
+const LAST_WORD_BEFORE = /[\p{L}\d]{1,32}$/u;
+
+/**
+ * Abbreviations a number follows (`čl. 2.`, `ods. 3.`): their full stop
+ * ends no sentence, so a number after one is a citation, not a paragraph.
+ */
+const NUMBERED_ABBREVIATIONS: ReadonlySet<string> = new Set([
+  "bod",
+  "č",
+  "čl",
+  "nar",
+  "napr",
+  "ods",
+  "písm",
+  "porov",
+  "resp",
+  "s",
+  "sp",
+  "str",
+  "tzv",
+  "zák",
+  "zb",
+  "zn",
+]);
+
+/**
+ * Where the source lost a line break: it ran the court's next numbered point
+ * onto the sentence before it (`… porušené boli. 2. Zrušuje …`), or a part
+ * marker onto the sentence that ends the part (`… osobou. Odôvodnenie:`).
+ * Only the number that comes next counts, after a word an abbreviation's
+ * full stop does not end. Restoring the break leaves the paragraph decision
+ * to the reading of whole lines.
+ */
+const lostBreakOffsets = (
+  text: string,
+  builder: Pick<BlockBuilder, "section" | "nextCourtNumber">,
+): number[] => {
+  const offsets: number[] = [];
+  let markerAt: number | undefined;
+  for (const match of text.matchAll(SENTENCE_THEN_GAP)) {
+    const at = match.index + match[0].length;
+    const word =
+      LAST_WORD_BEFORE.exec(
+        text.slice(Math.max(0, match.index - LAST_WORD_LENGTH), match.index),
+      )?.[0] ?? "";
+    const opening = openingNumberOf(text.slice(at));
+    if (
+      (builder.section === "holding" || builder.section === "reasoning") &&
+      opening === builder.nextCourtNumber &&
+      word.length >= 2 &&
+      !NUMBERED_ABBREVIATIONS.has(word.toLowerCase())
+    ) {
+      offsets.push(at);
+    }
+    const tail = text.slice(at);
+    if (isSkReasoningMarker(tail) || isSkStandaloneInstructionMarker(tail)) {
+      markerAt = at;
+    }
+  }
+  return markerAt === undefined
+    ? offsets
+    : [...offsets.filter((offset) => offset < markerAt), markerAt];
+};
+
 /**
  * Group the lines into blocks.
  *
@@ -1293,20 +1383,32 @@ const readParagraphLine = (
 const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
   const builder: BlockBuilder = {
     blocks: [],
+    makeAnchor: createBlockAnchorAllocator(),
     section: "preamble",
     blockCount: 0,
     paragraph: null,
     nextCourtNumber: 1,
   };
-  const reading: Reading = {
-    lines,
-    openings: lines.map(({ text }) => openingNumberOf(text)),
-  };
+  // A line split where the source lost a break is read as the lines it was.
+  const readLines = [...lines];
+  const openings = readLines.map(({ text }) => openingNumberOf(text));
+  const reading: Reading = { lines: readLines, openings };
   let index = 0;
-  while (index < lines.length) {
-    const line = lines[index];
+  while (index < readLines.length) {
+    const line = readLines[index];
     if (line === undefined || PAGE_NUMBER_PATTERN.test(line.text)) {
       index += 1;
+      continue;
+    }
+    const lostBreaks = lostBreakOffsets(line.text, builder);
+    if (lostBreaks.length > 0) {
+      const parts = splitLineAt(line, lostBreaks);
+      readLines.splice(index, 1, ...parts);
+      openings.splice(
+        index,
+        1,
+        ...parts.map(({ text }) => openingNumberOf(text)),
+      );
       continue;
     }
     if (line.text.length === 0) {
@@ -1385,12 +1487,9 @@ const courtRepeatsAfterList = (
   return false;
 };
 
-/** A line opening with a court paragraph number and a capitalised word. */
-const COURT_PARAGRAPH_OPENING = /^(?<number>\d{1,3})\.\s+\p{Lu}/u;
-
 /** The court paragraph number each line opens with, if any. */
 const openingNumberOf = (text: string): number | undefined => {
-  const raw = COURT_PARAGRAPH_OPENING.exec(text)?.groups?.["number"];
+  const raw = COURT_PARAGRAPH_OPENING_RE.exec(text)?.groups?.["number"];
   return raw === undefined ? undefined : Number(raw);
 };
 

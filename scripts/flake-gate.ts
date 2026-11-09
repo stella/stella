@@ -12,6 +12,7 @@ import { repoRelativePath } from "@stll/portable-path";
 
 import apiManifest from "../apps/api/package.json" with { type: "json" };
 import { isDbTest } from "../apps/api/scripts/test-batch-plan";
+import { API_TEST_FILES_ENCODED_ENV } from "../apps/api/scripts/test-file-shards";
 import { selectTestPaths } from "../apps/api/scripts/test-path-filters";
 import { analyzeModule, selectApiTestImpact } from "./api-test-impact";
 import { testFailures } from "./ci-failure-digest";
@@ -159,7 +160,7 @@ export const selectTargets = ({
         };
       } else {
         env = {
-          API_TEST_FILES_ENCODED: encodePlanFileList([relative]),
+          [API_TEST_FILES_ENCODED_ENV]: encodePlanFileList([relative]),
           API_TEST_SHARD: "",
         };
       }

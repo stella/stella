@@ -5,7 +5,7 @@ import { gunzipSync } from "node:zlib";
 import { type Block, hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
-import { mapCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
+import { mapCourtListenerRecord as uncheckedMapCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import {
   citationRow,
   clusterRow,
@@ -22,6 +22,9 @@ import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const mapCourtListenerRecord = guardParser(uncheckedMapCourtListenerRecord);
 
 const project = async (sourceRaw: string) => {
   if (usCourtlistenerRetention.type !== "checked") {

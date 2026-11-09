@@ -143,6 +143,7 @@ const listDocumentReviewRuns = createSafeHandler(
           .select({
             id: documentReviewRuns.id,
             status: documentReviewRuns.status,
+            executor: documentReviewRuns.executor,
             errorCode: documentReviewRuns.errorCode,
             entityVersionId: documentReviewRuns.entityVersionId,
             total: documentReviewRuns.total,
@@ -249,6 +250,7 @@ const listDocumentReviewRuns = createSafeHandler(
       items: page.items.map((run) => ({
         id: run.id,
         status: run.status,
+        executor: run.executor,
         errorCode: run.errorCode,
         entityVersionId: run.entityVersionId,
         total: run.total,

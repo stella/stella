@@ -5,7 +5,8 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "build": "tauri build",
+    "build": "tauri build --config src-tauri/tauri.sidecar.conf.json",
+    "build:sidecar": "bun run --cwd ../../packages/agent-engine build:sidecar",
     "build:view": "vite build",
     "clean": "git clean -xdf .cache .turbo dist node_modules src-tauri/target",
     "dev": "tauri dev",
@@ -28,7 +29,7 @@
     "@stll/concurrency": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "@stll/ui": "workspace:*",
     "@tauri-apps/api": "^2.12.4",
     "better-result": "catalog:",
@@ -38,7 +39,7 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "21.0.4",
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.1",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",

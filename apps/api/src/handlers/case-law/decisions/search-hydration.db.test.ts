@@ -31,7 +31,9 @@ import {
   provisionDecisionWalkQuery,
   provisionListCursorCodec,
   readCaseLawPageDecisionRows,
+  readNamedCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
+  rehydrateNamedCaseLawDecisions,
   searchCorpusIndexDecisions,
   searchPostgresDecisions,
   unresolvedCandidateDecisionRowsStatement,
@@ -48,7 +50,10 @@ import { provisionScopeLinksQuery } from "@/api/lib/case-law/provision-filter";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
-import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CorpusIndexError,
+  getCorpusIndexClient,
+} from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -112,11 +117,13 @@ const foreignId = createSafeId<"caseLawDecision">();
 const closedId = createSafeId<"caseLawDecision">();
 const projectedId = createSafeId<"caseLawDecision">();
 const queuedId = createSafeId<"caseLawDecision">();
+const erasingId = createSafeId<"caseLawDecision">();
 const czechIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const slovakIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const closedIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const projectedIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const queuedIntentId = createSafeId<"corpusIndexProjectionIntent">();
+const erasingIntentId = createSafeId<"corpusIndexProjectionIntent">();
 
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -321,6 +328,16 @@ beforeAll(
         languageGroupKey: "queued-group",
         contentHash: "hash-queued",
       },
+      {
+        id: erasingId,
+        sourceId,
+        caseNumber: "30 Cdo 5/2026",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        languageGroupKey: "erasing-group",
+        contentHash: "hash-erasing",
+      },
     ]);
 
     const link = (
@@ -437,11 +454,25 @@ beforeAll(
         expectedDocumentCount: 1,
         appliedAt: queuedAt,
       },
+      {
+        id: erasingIntentId,
+        family: "case_law",
+        generation: OTHER_GENERATION,
+        entityId: erasingId,
+        epoch: 1n,
+        fingerprint: APPLIED_FINGERPRINT,
+        indexId: OTHER_INDEX_ID,
+        status: "applied",
+        appendStartedAt: queuedAt,
+        appendCommittedAt: queuedAt,
+        expectedDocumentCount: 1,
+        appliedAt: queuedAt,
+      },
     ]);
     await db.insert(corpusIndexProjectionStates).values([
       ...held.map(({ state }) => state),
-      // The applied revision is behind a queued content change, so what the
-      // engine holds for this decision is not what the generation wants.
+      // The applied revision is behind a queued content change: the engine
+      // still holds the applied copy, and it answers until the new one lands.
       {
         family: "case_law",
         generation: OTHER_GENERATION,
@@ -453,6 +484,23 @@ beforeAll(
         appliedAction: "upsert",
         appliedEpoch: 1n,
         appliedRevision: queuedIntentId,
+        appliedFingerprint: APPLIED_FINGERPRINT,
+        appliedIndexId: OTHER_INDEX_ID,
+        appliedAt: queuedAt,
+      },
+      // The applied copy is still in the index, but the generation has
+      // queued its erasure: nothing may stand on it any more.
+      {
+        family: "case_law",
+        generation: OTHER_GENERATION,
+        entityId: erasingId,
+        desiredAction: "erase",
+        desiredEpoch: 2n,
+        desiredFingerprint: null,
+        desiredIndexId: null,
+        appliedAction: "upsert",
+        appliedEpoch: 1n,
+        appliedRevision: erasingIntentId,
         appliedFingerprint: APPLIED_FINGERPRINT,
         appliedIndexId: OTHER_INDEX_ID,
         appliedAt: queuedAt,
@@ -968,6 +1016,7 @@ test("a short strict page is topped up with new partial matches only, after the 
   // match. Highlights run through the search endpoint, facets through the
   // aggregate one.
   let scans = 0;
+  let coverageRefuses = false;
   const engine = getCorpusIndexClient(manifest.cluster);
   const scoredSpy = spyOn(engine, "scoredSearch").mockImplementation(
     async () => {
@@ -1002,6 +1051,9 @@ test("a short strict page is topped up with new partial matches only, after the 
   const aggregateSpy = spyOn(engine, "aggregate").mockImplementation(
     async ({ aggs, query }) => {
       if ("term_coverage" in aggs) {
+        if (coverageRefuses) {
+          return Result.err(new CorpusIndexError({ message: "over budget" }));
+        }
         const ids = query.includes("promlčení")
           ? [czechId, slovakId, projectedId].filter((id) => query.includes(id))
           : [];
@@ -1081,6 +1133,16 @@ test("a short strict page is topped up with new partial matches only, after the 
     // The total and facets stay the strict set's.
     expect(relaxed.result.total).toEqual(strictOnly.result.total);
     expect(relaxed.result.facets).toEqual(strictOnly.result.facets);
+    expect(relaxed.result.relaxedTopUp).toBeUndefined();
+
+    // A top-up that cannot finish keeps the strict page and says so.
+    coverageRefuses = true;
+    const unread = await search(false);
+    expect(unread.result.hits.map(({ decisionId }) => decisionId)).toEqual([
+      String(czechId),
+    ]);
+    expect(unread.result.relaxedHitCount).toBe(0);
+    expect(unread.result.relaxedTopUp).toBe("skipped");
   } finally {
     scoredSpy.mockRestore();
     searchSpy.mockRestore();
@@ -1422,7 +1484,7 @@ test("Postgres relaxes an empty six-term question using whole-document term cove
   }
 });
 
-test("a generation admits exactly what its projection state holds", async () => {
+test("a generation admits every decision it holds an applied copy of", async () => {
   const scoped = {
     body: SEARCH_BODY,
     caseLawDb,
@@ -1432,19 +1494,64 @@ test("a generation admits exactly what its projection state holds", async () => 
 
   const ranking = await rehydrateCaseLawCandidates({
     ...scoped,
-    candidates: candidatesOf(projectedId, queuedId, czechId),
+    candidates: candidatesOf(projectedId, queuedId, czechId, erasingId),
   });
-  // Applied equals desired for the first decision. The second still owes the
-  // index a mutation, and the third has no state row in this generation.
-  expect(ranking.ranked.map((hit) => hit.id)).toEqual([projectedId]);
+  // Applied equals desired for the first decision. The second owes the index
+  // a content change, so its applied copy answers until that lands. The third
+  // has no state row in this generation, and the fourth is queued for erasure.
+  expect(ranking.ranked.map((hit) => hit.id).toSorted()).toEqual(
+    [projectedId, queuedId].toSorted(),
+  );
 
   const rows = await readCaseLawPageDecisionRows({
     body: scoped.body,
     caseLawDb,
     generation: OTHER_GENERATION,
-    ids: [projectedId, queuedId, czechId],
+    ids: [projectedId, queuedId, czechId, erasingId],
   });
-  expect([...rows.keys()]).toEqual([projectedId]);
+  expect([...rows.keys()].toSorted()).toEqual(
+    [projectedId, queuedId].toSorted(),
+  );
+});
+
+test("a decision an identifier names answers from its published row, whatever the index holds", async () => {
+  const scoped = {
+    body: SEARCH_BODY,
+    caseLawDb,
+    courtWeights,
+    generation: OTHER_GENERATION,
+  };
+  const named = [projectedId, queuedId, czechId, closedId];
+
+  // The reader opens the first three, so a docket or ECLI must find them: a
+  // queued mutation or a missing state row means the index lags, not that the
+  // decision is absent. A source that may not be redistributed stays out.
+  const ranking = await rehydrateNamedCaseLawDecisions({
+    ...scoped,
+    candidates: candidatesOf(...named),
+  });
+  expect(ranking.ranked.map((hit) => hit.id).toSorted()).toEqual(
+    [projectedId, queuedId, czechId].toSorted(),
+  );
+
+  const rows = await readNamedCaseLawPageDecisionRows({
+    body: scoped.body,
+    caseLawDb,
+    generation: OTHER_GENERATION,
+    ids: named,
+  });
+  expect([...rows.keys()].toSorted()).toEqual(
+    [projectedId, queuedId, czechId].toSorted(),
+  );
+
+  // The same ids as search hits stand only on a copy the index holds.
+  const hits = await rehydrateCaseLawCandidates({
+    ...scoped,
+    candidates: candidatesOf(...named),
+  });
+  expect(hits.ranked.map((hit) => hit.id).toSorted()).toEqual(
+    [projectedId, queuedId].toSorted(),
+  );
 });
 
 test("a generation admits nothing another generation holds", async () => {
@@ -2388,6 +2495,7 @@ test("the unresolved row statements leave provision membership to their query fo
     // The Czech decision cites § 316 of the labour code; the Slovak one cites
     // § 31 of it and § 316 of another act.
     const options = {
+      admission: "indexed" as const,
       body: {
         ...SEARCH_BODY,
         provision: { work: "262/2006 Sb.", anchor: "par_316" },
@@ -2687,6 +2795,7 @@ test("the Postgres search plan and the engine page read agree on a citation past
     const engineIds = async (provision?: typeof GAPPED_PROVISION) =>
       await caseLawDb(async (tx) => {
         const options = {
+          admission: "indexed" as const,
           body: {
             ...SEARCH_BODY,
             ...(provision === undefined ? {} : { provision }),
@@ -2720,6 +2829,7 @@ test("the provision filter reads links through an index, never by scanning them"
   await caseLawDb(async (tx) => {
     await tx.execute(sql`SET LOCAL enable_seqscan = off`);
     const options = {
+      admission: "indexed" as const,
       body: {
         ...SEARCH_BODY,
         provision: {
@@ -2775,6 +2885,7 @@ test.each([true, false])(
     await caseLawDb(async (tx) => {
       await tx.execute(sql`SET LOCAL enable_seqscan = off`);
       const options = {
+        admission: "indexed" as const,
         body: { ...SEARCH_BODY, category: "A", hasLegalSentence },
         generation: GENERATION,
         ids: [czechId, slovakId],
@@ -2904,7 +3015,12 @@ test("canonical reads return content only for eligible rows and separate id-only
   const missingId = createSafeId<"caseLawDecision">();
   const ids = [czechId, closedId, queuedId, missingId];
   await caseLawDb(async (tx) => {
-    const options = { generation: GENERATION, ids, body: SEARCH_BODY };
+    const options = {
+      admission: "indexed" as const,
+      generation: GENERATION,
+      ids,
+      body: SEARCH_BODY,
+    };
     const partitions = [
       await candidateDecisionRowsQuery(tx, options),
       await pageDecisionRowsQuery(tx, options),
@@ -2930,6 +3046,7 @@ test("canonical reads return content only for eligible rows and separate id-only
 test("the database returns no content columns for excluded canonical ids", async () => {
   await caseLawDb(async (tx) => {
     const options = {
+      admission: "indexed" as const,
       body: SEARCH_BODY,
       generation: GENERATION,
       ids: [closedId, queuedId],

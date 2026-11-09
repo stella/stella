@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { askForFix, askSentence } from "@stll/agent-input";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { declareFailureClass } from "@stll/errors";
 import {
   closestNames,
@@ -29,7 +30,9 @@ import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   PUBLIC_READ_TIMEOUT_CODE,
+  PUBLIC_READ_TIMEOUT_HINT,
   publicReadTimeoutError,
+  publicReadTimeoutRefusal,
 } from "@/api/lib/legal-search/public-read-timeout";
 import {
   isSearchIndexUnavailable,
@@ -533,18 +536,30 @@ const CASE_LAW_SEARCH_TIMEOUT_SINK = failureSink({
   expected: [],
 });
 
+/**
+ * Whether a case-law search failure is its time budget running out: a
+ * cancelled statement or a public-read timeout, thrown or answered. Reads
+ * only; `caseLawSearchTimeoutResult` records and answers the same failures.
+ */
+export const isCaseLawSearchTimeout = (error: unknown): boolean => {
+  const response = isRecord(error) ? error["response"] : undefined;
+  return (
+    getPgErrorCode(error) === PG_ERROR.QUERY_CANCELED ||
+    resolveHandlerError(error)?.code === PUBLIC_READ_TIMEOUT_CODE ||
+    (isRecord(response) && response["code"] === PUBLIC_READ_TIMEOUT_CODE)
+  );
+};
+
 export const caseLawSearchTimeoutResult = (
   error: unknown,
 ): InternalToolErrorResult | null => {
-  const response = isRecord(error) ? error["response"] : undefined;
-  if (
-    getPgErrorCode(error) !== PG_ERROR.QUERY_CANCELED &&
-    resolveHandlerError(error)?.code !== PUBLIC_READ_TIMEOUT_CODE &&
-    !(isRecord(response) && response["code"] === PUBLIC_READ_TIMEOUT_CODE)
-  ) {
+  if (!isCaseLawSearchTimeout(error)) {
     return null;
   }
-  observeFailure(error, {
+  // Observed as the refusal it stands for, whichever shape it arrived in: a
+  // handler's returned 503 is a status body and a cancelled statement a driver
+  // error, and neither grades as a timeout on its own.
+  observeFailure(publicReadTimeoutRefusal(error), {
     sink: CASE_LAW_SEARCH_TIMEOUT_SINK,
     ctx: { source: "mcp" },
   });
@@ -585,6 +600,19 @@ export const searchIndexUnavailableResult = (
 };
 
 /**
+ * The envelope for a refusal a public-law search handler answered with (a
+ * read that ran out of time, an index that could not serve it), returned or
+ * thrown, or null for any other answer. The timeout is read first, so an
+ * expired budget never reads as the index being down.
+ */
+export const searchRefusalResult = (
+  answer: unknown,
+): InternalToolErrorResult | null =>
+  publicReadTimeoutError(answer) !== null || isSearchIndexUnavailable(answer)
+    ? internalFailureResult(answer, "mcp.searchRefusal")
+    : null;
+
+/**
  * Envelope for a failed backing-handler `Result`, the single sink for the
  * `errorResult(result.error.message)` class. Every tool site that unwraps a
  * `context.safeDb(...)` / `Result.gen(() => handler(...))` failure routes here
@@ -610,10 +638,12 @@ export const internalFailureResult = (
   error: unknown,
   fingerprintKey: StableExceptionKey,
 ): InternalToolErrorResult => {
-  if (isSearchIndexUnavailable(error)) {
+  // A read the request's budget ended is a timeout whatever it was waiting
+  // on, so it is read before the dependency's own failure.
+  const timeout = publicReadTimeoutError(error);
+  if (timeout === null && isSearchIndexUnavailable(error)) {
     return searchIndexUnavailableResult(error);
   }
-  const timeout = publicReadTimeoutError(error);
   if (
     timeout === null &&
     HandlerError.is(error) &&
@@ -630,7 +660,7 @@ export const internalFailureResult = (
     return structuredErrorResult({
       code: "public_read_timeout",
       message: timeout.message,
-      hint: "Retry with a narrower query or a smaller selection of public-law documents.",
+      hint: PUBLIC_READ_TIMEOUT_HINT,
       retryable: true,
     });
   }
@@ -885,7 +915,7 @@ export const ensureActiveWorkspace = ({
   if (!resolved) {
     return notFoundResult("Matter not found or not accessible");
   }
-  if (getWorkspaceStatus({ context, workspaceId }) !== "active") {
+  if (!workspaceAcceptsWrites(getWorkspaceStatus({ context, workspaceId }))) {
     return errorResult("Matter is archived; unarchive it first");
   }
   if (context.pinServerValidatedWorkspaceId?.(resolved) === false) {

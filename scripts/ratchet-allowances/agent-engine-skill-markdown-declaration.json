@@ -1,0 +1,5 @@
+{
+  "metric": "cross-workspace-duplicate-export-names",
+  "delta": 1,
+  "reason": "The local run's skill folder check reads a member's own SKILL.md, which the CI Markdown reader census sees as a Markdown read; the census needs the file to declare CI_MARKDOWN_READER_INPUTS, here as an empty list because no repository Markdown is read."
+}

@@ -18,7 +18,7 @@ import { env } from "@/api/env";
 import { organizationsRoute } from "@/api/handlers/organizations/routes";
 import { ORGANIZATION_EVALUATION_STARTED_EVENT_TYPE } from "@/api/lib/audit-log.constants";
 import { getAuth } from "@/api/lib/auth";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -33,8 +33,11 @@ import {
 } from "@/api/lib/usage/organization-access-snapshot";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
+import { seedReadyOrganizationAuditExport } from "@/api/tests/helpers/organization-audit-export";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 import type { TestServer } from "@/api/tests/helpers/test-server";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 const EVALUATION_LIMIT_CODE = "organization_evaluation_limit_reached";
@@ -130,6 +133,13 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
       await expectQuotaRefusal(
         await requestCreation({ api, browser, key: `${suffix}-fourth` }),
       );
+      // Deletion requires the owner's current audit archive; this suite's
+      // subject is the allowance after the deletion.
+      await seedReadyOrganizationAuditExport({
+        db: asTestRaw<TestDatabase>(rootDb),
+        userId: toSafeId<"user">(browser.userId),
+        organizationId: toSafeId<"organization">(first.organizationId),
+      });
       await getAuth().api.deleteOrganization({
         headers: browser.headers(),
         body: { organizationId: first.organizationId },

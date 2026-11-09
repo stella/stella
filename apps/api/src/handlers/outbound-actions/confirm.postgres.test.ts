@@ -3,8 +3,13 @@ import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
-import type { OutboundActionPreview } from "@stll/api-contract/outbound-action";
+import {
+  OUTBOUND_ACTION_TTL_MS,
+  type OutboundActionPreview,
+} from "@stll/api-contract/outbound-action";
 import { waitForExternalState } from "@stll/property-testing/external-state";
+import { createTestClock } from "@stll/test-kit";
+import { dbClock } from "@stll/test-kit/db";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -29,6 +34,7 @@ import { createConfirmOutboundActionHandler } from "./confirm";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const clock = createTestClock();
 
 const preview = {
   kind: "email.send",
@@ -85,14 +91,14 @@ if (!databaseUrl || !runPostgres) {
           id: organizationId,
           name: "Outbound test organization",
           slug: organizationId,
-          createdAt: new Date(),
+          createdAt: new Date(clock.now()),
         });
         await firstDb.insert(member).values({
           id: mintAuthProviderIdValue(),
           organizationId,
           userId,
           role: "owner",
-          createdAt: new Date(),
+          createdAt: new Date(clock.now()),
         });
         await firstDb.insert(chatThreads).values({
           id: chatThreadId,
@@ -101,18 +107,25 @@ if (!databaseUrl || !runPostgres) {
           userId,
           workspaceId: null,
         });
-        const prepared = await firstDb.transaction(
-          async (tx) =>
-            await prepareOutboundAction({
-              tx: asTestRaw<Transaction>(tx),
-              organizationId,
-              userId,
-              chatThreadId,
-              preview,
-              now: new Date(),
-              recordAuditEvent: noAudit,
-            }),
-        );
+        const prepared = await firstDb.transaction(async (tx) => {
+          const action = await prepareOutboundAction({
+            tx: asTestRaw<Transaction>(tx),
+            organizationId,
+            userId,
+            chatThreadId,
+            preview,
+            now: new Date(clock.now()),
+            recordAuditEvent: noAudit,
+          });
+          if (Result.isOk(action)) {
+            // Expiry is judged by the database clock, so it is set from it.
+            await tx
+              .update(outboundActions)
+              .set({ expiresAt: dbClock.fromNow(OUTBOUND_ACTION_TTL_MS) })
+              .where(eq(outboundActions.id, action.value.id));
+          }
+          return action;
+        });
         const actionId = prepared.unwrap().id;
         const pidRows = await secondDb
           .select({ pid: sql<number>`pg_backend_pid()` })

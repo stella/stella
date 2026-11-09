@@ -93,6 +93,23 @@ export const MODEL_RATES = {
       cachedWriteInputPerMTok: 500_000,
     },
   },
+  // models.dev: openai:gpt-6.1-terra
+  "gpt-6.1-terra": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 100_000,
+      outputPerMTok: 500_000,
+      cachedInputPerMTok: 5000,
+      cachedWriteInputPerMTok: 125_000,
+    },
+    aboveThreshold: {
+      inputPerMTok: 200_000,
+      outputPerMTok: 750_000,
+      cachedInputPerMTok: 10_000,
+      cachedWriteInputPerMTok: 250_000,
+    },
+  },
   // models.dev: openai:gpt-6-astra
   "gpt-6-astra": {
     kind: "input-token-tiered",

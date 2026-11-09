@@ -3,8 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 
 const FIXTURES_DIR = new URL("../adapters/__fixtures__/", import.meta.url);
 

@@ -21,7 +21,11 @@ export const DueDatePicker = ({
       displayedComponents="date"
       initialDate={pickerDate(day, MATERIAL_CLOCK).toISOString()}
       onDateSelected={(date) => {
-        onChange(pickedDay(date, MATERIAL_CLOCK));
+        // Material reports null while typed input is incomplete or invalid;
+        // the chosen day stays until the input names a real date.
+        if (date !== null) {
+          onChange(pickedDay(date, MATERIAL_CLOCK));
+        }
       }}
       selectableDates={{ start: pickerDate(earliest, MATERIAL_CLOCK) }}
       showVariantToggle={false}
