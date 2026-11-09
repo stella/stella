@@ -12,6 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { waitFor } from "@stll/test-kit";
+
 import { SidecarHost } from "./host";
 import type { SidecarHostOutput, SidecarRunStart } from "./protocol";
 
@@ -307,6 +309,35 @@ describe("undoing a local run's file changes", () => {
     const answered = turn.upcoming("folder.restored");
     turn.host.handle(restoreMessage(at, runId));
     expect((await answered).outcome).toBe("no_checkpoint");
+  });
+
+  test("a run stopped while its folder is being saved never starts its harness", async () => {
+    const at = place();
+    writeFileSync(path.join(at.workspaceDir, "brief.txt"), "the first draft");
+    // Another holder has the folder's checkpoints: the capture waits for it.
+    const store = `${at.workspaceDir}.checkpoints`;
+    mkdirSync(store);
+    const lock = path.join(store, ".lock");
+    writeFileSync(
+      lock,
+      JSON.stringify({ pid: process.pid, token: crypto.randomUUID() }),
+    );
+    const { host, upcoming } = startHost(at);
+    const start = runStart(at);
+    const finished = upcoming("run.finished");
+    host.handle(start);
+    // The run is past its copies once it waits for the store.
+    await waitFor(
+      () =>
+        readdirSync(store).some((name) => name.startsWith(".lock-"))
+          ? true
+          : undefined,
+      { description: "the run to wait for the folder's checkpoints" },
+    );
+    host.handle({ type: "run.cancel", runId: start.runId });
+    rmSync(lock);
+    expect((await finished).outcome).toBe("cancelled");
+    expect(existsSync(at.fakeLog)).toBe(false);
   });
 
   test("a run that starts while its folder is restored fails without starting its harness", async () => {

@@ -172,6 +172,12 @@ type HeldRun = {
   checkpoint: DesktopRunnerCheckpointEvent | null;
 };
 
+/**
+ * Whether the run was asked to stop. A call, not a field read, so a check
+ * after an await is not narrowed away by an earlier one.
+ */
+const isStopped = (run: HeldRun) => run.stop !== RUN_STOP.none;
+
 type Config = { appVersion: string; apiOrigin: string; proxy: McpProxy };
 
 /** Adapters by harness; `null` until the harness has one. */
@@ -639,6 +645,7 @@ export class SidecarHost {
       const restored = await restoreCheckpoint({
         workspaceDir,
         runId: message.runId,
+        log: this.options.log,
       });
       if (restored.detail !== null) {
         this.options.log(`a folder restore: ${restored.detail}`);
@@ -779,6 +786,15 @@ export class SidecarHost {
       this.options.log(
         `a run's folder was not saved: ${run.checkpoint.reason}`,
       );
+    }
+    // The capture can take a while: a stop during it ends the run here.
+    if (isStopped(run)) {
+      return Result.err({
+        type: "harness_exited",
+        message: "The run was stopped before it started.",
+        exitCode: null,
+        signal: null,
+      });
     }
     // Read after the copies and before the harness: what is there now was not
     // written by this turn.

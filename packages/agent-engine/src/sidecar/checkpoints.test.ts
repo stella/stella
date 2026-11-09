@@ -10,13 +10,17 @@ import {
   readlinkSync,
   renameSync,
   rmSync,
+  statSync,
   symlinkSync,
   unlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
+
+import { waitFor } from "@stll/test-kit";
 
 import {
   captureCheckpoint,
@@ -120,8 +124,11 @@ type Capture = {
   limits?: Partial<CheckpointLimits>;
 };
 
-/** What captures logged; nothing in these folders fails a cleanup. */
+/** What captures and restores logged; nothing here fails a cleanup. */
 const logged: string[] = [];
+const logLine = (line: string) => {
+  logged.push(line);
+};
 afterEach(() => {
   expect(logged.splice(0)).toEqual([]);
 });
@@ -137,15 +144,13 @@ const capture = async (
     memberFiles,
     protectedPaths,
     limits: { ...CHECKPOINT_LIMITS, ...limits },
-    log: (line) => {
-      logged.push(line);
-    },
+    log: logLine,
   });
   return { runId, report };
 };
 
 const restore = async (workspaceDir: string, runId: string) =>
-  await restoreCheckpoint({ workspaceDir, runId });
+  await restoreCheckpoint({ workspaceDir, runId, log: logLine });
 
 describe("a run folder's checkpoint", () => {
   test("restores what a turn changed, created and deleted, nested folders included", async () => {
@@ -653,7 +658,7 @@ describe("a run folder's checkpoint", () => {
       );
     });
 
-    test("a rollback that fails keeps the state before the restore and its files", async () => {
+    test("a rollback that fails keeps the state before the restore until it can be put back", async () => {
       const { workspaceDir } = place();
       write(workspaceDir, "d/f.txt", "old");
       const { runId } = await capture(workspaceDir);
@@ -664,6 +669,7 @@ describe("a run folder's checkpoint", () => {
       const restored = await restoreCheckpoint({
         workspaceDir,
         runId,
+        log: logLine,
         // Something the rollback cannot save appears before it runs.
         beforeRollback: () => {
           expect(Bun.spawnSync(["mkfifo", pipe]).exitCode).toBe(0);
@@ -690,17 +696,89 @@ describe("a run folder's checkpoint", () => {
       });
       expect(storedContents(workspaceDir)).toContain("new");
 
-      // Later cleanup keeps it too.
-      rmSync(pipe);
+      // While it cannot be put back, nothing else runs on the store.
       chmodSync(path.join(store(workspaceDir), "manifests"), 0o700);
-      write(workspaceDir, "d/f.txt", "newer");
-      expect(
-        (await capture(workspaceDir, { limits: { maxManifests: 1 } })).report,
-      ).toEqual({
+      expect((await capture(workspaceDir)).report).toEqual({
+        status: "unavailable",
+        reason: "failed",
+      });
+      expect(logged.splice(0)).toEqual([
+        "an interrupted restore was not settled: The folder holds a special file.",
+      ]);
+      expect(await restore(workspaceDir, runId)).toEqual({
+        outcome: "failed",
+        detail: "an interrupted restore could not be settled",
+      });
+      expect(recoveries(workspaceDir)).toEqual(kept);
+      expect(storedContents(workspaceDir)).toContain("new");
+
+      // Once it can, the next capture puts it back first.
+      rmSync(pipe);
+      expect((await capture(workspaceDir)).report).toEqual({
         status: "taken",
       });
-      expect(storedContents(workspaceDir)).toContain("new");
-      expect(recoveries(workspaceDir)).toEqual(kept);
+      expect(readFileSync(path.join(workspaceDir, "d/f.txt"), "utf-8")).toBe(
+        "new",
+      );
+      expect(recoveries(workspaceDir)).toEqual([]);
+    });
+
+    test("a restore interrupted half way is settled before the next capture", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "d/f.txt", "old");
+      const { runId } = await capture(workspaceDir);
+      write(workspaceDir, "d/f.txt", "new");
+      write(workspaceDir, "z-created.txt", "created by the turn");
+      const saved = treeOf(workspaceDir);
+      lockManifests(workspaceDir);
+
+      // The holder stops after the restore wrote its record and the folder.
+      const interrupted = await restoreCheckpoint({
+        workspaceDir,
+        runId,
+        log: logLine,
+        beforeRollback: () => {
+          throw new Error("the holder stopped");
+        },
+      });
+      expect(interrupted.outcome).toBe("failed");
+      expect(recoveries(workspaceDir)).toHaveLength(1);
+      expect(treeOf(workspaceDir)).not.toEqual(saved);
+
+      chmodSync(path.join(store(workspaceDir), "manifests"), 0o700);
+      expect((await capture(workspaceDir)).report).toEqual({
+        status: "taken",
+      });
+      expect(treeOf(workspaceDir)).toEqual(saved);
+      expect(recoveries(workspaceDir)).toEqual([]);
+    });
+
+    test("the store's lock is kept fresh while a restore runs", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "a.txt", "old");
+      const { runId } = await capture(workspaceDir);
+      write(workspaceDir, "a.txt", "new");
+      lockManifests(workspaceDir);
+      const lock = path.join(store(workspaceDir), ".lock");
+      const refreshed: boolean[] = [];
+      const restored = await restoreCheckpoint({
+        workspaceDir,
+        runId,
+        log: logLine,
+        limits: { ...CHECKPOINT_LIMITS, lockHeartbeatMs: 20 },
+        beforeRollback: async () => {
+          const first = statSync(lock).mtimeMs;
+          refreshed.push(
+            await waitFor(
+              () => (statSync(lock).mtimeMs > first ? true : undefined),
+              { description: "the lock to be refreshed" },
+            ),
+          );
+        },
+      });
+      expect(restored.outcome).toBe("failed");
+      expect(refreshed).toEqual([true]);
+      expect(existsSync(lock)).toBe(false);
     });
   });
 
@@ -757,14 +835,14 @@ describe("a run folder's checkpoint", () => {
       expect(existsSync(lockFile(workspaceDir))).toBe(false);
     });
 
+    const holder = (pid: number) =>
+      JSON.stringify({ pid, token: crypto.randomUUID() });
+
     test("a store another live process holds is not used; one whose holder is gone is taken over", async () => {
       const { workspaceDir } = place();
       write(workspaceDir, "a.txt", "saved");
       await capture(workspaceDir);
-      writeFileSync(
-        lockFile(workspaceDir),
-        JSON.stringify({ pid: process.pid }),
-      );
+      writeFileSync(lockFile(workspaceDir), holder(process.pid));
       expect(
         (await capture(workspaceDir, { limits: { lockWaitMs: 100 } })).report,
       ).toEqual({ status: "unavailable", reason: "failed" });
@@ -772,12 +850,30 @@ describe("a run folder's checkpoint", () => {
 
       const gone = Bun.spawn(["true"]);
       await gone.exited;
-      writeFileSync(lockFile(workspaceDir), JSON.stringify({ pid: gone.pid }));
+      writeFileSync(lockFile(workspaceDir), holder(gone.pid));
       expect(
         (await capture(workspaceDir, { limits: { lockWaitMs: 100 } })).report,
       ).toEqual({ status: "taken" });
       expect(manifestIds(workspaceDir)).toHaveLength(2);
       expect(existsSync(lockFile(workspaceDir))).toBe(false);
+    });
+
+    test("a lock its holder stopped refreshing is taken over, even under a live process id", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "a.txt", "saved");
+      await capture(workspaceDir);
+      // A reused process id: alive, but the lock went unrefreshed for long.
+      writeFileSync(lockFile(workspaceDir), holder(process.pid));
+      utimesSync(lockFile(workspaceDir), 1, 1);
+      expect(
+        (await capture(workspaceDir, { limits: { lockWaitMs: 100 } })).report,
+      ).toEqual({ status: "taken" });
+      expect(existsSync(lockFile(workspaceDir))).toBe(false);
+      expect(
+        readdirSync(checkpointStoreOf(workspaceDir)).filter((name) =>
+          name.startsWith(".lock"),
+        ),
+      ).toEqual([]);
     });
   });
 
