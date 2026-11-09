@@ -243,17 +243,15 @@ const citedProvisions = (
 ): readonly CitedProvision[] => {
   const written = section.trim();
   const folded = written.toLocaleLowerCase(profile.language);
-  const term = profile.sectionTerms
-    .filter(({ text }) =>
-      folded.startsWith(text.toLocaleLowerCase(profile.language)),
-    )
-    .reduce<SectionTermSpec | undefined>(
-      (longest, candidate) =>
-        longest === undefined || candidate.text.length > longest.text.length
-          ? candidate
-          : longest,
-      undefined,
-    );
+  let term: SectionTermSpec | undefined;
+  for (const candidate of profile.sectionTerms) {
+    if (
+      folded.startsWith(candidate.text.toLocaleLowerCase(profile.language)) &&
+      (term === undefined || candidate.text.length > term.text.length)
+    ) {
+      term = candidate;
+    }
+  }
   const match = /^(\d+)\s*([a-z])?$/iu.exec(
     written.slice(term?.text.length ?? 0).trim(),
   );
