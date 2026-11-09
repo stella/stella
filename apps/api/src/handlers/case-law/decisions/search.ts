@@ -62,10 +62,12 @@ import {
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import {
   CASE_LAW_SEARCH_DB_READ,
-  createCaseLawSearchDbTimer,
+  type CaseLawSearchTrace,
+  createCaseLawSearchTrace,
   decisionQueryClass,
   reportCaseLawFunctionWordsExcluded,
   reportCaseLawSearchCompleted,
+  runTracedCaseLawSearch,
 } from "@/api/handlers/case-law/decisions/search-telemetry";
 import { status } from "@/api/http/status";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -477,7 +479,7 @@ export const searchDecisionsHandler = async ({
                 provision,
               }),
           ));
-    return await searchCorpusIndexDecisions({
+    return await tracedCorpusIndexSearch({
       body:
         provisionScope?.type === "decisions"
           ? { ...scopedBody, provisionDecisionIds: provisionScope.decisionIds }
@@ -2994,13 +2996,16 @@ const caseLawIndexRanking = ({
     : { scanFields: undefined, projections: () => undefined };
 };
 
-export const searchCorpusIndexDecisions = async ({
-  signal,
-  body,
-  caseLawDb,
-  observer,
-  dependencies = {},
-}: SearchCorpusIndexDecisionsOptions) => {
+export const searchCorpusIndexDecisions = async (
+  {
+    signal,
+    body,
+    caseLawDb,
+    observer,
+    dependencies = {},
+  }: SearchCorpusIndexDecisionsOptions,
+  trace: CaseLawSearchTrace = createCaseLawSearchTrace(body.country),
+) => {
   const {
     readServingTarget,
     configuredVariant,
@@ -3013,7 +3018,7 @@ export const searchCorpusIndexDecisions = async ({
     caseLawDb,
     dependencies,
   });
-  const startedAt = performance.now();
+  const { startedAt } = trace;
   // Only the first page of a result set describes it (its total, its facets,
   // the decisions a reference pins above it); a page reached by cursor or by
   // offset is a slice of a set the first page already described.
@@ -3035,7 +3040,7 @@ export const searchCorpusIndexDecisions = async ({
   // the numbers are wait, not work: the candidate read hands the timer down to
   // where it opens its transaction, because the ranking, folding and
   // collapsing around it are not database time.
-  const dbTimer = createCaseLawSearchDbTimer();
+  const { dbTimer } = trace;
   const hitDispositions = createCorpusHitDispositionCounter();
   // The scan's record of rows read. The identity path keeps its own: it
   // admits every published row, which must never stand in for a search hit
@@ -3064,7 +3069,9 @@ export const searchCorpusIndexDecisions = async ({
     configuredVariant,
   });
   const queryClass = decisionQueryClass(intent);
+  trace.queryClass = queryClass;
   const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {
+    trace.reported = true;
     reportCaseLawSearchCompleted({
       candidatesHydrated: hydrated.size + namedHydrated.size,
       hitDispositions: hitDispositions.snapshot(),
@@ -3151,6 +3158,7 @@ export const searchCorpusIndexDecisions = async ({
   let pinned: readonly RankedHit[] = [];
   let pinnedIds: ReadonlySet<string> = new Set();
   if (intent.type === "identifier" && identityRole !== "none") {
+    trace.phase = "identity";
     const ids = await findDecisionIdsByIdentity({
       caseLawDb,
       country: body.country,
@@ -3270,6 +3278,7 @@ export const searchCorpusIndexDecisions = async ({
   // read may reach (`corpusIndexReadTarget`).
   const { indexId, jurisdictionClause } = route;
 
+  trace.phase = "query_resolve";
   const { facetQueries, resolved } = await resolveCorpusIndexQuery({
     body,
     generation,
@@ -3410,7 +3419,11 @@ export const searchCorpusIndexDecisions = async ({
       },
     });
   const concurrentStartedAt = performance.now();
-  const pageRead = readTextPage(resolved.query, limit, null);
+  trace.phase = "scan_and_facets";
+  const pageRead = readTextPage(resolved.query, limit, null).then((read) => {
+    trace.scanSettled = true;
+    return read;
+  });
   // Stamped where it resolves rather than after the phase: the reader waits on
   // the slower arm, and which arm that was is the whole point of the pair.
   const facetRead = readsResultSetDescription(body, isFirstPage)
@@ -3433,6 +3446,7 @@ export const searchCorpusIndexDecisions = async ({
         totalQuery: resolved.query,
       }).then((read) => {
         facetMs = performance.now() - concurrentStartedAt;
+        trace.facetMs = facetMs;
         return read;
       })
     : null;
@@ -3460,6 +3474,7 @@ export const searchCorpusIndexDecisions = async ({
   // scrubbed mid-request; it drops out of the page rather than being served
   // from a stale copy, and the cursor keeps pointing past it.
   // The pinned decisions were named by an identifier, the rest are hits.
+  trace.phase = "page_rows";
   const byId = new Map([
     ...(await readPageRows(
       readCaseLawPageDecisionRows,
@@ -3472,6 +3487,7 @@ export const searchCorpusIndexDecisions = async ({
   ]);
 
   // Timed around the call for the same reason as on the identity path.
+  trace.phase = "alternates";
   const alternatesStartedAt = performance.now();
   const alternatesByGroupKey =
     await readPublicDecisionLanguageAlternatesByGroup({
@@ -3483,6 +3499,7 @@ export const searchCorpusIndexDecisions = async ({
     performance.now() - alternatesStartedAt,
   );
 
+  trace.phase = "partial_top_up";
   const page = decisionHitsPage({
     alternatesByGroupKey,
     anchorIdById,
@@ -3655,16 +3672,14 @@ export const searchCorpusIndexDecisions = async ({
   const hits = [...page.hits, ...relaxedHits];
   // An unrelaxed request adds the empty scan, which changes nothing.
   report(hits.length, sumCorpusIndexScans(scan, relaxed.scan));
-  if (interpretation.droppedFunctionWords.length > 0) {
-    reportCaseLawFunctionWordsExcluded({
-      country: body.country,
-      excludedTokens: interpretation.droppedFunctionWords.length,
-      hitsReturned: hits.length,
-      queryTokens:
-        tokenizeCorpusFreeText(interpretation.queryUsed).length +
-        interpretation.droppedFunctionWords.length,
-    });
-  }
+  reportCaseLawFunctionWordsExcluded({
+    country: body.country,
+    excludedTokens: interpretation.droppedFunctionWords.length,
+    hitsReturned: hits.length,
+    queryTokens:
+      tokenizeCorpusFreeText(interpretation.queryUsed).length +
+      interpretation.droppedFunctionWords.length,
+  });
   const answer = searchAnswer({
     body,
     interpretation,
@@ -3686,6 +3701,17 @@ export const searchCorpusIndexDecisions = async ({
     decisionHeadnoteMaxChars(body.headnotePresentation),
   );
 };
+
+/** The corpus search, leaving a record of itself when it does not complete. */
+const tracedCorpusIndexSearch = async (
+  options: SearchCorpusIndexDecisionsOptions,
+) =>
+  await runTracedCaseLawSearch({
+    country: options.body.country,
+    observer: options.observer,
+    run: async (trace, observer) =>
+      await searchCorpusIndexDecisions({ ...options, observer }, trace),
+  });
 
 type ListCaseLawProvisionDecisionsOptions = {
   body: SearchDecisionsBody & { provision: CaseLawProvisionFilter };
