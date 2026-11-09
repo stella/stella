@@ -287,7 +287,7 @@ probe_search() {
     if [[ "$status" != running ]]; then break; fi
     # A search still running answers with a token: following it is what a
     # client does, and giving up on it is a timeout the client would see.
-    if [[ "$polls" -ge "$probe_poll_limit" ]]; then
+    if [[ "$polls" -ge "$probe_poll_limit" ]] || ((SECONDS - probe_started >= probe_run_limit)); then
       reason=timeout
       detail="still running after $polls continuations"
       return 1
@@ -305,11 +305,12 @@ probe_search() {
 
 probe_one() {
   local name="$1" args="$2" started="$SECONDS"
+  detail=
   if ((SECONDS - probe_started > probe_run_limit)); then
-    report "$name" skipped run_budget
+    # A skipped search is coverage nobody is getting.
+    report "$name" failed run_budget
     return
   fi
-  detail=
   last_status=
   : > "$scratch/error"
   probe_total=$((probe_total + 1))
@@ -343,8 +344,9 @@ search_probe() {
   probe_started="$SECONDS"
   probe_total=0
   probe_answered=0
+  # The workflow only runs once enabled, so an absent token is a broken probe.
   if [[ -z "$credential" ]]; then
-    report mcp_probe skipped no_credential
+    report mcp_probe failed no_credential
     return
   fi
   if ! initialize; then

@@ -101,6 +101,7 @@ type Scenario = {
   probeSlot?: string;
   probeError?: string;
   probeRunning?: "once" | "always";
+  probeRunSeconds?: string;
 };
 
 type WorkflowRun = {
@@ -533,6 +534,7 @@ rm -f "$response"
           JOURNEY_SEARCH_SLOT: scenario.searchSlot ?? "0",
           JOURNEY_PROBE_SLOT: scenario.probeSlot ?? "0",
           JOURNEY_PROBE_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
+          JOURNEY_PROBE_RUN_SECONDS: scenario.probeRunSeconds ?? "240",
           STELLA_DESKTOP_RETRY_PAUSE_SECONDS: "0",
           STELLA_DESKTOP_NOW_EPOCH: "1791536400",
           JOURNEY_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
@@ -1311,11 +1313,37 @@ describe("case-law search probe", () => {
     expect(result.stdout).toContain("failed timeout");
   });
 
-  test("names a skip without credentials and asks nothing", async () => {
+  test("fails without credentials and asks nothing", async () => {
     const result = await run({ mode: "search-probe", token: "" });
-    expect(result.exit).toBe(0);
-    expect(result.stdout).toContain("journey mcp_probe skipped no_credential");
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("journey mcp_probe failed no_credential");
     expect(result.counts.get("/mcp")).toBeUndefined();
+  });
+
+  test("fails on a search the run budget skipped", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { probeRunSeconds: "-1" },
+    });
+    expect(result.exit).toBe(1);
+    expect(result.calls).toHaveLength(0);
+    expect(result.stdout.match(/ failed run_budget/gu)).toHaveLength(7);
+  });
+
+  test("follows no continuation once the run budget is spent", async () => {
+    const result = await run({
+      mode: "search-probe",
+      scenario: { probeRunning: "always", probeRunSeconds: "0" },
+    });
+    expect(result.exit).toBe(1);
+    expect(
+      result.calls.every(
+        ({ args }) =>
+          typeof args === "object" &&
+          args !== null &&
+          !("continuation_token" in args),
+      ),
+    ).toBe(true);
   });
 });
 
