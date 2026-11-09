@@ -15,10 +15,7 @@ export const decisionSearchCategorySql = (metadata: SQLWrapper) =>
     THEN ${metadata} ->> 'category' END)`;
 
 /** Countries whose dockets open with a senate and a register. */
-export const DOCKET_REGISTER_COUNTRIES: ReadonlySet<string> = new Set([
-  "CZE",
-  "SVK",
-]);
+const DOCKET_REGISTER_COUNTRIES: ReadonlySet<string> = new Set(["CZE", "SVK"]);
 
 type DocketRegisterFilter = {
   docketRegisters?: readonly string[] | undefined;
@@ -36,12 +33,26 @@ export const docketRegisterPattern = ({
   senate,
 }: DocketRegisterFilter): string => {
   const senatePattern = senate === undefined ? "\\d+" : String(senate);
+  const registers = docketRegisters
+    ?.map((register) => register.trim())
+    .filter(Boolean);
   const registerPattern =
-    docketRegisters === undefined
+    registers === undefined || registers.length === 0
       ? "[^\\s\\d/]+"
-      : `(?:${docketRegisters.map((register) => register.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")).join("|")})`;
+      : `(?:${registers.map((register) => register.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")).join("|")})`;
   return `^\\s*${senatePattern}\\s*${registerPattern}[\\s/]`;
 };
+
+/** Why a request's docket filters cannot apply to its country, if they can't. */
+export const docketFilterRefusal = ({
+  country,
+  docketRegisters,
+  senate,
+}: DocketRegisterFilter & { country: string }): string | null =>
+  (docketRegisters !== undefined || senate !== undefined) &&
+  !DOCKET_REGISTER_COUNTRIES.has(country)
+    ? `${country} dockets carry no senate or register to filter by. Remove docketRegisters and senate.`
+    : null;
 
 export const decisionDocketRegisterSql = (
   caseNumber: SQLWrapper,

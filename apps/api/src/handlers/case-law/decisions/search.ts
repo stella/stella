@@ -125,7 +125,7 @@ import {
   decisionDocketRegisterSql,
   decisionHasLegalSentenceSql,
   decisionSearchCategorySql,
-  DOCKET_REGISTER_COUNTRIES,
+  docketFilterRefusal,
 } from "@/api/lib/case-law/decision-search-metadata-sql";
 import {
   decisionSearchCursorAfterSql,
@@ -467,13 +467,9 @@ export const searchDecisionsHandler = async ({
     });
   }
 
-  if (
-    (body.docketRegisters !== undefined || body.senate !== undefined) &&
-    !DOCKET_REGISTER_COUNTRIES.has(country)
-  ) {
-    return status(400, {
-      message: `${country} dockets carry no senate or register to filter by. Remove docketRegisters and senate.`,
-    });
+  const docketRefusal = docketFilterRefusal({ ...body, country });
+  if (docketRefusal !== null) {
+    return status(400, { message: docketRefusal });
   }
 
   const scopedBody = { ...body, country };
@@ -4407,6 +4403,10 @@ export const listCaseLawProvisionDecisions = async ({
   const limit = normalizeTenantPageLimit(
     body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
   );
+  const docketRefusal = docketFilterRefusal(body);
+  if (docketRefusal !== null) {
+    return status(400, { message: docketRefusal });
+  }
   const sort = body.sort ?? DEFAULT_SEARCH_SORT;
   const scope = { jurisdiction: body.country, provision: body.provision };
   // Total over the row filters the page applies, so a filter added there

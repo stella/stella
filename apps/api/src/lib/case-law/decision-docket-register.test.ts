@@ -1,11 +1,31 @@
 import { describe, expect, test } from "bun:test";
 
-import { docketRegisterPattern } from "@/api/lib/case-law/decision-search-metadata-sql";
+import {
+  docketFilterRefusal,
+  docketRegisterPattern,
+} from "@/api/lib/case-law/decision-search-metadata-sql";
 
 type Filter = Parameters<typeof docketRegisterPattern>[0];
 
 const matches = (filter: Filter, docket: string): boolean =>
   new RegExp(docketRegisterPattern(filter), "iu").test(docket);
+
+describe("docketFilterRefusal", () => {
+  test("refuses a filter on a country with no docket registers", () => {
+    expect(docketFilterRefusal({ country: "EU", senate: 21 })).toContain("EU");
+    expect(
+      docketFilterRefusal({ country: "POL", docketRegisters: ["Cdo"] }),
+    ).toContain("POL");
+  });
+
+  test("lets Czech and Slovak filters through, and requests with none", () => {
+    expect(docketFilterRefusal({ country: "CZE", senate: 21 })).toBeNull();
+    expect(
+      docketFilterRefusal({ country: "SVK", docketRegisters: ["Co"] }),
+    ).toBeNull();
+    expect(docketFilterRefusal({ country: "EU" })).toBeNull();
+  });
+});
 
 describe("docketRegisterPattern", () => {
   test.each([
@@ -41,6 +61,10 @@ describe("docketRegisterPattern", () => {
     const filter = { docketRegisters: ["Cdo"], senate: 21 };
     expect(matches(filter, "21 Cdo 1/2020")).toBe(true);
     expect(matches(filter, "22 Cdo 1/2020")).toBe(false);
+  });
+
+  test("a register is read without its surrounding space", () => {
+    expect(matches({ docketRegisters: [" Cdo "] }, "21 Cdo 1/2020")).toBe(true);
   });
 
   test("a register is matched literally", () => {
