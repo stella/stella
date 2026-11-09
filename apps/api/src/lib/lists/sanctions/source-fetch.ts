@@ -1,4 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
+import { SaxesParser } from "saxes";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
@@ -49,6 +50,7 @@ const MAX_REDIRECT_HOPS = 3;
 const PARSE_SLICE_BYTES = 16 * 1024;
 // The publisher's declared XML 1.1 location; the feed adds its access token.
 const EU_XML = new URL(SANCTIONS_SOURCES.eu.download.urls[0]);
+const EU_TOKEN_PARAMETER = SANCTIONS_SOURCES.eu.access.parameter;
 const CZ_CSV_NAME = /^Vnitrostatni_sankcni_seznam_\d{4}_\d{2}_\d{2}\.csv$/u;
 
 export class SanctionsRefreshError extends TaggedError(
@@ -75,38 +77,92 @@ const safeUrl = (value: string, base?: string): URL | null => {
 };
 
 /**
+ * The item links of an RSS document, read strictly: a body that is not
+ * well-formed XML with `rss` as its root and exactly one channel, such as a
+ * truncated feed or an error page, yields null rather than the items that
+ * happened to parse.
+ */
+const readFeedItemLinks = (feed: string): string[] | null => {
+  const parser = new SaxesParser();
+  const path: string[] = [];
+  const links: string[] = [];
+  // Written by the parser's callbacks.
+  const read: { malformed: boolean; channels: number; link: string | null } = {
+    malformed: false,
+    channels: 0,
+    link: null,
+  };
+  parser.on("error", () => {
+    read.malformed = true;
+  });
+  parser.on("opentag", ({ name }) => {
+    if (path.length === 0 && name !== "rss") {
+      read.malformed = true;
+    }
+    path.push(name);
+    if (path.length === 2 && name === "channel") {
+      read.channels += 1;
+    }
+    if (path.join(">") === "rss>channel>item>link") {
+      read.link = "";
+    }
+  });
+  const collect = (text: string) => {
+    if (read.link !== null) {
+      read.link += text;
+    }
+  };
+  parser.on("text", collect);
+  parser.on("cdata", collect);
+  parser.on("closetag", () => {
+    if (read.link !== null) {
+      links.push(read.link.trim());
+      read.link = null;
+    }
+    path.pop();
+  });
+  parser.write(feed).close();
+  return read.malformed || read.channels !== 1 ? null : links;
+};
+
+/**
  * Finds the XML 1.1 file, with its current query token, in the Commission's
  * feed of published list files. The feed is served by the host that serves
  * the file, so discovery depends on nothing the download does not already
- * depend on. Exactly one feed item may name the file.
+ * depend on. Exactly one feed item may name the file, and its link must carry
+ * the access token the publisher's download requires.
  */
 export const discoverEuXmlUrl = (
   feed: string,
 ): Result<string, SanctionsRefreshError> => {
-  const $ = load(feed, { xml: true });
-  const channel = $("rss > channel");
-  if (channel.length !== 1) {
+  const links = readFeedItemLinks(feed);
+  if (links === null) {
     return Result.err(refreshError("eu", "metadata-invalid"));
   }
 
   const candidates = new Set<string>();
-  channel.children("item").each((_index, item) => {
-    const url = safeUrl($(item).children("link").first().text().trim());
+  for (const link of links) {
+    const url = safeUrl(link);
     if (
       url?.origin !== EU_XML.origin ||
       url.pathname !== EU_XML.pathname ||
       url.username !== "" ||
       url.password !== ""
     ) {
-      return;
+      continue;
     }
     candidates.add(url.href);
-  });
+  }
 
   const [candidate, ...others] = candidates;
-  return candidate !== undefined && others.length === 0
-    ? Result.ok(candidate)
-    : Result.err(refreshError("eu", "metadata-invalid"));
+  if (
+    candidate === undefined ||
+    others.length > 0 ||
+    (new URL(candidate).searchParams.get(EU_TOKEN_PARAMETER) ?? "") === ""
+  ) {
+    return Result.err(refreshError("eu", "metadata-invalid"));
+  }
+  return Result.ok(candidate);
 };
 
 export const discoverCzCsvUrl = (

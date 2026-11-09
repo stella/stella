@@ -131,12 +131,20 @@ describe("publisher download discovery", () => {
   });
 
   test("refuses a feed that names no XML 1.1 file, two of them, or is not a feed", () => {
+    const xml = `${EU_FILES}/xmlFullSanctionsList_1_1/content`;
+    const complete = euFeed([`${xml}?token=example`]);
     for (const body of [
       euFeed([]),
-      euFeed([
-        `${EU_FILES}/xmlFullSanctionsList_1_1/content?token=one`,
-        `${EU_FILES}/xmlFullSanctionsList_1_1/content?token=two`,
-      ]),
+      euFeed([`${xml}?token=one`, `${xml}?token=two`]),
+      // The file without its access token, or with an empty one.
+      euFeed([xml]),
+      euFeed([`${xml}?token=`]),
+      euFeed([`${xml}?other=example`]),
+      // Cut off after the XML item: what parsed must not stand for the feed.
+      complete.slice(0, complete.indexOf("XML (Based on XSD) - v1.0")),
+      // An error page that embeds a feed is still not a feed.
+      `<html><body>${complete.replace(/^<\?xml[^>]*\?>/u, "")}</body></html>`,
+      `${complete}<rss version="2.0"><channel></channel></rss>`,
       '{"status":500,"error":"Internal Server Error"}',
       "<html><body>Maintenance</body></html>",
       "",
