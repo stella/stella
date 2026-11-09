@@ -306,7 +306,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --language, --as-of
 - `stella legislation resolve`
   - `--country` — Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - `--section` — Section number, with optional §, e.g. 1729 or § 5a. (string)
+  - `--section` — Section or article number, with optional § or čl., e.g. 1729, § 5a or čl. 38. (string)
   - optional: --as-of
   - via `--input` only: source
   - source: type="citation": citation:string; type="structured": collection:string, year:string, number:string. Example: `--input '{"source":{"type":"citation","citation":"x"}}'`

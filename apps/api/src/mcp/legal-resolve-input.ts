@@ -72,7 +72,9 @@ export const resolveLawArgsSchema = nullAsAbsent(
     ),
     section: v.pipe(
       citationText,
-      v.description("Section number, with optional §, e.g. 1729 or § 5a."),
+      v.description(
+        "Section or article number, with optional § or čl., e.g. 1729, § 5a or čl. 38.",
+      ),
     ),
     as_of: v.optional(
       v.pipe(
