@@ -1,5 +1,5 @@
 import { EventType } from "@tanstack/ai";
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { lstatSync, type Stats } from "node:fs";
 import {
   chmod,
@@ -7,6 +7,7 @@ import {
   mkdir,
   open,
   readdir,
+  readFile,
   readlink,
   rename,
   rm,
@@ -37,7 +38,15 @@ import { SIDECAR_CHECKPOINT_STORE_SUFFIX } from "./protocol";
  * agent's sandbox can write in the folder only, so it can neither forge nor
  * remove a checkpoint. Files are stored once by content
  * (`objects/<sha256[0..2]>/<sha256>`) and each checkpoint is a manifest of the
- * folder's entries (`manifests/<runId>.json`), written last.
+ * folder's entries (`manifests/<runId>.json`), written last. A restore first
+ * writes the folder's current state as a recovery manifest
+ * (`recovery/<id>.json`), kept with its files until the folder is either
+ * restored or verifiably put back.
+ *
+ * Captures, restores, pruning and cleanup of one store run one at a time: in
+ * this process through a queue per store, and across processes (a draining
+ * holder and its successor can both run turns in one chat's folder) through a
+ * lock file in the store that names its holder's process.
  *
  * The agent can write in the folder and this process runs outside its
  * sandbox, so nothing here follows a link: a link is saved and restored as a
@@ -66,6 +75,10 @@ export type CheckpointLimits = {
   maxManifests: number;
   /** Bytes of stored files per folder; the newest checkpoint is always kept. */
   maxStoredBytes: number;
+  /** Bytes of one manifest; a folder past it is not saved. */
+  maxManifestBytes: number;
+  /** How long a capture or restore waits for another one on the same store. */
+  lockWaitMs: number;
 };
 
 export const CHECKPOINT_LIMITS: CheckpointLimits = {
@@ -76,6 +89,8 @@ export const CHECKPOINT_LIMITS: CheckpointLimits = {
   maxCaptureMs: 15_000,
   maxManifests: 20,
   maxStoredBytes: 2 * 1024 * 1024 * 1024,
+  maxManifestBytes: 16 * 1024 * 1024,
+  lockWaitMs: 30_000,
 };
 
 export type CheckpointUnavailableReason =
@@ -93,9 +108,12 @@ export type CheckpointRestore = {
 
 const OBJECTS = "objects";
 const MANIFESTS = "manifests";
+const RECOVERY = "recovery";
+const LOCK_FILE = ".lock";
 const MANIFEST_VERSION = 1;
-/** A manifest of the largest folder a capture saves is well below this. */
-const MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
+const LOCK_POLL_MS = 50;
+/** A lock older than any capture or restore can take is stale, whoever holds it. */
+const LOCK_STALE_MS = 60 * 60_000;
 const COPY_CHUNK_BYTES = 1024 * 1024;
 const PRIVATE_FILE_MODE = 0o600;
 const PRIVATE_FOLDER_MODE = 0o700;
@@ -212,6 +230,17 @@ const manifestSchema = v.object({
 });
 
 type Manifest = v.InferOutput<typeof manifestSchema>;
+
+/** The folder as a restore found it, kept until the restore is settled. */
+const recoverySchema = v.object({
+  version: v.literal(MANIFEST_VERSION),
+  /** The checkpoint the restore was putting back. */
+  restoreOf: v.pipe(v.string(), v.uuid()),
+  savedAt: v.pipe(v.string(), v.isoTimestamp()),
+  entries: v.array(entrySchema),
+});
+
+type Recovery = v.InferOutput<typeof recoverySchema>;
 
 class CheckpointRefused extends TaggedError("CheckpointRefused")<{
   reason: CheckpointUnavailableReason;
@@ -537,6 +566,7 @@ const openStore = async (store: string) =>
       store,
       path.join(store, OBJECTS),
       path.join(store, MANIFESTS),
+      path.join(store, RECOVERY),
     ]) {
       const existing = yield* Result.try({
         try: () => entryAt(folder),
@@ -562,78 +592,278 @@ const openStore = async (store: string) =>
     return Result.ok();
   });
 
-type StoredManifests = {
-  /** Readable manifests, oldest first. */
-  manifests: Manifest[];
-  /** Files in the manifest folder that are not one. */
-  unreadable: string[];
+const errorCode = (cause: unknown) =>
+  cause instanceof Error && "code" in cause ? cause.code : undefined;
+
+/** The text as a value of `schema`; `null` when it is not one. */
+const parsedAs = <T>(
+  schema: v.GenericSchema<unknown, T>,
+  text: string | null,
+): T | null => {
+  if (text === null) {
+    return null;
+  }
+  const json = Result.try((): unknown => JSON.parse(text));
+  if (Result.isError(json)) {
+    return null;
+  }
+  const parsed = v.safeParse(schema, json.value);
+  return parsed.success ? parsed.output : null;
 };
 
-const readManifests = async (store: string): Promise<StoredManifests> => {
-  const folder = path.join(store, MANIFESTS);
-  const names = await namesIn(folder);
-  const manifests: Manifest[] = [];
-  const unreadable: string[] = [];
-  for (const name of names.toSorted()) {
-    const file = path.join(folder, name);
-    // await-in-loop: one manifest in memory at a time.
-    const read = await Result.tryPromise(async () => {
-      const handle = await open(file, READ_FLAGS);
-      try {
-        const stat = await handle.stat();
-        if (!stat.isFile() || stat.size > MAX_MANIFEST_BYTES) {
-          return null;
+/** What a lock file holds: the process that took it. */
+const lockSchema = v.object({
+  pid: v.pipe(v.number(), v.integer(), v.minValue(1)),
+});
+
+/** Whether the process that wrote a lock is gone, or the lock is too old. */
+const isStaleLock = async (lock: string) => {
+  const stat = entryAt(lock);
+  if (stat === undefined) {
+    return false;
+  }
+  if (Temporal.Now.instant().epochMilliseconds - stat.mtimeMs > LOCK_STALE_MS) {
+    return true;
+  }
+  const holder = parsedAs(lockSchema, await readFile(lock, "utf-8"));
+  if (holder === null) {
+    return true;
+  }
+  const alive = Result.try({
+    try: () => process.kill(holder.pid, 0),
+    catch: (cause) => cause,
+  });
+  // EPERM: alive, under another user.
+  return Result.isError(alive) && errorCode(alive.error) === "ESRCH";
+};
+
+/**
+ * Take the store's lock file, waiting while another process holds it. A lock
+ * whose process is gone is taken over.
+ */
+const takeLock = async (
+  store: string,
+  waitMs: number,
+): Promise<Result<void, CheckpointRefused>> => {
+  const lock = path.join(store, LOCK_FILE);
+  const deadline = performance.now() + waitMs;
+  for (;;) {
+    // await-in-loop: one attempt at a time until the lock is free.
+    const created = await Result.tryPromise({
+      try: async () => {
+        const handle = await open(lock, CREATE_FLAGS, PRIVATE_FILE_MODE);
+        try {
+          await handle.writeFile(JSON.stringify({ pid: process.pid }));
+        } finally {
+          await handle.close();
         }
-        return await handle.readFile("utf-8");
-      } finally {
-        await handle.close();
-      }
+      },
+      catch: (cause) => cause,
     });
-    const text = Result.isOk(read) ? read.value : null;
-    const json =
-      text === null ? null : Result.try((): unknown => JSON.parse(text));
-    const parsed =
-      json !== null && Result.isOk(json)
-        ? v.safeParse(manifestSchema, json.value)
-        : null;
-    if (parsed?.success === true && name === `${parsed.output.runId}.json`) {
-      manifests.push(parsed.output);
-    } else {
-      unreadable.push(file);
+    if (Result.isOk(created)) {
+      return Result.ok();
+    }
+    if (errorCode(created.error) !== "EEXIST") {
+      return Result.err(
+        refused(
+          "failed",
+          "The checkpoint store could not be locked.",
+        )(created.error),
+      );
+    }
+    // await-in-loop: checked before each new attempt.
+    const stale = await Result.tryPromise({
+      try: async () => await isStaleLock(lock),
+      catch: (cause) => cause,
+    });
+    if (Result.isOk(stale) && stale.value) {
+      // await-in-loop: the stale lock goes before the next attempt.
+      const removed = await Result.tryPromise({
+        try: async () => {
+          await rm(lock, { force: true });
+        },
+        catch: (cause) => cause,
+      });
+      if (Result.isOk(removed)) {
+        continue;
+      }
+    }
+    if (performance.now() >= deadline) {
+      return Result.err(
+        refused("failed", "Another process holds the checkpoint store.")(),
+      );
+    }
+    // real-time: another process holds the lock; it is polled until free.
+    // await-in-loop: one wait between attempts.
+    await Bun.sleep(LOCK_POLL_MS);
+  }
+};
+
+/** Work on one store, in this process queued after the work before it. */
+const storeQueues = new Map<string, Promise<null>>();
+
+/**
+ * Run `work` with the store to itself: after earlier work on it in this
+ * process, and holding its lock file against other processes.
+ */
+const withStore = async <T>(
+  store: string,
+  limits: CheckpointLimits,
+  work: () => Promise<Result<T, CheckpointRefused>>,
+): Promise<Result<T, CheckpointRefused>> => {
+  const before = storeQueues.get(store) ?? Promise.resolve(null);
+  const { promise: done, resolve: finish } = Promise.withResolvers<null>();
+  storeQueues.set(store, done);
+  await before;
+  try {
+    return await Result.gen(async function* () {
+      yield* Result.await(openStore(store));
+      yield* Result.await(takeLock(store, limits.lockWaitMs));
+      const outcome = await Result.tryPromise({
+        try: work,
+        catch: refused("failed", "The checkpoint store failed."),
+      }).then((result) => (Result.isOk(result) ? result.value : result));
+      const released = await Result.tryPromise({
+        try: async () => {
+          await rm(path.join(store, LOCK_FILE), { force: true });
+        },
+        catch: refused("failed", "The checkpoint store could not be unlocked."),
+      });
+      return Result.isError(released) && Result.isOk(outcome)
+        ? released
+        : outcome;
+    });
+  } finally {
+    finish(null);
+    if (storeQueues.get(store) === done) {
+      storeQueues.delete(store);
     }
   }
-  return {
-    manifests: manifests.toSorted(
-      (left, right) => left.ordinal - right.ordinal,
-    ),
-    unreadable,
-  };
 };
 
-/** Written to a fresh name, flushed, then renamed: a manifest is whole or absent. */
-const writeManifest = async (store: string, manifest: Manifest) =>
+type StoredText = {
+  file: string;
+  name: string;
+  /** `null` past the size a manifest may have: invalid without reading it. */
+  text: string | null;
+};
+
+/**
+ * The files of one store folder. A failure to list, open or read is an
+ * error: it says nothing about the content, so nothing may be dropped for it.
+ */
+const readTexts = async (folder: string, maxBytes: number) =>
   await Result.tryPromise({
     try: async () => {
+      const texts: StoredText[] = [];
+      for (const name of (await namesIn(folder)).toSorted()) {
+        const file = path.join(folder, name);
+        const stat = entryAt(file);
+        if (stat?.isFile() !== true) {
+          // Gone since the listing, or not a file: not ours to judge.
+          continue;
+        }
+        if (stat.size > maxBytes) {
+          texts.push({ file, name, text: null });
+          continue;
+        }
+        // await-in-loop: one file in memory at a time.
+        const handle = await open(file, READ_FLAGS);
+        try {
+          // await-in-loop: one file in memory at a time.
+          texts.push({ file, name, text: await handle.readFile("utf-8") });
+        } finally {
+          // await-in-loop: closed before the next one opens.
+          await handle.close();
+        }
+      }
+      return texts;
+    },
+    catch: refused("failed", "The checkpoints could not be read."),
+  });
+
+type StoreState = {
+  /** Valid manifests, oldest first. */
+  manifests: Manifest[];
+  /** Manifest files whose content is not a manifest: safe to drop. */
+  invalid: string[];
+  /** States restores saved and could not drop: their files are kept. */
+  recoveries: Recovery[];
+};
+
+const readStore = async (store: string, limits: CheckpointLimits) =>
+  await Result.gen(async function* () {
+    const manifestTexts = yield* Result.await(
+      readTexts(path.join(store, MANIFESTS), limits.maxManifestBytes),
+    );
+    const recoveryTexts = yield* Result.await(
+      readTexts(path.join(store, RECOVERY), limits.maxManifestBytes),
+    );
+    const manifests: Manifest[] = [];
+    const invalid: string[] = [];
+    for (const { file, name, text } of manifestTexts) {
+      const manifest = parsedAs(manifestSchema, text);
+      if (manifest !== null && name === `${manifest.runId}.json`) {
+        manifests.push(manifest);
+      } else {
+        invalid.push(file);
+      }
+    }
+    const state: StoreState = {
+      manifests: manifests.toSorted(
+        (left, right) => left.ordinal - right.ordinal,
+      ),
+      invalid,
+      recoveries: recoveryTexts.flatMap(({ text }) => {
+        const recovery = parsedAs(recoverySchema, text);
+        return recovery === null ? [] : [recovery];
+      }),
+    };
+    return Result.ok(state);
+  });
+
+/**
+ * Written to a fresh name, flushed, then renamed: whole or absent. Past
+ * `maxBytes` nothing is written and the capture is too large.
+ */
+const writeJson = async (target: string, value: unknown, maxBytes: number) => {
+  const text = JSON.stringify(value);
+  if (Buffer.byteLength(text) > maxBytes) {
+    return Result.err(refused("too_large", "The checkpoint is too large.")());
+  }
+  return await Result.tryPromise({
+    try: async () => {
       const temp = path.join(
-        store,
-        MANIFESTS,
+        path.dirname(target),
         `.${TEMP_OBJECT_PREFIX}${crypto.randomUUID()}`,
       );
       try {
         const handle = await open(temp, CREATE_FLAGS, PRIVATE_FILE_MODE);
         try {
-          await handle.writeFile(JSON.stringify(manifest));
+          await handle.writeFile(text);
           await handle.sync();
         } finally {
           await handle.close();
         }
-        await rename(temp, manifestPath(store, manifest.runId));
+        await rename(temp, target);
       } finally {
         await rm(temp, { force: true });
       }
     },
     catch: refused("failed", "The checkpoint could not be written."),
   });
+};
+
+const writeManifest = async (
+  store: string,
+  manifest: Manifest,
+  limits: CheckpointLimits,
+) =>
+  await writeJson(
+    manifestPath(store, manifest.runId),
+    manifest,
+    limits.maxManifestBytes,
+  );
 
 const storedBytes = (manifests: readonly Manifest[]) => {
   const sizes = new Map<string, number>();
@@ -647,58 +877,75 @@ const storedBytes = (manifests: readonly Manifest[]) => {
   return [...sizes.values()].reduce((total, size) => total + size, 0);
 };
 
-/** Remove every stored file no kept manifest names, and stale temp files. */
-const collectGarbage = async (store: string, kept: readonly Manifest[]) => {
-  const referenced = new Set(
-    kept.flatMap((manifest) =>
-      manifest.entries.flatMap((entry) =>
-        entry.kind === "file" ? [entry.sha256] : [],
-      ),
-    ),
-  );
-  const objects = path.join(store, OBJECTS);
-  const buckets = await namesIn(objects);
-  for (const bucket of buckets) {
-    const folder = path.join(objects, bucket);
-    if (bucket.startsWith(TEMP_OBJECT_PREFIX)) {
-      // await-in-loop: removals one at a time.
-      await rm(folder, { force: true });
-      continue;
-    }
-    // await-in-loop: one bucket listed at a time.
-    const names = await namesIn(folder);
-    for (const name of names) {
-      if (!referenced.has(name)) {
-        // await-in-loop: removals one at a time.
-        await rm(path.join(folder, name), { force: true });
+/**
+ * Remove every stored file that no kept manifest and no recovery names, and
+ * stale temp files. Only called with the store to itself.
+ */
+const collectGarbage = async (
+  store: string,
+  kept: readonly Manifest[],
+  recoveries: readonly Recovery[],
+) =>
+  await Result.tryPromise({
+    try: async () => {
+      const referenced = new Set(
+        [...kept, ...recoveries].flatMap((saved) =>
+          saved.entries.flatMap((entry) =>
+            entry.kind === "file" ? [entry.sha256] : [],
+          ),
+        ),
+      );
+      const objects = path.join(store, OBJECTS);
+      for (const bucket of await namesIn(objects)) {
+        const folder = path.join(objects, bucket);
+        if (bucket.startsWith(TEMP_OBJECT_PREFIX)) {
+          // await-in-loop: removals one at a time.
+          await rm(folder, { force: true });
+          continue;
+        }
+        // await-in-loop: one bucket listed at a time.
+        for (const name of await namesIn(folder)) {
+          if (!referenced.has(name)) {
+            // await-in-loop: removals one at a time.
+            await rm(path.join(folder, name), { force: true });
+          }
+        }
       }
-    }
-  }
-};
+    },
+    catch: refused("failed", "Unused stored files could not be removed."),
+  });
 
 /**
  * Keep the newest checkpoints within the folder's bounds: oldest first, never
- * the newest; then remove what no kept checkpoint names.
+ * the newest; then remove what nothing names. A store that cannot be read
+ * removes nothing.
  */
 const prune = async (store: string, limits: CheckpointLimits) =>
-  await Result.tryPromise(async () => {
-    const { manifests, unreadable } = await readManifests(store);
-    for (const file of unreadable) {
-      // await-in-loop: removals one at a time.
-      await rm(file, { force: true });
-    }
-    const kept = manifests.slice(-Math.max(1, limits.maxManifests));
+  await Result.gen(async function* () {
+    const state = yield* Result.await(readStore(store, limits));
+    const kept = state.manifests.slice(-Math.max(1, limits.maxManifests));
     while (kept.length > 1 && storedBytes(kept) > limits.maxStoredBytes) {
       kept.shift();
     }
     const keptIds = new Set(kept.map(({ runId }) => runId));
-    for (const manifest of manifests) {
-      if (!keptIds.has(manifest.runId)) {
-        // await-in-loop: removals one at a time.
-        await rm(manifestPath(store, manifest.runId), { force: true });
-      }
-    }
-    await collectGarbage(store, kept);
+    const dropped = [
+      ...state.invalid,
+      ...state.manifests
+        .filter(({ runId }) => !keptIds.has(runId))
+        .map(({ runId }) => manifestPath(store, runId)),
+    ];
+    yield* Result.await(
+      Result.tryPromise({
+        try: async () => {
+          for (const file of dropped) {
+            // await-in-loop: removals one at a time.
+            await rm(file, { force: true });
+          }
+        },
+        catch: refused("failed", "Older checkpoints could not be removed."),
+      }),
+    );
+    return await collectGarbage(store, kept, state.recoveries);
   });
 
 type CaptureOptions = {
@@ -741,45 +988,45 @@ export const captureCheckpoint = async ({
     return { status: "unavailable", reason: "unsupported" };
   }
   const store = checkpointStoreOf(workspaceDir);
-  const taken = await Result.gen(async function* () {
-    yield* Result.await(openStore(store));
-    const { manifests } = yield* Result.await(
-      Result.tryPromise({
-        try: async () => await readManifests(store),
-        catch: refused("failed", "The checkpoints could not be read."),
-      }),
-    );
-    const latest = manifests.at(-1);
-    const entries = yield* Result.await(
-      saveTree({
-        workspaceDir,
+  const taken = await withStore(store, limits, async () => {
+    const saved = await Result.gen(async function* () {
+      const { manifests } = yield* Result.await(readStore(store, limits));
+      const latest = manifests.at(-1);
+      const entries = yield* Result.await(
+        saveTree({
+          workspaceDir,
+          store,
+          limits,
+          known: latest?.entries ?? [],
+          signal,
+        }),
+      );
+      const files = new Set(
+        entries.flatMap((entry) => (entry.kind === "file" ? [entry.path] : [])),
+      );
+      return await writeManifest(
         store,
+        {
+          version: MANIFEST_VERSION,
+          runId,
+          ordinal: (latest?.ordinal ?? 0) + 1,
+          takenAt: Temporal.Now.instant().toString(),
+          undone: false,
+          entries,
+          memberFiles: memberFiles.filter((memberFile) =>
+            files.has(memberFile),
+          ),
+        },
         limits,
-        known: latest?.entries ?? [],
-        signal,
-      }),
-    );
-    const saved = new Set(
-      entries.flatMap((entry) => (entry.kind === "file" ? [entry.path] : [])),
-    );
-    yield* Result.await(
-      writeManifest(store, {
-        version: MANIFEST_VERSION,
-        runId,
-        ordinal: (latest?.ordinal ?? 0) + 1,
-        takenAt: Temporal.Now.instant().toString(),
-        undone: false,
-        entries,
-        memberFiles: memberFiles.filter((memberFile) => saved.has(memberFile)),
-      }),
-    );
-    return Result.ok();
+      );
+    });
+    // Also after a refusal: files stored before it are named by nothing.
+    const pruned = await prune(store, limits);
+    if (Result.isError(pruned)) {
+      log(`older checkpoints were kept: ${pruned.error.message}`);
+    }
+    return saved;
   });
-  // Also after a refusal: files stored before it are named by nothing.
-  const pruned = await prune(store, limits);
-  if (Result.isError(pruned)) {
-    log("older checkpoints could not be removed");
-  }
   return Result.isOk(taken)
     ? { status: "taken" }
     : { status: "unavailable", reason: taken.error.reason };
@@ -853,6 +1100,37 @@ const checkParents = (
     }
   }
   return Result.ok(path.join(workspaceDir, relative));
+};
+
+const OWNER_ACCESS = 7;
+const OWNER_SHIFT = 64;
+
+const ownerBits = (mode: number) => Math.floor(mode / OWNER_SHIFT) % 8;
+
+const hasOwnerAccess = (mode: number) => ownerBits(mode) === OWNER_ACCESS;
+
+/** The mode with read, write and search for the member. */
+const withOwnerAccess = (mode: number) =>
+  mode + (OWNER_ACCESS - ownerBits(mode)) * OWNER_SHIFT;
+
+/** Whether two walks found the same tree: kinds, contents, modes, links. */
+const sameTree = (left: readonly Entry[], right: readonly Entry[]) => {
+  const key = (entry: Entry) => {
+    switch (entry.kind) {
+      case "file":
+        return `f:${entry.path}:${entry.sha256}:${String(entry.mode)}`;
+      case "dir":
+        return `d:${entry.path}:${String(entry.mode)}`;
+      case "link":
+        return `l:${entry.path}:${entry.linkTarget}`;
+      default:
+        entry satisfies never;
+        return panic("Unhandled checkpoint entry kind");
+    }
+  };
+  const keys = (entries: readonly Entry[]) =>
+    entries.map(key).toSorted().join("\n");
+  return keys(left) === keys(right);
 };
 
 const sameKind = (wanted: Entry | undefined, existing: Entry) => {
@@ -1037,6 +1315,19 @@ const applyTree = async (
         }),
       );
     }
+    // Every folder the restore may write in is opened for the member first;
+    // its final mode is set last.
+    const opened = new Map<string, number>();
+    if (!isWindows()) {
+      for (const entry of [...existing.values()].toSorted(byPath)) {
+        if (entry.kind === "dir" && !hasOwnerAccess(entry.mode)) {
+          const mode = withOwnerAccess(entry.mode);
+          // await-in-loop: parents are opened before their children.
+          yield* Result.await(chmodFolder(workspaceDir, { ...entry, mode }));
+          opened.set(entry.path, mode);
+        }
+      }
+    }
     const removed = new Set<string>();
     const removals = [...existing.values()]
       .filter((entry) => !sameKind(desired.get(entry.path), entry))
@@ -1091,10 +1382,11 @@ const applyTree = async (
     if (!isWindows()) {
       for (const entry of wanted.toReversed()) {
         const now = current(entry.path);
-        if (
-          entry.kind === "dir" &&
-          (now?.kind !== "dir" || now.mode !== entry.mode)
-        ) {
+        const mode =
+          now?.kind === "dir"
+            ? (opened.get(entry.path) ?? now.mode)
+            : PRIVATE_FOLDER_MODE;
+        if (entry.kind === "dir" && mode !== entry.mode) {
           // await-in-loop: deepest folders first.
           yield* Result.await(chmodFolder(workspaceDir, entry));
         }
@@ -1108,6 +1400,11 @@ type RestoreOptions = {
   /** The run whose checkpoint to restore: the folder as it was before it. */
   runId: string;
   limits?: CheckpointLimits;
+  /**
+   * Runs right before a rollback; tests change the folder here to reach a
+   * rollback that fails.
+   */
+  beforeRollback?: () => Promise<void> | void;
 };
 
 /** Whether every stored file the restore writes still has its content. */
@@ -1134,24 +1431,66 @@ const verifyNeeded = async (
     catch: restoreFailed("A saved file could not be read."),
   });
 
+const byEntryPath = (entries: readonly Entry[]) =>
+  new Map(entries.map((entry) => [entry.path, entry]));
+
+/**
+ * Put the folder back as it was saved before the restore began, and check
+ * that a new walk finds exactly that.
+ */
+const rollBack = async (
+  workspaceDir: string,
+  store: string,
+  saved: readonly Entry[],
+  limits: CheckpointLimits,
+): Promise<Result<void, CheckpointRefused | CheckpointRestoreFailed>> =>
+  await Result.gen(async function* () {
+    const now = yield* Result.await(
+      saveTree({ workspaceDir, store, limits, known: saved }),
+    );
+    yield* Result.await(
+      applyTree(workspaceDir, store, byEntryPath(saved), byEntryPath(now)),
+    );
+    const after = yield* Result.await(
+      saveTree({ workspaceDir, store, limits, known: saved }),
+    );
+    return sameTree(after, saved)
+      ? Result.ok()
+      : Result.err(
+          restoreFailed("The folder did not come back as it was saved.")(),
+        );
+  });
+
+const dropRecovery = async (file: string) =>
+  await Result.tryPromise({
+    try: async () => {
+      await rm(file, { force: true });
+    },
+    catch: refused("failed", "A settled restore's state could not be removed."),
+  });
+
 /**
  * Put the folder back as the run's checkpoint saved it. Only the newest
  * checkpoint not undone yet is restored. The folder's current state is saved
- * first: any failure puts that back, and the restore reports `failed`.
+ * and written down first; any failure puts it back. Until the folder is
+ * restored or verifiably put back, that state and its files stay in the
+ * store.
  *
- * The caller makes sure no run uses the folder meanwhile.
+ * The caller holds the store, and makes sure no run uses the folder.
  */
-const restoreFromStore = async ({
-  workspaceDir,
-  runId,
-  limits = CHECKPOINT_LIMITS,
-}: RestoreOptions): Promise<CheckpointRestore> => {
-  const store = checkpointStoreOf(workspaceDir);
-  const storeEntry = entryAt(store);
-  if (storeEntry?.isDirectory() !== true) {
-    return { outcome: "no_checkpoint", detail: null };
+const restoreHeld = async (
+  store: string,
+  { workspaceDir, runId, beforeRollback }: RestoreOptions,
+  limits: CheckpointLimits,
+): Promise<CheckpointRestore> => {
+  const state = await readStore(store, limits);
+  if (Result.isError(state)) {
+    return {
+      outcome: "failed",
+      detail: "the checkpoint store could not be read",
+    };
   }
-  const { manifests } = await readManifests(store);
+  const { manifests } = state.value;
   const target = manifests.find((manifest) => manifest.runId === runId);
   if (target === undefined) {
     return { outcome: "no_checkpoint", detail: null };
@@ -1164,80 +1503,124 @@ const restoreFromStore = async ({
     target,
     manifests.filter(({ ordinal }) => ordinal > target.ordinal),
   );
-  const outcome = await (async (): Promise<CheckpointRestore> => {
-    const saved = await saveTree({
-      workspaceDir,
-      store,
-      limits,
-      known: manifests.at(-1)?.entries ?? [],
-    });
-    if (Result.isError(saved)) {
-      return {
-        outcome: "failed",
-        detail: `the folder could not be saved first: ${saved.error.reason}`,
-      };
-    }
-    const before = new Map(saved.value.map((entry) => [entry.path, entry]));
-    const verified = await verifyNeeded(store, desired, before);
-    if (Result.isError(verified) || !verified.value) {
-      return {
-        outcome: "failed",
-        detail: "a saved file is missing or changed",
-      };
-    }
-    const applied = await applyTree(workspaceDir, store, desired, before);
-    // Marked undone in the same step: a restore that is not recorded did
-    // not happen, and is undone too.
-    const marked =
-      Result.isOk(applied) &&
-      Result.isOk(await writeManifest(store, { ...target, undone: true }));
-    if (marked) {
-      return { outcome: "restored", detail: null };
-    }
-    // Back to the state saved before the restore began.
-    const now = await saveTree({
-      workspaceDir,
-      store,
-      limits,
-      known: saved.value,
-    });
-    const rolledBack =
-      Result.isOk(now) &&
-      Result.isOk(
-        await applyTree(
-          workspaceDir,
-          store,
-          before,
-          new Map(now.value.map((entry) => [entry.path, entry])),
-        ),
-      );
+  const saved = await saveTree({
+    workspaceDir,
+    store,
+    limits,
+    known: manifests.at(-1)?.entries ?? [],
+  });
+  if (Result.isError(saved)) {
     return {
       outcome: "failed",
-      detail: rolledBack
-        ? "the restore failed and the folder was put back"
-        : "the restore failed and the folder could not be put back",
+      detail: `the folder could not be saved first: ${saved.error.reason}`,
     };
-  })();
-  // The state saved before the restore is named by no checkpoint.
-  const collected = await Result.tryPromise(async () => {
-    await collectGarbage(store, (await readManifests(store)).manifests);
-  });
-  return Result.isOk(collected) || outcome.detail !== null
-    ? outcome
-    : { ...outcome, detail: "files the restore no longer needs were kept" };
+  }
+  const recoveryFile = path.join(
+    store,
+    RECOVERY,
+    `${crypto.randomUUID()}.json`,
+  );
+  const recovery: Recovery = {
+    version: MANIFEST_VERSION,
+    restoreOf: runId,
+    savedAt: Temporal.Now.instant().toString(),
+    entries: saved.value,
+  };
+  const recorded = await writeJson(
+    recoveryFile,
+    recovery,
+    limits.maxManifestBytes,
+  );
+  if (Result.isError(recorded)) {
+    return {
+      outcome: "failed",
+      detail: "the folder's current state could not be written down",
+    };
+  }
+  const before = byEntryPath(saved.value);
+  const verified = await verifyNeeded(store, desired, before);
+  if (Result.isError(verified) || !verified.value) {
+    const dropped = await dropRecovery(recoveryFile);
+    return {
+      outcome: "failed",
+      detail: Result.isOk(dropped)
+        ? "a saved file is missing or changed"
+        : "a saved file is missing or changed; the state before was kept",
+    };
+  }
+  const applied = await applyTree(workspaceDir, store, desired, before);
+  // Marked undone in the same step: a restore that is not recorded did not
+  // happen, and is undone too.
+  const marked =
+    Result.isOk(applied) &&
+    Result.isOk(
+      await writeManifest(store, { ...target, undone: true }, limits),
+    );
+  if (marked) {
+    const dropped = await dropRecovery(recoveryFile);
+    return {
+      outcome: "restored",
+      detail: Result.isOk(dropped)
+        ? null
+        : "the state before the restore was kept",
+    };
+  }
+  await beforeRollback?.();
+  const rolledBack = await rollBack(workspaceDir, store, saved.value, limits);
+  if (Result.isOk(rolledBack)) {
+    const dropped = await dropRecovery(recoveryFile);
+    return {
+      outcome: "failed",
+      detail: Result.isOk(dropped)
+        ? "the restore failed and the folder was put back"
+        : "the restore failed and the folder was put back; the state before was kept",
+    };
+  }
+  return {
+    outcome: "failed",
+    detail:
+      "the restore failed and the folder could not be put back; the state before was kept",
+  };
 };
 
+/**
+ * Restore the run's checkpoint with the store to itself, then remove the
+ * stored files nothing names any more. Answered whatever fails.
+ */
 export const restoreCheckpoint = async (
   options: RestoreOptions,
 ): Promise<CheckpointRestore> => {
-  // Reading the store fails before anything in the folder moves; the restore
-  // is answered either way.
-  const restored = await Result.tryPromise(
-    async () => await restoreFromStore(options),
-  );
+  const limits = options.limits ?? CHECKPOINT_LIMITS;
+  const store = checkpointStoreOf(options.workspaceDir);
+  const found = Result.try({
+    try: () => entryAt(store)?.isDirectory() === true,
+    catch: refused("failed", "The checkpoint store could not be read."),
+  });
+  if (Result.isError(found)) {
+    return {
+      outcome: "failed",
+      detail: "the checkpoint store could not be read",
+    };
+  }
+  if (!found.value) {
+    return { outcome: "no_checkpoint", detail: null };
+  }
+  const restored = await withStore(store, limits, async () => {
+    const outcome = await restoreHeld(store, options, limits);
+    // A store that cannot be read removes nothing.
+    const collected = await Result.gen(async function* () {
+      const state = yield* Result.await(readStore(store, limits));
+      return await collectGarbage(store, state.manifests, state.recoveries);
+    });
+    return Result.ok(
+      Result.isOk(collected) || outcome.detail !== null
+        ? outcome
+        : { ...outcome, detail: "files the restore no longer needs were kept" },
+    );
+  });
   return Result.isOk(restored)
     ? restored.value
-    : { outcome: "failed", detail: "the checkpoint store could not be read" };
+    : { outcome: "failed", detail: "the checkpoint store could not be held" };
 };
 
 /** A capture's report as the chunk it travels in on the run's stream. */

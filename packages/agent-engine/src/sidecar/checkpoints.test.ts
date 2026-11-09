@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   chmodSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -15,6 +16,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   captureCheckpoint,
@@ -262,6 +264,7 @@ describe("a run folder's checkpoint", () => {
         ["one file's bytes", { maxFileBytes: 10 }, "too_large"],
         ["a capture's new bytes", { maxNewBytes: 20 }, "too_large"],
         ["time", { maxCaptureMs: 0 }, "too_slow"],
+        ["a manifest's bytes", { maxManifestBytes: 200 }, "too_large"],
       ];
       for (const [name, limits, reason] of cases) {
         const { workspaceDir } = place();
@@ -580,41 +583,249 @@ describe("a run folder's checkpoint", () => {
     });
   });
 
-  test.skipIf(isWindows || isRoot)(
-    "a failure halfway through puts the folder back exactly as it was before the restore",
-    async () => {
+  describe.skipIf(isWindows || isRoot)("a restore that fails", () => {
+    const store = (workspaceDir: string) => checkpointStoreOf(workspaceDir);
+    const recoveries = (workspaceDir: string) =>
+      readdirSync(path.join(store(workspaceDir), "recovery"));
+    const cleanupModes: (() => void)[] = [];
+    /** The checkpoint can no longer be marked undone: the restore must roll back. */
+    const lockManifests = (workspaceDir: string) => {
+      chmodSync(path.join(store(workspaceDir), "manifests"), 0o500);
+      cleanupModes.push(() => {
+        chmodSync(path.join(store(workspaceDir), "manifests"), 0o700);
+      });
+    };
+    afterEach(() => {
+      for (const reset of cleanupModes.splice(0)) {
+        reset();
+      }
+    });
+
+    test("a member's read-only folder is written and closed again", async () => {
       const { workspaceDir } = place();
-      write(workspaceDir, "a.txt", "saved");
-      // The member's own read-only folder.
       write(workspaceDir, "b-ro/doc.txt", "saved");
       chmodSync(path.join(workspaceDir, "b-ro"), 0o555);
+      cleanupModes.push(() => {
+        chmodSync(path.join(workspaceDir, "b-ro"), 0o755);
+      });
+      const before = treeOf(workspaceDir);
       const { runId } = await capture(workspaceDir);
-      try {
-        write(workspaceDir, "a.txt", "changed by the turn");
-        write(workspaceDir, "z-new.txt", "created by the turn");
-        // The turn opened the folder, changed the file and closed it again,
-        // so the restore cannot write there: it fails after it already
-        // removed `z-new.txt` and wrote `a.txt`.
-        chmodSync(path.join(workspaceDir, "b-ro"), 0o755);
-        write(workspaceDir, "b-ro/doc.txt", "changed by the turn");
-        chmodSync(path.join(workspaceDir, "b-ro"), 0o555);
-        const saved = treeOf(workspaceDir);
+      chmodSync(path.join(workspaceDir, "b-ro"), 0o755);
+      write(workspaceDir, "b-ro/doc.txt", "changed by the turn");
+      write(workspaceDir, "b-ro/new.txt", "created by the turn");
+      chmodSync(path.join(workspaceDir, "b-ro"), 0o555);
+      expect((await restore(workspaceDir, runId)).outcome).toBe("restored");
+      expect(treeOf(workspaceDir)).toEqual(before);
+      expect(recoveries(workspaceDir)).toEqual([]);
+    });
 
-        const restored = await restore(workspaceDir, runId);
-        expect(restored).toEqual({
-          outcome: "failed",
-          detail: "the restore failed and the folder was put back",
-        });
-        expect(treeOf(workspaceDir)).toEqual(saved);
-        // Not marked undone: it is still the one to restore.
-        chmodSync(path.join(workspaceDir, "b-ro"), 0o755);
-        expect((await restore(workspaceDir, runId)).outcome).toBe("restored");
-        expect(
-          readFileSync(path.join(workspaceDir, "b-ro/doc.txt"), "utf-8"),
-        ).toBe("saved");
-      } finally {
-        chmodSync(path.join(workspaceDir, "b-ro"), 0o755);
+    test("a restore that cannot be recorded is rolled back exactly, and what it saved first is dropped", async () => {
+      const { workspaceDir } = place();
+      // Saved: a folder the member closed, holding the old file.
+      write(workspaceDir, "d/f.txt", "old");
+      chmodSync(path.join(workspaceDir, "d"), 0o500);
+      cleanupModes.push(() => {
+        chmodSync(path.join(workspaceDir, "d"), 0o700);
+      });
+      const { runId } = await capture(workspaceDir);
+      // The turn opened it and wrote a new file.
+      chmodSync(path.join(workspaceDir, "d"), 0o700);
+      write(workspaceDir, "d/f.txt", "new");
+      write(workspaceDir, "z-created.txt", "created by the turn");
+      const saved = treeOf(workspaceDir);
+      lockManifests(workspaceDir);
+
+      // The restore writes the old file and closes the folder, then cannot
+      // mark the checkpoint: the rollback opens the folder again.
+      expect(await restore(workspaceDir, runId)).toEqual({
+        outcome: "failed",
+        detail: "the restore failed and the folder was put back",
+      });
+      expect(treeOf(workspaceDir)).toEqual(saved);
+      expect(recoveries(workspaceDir)).toEqual([]);
+      expect(storedContents(workspaceDir)).not.toContain("new");
+
+      // Not marked undone: it is still the one to restore.
+      chmodSync(path.join(store(workspaceDir), "manifests"), 0o700);
+      expect((await restore(workspaceDir, runId)).outcome).toBe("restored");
+      expect(readFileSync(path.join(workspaceDir, "d/f.txt"), "utf-8")).toBe(
+        "old",
+      );
+    });
+
+    test("a rollback that fails keeps the state before the restore and its files", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "d/f.txt", "old");
+      const { runId } = await capture(workspaceDir);
+      write(workspaceDir, "d/f.txt", "new");
+      lockManifests(workspaceDir);
+      const pipe = path.join(workspaceDir, "pipe");
+
+      const restored = await restoreCheckpoint({
+        workspaceDir,
+        runId,
+        // Something the rollback cannot save appears before it runs.
+        beforeRollback: () => {
+          expect(Bun.spawnSync(["mkfifo", pipe]).exitCode).toBe(0);
+        },
+      });
+      expect(restored).toEqual({
+        outcome: "failed",
+        detail:
+          "the restore failed and the folder could not be put back; the state before was kept",
+      });
+      const kept = recoveries(workspaceDir);
+      expect(kept).toHaveLength(1);
+      const recovery: unknown = JSON.parse(
+        readFileSync(
+          path.join(store(workspaceDir), "recovery", kept[0] ?? ""),
+          "utf-8",
+        ),
+      );
+      expect(recovery).toMatchObject({
+        restoreOf: runId,
+        entries: expect.arrayContaining([
+          expect.objectContaining({ kind: "file", path: "d/f.txt" }),
+        ]),
+      });
+      expect(storedContents(workspaceDir)).toContain("new");
+
+      // Later cleanup keeps it too.
+      rmSync(pipe);
+      chmodSync(path.join(store(workspaceDir), "manifests"), 0o700);
+      write(workspaceDir, "d/f.txt", "newer");
+      expect(
+        (await capture(workspaceDir, { limits: { maxManifests: 1 } })).report,
+      ).toEqual({
+        status: "taken",
+      });
+      expect(storedContents(workspaceDir)).toContain("new");
+      expect(recoveries(workspaceDir)).toEqual(kept);
+    });
+  });
+
+  describe("one store at a time", () => {
+    const lockFile = (workspaceDir: string) =>
+      path.join(checkpointStoreOf(workspaceDir), ".lock");
+
+    test("captures of one folder at once leave every kept checkpoint whole", async () => {
+      const { workspaceDir } = place();
+      for (const index of [1, 2, 3, 4, 5, 6]) {
+        write(
+          workspaceDir,
+          `case-${String(index)}.txt`,
+          `case ${String(index)}`,
+        );
       }
-    },
-  );
+      const reports = await Promise.all(
+        [1, 2, 3, 4].map(async (turn) => {
+          write(
+            workspaceDir,
+            `turn-${String(turn)}.txt`,
+            `turn ${String(turn)}`,
+          );
+          return (await capture(workspaceDir, { limits: { maxManifests: 2 } }))
+            .report;
+        }),
+      );
+      expect(reports).toEqual(
+        Array.from({ length: 4 }, () => ({ status: "taken" })),
+      );
+      const manifests = path.join(checkpointStoreOf(workspaceDir), "manifests");
+      const names = readdirSync(manifests);
+      expect(names).toHaveLength(2);
+      const contents = new Set(storedContents(workspaceDir));
+      for (const name of names) {
+        const manifest = v.parse(
+          v.object({
+            entries: v.array(
+              v.looseObject({ kind: v.string(), path: v.string() }),
+            ),
+          }),
+          JSON.parse(readFileSync(path.join(manifests, name), "utf-8")),
+        );
+        for (const entry of manifest.entries) {
+          if (entry.kind === "file") {
+            expect(
+              contents.has(
+                readFileSync(path.join(workspaceDir, entry.path), "utf-8"),
+              ),
+            ).toBe(true);
+          }
+        }
+      }
+      expect(existsSync(lockFile(workspaceDir))).toBe(false);
+    });
+
+    test("a store another live process holds is not used; one whose holder is gone is taken over", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "a.txt", "saved");
+      await capture(workspaceDir);
+      writeFileSync(
+        lockFile(workspaceDir),
+        JSON.stringify({ pid: process.pid }),
+      );
+      expect(
+        (await capture(workspaceDir, { limits: { lockWaitMs: 100 } })).report,
+      ).toEqual({ status: "unavailable", reason: "failed" });
+      expect(manifestIds(workspaceDir)).toHaveLength(1);
+
+      const gone = Bun.spawn(["true"]);
+      await gone.exited;
+      writeFileSync(lockFile(workspaceDir), JSON.stringify({ pid: gone.pid }));
+      expect(
+        (await capture(workspaceDir, { limits: { lockWaitMs: 100 } })).report,
+      ).toEqual({ status: "taken" });
+      expect(manifestIds(workspaceDir)).toHaveLength(2);
+      expect(existsSync(lockFile(workspaceDir))).toBe(false);
+    });
+  });
+
+  describe("reading the store", () => {
+    test.skipIf(isWindows || isRoot)(
+      "a manifest that cannot be read stops the capture and removes nothing",
+      async () => {
+        const { workspaceDir } = place();
+        write(workspaceDir, "a.txt", "version 1");
+        const { runId: first } = await capture(workspaceDir);
+        write(workspaceDir, "a.txt", "version 2");
+        const { runId: second } = await capture(workspaceDir);
+        const unreadable = path.join(
+          checkpointStoreOf(workspaceDir),
+          "manifests",
+          `${first}.json`,
+        );
+        chmodSync(unreadable, 0o000);
+        try {
+          write(workspaceDir, "a.txt", "version 3");
+          expect(
+            (await capture(workspaceDir, { limits: { maxManifests: 1 } }))
+              .report,
+          ).toEqual({ status: "unavailable", reason: "failed" });
+          expect(logged.splice(0)).toEqual([
+            "older checkpoints were kept: The checkpoints could not be read.",
+          ]);
+          expect(manifestIds(workspaceDir)).toEqual([first, second].toSorted());
+          expect(storedContents(workspaceDir).toSorted()).toEqual([
+            "version 1",
+            "version 2",
+          ]);
+          expect((await restore(workspaceDir, second)).outcome).toBe("failed");
+        } finally {
+          chmodSync(unreadable, 0o600);
+        }
+      },
+    );
+
+    test("a manifest whose content is not one is dropped", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "a.txt", "saved");
+      const { runId } = await capture(workspaceDir);
+      const manifests = path.join(checkpointStoreOf(workspaceDir), "manifests");
+      writeFileSync(path.join(manifests, "torn.json"), '{"version":1,"run');
+      write(workspaceDir, "a.txt", "changed");
+      const { runId: next } = await capture(workspaceDir);
+      expect(manifestIds(workspaceDir)).toEqual([runId, next].toSorted());
+    });
+  });
 });
