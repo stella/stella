@@ -465,6 +465,16 @@ const CENSUS: readonly CensusEntry[] = [
     why: "The generated CLI's client transport deadline; the server does not wait on it.",
   },
   {
+    site: "apps/api/src/mcp/public-read-continuation.ts#PUBLIC_READ_RUN_BUDGET_MS",
+    why: "Bounds a continued read, which runs detached from the call that started it; that call answers at its response deadline.",
+    path: "off-request",
+  },
+  {
+    site: "apps/api/src/mcp/public-read-continuation.ts#statementBudgetMs",
+    why: "The statement budget of a continued read, inside its detached run.",
+    path: "off-request",
+  },
+  {
     site: "apps/api/src/mcp/tool-freshness.ts#this.#reprojectionDeadlineMs",
     path: "off-request",
     why: "Bounds a live session's tool reprojection; registration and every publish run detached from the request that triggered them.",

@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { LIMITS } from "@/api/lib/limits";
 import { requestStartedAtMs } from "@/api/lib/load/request-latency-budget";
 import { createWorkBudget } from "@/api/lib/load/work-budget";
@@ -38,6 +40,19 @@ const LANES = 8;
 
 const searchLane = new AsyncLocalStorage<number>();
 const searchCaller = new AsyncLocalStorage<string>();
+
+const patientReads = new AsyncLocalStorage<true>();
+
+/** How often a patient read looks again at a queue that was full. */
+const FULL_QUEUE_RETRY_MS = 250;
+
+/**
+ * Run `fn` with its reads patient: nobody is waiting on them, so a full queue
+ * or a long estimate is a reason to wait, not to fail. Only a run detached from
+ * its request may be patient; its own timeout still bounds every read.
+ */
+export const runWithPatientCorpusReads = <T>(fn: () => T): T =>
+  patientReads.run(true, fn);
 
 /** Reads per caller a queue's fairness tracks; only backlogged callers count. */
 type CallerFlow = {
@@ -185,7 +200,9 @@ export const createCorpusSearchAdmission = ({
   }): Promise<CorpusSearchAdmission> => {
     const startedAt = now();
     const { inFlight, queued: queuedAhead } = budget.stats();
+    const patient = patientReads.getStore() === true;
     if (
+      !patient &&
       maxWaitMs !== undefined &&
       inFlight >= slots &&
       queuedAhead > 0 &&
@@ -200,11 +217,23 @@ export const createCorpusSearchAdmission = ({
     }
     const caller = searchCaller.getStore();
     const virtualStart = enterFlow(caller);
-    const result = await budget.acquire({
-      signal:
-        signal === undefined ? waitLimit : AbortSignal.any([signal, waitLimit]),
-      rank: admissionRank(virtualStart),
-    });
+    const waitSignal =
+      signal === undefined ? waitLimit : AbortSignal.any([signal, waitLimit]);
+    const request = { signal: waitSignal, rank: admissionRank(virtualStart) };
+    let result = await budget.acquire(request);
+    let retriedFullQueue = false;
+    if (patient) {
+      while (
+        result.type === "refused" &&
+        result.reason === "busy" &&
+        !waitSignal.aborted
+      ) {
+        // Not cancelled by the wait limit: the next acquire reports it.
+        retriedFullQueue = true;
+        await sleep(FULL_QUEUE_RETRY_MS);
+        result = await budget.acquire(request);
+      }
+    }
     leaveFlow(caller);
     const waitedMs = now() - startedAt;
     if (result.type === "admitted") {
@@ -218,7 +247,7 @@ export const createCorpusSearchAdmission = ({
         },
         // A read admitted without queueing waited for nothing: the time to
         // resume after the await is not time spent waiting for a slot.
-        waitedMs: result.queued ? waitedMs : 0,
+        waitedMs: result.queued || retriedFullQueue ? waitedMs : 0,
       };
     }
     const { queued } = budget.stats();

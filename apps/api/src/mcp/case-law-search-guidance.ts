@@ -74,15 +74,18 @@ const apexCourtExamples = (): string =>
       : [`${country} ${JSON.stringify(abbreviations).replaceAll(",", ", ")}`];
   }).join("; ");
 
+const CONTINUATION_TAIL =
+  ' Under load it may answer status "running": not a failure. After retryAfterMs, repeat the call with continuation_token; "partial" is never the full answer.';
+
 const SEARCH_CASE_LAW_TEXTS = {
   off: {
-    description: `${DESCRIPTION_HEAD}${DESCRIPTION_TAIL}`,
+    description: `${DESCRIPTION_HEAD}${DESCRIPTION_TAIL}${CONTINUATION_TAIL}`,
     queries: `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. ${QUERIES_TAIL}`,
     limit: LIMIT_OFF,
     courts: `Match any listed court. For Czech apex courts use ["NS", "NSS", "ÚS"]. ${COURTS_TAIL}`,
   },
   v1: {
-    description: `${DESCRIPTION_HEAD} Put the most central phrasing first; three are usually enough.${DESCRIPTION_TAIL}`,
+    description: `${DESCRIPTION_HEAD} Put the most central phrasing first; three are usually enough.${DESCRIPTION_TAIL}${CONTINUATION_TAIL}`,
     queries:
       `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. ` +
       "A full match needs every word of a phrasing except function words in " +
