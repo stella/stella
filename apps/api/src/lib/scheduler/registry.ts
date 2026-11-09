@@ -162,6 +162,10 @@ import {
   refreshLegislationFacetsTask,
 } from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
 import {
+  RECONCILE_FACT_EXTRACTION_RUNS_TASK,
+  reconcileFactExtractionRuns,
+} from "@/api/lib/scheduler/tasks/list-fact-extraction-run-reconcile";
+import {
   RECONCILE_LIST_VERIFICATION_RUNS_TASK,
   reconcileListVerificationRuns,
 } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
@@ -331,6 +335,10 @@ const SCHEDULER_TASKS = {
   [RECONCILE_LIST_VERIFICATION_RUNS_TASK]: {
     featureId: "list-verification",
     task: reconcileListVerificationRuns,
+  },
+  [RECONCILE_FACT_EXTRACTION_RUNS_TASK]: {
+    featureId: "list-verification",
+    task: reconcileFactExtractionRuns,
   },
   [RECONCILE_BILINGUAL_RUNS_TASK]: reconcileBilingualRuns,
   [RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK]: reconcileStyleSetPackageCleanups,

@@ -162,6 +162,12 @@ export const KILL_SWITCHES = {
     offHint:
       "List verification is turned off. Do not retry until it is turned back on.",
   },
+  "list-fact-extraction": {
+    default: KILL_SWITCH_STATE.on,
+    owner: "apps/api/src/handlers/lists/fact-extractions",
+    offHint:
+      "Fact extraction is turned off. Do not retry until it is turned back on.",
+  },
   "report-export": {
     default: KILL_SWITCH_STATE.on,
     owner: "apps/api/src/handlers/reports",
@@ -233,6 +239,8 @@ export const ACTION_KIND_KILL_SWITCH = {
   "bilingual.background": "bilingual-documents",
   "list-verification.start": "list-verification",
   "list-verification.background": "list-verification",
+  "list-fact-extraction.start": "list-fact-extraction",
+  "list-fact-extraction.background": "list-fact-extraction",
   "report-export.start": "report-export",
   "report-export.background": "report-export",
   "mcp.services/call": "mcp-tools",

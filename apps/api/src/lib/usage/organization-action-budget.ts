@@ -139,6 +139,8 @@ export const FREE_WITHOUT_OWN_KEY = {
   "bilingual.background": "counts",
   "list-verification.start": "counts",
   "list-verification.background": "counts",
+  "list-fact-extraction.start": "counts",
+  "list-fact-extraction.background": "counts",
   "report-export.start": "counts",
   "report-export.background": "counts",
   "mcp.services/call": "counts",

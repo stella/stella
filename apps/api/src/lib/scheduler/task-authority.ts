@@ -241,6 +241,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "statute-sitemap-shard-refresh.ts",
     "Public legal corpus sitemap.",
   ),
+  "listFactExtractions.reconcileQueuedRuns": platform(
+    "list-fact-extraction-run-reconcile.ts",
+    "Fails stuck runs and hands queued runs back to their queue, whose worker resolves the requester's run actor.",
+  ),
   "listVerifications.reconcileQueuedRuns": platform(
     "list-verification-run-reconcile.ts",
     "Fails stuck runs and hands queued runs back to their queue, whose worker resolves the requester's run actor.",

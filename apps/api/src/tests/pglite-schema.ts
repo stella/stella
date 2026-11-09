@@ -1683,7 +1683,8 @@ export const installPgliteDecisionCitationStats = async (
   }
 };
 
-/** Install the migration-owned verification counter and Prague day function. */
+/** Install the migration-owned verification counter and Prague day function,
+ *  and the triggers that charge fact extraction runs to the same counter. */
 export const installPgliteListVerificationBudgets = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
@@ -1705,7 +1706,16 @@ export const installPgliteListVerificationBudgets = async (
       "ALTER TABLE",
     ].some((prefix) => source.startsWith(prefix));
   });
-  for (const statement of statements) {
+  const generationTriggers = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261109190000_list_fact_extraction_runs",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    executableSql(statement).startsWith("CREATE TRIGGER"),
+  );
+  for (const statement of [...statements, ...generationTriggers]) {
     await db.execute(sql.raw(statement));
   }
 };
