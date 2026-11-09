@@ -2509,12 +2509,29 @@ const caseLawSearchResult = ({
   };
 };
 
-const caseLawSearchResultFor = (
+/** The page's results, one per decision a preferred language serves alike. */
+const caseLawSearchResults = (
+  merged: ReturnType<typeof mergeCaseLawSearchHits>,
   args: v.InferOutput<typeof searchCaseLawArgs>,
 ) => {
   const preferredLanguage = preferredLanguageOf(args);
-  return (entry: ReturnType<typeof mergeCaseLawSearchHits>[number]) =>
-    caseLawSearchResult({ ...entry, preferredLanguage });
+  const served = new Map<string, ReturnType<typeof caseLawSearchResult>>();
+  for (const entry of merged) {
+    const result = caseLawSearchResult({ ...entry, preferredLanguage });
+    const earlier = served.get(result.decisionId);
+    served.set(
+      result.decisionId,
+      earlier === undefined
+        ? result
+        : {
+            ...earlier,
+            matchedQueries: [
+              ...new Set([...earlier.matchedQueries, ...result.matchedQueries]),
+            ].toSorted((left, right) => left - right),
+          },
+    );
+  }
+  return [...served.values()];
 };
 
 /**
@@ -2729,7 +2746,7 @@ const listSearchCaseLawProvision = async ({
     ),
     nextCursor: page.nextCursor,
     paginationOutcome: page.paginationOutcome,
-    results: merged.map(caseLawSearchResultFor(args)),
+    results: caseLawSearchResults(merged, args),
     total: page.total,
     ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
   });
@@ -3180,7 +3197,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     searches: searchNotesForCall(searches, requests),
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
     paginationOutcome: mergedCaseLawPaginationOutcome(pages),
-    results: merged.map(caseLawSearchResultFor(parsed.output)),
+    results: caseLawSearchResults(merged, parsed.output),
     total: caseLawAgentSearchTotal(single?.total ?? SEARCH_TOTAL_NOT_COUNTED),
     ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
   });

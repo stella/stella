@@ -189,13 +189,37 @@ type ReadPublicDecisionLanguageAlternatesOptions = {
 };
 
 /**
+ * The version of a decision to read instead of it, if any. A decision already
+ * in the language stays itself, and one missing from its own group's public
+ * list is left for the read gate to answer: it names no alternate.
+ */
+export const preferredLanguageVersionId = ({
+  id,
+  language,
+  alternates,
+  preferred,
+}: {
+  id: string;
+  language: string;
+  alternates: readonly PublicDecisionLanguageAlternate[];
+  preferred: string;
+}): string | undefined =>
+  normalizePublicDecisionLanguage(language) === preferred ||
+  !alternates.some((alternate) => alternate.id === id)
+    ? undefined
+    : alternates.find(
+        (alternate) =>
+          normalizePublicDecisionLanguage(alternate.language) === preferred,
+      )?.id;
+
+/**
  * For each decision that has a version in `language` other than itself, the
  * id of that version. A decision with none is absent from the answer.
  */
 export const readPreferredLanguageVersionIds = async ({
   caseLawDb,
   decisionIds,
-  language,
+  language: preferred,
 }: {
   caseLawDb: CaseLawPublicReadDb;
   decisionIds: readonly string[];
@@ -206,6 +230,7 @@ export const readPreferredLanguageVersionIds = async ({
       await tx
         .select({
           id: publishedCaseLawDecisions.id,
+          language: publishedCaseLawDecisions.language,
           languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
         })
         .from(publishedCaseLawDecisions)
@@ -228,15 +253,15 @@ export const readPreferredLanguageVersionIds = async ({
     ],
   });
   const versions = new Map<string, string>();
-  for (const { id, languageGroupKey } of decisions) {
-    const version = alternates
-      .alternatesFor(languageGroupKey)
-      .find(
-        (alternate) =>
-          normalizePublicDecisionLanguage(alternate.language) === language,
-      );
-    if (version !== undefined && version.id !== id) {
-      versions.set(id, version.id);
+  for (const { id, language, languageGroupKey } of decisions) {
+    const version = preferredLanguageVersionId({
+      id,
+      language,
+      alternates: alternates.alternatesFor(languageGroupKey),
+      preferred,
+    });
+    if (version !== undefined) {
+      versions.set(id, version);
     }
   }
   return versions;
