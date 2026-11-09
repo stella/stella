@@ -506,6 +506,33 @@ describe("deferral reporting", () => {
     expect(captured).toEqual([]);
   });
 
+  test("a fetch the request's own deadline aborts is not captured as an exception", async () => {
+    expect(
+      await readThroughDeferredDocument({
+        adapterKey: "sk-courts",
+        decision: pending(),
+        deps: {
+          recordPacingOutcome: () => {},
+          withFetchBudget: availableBudget,
+          recordRequest: async () => {},
+          fetchDocument: async () => {
+            // The request scope's signal, ungraded, ends before the read budget.
+            const requestDeadline = AbortSignal.timeout(1);
+            await new Promise<void>((resolve) => {
+              requestDeadline.addEventListener("abort", () => {
+                resolve();
+              });
+            });
+            requestDeadline.throwIfAborted();
+            return panic("The request deadline has passed");
+          },
+        },
+        recordDemand: false,
+      }),
+    ).toBeNull();
+    expect(captured).toEqual([]);
+  });
+
   test("a failing fetch is still captured as an exception", async () => {
     expect(
       await readThroughDeferredDocument({
