@@ -132,7 +132,11 @@ type Api = {
 };
 
 const createApi = (apiUrl: string, cookie: string): Api => {
-  const call = async (method: string, route: string, body?: BodyInit) => {
+  const call = async (
+    method: string,
+    route: string,
+    body?: FormData | string,
+  ) => {
     const response = await fetch(`${apiUrl}/v1${route}`, {
       method,
       headers: {
@@ -151,7 +155,7 @@ const createApi = (apiUrl: string, cookie: string): Api => {
   const expectOk = async (
     method: string,
     route: string,
-    body?: BodyInit,
+    body?: FormData | string,
   ): Promise<{ status: number; json: unknown }> => {
     const result = await call(method, route, body);
     if (result.status >= 400 && result.status !== 428) {
