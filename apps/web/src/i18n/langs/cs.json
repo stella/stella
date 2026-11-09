@@ -5586,6 +5586,7 @@
         "number_series": "číselná řada",
         "organization_access_state": "stav přístupu organizace",
         "organization_settings": "nastavení organizace",
+        "outbound_action": "odchozí akce",
         "pdf_signing_session": "relace podpisu PDF",
         "personal_api_key": "osobní klíč API",
         "playbook": "playbook",

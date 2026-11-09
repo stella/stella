@@ -124,6 +124,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.signal",
   [AUDIT_RESOURCE_TYPE.INVOICE]:
     "settings.organization.auditResourceKinds.invoice",
+  [AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION]:
+    "settings.organization.auditResourceKinds.outbound_action",
   [AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY]:
     "settings.organization.auditResourceKinds.personal_api_key",
   [AUDIT_RESOURCE_TYPE.MACHINE_API_KEY]:

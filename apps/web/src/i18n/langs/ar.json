@@ -5586,6 +5586,7 @@
         "number_series": "سلسلة ترقيم",
         "organization_access_state": "حالة وصول المؤسسة",
         "organization_settings": "إعدادات المؤسسة",
+        "outbound_action": "إجراء صادر",
         "pdf_signing_session": "جلسة توقيع PDF",
         "personal_api_key": "مفتاح API شخصي",
         "playbook": "دليل المراجعة",

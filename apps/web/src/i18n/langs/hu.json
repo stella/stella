@@ -5586,6 +5586,7 @@
         "number_series": "számsorozat",
         "organization_access_state": "szervezeti hozzáférés állapota",
         "organization_settings": "szervezeti beállítások",
+        "outbound_action": "kimenő művelet",
         "pdf_signing_session": "PDF-aláírási munkamenet",
         "personal_api_key": "személyes API-kulcs",
         "playbook": "playbook",

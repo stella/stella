@@ -5586,6 +5586,7 @@
         "number_series": "Nummernkreis",
         "organization_access_state": "Organisationszugriffsstatus",
         "organization_settings": "Organisationseinstellungen",
+        "outbound_action": "ausgehende Aktion",
         "pdf_signing_session": "PDF-Signatursitzung",
         "personal_api_key": "persönlicher API-Schlüssel",
         "playbook": "Playbook",

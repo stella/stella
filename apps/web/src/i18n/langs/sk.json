@@ -5586,6 +5586,7 @@
         "number_series": "číselný rad",
         "organization_access_state": "stav prístupu organizácie",
         "organization_settings": "nastavenia organizácie",
+        "outbound_action": "odchádzajúca akcia",
         "pdf_signing_session": "relácia podpisu PDF",
         "personal_api_key": "osobný kľúč API",
         "playbook": "playbook",

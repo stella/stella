@@ -5586,6 +5586,7 @@
         "number_series": "série de numérotation",
         "organization_access_state": "état d’accès à l’organisation",
         "organization_settings": "paramètres de l’organisation",
+        "outbound_action": "action sortante",
         "pdf_signing_session": "session de signature PDF",
         "personal_api_key": "clé API personnelle",
         "playbook": "playbook",
