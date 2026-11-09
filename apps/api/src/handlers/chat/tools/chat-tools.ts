@@ -1156,7 +1156,8 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     disabledNativeToolSlugs,
   );
   const browserControlTools =
-    browserExtension && browserExtensionPolicy(browserExtension).toolOffered
+    browserExtension !== undefined &&
+    browserExtensionPolicy(browserExtension).toolOffered
       ? createBrowserControlTool()
       : {};
   const { webSearchProvider, urlFetcher } = webSearchProviders;
