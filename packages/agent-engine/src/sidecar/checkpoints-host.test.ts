@@ -129,11 +129,15 @@ const startHost = (at: Place): Host => {
     upcoming: async <K extends SidecarHostOutput["type"]>(type: K) => {
       const { promise, resolve } =
         Promise.withResolvers<Extract<SidecarHostOutput, { type: K }>>();
+      const wanted = (
+        message: SidecarHostOutput,
+      ): message is Extract<SidecarHostOutput, { type: K }> =>
+        message.type === type;
       waiters.add((message) => {
-        if (message.type !== type) {
+        if (!wanted(message)) {
           return false;
         }
-        resolve(message as Extract<SidecarHostOutput, { type: K }>);
+        resolve(message);
         return true;
       });
       return await promise;
