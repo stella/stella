@@ -1,13 +1,19 @@
 import type { TextPart } from "@tanstack/ai";
 import type { AnthropicTextMetadata } from "@tanstack/ai-anthropic";
+import { panic, Result } from "better-result";
 
 import { createSha256 } from "@stll/sha256/bun";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
+import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { buildDocxBlocksMessage } from "@/api/lib/workflow/ai-prompts";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
+import {
+  fitDocxFilesToRequestBudget,
+  logRequestFit,
+} from "@/api/lib/workflow/request-budget";
 
 /**
  * The document region every reference-review call shares: the source roles,
@@ -51,6 +57,50 @@ export const buildReviewDocumentParts = ({
     });
   }
   return parts;
+};
+
+type FitReviewDocumentsOptions = {
+  target: PreparedDocxFile;
+  references: readonly PreparedDocxFile[];
+  budgetBytes: number;
+};
+
+type FittedReviewDocuments = {
+  target: PreparedDocxFile;
+  references: readonly PreparedDocxFile[];
+};
+
+/**
+ * The documents of one review call, cut to fit its model. The budget depends
+ * only on the model and the cut only on the documents, so calls over the same
+ * documents under the same model send the same bytes.
+ */
+export const fitReviewDocuments = ({
+  target,
+  references,
+  budgetBytes,
+}: FitReviewDocumentsOptions): Result<
+  FittedReviewDocuments,
+  WorkflowIntegrationError
+> => {
+  const fit = fitDocxFilesToRequestBudget({
+    files: [target, ...references],
+    budgetBytes,
+  });
+  if (Result.isError(fit)) {
+    return Result.err(
+      new WorkflowIntegrationError({
+        message: fit.error.message,
+        cause: fit.error,
+      }),
+    );
+  }
+  logRequestFit(fit.value);
+  const [fittedTarget, ...fittedReferences] = fit.value.files;
+  return Result.ok({
+    target: fittedTarget ?? panic("The fit dropped the review target"),
+    references: fittedReferences,
+  });
 };
 
 /** One cache scope for every call over the same pinned documents, so the

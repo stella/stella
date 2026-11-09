@@ -34,6 +34,7 @@ import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+  DocumentTooLargeError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import type {
@@ -758,6 +759,15 @@ export const aiHandlerError = (
   error: unknown,
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
+  // Raised before any model call, so no provider failure kind describes it.
+  if (DocumentTooLargeError.is(error)) {
+    return new HandlerError({
+      code: "document_too_large",
+      status: 413,
+      message: error.message,
+      cause: error,
+    });
+  }
   const kind = classifyAIBoundaryFailure(error);
   const mapped = aiKindHandlerError(kind, error, fallback);
   const handlerError =

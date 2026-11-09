@@ -33,6 +33,7 @@ import {
 import {
   isBrowserResolvedChatToolCall,
   isChatPastedTextPart,
+  isDeclinedChatToolCall,
   isHarnessChatToolCall,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
@@ -2001,11 +2002,7 @@ const validateToolCallErrorOutput = (
   }
   // Denial is an approval decision, not a failed server execution. The SDK
   // preserves its decision payload on the call and the paired result.
-  if (
-    "approval" in part &&
-    part.approval.approved === false &&
-    isDeniedToolOutput(output)
-  ) {
+  if (isDeclinedChatToolCall(part) && isDeniedToolOutput(output)) {
     return Result.ok({ type: "denied", output });
   }
   if (
@@ -2153,8 +2150,7 @@ const validateToolErrorResult = (
   const content = contentResult.value;
   if (
     part.outcome === "denied" &&
-    "approval" in toolCall.part &&
-    toolCall.part.approval.approved === false &&
+    isDeclinedChatToolCall(toolCall.part) &&
     isDeniedToolOutput(content) &&
     part.error === undefined
   ) {

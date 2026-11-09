@@ -365,6 +365,14 @@ const CENSUS: readonly CensusEntry[] = [
     why: "Reads the stored courts a court filter is matched against; without them the filter runs as sent and the search reports filter_unread.",
   },
   {
+    site: "apps/api/src/handlers/case-law/decisions/search.ts#CASE_LAW_RELAXED_TOP_UP_BUDGET_MS",
+    path: "request",
+    tools: ["search", "search_case_law"],
+    bound: "own",
+    onExpiry: "degrades",
+    why: "Tops up a short strict page with partial matches; without it the strict page is answered alone.",
+  },
+  {
     site: "apps/api/src/mcp/case-law-court-catalog-tool.ts#LIST_CASE_LAW_COURTS_READ_BUDGET_MS",
     path: "request",
     tools: ["list_case_law_courts"],
