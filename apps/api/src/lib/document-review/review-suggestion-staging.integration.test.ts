@@ -23,7 +23,6 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { DOCX_SUGGESTIONS_PENDING_MAX } from "@stll/api-contract";
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
-import type { Transaction } from "@/api/db/root";
 import {
   documentReviewFindings,
   documentReviewRuns,
@@ -33,7 +32,6 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import type { RlsDatabase } from "@/api/db/scoped";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
 import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
@@ -57,6 +55,10 @@ import {
   createRootRunActor,
 } from "@/api/lib/root-scoped-db";
 import { brandPersistedDocumentReviewRunId } from "@/api/lib/safe-id-boundaries";
+import {
+  applicationRoleDatabase,
+  memberScopedDb,
+} from "@/api/tests/helpers/application-role-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -216,16 +218,26 @@ const finalize = async (
   target: ReviewTarget,
   expectedFindingCount: number,
 ) =>
-  await finalizeReviewRun({
-    tx: asTestRaw<Transaction>(testDb),
-    workspaceId: ids.wsA1,
-    runId,
-    entityId: target.entityId,
-    fileFieldId: target.fileFieldId,
-    executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
-    fixStaging: { type: REVIEW_FIX_STAGING.stage, sourceDataWorkspaceIds: [] },
-    expectedFindingCount,
-  });
+  await memberScopedDb(testDb, {
+    organizationId: ids.orgA,
+    workspaceIds: [ids.wsA1],
+    userId: ids.userA1,
+  })(
+    async (tx) =>
+      await finalizeReviewRun({
+        tx,
+        workspaceId: ids.wsA1,
+        runId,
+        entityId: target.entityId,
+        fileFieldId: target.fileFieldId,
+        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
+        fixStaging: {
+          type: REVIEW_FIX_STAGING.stage,
+          sourceDataWorkspaceIds: [],
+        },
+        expectedFindingCount,
+      }),
+  );
 
 const suggestionsFor = async (findingId: SafeId<"documentReviewFinding">) =>
   await testDb
@@ -631,7 +643,7 @@ describe("review fixes and the document's pending suggestion cap", () => {
 });
 
 describe("a review whose reference text comes from another matter", () => {
-  const database = () => asTestRaw<RlsDatabase<Transaction>>(testDb);
+  const database = () => applicationRoleDatabase(testDb);
 
   const pinnedReference = (workspaceId: SafeId<"workspace">) => ({
     workspaceId,
