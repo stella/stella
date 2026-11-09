@@ -766,10 +766,10 @@ const MOCK_FACT_MAX = 200;
 
 const mockExtractedFacts = (messages: readonly ModelMessage[]) => {
   const request = getLatestUserText([...messages]);
-  const asked =
-    /List the facts in these blocks only: (?<ids>.+)$/mu
-      .exec(request)
-      ?.groups?.["ids"]?.split(", ") ?? [];
+  const askedList = /List the facts in these blocks only: (?<ids>.+)$/mu.exec(
+    request,
+  )?.groups?.["ids"];
+  const asked = askedList === undefined ? [] : askedList.split(", ");
   const blockText = new Map<string, string>();
   for (const line of request.split("\n")) {
     const block = /^\[(?<id>[^\]]+)\] (?<text>.+)$/u.exec(line)?.groups;

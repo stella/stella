@@ -33,6 +33,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
@@ -73,6 +74,7 @@ const bodySchema = v.object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   // The run is queued here; its worker takes a background slot.
   actionAdmission: {
     type: "handler",
@@ -158,22 +160,29 @@ const readTargets = async (
   if (versionIds.length !== documents.length) {
     return { type: "missing" };
   }
-  const versionFields = await tx
-    .select({
-      id: fields.id,
-      entityVersionId: fields.entityVersionId,
-      content: fields.content,
-    })
-    .from(fields)
-    .where(
-      and(
-        eq(fields.workspaceId, workspaceId),
-        inArray(fields.entityVersionId, versionIds),
-      ),
-    )
-    // Ascending id is creation order, which the file choice needs.
-    .orderBy(asc(fields.id))
-    .limit(FACT_EXTRACTION_DOCUMENTS_MAX * VERSION_FIELDS_READ_MAX);
+  const versionFieldRead = await readBounded(
+    tx
+      .select({
+        id: fields.id,
+        entityVersionId: fields.entityVersionId,
+        content: fields.content,
+      })
+      .from(fields)
+      .where(
+        and(
+          eq(fields.workspaceId, workspaceId),
+          inArray(fields.entityVersionId, versionIds),
+        ),
+      )
+      // Ascending id is creation order, which the file choice needs.
+      .orderBy(asc(fields.id)),
+    FACT_EXTRACTION_DOCUMENTS_MAX * VERSION_FIELDS_READ_MAX,
+  );
+  // More fields than any document carries: nothing to choose a file from.
+  if (versionFieldRead.type === "overflow") {
+    return { type: "unreadable" };
+  }
+  const versionFields = versionFieldRead.rows;
   const byId = new Map(documents.map((document) => [document.id, document]));
   const pinned: PinnedDocument[] = [];
   // In the order the caller named them: the order facts are proposed in.
@@ -444,6 +453,7 @@ const createFactExtraction = createSafeHandler(
             return Result.err(
               new HandlerError({
                 status: 500,
+                code: "fact_extraction_enqueue_failed",
                 message: "The fact extraction could not be started.",
                 cause: enqueued.error,
               }),

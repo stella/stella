@@ -37,6 +37,7 @@ import {
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { candidateFactDetailColumns } from "@/api/lib/lists/generation/candidate-fact-details";
@@ -564,31 +565,31 @@ const resolvePinnedSources = async (
     ) {
       return null;
     }
-    const versionFields =
-      sources.length === 0
-        ? []
-        : await tx
-            .select({
-              id: fields.id,
-              entityVersionId: fields.entityVersionId,
-              content: fields.content,
-            })
-            .from(fields)
-            .where(
-              and(
-                eq(fields.workspaceId, actor.workspaceId),
-                inArray(
-                  fields.entityVersionId,
-                  sources.map((source) => source.entityVersionId),
-                ),
-              ),
-            )
-            // Ascending id is creation order, which the file choice needs.
-            .orderBy(asc(fields.id))
-            .limit(
-              LIMITS.legalListGenerationSourcesMax * VERSION_FIELDS_READ_MAX,
-            );
-    return { sources, versionFields };
+    const versionFieldRead = await readBounded(
+      tx
+        .select({
+          id: fields.id,
+          entityVersionId: fields.entityVersionId,
+          content: fields.content,
+        })
+        .from(fields)
+        .where(
+          and(
+            eq(fields.workspaceId, actor.workspaceId),
+            inArray(
+              fields.entityVersionId,
+              sources.map((source) => source.entityVersionId),
+            ),
+          ),
+        )
+        // Ascending id is creation order, which the file choice needs.
+        .orderBy(asc(fields.id)),
+      LIMITS.legalListGenerationSourcesMax * VERSION_FIELDS_READ_MAX,
+    );
+    // More fields than the pinned versions can carry reads as unavailable.
+    return versionFieldRead.type === "overflow"
+      ? null
+      : { sources, versionFields: versionFieldRead.rows };
   });
   if (resolved === null || resolved.sources.length === 0) {
     return Result.err("source_unavailable");
@@ -769,7 +770,14 @@ const executeRun = async ({
       deps: { ...baseDeps, entityVersionId: source.entityVersionId },
     });
     if (Result.isError(extracted)) {
-      return failureOf(extracted.error.cause);
+      const code = failureOf(extracted.error.cause);
+      if (code === "extraction_failed") {
+        observeFailure(extracted.error, {
+          sink: RUN_FAILED_SINK,
+          ctx: { runId: actor.runId, workspaceId: actor.workspaceId },
+        });
+      }
+      return code;
     }
     candidates.push(
       ...extracted.value.map((fact) => candidateOf(source, fact)),

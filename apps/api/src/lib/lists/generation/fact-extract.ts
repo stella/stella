@@ -355,13 +355,12 @@ export const extractFacts = async ({
           ),
         );
       },
-      catch: (cause) => {
-        call.captureError(cause);
-        return new WorkflowIntegrationError({
+      // The run records why it failed; its worker observes the cause.
+      catch: (cause) =>
+        new WorkflowIntegrationError({
           message: "Fact extraction failed",
           cause,
-        });
-      },
+        }),
     }),
   );
 };

@@ -5,94 +5,205 @@
  * fake that reports no text, which ends the run before any model call.
  */
 
-import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
   beforeEach,
   describe,
   expect,
-  type Mock,
-  mock,
-  setDefaultTimeout,
-  spyOn,
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { createTestClock } from "@stll/test-kit";
 import { createTestState } from "@stll/test-state";
 
-import { member, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
+  entities,
+  entityVersions,
+  fields,
   legalListGenerationRuns,
   legalListGenerationSources,
   legalLists,
+  properties,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { processFactExtractionRun } from "@/api/lib/lists/generation/run-queue";
-import * as documentText from "@/api/lib/lists/verification/document-text";
+import type { FactExtractionExecutionBoundaries } from "@/api/lib/lists/generation/run-queue";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedLegalListGenerationRunId } from "@/api/lib/safe-id-boundaries";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import {
-  getRlsFixture,
-  releaseRlsFixture,
-} from "@/api/tests/security/rls-fixture";
+import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-// timeout: the first test builds the shared PGlite fixture.
-setDefaultTimeout(120_000);
-
-const { testDb, ids } = await getRlsFixture();
 const testState = createTestState({ file: import.meta.path, config: env });
-const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
-
-const originalOrganizationMember = (
-  await testDb
-    .select()
-    .from(member)
-    .where(eq(member.id, ids.memberA1org))
-    .limit(1)
-).at(0);
-// Leaving the organization also ends every matter membership in it, so the
-// restore covers all of them, not only the one a test removes directly.
-const originalMatterMembers = await testDb.query.workspaceMembers.findMany({
-  where: {
-    userId: { eq: ids.userA1 },
-    workspaceId: { in: [ids.wsA1, ids.wsA2] },
-  },
-});
-if (!originalOrganizationMember || originalMatterMembers.length === 0) {
-  panic("Fact extraction run fixture is incomplete");
-}
-
-const listId = createSafeId<"legalList">();
-const runId = createSafeId<"legalListGenerationRun">();
-const actor = createRootRunActor(
-  {
-    organizationId: ids.orgA,
-    workspaceId: ids.wsA1,
-    userId: ids.userA1,
-    runId,
-  },
-  brandPersistedLegalListGenerationRunId,
-  database,
+const clock = createTestClock();
+let testDb: TestDatabase;
+const organizationId = toSafeId<"organization">(
+  `fact-extraction-inputs-${Bun.randomUUIDv7()}`,
 );
-const data = {
-  runId,
-  organizationId: ids.orgA,
-  workspaceId: ids.wsA1,
-  userId: ids.userA1,
-};
+const userId = toSafeId<"user">(`fact-extraction-inputs-${Bun.randomUUIDv7()}`);
+const workspaceId = createSafeId<"workspace">();
+const listId = createSafeId<"legalList">();
+const documentId = createSafeId<"entity">();
+const versionId = createSafeId<"entityVersion">();
+const fileId = Bun.randomUUIDv7();
+const organizationMemberId = Bun.randomUUIDv7();
+const matterMemberId = createSafeId<"workspaceMember">();
+let runId: SafeId<"legalListGenerationRun">;
 
-let readSpy: Mock<typeof documentText.readVerificationDocument>;
+testState.beforeAll(async () => {
+  testDb = await getTestDb();
+  await testDb.insert(organization).values({
+    id: organizationId,
+    name: "Fact extraction inputs",
+    slug: organizationId,
+    createdAt: new Date(clock.now()),
+  });
+  await testDb.insert(user).values({
+    id: userId,
+    name: "Fact extraction requester",
+    email: `${userId}@example.test`,
+    emailVerified: true,
+  });
+  await testDb.insert(workspaces).values({
+    id: workspaceId,
+    organizationId,
+    name: "Fact extraction matter",
+    reference: Bun.randomUUIDv7(),
+  });
+  await testDb.insert(legalLists).values({
+    id: listId,
+    workspaceId,
+    name: "Chronology",
+    createdBy: userId,
+  });
+  const propertyId = createSafeId<"property">();
+  await testDb.insert(entities).values({
+    id: documentId,
+    workspaceId,
+    kind: "document",
+    name: "Witness statement",
+  });
+  await testDb.insert(entityVersions).values({
+    id: versionId,
+    entityId: documentId,
+    workspaceId,
+    versionNumber: 1,
+  });
+  await testDb
+    .update(entities)
+    .set({ currentVersionId: versionId })
+    .where(eq(entities.id, documentId));
+  await testDb.insert(properties).values({
+    id: propertyId,
+    workspaceId,
+    name: "File",
+    status: "fresh",
+    content: { version: 1, type: "file" },
+    tool: { version: 1, type: "manual-input" },
+  });
+  await testDb.insert(fields).values({
+    id: createSafeId<"field">(),
+    workspaceId,
+    entityVersionId: versionId,
+    propertyId,
+    content: {
+      version: 1,
+      type: "file",
+      id: fileId,
+      fileName: "statement.docx",
+      mimeType: DOCX_MIME_TYPE,
+      sizeBytes: 1,
+      encrypted: false,
+      sha256Hex: "a".repeat(64),
+      pdfFileId: null,
+    },
+  });
+});
 
-const readRun = async () =>
-  (
+afterAll(async () => {
+  await deleteOrganizationsForTest(testDb, [organizationId]);
+  await releaseTestDb();
+});
+
+beforeEach(async () => {
+  testState.setConfig("FEATURE_LEGAL_LISTS", true);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    "legal-lists": [{ type: "organization", organizationId }],
+    "list-verification": [{ type: "organization", organizationId }],
+  });
+  await testDb.insert(member).values({
+    id: organizationMemberId,
+    organizationId,
+    userId,
+    role: "member",
+    createdAt: new Date(clock.now()),
+  });
+  await testDb
+    .insert(workspaceMembers)
+    .values({ id: matterMemberId, workspaceId, userId });
+  runId = createSafeId<"legalListGenerationRun">();
+  await testDb.insert(legalListGenerationRuns).values({
+    id: runId,
+    workspaceId,
+    listId,
+    organizationId,
+    producer: "stella",
+    itemType: "fact",
+    status: "queued",
+    instruction: "List every fact the documents establish.",
+    requestedBy: userId,
+  });
+  await testDb.insert(legalListGenerationSources).values({
+    id: createSafeId<"legalListGenerationSource">(),
+    workspaceId,
+    listId,
+    runId,
+    sourceEntityId: documentId,
+    sourceEntityVersionId: versionId,
+  });
+});
+
+afterEach(async () => {
+  await testDb
+    .delete(legalListGenerationRuns)
+    .where(eq(legalListGenerationRuns.id, runId));
+  await testDb
+    .delete(workspaceMembers)
+    .where(eq(workspaceMembers.id, matterMemberId));
+  await testDb.delete(member).where(eq(member.id, organizationMemberId));
+});
+
+const run = async () => {
+  const reads: string[] = [];
+  const execution: FactExtractionExecutionBoundaries = {
+    readDocument: async ({ file }) => {
+      reads.push(file.fileId);
+      return { type: "no-text" };
+    },
+  };
+  await processFactExtractionRun({
+    actor: createRootRunActor(
+      { organizationId, workspaceId, userId, runId },
+      brandPersistedLegalListGenerationRunId,
+      asTestRaw<RlsDatabase<Transaction>>(testDb),
+    ),
+    admission: testModelAdmission(organizationId),
+    data: { runId, organizationId, workspaceId, userId },
+    execution,
+  });
+  const persisted = (
     await testDb
       .select({
         status: legalListGenerationRuns.status,
@@ -101,106 +212,36 @@ const readRun = async () =>
       })
       .from(legalListGenerationRuns)
       .where(eq(legalListGenerationRuns.id, runId))
-      .limit(1)
   ).at(0);
-
-beforeEach(async () => {
-  readSpy = spyOn(documentText, "readVerificationDocument");
-  testState.setConfig("FEATURE_LEGAL_LISTS", true);
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
-    "list-verification": [{ type: "organization", organizationId: ids.orgA }],
-  });
-  await testDb
-    .update(user)
-    .set({ emailVerified: true })
-    .where(eq(user.id, ids.userA1));
-  readSpy.mockReset();
-  readSpy.mockImplementation(async () => ({ type: "no-text" }));
-  await testDb.insert(legalLists).values({
-    id: listId,
-    workspaceId: ids.wsA1,
-    name: "Chronology",
-    createdBy: ids.userA1,
-  });
-  await testDb.insert(legalListGenerationRuns).values({
-    id: runId,
-    workspaceId: ids.wsA1,
-    listId,
-    organizationId: ids.orgA,
-    producer: "stella",
-    itemType: "fact",
-    status: "queued",
-    instruction: "List every fact the documents establish.",
-    requestedBy: ids.userA1,
-  });
-  await testDb.insert(legalListGenerationSources).values({
-    id: createSafeId<"legalListGenerationSource">(),
-    workspaceId: ids.wsA1,
-    listId,
-    runId,
-    sourceEntityId: ids.entityA1,
-    sourceEntityVersionId: ids.entityVersionA1,
-  });
-});
-
-afterEach(async () => {
-  mock.restore();
-  // Deleting the list cascades its runs and their sources.
-  await testDb.delete(legalLists).where(eq(legalLists.id, listId));
-  await testDb
-    .insert(member)
-    .values(originalOrganizationMember)
-    .onConflictDoNothing();
-  await testDb
-    .insert(workspaceMembers)
-    .values(originalMatterMembers)
-    .onConflictDoNothing();
-});
-
-afterAll(async () => {
-  readSpy.mockRestore();
-  await releaseRlsFixture();
-});
+  return { reads, persisted };
+};
 
 const expectStoppedBeforeReading = async () => {
-  await processFactExtractionRun({
-    actor,
-    admission: testModelAdmission(actor.organizationId),
-    data,
+  const { reads, persisted } = await run();
+  expect(persisted).toMatchObject({
+    status: "failed",
+    errorCode: "access_revoked",
   });
-  const run = await readRun();
-  expect(run).toMatchObject({ status: "failed", errorCode: "access_revoked" });
-  expect(run?.completedAt).not.toBeNull();
-  expect(readSpy).not.toHaveBeenCalled();
+  expect(persisted?.completedAt).not.toBeNull();
+  expect(reads).toEqual([]);
 };
 
 describe("fact extraction run", () => {
   test("a run stops when its requester no longer has access to the matter", async () => {
     await testDb
       .delete(workspaceMembers)
-      .where(eq(workspaceMembers.id, ids.memberA1wsA1));
+      .where(eq(workspaceMembers.id, matterMemberId));
     await expectStoppedBeforeReading();
   });
 
   test("a run stops when its requester has left the organization", async () => {
-    await testDb.delete(member).where(eq(member.id, ids.memberA1org));
+    await testDb.delete(member).where(eq(member.id, organizationMemberId));
     await expectStoppedBeforeReading();
   });
 
   test("a run reads its pinned document while its requester keeps access", async () => {
-    await processFactExtractionRun({
-      actor,
-      admission: testModelAdmission(actor.organizationId),
-      data,
-    });
-    expect(await readRun()).toMatchObject({
-      status: "failed",
-      errorCode: "no_text",
-    });
-    expect(readSpy).toHaveBeenCalledTimes(1);
-    expect(readSpy.mock.calls.at(0)?.at(0)).toMatchObject({
-      file: { fileId: ids.fileObjectA1 },
-    });
+    const { reads, persisted } = await run();
+    expect(persisted).toMatchObject({ status: "failed", errorCode: "no_text" });
+    expect(reads).toEqual([fileId]);
   });
 });

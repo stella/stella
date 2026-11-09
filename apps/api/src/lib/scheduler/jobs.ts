@@ -73,7 +73,6 @@ import { RECEIVE_INBOUND_MAIL_TASK } from "@/api/lib/scheduler/tasks/inbound-mai
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
 import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import { REFRESH_LEGISLATION_FACETS_TASK } from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
-import { RECONCILE_FACT_EXTRACTION_RUNS_TASK } from "@/api/lib/scheduler/tasks/list-fact-extraction-run-reconcile";
 import { RECONCILE_LIST_VERIFICATION_RUNS_TASK } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
 import { MEMORY_CURATOR_TASK } from "@/api/lib/scheduler/tasks/memory-curator";
 import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extractor";
@@ -756,19 +755,12 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
-    description: "Re-drive list verification runs no queued job owns anymore",
+    description:
+      "Re-drive list verification and fact extraction runs no queued job owns anymore",
     id: "listVerifications.reconcileQueuedRuns.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_LIST_VERIFICATION_RUNS_TASK,
-    reads: "unmeasured",
-  },
-  {
-    description: "Re-drive fact extraction runs no queued job owns anymore",
-    id: "listFactExtractions.reconcileQueuedRuns.fiveMinute",
-    mode: "recurring",
-    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
-    task: RECONCILE_FACT_EXTRACTION_RUNS_TASK,
     reads: "unmeasured",
   },
   {
