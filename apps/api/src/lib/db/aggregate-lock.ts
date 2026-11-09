@@ -2651,6 +2651,19 @@ export const lockBillingArrangement = async (
   return rows.at(0);
 };
 
+/** One statement, in key order, so holders of several matter locks cannot deadlock. */
+const lockMattersInKeyOrder = async (
+  tx: ExecuteTransaction,
+  workspaceIds: readonly SafeId<"workspace">[],
+) => {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(keys.key) FROM (SELECT DISTINCT hashtext(matter_id::text) AS key FROM unnest(ARRAY[${sql.join(
+      workspaceIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )}]) AS matter_id ORDER BY key) keys ORDER BY keys.key`,
+  );
+};
+
 /** Timer guards use the same advisory key order before any matter row lock. */
 export const withInvoiceMatterLocks = async (
   tx: Transaction,
@@ -2660,12 +2673,7 @@ export const withInvoiceMatterLocks = async (
   if (ids.length === 0) {
     panic("Invoice matter locks require at least one matter");
   }
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(keys.key) FROM (SELECT DISTINCT hashtext(matter_id::text) AS key FROM unnest(ARRAY[${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )}]) AS matter_id ORDER BY key) keys ORDER BY keys.key`,
-  );
+  await lockMattersInKeyOrder(tx, ids);
   await withAggregateParentBatch({
     tx,
     organizationIds: [],
@@ -3060,9 +3068,7 @@ export const holdLiveSourceWorkspaces = async ({
   if (workspaceIds.length === 0) {
     return true;
   }
-  for (const workspaceId of workspaceIds.toSorted(compareCodeUnit)) {
-    await lockWorkspaceLifecycle(tx, workspaceId);
-  }
+  await lockMattersInKeyOrder(tx, workspaceIds);
   const live = await tx
     .select({ id: workspaces.id })
     .from(workspaces)
