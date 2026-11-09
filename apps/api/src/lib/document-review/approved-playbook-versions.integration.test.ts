@@ -40,7 +40,7 @@ import type {
   PlaybookPositions,
   PlaybookScope,
 } from "@/api/lib/workflow/playbook-positions";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { membershipScopedDb } from "@/api/tests/helpers/application-role-db";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -52,6 +52,13 @@ setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 let ids: TestIds;
+
+/** Reads as a member of the organization, on the application role. */
+const asMember = async <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> =>
+  await membershipScopedDb(testDb, {
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  })(fn);
 
 const seededDefinitionIds: SafeId<"playbookDefinition">[] = [];
 
@@ -241,20 +248,25 @@ describe("resolving the pin a run is measured against", () => {
       positions: positionsSaying("Someone else's standard"),
     });
 
-    const tx = asTestRaw<Transaction>(testDb);
     // What the single run reads.
-    const single = await loadLatestApprovedVersion({
-      tx,
-      organizationId: ids.orgA,
-      playbookDefinitionId: edited.id,
-    });
+    const single = await asMember(
+      async (tx) =>
+        await loadLatestApprovedVersion({
+          tx,
+          organizationId: ids.orgA,
+          playbookDefinitionId: edited.id,
+        }),
+    );
     // What the auto-run and the classification trigger read, for the whole
     // applicable set at once.
-    const batch = await loadLatestApprovedVersions({
-      tx,
-      organizationId: ids.orgA,
-      playbookDefinitionIds: [edited.id, other.id],
-    });
+    const batch = await asMember(
+      async (tx) =>
+        await loadLatestApprovedVersions({
+          tx,
+          organizationId: ids.orgA,
+          playbookDefinitionIds: [edited.id, other.id],
+        }),
+    );
 
     if (single === null) {
       throw new Error("The edited playbook must resolve an approved version");
@@ -294,17 +306,22 @@ describe("resolving the pin a run is measured against", () => {
       positionsSaying("Still being written"),
     );
 
-    const tx = asTestRaw<Transaction>(testDb);
-    const single = await loadLatestApprovedVersion({
-      tx,
-      organizationId: ids.orgA,
-      playbookDefinitionId: draft.id,
-    });
-    const batch = await loadLatestApprovedVersions({
-      tx,
-      organizationId: ids.orgA,
-      playbookDefinitionIds: [draft.id],
-    });
+    const single = await asMember(
+      async (tx) =>
+        await loadLatestApprovedVersion({
+          tx,
+          organizationId: ids.orgA,
+          playbookDefinitionId: draft.id,
+        }),
+    );
+    const batch = await asMember(
+      async (tx) =>
+        await loadLatestApprovedVersions({
+          tx,
+          organizationId: ids.orgA,
+          playbookDefinitionIds: [draft.id],
+        }),
+    );
 
     expect(single).toBeNull();
     expect(batch.get(draft.id)).toBeUndefined();
@@ -360,12 +377,14 @@ describe("resolving the pin a run is measured against", () => {
       .set({ scope: { documentTypeKey: "lease" }, status: "draft" })
       .where(eq(playbookDefinitions.id, definition.id));
 
-    const tx = asTestRaw<Transaction>(testDb);
-    const latest = await loadLatestApprovedVersion({
-      tx,
-      organizationId: ids.orgA,
-      playbookDefinitionId: definition.id,
-    });
+    const latest = await asMember(
+      async (tx) =>
+        await loadLatestApprovedVersion({
+          tx,
+          organizationId: ids.orgA,
+          playbookDefinitionId: definition.id,
+        }),
+    );
     if (latest === null) {
       throw new Error("The edited playbook must resolve an approved version");
     }

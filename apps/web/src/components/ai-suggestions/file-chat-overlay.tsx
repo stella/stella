@@ -6,6 +6,17 @@ import {
   useRef,
   useState,
 } from "react";
+import type { Dispatch, RefObject, SetStateAction } from "react";
+
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+import { panic, Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import {
+  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
+  DOCX_SUGGESTION_SURFACE,
+} from "@stll/api-contract/chat-docx-suggestions";
 /**
  * FileChatOverlay
  *
@@ -20,17 +31,7 @@ import {
  * proposes edits via a `propose-suggestion` tool, the frontend
  * extracts and renders accept/reject cards). That work is Phase E.
  */
-import type { Dispatch, RefObject, SetStateAction } from "react";
-
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import type { QueryClient } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
-import { useTranslations } from "use-intl";
-
-import {
-  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
-  DOCX_SUGGESTION_SURFACE,
-} from "@stll/api-contract/chat-docx-suggestions";
+import { CHAT_CLOUD_RUN_TARGET } from "@stll/api-contract/chat-run-target";
 import {
   createEditorRefBridge,
   executeFolioToolCall,
@@ -2760,6 +2761,7 @@ const FileChatOverlayInner = ({
                   },
                 }
               : {}),
+            runTarget: CHAT_CLOUD_RUN_TARGET,
             threadRef,
             webSearch: {
               available: data.webSearchAvailable,

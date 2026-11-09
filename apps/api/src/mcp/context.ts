@@ -141,6 +141,7 @@ import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpCredentialType, McpSession } from "@/api/mcp/auth";
 import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import type { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
+import type { CompatCorpusContinuation } from "@/api/mcp/compat-corpus";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import type { McpFeatureAccessBindings } from "@/api/mcp/feature-access";
 import type { LegislationContinuation } from "@/api/mcp/legislation-tools";
@@ -211,6 +212,7 @@ export type McpRequestContext = {
     caseLawSearchContinuation?: CaseLawContinuation;
     publicReadResponseDeadlineMs?: number;
     legislationSearchContinuation?: LegislationContinuation;
+    compatCorpusContinuation?: CompatCorpusContinuation;
     listCaseLawProvisionDecisions?: typeof listCaseLawProvisionDecisions;
     /** Reads a provision's citing set once per agent search. */
     readCaseLawProvisionScope?: (
