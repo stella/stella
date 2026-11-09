@@ -79,7 +79,8 @@ describe("workspace hygiene", () => {
     });
 
     expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
-      message: `devDependencies.@stll/oxlint-config must be ${repositoryPackage.devDependencies["@stll/oxlint-config"]}; found 0.6.0`,
+      message:
+        "devDependencies.@stll/oxlint-config must be an exact version of major 4 or later; found 0.6.0",
       path: "package.json",
     });
   });
@@ -775,9 +776,66 @@ describe("workspace hygiene", () => {
     });
 
     expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
-      message: `devDependencies.@stll/oxlint-config must be ${repositoryPackage.devDependencies["@stll/oxlint-config"]}; found 0.6.0`,
+      message:
+        "devDependencies.@stll/oxlint-config must be an exact version of major 4 or later; found 0.6.0",
       path: "package.json",
     });
+  });
+
+  test("takes toolchain versions from the root manifest alone", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          "@stll/oxlint-config": "5.0.0",
+          "oxlint-tsgolint": "8.1.0",
+          turbo: "2.10.3",
+        },
+      },
+      webPackageJson: { name: "@stll/web" },
+    });
+
+    expect(
+      (await validateWorkspaceRoot(rootDir, LOCAL)).filter(({ message }) =>
+        /oxlint|tsrs|typescript/u.test(message),
+      ),
+    ).toEqual([]);
+  });
+
+  test("rejects ranged toolchain pins and mismatched TypeScript builds", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          "@stll/oxlint-config": "^4.0.0",
+          turbo: "2.10.3",
+        },
+      },
+      webPackageJson: { name: "@stll/web" },
+    });
+    const manifestPath = path.join(rootDir, "package.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+    manifest.catalog.tsrs = "0.20.1";
+    manifest.catalog.typescript6 = "npm:typescript@6.0.4";
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual(
+      expect.arrayContaining([
+        {
+          message:
+            "devDependencies.@stll/oxlint-config must be an exact version of major 4 or later; found ^4.0.0",
+          path: "package.json",
+        },
+        {
+          message:
+            "catalog.tsrs must be an exact tsrs build of TypeScript 7; found 0.20.1",
+          path: "package.json",
+        },
+        {
+          message:
+            "catalogs.ts6.typescript must match catalog.typescript6 (6.0.4); found 6.0.3",
+          path: "package.json",
+        },
+      ]),
+    );
   });
 
   test("rejects deprecated Oxc and non-Bun typecheck scripts", async () => {
@@ -802,7 +860,8 @@ describe("workspace hygiene", () => {
     expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual(
       expect.arrayContaining([
         {
-          message: `devDependencies.oxlint-tsgolint must be ${repositoryPackage.devDependencies["oxlint-tsgolint"]}; found 0.25.0`,
+          message:
+            "devDependencies.oxlint-tsgolint must be an exact version of major 7 or later; found 0.25.0",
           path: "package.json",
         },
         {
