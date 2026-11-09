@@ -1,0 +1,46 @@
+name: Case-law search probe
+
+# Searches every corpus country and a rotation of its apex courts through the
+# public MCP endpoint with queries no earlier run used, and fails on any
+# timeout. A failed run alerts through scheduled-run-alerts.yml. Bounded by
+# check-journeys.sh: seven searches a run, sequential, no retries.
+#
+# Inert until the repository variable CASE_LAW_SEARCH_PROBE_ENABLED is "true".
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: case-law-search-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    if: ${{ vars.CASE_LAW_SEARCH_PROBE_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout probe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: |
+            /scripts/check-journeys.sh
+            /scripts/journey-detail.jq
+          sparse-checkout-cone-mode: false
+
+      - name: Probe fresh case-law searches
+        timeout-minutes: 6
+        env:
+          MCP_CANARY_TOKEN: ${{ secrets.MCP_CANARY_TOKEN }}
+        run: bash scripts/check-journeys.sh --search-probe

@@ -28,6 +28,10 @@
     "reason": "Canary over published release assets; the HEAD responses are the verdict."
   },
   {
+    "id": ".github/workflows/case-law-search-probe.yml#probe#Probe fresh case-law searches#retry",
+    "reason": "Probe of a public search; a retry would hide the first-hit timeout it exists to report."
+  },
+  {
     "id": ".github/workflows/journey-canary.yml#journeys#Check public journeys#retry",
     "reason": "Canary of public journeys, including installing the released CLI; every request is part of the checked journey."
   },
