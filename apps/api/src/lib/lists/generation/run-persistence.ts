@@ -26,8 +26,9 @@ import { insertInChunks } from "@/api/lib/db/bulk-write";
 import { defineTransitions, transitionBatch } from "@/api/lib/db/transitions";
 import type { ListGenerationRunErrorCode } from "@/api/lib/lists/generation/contract";
 
-export const FACT_EXTRACTION_OPERATION = {
-  started: "fact_extraction_started",
+/** Audit operations of a run's terminal transitions; the start handler
+ *  records `fact_extraction_started`. */
+const FACT_EXTRACTION_OPERATION = {
   completed: "fact_extraction_completed",
   failed: "fact_extraction_failed",
 } as const;

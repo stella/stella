@@ -516,48 +516,55 @@ const resolvePinnedSources = async (
   actor: RunActor,
 ): Promise<Result<PinnedSource[], ListGenerationRunErrorCode>> => {
   const resolved = await actor.inputDb(async (tx) => {
-    const sources = await tx
-      .select({
-        entityId: legalListGenerationSources.sourceEntityId,
-        entityVersionId: legalListGenerationSources.sourceEntityVersionId,
-        liveVersionId: entityVersions.id,
-        documentId: entities.id,
-      })
-      .from(legalListGenerationSources)
-      .leftJoin(
-        entityVersions,
-        and(
-          eq(
-            entityVersions.id,
-            legalListGenerationSources.sourceEntityVersionId,
+    const sourceRead = await readBounded(
+      tx
+        .select({
+          entityId: legalListGenerationSources.sourceEntityId,
+          entityVersionId: legalListGenerationSources.sourceEntityVersionId,
+          liveVersionId: entityVersions.id,
+          documentId: entities.id,
+        })
+        .from(legalListGenerationSources)
+        .leftJoin(
+          entityVersions,
+          and(
+            eq(
+              entityVersions.id,
+              legalListGenerationSources.sourceEntityVersionId,
+            ),
+            eq(
+              entityVersions.entityId,
+              legalListGenerationSources.sourceEntityId,
+            ),
+            eq(
+              entityVersions.workspaceId,
+              legalListGenerationSources.workspaceId,
+            ),
+            isNull(entityVersions.deletedAt),
           ),
-          eq(
-            entityVersions.entityId,
-            legalListGenerationSources.sourceEntityId,
+        )
+        .leftJoin(
+          entities,
+          and(
+            eq(entities.id, legalListGenerationSources.sourceEntityId),
+            eq(entities.workspaceId, legalListGenerationSources.workspaceId),
+            eq(entities.kind, "document"),
           ),
-          eq(
-            entityVersions.workspaceId,
-            legalListGenerationSources.workspaceId,
+        )
+        .where(
+          and(
+            eq(legalListGenerationSources.workspaceId, actor.workspaceId),
+            eq(legalListGenerationSources.runId, actor.runId),
           ),
-          isNull(entityVersions.deletedAt),
-        ),
-      )
-      .leftJoin(
-        entities,
-        and(
-          eq(entities.id, legalListGenerationSources.sourceEntityId),
-          eq(entities.workspaceId, legalListGenerationSources.workspaceId),
-          eq(entities.kind, "document"),
-        ),
-      )
-      .where(
-        and(
-          eq(legalListGenerationSources.workspaceId, actor.workspaceId),
-          eq(legalListGenerationSources.runId, actor.runId),
-        ),
-      )
-      .orderBy(asc(legalListGenerationSources.id))
-      .limit(LIMITS.legalListGenerationSourcesMax);
+        )
+        .orderBy(asc(legalListGenerationSources.id)),
+      LIMITS.legalListGenerationSourcesMax,
+    );
+    // A run pins at most this many sources; more cannot be a run's own.
+    if (sourceRead.type === "overflow") {
+      return null;
+    }
+    const sources = sourceRead.rows;
     if (
       sources.some(
         (source) => source.liveVersionId === null || source.documentId === null,

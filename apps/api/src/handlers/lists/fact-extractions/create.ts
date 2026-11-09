@@ -36,10 +36,7 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
-import {
-  FACT_EXTRACTION_OPERATION,
-  failGenerationRun,
-} from "@/api/lib/lists/generation/run-persistence";
+import { failGenerationRun } from "@/api/lib/lists/generation/run-persistence";
 import { enqueueFactExtractionRun } from "@/api/lib/lists/generation/run-queue";
 import { VERIFICATION_MODEL_TASK } from "@/api/lib/lists/verification/model-call";
 import {
@@ -261,7 +258,7 @@ const startRun = async ({
       resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION,
       resourceId: run.id,
       metadata: {
-        operation: FACT_EXTRACTION_OPERATION.started,
+        operation: "fact_extraction_started",
         listId: run.listId,
         sourceCount: documents.length,
       },
