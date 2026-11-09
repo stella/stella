@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { and, eq, ne } from "drizzle-orm";
 
 import type { ChatLimitReminderResponse } from "@stll/api-contract/chat-limit-reminder";
 
@@ -8,6 +9,7 @@ import {
   chatThreadNotFound,
   limitReminderParams,
   limitReminderQuery,
+  limitReminderRaced,
   readLimitedLatestTurn,
   readOwnThread,
 } from "@/api/handlers/chat/limit-reminder/shared";
@@ -66,7 +68,19 @@ const setChatLimitReminder = createSafeRootHandler(
           return Result.err(limited.error);
         }
         const { resetsAt, turnId } = limited.value;
-        const [stored] = await tx
+        // A reminder left from an earlier stopped turn is replaced, never
+        // kept: the sweep would see this newer turn and send nothing.
+        const [replaced] = await tx
+          .delete(chatLimitReminders)
+          .where(
+            and(
+              eq(chatLimitReminders.threadId, threadId),
+              eq(chatLimitReminders.userId, user.id),
+              ne(chatLimitReminders.turnId, turnId),
+            ),
+          )
+          .returning({ remindAt: chatLimitReminders.remindAt });
+        const [inserted] = await tx
           .insert(chatLimitReminders)
           .values({
             threadId,
@@ -77,18 +91,35 @@ const setChatLimitReminder = createSafeRootHandler(
           })
           .onConflictDoNothing()
           .returning({ remindAt: chatLimitReminders.remindAt });
-        if (stored !== undefined) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-            resourceId: threadId,
-            workspaceId: thread.workspaceId,
-            changes: {
-              limitReminder: { old: null, new: resetsAt.toISOString() },
-            },
-          });
+        if (inserted === undefined) {
+          // Asked again for the same turn: the stored reminder stands.
+          const [existing] = await tx
+            .select({ remindAt: chatLimitReminders.remindAt })
+            .from(chatLimitReminders)
+            .where(
+              and(
+                eq(chatLimitReminders.threadId, threadId),
+                eq(chatLimitReminders.userId, user.id),
+              ),
+            )
+            .limit(1);
+          return existing === undefined
+            ? Result.err(limitReminderRaced())
+            : Result.ok(existing.remindAt);
         }
-        return Result.ok(resetsAt);
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+          resourceId: threadId,
+          workspaceId: thread.workspaceId,
+          changes: {
+            limitReminder: {
+              old: replaced?.remindAt.toISOString() ?? null,
+              new: inserted.remindAt.toISOString(),
+            },
+          },
+        });
+        return Result.ok(inserted.remindAt);
       }),
     );
     const remindAt = yield* outcome;

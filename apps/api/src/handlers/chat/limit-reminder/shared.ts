@@ -128,3 +128,11 @@ export const chatThreadNotFound = () =>
     code: "not_found",
     message: "Chat thread not found",
   });
+
+/** The reminder was cancelled while this request asked for it; ask again. */
+export const limitReminderRaced = () =>
+  new HandlerError({
+    status: 409,
+    code: CHAT_LIMIT_REMINDER_UNAVAILABLE,
+    message: "The reminder changed while it was being set",
+  });

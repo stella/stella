@@ -30,7 +30,14 @@ export const routeForPush = (data: unknown): Href => {
     entityId !== null &&
     entityId !== undefined
   ) {
-    return { pathname: "/thread/[threadId]", params: { threadId: entityId } };
+    // A matter's chat reads only within its matter.
+    return {
+      pathname: "/thread/[threadId]",
+      params:
+        workspaceId === null || workspaceId === undefined
+          ? { threadId: entityId }
+          : { matterId: workspaceId, threadId: entityId },
+    };
   }
   if (workspaceId === null || workspaceId === undefined) {
     return "/";
