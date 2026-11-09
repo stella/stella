@@ -33,7 +33,25 @@ type BrowserExtensionRow =
 
 export const BROWSER_EXTENSION_PROTOCOL_MISMATCH = "protocol-mismatch";
 
+/**
+ * The turn runs on the member's computer. The agent there reaches stella
+ * through its own tools, never through a stella tab, so whatever the tab
+ * reports about the extension is out of that agent's reach.
+ */
+export const BROWSER_EXTENSION_LOCAL_RUN = "local-run";
+
+/** What a turn's browser prompt line and browser tool offer derive from. */
+export type TurnBrowserExtension =
+  BrowserExtensionCapability | typeof BROWSER_EXTENSION_LOCAL_RUN;
+
 export const BROWSER_EXTENSION_CAPABILITY = {
+  [BROWSER_EXTENSION_LOCAL_RUN]: {
+    toolOffered: false,
+    availability:
+      "Browser tools are not available in this run because it runs on the user's computer, where stella cannot reach their browser extension.",
+    recoveryStep:
+      "that stella can use their browser in a chat that runs on stella rather than on their computer",
+  },
   // The tab's page and the stella server run different versions: the tab was
   // open across an update, and a reload brings it to the server's version.
   [BROWSER_EXTENSION_PROTOCOL_MISMATCH]: {
@@ -102,7 +120,9 @@ export const BROWSER_EXTENSION_CAPABILITY = {
       "that you can use their browser when they chat with stella in Google Chrome on a computer with the stella browser extension",
   },
 } satisfies Record<
-  BrowserExtensionStatus | typeof BROWSER_EXTENSION_PROTOCOL_MISMATCH,
+  | BrowserExtensionStatus
+  | typeof BROWSER_EXTENSION_PROTOCOL_MISMATCH
+  | typeof BROWSER_EXTENSION_LOCAL_RUN,
   BrowserExtensionRow
 >;
 
@@ -118,15 +138,20 @@ export const composeBrowserExtensionPromptLine = (
     ? `BROWSER: ${row.availability}`
     : `BROWSER: ${row.availability} Only if the user asks you to open, visit, read or operate a website, or to do something in their browser, tell them, in their language, ${row.recoveryStep}, before you answer another way such as with web search; otherwise do not mention the browser extension. Do not claim you have no way to use a browser.`;
 
+const browserExtensionRowKey = (extension: TurnBrowserExtension) => {
+  if (extension === BROWSER_EXTENSION_LOCAL_RUN) {
+    return BROWSER_EXTENSION_LOCAL_RUN;
+  }
+  return extension.protocolVersion === BROWSER_CONTROL_PROTOCOL_VERSION
+    ? extension.status
+    : BROWSER_EXTENSION_PROTOCOL_MISMATCH;
+};
+
 export const browserExtensionPolicy = (
-  extension: BrowserExtensionCapability,
+  extension: TurnBrowserExtension,
 ): BrowserExtensionPolicy => {
   const row: BrowserExtensionRow =
-    BROWSER_EXTENSION_CAPABILITY[
-      extension.protocolVersion === BROWSER_CONTROL_PROTOCOL_VERSION
-        ? extension.status
-        : BROWSER_EXTENSION_PROTOCOL_MISMATCH
-    ];
+    BROWSER_EXTENSION_CAPABILITY[browserExtensionRowKey(extension)];
   return {
     promptLine: composeBrowserExtensionPromptLine(row),
     toolOffered: row.toolOffered,
