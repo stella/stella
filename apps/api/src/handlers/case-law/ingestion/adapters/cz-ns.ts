@@ -144,7 +144,7 @@ type CzNsRawPart = (typeof CZ_NS_RAW_PART)[keyof typeof CZ_NS_RAW_PART];
 /** The Domino universal id as every NS listing and detail URL states it. */
 const CZ_NS_DOCUMENT_ID_PATTERN = /^[0-9a-f]{32}$/iu;
 /** The marker the court appends to a docket's later documents: "- II.". */
-const CZ_NS_SIBLING_DOCKET_SUFFIX = /\s*-\s*[IVXLC]+\.?$/u;
+const CZ_NS_SIBLING_DOCKET_SUFFIX = /-\s*[IVXLC]+\.?$/u;
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
@@ -605,8 +605,10 @@ const czNsIdentityFields = ({
  * when the docket carries no suffix.
  */
 const docketBeforeSiblingSuffix = (caseNumber: string): string | undefined => {
-  const bare = caseNumber.replace(CZ_NS_SIBLING_DOCKET_SUFFIX, "");
-  return bare === caseNumber ? undefined : bare;
+  const suffix = CZ_NS_SIBLING_DOCKET_SUFFIX.exec(caseNumber);
+  return suffix === null
+    ? undefined
+    : caseNumber.slice(0, suffix.index).trimEnd();
 };
 
 const caseNumbersOf = ({
@@ -728,7 +730,7 @@ const buildCzNsDecisionFromPages = ({
           identifiers: [firstPublisherIdentifier, ...otherPublisherIdentifiers],
         }),
     sourceDocumentId: unid,
-    legacyIdentityUrls: [webUrl],
+    legacySourceUrls: [webUrl],
     legacyCaseNumber: docketBeforeSiblingSuffix(caseNumber),
     ecli: meta["ecli"],
     court,
@@ -1171,8 +1173,8 @@ const parseListingRows = (html: string): CzNsListingRow[] =>
  * collapses those rows into one.
  *
  * Rows written before the adapter stated an id are re-keyed by the
- * deterministic `WebSearch/{unid}` URL they carry — see `legacyIdentityUrls`
- * in the build. The two must state one rule: a walk that keyed rows differently
+ * deterministic `WebSearch/{unid}` URL they carry — see `legacySourceUrls` in
+ * the build. The two must state one rule: a walk that keyed rows differently
  * from the ingest would read stored decisions as missing and re-fetch them
  * forever.
  *

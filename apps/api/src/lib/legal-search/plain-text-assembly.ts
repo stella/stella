@@ -44,7 +44,6 @@ export const plainTextIngestionResult = <T extends RawIngestionResult>(
     sourceUrl: raw.sourceUrl,
     documentUrl: raw.documentUrl,
     legacySourceUrls: raw.legacySourceUrls,
-    legacyIdentityUrls: raw.legacyIdentityUrls,
     sourceRaw: raw.sourceRaw,
     sourceRawContentType: raw.sourceRawContentType,
     sourceRawBytes: raw.sourceRawBytes,

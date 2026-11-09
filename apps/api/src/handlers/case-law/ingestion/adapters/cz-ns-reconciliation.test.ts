@@ -751,7 +751,7 @@ describe("cz-ns buildDecision", () => {
     }
     // The hint the pipeline re-keys an existing null-id row by: it must be the
     // URL that row carries, which is the one this build stores as `sourceUrl`.
-    expect(built.decision.legacyIdentityUrls).toEqual([
+    expect(built.decision.legacySourceUrls).toEqual([
       built.decision.sourceUrl ?? "",
     ]);
   });

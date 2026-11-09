@@ -499,9 +499,6 @@ export const sanitizeResult = (
         legacySourceUrls: result.legacySourceUrls
           ?.map((url) => strip(url))
           .filter((url): url is string => url !== undefined),
-        legacyIdentityUrls: result.legacyIdentityUrls
-          ?.map((url) => strip(url))
-          .filter((url): url is string => url !== undefined),
         legacyEcli: strip(result.legacyEcli),
         legacyCaseNumber: strip(result.legacyCaseNumber),
         sheetNumber: strip(result.sheetNumber),

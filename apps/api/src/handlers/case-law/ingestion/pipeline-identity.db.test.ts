@@ -806,7 +806,7 @@ if (!databaseUrl || !runPostgresTests) {
             ecli: "ECLI:CZ:NS:2026:22.CDO.120.2026.2",
             sourceDocumentId: "renamed-unid",
             legacyCaseNumber: caseNumber,
-            legacyIdentityUrls: [url],
+            legacySourceUrls: [url],
             rawHash: "hash-renamed-docket",
           }),
           observationOrder: 2n,
@@ -816,10 +816,10 @@ if (!databaseUrl || !runPostgresTests) {
         })
       ).unwrap();
 
-      expect(await docketRows(renamedCaseNumber)).toEqual([
+      expect(await docketRows(caseNumber)).toEqual([
         { id: legacyRow.id, sourceDocumentId: "renamed-unid" },
       ]);
-      expect(await docketRows(caseNumber)).toEqual([]);
+      expect(await docketRows(renamedCaseNumber)).toEqual([]);
     });
 
     test("adopts a legacy row stored under the docket an earlier release derived", async () => {
