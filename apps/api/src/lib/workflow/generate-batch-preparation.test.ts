@@ -123,8 +123,8 @@ describe("an answer the batch request never returned", () => {
     content: { version: 1, type: "single-select", options: [], fallback: null },
   } as const satisfies AIBatchProperty;
 
-  const batchWithout = (properties: readonly AIBatchProperty[]) =>
-    generateBatch(
+  const batchWithout = async (properties: readonly AIBatchProperty[]) =>
+    await generateBatch(
       {
         ...props,
         batch: {

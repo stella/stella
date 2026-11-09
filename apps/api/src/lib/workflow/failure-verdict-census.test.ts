@@ -57,19 +57,16 @@ const FUNCTION_TYPES: ReadonlySet<string> = new Set([
 /** The expression under parentheses, type assertions and optional chains. */
 const unwrap = (node: Node | null | undefined): Node | undefined => {
   let current = node ?? undefined;
-  for (;;) {
-    switch (current?.type) {
-      case "ParenthesizedExpression":
-      case "TSAsExpression":
-      case "TSSatisfiesExpression":
-      case "TSNonNullExpression":
-      case "ChainExpression":
-        current = current.expression;
-        break;
-      default:
-        return current;
-    }
+  while (
+    current?.type === "ParenthesizedExpression" ||
+    current?.type === "TSAsExpression" ||
+    current?.type === "TSSatisfiesExpression" ||
+    current?.type === "TSNonNullExpression" ||
+    current?.type === "ChainExpression"
+  ) {
+    current = current.expression;
   }
+  return current;
 };
 
 /** The body of a function expression, the shape a handler is written in. */
