@@ -78,27 +78,6 @@ export const runBeforeRequestDeadline = <T>(
       );
 };
 
-/**
- * Run an optional step under at most `budgetMs` from now, inside the request's
- * deadline. The step counts as started now, so its reads queue behind the work
- * the request cannot answer without. Outside a scope, `fn` runs as it is.
- */
-export const runOptionalRequestSlice = <T>(
-  { label, budgetMs }: { label: string; budgetMs: number },
-  fn: () => T,
-): T => {
-  const scope = requestLatencyScope.getStore();
-  if (scope === undefined) {
-    return fn();
-  }
-  const startedAtMs = performance.now();
-  const deadlineAtMs = Math.min(scope.deadlineAtMs, startedAtMs + budgetMs);
-  return requestLatencyScope.run(
-    { label, budgetMs: deadlineAtMs - startedAtMs, deadlineAtMs },
-    fn,
-  );
-};
-
 /** What is left of the current request's budget; undefined outside a scope. */
 export const remainingRequestBudgetMs = (): number | undefined => {
   const scope = requestLatencyScope.getStore();

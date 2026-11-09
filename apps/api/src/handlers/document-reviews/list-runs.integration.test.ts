@@ -62,6 +62,7 @@ const basis: DocumentReviewRunBasis = {
     definitionSnapshot: {
       name: "Positions confirmed for this review",
       positions: { version: 3, items: [] },
+      scope: null,
     },
   },
   references: [],

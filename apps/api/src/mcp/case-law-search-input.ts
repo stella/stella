@@ -60,7 +60,9 @@ export const SEARCH_CASE_LAW_INPUT_NORMALIZATION = {
   court: FILTER_NORMALIZATION,
   courts: { kind: "string-list" },
   category: FILTER_NORMALIZATION,
+  docket_registers: { kind: "string-list" },
   language: FILTER_NORMALIZATION,
+  preferred_language: FILTER_NORMALIZATION,
   decision_type: FILTER_NORMALIZATION,
 } as const satisfies Readonly<
   Record<string, AgentInputNormalizationAnnotation>
@@ -137,13 +139,40 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
           ),
         ),
       ),
+      docket_registers: v.optional(
+        v.pipe(
+          v.array(
+            v.pipe(
+              v.string(),
+              v.minLength(LIMITS.mcpNonEmptyMin),
+              v.maxLength(LIMITS.caseLawDocketRegisterMaxChars),
+            ),
+          ),
+          v.minLength(LIMITS.mcpNonEmptyMin),
+          v.maxLength(LIMITS.caseLawDocketRegistersFilterMax),
+          v.description(
+            'Only decisions whose Czech or Slovak docket carries one of these registers, case-insensitive: ["Cdo"] keeps Supreme Court civil appeals and leaves out "Tdo" criminal ones. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Other countries have no register to filter by and refuse it; a docket without one (Constitutional Court) never matches.',
+          ),
+        ),
+      ),
+      senate: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(LIMITS.caseLawSenateMin),
+          v.maxValue(LIMITS.caseLawSenateMax),
+          v.description(
+            'The senate number a Czech or Slovak docket opens with, for example 21 in "21 Cdo 641/2018". Same limits as docket_registers.',
+          ),
+        ),
+      ),
       provision: v.optional(
         v.pipe(
           v.string(),
           v.nonEmpty(),
           v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
           v.description(
-            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total.',
+            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". EU acts such as GDPR have no recorded links yet: use queries. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total.',
           ),
         ),
       ),
@@ -164,6 +193,16 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
           v.minLength(LIMITS.mcpNonEmptyMin),
           v.maxLength(LIMITS.mcpLanguageCodeMaxChars),
           v.description("Filter by language code"),
+        ),
+      ),
+      preferred_language: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(LIMITS.mcpNonEmptyMin),
+          v.maxLength(LIMITS.mcpLanguageCodeMaxChars),
+          v.description(
+            "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, its snippet still in the language that matched; otherwise it stays as matched. Ignored together with language.",
+          ),
         ),
       ),
       decision_type: v.optional(

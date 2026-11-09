@@ -1,5 +1,7 @@
 import { apexCourtAbbreviations } from "@stll/api-contract/case-law-court-abbreviations";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
+import type { SearchTotal } from "@stll/api-contract/search";
 
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { LIMITS } from "@/api/lib/limits";
@@ -36,12 +38,24 @@ export type SearchCaseLawTexts = {
   courts: string;
 };
 
+const TOTAL_NOT_COUNTED_NOTE =
+  "Not computed for this call, which does not mean zero. A total is computed only on the first page of one phrasing that names facets, and not under every filter.";
+
+/**
+ * The total as an agent reads it. An uncounted total says so in the output
+ * itself: a missing number next to a short list reads as a small result set.
+ */
+export const caseLawAgentSearchTotal = (total: SearchTotal) =>
+  total.type === SEARCH_TOTAL_TYPE.NOT_COUNTED
+    ? { ...total, note: TOTAL_NOT_COUNTED_NOTE }
+    : total;
+
 const DESCRIPTION_HEAD =
   "Search case law. `queries` merges phrasings; matchedQueries " +
   "names each hit's phrasings. `limit` is split evenly.";
 
 const DESCRIPTION_TAIL =
-  " Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values.";
+  " Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values.";
 
 const QUERIES_TAIL =
   "Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total.";

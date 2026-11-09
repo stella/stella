@@ -3,9 +3,8 @@ import { describe, expect, test } from "bun:test";
 
 import { SEARCH_PAGE_END } from "@stll/api-contract/search";
 import { readFailureBrand } from "@stll/errors";
-import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   corpusIndexBudgetExpiry,
   CorpusIndexError,
@@ -17,147 +16,16 @@ import {
   SEARCH_INDEX_UNAVAILABLE_CODE,
 } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  remainingRequestBudgetMs,
-  requestBudgetExpiry,
-  requestStartedAtMs,
-  runWithinRequestLatencyBudget,
-} from "@/api/lib/load/request-latency-budget";
+import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
 
 import {
   rankByTermCoverage,
-  readRelaxedTopUp,
   readTermCoverage,
   relaxedFetchLimit,
+  relaxedTopUpOutcome,
   shouldRelaxCaseLawSearch,
+  termsForCoverage,
 } from "./search-relaxed";
-
-describe("an agent search's relaxed top-up under a deadline", () => {
-  const budgetExpiry = () =>
-    runWithinRequestLatencyBudget(
-      { label: "search_case_law", budgetMs: 8000 },
-      () =>
-        new HandlerError({
-          status: 503,
-          code: PUBLIC_READ_TIMEOUT_CODE,
-          message: "Public read timed out. Please try again.",
-          cause: requestBudgetExpiry(new Error("deadline"), {
-            clampedTimeout: true,
-          }),
-        }),
-    );
-
-  test.each([
-    ["thrown", async () => await Promise.reject(budgetExpiry())],
-    ["returned", async () => Result.err(budgetExpiry())],
-  ] as const)(
-    "keeps the strict hits when the budget ends it, %s",
-    async (_, read) => {
-      const topUp = await readRelaxedTopUp({
-        mode: "best_effort",
-        strictHitCount: 2,
-        read,
-      });
-
-      expect(topUp.type).toBe("shed");
-    },
-  );
-
-  test("gives a page with no strict hits nothing to keep", async () => {
-    expect(
-      await rejectionOf(
-        readRelaxedTopUp({
-          mode: "best_effort",
-          strictHitCount: 0,
-          read: async () => await Promise.reject(budgetExpiry()),
-        }),
-      ),
-    ).toBeInstanceOf(HandlerError);
-  });
-
-  test("keeps every other failure", async () => {
-    const failure = new HandlerError({
-      status: 400,
-      message: "Search term coverage is invalid",
-    });
-
-    expect(
-      await readRelaxedTopUp({
-        mode: "best_effort",
-        strictHitCount: 2,
-        read: async () => Result.err(failure),
-      }),
-    ).toEqual({ type: "read", read: Result.err(failure) });
-  });
-
-  test("rethrows any other thrown failure unchanged", async () => {
-    const failure = new HandlerError({
-      status: 400,
-      message: "Search term coverage is invalid",
-    });
-
-    expect(
-      await rejectionOf(
-        readRelaxedTopUp({
-          mode: "best_effort",
-          strictHitCount: 2,
-          read: async () => await Promise.reject(failure),
-        }),
-      ),
-    ).toBe(failure);
-  });
-
-  test("a caller that did not opt in keeps the timeout", async () => {
-    const expired = budgetExpiry();
-
-    expect(
-      await readRelaxedTopUp({
-        mode: undefined,
-        strictHitCount: 2,
-        read: async () => Result.err(expired),
-      }),
-    ).toEqual({ type: "read", read: Result.err(expired) });
-  });
-
-  test("caps the top-up and queues it behind the request's required reads", async () => {
-    // A request that began at the clock's origin, so any read started now is
-    // later than it, with a deadline too far off to be what bounds the slice.
-    await runWithinRequestLatencyBudget(
-      {
-        label: "search_case_law",
-        budgetMs: Number.MAX_SAFE_INTEGER,
-        startedAtMs: 0,
-      },
-      async () => {
-        await readRelaxedTopUp({
-          mode: "best_effort",
-          strictHitCount: 2,
-          read: async () => {
-            expect(remainingRequestBudgetMs()).toBeLessThanOrEqual(4000);
-            expect(requestStartedAtMs()).toBeGreaterThan(0);
-            return Result.ok({ hits: [] });
-          },
-        });
-      },
-    );
-  });
-
-  test("never outlasts the deadline of the request it serves", async () => {
-    await runWithinRequestLatencyBudget(
-      { label: "search_case_law", budgetMs: 500 },
-      async () => {
-        await readRelaxedTopUp({
-          mode: "best_effort",
-          strictHitCount: 2,
-          read: async () => {
-            expect(remainingRequestBudgetMs()).toBeLessThanOrEqual(500);
-            return Result.ok({ hits: [] });
-          },
-        });
-      },
-    );
-  });
-});
 
 const ELIGIBLE = {
   body: {},
@@ -195,6 +63,60 @@ describe("when a short strict page is topped up", () => {
     expect(
       shouldRelaxCaseLawSearch({ ...ELIGIBLE, body: { strict: false } }),
     ).toBe(true);
+  });
+});
+
+describe("termsForCoverage", () => {
+  test("keeps distinct terms, longest first, within the bound", () => {
+    const terms = [
+      "a",
+      "bbbb",
+      "bbbb",
+      "cc",
+      "ddddd",
+      "eee",
+      "ffffff",
+      "ggggggg",
+      "h",
+    ].map((value) => ({ value }));
+    expect(termsForCoverage(terms).map(({ value }) => value)).toEqual([
+      "ggggggg",
+      "ffffff",
+      "ddddd",
+      "bbbb",
+      "eee",
+      "cc",
+    ]);
+  });
+});
+
+describe("relaxedTopUpOutcome", () => {
+  const failure = new TimeoutError({
+    message: "over",
+    label: "case-law-relaxed-top-up",
+    timeoutMs: 1, // timeout: an error fixture, nothing waits on it
+  });
+
+  test("reads the hits of a finished step", () => {
+    expect(
+      relaxedTopUpOutcome({ status: "complete", value: Result.ok(["hit"]) }),
+    ).toEqual({ type: "read", value: ["hit"] });
+  });
+
+  test.each([
+    { status: "complete", value: Result.err(failure) },
+    {
+      status: "degraded",
+      reason: "budget_exhausted",
+      budgetMs: 1,
+      error: failure,
+    },
+    { status: "failed", error: failure },
+  ] as const)("answers without the top-up when it ended %#", (step) => {
+    expect(relaxedTopUpOutcome(step)).toEqual({
+      type: "skipped",
+      error: failure,
+    });
   });
 });
 

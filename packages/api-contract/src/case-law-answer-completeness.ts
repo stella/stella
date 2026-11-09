@@ -29,7 +29,7 @@ export const CASE_LAW_INCOMPLETE_REASON = {
     "identity_row_dropped",
     "pagination_truncated",
     "rehydration_row_dropped",
-    "relaxed_top_up_given_up",
+    "relaxed_top_up_skipped",
     "snippet_missing",
   ],
 } as const satisfies Record<CaseLawAnswerSurface, readonly string[]>;

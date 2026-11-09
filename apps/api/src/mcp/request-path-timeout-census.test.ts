@@ -365,6 +365,14 @@ const CENSUS: readonly CensusEntry[] = [
     why: "Reads the stored courts a court filter is matched against; without them the filter runs as sent and the search reports filter_unread.",
   },
   {
+    site: "apps/api/src/handlers/case-law/decisions/search.ts#CASE_LAW_RELAXED_TOP_UP_BUDGET_MS",
+    path: "request",
+    tools: ["search", "search_case_law"],
+    bound: "own",
+    onExpiry: "degrades",
+    why: "Tops up a short strict page with partial matches; without it the strict page is answered alone.",
+  },
+  {
     site: "apps/api/src/mcp/case-law-court-catalog-tool.ts#LIST_CASE_LAW_COURTS_READ_BUDGET_MS",
     path: "request",
     tools: ["list_case_law_courts"],
@@ -480,14 +488,6 @@ const CENSUS: readonly CensusEntry[] = [
     site: "apps/api/src/handlers/case-law/decisions/dev-reparse.ts#FETCH_TIMEOUT_MS",
     path: "off-request",
     why: "A local-development route, not mounted in deployments.",
-  },
-  {
-    site: "apps/api/src/handlers/case-law/decisions/search-relaxed.ts#RELAXED_TOP_UP_SLICE_MS",
-    path: "request",
-    tools: ["search_case_law"],
-    bound: "own",
-    onExpiry: "degrades",
-    why: "An agent search's optional any-word top-up, also clamped to the request's deadline; past it the strict hits answer and a warning says the partial matches were given up.",
   },
   {
     site: "apps/api/src/handlers/case-law/decisions/search-expand.ts#4000",

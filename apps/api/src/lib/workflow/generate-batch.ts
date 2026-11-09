@@ -24,8 +24,10 @@ import {
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import {
   fieldContentFromValidated,
+  isEmptyFieldContent,
   validateAIOutput,
 } from "@/api/lib/workflow/ai-validators";
+import { withGradingSource } from "@/api/lib/workflow/cited-passages";
 import {
   fetchInputFieldsForBatch,
   prepareBatchInput,
@@ -55,14 +57,6 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 // reuses the exact same file-preparation + citation-allow-list wiring the batch
 // workflow uses, instead of forking a parallel DOCX→blocks / PDF→bates path.
 export { isAISupportedFile };
-
-export type GenerateBatchDependencies = {
-  fetchInputFieldsForBatch: typeof fetchInputFieldsForBatch;
-};
-
-const defaultGenerateBatchDependencies = {
-  fetchInputFieldsForBatch,
-} satisfies GenerateBatchDependencies;
 
 const addBatesNumbers = async (
   pdfBuffer: ArrayBuffer,
@@ -252,6 +246,18 @@ export const buildJustificationFilenames = (
   return filenames;
 };
 
+export type GenerateBatchDependencies = {
+  fetchInputFieldsForBatch: typeof fetchInputFieldsForBatch;
+  fetchAndPrepareFiles: typeof fetchAndPrepareFiles;
+  generateWorkflowData: typeof generateWorkflowData;
+};
+
+const defaultGenerateBatchDependencies = {
+  fetchInputFieldsForBatch,
+  fetchAndPrepareFiles,
+  generateWorkflowData,
+} satisfies GenerateBatchDependencies;
+
 export const generateBatch = async (
   {
     abortSignal,
@@ -294,6 +300,7 @@ export const generateBatch = async (
         skippedPropertyIds,
         unsupportedPropertyIds: [],
         settlements: new Map(),
+        withheld: [],
       });
     }
 
@@ -312,6 +319,7 @@ export const generateBatch = async (
         skippedPropertyIds,
         unsupportedPropertyIds: aiInputProperties.map((p) => p.id),
         settlements,
+        withheld: [],
       });
     }
 
@@ -323,7 +331,7 @@ export const generateBatch = async (
     const preparedFiles = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await fetchAndPrepareFiles(
+          await dependencies.fetchAndPrepareFiles(
             resolvedFiles,
             organizationId,
             workspaceId,
@@ -353,7 +361,7 @@ export const generateBatch = async (
     );
 
     const generation = yield* Result.await(
-      generateWorkflowData({
+      dependencies.generateWorkflowData({
         entityVersionId,
         files: preparedFiles,
         properties: aiInputProperties,
@@ -376,15 +384,17 @@ export const generateBatch = async (
     const aiResults: AIResult[] = [];
     const aiJustifications: AIJustification[] = [];
     const settlements = new Map<SafeId<"property">, BatchSettlement>();
+    const noAnswer =
+      generation.fit.type === "cut" ? "notFoundInCutDocument" : "notStated";
 
-    for (const property of aiInputProperties) {
+    for (const property of generation.properties) {
       if (generation.refusedPropertyIds.has(property.id)) {
         settlements.set(property.id, "refused");
         continue;
       }
       const propertyResult = generation.output[property.id];
       if (!propertyResult) {
-        settlements.set(property.id, "notStated");
+        settlements.set(property.id, noAnswer);
         continue;
       }
 
@@ -394,8 +404,13 @@ export const generateBatch = async (
       });
 
       const content = fieldContentFromValidated(validated);
-      if (content === null) {
-        settlements.set(property.id, "notStated");
+      // In a cut document an empty answer says nothing about the document: the
+      // value may sit in the text the model never read.
+      if (
+        content === null ||
+        (generation.fit.type === "cut" && isEmptyFieldContent(content))
+      ) {
+        settlements.set(property.id, noAnswer);
         continue;
       }
 
@@ -412,6 +427,10 @@ export const generateBatch = async (
           fieldId,
           justificationId,
           ...justification,
+          content: withGradingSource(
+            justification.content,
+            property.answerShape,
+          ),
         });
       }
 
@@ -429,5 +448,6 @@ export const generateBatch = async (
       skippedPropertyIds,
       unsupportedPropertyIds: [],
       settlements,
+      withheld: generation.fit.type === "cut" ? generation.fit.withheld : [],
     });
   });

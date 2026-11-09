@@ -18,7 +18,10 @@ import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run
 import { LIMITS } from "@/api/lib/limits";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
-import { resolveApplicablePlaybooks } from "@/api/lib/workflow/route-playbooks";
+import {
+  resolveApplicablePlaybooks,
+  withPinnedScopes,
+} from "@/api/lib/workflow/route-playbooks";
 
 const config = {
   contract: "patch",
@@ -106,21 +109,25 @@ export const createAutoRunPlaybooks = (
             limit: LIMITS.playbookDefinitionsCount,
           });
 
-          const applicable = await dependencies.resolveApplicablePlaybooks({
-            tx,
-            workspaceId,
-            organizationId,
-            playbooks,
-          });
-
           // One read for the whole batch: a pin per playbook resolved separately
-          // would grow the round-trips with the org's library.
+          // would grow the round-trips with the org's library. Loaded before
+          // applicability so the check runs on each playbook's pinned scope,
+          // not its live one: a scope edited after approval takes effect only
+          // once the playbook is approved again.
           const approvedVersions =
             await dependencies.loadLatestApprovedVersions({
               tx,
               organizationId,
-              playbookDefinitionIds: applicable.map((playbook) => playbook.id),
+              playbookDefinitionIds: playbooks.map((playbook) => playbook.id),
             });
+          const pinned = withPinnedScopes({ playbooks, approvedVersions });
+
+          const applicable = await dependencies.resolveApplicablePlaybooks({
+            tx,
+            workspaceId,
+            organizationId,
+            playbooks: pinned,
+          });
 
           const materializedPropertyIds: SafeId<"property">[] = [];
           const refusals: AutoRunPlaybookRefusal[] = [];

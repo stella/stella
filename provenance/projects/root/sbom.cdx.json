@@ -136,7 +136,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/@astrojs/react@7.1.1",
+      "bom-ref": "pkg:npm/@astrojs/react@7.1.2",
       "description": "Use React components within Astro",
       "evidence": {
         "identity": [
@@ -927,6 +927,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/PermissionRow.tsx#1"
@@ -3081,6 +3084,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/local-run-approval-ceiling-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#1"
@@ -4413,10 +4419,10 @@
           "value": "apps/landing/node_modules/@astrojs/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40astrojs/react@7.1.1",
+      "purl": "pkg:npm/%40astrojs/react@7.1.2",
       "scope": "required",
       "type": "library",
-      "version": "7.1.1"
+      "version": "7.1.2"
     },
     {
       "authors": [
@@ -4488,7 +4494,7 @@
           "name": "Chris Swithinbank <swithinbank@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/@astrojs/starlight@0.42.6",
+      "bom-ref": "pkg:npm/@astrojs/starlight@0.42.8",
       "description": "Build beautiful, high-performance documentation websites with Astro",
       "evidence": {
         "identity": [
@@ -4541,10 +4547,10 @@
           "value": "apps/landing/node_modules/@astrojs/starlight/package.json"
         }
       ],
-      "purl": "pkg:npm/%40astrojs/starlight@0.42.6",
+      "purl": "pkg:npm/%40astrojs/starlight@0.42.8",
       "scope": "required",
       "type": "library",
-      "version": "0.42.6"
+      "version": "0.42.8"
     },
     {
       "authors": [
@@ -4990,7 +4996,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-bedrock-runtime@3.1156.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-bedrock-runtime@3.1161.0",
       "description": "AWS SDK for JavaScript Bedrock Runtime Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -5043,13 +5049,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-bedrock-runtime/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-bedrock-runtime@3.1156.0",
+      "purl": "pkg:npm/%40aws-sdk/client-bedrock-runtime@3.1161.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1156.0"
+      "version": "3.1161.0"
     },
     {
       "authors": [
@@ -5057,7 +5063,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1156.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1161.0",
       "description": "AWS SDK for JavaScript Cloudwatch Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -5110,13 +5116,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-cloudwatch/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1156.0",
+      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1161.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1156.0"
+      "version": "3.1161.0"
     },
     {
       "authors": [
@@ -5124,7 +5130,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-lambda@3.1156.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-lambda@3.1161.0",
       "description": "AWS SDK for JavaScript Lambda Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -5177,13 +5183,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-lambda/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-lambda@3.1156.0",
+      "purl": "pkg:npm/%40aws-sdk/client-lambda@3.1161.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1156.0"
+      "version": "3.1161.0"
     },
     {
       "authors": [
@@ -5191,7 +5197,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1156.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1161.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -5250,13 +5256,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1156.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1161.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1156.0"
+      "version": "3.1161.0"
     },
     {
       "authors": [
@@ -5264,7 +5270,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1156.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1161.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -5317,13 +5323,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1156.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1161.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1156.0"
+      "version": "3.1161.0"
     },
     {
       "authors": [
@@ -5331,7 +5337,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sqs@3.1156.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sqs@3.1161.0",
       "description": "AWS SDK for JavaScript Sqs Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -5390,13 +5396,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sqs/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sqs@3.1156.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sqs@3.1161.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1156.0"
+      "version": "3.1161.0"
     },
     {
       "authors": [
@@ -5404,7 +5410,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-ssm@3.1147.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-ssm@3.1160.0",
       "description": "AWS SDK for JavaScript Ssm Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -5457,13 +5463,13 @@
           "value": "node_modules/@aws-sdk/client-ssm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-ssm@3.1147.0",
+      "purl": "pkg:npm/%40aws-sdk/client-ssm@3.1160.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1147.0"
+      "version": "3.1160.0"
     },
     {
       "authors": [
@@ -5471,7 +5477,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1156.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1161.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -5527,13 +5533,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1156.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1161.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1156.0"
+      "version": "3.1161.0"
     },
     {
       "authors": [
@@ -5541,7 +5547,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1156.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1161.0",
       "evidence": {
         "identity": [
           {
@@ -5593,13 +5599,13 @@
           "value": "apps/api/node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1156.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1161.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1156.0"
+      "version": "3.1161.0"
     },
     {
       "authors": [
@@ -6398,6 +6404,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/PermissionRow.tsx#1"
@@ -8552,6 +8561,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/local-run-approval-ceiling-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#1"
@@ -10564,7 +10576,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/@expo/fingerprint@0.21.6",
+      "bom-ref": "pkg:npm/@expo/fingerprint@0.21.8",
       "description": "A library to generate a fingerprint from a React Native project",
       "evidence": {
         "identity": [
@@ -10620,10 +10632,10 @@
           "value": "apps/mobile/node_modules/@expo/fingerprint/package.json"
         }
       ],
-      "purl": "pkg:npm/%40expo/fingerprint@0.21.6",
+      "purl": "pkg:npm/%40expo/fingerprint@0.21.8",
       "scope": "required",
       "type": "library",
-      "version": "0.21.6"
+      "version": "0.21.8"
     },
     {
       "authors": [
@@ -10634,7 +10646,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/@expo/ui@58.0.22",
+      "bom-ref": "pkg:npm/@expo/ui@58.0.26",
       "description": "A collection of UI components",
       "evidence": {
         "identity": [
@@ -10705,10 +10717,10 @@
           "value": "apps/mobile/node_modules/@expo/ui/package.json"
         }
       ],
-      "purl": "pkg:npm/%40expo/ui@58.0.22",
+      "purl": "pkg:npm/%40expo/ui@58.0.26",
       "scope": "required",
       "type": "library",
-      "version": "58.0.22"
+      "version": "58.0.26"
     },
     {
       "authors": [
@@ -11329,7 +11341,7 @@
       "version": "0.1.0"
     },
     {
-      "bom-ref": "pkg:npm/@google/genai@2.31.0",
+      "bom-ref": "pkg:npm/@google/genai@2.32.0",
       "evidence": {
         "identity": [
           {
@@ -11384,10 +11396,10 @@
           "value": "apps/api/node_modules/@google/genai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40google/genai@2.31.0",
+      "purl": "pkg:npm/%40google/genai@2.32.0",
       "scope": "required",
       "type": "library",
-      "version": "2.31.0"
+      "version": "2.32.0"
     },
     {
       "authors": [
@@ -11480,7 +11492,7 @@
       "version": "21.0.4"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/extension-redis@4.7.1",
+      "bom-ref": "pkg:npm/@hocuspocus/extension-redis@4.8.0",
       "description": "Scale Hocuspocus horizontally with Redis",
       "evidence": {
         "identity": [
@@ -11536,13 +11548,13 @@
           "value": "apps/collab/node_modules/@hocuspocus/extension-redis/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/extension-redis@4.7.1",
+      "purl": "pkg:npm/%40hocuspocus/extension-redis@4.8.0",
       "scope": "required",
       "type": "library",
-      "version": "4.7.1"
+      "version": "4.8.0"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/provider@4.7.1",
+      "bom-ref": "pkg:npm/@hocuspocus/provider@4.8.0",
       "description": "hocuspocus provider",
       "evidence": {
         "identity": [
@@ -11602,13 +11614,13 @@
           "value": "apps/collab/node_modules/@hocuspocus/provider/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/provider@4.7.1",
+      "purl": "pkg:npm/%40hocuspocus/provider@4.8.0",
       "scope": "required",
       "type": "library",
-      "version": "4.7.1"
+      "version": "4.8.0"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/server@4.7.1",
+      "bom-ref": "pkg:npm/@hocuspocus/server@4.8.0",
       "description": "plug & play collaboration backend",
       "evidence": {
         "identity": [
@@ -11664,10 +11676,10 @@
           "value": "apps/collab/node_modules/@hocuspocus/server/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/server@4.7.1",
+      "purl": "pkg:npm/%40hocuspocus/server@4.8.0",
       "scope": "required",
       "type": "library",
-      "version": "4.7.1"
+      "version": "4.8.0"
     },
     {
       "authors": [
@@ -11900,7 +11912,8 @@
       "version": "0.5.3"
     },
     {
-      "bom-ref": "pkg:npm/@litko/yara-x@0.7.5",
+      "bom-ref": "pkg:npm/@litko/yara-x@0.12.0",
+      "description": "Node.js bindings for YARA-X. Compile YARA rules and scan buffers or files with prebuilt native binaries.",
       "evidence": {
         "identity": [
           {
@@ -11938,10 +11951,7 @@
       "group": "@litko",
       "licenses": [
         {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
+          "expression": "(MIT AND BSD-3-Clause)"
         }
       ],
       "name": "yara-x",
@@ -11955,10 +11965,59 @@
           "value": "apps/api/node_modules/@litko/yara-x/package.json"
         }
       ],
-      "purl": "pkg:npm/%40litko/yara-x@0.7.5",
+      "purl": "pkg:npm/%40litko/yara-x@0.12.0",
       "scope": "required",
       "type": "library",
-      "version": "0.7.5"
+      "version": "0.12.0"
+    },
+    {
+      "bom-ref": "pkg:npm/@mcp-ui/client@7.1.1",
+      "description": "mcp-ui Client SDK",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/web/node_modules/@mcp-ui/client/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/web/node_modules/@mcp-ui/client/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/components/chat/chat-rich-message-part.tsx#3"
+          }
+        ]
+      },
+      "group": "@mcp-ui",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "client",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@mcp-ui/client/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/web/node_modules/@mcp-ui/client/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40mcp-ui/client@7.1.1",
+      "scope": "required",
+      "type": "library",
+      "version": "7.1.1"
     },
     {
       "authors": [
@@ -11969,7 +12028,7 @@
           "name": " PBC (https://anthropic.com)"
         }
       ],
-      "bom-ref": "pkg:npm/@modelcontextprotocol/client@2.3.1",
+      "bom-ref": "pkg:npm/@modelcontextprotocol/client@2.4.0",
       "description": "Model Context Protocol implementation for TypeScript - Client package",
       "evidence": {
         "identity": [
@@ -12029,10 +12088,10 @@
           "value": "apps/api/node_modules/@modelcontextprotocol/client/package.json"
         }
       ],
-      "purl": "pkg:npm/%40modelcontextprotocol/client@2.3.1",
+      "purl": "pkg:npm/%40modelcontextprotocol/client@2.4.0",
       "scope": "required",
       "type": "library",
-      "version": "2.3.1"
+      "version": "2.4.0"
     },
     {
       "authors": [
@@ -12040,7 +12099,7 @@
           "name": "Olivier Chafik"
         }
       ],
-      "bom-ref": "pkg:npm/@modelcontextprotocol/ext-apps@2.0.3",
+      "bom-ref": "pkg:npm/@modelcontextprotocol/ext-apps@2.0.4",
       "description": "MCP Apps SDK — Enable MCP servers to display interactive user interfaces in conversational clients.",
       "evidence": {
         "identity": [
@@ -12115,10 +12174,10 @@
           "value": "apps/api/node_modules/@modelcontextprotocol/ext-apps/package.json"
         }
       ],
-      "purl": "pkg:npm/%40modelcontextprotocol/ext-apps@2.0.3",
+      "purl": "pkg:npm/%40modelcontextprotocol/ext-apps@2.0.4",
       "scope": "required",
       "type": "library",
-      "version": "2.0.3"
+      "version": "2.0.4"
     },
     {
       "authors": [
@@ -12129,7 +12188,7 @@
           "name": " PBC (https://anthropic.com)"
         }
       ],
-      "bom-ref": "pkg:npm/@modelcontextprotocol/server@2.3.1",
+      "bom-ref": "pkg:npm/@modelcontextprotocol/server@2.4.0",
       "description": "Model Context Protocol implementation for TypeScript - Server package",
       "evidence": {
         "identity": [
@@ -12152,6 +12211,9 @@
           },
           {
             "location": "apps/api/src/lib/mcp-upstream/connections.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/agent-run-app-calls.ts#1"
           },
           {
             "location": "apps/api/src/mcp/gateway/dispatch-call.ts#1"
@@ -12254,10 +12316,10 @@
           "value": "apps/api/node_modules/@modelcontextprotocol/server/package.json"
         }
       ],
-      "purl": "pkg:npm/%40modelcontextprotocol/server@2.3.1",
+      "purl": "pkg:npm/%40modelcontextprotocol/server@2.4.0",
       "scope": "required",
       "type": "library",
-      "version": "2.3.1"
+      "version": "2.4.0"
     },
     {
       "authors": [
@@ -12670,7 +12732,7 @@
           "name": "Yuki Yokotani <silurus.dev@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/@silurus/ooxml@0.89.2",
+      "bom-ref": "pkg:npm/@silurus/ooxml@0.89.7",
       "description": "Browser-based OOXML viewer (docx/xlsx/pptx) — Rust/WASM parser + Canvas renderer",
       "evidence": {
         "identity": [
@@ -12733,13 +12795,13 @@
           "value": "apps/api/node_modules/@silurus/ooxml/package.json"
         }
       ],
-      "purl": "pkg:npm/%40silurus/ooxml@0.89.2",
+      "purl": "pkg:npm/%40silurus/ooxml@0.89.7",
       "scope": "required",
       "tags": [
         "xml"
       ],
       "type": "library",
-      "version": "0.89.2"
+      "version": "0.89.7"
     },
     {
       "authors": [
@@ -14529,6 +14591,9 @@
             "location": "apps/api/src/handlers/chat/tools/secret-tools.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/show-app-tool.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/show-visual-tools.ts#1"
           },
           {
@@ -14929,7 +14994,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.13",
+      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.14",
       "description": "TanStack Devtools is a set of tools for building advanced devtools for your React application.",
       "evidence": {
         "identity": [
@@ -14982,13 +15047,13 @@
           "value": "apps/web/node_modules/@tanstack/react-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.13",
+      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.14",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "0.10.13"
+      "version": "0.10.14"
     },
     {
       "authors": [
@@ -15141,7 +15206,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-hotkeys@0.14.5",
+      "bom-ref": "pkg:npm/@tanstack/react-hotkeys@0.17.0",
       "description": "React adapter for TanStack Hotkeys",
       "evidence": {
         "identity": [
@@ -15266,10 +15331,10 @@
           "value": "apps/web/node_modules/@tanstack/react-hotkeys/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-hotkeys@0.14.5",
+      "purl": "pkg:npm/%40tanstack/react-hotkeys@0.17.0",
       "scope": "required",
       "type": "library",
-      "version": "0.14.5"
+      "version": "0.17.0"
     },
     {
       "authors": [
@@ -15277,7 +15342,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.104.5",
+      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.105.3",
       "description": "Developer tools to interact with and visualize the TanStack/react-query cache",
       "evidence": {
         "identity": [
@@ -15330,13 +15395,13 @@
           "value": "apps/web/node_modules/@tanstack/react-query-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.104.5",
+      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.105.3",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "5.104.5"
+      "version": "5.105.3"
     },
     {
       "authors": [
@@ -15344,7 +15409,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query@5.104.5",
+      "bom-ref": "pkg:npm/@tanstack/react-query@5.105.3",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "evidence": {
         "identity": [
@@ -15385,6 +15450,9 @@
           },
           {
             "location": "apps/web/src/components/chat/statute-open.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/use-effective-run-target.ts#1"
           },
           {
             "location": "apps/web/src/components/contact-picker-queries.ts#1"
@@ -16335,6 +16403,9 @@
             "location": "apps/web/src/components/chat/chat-model-selector.tsx#3"
           },
           {
+            "location": "apps/web/src/components/chat/chat-rich-message-part.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-run-target-menu.tsx#1"
           },
           {
@@ -16953,6 +17024,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.tsx#3"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/local-run-approval-ceiling-card.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#3"
           },
           {
@@ -17326,10 +17400,10 @@
           "value": "apps/web/node_modules/@tanstack/react-query/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.104.5",
+      "purl": "pkg:npm/%40tanstack/react-query@5.105.3",
       "scope": "required",
       "type": "library",
-      "version": "5.104.5"
+      "version": "5.105.3"
     },
     {
       "authors": [
@@ -18856,7 +18930,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-virtual@3.14.21",
+      "bom-ref": "pkg:npm/@tanstack/react-virtual@3.14.25",
       "description": "Headless UI for virtualizing scrollable elements in React",
       "evidence": {
         "identity": [
@@ -18934,10 +19008,10 @@
           "value": "apps/web/node_modules/@tanstack/react-virtual/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.21",
+      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.25",
       "scope": "required",
       "type": "library",
-      "version": "3.14.21"
+      "version": "3.14.25"
     },
     {
       "authors": [
@@ -19072,6 +19146,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#3"
+          },
+          {
+            "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#3"
           },
           {
             "location": "apps/desktop/src/mainview/PermissionsSection.tsx#3"
@@ -19946,6 +20023,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/PermissionRow.tsx#1"
@@ -22100,6 +22180,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/local-run-approval-ceiling-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#1"
@@ -23450,7 +23533,7 @@
       "version": "16.3.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/core@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/core@3.32.2",
       "description": "headless rich text editor",
       "evidence": {
         "identity": [
@@ -23570,13 +23653,13 @@
           "value": "apps/web/node_modules/@tiptap/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/core@3.32.0",
+      "purl": "pkg:npm/%40tiptap/core@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.32.2",
       "description": "bold extension for tiptap",
       "evidence": {
         "identity": [
@@ -23635,13 +23718,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-bold/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-bold@3.32.0",
+      "purl": "pkg:npm/%40tiptap/extension-bold@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-document@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-document@3.32.2",
       "description": "document extension for tiptap",
       "evidence": {
         "identity": [
@@ -23697,13 +23780,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-document/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-document@3.32.0",
+      "purl": "pkg:npm/%40tiptap/extension-document@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.32.2",
       "description": "hard break extension for tiptap",
       "evidence": {
         "identity": [
@@ -23756,13 +23839,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-hard-break/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.32.0",
+      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.32.2",
       "description": "heading extension for tiptap",
       "evidence": {
         "identity": [
@@ -23815,13 +23898,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-heading/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-heading@3.32.0",
+      "purl": "pkg:npm/%40tiptap/extension-heading@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.32.2",
       "description": "italic extension for tiptap",
       "evidence": {
         "identity": [
@@ -23874,13 +23957,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-italic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-italic@3.32.0",
+      "purl": "pkg:npm/%40tiptap/extension-italic@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-list@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-list@3.32.2",
       "description": "List extension for tiptap",
       "evidence": {
         "identity": [
@@ -23933,13 +24016,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-list/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-list@3.32.0",
+      "purl": "pkg:npm/%40tiptap/extension-list@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.32.2",
       "description": "mention extension for tiptap",
       "evidence": {
         "identity": [
@@ -24004,13 +24087,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-mention/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-mention@3.32.0",
+      "purl": "pkg:npm/%40tiptap/extension-mention@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.32.2",
       "description": "paragraph extension for tiptap",
       "evidence": {
         "identity": [
@@ -24069,13 +24152,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-paragraph/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.32.0",
+      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-text@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/extension-text@3.32.2",
       "description": "text extension for tiptap",
       "evidence": {
         "identity": [
@@ -24134,13 +24217,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-text/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-text@3.32.0",
+      "purl": "pkg:npm/%40tiptap/extension-text@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extensions@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/extensions@3.32.2",
       "description": "various extensions for tiptap",
       "evidence": {
         "identity": [
@@ -24202,13 +24285,13 @@
           "value": "apps/web/node_modules/@tiptap/extensions/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extensions@3.32.0",
+      "purl": "pkg:npm/%40tiptap/extensions@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/pm@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/pm@3.32.2",
       "description": "prosemirror wrapper package for tiptap",
       "evidence": {
         "identity": [
@@ -24415,13 +24498,13 @@
           "value": "apps/web/node_modules/@tiptap/pm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/pm@3.32.0",
+      "purl": "pkg:npm/%40tiptap/pm@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/react@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/react@3.32.2",
       "description": "React components for tiptap",
       "evidence": {
         "identity": [
@@ -25212,6 +25295,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/PermissionRow.tsx#1"
@@ -27368,6 +27454,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/local-run-approval-ceiling-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#1"
           },
           {
@@ -28698,13 +28787,13 @@
           "value": "apps/web/node_modules/@tiptap/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/react@3.32.0",
+      "purl": "pkg:npm/%40tiptap/react@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/suggestion@3.32.0",
+      "bom-ref": "pkg:npm/@tiptap/suggestion@3.32.2",
       "description": "suggestion plugin for tiptap",
       "evidence": {
         "identity": [
@@ -28769,10 +28858,10 @@
           "value": "apps/web/node_modules/@tiptap/suggestion/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/suggestion@3.32.0",
+      "purl": "pkg:npm/%40tiptap/suggestion@3.32.2",
       "scope": "required",
       "type": "library",
-      "version": "3.32.0"
+      "version": "3.32.2"
     },
     {
       "authors": [
@@ -29066,7 +29155,7 @@
           "name": "Yury Strozhevsky <yury@strozhevsky.com>"
         }
       ],
-      "bom-ref": "pkg:npm/asn1js@3.0.10",
+      "bom-ref": "pkg:npm/asn1js@4.0.0",
       "description": "asn1js is a pure JavaScript library implementing this standard. ASN.1 is the basis of all X.509 related data structures and numerous other protocols used on the web",
       "evidence": {
         "identity": [
@@ -29127,10 +29216,10 @@
           "value": "apps/api/node_modules/asn1js/package.json"
         }
       ],
-      "purl": "pkg:npm/asn1js@3.0.10",
+      "purl": "pkg:npm/asn1js@4.0.0",
       "scope": "required",
       "type": "library",
-      "version": "3.0.10"
+      "version": "4.0.0"
     },
     {
       "authors": [
@@ -29138,7 +29227,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@7.4.2",
+      "bom-ref": "pkg:npm/astro@7.4.5",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -29209,13 +29298,13 @@
           "value": "apps/landing/node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@7.4.2",
+      "purl": "pkg:npm/astro@7.4.5",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "7.4.2"
+      "version": "7.4.5"
     },
     {
       "bom-ref": "pkg:npm/better-auth@1.7.16",
@@ -30466,7 +30555,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/courtlistener/test-records.ts#7"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts#6"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts#7"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss-documents.ts#3"
@@ -30701,9 +30790,6 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-nsa.ts#17"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-operative-verbs.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-tk.ts#19"
@@ -31147,6 +31233,12 @@
             "location": "apps/api/src/handlers/chat/local-runners.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/mcp-apps/call-tool.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/mcp-apps/read-bundle.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/memory-context.ts#1"
           },
           {
@@ -31409,6 +31501,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/secret-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/show-app-tool.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/show-visual-tools.ts#2"
@@ -32650,6 +32745,9 @@
             "location": "apps/api/src/handlers/organization-settings/get.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/organization-settings/local-runs/update.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts#1"
           },
           {
@@ -33095,6 +33193,9 @@
           },
           {
             "location": "apps/api/src/handlers/soft-law/adapters/registry.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/soft-law/adapters/uoou-cz.ts#1"
           },
           {
             "location": "apps/api/src/handlers/soft-law/adapters/uoou-sk.ts#1"
@@ -34171,7 +34272,7 @@
             "location": "apps/api/src/lib/case-law/decision-search-order-sql.ts#1"
           },
           {
-            "location": "apps/api/src/lib/case-law/decision-text.ts#4"
+            "location": "apps/api/src/lib/case-law/decision-text.ts#5"
           },
           {
             "location": "apps/api/src/lib/case-law/decision-type-filter-sql.ts#1"
@@ -34295,6 +34396,9 @@
           },
           {
             "location": "apps/api/src/lib/chat/managed-provider-checks.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/chat/mcp-app-catalog.ts#1"
           },
           {
             "location": "apps/api/src/lib/chat/model-ingress-guard.ts#2"
@@ -34615,6 +34719,9 @@
             "location": "apps/api/src/lib/document-review/review-delta.ts#10"
           },
           {
+            "location": "apps/api/src/lib/document-review/review-document-messages.ts#3"
+          },
+          {
             "location": "apps/api/src/lib/document-review/review-extract.ts#1"
           },
           {
@@ -34631,6 +34738,9 @@
           },
           {
             "location": "apps/api/src/lib/document-review/suggestion-finding-sync.ts#14"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/table-run-findings.ts#18"
           },
           {
             "location": "apps/api/src/lib/document-translation/bilingual-batch-runner.ts#1"
@@ -35383,7 +35493,7 @@
             "location": "apps/api/src/lib/legal-search/parsers/document-footnotes.ts#1"
           },
           {
-            "location": "apps/api/src/lib/legal-search/parsers/hard-wrapped-lines.ts#2"
+            "location": "apps/api/src/lib/legal-search/parsers/hard-wrapped-lines.ts#8"
           },
           {
             "location": "apps/api/src/lib/legal-search/parsers/rtf-reader.ts#28"
@@ -35395,7 +35505,7 @@
             "location": "apps/api/src/lib/legal-search/parsers/text-encoding.ts#1"
           },
           {
-            "location": "apps/api/src/lib/legal-search/parsers/validate-ast.ts#20"
+            "location": "apps/api/src/lib/legal-search/parsers/validate-ast.ts#21"
           },
           {
             "location": "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts#1"
@@ -35513,6 +35623,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/soft-law-ingestion-store.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/soft-law-serving.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/soft-law-types.ts#1"
@@ -36202,6 +36315,9 @@
             "location": "apps/api/src/lib/skills/skill-package.ts#1"
           },
           {
+            "location": "apps/api/src/lib/smoke-session/store.ts#18"
+          },
+          {
             "location": "apps/api/src/lib/sse-broadcast.ts#1"
           },
           {
@@ -36484,6 +36600,12 @@
             "location": "apps/api/src/lib/workflow/playbook-positions-validation.ts#1"
           },
           {
+            "location": "apps/api/src/lib/workflow/request-budget.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/route-playbooks.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/workflow/run-logic.ts#1"
           },
           {
@@ -36518,6 +36640,9 @@
           },
           {
             "location": "apps/api/src/lib/write-contract/write-contract.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/agent-run-app-calls.ts#2"
           },
           {
             "location": "apps/api/src/mcp/anonymization-core.ts#1"
@@ -36928,6 +37053,9 @@
             "location": "apps/api/src/scripts/mcp-canary-case-law-identity.ts#7"
           },
           {
+            "location": "apps/api/src/scripts/mcp-canary-release-load.ts#23"
+          },
+          {
             "location": "apps/api/src/scripts/mcp-canary.ts#13"
           },
           {
@@ -37171,6 +37299,9 @@
             "location": "apps/mobile/scripts/sim.ts#25"
           },
           {
+            "location": "apps/mobile/src/components/open-link.ts#1"
+          },
+          {
             "location": "apps/mobile/src/components/use-chat-attachments.ts#3"
           },
           {
@@ -37208,6 +37339,9 @@
           },
           {
             "location": "apps/mobile/src/connection/id-token.ts#7"
+          },
+          {
+            "location": "apps/mobile/src/connection/install-marker.ts#6"
           },
           {
             "location": "apps/mobile/src/connection/restored-session.ts#5"
@@ -37250,9 +37384,6 @@
           },
           {
             "location": "apps/mobile/src/state/chat-threads.ts#1"
-          },
-          {
-            "location": "apps/mobile/src/state/decision-page.ts#1"
           },
           {
             "location": "apps/mobile/src/state/dictation.ts#1"
@@ -37460,6 +37591,9 @@
           },
           {
             "location": "apps/web/src/components/chat/source-citation-navigation.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/stella-mcp-app-bridge.ts#1"
           },
           {
             "location": "apps/web/src/components/chat/table-chart.logic.ts#1"
@@ -38563,6 +38697,12 @@
             "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#12"
           },
           {
+            "location": "packages/agent-engine/scripts/fake-codex-app-server.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/scripts/fake-harness-holder.ts#1"
+          },
+          {
             "location": "packages/agent-engine/scripts/mcp-canary-server.ts#1"
           },
           {
@@ -38582,6 +38722,9 @@
           },
           {
             "location": "packages/agent-engine/src/harness/claude-code/items.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/skill-plugin.ts#1"
           },
           {
             "location": "packages/agent-engine/src/harness/claude-code/turn.ts#1"
@@ -38614,7 +38757,19 @@
             "location": "packages/agent-engine/src/harness/package-cache.ts#1"
           },
           {
+            "location": "packages/agent-engine/src/harness/process-tree.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/skill-folders.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/skill-redaction.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/harness/stream-chunks.ts#9"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/tool-path.ts#1"
           },
           {
             "location": "packages/agent-engine/src/harness/transcript-handoff.ts#1"
@@ -38653,6 +38808,9 @@
             "location": "packages/agent-engine/src/sidecar/protocol.ts#2"
           },
           {
+            "location": "packages/agent-engine/src/sidecar/workspace-file.ts#1"
+          },
+          {
             "location": "packages/agent-input/src/locale.ts#12"
           },
           {
@@ -38689,7 +38847,7 @@
             "location": "packages/api-contract/src/case-law-research.ts#1"
           },
           {
-            "location": "packages/api-contract/src/case-law-text-field.ts#2"
+            "location": "packages/api-contract/src/case-law-text-field.ts#3"
           },
           {
             "location": "packages/api-contract/src/chat-decision-passage-link.ts#17"
@@ -38783,6 +38941,9 @@
           },
           {
             "location": "packages/api-contract/src/statute-route.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/stella-mcp-app.ts#1"
           },
           {
             "location": "packages/api-contract/src/us-court-vocabulary.ts#7"
@@ -39247,6 +39408,9 @@
             "location": "packages/legal-ast/src/paragraph-range.ts#1"
           },
           {
+            "location": "packages/legal-ast/src/polish-document-roles.ts#14"
+          },
+          {
             "location": "packages/legal-ast/src/projection-digest.ts#11"
           },
           {
@@ -39271,6 +39435,9 @@
             "location": "packages/legal-atlas/src/link-recall-reference.ts#1"
           },
           {
+            "location": "packages/legal-atlas/src/printed-date.ts#2"
+          },
+          {
             "location": "packages/legal-atlas/src/provision-citation-grammars.ts#17"
           },
           {
@@ -39280,7 +39447,7 @@
             "location": "packages/legal-atlas/src/provision-key.ts#1"
           },
           {
-            "location": "packages/legal-atlas/src/provision-version-grammar.ts#1"
+            "location": "packages/legal-atlas/src/provision-version-grammar.ts#2"
           },
           {
             "location": "packages/legal-atlas/src/runners/registry.ts#1"
@@ -39778,9 +39945,6 @@
             "location": "scripts/check-dead-columns.ts#12"
           },
           {
-            "location": "scripts/check-deploy-env-contract.ts#1"
-          },
-          {
             "location": "scripts/check-desktop-rust-inputs.ts#24"
           },
           {
@@ -40060,7 +40224,7 @@
             "location": "scripts/generate-cloud-setup.ts#1"
           },
           {
-            "location": "scripts/generate-harness-releases.ts#26"
+            "location": "scripts/generate-harness-releases.ts#31"
           },
           {
             "location": "scripts/generate-main-heavy-infrastructure-steps.ts#1"
@@ -40363,6 +40527,9 @@
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#4"
           },
           {
+            "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#4"
+          },
+          {
             "location": "apps/desktop/src/mainview/PermissionRow.tsx#3"
           },
           {
@@ -40594,7 +40761,7 @@
             "location": "apps/web/src/components/chat/chat-prompt-improve-button.tsx#3"
           },
           {
-            "location": "apps/web/src/components/chat/chat-rich-message-part.tsx#3"
+            "location": "apps/web/src/components/chat/chat-rich-message-part.tsx#5"
           },
           {
             "location": "apps/web/src/components/chat/chat-run-target-menu.tsx#2"
@@ -41825,7 +41992,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@6.4.1",
+      "bom-ref": "pkg:npm/bullmq@6.5.4",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -41911,10 +42078,10 @@
           "value": "apps/api/node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@6.4.1",
+      "purl": "pkg:npm/bullmq@6.5.4",
       "scope": "required",
       "type": "library",
-      "version": "6.4.1"
+      "version": "6.5.4"
     },
     {
       "authors": [
@@ -42473,7 +42640,7 @@
           "name": "Felix Boehm <me@feedic.com>"
         }
       ],
-      "bom-ref": "pkg:npm/domhandler@6.0.1",
+      "bom-ref": "pkg:npm/domhandler@5.0.3",
       "description": "Handler for htmlparser2 that turns pages into a dom",
       "evidence": {
         "identity": [
@@ -42535,10 +42702,10 @@
           "value": "node_modules/domhandler/package.json"
         }
       ],
-      "purl": "pkg:npm/domhandler@6.0.1",
+      "purl": "pkg:npm/domhandler@5.0.3",
       "scope": "required",
       "type": "library",
-      "version": "6.0.1"
+      "version": "5.0.3"
     },
     {
       "authors": [
@@ -42803,6 +42970,12 @@
           },
           {
             "location": "apps/api/src/agent-auth/id-jag.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/account-erasure-policies.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/account-erasure-policies.ts#2"
           },
           {
             "location": "apps/api/src/db/agent-auth-schema.ts#1"
@@ -43559,6 +43732,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/history-window.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/mcp-apps/call-tool.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/memory-context.ts#11"
@@ -45490,6 +45666,9 @@
             "location": "apps/api/src/lib/chat/data-scope.ts#2"
           },
           {
+            "location": "apps/api/src/lib/chat/local-run-approval-ceiling.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/chat/run-log.ts#15"
           },
           {
@@ -45673,7 +45852,10 @@
             "location": "apps/api/src/lib/desktop-edit-sessions.ts#1"
           },
           {
-            "location": "apps/api/src/lib/desktop-runner/store.ts#16"
+            "location": "apps/api/src/lib/desktop-runner/app-calls.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/desktop-runner/store.ts#17"
           },
           {
             "location": "apps/api/src/lib/document-content-provenance.ts#1"
@@ -45754,7 +45936,7 @@
             "location": "apps/api/src/lib/document-review/table-run-create.ts#11"
           },
           {
-            "location": "apps/api/src/lib/document-review/table-run-findings.ts#18"
+            "location": "apps/api/src/lib/document-review/table-run-findings.ts#19"
           },
           {
             "location": "apps/api/src/lib/document-translation/run-queue.ts#2"
@@ -45863,6 +46045,9 @@
           },
           {
             "location": "apps/api/src/lib/entity-filters.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/entity-versions/cell-companions.ts#1"
           },
           {
             "location": "apps/api/src/lib/entity-versions/compute-version-diff.ts#1"
@@ -46774,6 +46959,9 @@
             "location": "apps/api/src/lib/skills/install.ts#2"
           },
           {
+            "location": "apps/api/src/lib/smoke-session/store.ts#19"
+          },
+          {
             "location": "apps/api/src/lib/sql-case-expression.ts#19"
           },
           {
@@ -46954,7 +47142,7 @@
             "location": "apps/api/src/lib/workflow/resolve-standards.ts#2"
           },
           {
-            "location": "apps/api/src/lib/workflow/route-playbooks.ts#1"
+            "location": "apps/api/src/lib/workflow/route-playbooks.ts#2"
           },
           {
             "location": "apps/api/src/lib/workflow/straggler-catchup.ts#2"
@@ -47222,6 +47410,9 @@
           },
           {
             "location": "apps/api/scripts/seed-usage-policies-runner.ts#21"
+          },
+          {
+            "location": "apps/api/src/db/account-erasure-policies.ts#2"
           },
           {
             "location": "apps/api/src/db/agent-auth-schema.ts#9"
@@ -47613,7 +47804,7 @@
           "name": "Felix Boehm <me@feedic.com>"
         }
       ],
-      "bom-ref": "pkg:npm/entities@8.1.0",
+      "bom-ref": "pkg:npm/entities@9.0.0",
       "description": "Encode & decode XML and HTML entities with ease & speed",
       "evidence": {
         "identity": [
@@ -47677,7 +47868,7 @@
           "value": "apps/api/node_modules/entities/package.json"
         }
       ],
-      "purl": "pkg:npm/entities@8.1.0",
+      "purl": "pkg:npm/entities@9.0.0",
       "scope": "required",
       "tags": [
         "decode",
@@ -47685,7 +47876,7 @@
         "xml"
       ],
       "type": "library",
-      "version": "8.1.0"
+      "version": "9.0.0"
     },
     {
       "authors": [
@@ -47696,7 +47887,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-audio@58.0.10",
+      "bom-ref": "pkg:npm/expo-audio@58.0.11",
       "description": "A cross-platform audio library for React Native and Expo apps.",
       "evidence": {
         "identity": [
@@ -47752,10 +47943,10 @@
           "value": "apps/mobile/node_modules/expo-audio/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-audio@58.0.10",
+      "purl": "pkg:npm/expo-audio@58.0.11",
       "scope": "required",
       "type": "library",
-      "version": "58.0.10"
+      "version": "58.0.11"
     },
     {
       "authors": [
@@ -47766,7 +47957,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-constants@58.0.13",
+      "bom-ref": "pkg:npm/expo-constants@58.0.14",
       "description": "Provides system information that remains constant throughout the lifetime of your app.",
       "evidence": {
         "identity": [
@@ -47825,10 +48016,10 @@
           "value": "apps/mobile/node_modules/expo-constants/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-constants@58.0.13",
+      "purl": "pkg:npm/expo-constants@58.0.14",
       "scope": "required",
       "type": "library",
-      "version": "58.0.13"
+      "version": "58.0.14"
     },
     {
       "authors": [
@@ -48003,7 +48194,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-file-system@58.0.10",
+      "bom-ref": "pkg:npm/expo-file-system@58.0.13",
       "description": "Provides access to the local file system on the device.",
       "evidence": {
         "identity": [
@@ -48026,6 +48217,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-document-editing.ts#4"
+          },
+          {
+            "location": "apps/mobile/src/connection/platform.ts#5"
           }
         ]
       },
@@ -48059,10 +48253,10 @@
           "value": "apps/mobile/node_modules/expo-file-system/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-file-system@58.0.10",
+      "purl": "pkg:npm/expo-file-system@58.0.13",
       "scope": "required",
       "type": "library",
-      "version": "58.0.10"
+      "version": "58.0.13"
     },
     {
       "authors": [
@@ -48073,7 +48267,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-glass-effect@58.0.4",
+      "bom-ref": "pkg:npm/expo-glass-effect@58.0.5",
       "description": "A component that renders a native glass effect view on iOS.",
       "evidence": {
         "identity": [
@@ -48132,10 +48326,10 @@
           "value": "apps/mobile/node_modules/expo-glass-effect/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-glass-effect@58.0.4",
+      "purl": "pkg:npm/expo-glass-effect@58.0.5",
       "scope": "required",
       "type": "library",
-      "version": "58.0.4"
+      "version": "58.0.5"
     },
     {
       "authors": [
@@ -48146,7 +48340,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-linking@58.0.14",
+      "bom-ref": "pkg:npm/expo-linking@58.0.15",
       "description": "Create and open deep links universally",
       "evidence": {
         "identity": [
@@ -48199,10 +48393,10 @@
           "value": "apps/mobile/node_modules/expo-linking/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-linking@58.0.14",
+      "purl": "pkg:npm/expo-linking@58.0.15",
       "scope": "required",
       "type": "library",
-      "version": "58.0.14"
+      "version": "58.0.15"
     },
     {
       "authors": [
@@ -48213,7 +48407,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-notifications@58.1.6",
+      "bom-ref": "pkg:npm/expo-notifications@58.1.7",
       "description": "Provides an API to fetch push notification tokens and to present, schedule, receive, and respond to notifications.",
       "evidence": {
         "identity": [
@@ -48269,13 +48463,13 @@
           "value": "apps/mobile/node_modules/expo-notifications/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-notifications@58.1.6",
+      "purl": "pkg:npm/expo-notifications@58.1.7",
       "scope": "required",
       "tags": [
         "api"
       ],
       "type": "library",
-      "version": "58.1.6"
+      "version": "58.1.7"
     },
     {
       "authors": [
@@ -48286,7 +48480,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-router@58.0.25",
+      "bom-ref": "pkg:npm/expo-router@58.0.29",
       "description": "Expo Router is a file-based router for React Native and web applications.",
       "evidence": {
         "identity": [
@@ -48462,13 +48656,13 @@
           "value": "apps/mobile/node_modules/expo-router/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-router@58.0.25",
+      "purl": "pkg:npm/expo-router@58.0.29",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "58.0.25"
+      "version": "58.0.29"
     },
     {
       "authors": [
@@ -48498,7 +48692,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/mobile/src/connection/platform.ts#10"
+            "location": "apps/mobile/src/connection/platform.ts#11"
           },
           {
             "location": "apps/mobile/src/native/account-store.ts#6"
@@ -48616,7 +48810,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-web-browser@58.0.6",
+      "bom-ref": "pkg:npm/expo-web-browser@58.0.7",
       "description": "Provides access to the system's web browser and supports handling redirects. On iOS, it uses SFSafariViewController or ASWebAuthenticationSession, depending on the method you call, and on Android it uses ChromeCustomTabs. As of iOS 11, SFSafariViewController no longer shares cookies with Safari, so if you are using WebBrowser for authentication you will want to use WebBrowser.openAuthSessionAsync, and if you just want to open a webpage (such as your app privacy policy), then use WebBrowser.openBrowserAsync.",
       "evidence": {
         "identity": [
@@ -48635,7 +48829,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/mobile/src/connection/platform.ts#11"
+            "location": "apps/mobile/src/connection/platform.ts#12"
           },
           {
             "location": "apps/mobile/src/app/settings.tsx#3"
@@ -48675,13 +48869,13 @@
           "value": "apps/mobile/node_modules/expo-web-browser/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-web-browser@58.0.6",
+      "purl": "pkg:npm/expo-web-browser@58.0.7",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "58.0.6"
+      "version": "58.0.7"
     },
     {
       "authors": [
@@ -48692,7 +48886,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-widgets@58.0.22",
+      "bom-ref": "pkg:npm/expo-widgets@58.0.26",
       "description": "Widgets.",
       "evidence": {
         "identity": [
@@ -48763,10 +48957,10 @@
           "value": "apps/mobile/node_modules/expo-widgets/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-widgets@58.0.22",
+      "purl": "pkg:npm/expo-widgets@58.0.26",
       "scope": "required",
       "type": "library",
-      "version": "58.0.22"
+      "version": "58.0.26"
     },
     {
       "authors": [
@@ -48774,7 +48968,7 @@
           "name": "Expo"
         }
       ],
-      "bom-ref": "pkg:npm/expo@58.0.17",
+      "bom-ref": "pkg:npm/expo@58.0.22",
       "description": "The Expo SDK",
       "evidence": {
         "identity": [
@@ -48863,10 +49057,10 @@
           "value": "apps/mobile/node_modules/expo/package.json"
         }
       ],
-      "purl": "pkg:npm/expo@58.0.17",
+      "purl": "pkg:npm/expo@58.0.22",
       "scope": "required",
       "type": "library",
-      "version": "58.0.17"
+      "version": "58.0.22"
     },
     {
       "authors": [
@@ -49216,7 +49410,7 @@
           "name": "Hyperparam"
         }
       ],
-      "bom-ref": "pkg:npm/hyparquet@1.31.5",
+      "bom-ref": "pkg:npm/hyparquet@1.32.0",
       "description": "Parquet file parser for JavaScript",
       "evidence": {
         "identity": [
@@ -49272,10 +49466,10 @@
           "value": "apps/api/node_modules/hyparquet/package.json"
         }
       ],
-      "purl": "pkg:npm/hyparquet@1.31.5",
+      "purl": "pkg:npm/hyparquet@1.32.0",
       "scope": "required",
       "type": "library",
-      "version": "1.31.5"
+      "version": "1.32.0"
     },
     {
       "authors": [
@@ -49633,7 +49827,7 @@
           "name": "Filip Skokan <panva.ip@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/jose@6.2.13",
+      "bom-ref": "pkg:npm/jose@6.2.15",
       "description": "JWA, JWS, JWE, JWT, JWK, JWKS for Node.js, Browser, Cloudflare Workers, Deno, Bun, and other Web-interoperable runtimes",
       "evidence": {
         "identity": [
@@ -49733,13 +49927,13 @@
           "value": "apps/api/node_modules/jose/package.json"
         }
       ],
-      "purl": "pkg:npm/jose@6.2.13",
+      "purl": "pkg:npm/jose@6.2.15",
       "scope": "required",
       "tags": [
         "security"
       ],
       "type": "library",
-      "version": "6.2.13"
+      "version": "6.2.15"
     },
     {
       "bom-ref": "pkg:npm/katex@0.16.47",
@@ -49918,7 +50112,7 @@
           "name": "Eric Fennis"
         }
       ],
-      "bom-ref": "pkg:npm/lucide-react-native@1.41.0",
+      "bom-ref": "pkg:npm/lucide-react-native@1.65.0",
       "description": "A Lucide icon library package for React Native applications.",
       "evidence": {
         "identity": [
@@ -50015,13 +50209,13 @@
           "value": "apps/mobile/node_modules/lucide-react-native/package.json"
         }
       ],
-      "purl": "pkg:npm/lucide-react-native@1.41.0",
+      "purl": "pkg:npm/lucide-react-native@1.65.0",
       "scope": "required",
       "tags": [
         "native"
       ],
       "type": "library",
-      "version": "1.41.0"
+      "version": "1.65.0"
     },
     {
       "authors": [
@@ -50029,7 +50223,7 @@
           "name": "Eric Fennis"
         }
       ],
-      "bom-ref": "pkg:npm/lucide-react@1.61.0",
+      "bom-ref": "pkg:npm/lucide-react@1.65.0",
       "description": "A Lucide icon library package for React applications.",
       "evidence": {
         "identity": [
@@ -50123,13 +50317,13 @@
           "value": "apps/web/node_modules/lucide-react/package.json"
         }
       ],
-      "purl": "pkg:npm/lucide-react@1.61.0",
+      "purl": "pkg:npm/lucide-react@1.65.0",
       "scope": "required",
       "type": "library",
-      "version": "1.61.0"
+      "version": "1.65.0"
     },
     {
-      "bom-ref": "pkg:npm/lucide-static@1.41.0",
+      "bom-ref": "pkg:npm/lucide-static@1.65.0",
       "description": "Lucide is a community-run fork of Feather Icons, open for anyone to contribute icons.",
       "evidence": {
         "identity": [
@@ -50185,10 +50379,10 @@
           "value": "apps/mobile/node_modules/lucide-static/package.json"
         }
       ],
-      "purl": "pkg:npm/lucide-static@1.41.0",
+      "purl": "pkg:npm/lucide-static@1.65.0",
       "scope": "required",
       "type": "library",
-      "version": "1.41.0"
+      "version": "1.65.0"
     },
     {
       "authors": [
@@ -50196,7 +50390,7 @@
           "name": "Filip Seman <filip.seman@pm.me>"
         }
       ],
-      "bom-ref": "pkg:npm/lzma1@0.4.0",
+      "bom-ref": "pkg:npm/lzma1@0.6.2",
       "description": "A JavaScript implementation of the Lempel-Ziv-Markov (LZMA) chain compression algorithm",
       "evidence": {
         "identity": [
@@ -50249,10 +50443,10 @@
           "value": "node_modules/lzma1/package.json"
         }
       ],
-      "purl": "pkg:npm/lzma1@0.4.0",
+      "purl": "pkg:npm/lzma1@0.6.2",
       "scope": "required",
       "type": "library",
-      "version": "0.4.0"
+      "version": "0.6.2"
     },
     {
       "authors": [
@@ -50260,7 +50454,7 @@
           "name": "Postal Systems OÜ"
         }
       ],
-      "bom-ref": "pkg:npm/mailauth@7.1.1",
+      "bom-ref": "pkg:npm/mailauth@8.0.4",
       "description": "Email authentication library for Node.js",
       "evidence": {
         "identity": [
@@ -50313,10 +50507,10 @@
           "value": "apps/api/node_modules/mailauth/package.json"
         }
       ],
-      "purl": "pkg:npm/mailauth@7.1.1",
+      "purl": "pkg:npm/mailauth@8.0.4",
       "scope": "required",
       "type": "library",
-      "version": "7.1.1"
+      "version": "8.0.4"
     },
     {
       "authors": [
@@ -50564,7 +50758,7 @@
           "name": "Andris Reinman"
         }
       ],
-      "bom-ref": "pkg:npm/nodemailer@10.2.1",
+      "bom-ref": "pkg:npm/nodemailer@10.3.1",
       "description": "Easy as cake e-mail sending from your Node.js applications",
       "evidence": {
         "identity": [
@@ -50617,10 +50811,10 @@
           "value": "apps/api/node_modules/nodemailer/package.json"
         }
       ],
-      "purl": "pkg:npm/nodemailer@10.2.1",
+      "purl": "pkg:npm/nodemailer@10.3.1",
       "scope": "required",
       "type": "library",
-      "version": "10.2.1"
+      "version": "10.3.1"
     },
     {
       "authors": [
@@ -50628,7 +50822,7 @@
           "name": "fs-eire"
         }
       ],
-      "bom-ref": "pkg:npm/onnxruntime-node@1.30.0",
+      "bom-ref": "pkg:npm/onnxruntime-node@1.31.1",
       "description": "ONNXRuntime Node.js binding",
       "evidence": {
         "identity": [
@@ -50677,10 +50871,10 @@
           "value": "apps/api/node_modules/onnxruntime-node/package.json"
         }
       ],
-      "purl": "pkg:npm/onnxruntime-node@1.30.0",
+      "purl": "pkg:npm/onnxruntime-node@1.31.1",
       "scope": "required",
       "type": "library",
-      "version": "1.30.0"
+      "version": "1.31.1"
     },
     {
       "authors": [
@@ -50745,7 +50939,7 @@
           "name": "Boshen and oxc contributors"
         }
       ],
-      "bom-ref": "pkg:npm/oxc-parser@0.155.0",
+      "bom-ref": "pkg:npm/oxc-parser@0.157.0",
       "description": "Oxc Parser Node API",
       "evidence": {
         "identity": [
@@ -50821,13 +51015,13 @@
           "value": "node_modules/oxc-parser/package.json"
         }
       ],
-      "purl": "pkg:npm/oxc-parser@0.155.0",
+      "purl": "pkg:npm/oxc-parser@0.157.0",
       "scope": "required",
       "tags": [
         "parse"
       ],
       "type": "library",
-      "version": "0.155.0"
+      "version": "0.157.0"
     },
     {
       "authors": [
@@ -50835,7 +51029,7 @@
           "name": "Boshen and oxc contributors"
         }
       ],
-      "bom-ref": "pkg:npm/oxc-transform-react@0.152.0",
+      "bom-ref": "pkg:npm/oxc-transform-react@0.156.0",
       "description": "Oxc React Compiler Node API",
       "evidence": {
         "identity": [
@@ -50898,10 +51092,10 @@
           "value": "apps/web/node_modules/oxc-transform-react/package.json"
         }
       ],
-      "purl": "pkg:npm/oxc-transform-react@0.152.0",
+      "purl": "pkg:npm/oxc-transform-react@0.156.0",
       "scope": "required",
       "type": "library",
-      "version": "0.152.0"
+      "version": "0.156.0"
     },
     {
       "authors": [
@@ -50909,7 +51103,7 @@
           "name": "Sergio Azocar"
         }
       ],
-      "bom-ref": "pkg:npm/oxlint-tailwindcss@1.16.0",
+      "bom-ref": "pkg:npm/oxlint-tailwindcss@1.17.1",
       "description": "Tailwind CSS v4 lint rules for oxlint that read your design system: unknown, conflicting and deprecated classes, theme colors, class order — with autofixes.",
       "evidence": {
         "identity": [
@@ -50928,7 +51122,7 @@
         ],
         "occurrences": [
           {
-            "location": "scripts/generate-tailwind-classes.ts#13"
+            "location": "scripts/generate-tailwind-classes.ts#18"
           }
         ]
       },
@@ -50958,13 +51152,13 @@
           "value": "node_modules/oxlint-tailwindcss/package.json"
         }
       ],
-      "purl": "pkg:npm/oxlint-tailwindcss@1.16.0",
+      "purl": "pkg:npm/oxlint-tailwindcss@1.17.1",
       "scope": "required",
       "tags": [
         "lint"
       ],
       "type": "library",
-      "version": "1.16.0"
+      "version": "1.17.1"
     },
     {
       "authors": [
@@ -50972,7 +51166,7 @@
           "name": "Boshen and oxc contributors"
         }
       ],
-      "bom-ref": "pkg:npm/oxlint@1.89.0",
+      "bom-ref": "pkg:npm/oxlint@1.90.0",
       "description": "Linter for the JavaScript Oxidation Compiler",
       "evidence": {
         "identity": [
@@ -51033,10 +51227,10 @@
           "value": "node_modules/oxlint/package.json"
         }
       ],
-      "purl": "pkg:npm/oxlint@1.89.0",
+      "purl": "pkg:npm/oxlint@1.90.0",
       "scope": "required",
       "type": "library",
-      "version": "1.89.0"
+      "version": "1.90.0"
     },
     {
       "authors": [
@@ -51179,7 +51373,7 @@
       "version": "7.3.0"
     },
     {
-      "bom-ref": "pkg:npm/pdfjs-dist@6.4.299",
+      "bom-ref": "pkg:npm/pdfjs-dist@6.5.438",
       "description": "Generic build of Mozilla's PDF.js library.",
       "evidence": {
         "identity": [
@@ -51207,7 +51401,7 @@
             "location": "apps/web/src/lib/pdf/pdfjs-loader.ts#1"
           },
           {
-            "location": "apps/web/src/lib/pdf/pdfjs-loader.ts#26"
+            "location": "apps/web/src/lib/pdf/pdfjs-loader.ts#27"
           },
           {
             "location": "apps/web/src/lib/pdf/pdfjs-worker.ts#2"
@@ -51262,7 +51456,7 @@
         },
         {
           "name": "ExportedModules",
-          "value": "pdfjs-dist,PDFDocumentLoadingTask,pdfjs-dist/PDFDocumentLoadingTask,PDFDocumentProxy,pdfjs-dist/PDFDocumentProxy,PDFPageProxy,pdfjs-dist/PDFPageProxy,PageViewport,pdfjs-dist/PageViewport"
+          "value": "pdfjs-dist,PDFDocumentLoadingTask,pdfjs-dist/PDFDocumentLoadingTask,PDFDocumentProxy,pdfjs-dist/PDFDocumentProxy,PDFPageProxy,pdfjs-dist/PDFPageProxy,PageViewport,pdfjs-dist/PageViewport,RenderTask,pdfjs-dist/RenderTask"
         },
         {
           "name": "SrcFile",
@@ -51277,10 +51471,10 @@
           "value": "apps/api/node_modules/pdfjs-dist/package.json"
         }
       ],
-      "purl": "pkg:npm/pdfjs-dist@6.4.299",
+      "purl": "pkg:npm/pdfjs-dist@6.5.438",
       "scope": "required",
       "type": "library",
-      "version": "6.4.299"
+      "version": "6.5.438"
     },
     {
       "authors": [
@@ -51288,7 +51482,7 @@
           "name": "kepano"
         }
       ],
-      "bom-ref": "pkg:npm/pele@1.9.0",
+      "bom-ref": "pkg:npm/pele@1.13.0",
       "description": "A fast, lightweight Mermaid renderer that outputs themeable SVG.",
       "evidence": {
         "identity": [
@@ -51347,10 +51541,10 @@
           "value": "apps/web/node_modules/pele/package.json"
         }
       ],
-      "purl": "pkg:npm/pele@1.9.0",
+      "purl": "pkg:npm/pele@1.13.0",
       "scope": "required",
       "type": "library",
-      "version": "1.9.0"
+      "version": "1.13.0"
     },
     {
       "authors": [
@@ -51358,7 +51552,7 @@
           "name": "Yury Strozhevsky <yury@strozhevsky.com>"
         }
       ],
-      "bom-ref": "pkg:npm/pkijs@3.4.2",
+      "bom-ref": "pkg:npm/pkijs@4.0.1",
       "description": "Public Key Infrastructure (PKI) is the basis of how identity and key management is performed on the web today. PKIjs is a pure JavaScript library implementing the formats that are used in PKI applications. It is built on WebCrypto and aspires to make it possible to build native web applications that utilize X.509 and the related formats on the web without plug-ins",
       "evidence": {
         "identity": [
@@ -51425,13 +51619,13 @@
           "value": "apps/api/node_modules/pkijs/package.json"
         }
       ],
-      "purl": "pkg:npm/pkijs@3.4.2",
+      "purl": "pkg:npm/pkijs@4.0.1",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "3.4.2"
+      "version": "4.0.1"
     },
     {
       "authors": [
@@ -51514,7 +51708,7 @@
           "name": "Andris Reinman"
         }
       ],
-      "bom-ref": "pkg:npm/postal-mime@4.1.4",
+      "bom-ref": "pkg:npm/postal-mime@4.2.0",
       "description": "Email parser for Node.js and browser environments",
       "evidence": {
         "identity": [
@@ -51570,10 +51764,10 @@
           "value": "apps/api/node_modules/postal-mime/package.json"
         }
       ],
-      "purl": "pkg:npm/postal-mime@4.1.4",
+      "purl": "pkg:npm/postal-mime@4.2.0",
       "scope": "required",
       "type": "library",
-      "version": "4.1.4"
+      "version": "4.2.0"
     },
     {
       "authors": [
@@ -51641,7 +51835,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.438.21",
+      "bom-ref": "pkg:npm/posthog-js@1.444.4",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -51703,10 +51897,10 @@
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.438.21",
+      "purl": "pkg:npm/posthog-js@1.444.4",
       "scope": "required",
       "type": "library",
-      "version": "1.438.21"
+      "version": "1.444.4"
     },
     {
       "bom-ref": "pkg:npm/prism-react-renderer@2.4.1",
@@ -52389,7 +52583,7 @@
           "name": "Krzysztof Magiera <krzys.magiera@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/react-native-screens@4.30.0",
+      "bom-ref": "pkg:npm/react-native-screens@4.30.1",
       "description": "Native navigation primitives for your React Native app.",
       "evidence": {
         "identity": [
@@ -52442,14 +52636,14 @@
           "value": "apps/mobile/node_modules/react-native-screens/package.json"
         }
       ],
-      "purl": "pkg:npm/react-native-screens@4.30.0",
+      "purl": "pkg:npm/react-native-screens@4.30.1",
       "scope": "required",
       "tags": [
         "framework",
         "native"
       ],
       "type": "framework",
-      "version": "4.30.0"
+      "version": "4.30.1"
     },
     {
       "bom-ref": "pkg:npm/react-native-svg@15.16.0",
@@ -52531,7 +52725,7 @@
       "version": "15.16.0"
     },
     {
-      "bom-ref": "pkg:npm/react-native@0.88.0",
+      "bom-ref": "pkg:npm/react-native@0.88.1",
       "description": "A framework for building native apps using React",
       "evidence": {
         "identity": [
@@ -52549,6 +52743,9 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/mobile/src/components/open-link.ts#2"
+          },
           {
             "location": "apps/mobile/src/components/use-chat-turn.ts#6"
           },
@@ -52819,14 +53016,14 @@
           "value": "apps/mobile/node_modules/react-native/package.json"
         }
       ],
-      "purl": "pkg:npm/react-native@0.88.0",
+      "purl": "pkg:npm/react-native@0.88.1",
       "scope": "required",
       "tags": [
         "framework",
         "native"
       ],
       "type": "framework",
-      "version": "0.88.0"
+      "version": "0.88.1"
     },
     {
       "bom-ref": "pkg:npm/react@19.3.1",
@@ -53620,6 +53817,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/PermissionRow.tsx#1"
@@ -55776,6 +55976,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/local-run-approval-ceiling-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#1"
           },
           {
@@ -57187,6 +57390,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/src/lib/lists/sanctions/source-fetch.ts#2"
+          },
+          {
             "location": "packages/business-registries/src/entity-checks/soap-request-contract.helpers.ts#2"
           },
           {
@@ -57823,7 +58029,7 @@
           "name": "Adam Shaw <arshaw@users.noreply.github.com> (http://arshaw.com/)"
         }
       ],
-      "bom-ref": "pkg:npm/temporal-polyfill@1.0.5",
+      "bom-ref": "pkg:npm/temporal-polyfill@1.0.6",
       "description": "A lightweight polyfill for Temporal, successor to the JavaScript Date object",
       "evidence": {
         "identity": [
@@ -57864,6 +58070,9 @@
           },
           {
             "location": "packages/agent-engine/src/harness/claude-code/errors.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/skill-plugin.ts#12"
           },
           {
             "location": "packages/agent-engine/src/harness/claude-code/turn.ts#2"
@@ -58002,6 +58211,9 @@
           },
           {
             "location": "packages/agent-engine/src/harness/claude-code/errors.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/skill-plugin.ts#12"
           },
           {
             "location": "packages/agent-engine/src/harness/claude-code/turn.ts#2"
@@ -58173,10 +58385,10 @@
           "value": "apps/mobile/node_modules/temporal-polyfill/package.json"
         }
       ],
-      "purl": "pkg:npm/temporal-polyfill@1.0.5",
+      "purl": "pkg:npm/temporal-polyfill@1.0.6",
       "scope": "required",
       "type": "library",
-      "version": "1.0.5"
+      "version": "1.0.6"
     },
     {
       "authors": [
@@ -58623,7 +58835,7 @@
           "name": "Unistack"
         }
       ],
-      "bom-ref": "pkg:npm/uniwind@1.13.0",
+      "bom-ref": "pkg:npm/uniwind@1.13.1",
       "description": "The fastest Tailwind bindings for React Native",
       "evidence": {
         "identity": [
@@ -58691,10 +58903,10 @@
           "value": "apps/mobile/node_modules/uniwind/package.json"
         }
       ],
-      "purl": "pkg:npm/uniwind@1.13.0",
+      "purl": "pkg:npm/uniwind@1.13.1",
       "scope": "required",
       "type": "library",
-      "version": "1.13.0"
+      "version": "1.13.1"
     },
     {
       "authors": [
@@ -58983,6 +59195,9 @@
             "location": "apps/mobile/src/components/new-chat.ts#3"
           },
           {
+            "location": "apps/mobile/src/components/open-link.ts#3"
+          },
+          {
             "location": "apps/mobile/src/components/use-chat-attachments.ts#6"
           },
           {
@@ -59251,6 +59466,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/HarnessInstallLine.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/LocalSkillFoldersSection.tsx#5"
           },
           {
             "location": "apps/desktop/src/mainview/PermissionRow.tsx#4"
@@ -59706,7 +59924,7 @@
             "location": "apps/web/src/components/chat/chat-prompt-improve-button.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat/chat-rich-message-part.tsx#4"
+            "location": "apps/web/src/components/chat/chat-rich-message-part.tsx#6"
           },
           {
             "location": "apps/web/src/components/chat/chat-run-target-menu.tsx#3"
@@ -61116,6 +61334,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/local-run-approval-ceiling-card.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#5"
           },
           {
@@ -62448,6 +62669,12 @@
             "location": "apps/api/src/handlers/chat/local-run-chunks.ts#10"
           },
           {
+            "location": "apps/api/src/handlers/chat/mcp-apps/call-tool.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/mcp-apps/read-bundle.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/messages/list.ts#2"
           },
           {
@@ -62590,6 +62817,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/secret-tools.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/show-app-tool.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/show-visual-tools.ts#3"
@@ -63447,6 +63677,9 @@
             "location": "apps/api/src/handlers/organization-settings/feature-enrolments/unenrol.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/organization-settings/local-runs/update.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/organization-settings/practice-jurisdictions/update.ts#2"
           },
           {
@@ -63736,6 +63969,9 @@
           },
           {
             "location": "apps/api/src/handlers/soft-law/adapters/bfdi.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/soft-law/adapters/uoou-cz.ts#2"
           },
           {
             "location": "apps/api/src/handlers/soft-law/adapters/uoou-sk.ts#2"
@@ -64410,7 +64646,7 @@
             "location": "apps/api/src/lib/desktop-runner/session.ts#2"
           },
           {
-            "location": "apps/api/src/lib/desktop-runner/store.ts#17"
+            "location": "apps/api/src/lib/desktop-runner/store.ts#18"
           },
           {
             "location": "apps/api/src/lib/document-processing-readiness.ts#2"
@@ -65076,7 +65312,7 @@
             "location": "apps/mobile/src/connection/id-token.ts#8"
           },
           {
-            "location": "apps/mobile/src/connection/platform.ts#12"
+            "location": "apps/mobile/src/connection/platform.ts#13"
           },
           {
             "location": "apps/mobile/src/connection/session.ts#2"
@@ -65176,6 +65412,9 @@
           },
           {
             "location": "apps/web/src/components/chat/markdown-selection.logic.ts#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/stella-mcp-app-bridge.ts#2"
           },
           {
             "location": "apps/web/src/components/chat/table-chart.logic.ts#3"
@@ -65436,7 +65675,7 @@
             "location": "packages/agent-engine/scripts/fake-claude-code-cli.ts#1"
           },
           {
-            "location": "packages/agent-engine/scripts/fake-codex-app-server.ts#1"
+            "location": "packages/agent-engine/scripts/fake-codex-app-server.ts#4"
           },
           {
             "location": "packages/agent-engine/scripts/fake-harness-peer.ts#2"
@@ -65473,6 +65712,9 @@
           },
           {
             "location": "packages/agent-engine/src/harness/events.ts#8"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/process-tree.ts#4"
           },
           {
             "location": "packages/agent-engine/src/harness/transcript-handoff.ts#2"
@@ -65632,6 +65874,9 @@
           },
           {
             "location": "packages/api-contract/src/spot.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/stella-mcp-app.ts#2"
           },
           {
             "location": "packages/api-contract/src/table-chart.ts#1"
@@ -65838,9 +66083,6 @@
             "location": "scripts/check-concurrency-exceptions.ts#2"
           },
           {
-            "location": "scripts/check-deploy-env-contract.ts#2"
-          },
-          {
             "location": "scripts/check-playwright-config-scope.ts#24"
           },
           {
@@ -65946,13 +66188,13 @@
             "location": "scripts/generate-bun-toolchain.ts#3"
           },
           {
-            "location": "scripts/generate-harness-releases.ts#29"
+            "location": "scripts/generate-harness-releases.ts#34"
           },
           {
             "location": "scripts/generate-mobile-folio-fonts.ts#15"
           },
           {
-            "location": "scripts/generate-tailwind-classes.ts#14"
+            "location": "scripts/generate-tailwind-classes.ts#19"
           },
           {
             "location": "scripts/generate-us-courts.ts#37"
@@ -66022,6 +66264,9 @@
           },
           {
             "location": "apps/web/src/components/billing/expense-form.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-rich-message-part.tsx#7"
           },
           {
             "location": "apps/web/src/components/chat/chat-table-chart.tsx#9"
@@ -66380,7 +66625,7 @@
           "name": "Aaron Klinker <aaronklinker1+wxt@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/wxt@0.21.4",
+      "bom-ref": "pkg:npm/wxt@0.21.5",
       "description": "⚡ Next-gen Web Extension Framework",
       "evidence": {
         "identity": [
@@ -66442,14 +66687,14 @@
           "value": "apps/extension/node_modules/wxt/package.json"
         }
       ],
-      "purl": "pkg:npm/wxt@0.21.4",
+      "purl": "pkg:npm/wxt@0.21.5",
       "scope": "required",
       "tags": [
         "framework",
         "web"
       ],
       "type": "framework",
-      "version": "0.21.4"
+      "version": "0.21.5"
     },
     {
       "authors": [

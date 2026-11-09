@@ -92,6 +92,7 @@
     "countSummary": "{columns} oszlop × {rows} sor = {answers, plural, one {# válasz} other {# válasz}}. A válaszok felhasználják a keretet.",
     "modelRefused": "A modell megtagadta a választ",
     "nothingFound": "Nincs találat",
+    "nothingFoundInCutDocument": "Az elolvasott részben nem található semmi",
     "refusedBudget": "Nem futott le: a válaszkeret nem érhető el",
     "rerunAllPage": "Összes újrafuttatása (ezen az oldalon)",
     "rerunColumnPage": "Oszlop újrafuttatása (ezen az oldalon)",
@@ -4041,6 +4042,8 @@
       "description": "Válasszon egy kidolgozott playbookot, referenciadokumentumokat vagy mindkettőt.",
       "dismissFinding": "Megállapítás elvetése",
       "documentChanged": "A dokumentum az ellenőrzés óta megváltozott.",
+      "documentCutNotice": "<strong>A(z) {documentName} dokumentumot nem sikerült teljes egészében elolvasni.</strong> Ehhez a modellhez túl hosszú, ezért a szöveg körülbelül {percent}-a kimaradt. A válasz nélküli pozíció ellenőrzésre jelölve jelenik meg, mert a válasz a kimaradt részben is lehet.",
+      "documentTooLarge": "Ez a dokumentum túl hosszú ahhoz, hogy ez a modell elegendő részét elolvassa. Próbáljon nagyobb kontextusablakkal rendelkező modellt.",
       "export": {
         "counterparty": "Letöltés az ellenfélnek",
         "counterpartyFailed": "A dokumentumot nem sikerült exportálni",

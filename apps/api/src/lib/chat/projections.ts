@@ -1730,6 +1730,8 @@ const caseLawDecisionProjection = v.strictObject({
   courtAbbreviation: v.optional(v.string()),
   decisionDate: v.optional(v.string()),
   decisionId: passthroughId(),
+  // Set when the entry was read as another language's version of this id.
+  requestedDecisionId: v.optional(passthroughId()),
   decisionType: v.optional(v.string()),
   ecli: v.optional(v.string()),
   identifiers: decisionIdentifiersProjection,
@@ -1813,6 +1815,25 @@ const caseLawDecisionProjection = v.strictObject({
         }),
       ),
       truncated: v.optional(v.literal(true)),
+      resumeAfter: v.optional(
+        v.pipe(
+          v.string(),
+          v.description(
+            "Pass as resume_after with the same query and section to read the next matches.",
+          ),
+        ),
+      ),
+      section: v.optional(
+        v.strictObject({
+          status: v.picklist(["found", "not_found"]),
+          heading: v.optional(v.string()),
+          position: v.optional(v.number()),
+          hitsBefore: v.optional(v.number()),
+          reason: v.optional(
+            v.picklist(["no_assessment_heading", "language_unsupported"]),
+          ),
+        }),
+      ),
       // Only on an empty answer: which words matched nothing, and the next call.
       warnings: v.optional(
         v.array(

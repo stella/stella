@@ -13,10 +13,11 @@ import committedWeights from "../../mcp-connect-tool-weights.json" with { type: 
 // the template list takes a limit and cursor like every other list, and the
 // reader annotation list says how it reports passages it can no longer place,
 // and the audit log takes a performer filter. The case-law results app pages
-// a country's courts through list_case_law_courts (844 characters), and
-// search_case_law says how it reports a phrasing that ran out of time.
+// a country's courts through list_case_law_courts (844 characters). A
+// citation read offers a compact detail and a passage filter (499 characters).
+// search_case_law says how it reports a phrasing that ran out of time (67).
 // These measured limits include that shape; lower them as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 133_982;
+const TOTAL_CONNECT_CHAR_BUDGET = 136_615;
 const PER_TOOL_CONNECT_CHAR_CAP = 8179;
 
 describe("MCP connect-time tool budget", () => {

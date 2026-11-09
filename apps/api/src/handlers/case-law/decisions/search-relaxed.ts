@@ -10,11 +10,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
-import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
 import { corpusIndexReadRefusal } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
-import { runOptionalRequestSlice } from "@/api/lib/load/request-latency-budget";
+import type { BoundedRequestStep } from "@/api/lib/load/request-latency-budget";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -86,59 +85,49 @@ const RELAXED_OVERFETCH = 3;
 export const relaxedFetchLimit = (needed: number): number =>
   Math.min(needed * RELAXED_OVERFETCH, LIMITS.caseLawSearchPageSizeMax);
 
-/**
- * How long an agent search's top-up may run: inside the call's budget, and
- * short enough to leave room for the phrasings still reading their strict
- * pages.
- */
-const RELAXED_TOP_UP_SLICE_MS = 4000;
-
-export type RelaxedTopUp<TRead, TError> =
-  | { type: "read"; read: Result<TRead, TError> }
-  /** The caller's deadline ended the top-up; the strict hits stand. */
-  | { type: "shed"; cause: unknown };
-
-type ReadRelaxedTopUpOptions<TRead, TError> = {
-  mode: "best_effort" | undefined;
-  strictHitCount: number;
-  read: () => Promise<Result<TRead, TError>>;
-};
+/** Coverage queries are whole-index aggregations: at most this many per search. */
+const TERM_COVERAGE_MAX_TERMS = 6;
 
 /**
- * The relaxed phase, which an agent search gives up first: the strict hits are
- * already in hand, and losing them to a top-up is the worse answer. A page
- * with no strict hits has nothing to keep, so its failure stays the phrasing's
- * own, which the phrasing's cursor runs again. Only running out of time is
- * shed; any other failure stays what it was.
+ * The terms whose coverage ranks the partial hits: distinct, longest first
+ * (the longer word is usually the more specific), bounded so a long question
+ * cannot spend one whole-index aggregation per word. Coverage only orders
+ * hits that are already partial, so a word left out here changes no hit's
+ * eligibility.
  */
-export const readRelaxedTopUp = async <TRead, TError>({
-  mode,
-  strictHitCount,
-  read,
-}: ReadRelaxedTopUpOptions<TRead, TError>): Promise<
-  RelaxedTopUp<TRead, TError>
-> => {
-  if (mode !== "best_effort" || strictHitCount === 0) {
-    return { type: "read", read: await read() };
+export const termsForCoverage = <Term extends { value: string }>(
+  terms: readonly Term[],
+): Term[] =>
+  [...new Map(terms.map((term) => [term.value, term])).values()]
+    .toSorted((left, right) => right.value.length - left.value.length)
+    .slice(0, TERM_COVERAGE_MAX_TERMS);
+
+/** How a search's partial-match phase ended. */
+export type RelaxedTopUpState = "not_run" | "read" | "skipped";
+
+export type RelaxedTopUpOutcome<T> =
+  { type: "read"; value: T } | { type: "skipped"; error: unknown };
+
+/**
+ * How the top-up step ended. It is optional and starts with a strict page
+ * already in hand, so any way of not finishing it answers with that page
+ * rather than failing a request that has its hits.
+ */
+export const relaxedTopUpOutcome = <T>(
+  step: BoundedRequestStep<Result<T, unknown>>,
+): RelaxedTopUpOutcome<T> => {
+  switch (step.status) {
+    case "complete":
+      return Result.isOk(step.value)
+        ? { type: "read", value: step.value.value }
+        : { type: "skipped", error: step.value.error };
+    case "degraded":
+    case "failed":
+      return { type: "skipped", error: step.error };
+    default:
+      step satisfies never;
+      return panic("Unhandled relaxed top-up step");
   }
-  const run = runOptionalRequestSlice(
-    { label: "case_law.relaxed_top_up", budgetMs: RELAXED_TOP_UP_SLICE_MS },
-    read,
-  );
-  const attempt = await Result.tryPromise({
-    try: async () => await run,
-    catch: (cause) => cause,
-  });
-  if (Result.isError(attempt)) {
-    // Read again, any other failure rejects unchanged.
-    return publicReadTimeoutError(attempt.error) === null
-      ? { type: "read", read: await run }
-      : { type: "shed", cause: attempt.error };
-  }
-  const topUp = attempt.value;
-  return Result.isError(topUp) && publicReadTimeoutError(topUp.error) !== null
-    ? { type: "shed", cause: topUp.error }
-    : { type: "read", read: topUp };
 };
 
 const TERM_COVERAGE_CONCURRENCY = 4;
@@ -146,6 +135,7 @@ const TERM_COVERAGE_CONCURRENCY = 4;
 type ReadTermCoverageOptions = {
   aggregate: CorpusIndexClient["aggregate"];
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   indexId: string;
   /** One query per distinct required term, using the executed expansion dictionary. */
   queries: readonly string[];
@@ -160,6 +150,7 @@ type ReadTermCoverageOptions = {
 export const readTermCoverage = async ({
   aggregate,
   observer,
+  signal,
   indexId,
   queries,
   ids,
@@ -179,6 +170,7 @@ export const readTermCoverage = async ({
     ): Promise<Result<void, HandlerError<400 | 502 | 503>>> => {
       const answer = await aggregate({
         observer,
+        signal,
         indexId,
         query: `(${query}) AND (${candidates})`,
         aggs: {

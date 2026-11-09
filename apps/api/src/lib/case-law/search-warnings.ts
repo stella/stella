@@ -131,9 +131,8 @@ export const caseLawSearchWarnings = ({
  * - `phrasing_timed_out`: one of several phrasings ran out of the call's time
  *   budget, so the page holds the phrasings that finished and none of its
  *   hits; the returned cursor runs it again.
- * - `partial_matches_unavailable`: a phrasing's decisions holding every word
- *   are on the page, but the top-up of those holding only some of them was
- *   given up inside the call's time budget.
+ * - `partial_matches_unread`: the partial matches a short page tops up with
+ *   were due and could not be read, so the list is shorter than usual.
  */
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
@@ -142,7 +141,7 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "many_required_terms",
   "provision_cited_widely",
   "phrasing_timed_out",
-  "partial_matches_unavailable",
+  "partial_matches_unread",
 ] as const;
 
 type AgentCaseLawSearchWarningCode =
@@ -322,20 +321,18 @@ export const phrasingTimedOutWarning = ({
 });
 
 /**
- * A phrasing's own page was read but the decisions holding only some of its
- * words were not, inside the call's time budget. Every decision holding all
- * of its words is on the page (a top-up only runs once that set has ended),
- * so nothing it reports is wrong; what it leaves out is said rather than left
- * to read as "few decisions touch this".
+ * A short page whose top-up with partial matches did not finish. What it holds
+ * is correct but not everything it would normally hold, which the caller cannot
+ * tell from the hits. The phrasing is named for the same reason as above.
  */
-export const partialMatchesUnavailableWarning = ({
+export const partialMatchesUnreadWarning = ({
   query,
 }: {
   query: string;
 }): AgentCaseLawSearchWarning => ({
-  code: "partial_matches_unavailable",
-  message: `Decisions holding only some of the words of ${JSON.stringify(query)} could not be read within the search's time budget, so the page holds only the decisions holding every word.`,
-  hint: `Search this phrasing on its own (queries: [${JSON.stringify(query)}]) or with fewer words to read them.`,
+  code: "partial_matches_unread",
+  message: `Decisions holding only some of the words of ${JSON.stringify(query)} could not be read in time, so this page may hold fewer "some_terms" hits than usual, or none. Do not read the shorter list as all there is.`,
+  hint: "Repeat this search to read the partial matches, or narrow it with a court or date range. Pass strict: true if only decisions holding every word are wanted.",
 });
 
 export const manyRequiredTermsWarning = ({
@@ -456,8 +453,8 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
     }),
   phrasing_timed_out: () =>
     phrasingTimedOutWarning({ query: "náhrada škody promlčení" }),
-  partial_matches_unavailable: () =>
-    partialMatchesUnavailableWarning({ query: "náhrada škody promlčení" }),
+  partial_matches_unread: () =>
+    partialMatchesUnreadWarning({ query: "náhrada škody promlčení" }),
 } as const satisfies Record<
   AgentCaseLawSearchWarningCode,
   () => AgentCaseLawSearchWarning

@@ -92,6 +92,7 @@
     "countSummary": "{columns} veergu × {rows} rida = {answers, plural, one {# vastus} other {# vastust}}. Vastused kasutavad eelarvet.",
     "modelRefused": "Mudel keeldus vastamast",
     "nothingFound": "Midagi ei leitud",
+    "nothingFoundInCutDocument": "Loetud osast ei leitud midagi",
     "refusedBudget": "Käivitamata: vastuste eelarve pole saadaval",
     "rerunAllPage": "Käivita kõik uuesti (sellel lehel)",
     "rerunColumnPage": "Käivita veerg uuesti (sellel lehel)",
@@ -4041,6 +4042,8 @@
       "description": "Valige koostatud kontrolljuhend, võrdlusdokumendid või mõlemad.",
       "dismissFinding": "Jäta leid kõrvale",
       "documentChanged": "See dokument on pärast seda ülevaatust muutunud.",
+      "documentCutNotice": "<strong>Dokumenti {documentName} ei loetud täielikult.</strong> See on selle mudeli jaoks liiga pikk, seega jäeti välja umbes {percent} selle tekstist. Vastuseta seisukoht märgitakse ülevaatamiseks, sest vastus võib olla väljajäetud osas.",
+      "documentTooLarge": "See dokument on liiga pikk, et see mudel saaks sellest piisavalt lugeda. Proovige suurema kontekstiaknaga mudelit.",
       "export": {
         "counterparty": "Laadi vastaspoole jaoks alla",
         "counterpartyFailed": "Dokumendi eksportimine ebaõnnestus",

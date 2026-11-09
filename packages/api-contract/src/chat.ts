@@ -170,6 +170,32 @@ export const isBrowserResolvedChatToolCall = (part: unknown): boolean => {
 };
 
 /**
+ * The error a declined call stores, as the chat engine writes it when the
+ * user denies an approval: on the call's `output.error` and on its
+ * `tool-result`, whose `outcome` is `denied`. Every writer of a denial stores
+ * this shape (see `isDeclinedChatToolCall`).
+ */
+export const CHAT_TOOL_DECLINED_ERROR = "User declined tool execution";
+
+/** The parts of a tool call that decide whether it was declined. */
+type DecidedChatToolCall = {
+  type: string;
+  approval?: { approved?: boolean | undefined } | undefined;
+};
+
+/**
+ * Whether the user declined a tool call's approval. The decision is
+ * `approval.approved === false`, whatever state the call is in: a declined
+ * call is stored settled as an `error` with the engine's denial
+ * (`CHAT_TOOL_DECLINED_ERROR`), threads stored before that keep it
+ * `approval-responded` with no result, and a client posts its answer as
+ * `approval-responded`. All of them are the same decision, so every reader
+ * asks this predicate rather than reading a state.
+ */
+export const isDeclinedChatToolCall = (part: DecidedChatToolCall): boolean =>
+  part.type === "tool-call" && part.approval?.approved === false;
+
+/**
  * Title a thread is persisted with until its first message generates a real
  * one. Deliberately untranslated: it is a sentinel both sides compare
  * against, and the UI substitutes a localized label when it matches.
