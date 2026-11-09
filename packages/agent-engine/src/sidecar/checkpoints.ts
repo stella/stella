@@ -116,6 +116,8 @@ const OBJECTS = "objects";
 const MANIFESTS = "manifests";
 const RECOVERY = "recovery";
 const LOCK_FILE = ".lock";
+/** Held by whoever removes a stale lock, for a few file operations. */
+const RECLAIM_FILE = `${LOCK_FILE}-reclaim`;
 const MANIFEST_VERSION = 1;
 const LOCK_POLL_MS = 50;
 /** A lock its holder stopped refreshing for this many heartbeats is stale. */
@@ -633,6 +635,13 @@ const lockAt = async (file: string) => {
   return parsedAs(lockSchema, await readFile(file, "utf-8"));
 };
 
+/** A lock, draft or reclaim mutex left alone for this long is stale. */
+const staleAfterMs = (limits: CheckpointLimits) =>
+  limits.lockHeartbeatMs * LOCK_STALE_HEARTBEATS;
+
+const ageOf = (stat: Stats) =>
+  Temporal.Now.instant().epochMilliseconds - stat.mtimeMs;
+
 /**
  * Whether a lock's holder is gone: its process exited, or it stopped
  * refreshing the lock for several heartbeats (its process id may have been
@@ -643,8 +652,7 @@ const isStaleLock = async (lock: string, limits: CheckpointLimits) => {
   if (stat === undefined) {
     return false;
   }
-  const age = Temporal.Now.instant().epochMilliseconds - stat.mtimeMs;
-  if (age > limits.lockHeartbeatMs * LOCK_STALE_HEARTBEATS) {
+  if (ageOf(stat) > staleAfterMs(limits)) {
     return true;
   }
   const holder = await lockAt(lock);
@@ -660,62 +668,66 @@ const isStaleLock = async (lock: string, limits: CheckpointLimits) => {
 };
 
 /**
- * Remove a stale lock without removing a fresh one that replaced it: the lock
- * is moved to a name of its own first, and removed only when it is still the
- * one judged stale; otherwise it is put back.
+ * Remove a stale lock without ever removing a fresh one. Reclaimers take a
+ * small mutex first (`.lock-reclaim`, created exclusively); inside it the
+ * lock is read again and unlinked only while it is still the one judged
+ * stale and still stale. Nobody renames a lock away, so a fresh lock is never
+ * moved out of its name, and only one reclaimer acts at a time; the others
+ * wait and try again. A mutex older than five heartbeats belongs to a
+ * reclaimer that died and is removed; it is held for a few file operations,
+ * so a live reclaimer losing it that way is not a practical case.
+ *
+ * Answers `gone` once the stale lock is removed, `kept` when it is not this
+ * reclaimer's to remove (now or yet), `failed` when the mutex cannot be had.
  */
-const reclaimLock = async (lock: string, judged: Lock | null) => {
-  const moved = path.join(
-    path.dirname(lock),
-    `${LOCK_FILE}-stale-${crypto.randomUUID()}`,
-  );
-  const stillStale = await Result.tryPromise({
-    try: async () => {
-      await rename(lock, moved);
-      const found = await lockAt(moved);
-      return judged === null || found?.token === judged.token;
-    },
-    catch: (cause) => cause,
-  });
-  if (Result.isError(stillStale)) {
-    return stillStale;
+const reclaimLock = async (
+  store: string,
+  judged: Lock | null,
+  limits: CheckpointLimits,
+) => {
+  const lock = path.join(store, LOCK_FILE);
+  const mutex = path.join(store, RECLAIM_FILE);
+  const left = entryAt(mutex);
+  if (left !== undefined && ageOf(left) > staleAfterMs(limits)) {
+    await rm(mutex, { force: true });
   }
-  // A new holder took the lock between the check and the move: it goes
-  // back, unless yet another holder has published one since.
-  const putBack = stillStale.value
-    ? Result.ok()
-    : await Result.tryPromise({
-        try: async () => {
-          await link(moved, lock);
-        },
-        catch: (cause) => cause,
-      });
-  const removed = await Result.tryPromise({
+  const held = await Result.tryPromise({
     try: async () => {
-      await rm(moved, { force: true });
+      const handle = await open(mutex, CREATE_FLAGS, PRIVATE_FILE_MODE);
+      await handle.close();
     },
     catch: (cause) => cause,
   });
-  return Result.isError(putBack) && errorCode(putBack.error) !== "EEXIST"
-    ? putBack
-    : removed;
+  if (Result.isError(held)) {
+    // EEXIST: another reclaimer is at it; this one waits and looks again.
+    return errorCode(held.error) === "EEXIST" ? "kept" : "failed";
+  }
+  try {
+    const current = await lockAt(lock);
+    const same =
+      judged === null ? current === null : current?.token === judged.token;
+    if (same && (await isStaleLock(lock, limits))) {
+      await unlink(lock);
+      return "gone";
+    }
+    return "kept";
+  } finally {
+    await rm(mutex, { force: true });
+  }
 };
 
 /**
- * Remove what crashed holders left of their locks: drafts and moved stale
- * locks, once they are older than a stale lock.
+ * Remove what crashed holders left of their locks: drafts and reclaim
+ * mutexes, once they are older than a stale lock. A waiting holder refreshes
+ * its draft before every attempt, so a live draft is never this old.
  */
 const sweepLockLeftovers = async (store: string, limits: CheckpointLimits) => {
-  const now = Temporal.Now.instant().epochMilliseconds;
   for (const name of await namesIn(store)) {
     const leftover = path.join(store, name);
     const stat = name.startsWith(`${LOCK_FILE}-`)
       ? entryAt(leftover)
       : undefined;
-    if (
-      stat !== undefined &&
-      now - stat.mtimeMs > limits.lockHeartbeatMs * LOCK_STALE_HEARTBEATS
-    ) {
+    if (stat !== undefined && ageOf(stat) > staleAfterMs(limits)) {
       // await-in-loop: removals one at a time.
       await rm(leftover, { force: true });
     }
@@ -726,7 +738,9 @@ const sweepLockLeftovers = async (store: string, limits: CheckpointLimits) => {
  * Take the store's lock file, waiting while another process holds it. The
  * lock is written in full under a name of its own and published with a hard
  * link, which refuses an existing lock: no holder ever sees a half-written
- * one. A lock whose holder is gone is taken over.
+ * one. The draft's time is refreshed right before every attempt, so a lock is
+ * published fresh and a waiting draft never looks left behind. A lock whose
+ * holder is gone is taken over through `reclaimLock`.
  */
 const takeLock = async (
   store: string,
@@ -736,8 +750,13 @@ const takeLock = async (
   const mine: Lock = { pid: process.pid, token: crypto.randomUUID() };
   const draft = path.join(store, `${LOCK_FILE}-${mine.token}`);
   const deadline = performance.now() + limits.lockWaitMs;
-  const written = await Result.tryPromise({
-    try: async () => {
+  const lockFailed = refused(
+    "failed",
+    "The checkpoint store could not be locked.",
+  );
+  /** The draft, written again when a sweep took it, with a fresh time. */
+  const freshDraft = async () => {
+    if (entryAt(draft) === undefined) {
       const handle = await open(draft, CREATE_FLAGS, PRIVATE_FILE_MODE);
       try {
         await handle.writeFile(JSON.stringify(mine));
@@ -745,57 +764,77 @@ const takeLock = async (
       } finally {
         await handle.close();
       }
-    },
-    catch: refused("failed", "The checkpoint store could not be locked."),
-  });
-  if (Result.isError(written)) {
-    return written;
-  }
+      return;
+    }
+    const now = new Date();
+    await utimes(draft, now, now);
+  };
+  /**
+   * One attempt: `taken` once the lock is this holder's, `retry` to try again
+   * at once, `wait` to try again after a poll, `failed` to give up.
+   */
+  const attempt = async () => {
+    await freshDraft();
+    const published = await Result.tryPromise({
+      try: async () => {
+        await link(draft, lock);
+      },
+      catch: (cause) => cause,
+    });
+    if (Result.isOk(published)) {
+      return "taken";
+    }
+    const code = errorCode(published.error);
+    if (code === "ENOENT") {
+      // Swept between the refresh and the link: the next attempt rewrites it.
+      return "retry";
+    }
+    if (code !== "EEXIST") {
+      return "failed";
+    }
+    const judged = await lockAt(lock);
+    if (!(await isStaleLock(lock, limits))) {
+      return "wait";
+    }
+    const reclaimed = await reclaimLock(store, judged, limits);
+    switch (reclaimed) {
+      case "gone":
+        return "retry";
+      case "kept":
+        return "wait";
+      case "failed":
+        return "failed";
+      default:
+        reclaimed satisfies never;
+        return panic("Unhandled lock reclaim");
+    }
+  };
   try {
     for (;;) {
       // await-in-loop: one attempt at a time until the lock is free.
-      const published = await Result.tryPromise({
-        try: async () => {
-          await link(draft, lock);
-        },
-        catch: (cause) => cause,
+      const taken = await Result.tryPromise({
+        try: attempt,
+        catch: lockFailed,
       });
-      if (Result.isOk(published)) {
+      if (Result.isError(taken)) {
+        return taken;
+      }
+      if (taken.value === "taken") {
         return Result.ok(mine);
       }
-      if (errorCode(published.error) !== "EEXIST") {
-        return Result.err(
-          refused(
-            "failed",
-            "The checkpoint store could not be locked.",
-          )(published.error),
-        );
-      }
-      // await-in-loop: the holder is read before it is judged.
-      const judged = await Result.tryPromise({
-        try: async () => await lockAt(lock),
-        catch: (cause) => cause,
-      });
-      // await-in-loop: checked before each new attempt.
-      const stale = await Result.tryPromise({
-        try: async () => await isStaleLock(lock, limits),
-        catch: (cause) => cause,
-      });
-      if (Result.isOk(judged) && Result.isOk(stale) && stale.value) {
-        // await-in-loop: the stale lock goes before the next attempt.
-        const reclaimed = await reclaimLock(lock, judged.value);
-        if (Result.isOk(reclaimed)) {
-          continue;
-        }
+      if (taken.value === "failed") {
+        return Result.err(lockFailed());
       }
       if (performance.now() >= deadline) {
         return Result.err(
           refused("failed", "Another process holds the checkpoint store.")(),
         );
       }
-      // real-time: another process holds the lock; it is polled until free.
-      // await-in-loop: one wait between attempts.
-      await Bun.sleep(LOCK_POLL_MS);
+      if (taken.value === "wait") {
+        // real-time: another process holds the lock; it is polled until free.
+        // await-in-loop: one wait between attempts.
+        await Bun.sleep(LOCK_POLL_MS);
+      }
     }
   } finally {
     await rm(draft, { force: true });
@@ -1474,6 +1513,12 @@ type RestoreOptions = {
    * rollback that fails, or stop the restore there as a crash would.
    */
   beforeRollback?: () => Promise<void> | void;
+  /**
+   * Runs after the checkpoint is marked undone and before the restore's
+   * record is dropped; tests stop there as a crash would, or make the drop
+   * fail.
+   */
+  afterMark?: () => Promise<void> | void;
   /** One line in the holder's log; never given a path or a file name. */
   log: (line: string) => void;
 };
@@ -1505,27 +1550,131 @@ const verifyNeeded = async (
 const byEntryPath = (entries: readonly Entry[]) =>
   new Map(entries.map((entry) => [entry.path, entry]));
 
+/** The same entry, or both absent: kind, content, mode and link. */
+const sameEntry = (left: Entry | undefined, right: Entry | undefined) => {
+  if (left === undefined || right === undefined) {
+    return left === right;
+  }
+  switch (left.kind) {
+    case "file":
+      return (
+        right.kind === "file" &&
+        right.sha256 === left.sha256 &&
+        right.mode === left.mode
+      );
+    case "dir":
+      return right.kind === "dir" && right.mode === left.mode;
+    case "link":
+      return right.kind === "link" && right.linkTarget === left.linkTarget;
+    default:
+      left satisfies never;
+      return panic("Unhandled checkpoint entry kind");
+  }
+};
+
+/** A folder as a restore leaves it after opening it for writing. */
+const openedFrom = (before: Entry | undefined, now: Entry | undefined) =>
+  before?.kind === "dir" &&
+  now?.kind === "dir" &&
+  now.mode === withOwnerAccess(before.mode);
+
+const parentOf = (entryPath: string) => path.posix.dirname(entryPath);
+
 /**
- * Put the folder back as it was saved before the restore began, and check
- * that a new walk finds exactly that.
+ * Undo what a restore wrote, and only that. For each path, with `before` the
+ * folder as the restore found it and `desired` what the restore was writing:
+ *
+ * - as it was before: left as it is;
+ * - as the restore wrote it (or a folder it opened): put back as before,
+ *   which removes what the restore created;
+ * - anything else (changed since, or new in neither tree, such as an
+ *   attachment a later run copied): left as it is, and noted in one log line.
+ *
+ * What is left keeps the folders it lies in. The result is checked with a
+ * new walk.
  */
-const rollBack = async (
-  workspaceDir: string,
-  store: string,
-  saved: readonly Entry[],
-  limits: CheckpointLimits,
-): Promise<Result<void, CheckpointRefused | CheckpointRestoreFailed>> =>
+type RollBackOptions = {
+  workspaceDir: string;
+  store: string;
+  /** The folder as the restore found it. */
+  before: readonly Entry[];
+  /** What the restore was writing. */
+  desired: ReadonlyMap<string, Entry>;
+  limits: CheckpointLimits;
+  log: (line: string) => void;
+};
+
+const rollBack = async ({
+  workspaceDir,
+  store,
+  before,
+  desired,
+  limits,
+  log,
+}: RollBackOptions): Promise<
+  Result<void, CheckpointRefused | CheckpointRestoreFailed>
+> =>
   await Result.gen(async function* () {
     const now = yield* Result.await(
-      saveTree({ workspaceDir, store, limits, known: saved }),
+      saveTree({ workspaceDir, store, limits, known: before }),
     );
-    yield* Result.await(
-      applyTree(workspaceDir, store, byEntryPath(saved), byEntryPath(now)),
-    );
+    const saved = byEntryPath(before);
+    const current = byEntryPath(now);
+    const target = new Map<string, Entry>();
+    const changedSince: string[] = [];
+    for (const entryPath of new Set([
+      ...saved.keys(),
+      ...desired.keys(),
+      ...current.keys(),
+    ])) {
+      const was = saved.get(entryPath);
+      const is = current.get(entryPath);
+      const chosen =
+        sameEntry(is, was) ||
+        !(sameEntry(is, desired.get(entryPath)) || openedFrom(was, is))
+          ? is
+          : was;
+      if (!sameEntry(is, was) && chosen === is) {
+        changedSince.push(entryPath);
+      }
+      if (chosen !== undefined) {
+        target.set(entryPath, chosen);
+      }
+    }
+    // What is left as it is keeps the folders it lies in.
+    for (const entryPath of changedSince) {
+      for (
+        let folder = parentOf(entryPath);
+        folder !== ".";
+        folder = parentOf(folder)
+      ) {
+        const kept = current.get(folder);
+        if (kept !== undefined && target.get(folder)?.kind !== "dir") {
+          target.set(folder, kept);
+        }
+      }
+    }
+    // Anything put back below a path that is no longer a folder goes.
+    const underFolders = (entryPath: string): boolean => {
+      const folder = parentOf(entryPath);
+      return (
+        folder === "." ||
+        (target.get(folder)?.kind === "dir" && underFolders(folder))
+      );
+    };
+    for (const entryPath of [...target.keys()]) {
+      if (!underFolders(entryPath)) {
+        target.delete(entryPath);
+      }
+    }
+    if (changedSince.length > 0) {
+      log("a rollback left entries changed since the restore as they are");
+    }
+    yield* Result.await(applyTree(workspaceDir, store, target, current));
     const after = yield* Result.await(
-      saveTree({ workspaceDir, store, limits, known: saved }),
+      saveTree({ workspaceDir, store, limits, known: now }),
     );
-    return sameTree(after, saved)
+    return sameTree(after, [...target.values()])
       ? Result.ok()
       : Result.err(
           restoreFailed("The folder did not come back as it was saved.")(),
@@ -1543,13 +1692,18 @@ const dropRecovery = async (file: string) =>
 /**
  * Settle a restore that was interrupted (the holder stopped mid-way): a
  * recovery record left in the store means the folder may be half restored.
- * The folder is put back to the newest record, the same way a failed restore
- * rolls back, and the records are dropped. Runs first, with the store held.
+ * A record whose checkpoint is already marked undone belongs to a restore
+ * that committed and only failed to drop it: it is dropped and the folder
+ * kept. Otherwise what the restore wrote is undone against the newest
+ * uncommitted record, the same way a failed restore rolls back (changes made
+ * since are kept), and the records are dropped. Runs first, with the store
+ * held.
  */
 const reconcile = async (
   store: string,
   workspaceDir: string,
   limits: CheckpointLimits,
+  log: (line: string) => void,
 ): Promise<Result<void, CheckpointRefused | CheckpointRestoreFailed>> =>
   await Result.gen(async function* () {
     const texts = yield* Result.await(
@@ -1563,13 +1717,41 @@ const reconcile = async (
       .toSorted((left, right) =>
         left.recovery.savedAt < right.recovery.savedAt ? -1 : 1,
       );
-    const newest = records.at(-1);
-    if (newest === undefined) {
+    if (records.length === 0) {
       return Result.ok();
     }
-    yield* Result.await(
-      rollBack(workspaceDir, store, newest.recovery.entries, limits),
+    const { manifests } = yield* Result.await(readStore(store, limits));
+    const undone = new Set(
+      manifests.flatMap(({ runId, undone: isUndone }) =>
+        isUndone ? [runId] : [],
+      ),
     );
+    const uncommitted = records.findLast(
+      ({ recovery }) => !undone.has(recovery.restoreOf),
+    );
+    if (uncommitted !== undefined) {
+      // What the interrupted restore was writing, from the same checkpoints.
+      const target = manifests.find(
+        ({ runId }) => runId === uncommitted.recovery.restoreOf,
+      );
+      const desired =
+        target === undefined
+          ? new Map<string, Entry>()
+          : desiredTree(
+              target,
+              manifests.filter(({ ordinal }) => ordinal > target.ordinal),
+            );
+      yield* Result.await(
+        rollBack({
+          workspaceDir,
+          store,
+          before: uncommitted.recovery.entries,
+          desired,
+          limits,
+          log,
+        }),
+      );
+    }
     for (const { file } of records) {
       // await-in-loop: removals one at a time.
       yield* Result.await(dropRecovery(file));
@@ -1588,7 +1770,7 @@ const reconcile = async (
  */
 const restoreHeld = async (
   store: string,
-  { workspaceDir, runId, beforeRollback }: RestoreOptions,
+  { workspaceDir, runId, beforeRollback, afterMark, log }: RestoreOptions,
   limits: CheckpointLimits,
 ): Promise<CheckpointRestore> => {
   const state = await readStore(store, limits);
@@ -1665,6 +1847,7 @@ const restoreHeld = async (
       await writeManifest(store, { ...target, undone: true }, limits),
     );
   if (marked) {
+    await afterMark?.();
     const dropped = await dropRecovery(recoveryFile);
     return {
       outcome: "restored",
@@ -1674,7 +1857,14 @@ const restoreHeld = async (
     };
   }
   await beforeRollback?.();
-  const rolledBack = await rollBack(workspaceDir, store, saved.value, limits);
+  const rolledBack = await rollBack({
+    workspaceDir,
+    store,
+    before: saved.value,
+    desired,
+    limits,
+    log,
+  });
   if (Result.isOk(rolledBack)) {
     const dropped = await dropRecovery(recoveryFile);
     return {
@@ -1715,7 +1905,12 @@ export const restoreCheckpoint = async (
   }
   const restored = await withStore(store, limits, options.log, async () => {
     // An interrupted restore is settled first; until it is, nothing else.
-    const settled = await reconcile(store, options.workspaceDir, limits);
+    const settled = await reconcile(
+      store,
+      options.workspaceDir,
+      limits,
+      options.log,
+    );
     if (Result.isError(settled)) {
       const unsettled: CheckpointRestore = {
         outcome: "failed",
@@ -1782,7 +1977,7 @@ export const captureCheckpoint = async ({
   const store = checkpointStoreOf(workspaceDir);
   const taken = await withStore(store, limits, log, async () => {
     // An interrupted restore is settled first; until it is, nothing else.
-    const settled = await reconcile(store, workspaceDir, limits);
+    const settled = await reconcile(store, workspaceDir, limits, log);
     if (Result.isError(settled)) {
       log(`an interrupted restore was not settled: ${settled.error.message}`);
       return Result.err(

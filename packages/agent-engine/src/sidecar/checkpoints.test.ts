@@ -753,6 +753,121 @@ describe("a run folder's checkpoint", () => {
       expect(recoveries(workspaceDir)).toEqual([]);
     });
 
+    test("a restore stopped after it committed keeps the restored folder", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "d/f.txt", "old");
+      const { runId } = await capture(workspaceDir);
+      write(workspaceDir, "d/f.txt", "new");
+      write(workspaceDir, "z-created.txt", "created by the turn");
+
+      // The holder stops right after the checkpoint is marked undone.
+      const stopped = await restoreCheckpoint({
+        workspaceDir,
+        runId,
+        log: logLine,
+        afterMark: () => {
+          throw new Error("the holder stopped");
+        },
+      });
+      expect(stopped.outcome).toBe("failed");
+      expect(recoveries(workspaceDir)).toHaveLength(1);
+      const restored = treeOf(workspaceDir);
+      expect(readFileSync(path.join(workspaceDir, "d/f.txt"), "utf-8")).toBe(
+        "old",
+      );
+
+      expect((await capture(workspaceDir)).report).toEqual({
+        status: "taken",
+      });
+      expect(treeOf(workspaceDir)).toEqual(restored);
+      expect(recoveries(workspaceDir)).toEqual([]);
+      // Undone once, and it stays undone.
+      expect((await restore(workspaceDir, runId)).outcome).toBe("not_newest");
+    });
+
+    test("a restore whose record could not be dropped keeps the restored folder", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "d/f.txt", "old");
+      const { runId } = await capture(workspaceDir);
+      write(workspaceDir, "d/f.txt", "new");
+      const recoveryFolder = path.join(store(workspaceDir), "recovery");
+
+      const restored = await restoreCheckpoint({
+        workspaceDir,
+        runId,
+        log: logLine,
+        afterMark: () => {
+          chmodSync(recoveryFolder, 0o500);
+          cleanupModes.push(() => {
+            chmodSync(recoveryFolder, 0o700);
+          });
+        },
+      });
+      expect(restored).toEqual({
+        outcome: "restored",
+        detail: "the state before the restore was kept",
+      });
+      expect(recoveries(workspaceDir)).toHaveLength(1);
+      const after = treeOf(workspaceDir);
+
+      chmodSync(recoveryFolder, 0o700);
+      expect((await capture(workspaceDir)).report).toEqual({
+        status: "taken",
+      });
+      expect(treeOf(workspaceDir)).toEqual(after);
+      expect(readFileSync(path.join(workspaceDir, "d/f.txt"), "utf-8")).toBe(
+        "old",
+      );
+      expect(recoveries(workspaceDir)).toEqual([]);
+    });
+
+    test("settling an interrupted restore keeps what changed since, attachments included", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "d/f.txt", "old");
+      write(workspaceDir, "notes.txt", "the member's notes");
+      const { runId } = await capture(workspaceDir);
+      write(workspaceDir, "d/f.txt", "new");
+      write(workspaceDir, "z-created.txt", "created by the turn");
+      lockManifests(workspaceDir);
+      const interrupted = await restoreCheckpoint({
+        workspaceDir,
+        runId,
+        log: logLine,
+        beforeRollback: () => {
+          throw new Error("the holder stopped");
+        },
+      });
+      expect(interrupted.outcome).toBe("failed");
+
+      // Changed after the interruption: an edit, and a newly copied file.
+      const annex =
+        "attachments/019a0000-0000-7000-8000-000000000003/annex.pdf";
+      write(workspaceDir, "notes.txt", "edited after the interruption");
+      write(workspaceDir, annex, "copied for the next run");
+
+      chmodSync(path.join(store(workspaceDir), "manifests"), 0o700);
+      expect((await capture(workspaceDir)).report).toEqual({
+        status: "taken",
+      });
+      expect(logged.splice(0)).toEqual([
+        "a rollback left entries changed since the restore as they are",
+      ]);
+      // What the restore wrote is undone; what changed since stays.
+      expect(readFileSync(path.join(workspaceDir, "d/f.txt"), "utf-8")).toBe(
+        "new",
+      );
+      expect(
+        readFileSync(path.join(workspaceDir, "z-created.txt"), "utf-8"),
+      ).toBe("created by the turn");
+      expect(readFileSync(path.join(workspaceDir, "notes.txt"), "utf-8")).toBe(
+        "edited after the interruption",
+      );
+      expect(readFileSync(path.join(workspaceDir, annex), "utf-8")).toBe(
+        "copied for the next run",
+      );
+      expect(recoveries(workspaceDir)).toEqual([]);
+    });
+
     test("the store's lock is kept fresh while a restore runs", async () => {
       const { workspaceDir } = place();
       write(workspaceDir, "a.txt", "old");
@@ -857,6 +972,52 @@ describe("a run folder's checkpoint", () => {
       expect(manifestIds(workspaceDir)).toHaveLength(2);
       expect(existsSync(lockFile(workspaceDir))).toBe(false);
     });
+
+    test.skipIf(isWindows)(
+      "two holders taking over one stale lock at once never both hold it",
+      async () => {
+        const { root, workspaceDir } = place();
+        // A second name for the same folder: its work is not queued behind
+        // the first in this process, so only the lock file keeps them apart.
+        symlinkSync(path.join(root, "agent-runs"), path.join(root, "alias"));
+        const alias = path.join(root, "alias", path.basename(workspaceDir));
+        write(workspaceDir, "a.txt", "saved");
+        await capture(workspaceDir);
+        for (const round of [1, 2, 3, 4, 5]) {
+          writeFileSync(lockFile(workspaceDir), holder(process.pid));
+          utimesSync(lockFile(workspaceDir), 1, 1);
+          write(workspaceDir, "a.txt", `round ${String(round)}`);
+          // await-in-loop: each round races on a freshly planted stale lock.
+          const captures = await Promise.all([
+            capture(workspaceDir),
+            capture(alias),
+          ]);
+          expect(captures.map(({ report }) => report)).toEqual([
+            { status: "taken" },
+            { status: "taken" },
+          ]);
+        }
+        const manifests = path.join(
+          checkpointStoreOf(workspaceDir),
+          "manifests",
+        );
+        const ordinals = readdirSync(manifests).map(
+          (name) =>
+            v.parse(
+              v.object({ ordinal: v.number() }),
+              JSON.parse(readFileSync(path.join(manifests, name), "utf-8")),
+            ).ordinal,
+        );
+        // Two holders at once would have read the same latest checkpoint.
+        expect(new Set(ordinals).size).toBe(ordinals.length);
+        expect(ordinals.length).toBe(11);
+        expect(
+          readdirSync(checkpointStoreOf(workspaceDir)).filter((name) =>
+            name.startsWith(".lock"),
+          ),
+        ).toEqual([]);
+      },
+    );
 
     test("a lock its holder stopped refreshing is taken over, even under a live process id", async () => {
       const { workspaceDir } = place();
