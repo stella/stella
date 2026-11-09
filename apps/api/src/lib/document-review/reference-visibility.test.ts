@@ -426,6 +426,9 @@ const STORED_BASIS_READERS = {
   "lib/db/aggregate-lock.ts": "internal",
   // Compares the pinned position rules of two runs; answers with nothing.
   "lib/document-review/decision-carry-over.ts": "internal",
+  // Reads only the run's reference matters, to decide whether the review
+  // signal may quote a finding's rationale; emits nothing from the basis.
+  "lib/scouts/document-review.ts": "internal",
 } as const satisfies Record<
   string,
   "projects" | "summary" | "gated" | "internal"
