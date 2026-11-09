@@ -1579,7 +1579,7 @@ describe("OpenAI-compatible MCP tools", () => {
             minLength: 1,
             maxLength: 8,
             description:
-              "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, and matchedLanguage names the language its snippet came from; otherwise it stays in the language that matched. Decisions in one language are unaffected. Ignored together with language.",
+              "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, its snippet still in the language that matched; otherwise it stays as matched. Ignored together with language.",
           },
           FILTER_KIND,
         ),
@@ -3104,13 +3104,11 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(preferred).toMatchObject({
       decisionId: CZECH_VERSION_ID,
       language: "cs",
-      matchedLanguage: "pl",
     });
     expect(preferred).not.toHaveProperty("source_url");
 
     const missing = await resultFor({ preferred_language: "de" });
     expect(missing).toMatchObject({ decisionId: DECISION_ID, language: "pl" });
-    expect(missing).not.toHaveProperty("matchedLanguage");
 
     const filtered = await resultFor({
       language: "pl",

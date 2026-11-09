@@ -2412,8 +2412,7 @@ const preferredLanguageOf = ({
 
 /**
  * The hit a caller asked to read in another language, as that version. The
- * decision is the same; the snippet stays the one that matched, so the result
- * says which language that was.
+ * decision is the same; the snippet stays the one that matched.
  */
 const preferredLanguageHit = <
   THit extends ReturnType<typeof mergeCaseLawSearchHits>[number]["hit"],
@@ -2430,21 +2429,18 @@ const preferredLanguageHit = <
             normalizePublicDecisionLanguage(language) === preferredLanguage,
         );
   return version === undefined
-    ? { served: hit, matchedLanguage: undefined }
+    ? hit
     : {
-        served: {
-          ...hit,
-          decisionId: version.id,
-          caseNumber: version.caseNumber,
-          court: version.court,
-          decisionDate: version.decisionDate,
-          language: version.language,
-          slug: version.slug,
-          // The alternates read carries no publisher link; the reader URL and
-          // read_case_law_decision give this version's own.
-          sourceUrl: null,
-        },
-        matchedLanguage: hit.language,
+        ...hit,
+        decisionId: version.id,
+        caseNumber: version.caseNumber,
+        court: version.court,
+        decisionDate: version.decisionDate,
+        language: version.language,
+        slug: version.slug,
+        // The alternates read carries no publisher link; the reader URL and
+        // read_case_law_decision give this version's own.
+        sourceUrl: null,
       };
 };
 
@@ -2456,10 +2452,7 @@ const caseLawSearchResult = ({
 }: ReturnType<typeof mergeCaseLawSearchHits>[number] & {
   preferredLanguage: string | null;
 }) => {
-  const { served: hit, matchedLanguage } = preferredLanguageHit(
-    matchedHit,
-    preferredLanguage,
-  );
+  const hit = preferredLanguageHit(matchedHit, preferredLanguage);
   const resource = resourceRef({
     type: RESOURCE_TYPE.CASE_LAW_DECISION,
     id: brandPersistedCaseLawDecisionId(hit.decisionId),
@@ -2491,7 +2484,6 @@ const caseLawSearchResult = ({
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
-    ...(matchedLanguage === undefined ? {} : { matchedLanguage }),
     textAvailability: hit.textAvailability,
     match,
     ...(hit.textWithheldReason === null

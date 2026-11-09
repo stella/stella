@@ -322,7 +322,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 8,
-          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, and matchedLanguage names the language its snippet came from; otherwise it stays in the language that matched. Decisions in one language are unaffected. Ignored together with language. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, its snippet still in the language that matched; otherwise it stays as matched. Ignored together with language. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -7690,7 +7690,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 8,
-          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, and matchedLanguage names the language its snippet came from; otherwise it stays in the language that matched. Decisions in one language are unaffected. Ignored together with language. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, its snippet still in the language that matched; otherwise it stays as matched. Ignored together with language. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -15794,7 +15794,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 8,
-          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, and matchedLanguage names the language its snippet came from; otherwise it stays in the language that matched. Decisions in one language are unaffected. Ignored together with language. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, its snippet still in the language that matched; otherwise it stays as matched. Ignored together with language. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -17926,7 +17926,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 8,
-          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, and matchedLanguage names the language its snippet came from; otherwise it stays in the language that matched. Decisions in one language are unaffected. Ignored together with language. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, its snippet still in the language that matched; otherwise it stays as matched. Ignored together with language. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }

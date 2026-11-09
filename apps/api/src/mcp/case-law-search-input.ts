@@ -173,7 +173,7 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
           v.minLength(LIMITS.mcpNonEmptyMin),
           v.maxLength(LIMITS.mcpLanguageCodeMaxChars),
           v.description(
-            "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, and matchedLanguage names the language its snippet came from; otherwise it stays in the language that matched. Decisions in one language are unaffected. Ignored together with language.",
+            "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, its snippet still in the language that matched; otherwise it stays as matched. Ignored together with language.",
           ),
         ),
       ),
