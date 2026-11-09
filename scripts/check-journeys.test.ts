@@ -1354,7 +1354,10 @@ test("schedules bounded journeys and routes alerts", async () => {
   ).text();
   expect(probe).toContain("vars.CASE_LAW_SEARCH_PROBE_ENABLED == 'true'");
   expect(probe).toContain("persist-credentials: false");
-  expect(probe).toContain("bash scripts/check-journeys.sh --search-probe");
+  expect(probe).toContain(
+    "bash scripts/retry.sh bash scripts/check-journeys.sh --search-probe",
+  );
+  expect(probe).toContain('RETRY_PASSTHROUGH_EXIT_CODES: "1"');
   for (const action of probe.matchAll(/uses: (\S+)/gu)) {
     expect(action[1]).toMatch(/@[0-9a-f]{40}$/u);
   }

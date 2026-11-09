@@ -35,12 +35,23 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
           sparse-checkout: |
+            /scripts/check-cli-promotion.ts
             /scripts/check-journeys.sh
+            /scripts/check-npm-publish-lag.ts
             /scripts/journey-detail.jq
+            /scripts/promoted-cli-target.ts
+            /scripts/promoted-release-policy.ts
+            /scripts/publish-packages.ts
+            /scripts/retry.sh
           sparse-checkout-cone-mode: false
 
       - name: Probe fresh case-law searches
         timeout-minutes: 6
         env:
           MCP_CANARY_TOKEN: ${{ secrets.MCP_CANARY_TOKEN }}
-        run: bash scripts/check-journeys.sh --search-probe
+          # Exit 1 is the probe's verdict, and repeating it would hide a first
+          # hit that timed out: only a crash of the script itself is retried.
+          RETRY_PASSTHROUGH_EXIT_CODES: "1"
+          RETRY_ATTEMPTS: "2"
+          RETRY_DELAYS_SECONDS: "15"
+        run: bash scripts/retry.sh bash scripts/check-journeys.sh --search-probe
