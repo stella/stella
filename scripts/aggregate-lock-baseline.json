@@ -3889,7 +3889,7 @@
   },
   {
     "file": "apps/api/src/scripts/backfill-citation-keys.ts",
-    "fingerprint": "56d03fa605856c62c913f88011db622573779889bfe620510396a0410108512a",
+    "fingerprint": "f60d34cadf241689187c23d1ebf6d827627487da041239c252cf07b6a8b5cc7f",
     "count": 1,
     "reason": "for update in apps/api/src/scripts/backfill-citation-keys.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
