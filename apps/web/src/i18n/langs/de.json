@@ -1898,6 +1898,7 @@
     "sendErrorStreamIncomplete": "Die Antwort der KI wurde abgebrochen, bevor sie fertig war. Versuchen Sie es erneut.",
     "sendErrorTimedOut": "Der Chat hat nicht rechtzeitig geantwortet. Versuchen Sie es erneut.",
     "sendErrorToolsUnsupported": "Dieses Modell kann keine Tools verwenden und daher keine Fragen zu Ihrer Akte beantworten. Wechseln Sie zu einem Modell, das Tools unterstützt.",
+    "sendErrorTurnTooLarge": "Diese Antwort ist zu umfangreich geworden, um vollständig übermittelt zu werden. Senden Sie eine neue Nachricht, um fortzufahren.",
     "sendPrompt": "Nachricht senden",
     "sendQueuedMessageNow": "Jetzt senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",

@@ -82,6 +82,7 @@ export const PROVIDER_CALL_FAILURE_REASON = {
   local_runner_limit_reached: "quota_exhausted",
   local_runner_unavailable: "provider_unavailable",
   local_runner_turn_too_large: "request_invalid",
+  turn_too_large: "usage_limited",
   unknown: "unclassified",
 } as const satisfies Record<AIErrorKind, FailureReason>;
 

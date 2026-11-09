@@ -1898,6 +1898,7 @@
     "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.",
     "sendErrorTimedOut": "The chat service did not respond in time. Try again.",
     "sendErrorToolsUnsupported": "This model cannot use tools, so it cannot answer questions about your matter. Switch to a model that supports tools.",
+    "sendErrorTurnTooLarge": "This reply grew too large to deliver in full. Send a new message to continue.",
     "sendPrompt": "Send message",
     "sendQueuedMessageNow": "Send now",
     "sendWithoutAnonymization": "Send without anonymization",

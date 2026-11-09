@@ -73,6 +73,7 @@ export const TAGGED_FAILURE_REASON = {
   ChatCompactionError: "tagged_failure",
   ChatConfigurationError: "tagged_failure",
   ChatContentV3UpgradeError: "tagged_failure",
+  ChatDeliveryError: "tagged_failure",
   ChatEmptyCompletionError: "tagged_failure",
   ChatError: "tagged_failure",
   ChatForkAttachmentObjectMissingError: "tagged_failure",

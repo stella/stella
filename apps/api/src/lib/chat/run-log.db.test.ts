@@ -55,12 +55,12 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
-  ChatRunLogRefusedError,
   createChatRunLog,
   createChatRunLogReplay,
   MAX_RUN_BYTES,
   sweepClosedChatRunLogs,
 } from "@/api/lib/chat/run-log";
+import { ChatRunLogRefusedError } from "@/api/lib/chat/run-log-refusal";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
@@ -1120,6 +1120,90 @@ describe("chat run log database contract", () => {
       .from(chatRunLogs)
       .where(eq(chatRunLogs.runId, run.runId));
     expect(header?.closedAt).toBeInstanceOf(Date);
+  });
+
+  test("a turn whose output outgrows its run log ends live, stored and settled as too large", async () => {
+    const seeded = await seedRunningTurn();
+    const log = logFor(seeded);
+    const run = new ChatTurnRun({
+      connectors: undefined,
+      deadlineMs: 60_000,
+      heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
+      mode: "raw",
+      ownership: new ChatTurnOwnership(),
+      owner: {
+        execution: seeded.execution,
+        threadId: seeded.threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+        owningAssistantMessage: undefined,
+        safeDb: toSafeDbMock(scopedDbA),
+        indexThread: async () => {},
+        recordAuditEvent: async () => {},
+      },
+    });
+    const messageId = Bun.randomUUIDv7();
+    const source = (async function* (): AsyncIterable<StreamChunk> {
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+      };
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId,
+        delta: "Partial",
+      };
+      // One event past the run log's per-chunk limit.
+      yield chunk("x".repeat(1024 * 1024));
+      yield chunk("never delivered");
+    })();
+    const readTiming = async (): Promise<ReadOutcome<ChatTurnTiming | null>> =>
+      readPresent(null);
+    const response = run.produce(
+      source,
+      createChatTurnTimingDurability({
+        log,
+        getPhase: () => "running",
+        getTerminal: () => undefined,
+        readTiming,
+        // What a turn settles as when its stream ends before any outcome.
+        finishSettlement: async () => {
+          await run.failProduction("started");
+        },
+      }),
+      HELD_TEST_STREAM_BINDING,
+    );
+    const delivered = (await response.text())
+      .split("\n")
+      .flatMap((line) =>
+        line.startsWith("data: ")
+          ? [JSON.parse(line.slice("data: ".length)) as StreamChunk]
+          : [],
+      );
+    const explained = {
+      type: EventType.RUN_ERROR,
+      message: "turn_too_large",
+      code: "ai_turn_too_large",
+    };
+    // The client reads the kind from the message (`aiErrorKindFromMessage`).
+    expect(delivered.at(-1)).toMatchObject(explained);
+    const stored = (await log.snapshot()).map(({ chunk: entry }) => entry);
+    expect(stored.at(-1)).toMatchObject(explained);
+    expect(await run.settled).toBe("stored");
+    const [turn] = await testDb
+      .select({
+        status: chatTurns.status,
+        failureCode: chatTurns.failureCode,
+        failureRetryable: chatTurns.failureRetryable,
+      })
+      .from(chatTurns)
+      .where(eq(chatTurns.id, seeded.execution.id));
+    expect(turn).toEqual({
+      status: "failed",
+      failureCode: "persistence",
+      failureRetryable: false,
+    });
   });
 
   test("a run refused for its total size still stores its terminal error", async () => {

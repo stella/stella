@@ -62,6 +62,7 @@ export const FAILURE_TAGS = [
   "ChatCompactionError",
   "ChatConfigurationError",
   "ChatContentV3UpgradeError",
+  "ChatDeliveryError",
   "ChatEmptyCompletionError",
   "ChatError",
   "ChatForkAttachmentObjectMissingError",

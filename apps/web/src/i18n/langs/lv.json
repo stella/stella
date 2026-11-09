@@ -1898,6 +1898,7 @@
     "sendErrorStreamIncomplete": "AI atbilde tika pārtraukta, pirms tā bija pabeigta. Mēģiniet vēlreiz.",
     "sendErrorTimedOut": "Tērzēšanas pakalpojums neatbildēja laikus. Mēģiniet vēlreiz.",
     "sendErrorToolsUnsupported": "Šis modelis nevar izmantot rīkus, tāpēc nevar atbildēt uz jautājumiem par jūsu lietu. Pārslēdzieties uz modeli, kas atbalsta rīkus.",
+    "sendErrorTurnTooLarge": "Šī atbilde kļuva pārāk liela, lai to piegādātu pilnībā. Lai turpinātu, nosūtiet jaunu ziņu.",
     "sendPrompt": "Sūtīt ziņojumu",
     "sendQueuedMessageNow": "Sūtīt tūlīt",
     "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",

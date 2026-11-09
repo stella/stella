@@ -11,6 +11,8 @@ export const AI_ERROR_KINDS = [
   "deadline_exceeded",
   "loop_detected",
   "empty_completion",
+  // A chat turn whose own output grew past what one delivered run may hold.
+  "turn_too_large",
   // A chat turn run by a harness on the member's own computer.
   "local_runner_needs_login",
   "local_runner_limit_reached",
@@ -35,6 +37,7 @@ export const AI_FAILURE_CODES = {
   deadline_exceeded: "ai_deadline_exceeded",
   loop_detected: "ai_loop_detected",
   empty_completion: "ai_empty_completion",
+  turn_too_large: "ai_turn_too_large",
   local_runner_needs_login: "ai_local_runner_needs_login",
   local_runner_limit_reached: "ai_local_runner_limit_reached",
   local_runner_unavailable: "ai_local_runner_unavailable",

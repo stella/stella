@@ -23,6 +23,7 @@ export const AI_FAILURE_ERROR_KEYS = {
   [AI_FAILURE_CODES.deadline_exceeded]: "errors.apiCodes.aiDeadlineExceeded",
   [AI_FAILURE_CODES.loop_detected]: "chat.sendErrorLoopDetected",
   [AI_FAILURE_CODES.empty_completion]: "chat.sendErrorEmptyCompletion",
+  [AI_FAILURE_CODES.turn_too_large]: "chat.sendErrorTurnTooLarge",
   [AI_FAILURE_CODES.local_runner_needs_login]: "chat.localRun.errorNeedsLogin",
   [AI_FAILURE_CODES.local_runner_limit_reached]:
     "chat.localRun.errorLimitReached",

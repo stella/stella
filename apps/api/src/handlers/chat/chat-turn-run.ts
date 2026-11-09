@@ -8,6 +8,7 @@ import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { reportDeliveryFailuresByKind } from "@/api/handlers/chat/chat-delivery-failure";
 import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
 import {
   persistFailedChatTurn,
@@ -16,6 +17,7 @@ import {
 import type { PersistMessageProps } from "@/api/handlers/chat/chat-message-persistence";
 import {
   AI_ERROR_FAILURE_CODE,
+  AI_ERROR_RETRYABLE,
   isChatTurnNotOwned,
   readChatTurnExecutionStanding,
   renewChatTurnExecutionLease,
@@ -27,6 +29,7 @@ import type {
   ChatTurnOutcome,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
+import type { AIErrorKind } from "@/api/lib/ai-error";
 import { detached } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -486,6 +489,8 @@ export class ChatTurnRun {
     | { status: "closed" } = { status: "not-started" };
   /** A cut requested before the run produced; applied once it does. */
   private pendingAbort: string | undefined;
+  /** What the first explained delivery failure said, if delivery failed. */
+  private deliveryFailure: AIErrorKind = "unknown";
   private provider: ChatTurnObservation["provider"] = "none";
 
   constructor(options: ChatTurnRunOptions) {
@@ -627,7 +632,13 @@ export class ChatTurnRun {
             : this.trackUpstream(output),
           {
             // Run control cuts the provider; delivery drains its terminal events.
-            durability: { adapter: durability },
+            durability: {
+              adapter: reportDeliveryFailuresByKind(durability, (kind) => {
+                if (this.deliveryFailure === "unknown") {
+                  this.deliveryFailure = kind;
+                }
+              }),
+            },
             headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
           },
         ),
@@ -709,7 +720,11 @@ export class ChatTurnRun {
    * Never throws: a failure it cannot store is reported, and the turn's lease
    * then ends it.
    */
-  async fail(code: ChatTurnFailureCode, retryable: boolean): Promise<void> {
+  async fail(
+    code: ChatTurnFailureCode,
+    retryable: boolean,
+    error: AIErrorKind = "unknown",
+  ): Promise<void> {
     const { status } = this.state;
     if (status === "settled") {
       return panic("A settled chat turn run cannot fail");
@@ -720,6 +735,7 @@ export class ChatTurnRun {
       checkpoint === undefined
         ? await persistFailedChatTurn({
             code,
+            error,
             execution: owner.execution,
             indexThread: owner.indexThread,
             owningAssistantMessage: owner.owningAssistantMessage,
@@ -763,7 +779,16 @@ export class ChatTurnRun {
       return panic(`Cannot fail a producer once ${this.state.status}`);
     }
     try {
-      await this.fail("internal", true);
+      // A delivery failure the stream explained settles the turn with the same
+      // kind, so a reload shows what the live stream did.
+      const kind = this.deliveryFailure;
+      await (kind === "unknown"
+        ? this.fail("internal", true)
+        : this.fail(
+            AI_ERROR_FAILURE_CODE[kind],
+            AI_ERROR_RETRYABLE[kind],
+            kind,
+          ));
       if (source === "not-started") {
         // trackUpstream prepares a completion promise before the iterator is
         // pulled. An unused iterator has no finally to resolve that promise.

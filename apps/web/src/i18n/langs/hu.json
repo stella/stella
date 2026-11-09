@@ -1898,6 +1898,7 @@
     "sendErrorStreamIncomplete": "Az AI válasza megszakadt, mielőtt elkészült volna. Próbálja újra.",
     "sendErrorTimedOut": "A csevegés nem válaszolt időben. Próbálja újra.",
     "sendErrorToolsUnsupported": "Ez a modell nem tud eszközöket használni, ezért nem tud válaszolni az ügyével kapcsolatos kérdésekre. Váltson olyan modellre, amely támogatja az eszközöket.",
+    "sendErrorTurnTooLarge": "Ez a válasz túl nagyra nőtt ahhoz, hogy teljes egészében megérkezzen. A folytatáshoz küldjön új üzenetet.",
     "sendPrompt": "Üzenet küldése",
     "sendQueuedMessageNow": "Küldés most",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
