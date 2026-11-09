@@ -4346,6 +4346,50 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(page.results.length).toBeGreaterThan(0);
       });
 
+      test("reads matters under the caller's slot and gives it back before the corpus wait", async () => {
+        const { store } = createFakeContinuationStore();
+        let slots = 0;
+        let slotsDuringMatterRead = -1;
+        let slotsAtCorpusRead = -1;
+        searchDecisionsHandlerMock.mockImplementation(
+          async ({ body: { query } }: { body: { query: string } }) => {
+            slotsAtCorpusRead = slots;
+            return await Promise.resolve(answered(query));
+          },
+        );
+        const context = compatContext(store, 2000);
+        const result = await compatSearch(
+          {
+            ...context,
+            testDependencies: {
+              ...context.testDependencies,
+              getSearchReader: () => ({
+                search: async () => {
+                  slotsDuringMatterRead = slots;
+                  return await Promise.resolve({
+                    hits: [],
+                    facets: { kind: [], workspace: [] },
+                    totalCount: 0,
+                    nextCursor: null,
+                  });
+                },
+                searchContent: mock(async () => ({ hits: [], totalCount: 0 })),
+              }),
+              admitPublicRead: async ({ run }) => {
+                slots += 1;
+                const value = await run(new AbortController().signal);
+                slots -= 1;
+                return Result.ok({ status: "leased" as const, value });
+              },
+            },
+          },
+          { query: "náhrada" },
+        );
+        expect(result.isError).not.toBe(true);
+        expect(slotsDuringMatterRead).toBe(1);
+        expect(slotsAtCorpusRead).toBe(1);
+      });
+
       test("answers cut short with a cursor that runs the same page again", async () => {
         const { store } = createFakeContinuationStore();
         const gate = gatedSearch();

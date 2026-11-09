@@ -313,7 +313,7 @@ type UnderFleetCallerSlotOptions<T> = {
  * waiting on it waits out a full pool instead of being refused; the run budget
  * ends the wait.
  */
-const underFleetCallerSlot = async <T>({
+export const underFleetCallerSlot = async <T>({
   context,
   signal,
   run,

@@ -9,6 +9,11 @@ import {
   loadCurrentExtractedContents,
   loadCurrentExtractedSources,
 } from "@/api/lib/document-content-provenance";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/errors/action-admission-error";
+import { getPublicReadSignal } from "@/api/lib/legal-search/public-read-timeout-context";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -52,6 +57,7 @@ import {
 } from "@/api/mcp/compat-shared";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { cursorInput, nullAsAbsent } from "@/api/mcp/input-schemas";
+import { underFleetCallerSlot } from "@/api/mcp/public-read-continuation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpCompatSearchResult,
@@ -68,6 +74,7 @@ import {
   internalFailureResult,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
+  structuredErrorResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -517,13 +524,22 @@ const handleCompatSearchTool: McpToolHandler<
   const matterResult =
     position.matter === null
       ? Result.ok(EXHAUSTED_MATTER_PAGE)
-      : await searchMatterKnowledge({
+      : // The slot covers this read alone: holding it through the corpus wait
+        // would queue the continued read behind its own caller.
+        await underFleetCallerSlot({
           context,
-          cursor: position.matter,
-          query,
+          signal: getPublicReadSignal() ?? new AbortController().signal,
+          run: async () =>
+            await searchMatterKnowledge({
+              context,
+              cursor: position.matter ?? undefined,
+              query,
+            }),
         });
   if (matterResult.isErr()) {
-    return internalFailureResult(matterResult.error, "mcp.compatSearch.matter");
+    return ActionAdmissionError.is(matterResult.error)
+      ? structuredErrorResult(actionAdmissionRefusal(matterResult.error))
+      : internalFailureResult(matterResult.error, "mcp.compatSearch.matter");
   }
   const matter = matterResult.value;
 
