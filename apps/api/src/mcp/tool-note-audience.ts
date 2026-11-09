@@ -15,6 +15,7 @@ export const MCP_NOTE_AUDIENCE = {
   filter_unread: "agent",
   many_required_terms: "agent",
   provision_cited_widely: "agent",
+  provision_scope_unread: "agent",
   phrasing_timed_out: "agent",
   partial_matches_unread: "agent",
   query_words_apart: "agent",

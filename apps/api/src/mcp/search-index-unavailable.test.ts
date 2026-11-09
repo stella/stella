@@ -615,7 +615,7 @@ describe("a search the tool's latency budget ends is a timeout", () => {
       expect(payloadOf(result)).toMatchObject({
         error:
           tool.toolName === "search_case_law"
-            ? { code: "upstream_unavailable", retryable: true }
+            ? { code: "public_read_timeout", retryable: true }
             : {
                 code: "public_read_timeout",
                 hint: PUBLIC_READ_TIMEOUT_HINT,
