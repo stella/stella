@@ -124,8 +124,10 @@ import {
   readCaseLawSourceNames,
 } from "@/api/lib/case-law/decision-search-facets";
 import {
+  decisionDocketRegisterSql,
   decisionHasLegalSentenceSql,
   decisionSearchCategorySql,
+  docketFilterRefusal,
 } from "@/api/lib/case-law/decision-search-metadata-sql";
 import {
   decisionSearchCursorAfterSql,
@@ -406,10 +408,12 @@ type SearchDecisionsBody = v.InferOutput<typeof searchDecisionsBodySchema> & {
 
 type PostgresSearchBody = Omit<
   SearchDecisionsBody,
-  "category" | "hasLegalSentence"
+  "category" | "hasLegalSentence" | "docketRegisters" | "senate"
 > & {
   category?: never;
   hasLegalSentence?: never;
+  docketRegisters?: never;
+  senate?: never;
 };
 
 type SearchDecisionsHandlerArgs = Omit<
@@ -533,6 +537,11 @@ export const searchDecisionsHandler = async ({
     });
   }
 
+  const docketRefusal = docketFilterRefusal({ ...body, country });
+  if (docketRefusal !== null) {
+    return status(400, { message: docketRefusal });
+  }
+
   const scopedBody = { ...body, country };
   if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
     const readServingTarget = corpusIndexRequestConfiguration({
@@ -582,7 +591,19 @@ export const searchDecisionsHandler = async ({
     });
   }
 
-  const { category, hasLegalSentence, ...postgresBody } = scopedBody;
+  const {
+    category,
+    hasLegalSentence,
+    docketRegisters,
+    senate,
+    ...postgresBody
+  } = scopedBody;
+  if (docketRegisters !== undefined || senate !== undefined) {
+    return status(400, {
+      message:
+        "Docket register and senate filters require corpus-index search. Remove docketRegisters and senate from this request.",
+    });
+  }
   if (category !== undefined || hasLegalSentence !== undefined) {
     return status(400, {
       message:
@@ -1659,6 +1680,8 @@ type CaseLawSearchRowFilterBody = Pick<
   | "courts"
   | "category"
   | "hasLegalSentence"
+  | "docketRegisters"
+  | "senate"
   | "provision"
   | "dateFrom"
   | "dateTo"
@@ -1731,6 +1754,11 @@ const caseLawNonProvisionRowFilters = (
   if (body.hasLegalSentence !== undefined) {
     filters.push(
       sql`${decisionHasLegalSentenceSql(publishedCaseLawDecisions.metadata)} = ${body.hasLegalSentence}`,
+    );
+  }
+  if (body.docketRegisters !== undefined || body.senate !== undefined) {
+    filters.push(
+      decisionDocketRegisterSql(publishedCaseLawDecisions.caseNumber, body),
     );
   }
   filters.push(eq(publishedCaseLawDecisions.country, body.country));
@@ -2731,6 +2759,8 @@ const readCaseLawSearchFacets = async ({
     queryFor === null ||
     body.category !== undefined ||
     body.hasLegalSentence !== undefined ||
+    body.docketRegisters !== undefined ||
+    body.senate !== undefined ||
     // An id-set provision filter is the engine's own; only the candidate
     // check a broad provision falls back to is invisible to aggregations.
     (body.provision !== undefined && body.provisionDecisionIds === undefined)
@@ -3079,6 +3109,8 @@ const caseLawIndexRanking = ({
     body.provision === undefined &&
     body.category === undefined &&
     body.hasLegalSentence === undefined &&
+    body.docketRegisters === undefined &&
+    body.senate === undefined &&
     !indexId.includes(",");
   return fromIndex
     ? {
@@ -4489,6 +4521,10 @@ export const listCaseLawProvisionDecisions = async ({
   const limit = normalizeTenantPageLimit(
     body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
   );
+  const docketRefusal = docketFilterRefusal(body);
+  if (docketRefusal !== null) {
+    return status(400, { message: docketRefusal });
+  }
   const sort = body.sort ?? DEFAULT_SEARCH_SORT;
   const scope = { jurisdiction: body.country, provision: body.provision };
   // Total over the row filters the page applies, so a filter added there
@@ -4499,6 +4535,8 @@ export const listCaseLawProvisionDecisions = async ({
     courts: body.courts ?? null,
     category: body.category ?? null,
     hasLegalSentence: body.hasLegalSentence ?? null,
+    docketRegisters: body.docketRegisters ?? null,
+    senate: body.senate ?? null,
     provision: body.provision,
     dateFrom: body.dateFrom ?? null,
     dateTo: body.dateTo ?? null,

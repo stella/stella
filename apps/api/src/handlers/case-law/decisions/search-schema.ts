@@ -84,6 +84,16 @@ export const searchDecisionsBodySchema = v.object({
     ),
   ),
   category: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  docketRegisters: v.optional(
+    v.pipe(
+      v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(16))),
+      v.minLength(1),
+      v.maxLength(8),
+    ),
+  ),
+  senate: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(999)),
+  ),
   hasLegalSentence: v.optional(v.boolean()),
   // Decisions whose recorded provision links cite this provision. Applied to
   // live rows within the bounded candidate scan, like the metadata filters.
