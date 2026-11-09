@@ -113,6 +113,7 @@ export { default as indexes_sanctions_screening_events_org_cursor_idx } from "./
 export { default as indexes_search_history_entries_owner_country_recent_idx } from "./online-migration-entries/indexes-search-history-entries-owner-country-recent-idx";
 export { default as indexes_session_originconsentid_idx } from "./online-migration-entries/indexes-session-originconsentid-idx";
 export { default as indexes_session_prior_token_hash_idx } from "./online-migration-entries/indexes-session-prior-token-hash-idx";
+export { default as indexes_soft_law_search } from "./online-migration-entries/indexes-soft-law-search";
 export { default as indexes_templates_org_pack_template_uidx } from "./online-migration-entries/indexes-templates-org-pack-template-uidx";
 export { default as indexes_time_entries_approval_queue_idx } from "./online-migration-entries/indexes-time-entries-approval-queue-idx";
 export { default as indexes_time_entries_one_active_timer_per_user_idx } from "./online-migration-entries/indexes-time-entries-one-active-timer-per-user-idx";

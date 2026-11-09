@@ -95,6 +95,11 @@ import {
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
+import type {
+  readServedSoftLaw,
+  searchServedSoftLaw,
+} from "@/api/lib/legal-search/soft-law-read";
+import type { SoftLawReadSurface } from "@/api/lib/legal-search/soft-law-serving";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -169,6 +174,8 @@ export type McpRequestDataAccess = Pick<
 >;
 
 export type McpRequestContext = {
+  /** Set by the in-app chat projection; absent on MCP client requests. */
+  softLawReadSurface?: SoftLawReadSurface | undefined;
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: {
@@ -236,6 +243,8 @@ export type McpRequestContext = {
     readProvisionPreviewHandler?: typeof readProvisionPreviewHandler;
     readsSharedPublicLawCorpus?: typeof readsSharedPublicLawCorpus;
     searchLegislationHandler?: typeof searchLegislationHandler;
+    searchServedSoftLaw?: typeof searchServedSoftLaw;
+    readServedSoftLaw?: typeof readServedSoftLaw;
     resolveStatuteExpression?: typeof resolveStatuteExpression;
     resolveStatuteWorkVersion?: typeof resolveStatuteWorkVersion;
     readPublicLegislationHandler?: typeof readPublicLegislationHandler;
