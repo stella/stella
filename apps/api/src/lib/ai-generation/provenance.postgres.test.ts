@@ -636,7 +636,7 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
       if (preview?.type !== "plain-text") {
         return;
       }
-      expect(preview.content).toBe(exportSource?.title);
+      expect<string | undefined>(preview.content).toBe(exportSource?.title);
     },
   );
 
