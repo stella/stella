@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 
 import {
-  containedTabLabel,
   containedTabsMessage,
   handedTabView,
   type PopupActiveTab,
@@ -144,6 +143,12 @@ if (containedLine !== null) {
 }
 
 describe("naming the tabs stella keeps contained", () => {
+  /** How the popup line names one tab; null when it names none. */
+  const containedTabLabel = (
+    tab: Parameters<typeof containedTabsMessage>[0][number],
+  ): string | null =>
+    containedTabsMessage([tab], "en")?.substitutions.at(0) ?? null;
+
   test("a tab is named by its title and host", () => {
     expect(
       containedTabLabel({
@@ -169,12 +174,12 @@ describe("naming the tabs stella keeps contained", () => {
     expect(containedTabLabel({})).toBe(null);
   });
 
-  test("a long title is cut without splitting a character", () => {
+  test("a long title is cut without splitting a character, emoji sequences included", () => {
     const label = containedTabLabel({
-      title: `${"a".repeat(58)}😀😀😀`,
+      title: `${"a".repeat(58)}👩‍👩‍👧👩‍👩‍👧👩‍👩‍👧`,
       url: "https://portal.example.com/",
     });
-    expect(label).toBe(`${"a".repeat(58)}😀… (portal.example.com)`);
+    expect(label).toBe(`${"a".repeat(58)}👩‍👩‍👧… (portal.example.com)`);
   });
 
   test("lists every contained tab, the controlled one first, or nothing", () => {

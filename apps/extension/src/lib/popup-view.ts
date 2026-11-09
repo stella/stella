@@ -131,9 +131,13 @@ const shortTitle = (title: string | undefined): string | null => {
   if (trimmed === "") {
     return null;
   }
-  const characters = [...trimmed];
-  return characters.length > TAB_TITLE_LIMIT
-    ? `${characters
+  // Cut by grapheme, so an emoji or an accented letter is never split.
+  const graphemes = Array.from(
+    new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(trimmed),
+    ({ segment }) => segment,
+  );
+  return graphemes.length > TAB_TITLE_LIMIT
+    ? `${graphemes
         .slice(0, TAB_TITLE_LIMIT - 1)
         .join("")
         .trimEnd()}…`
@@ -145,7 +149,7 @@ const shortTitle = (title: string | undefined): string | null => {
  * among their tabs: its title and host, or whichever Chrome reported. Null
  * when it reported neither.
  */
-export const containedTabLabel = ({ title, url }: NamedTab): string | null => {
+const containedTabLabel = ({ title, url }: NamedTab): string | null => {
   const name = shortTitle(title);
   const host = webHost(url);
   if (name !== null && host !== null) {
