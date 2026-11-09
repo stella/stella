@@ -298,6 +298,25 @@ describe("document review grading", () => {
     });
   });
 
+  test("hands the grader the exact wording of the citations the answer verified", async () => {
+    await buildFindings(buildArgs([position(1)], new AbortController().signal));
+
+    expect(gradeTierMatchesMock.mock.calls.at(0)?.at(0)?.items).toMatchObject([
+      { askValue: "Ten days", passages: ["Ten days' written notice."] },
+    ]);
+  });
+
+  test("records the cited wording as the text behind a tier-match summary", async () => {
+    const findings = await buildFindings(
+      buildArgs([position(1)], new AbortController().signal),
+    );
+
+    expect(findings.at(0)?.extracted).toEqual({
+      value: "Ten days",
+      text: "Ten days' written notice.",
+    });
+  });
+
   test("stops after cancellation and preserves completed-batch grading", async () => {
     const controller = new AbortController();
     abortAfterFirstCall = controller;

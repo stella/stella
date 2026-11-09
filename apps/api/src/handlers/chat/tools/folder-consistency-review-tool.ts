@@ -501,6 +501,7 @@ export const createFolderConsistencyReviewTools = ({
             sourceId: REVIEW_SOURCE_ID,
             question: buildReviewQuestion(snapshot.reviewDocuments),
             content: { type: "text", version: 1 },
+            answerShape: "value",
           },
         ],
         resolvedFiles: snapshot.reviewDocuments.map(({ file }) => file),

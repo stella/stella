@@ -44,10 +44,12 @@ import type {
   PositionStandardSource,
   ResolvedTiers,
 } from "@/api/lib/workflow/playbook-positions";
+import { answerShapeForPosition } from "@/api/lib/workflow/position-runtime";
 import {
   askPresence,
   askText,
   CUT_DOCUMENT_RATIONALE,
+  extractedFromCitedClause,
   extractedFromContent,
   gradePresence,
   gradePropertyConstraint,
@@ -319,12 +321,17 @@ const gradeTierMatchPositions = async ({
     }
 
     const graded = await gradeTierMatchesForReview({
-      items: batch.map((position) => ({
-        key: position.sourceId,
-        askValue:
-          askText(contentBySourceId.get(position.sourceId)?.content) ?? "",
-        tiers: tiersBySourceId.get(position.sourceId) ?? EMPTY_TIERS,
-      })),
+      items: batch.map((position) => {
+        const extraction = contentBySourceId.get(position.sourceId);
+        return {
+          key: position.sourceId,
+          askValue: askText(extraction?.content) ?? "",
+          tiers: tiersBySourceId.get(position.sourceId) ?? EMPTY_TIERS,
+          passages: arrayOrEmpty(extraction?.citations).flatMap((citation) =>
+            citation.kind === "docx-folio" ? [citation.text] : [],
+          ),
+        };
+      }),
       abortSignal: deps.abortSignal,
       organizationId: deps.organizationId,
       admission: deps.admission,
@@ -731,7 +738,13 @@ const projectFinding = ({
     // difference it finds is a language one; the structured kinds come from
     // a reference comparison, which reads both sides' text.
     delta: LANGUAGE_DELTA,
-    extracted: extractedFromContent(askContent),
+    extracted:
+      answerShapeForPosition(position) === "clause-summary"
+        ? extractedFromCitedClause(
+            askContent,
+            citations.map(({ text }) => text),
+          )
+        : extractedFromContent(askContent),
     rationale,
     ...(matchedRef === undefined ? {} : { matchedRef }),
     citations,
