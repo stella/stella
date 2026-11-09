@@ -438,6 +438,7 @@ const createLawResolver =
     }
     const readCited = async () => {
       for (const provision of provisions) {
+        // db-await-in-loop: At most one read per section unit, and the article is asked only when the section is missing.
         const preview = await readPreview({
           documentId: expression.id,
           anchor: provision.anchor,
