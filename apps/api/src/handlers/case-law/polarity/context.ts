@@ -144,15 +144,19 @@ export const extractContexts = (
 
   const window = ({ start, end }: Span) =>
     normalizeUnicode(text.slice(start, end), "NFC");
+  // Each mention's evidence window covers the same sentence-extended span
+  // its mention text reads.
+  const firstMention = toSentenceEnd(text, first);
+  const restMentions = rest.map((span) => toSentenceEnd(text, span));
   return {
-    mentions: [
-      window(toSentenceEnd(text, first)),
-      ...rest.map((span) => window(toSentenceEnd(text, span))),
-    ],
+    mentions: [window(firstMention), ...restMentions.map(window)],
     contexts: [window(mergedFirst), ...mergedRest.map(window)],
     evidenceWindows: [
-      { start: sectionOffset + first.start, end: sectionOffset + first.end },
-      ...rest.map(({ start, end }) => ({
+      {
+        start: sectionOffset + firstMention.start,
+        end: sectionOffset + firstMention.end,
+      },
+      ...restMentions.map(({ start, end }) => ({
         start: sectionOffset + start,
         end: sectionOffset + end,
       })),

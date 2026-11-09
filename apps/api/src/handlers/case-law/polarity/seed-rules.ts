@@ -467,26 +467,31 @@ export const SEED_RULES: readonly SeedRule[] = [
     pattern: `${CS_CITED_MATTER}\\s+${WORDS_BETWEEN}(?:řešil|posuzoval|zabýval)\\p{L}*\\b[^.;]{0,280}?,\\s+nikoli(?:v)?\\b`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     pattern: `\\b${CS_CITED_DECISION}\\p{L}*\\s+${WORDS_IN_CLAUSE}řeš\\p{L}*\\s+(?:zcela\\s+)?jin\\p{L}+\\s+(?:otázk|situac|problematik)`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     pattern: `\\b${CS_CITED_DECISION}\\p{L}*\\s+${WORDS_IN_CLAUSE}neobsahuj\\p{L}*\\s+(?:žádné\\s+)?(?:zobecnitelné|přenositelné|obecně\\s+použitelné)\\s+závěr`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     pattern: `\\b${CS_CITED_DECISION}\\p{L}*\\s+${WORDS_IN_CLAUSE}(?:nelze|nemůže\\s+být|není\\s+možné)\\s+(?:přenést|přenesen|vztáhnout|vztažen)`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
   {
     pattern: `\\b${CS_CITED_DECISION}\\p{L}*\\s+(?:na\\s+(?:\\p{L}+\\s+){0,2}(?:věc|případ|situaci)\\s+)?nedopad`,
     polarity: "negative",
     language: "cs",
+    kind: POLARITY_RULE_KIND.STANCE,
   },
 
   // -- Slovak: positive ------------------------------------------
