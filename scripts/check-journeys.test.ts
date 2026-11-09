@@ -613,6 +613,19 @@ describe("scheduled read journeys", () => {
       [...result.counts.values()].reduce((sum, value) => sum + value, 0),
     ).toBe(11);
   });
+  test("keeps every retry within the budget of a session run", async () => {
+    const result = await run({
+      scenario: { firstStatus: 503, session: "required" },
+    });
+    expect(result.exit).toBe(0);
+    expect(
+      result.stdout.match(/passed_after_retry http_status/gu),
+    ).toHaveLength(3);
+    expect(result.stdout).toContain("mcp_coverage passed ok");
+    expect(
+      [...result.counts.values()].reduce((sum, value) => sum + value, 0),
+    ).toBe(12);
+  });
   test("counts a bounded public redirect", async () => {
     const result = await run({ scenario: { redirect: "once" } });
     expect(result.exit).toBe(0);
@@ -624,7 +637,7 @@ describe("scheduled read journeys", () => {
     expect(chain.stdout).toContain("web_statutes failed http_status");
     expect(
       [...chain.counts.values()].reduce((sum, value) => sum + value, 0),
-    ).toBeLessThanOrEqual(11);
+    ).toBeLessThanOrEqual(12);
   });
   test("retains the first failure reason after recovery", async () => {
     const result = await run({ scenario: { firstHtml: "<h1>Fixture</h1>" } });
@@ -670,7 +683,7 @@ describe("scheduled read journeys", () => {
       expect(result.stdout).toContain(`failed ${reason}`);
       expect(
         [...result.counts.values()].reduce((sum, value) => sum + value, 0),
-      ).toBeLessThanOrEqual(11);
+      ).toBeLessThanOrEqual(12);
     });
   }
   test("negotiates a session and initializes it before tools", async () => {
@@ -685,7 +698,7 @@ describe("scheduled read journeys", () => {
     expect(result.stdout).toContain("mcp_initialize failed http_status");
     expect(
       [...result.counts.values()].reduce((sum, value) => sum + value, 0),
-    ).toBeLessThanOrEqual(11);
+    ).toBeLessThanOrEqual(12);
   });
   test("fails coverage whose refreshes stopped landing", async () => {
     const result = await run({ scenario: { rpc: "stale-coverage" } });
