@@ -813,8 +813,9 @@ export type VerdictBatchOutput = {
   // Verdicts gated out by an unmet dependency condition: their field is left
   // untouched, matching the extraction path's skip semantics.
   skippedPropertyIds: SafeId<"property">[];
-  // Verdicts whose ASK extraction never finished: there is no answer to grade,
-  // so the caller flips their field to "error" and they stay re-runnable.
+  // Verdicts whose ASK extraction never finished, or whose grading was aborted:
+  // nothing was decided, so the caller flips their field to "error" and they
+  // stay re-runnable.
   erroredPropertyIds: SafeId<"property">[];
   /** One disposition for every verdict cell claimed by this batch. */
   settlements: ReadonlyMap<
@@ -1100,7 +1101,14 @@ export const computeVerdictBatch = async ({
           passages,
         );
         if (Result.isError(graded)) {
-          ungradedVerdicts.push({ propertyId: property.id, extracted });
+          // A call cut short by the job's abort or the batch budget says
+          // nothing about this position: it stays errored, like an unfinished
+          // extraction, rather than completing a review the retry would redo.
+          if (abortSignal.aborted) {
+            erroredPropertyIds.push(property.id);
+          } else {
+            ungradedVerdicts.push({ propertyId: property.id, extracted });
+          }
           settlements.set(property.id, "failedTransient");
           return;
         }

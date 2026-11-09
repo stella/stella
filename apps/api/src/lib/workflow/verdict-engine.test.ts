@@ -695,6 +695,7 @@ describe("computeVerdictBatch — a failed extraction is not a missing clause", 
     rule: PositionRule,
     cell: Cell | undefined,
     gradeTierMatchForTest?: typeof gradeTierMatch,
+    abortSignal: AbortSignal = AbortSignal.abort(),
   ) => {
     const tx = {
       select: () => ({
@@ -715,7 +716,7 @@ describe("computeVerdictBatch — a failed extraction is not a missing clause", 
     const scopedDb: ScopedDb = async (run) =>
       await run(asTestRaw<Transaction>(tx));
     return await computeVerdictBatch({
-      abortSignal: AbortSignal.abort(),
+      abortSignal,
       organizationId: toSafeId<"organization">("org"),
       admission: testModelAdmission(toSafeId<"organization">("org")),
       workspaceId: toSafeId<"workspace">("ws"),
@@ -862,6 +863,7 @@ describe("computeVerdictBatch — a failed extraction is not a missing clause", 
             new WorkflowIntegrationError({ message: "Grading failed" }),
           ),
         ),
+      new AbortController().signal,
     );
 
     expect(output.settlements.get(verdictPropertyId)).toBe("failedTransient");
@@ -873,6 +875,25 @@ describe("computeVerdictBatch — a failed extraction is not a missing clause", 
     ]);
     expect(output.erroredPropertyIds).toEqual([]);
     expect(output.gradedVerdicts).toEqual([]);
+  });
+
+  test("a tier-match call cut short by an abort stays errored, never ungraded", async () => {
+    const output = await gradeCell(
+      { kind: "positionMatch" },
+      plain({ type: "text", version: 1, value: "Sixty days." }),
+      async (args) => {
+        expect(args.abortSignal.aborted).toBe(true);
+        return await Promise.resolve(
+          Result.err(
+            new WorkflowIntegrationError({ message: "Grading aborted" }),
+          ),
+        );
+      },
+    );
+
+    expect(output.settlements.get(verdictPropertyId)).toBe("failedTransient");
+    expect(output.erroredPropertyIds).toEqual([verdictPropertyId]);
+    expect(output.ungradedVerdicts).toEqual([]);
   });
 
   test("an extract-only position stays skipped when its extraction failed", async () => {
