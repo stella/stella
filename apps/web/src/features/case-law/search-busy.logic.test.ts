@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import {
   isSearchBusy,
-  retryAfterMsFrom,
   searchRetryDelayMs,
   shouldRetrySearch,
   withRetryAfterDetail,
@@ -12,7 +11,7 @@ import { APIError } from "@/lib/errors/api";
 const busy = new APIError({
   status: 503,
   message: "busy",
-  details: withRetryAfterDetail({ code: "search_index_unavailable" }, 4000),
+  details: { code: "search_index_unavailable", retryAfterMs: 4000 },
 });
 const outage = new APIError({ status: 503, message: "down" });
 
@@ -37,12 +36,24 @@ describe("a search the server turned away for now", () => {
   });
 });
 
-describe("retryAfterMsFrom", () => {
-  test("reads seconds, and nothing else", () => {
-    expect(retryAfterMsFrom(new Headers({ "retry-after": "3" }))).toBe(3000);
-    expect(retryAfterMsFrom(new Headers())).toBeUndefined();
+describe("withRetryAfterDetail", () => {
+  const refusal = (value: unknown) => ({ status: 503, value });
+  const headers = (retryAfter: string) =>
+    new Headers({ "retry-after": retryAfter });
+
+  test("carries the header's delay into the refusal's body", () => {
     expect(
-      retryAfterMsFrom(new Headers({ "retry-after": "soon" })),
-    ).toBeUndefined();
+      withRetryAfterDetail(refusal({ code: "busy" }), headers("3")).value,
+    ).toEqual({ code: "busy", retryAfterMs: 3000 });
+  });
+
+  test("leaves a refusal without a usable header alone", () => {
+    expect(withRetryAfterDetail(refusal("text"), undefined).value).toBe("text");
+    expect(withRetryAfterDetail(refusal("text"), new Headers()).value).toBe(
+      "text",
+    );
+    expect(withRetryAfterDetail(refusal("text"), headers("soon")).value).toBe(
+      "text",
+    );
   });
 });

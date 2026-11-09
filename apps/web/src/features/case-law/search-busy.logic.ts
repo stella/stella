@@ -1,4 +1,8 @@
-import { APIError, shouldRetryAPIRequest } from "@/lib/errors/api";
+import {
+  APIError,
+  shouldRetryAPIRequest,
+  type ToAPIErrorProps,
+} from "@/lib/errors/api";
 
 const SERVICE_UNAVAILABLE_STATUS = 503;
 const BUSY_SEARCH_RETRIES = 1;
@@ -19,19 +23,33 @@ export const isSearchBusy = (error: unknown): boolean =>
   busyRetryAfterMs(error) !== undefined;
 
 /** A `Retry-After` in seconds as a delay, or nothing when it says no such thing. */
-export const retryAfterMsFrom = (headers: Headers): number | undefined => {
+const retryAfterMsFrom = (headers: Headers): number | undefined => {
   const seconds = Number(headers.get("retry-after") ?? Number.NaN);
   return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : undefined;
 };
 
-/** The refusal's body, carrying the delay into the error the query holds. */
+/**
+ * A refusal with a `Retry-After`, the delay carried in its body, which is what
+ * reaches the query's error.
+ */
 export const withRetryAfterDetail = (
-  value: unknown,
-  retryAfterMs: number,
-): Record<string, unknown> => ({
-  ...(typeof value === "object" && value !== null ? value : {}),
-  [RETRY_AFTER_DETAIL]: retryAfterMs,
-});
+  error: ToAPIErrorProps,
+  headers: Headers | undefined,
+): ToAPIErrorProps => {
+  const retryAfterMs =
+    headers === undefined ? undefined : retryAfterMsFrom(headers);
+  if (retryAfterMs === undefined) {
+    return error;
+  }
+  const { value } = error;
+  return {
+    ...error,
+    value: {
+      ...(typeof value === "object" && value !== null ? value : {}),
+      [RETRY_AFTER_DETAIL]: retryAfterMs,
+    },
+  };
+};
 
 export const shouldRetrySearch = (
   failureCount: number,
