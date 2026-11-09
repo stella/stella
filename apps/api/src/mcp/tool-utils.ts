@@ -566,7 +566,7 @@ export const caseLawSearchTimeoutResult = (
   return structuredErrorResult({
     code: "public_read_timeout",
     message: "Case-law search exceeded its time budget.",
-    hint: "Retry search_case_law with fewer queries or a narrower court, date range or provision filter. If it still times out, retry shortly.",
+    hint: "Repeat the identical search_case_law call once before changing it. If it times out again, use fewer queries or a narrower court, date range or provision filter.",
     retryable: true,
   });
 };
