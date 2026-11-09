@@ -9,10 +9,11 @@
 // `Record<string, V>` (also inside `Readonly<>` / `Partial<>`) by annotation
 // or by `satisfies` (with or without `as const`), when the binding is a
 // lookup table: read by a dynamic key (`map[key]`, `key in map`,
-// `Object.hasOwn(map, key)`, `isOwnKey(map, key)`, `ownEntry(map, key)`) or
-// exported, where its lookups are out of sight. An exported object whose keys
-// are all CONSTANT_CASE names is a set of named constants read by property,
-// not a lookup table, and is accepted.
+// `Object.hasOwn(map, key)`, `isOwnKey(map, key)`, `ownEntry(map, key)`, also
+// through `as` / `!` wrappers; a plain `map[key] = value` write is not a read)
+// or exported, by name or as the default, where its lookups are out of
+// sight. An exported object whose keys are all CONSTANT_CASE names is a set
+// of named constants read by property, not a lookup table, and is accepted.
 //
 //   const ICONS: Record<string, Icon> = { compliant: CheckIcon };  // flagged
 //   const ICONS = { ... } as const satisfies Record<string, Icon>; // flagged
@@ -161,27 +162,53 @@ const isLiteralKey = (node: unknown): boolean => {
   );
 };
 
+// Wrappers that pass the map through unchanged: `(map as Record<...>)[key]`
+// is still a read of `map`.
+const VALUE_WRAPPERS: ReadonlySet<string> = new Set([
+  "ParenthesizedExpression",
+  "TSAsExpression",
+  "TSNonNullExpression",
+  "TSSatisfiesExpression",
+  "TSTypeAssertion",
+]);
+
 /** Whether `identifier` is read as a lookup table, or exported by name. */
 const lookupUse = (identifier: unknown): "lookup" | "export" | null => {
   if (!isAstNode(identifier)) {
     return null;
   }
-  const parent: unknown = identifier.parent;
+  let value: AstNode = identifier;
+  let parent: unknown = identifier.parent;
+  while (
+    isAstNode(parent) &&
+    VALUE_WRAPPERS.has(parent.type) &&
+    parent.expression === value
+  ) {
+    value = parent;
+    parent = parent.parent;
+  }
   if (!isAstNode(parent)) {
     return null;
   }
   if (
     parent.type === "MemberExpression" &&
-    parent.object === identifier &&
+    parent.object === value &&
     parent.computed === true &&
     !isLiteralKey(parent.property)
   ) {
-    return "lookup";
+    // `map[key] = value` only fills the table; a compound assignment reads it.
+    const target: unknown = parent.parent;
+    const fillsOnly =
+      isAstNode(target) &&
+      target.type === "AssignmentExpression" &&
+      target.operator === "=" &&
+      target.left === parent;
+    return fillsOnly ? null : "lookup";
   }
   if (
     parent.type === "BinaryExpression" &&
     parent.operator === "in" &&
-    parent.right === identifier &&
+    parent.right === value &&
     !isLiteralKey(parent.left)
   ) {
     return "lookup";
@@ -192,14 +219,18 @@ const lookupUse = (identifier: unknown): "lookup" | "export" | null => {
     const name = getCalleeName(parent.callee)?.split(".").at(-1) ?? null;
     if (
       Array.isArray(args) &&
-      args.at(0) === identifier &&
+      args.at(0) === value &&
+      !isLiteralKey(args.at(1)) &&
       name !== null &&
       OWN_KEY_CALLS.has(name)
     ) {
       return "lookup";
     }
   }
-  return parent.type === "ExportSpecifier" ? "export" : null;
+  return parent.type === "ExportSpecifier" ||
+    parent.type === "ExportDefaultDeclaration"
+    ? "export"
+    : null;
 };
 
 const isExportedDeclaration = (declarator: ESTree.VariableDeclarator) => {
@@ -225,6 +256,11 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           VariableDeclarator(node) {
+            // A `let` table is filled as the program runs; its keys are open.
+            const declaration: unknown = node.parent;
+            if (!isAstNode(declaration) || declaration.kind !== "const") {
+              return;
+            }
             const literal = typedLiteral(node);
             const keys = literal === null ? null : staticKeys(literal);
             if (keys === null) {

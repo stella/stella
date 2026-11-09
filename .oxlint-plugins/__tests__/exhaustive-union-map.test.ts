@@ -67,3 +67,41 @@ test("allows a map only read by property, and open-ended shapes", async () => {
     ]),
   ).toEqual([]);
 });
+
+test("follows a map through value-preserving wrappers and default exports", async () => {
+  expect(
+    await lint([
+      "declare const tier: string;",
+      "const WRAPPED = { compliant: 'ok' } as const satisfies Record<string, string>;",
+      "const ASSERTED = { compliant: 'ok' } as const satisfies Record<string, string>;",
+      "const STYLES: Record<string, string> = { draft: 'a', billed: 'b' };",
+      "export const read = [(WRAPPED as Record<string, string>)[tier], ASSERTED![tier]];",
+      "export default STYLES;",
+    ]),
+  ).toEqual([2, 3, 4]);
+});
+
+test("ignores plain writes, literal own-key checks and `let` tables", async () => {
+  expect(
+    await lint([
+      "declare const key: string;",
+      "const FILLED: Record<string, number> = { draft: 0 };",
+      "FILLED[key] = 1;",
+      "const CHECKED = { draft: 'a' } satisfies Record<string, string>;",
+      "export const STATUS = { DRAFT: 'draft' } as const satisfies Record<string, string>;",
+      "let OPEN: Record<string, string> = { draft: 'a' };",
+      "OPEN = { ...OPEN };",
+      "export const read = [Object.hasOwn(CHECKED, 'draft'), Object.hasOwn(STATUS, 'DRAFT'), OPEN[key]];",
+    ]),
+  ).toEqual([]);
+});
+
+test("counts a compound assignment as a read", async () => {
+  expect(
+    await lint([
+      "declare const key: string;",
+      "const COUNTS: Record<string, number> = { draft: 0 };",
+      "COUNTS[key] += 1;",
+    ]),
+  ).toEqual([2]);
+});
