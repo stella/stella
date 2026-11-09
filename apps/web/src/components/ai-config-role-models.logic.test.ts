@@ -508,6 +508,7 @@ describe("BYOK provider and model configuration", () => {
       "fast",
       "reasoning",
       "pdf",
+      "browse",
     ]);
     expect(rows.at(0)?.selection).toEqual({
       provider: "anthropic",

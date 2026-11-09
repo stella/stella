@@ -36,6 +36,42 @@
     "reason": "Seed default awaits matching local evaluation or same-weights evidence."
   },
   {
+    "id": "seed:browse:anthropic",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:browse:azure_foundry",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:browse:bedrock",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:browse:google",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:browse:huggingface",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:browse:mistral",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:browse:openai",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:browse:openai_compatible",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
+    "id": "seed:browse:openrouter",
+    "reason": "Seed default awaits matching local evaluation or same-weights evidence."
+  },
+  {
     "id": "seed:chat:anthropic",
     "reason": "Seed default awaits matching local evaluation or same-weights evidence."
   },
