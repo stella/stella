@@ -8,7 +8,7 @@ import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "./organization-settings
 
 const migrationSql = readFileSync(
   new URL(
-    "../../drizzle/20261031031854_organization_ai_instructions/migration.sql",
+    "../../drizzle/20261109103100_organization_ai_instructions/migration.sql",
     import.meta.url,
   ),
   "utf-8",
