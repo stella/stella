@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# sprendimas turi} few {# sprendimai turi} many {# sprendimo turi} other {# sprendimų turi}} šį bylos numerį. Pasirinkite teismą.",
     "searchLabel": "Ieškoti teismų praktikoje",
     "searchPlaceholder": "Bylos numeris, ECLI arba žodžiai, pvz. 22 Cdo 2653/2012",
+    "searchStillSearching": "Paieškos paslauga užimta. Vis dar ieškoma…",
     "searchUnavailable": {
       "description": "Nepavyko pasiekti teismų praktikos paieškos. Jūsų užklausa lieka adreso juostoje, pabandykite po akimirkos dar kartą.",
       "title": "Paieška laikinai nepasiekiama"

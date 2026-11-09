@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# orzeczenie ma} few {# orzeczenia mają} many {# orzeczeń ma} other {# orzeczenia ma}} tę sygnaturę. Wybierz sąd.",
     "searchLabel": "Szukaj w orzecznictwie",
     "searchPlaceholder": "Sygnatura, ECLI lub słowa, np. II CSK 123/19",
+    "searchStillSearching": "Usługa wyszukiwania jest przeciążona. Nadal szukamy…",
     "searchUnavailable": {
       "description": "Nie udało się połączyć z wyszukiwaniem orzecznictwa. Twoje zapytanie pozostaje w pasku adresu, spróbuj ponownie za chwilę.",
       "title": "Wyszukiwanie jest tymczasowo niedostępne"

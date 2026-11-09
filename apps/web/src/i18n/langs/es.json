@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# resolución lleva} other {# resoluciones llevan} many {# resoluciones llevan}} este número de asunto. Elija el tribunal.",
     "searchLabel": "Buscar jurisprudencia",
     "searchPlaceholder": "Número de asunto, ECLI o palabras, p. ej. 22 Cdo 2653/2012",
+    "searchStillSearching": "El servicio de búsqueda está ocupado. Seguimos buscando…",
     "searchUnavailable": {
       "description": "No se pudo acceder a la búsqueda de jurisprudencia. Tu consulta se conserva en la barra de direcciones; inténtalo de nuevo en un momento.",
       "title": "La búsqueda no está disponible temporalmente"

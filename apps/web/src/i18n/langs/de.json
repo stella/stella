@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# Entscheidung trägt} other {# Entscheidungen tragen}} dieses Aktenzeichen. Wählen Sie das Gericht.",
     "searchLabel": "Rechtsprechung durchsuchen",
     "searchPlaceholder": "Aktenzeichen, ECLI oder Stichwörter, z. B. 22 Cdo 2653/2012",
+    "searchStillSearching": "Die Suche ist ausgelastet. Es wird weiter gesucht…",
     "searchUnavailable": {
       "description": "Die Suche in der Rechtsprechung war nicht erreichbar. Ihre Suchanfrage bleibt in der Adresszeile, versuchen Sie es gleich noch einmal.",
       "title": "Die Suche ist vorübergehend nicht verfügbar"

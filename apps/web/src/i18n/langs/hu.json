@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# határozat viseli} other {# határozat viseli}} ezt az ügyszámot. Válasszon bíróságot.",
     "searchLabel": "Keresés a joggyakorlatban",
     "searchPlaceholder": "Ügyszám, ECLI vagy szavak, pl. 22 Cdo 2653/2012",
+    "searchStillSearching": "A keresőszolgáltatás leterhelt. A keresés folyamatban…",
     "searchUnavailable": {
       "description": "Az ítélkezési gyakorlat keresője nem érhető el. A keresése megmarad a címsorban, próbálja újra egy pillanat múlva.",
       "title": "A keresés átmenetileg nem érhető el"
