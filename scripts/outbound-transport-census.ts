@@ -179,12 +179,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
   },
 
   {
-    path: "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-    class: "package-owned-client",
-    reason: "Stubs fetch with fixture responses for adapter checks.",
-    transports: ["global:fetch"],
-  },
-  {
     path: "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts",
     class: "third-party",
     reason: "Reads roster data from public court sites.",
@@ -643,6 +637,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:jose"],
   },
   {
+    path: "apps/api/src/lib/push/apns-client.ts",
+    class: "third-party",
+    reason:
+      "Sends push alerts over HTTP/2 to the two fixed Apple Push Notification service gateways.",
+    transports: ["module:node:http2"],
+  },
+  {
     path: "apps/api/src/lib/redis-client.ts",
     class: "operator-configured-infrastructure",
     reason:
@@ -997,6 +998,34 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/agent-engine/src/sidecar/attachments.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Copies a chat's attached file into a local run's folder from the signed storage link the API issued for that run.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/holder-server.ts",
+    class: "package-owned-client",
+    reason:
+      "Listens on, and probes for a live holder at, the private Unix socket or named pipe the desktop names; it reaches no other host.",
+    transports: ["module:node:net"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/mcp-proxy.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Forwards a local harness's MCP requests only to the run's MCP URL on the configured stella API origin, without following redirects.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/outputs.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Posts a file a local run wrote to the configured stella API origin with the run's agent token, under a bounded deadline and refusing redirects.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/api-client/src/index.ts",
     class: "package-owned-client",
     reason:
@@ -1056,7 +1085,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "packages/fetch/src/index.ts",
     class: "package-owned-client",
     reason:
-      "Shared fetch owner resolves the runtime transport and applies caller-selected header or idle deadlines.",
+      "Shared fetch owner resolves the runtime transport and applies caller-selected header or total deadlines.",
     transports: ["global:fetch"],
   },
   {

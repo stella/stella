@@ -1,4 +1,12 @@
-import { createContext, use, useState } from "react";
+import {
+  createContext,
+  startTransition,
+  use,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 
 import { panic } from "better-result";
 
@@ -27,8 +35,12 @@ const NONE: Readonly<Record<ChangeKind, number>> = {
  */
 export const ChangesProvider = ({ children }: React.PropsWithChildren) => {
   const [revisions, setRevisions] = useState(NONE);
+  // A transition, so the lists that reload keep showing what they have
+  // until the new load settles, rather than falling back to a spinner.
   const changed = (kind: ChangeKind) => {
-    setRevisions((current) => ({ ...current, [kind]: current[kind] + 1 }));
+    startTransition(() => {
+      setRevisions((current) => ({ ...current, [kind]: current[kind] + 1 }));
+    });
   };
   return (
     <ChangesContext value={{ changed, revisions }}>{children}</ChangesContext>
@@ -48,3 +60,31 @@ export const useRevision = (...kinds: readonly ChangeKind[]): string => {
 /** Tells the lists that something of `kind` changed. */
 export const useChanged = (): ((kind: ChangeKind) => void) =>
   useChanges().changed;
+
+/**
+ * A list's load: started when the list mounts and again, in place, whenever
+ * something of `kinds` changes here. The list stays mounted and the reload is
+ * a transition, so it keeps showing what it has, and its own state, until
+ * the new load settles. The setter replaces the load, for a pull to refresh
+ * or a next page.
+ */
+export const useRevisedLoad = <T,>(
+  start: () => Promise<T>,
+  kinds: readonly ChangeKind[],
+): readonly [Promise<T>, (load: Promise<T>) => void] => {
+  const revision = useRevision(...kinds);
+  const [load, setLoad] = useState(start);
+  const loadedFor = useRef(revision);
+  const reload = useEffectEvent(() => {
+    startTransition(() => {
+      setLoad(start());
+    });
+  });
+  useEffect(() => {
+    if (loadedFor.current !== revision) {
+      loadedFor.current = revision;
+      reload();
+    }
+  }, [revision]);
+  return [load, setLoad] as const;
+};

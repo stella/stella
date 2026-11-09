@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import path from "node:path";
-import * as ts from "tsrs/unstable/ast";
-import { API, type Checker } from "tsrs/unstable/async";
-import { serverFS } from "tsrs/unstable/fs";
+import * as ts from "tsrs/ast";
+import { API, type Checker } from "tsrs/async";
+import { serverFS } from "tsrs/fs";
 
 const hasTemplateBinding = async (
   access: ts.PropertyAccessExpression,

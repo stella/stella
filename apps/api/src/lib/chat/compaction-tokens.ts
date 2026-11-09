@@ -7,7 +7,8 @@
  * a thread cannot drift apart on the numbers that matter.
  */
 
-const ESTIMATED_CHARS_PER_TOKEN = 4;
+import { estimateTextTokens } from "@/api/lib/ai-generation/token-estimate";
+
 export const MESSAGE_OVERHEAD_TOKENS = 12;
 export const FILE_PART_ESTIMATED_TOKENS = 8000;
 export const DEFAULT_TRIGGER_TOKENS = 64_000;
@@ -21,12 +22,6 @@ export const DEFAULT_PRESERVE_TOKENS = 38_000;
 const MAX_TRIGGER_TOKENS = 200_000;
 export const MAX_TEXT_PART_CHARS = 8000;
 export const MAX_STRUCTURED_PART_CHARS = 4000;
-/**
- * Canonical chars/4 token estimate. Shared with the prompt builders so the
- * meter's prompt/tool parts use the same estimator as the message parts.
- */
-export const estimateTextTokens = (text: string): number =>
-  Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
 
 /** The fewest summary tokens a compaction asks for, however short its input. */
 const MIN_SUMMARY_TARGET_TOKENS = 400;

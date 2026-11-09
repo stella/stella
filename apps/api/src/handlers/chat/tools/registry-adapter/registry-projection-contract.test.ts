@@ -21,7 +21,10 @@ import {
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { Block } from "@stll/legal-ast/document-ast";
+import type { ReaderTextQuoteSelector } from "@stll/legal-ast/reader-text-quote";
 import { cents } from "@stll/money";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -72,12 +75,15 @@ import {
 } from "@/api/tests/helpers/invoice-tool-fixtures";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
+
+const testFetchState = createTestFetch();
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
@@ -246,6 +252,20 @@ const selectQueue = (queue: readonly (readonly unknown[])[]) => {
   };
 };
 
+const ANNOTATION_BLOCKS = [
+  { anchorId: "p-3", text: "The court held" },
+  { anchorId: "p-4", text: "that the claim was time-barred" },
+].map(
+  ({ anchorId, text }) =>
+    ({
+      type: "paragraph",
+      id: anchorId,
+      anchorId,
+      inlines: [{ type: "text", text }],
+      plainText: text,
+    }) satisfies Block,
+);
+
 const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
   const scopedDb = asTestRaw<ScopedDb>(
     async (run: (transaction: unknown) => unknown) => await run(tx),
@@ -260,6 +280,7 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],
         pinnedIds: [],
       }),
+      workspaceStatusById: new Map([[WS, "active" as const]]),
       userId: toSafeId<"user">("user_1"),
       userEmail: "standard@example.test",
       testDependencies: {
@@ -294,7 +315,11 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         resolveAnnotationTarget: async () =>
           await Promise.resolve({
             status: "available" as const,
-            readBlocks: async () => await Promise.resolve([]),
+            readBlocks: async () => await Promise.resolve(ANNOTATION_BLOCKS),
+            readTextPieces: async () =>
+              await Promise.resolve(
+                ANNOTATION_BLOCKS.flatMap(readerAnchorPiecesOf),
+              ),
           }),
         searchConsolidatedLegislation: searchConsolidatedLegislationMock,
         getLawTextBlock: getLawTextBlockMock,
@@ -339,11 +364,14 @@ const recordOutboundFetches = async <TResult>(
     },
     { preconnect: globalThis.fetch.preconnect },
   );
-  const spy = spyOn(globalThis, "fetch").mockImplementation(refuse);
+  const spy = Object.assign(mock(refuse), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(spy);
   try {
     return { result: await run(), fetched };
   } finally {
-    spy.mockRestore();
+    testFetchState.restore();
   }
 };
 
@@ -506,11 +534,16 @@ const CONTRACT_CORPUS = {
         readWorkspaceHandlerMock.mockResolvedValue({
           id: toSafeId<"workspace">(WS),
           organizationId: ORGANIZATION_ID,
+          externalSource: null,
+          externalId: null,
+          externalChangeKey: null,
+          importedAt: null,
           name: "Acme retainer",
           reference: "REF-1",
           clientId: toSafeId<"contact">(uid(61)),
           leadUserId: null,
           billingReference: null,
+          billingNarrativeLanguage: null,
           color: null,
           status: "active",
           lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -806,6 +839,9 @@ const CONTRACT_CORPUS = {
                 dateOfBirthMonth: null,
                 dateOfBirthDay: null,
                 nationalityCodes: [],
+                externalSource: "legacy",
+                externalId: uid(113),
+                externalChangeKey: "sample-change",
               }) satisfies Pick<
                 typeof contacts.$inferSelect,
                 keyof typeof READ_CONTACT_COLUMNS
@@ -814,6 +850,7 @@ const CONTRACT_CORPUS = {
         },
       }),
       expectRefPaths: ["contactId"],
+      expectPayloadContains: [uid(113)],
     },
   ],
   list_documents: [
@@ -2234,20 +2271,21 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ target_type: "decision", target_id: uid(60) }),
       tx: () => ({
         select: selectQueue([
-          [
-            ["p-3", "The court held"],
-            ["p-4", "that the claim was time-barred"],
-          ].map(([blockAnchorId, quote], index) => ({
+          ANNOTATION_BLOCKS.map(({ anchorId, plainText }, index) => ({
             id: uid(61 + index),
             groupId: uid(63),
             kind: "comment",
             visibility: "shared",
             color: null,
             style: null,
-            blockAnchorId,
-            startOffset: 0,
-            endOffset: 10,
-            quote,
+            ...({
+              blockAnchorId: anchorId,
+              startOffset: 0,
+              endOffset: plainText.length,
+              quote: plainText,
+              quotePrefix: "",
+              quoteSuffix: "",
+            } satisfies ReaderTextQuoteSelector),
             body: index === 0 ? "Check the limitation date" : null,
             createdAt: new Date("2026-01-01"),
             updatedAt: new Date("2026-01-01"),
@@ -2399,7 +2437,7 @@ describe("registry projection contract", () => {
           if (!isRecord(item)) {
             panic("Invalid citation result");
           }
-          expect(item["url"]).toBe(item["sourceUrl"]);
+          expect(item["sourceUrl"]).toBeUndefined();
           expect(item["url"]).toMatch(/^https:/u);
           expect(item["source_url"]).toBeUndefined();
         }
@@ -2500,16 +2538,12 @@ describe("registry projection contract", () => {
             "appUrl" in value,
             `${toolName}: primary/source links must not expose appUrl`,
           ).toBe(false);
-          if (
-            "url" in value &&
-            typeof value.url === "string" &&
-            "sourceUrl" in value &&
-            typeof value.sourceUrl === "string" &&
-            value.url !== new URL(value.sourceUrl).href
-          ) {
-            expect("source_url" in value && value.source_url).toBe(
-              new URL(value.sourceUrl).href,
+          // The publisher link is a distinct, parsed link or absent.
+          if ("source_url" in value) {
+            expect(value.source_url).toBe(
+              new URL(String(value.source_url)).href,
             );
+            expect("url" in value && value.url).not.toBe(value.source_url);
           }
           for (const child of Object.values(value)) {
             assertCitationLinks(child);

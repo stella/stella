@@ -12,6 +12,7 @@ import {
 import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
 import {
   assertChatThreadScopeMatches,
+  chatThreadScopeMismatchError,
   resolveChatScope,
 } from "@/api/handlers/chat/chat-scope";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
@@ -33,6 +34,11 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
+import {
+  chatRunTargetOf,
+  localRunTargetField,
+  reportedLocalRunContext,
+} from "@/api/lib/chat/run-target";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -147,6 +153,7 @@ const getMessages = createSafeRootHandler(
     user,
   }) {
     const scope = yield* resolveChatScope({
+      admitted: "active-or-archived",
       getWorkspaceAccess,
       workspaceId,
     });
@@ -230,6 +237,7 @@ const getMessages = createSafeRootHandler(
             usedAnonymization: true,
             chatModel: true,
             chatReasoningEffort: true,
+            chatLocalRunTarget: true,
             forkedFromMessageId: true,
             parentThreadId: true,
             updatedAt: true,
@@ -294,7 +302,10 @@ const getMessages = createSafeRootHandler(
             }),
           )
         ) {
-          return { kind: "scope-mismatch" as const };
+          return {
+            kind: "scope-mismatch" as const,
+            workspaceId: thread.workspaceId ?? null,
+          };
         }
 
         // The most-recent page is loaded first; older pages are fetched on
@@ -396,6 +407,7 @@ const getMessages = createSafeRootHandler(
           webSearchEnabled: false,
           model: null,
           reasoningEffort: null,
+          ...localRunTargetField(chatRunTargetOf(null)),
           // A not-yet-created draft still carries the cache-stable floor its
           // first send will pay. Web search is off (`webSearchEnabled: false`)
           // and the model defaults (`threadChatModel: null`) until the draft
@@ -420,10 +432,15 @@ const getMessages = createSafeRootHandler(
 
     if (reads.kind === "scope-mismatch") {
       return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Chat thread scope does not match request",
-        }),
+        yield* Result.await(
+          Result.tryPromise(
+            async () =>
+              await chatThreadScopeMismatchError({
+                workspaceId: reads.workspaceId,
+                getWorkspaceAccess,
+              }),
+          ),
+        ),
       );
     }
 
@@ -446,12 +463,15 @@ const getMessages = createSafeRootHandler(
     // path applies (provider availability and the thread's opt-in), and (unlike
     // template studio) the standalone read path never carries template-authoring
     // tools. The trigger denominator resolves the same model the next send uses.
-    const context = buildNextSendContext({
+    const persistedMessages = windowedMessages.map((message) =>
+      chatMessageFromPersisted(message),
+    );
+    const estimate = buildNextSendContext({
       revisionNoteTokens,
-      messages: windowedMessages.map((message) => ({
-        id: message.id,
-        role: message.role,
-        parts: chatMessageFromPersisted(message).parts,
+      messages: persistedMessages.map(({ id, role, parts }) => ({
+        id,
+        role,
+        parts,
       })),
       summary: checkpoint
         ? {
@@ -463,6 +483,14 @@ const getMessages = createSafeRootHandler(
       webResearch: webSearchAvailable && thread.webSearchEnabled,
       modelTier,
     });
+    // A thread whose turns run on the member's computer shows what its
+    // harness reported: the harness manages that context, not stella.
+    const reported = reportedLocalRunContext({
+      target: chatRunTargetOf(thread.chatLocalRunTarget),
+      messages: persistedMessages,
+    });
+    const context: ThreadContextUsage =
+      reported === undefined ? estimate : { ...estimate, reported };
 
     return Result.ok({
       activeSkill: thread.activeSkill,
@@ -483,6 +511,8 @@ const getMessages = createSafeRootHandler(
       webSearchEnabled: thread.webSearchEnabled,
       model: thread.chatModel,
       reasoningEffort: thread.chatReasoningEffort,
+      // Present only for a thread whose turns run on a computer; absent is cloud.
+      ...localRunTargetField(chatRunTargetOf(thread.chatLocalRunTarget)),
       context,
     });
   },

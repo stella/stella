@@ -4,6 +4,8 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { readerPdfPageAnchorId } from "@stll/api-contract/legal-reader-annotations";
+import { DETACHED_REASON } from "@stll/api-contract/pdf-mark-placement";
+import type { DetachedReason } from "@stll/api-contract/pdf-mark-placement";
 import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
 import { ReviewCommentCard } from "@stll/ui/review-comment-card";
@@ -16,8 +18,6 @@ import {
   MarginNotes,
 } from "@/components/legal-reader/margin-notes";
 import type { CommentMarginItem } from "@/components/legal-reader/margin-notes";
-import { DETACHED_REASON } from "@/components/pdf/annotations/document-mark-anchor.logic";
-import type { DetachedReason } from "@/components/pdf/annotations/document-mark-anchor.logic";
 import type {
   DocumentMark,
   DocumentMarks,

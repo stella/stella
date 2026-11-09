@@ -6,17 +6,30 @@
  * that cannot be hydrated is still a decision a reader can see.
  */
 
-import { describe, expect, test } from "bun:test";
+import { panic } from "better-result";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
   isDeferredDocumentFetchable,
   readThroughDeferredDocument,
+  recordDocumentPacingOutcome,
+  resetDocumentFetchesForTesting,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
-import type { OnDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand";
+import type {
+  DocumentReadDeferral,
+  OnDemandDocumentDeps,
+} from "@/api/handlers/case-law/decisions/document-on-demand";
+import { resetCaptureWindows } from "@/api/lib/analytics/capture";
+import {
+  resetAnalyticsForTesting,
+  setAnalyticsForTesting,
+} from "@/api/lib/analytics/client";
+import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { gradedDocumentFetchBudget } from "@/api/lib/legal-search/document-fetch-budget";
 import type {
   BackfilledDocument,
   PendingDocument,
@@ -128,6 +141,10 @@ const recorder = (
 };
 
 describe("deferred document read-through", () => {
+  afterEach(() => {
+    resetDocumentFetchesForTesting();
+  });
+
   test("many readers of one decision cause one fetch", async () => {
     const { deps, fetched, release } = recorder();
     const decision = pending();
@@ -481,3 +498,86 @@ for (const status of ["busy", "lost"] as const) {
     expect(requested).toEqual([decision.id]);
   });
 }
+
+describe("deferral reporting", () => {
+  const captured: ServerAnalyticsCaptureParams[] = [];
+
+  beforeEach(() => {
+    captured.length = 0;
+    resetCaptureWindows();
+    setAnalyticsForTesting({
+      capture: (event) => {
+        captured.push(event);
+      },
+      flush: async () => undefined,
+      identifyOrganizationGroup: () => undefined,
+    });
+  });
+
+  afterEach(() => {
+    resetCaptureWindows();
+    resetAnalyticsForTesting();
+  });
+
+  const deferrals = {
+    "pacing-deferred": true,
+    "pacing-unavailable": true,
+    "ownership-busy": true,
+    "ownership-lost": true,
+  } as const satisfies Record<DocumentReadDeferral, true>;
+
+  for (const outcome of Object.keys(deferrals).filter(
+    (key): key is DocumentReadDeferral => Object.hasOwn(deferrals, key),
+  )) {
+    test(`${outcome} deferral is not captured as an exception`, () => {
+      recordDocumentPacingOutcome(createSafeId<"caseLawDecision">(), outcome);
+      expect(captured).toEqual([]);
+    });
+  }
+
+  test("a fetch that outlasts its budget is not captured as an exception", async () => {
+    expect(
+      await readThroughDeferredDocument({
+        adapterKey: "sk-courts",
+        decision: pending(),
+        deps: {
+          recordPacingOutcome: () => {},
+          withFetchBudget: availableBudget,
+          recordRequest: async () => {},
+          fetchDocument: async () => {
+            const budget = gradedDocumentFetchBudget(AbortSignal.timeout(1));
+            await new Promise<void>((resolve) => {
+              budget.addEventListener("abort", () => {
+                resolve();
+              });
+            });
+            budget.throwIfAborted();
+            return panic("The budget has expired");
+          },
+        },
+        recordDemand: false,
+      }),
+    ).toBeNull();
+    expect(captured).toEqual([]);
+  });
+
+  test("a failing fetch is still captured as an exception", async () => {
+    expect(
+      await readThroughDeferredDocument({
+        adapterKey: "sk-courts",
+        decision: pending(),
+        deps: {
+          recordPacingOutcome: () => {},
+          withFetchBudget: availableBudget,
+          recordRequest: async () => {},
+          fetchDocument: async () => {
+            await Promise.resolve();
+            throw new Error("court site unreachable");
+          },
+        },
+        recordDemand: false,
+      }),
+    ).toBeNull();
+    expect(captured).toHaveLength(1);
+  });
+});

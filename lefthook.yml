@@ -80,11 +80,20 @@ pre-push:
     # Checks each touched TypeScript package once, sequentially.
     typecheck:
       run: bun scripts/pre-push-typecheck.ts --base origin/main
+    # Same check as merge-queue admission: a branch that merged main must stamp
+    # its new migrations after main's newest one. Reads git only.
+    migration-order:
+      run: bun scripts/check-migration-order.ts origin/main
     secrets:
       # The hook's stdin carries the ref updates the push would publish; the
       # scanner scopes each gitleaks run to exactly those commits.
       use_stdin: true
       run: bun run secrets:check:pushed
+    # Main accepts only signed commits; a pull request carrying an unsigned
+    # one shows every check green and still never merges.
+    signatures:
+      use_stdin: true
+      run: bash scripts/check-pushed-signatures.sh
     ai-skills:
       run: bash scripts/check-ai-skill-sources.sh
     # Every lockfile besides the root bun.lock needs the release-age

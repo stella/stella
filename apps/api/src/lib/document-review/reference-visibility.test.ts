@@ -70,6 +70,7 @@ const basis: DocumentReviewRunBasis = {
           },
         ],
       },
+      scope: null,
     },
   },
   references: [reference],
@@ -197,6 +198,7 @@ describe("basisForReader", () => {
       definitionSnapshot: {
         name: basis.playbook.definitionSnapshot.name,
         positions: { version: 3, items: [{ ...pinned, ...prose }] },
+        scope: basis.playbook.definitionSnapshot.scope ?? null,
       },
     },
     references: basis.references,
@@ -232,6 +234,31 @@ describe("basisForReader", () => {
   test("projects the reference list with the positions", () => {
     expect(basisForReader(withProse, new Set()).references).toEqual(
       referencesForReader(withProse.references, new Set()),
+    );
+  });
+
+  test("reads a scope the stored basis predates as null", () => {
+    // Runs opened before the snapshot carried a scope stored a basis whose
+    // snapshot has no `scope` key at all (the JSON round trip is how the row
+    // actually comes back). The reader contract is `PlaybookScope | null`:
+    // the missing key must surface as a present null, not as an absent key
+    // a client reads as undefined.
+    const legacy: DocumentReviewRunBasis = {
+      ...withProse,
+      playbook: {
+        ...withProse.playbook,
+        definitionSnapshot: {
+          name: withProse.playbook.definitionSnapshot.name,
+          positions: withProse.playbook.definitionSnapshot.positions,
+        },
+      },
+    };
+    expect("scope" in legacy.playbook.definitionSnapshot).toBe(false);
+
+    const shown = basisForReader(legacy, new Set());
+    expect(shown.playbook.definitionSnapshot.scope).toBeNull();
+    expect(Object.hasOwn(shown.playbook.definitionSnapshot, "scope")).toBe(
+      true,
     );
   });
 });
@@ -319,6 +346,7 @@ describe("basis and finding projections agree", () => {
               definitionSnapshot: {
                 name: "Positions confirmed for this review",
                 positions: { version: 3, items: [position] },
+                scope: null,
               },
             },
             references: [],
@@ -369,8 +397,10 @@ const STORED_BASIS_READERS = {
   // Refuses unless every reference matter is readable.
   "handlers/playbooks/from-run/create.ts": "gated",
   "lib/document-review/run-queue.ts": "internal",
-  "lib/document-review/table-run-findings.ts": "internal",
+  "lib/db/aggregate-lock.ts": "internal",
   "lib/document-review/review-suggestion-staging.ts": "internal",
+  // Compares the pinned position rules of two runs; answers with nothing.
+  "lib/document-review/decision-carry-over.ts": "internal",
 } as const satisfies Record<
   string,
   "projects" | "summary" | "gated" | "internal"

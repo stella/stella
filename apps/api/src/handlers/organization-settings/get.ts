@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 import type { TimeZoneId } from "@stll/time";
 
 import type {
@@ -18,6 +19,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { localRunApprovalCeilingOf } from "@/api/lib/chat/local-run-approval-ceiling";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   isFeatureAccessSnapshotForPrincipal,
@@ -39,12 +41,15 @@ const config = {
   description:
     "Read the organization's general settings: document processing mode, " +
     "matter-number pattern, padding, and whether titles show that number, practice jurisdictions, prompt " +
-    "caching, memory extraction, time policy, and the time zone whose calendar " +
-    "decides the organization's day. declaredFeatureIds identifies policies in force; " +
+    "caching, memory extraction, time policy, the time zone whose calendar " +
+    "decides the organization's day, and localRunMaxApprovalMode, the most a " +
+    "chat turn run on a member's computer may do without asking. declaredFeatureIds identifies policies in force; " +
     "capabilities contains caller decisions; deploymentFeatures supplies deployment availability. " +
     "timeZoneSource says whether the zone was " +
     "chosen or derived from the primary practice jurisdiction (Europe/Prague " +
-    "for CZ and SK, UTC otherwise). An organization that has never saved " +
+    "for CZ and SK, UTC otherwise). primaryJurisdictionTimeZone is the " +
+    "zone the primary jurisdiction implies, regardless of an organization " +
+    "override. An organization that has never saved " +
     "settings gets the defaults rather than an error.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -66,6 +71,7 @@ type OrganizationSettingsRow = {
   promptCachingEnabled: boolean;
   managedAIResidency: ManagedAIResidency;
   memoryExtractionEnabled: boolean;
+  localRunMaxApprovalMode: DesktopRunnerApprovalMode;
   timeMinimumUnitMinutes: number;
   timeEditWindowDays: number;
   timeLockedThroughMonth: string | null;
@@ -77,6 +83,7 @@ export const projectOrganizationSettingsRow = (
   row: OrganizationSettingsRow | null | undefined,
   snapshot: FeatureAccessSnapshot,
 ) => {
+  const practiceJurisdictions = arrayOrEmpty(row?.practiceJurisdictions);
   const visibleDecisions = Array.from(snapshot.decisions).filter(
     ([featureId]) =>
       featureId !== LIST_VERIFICATION_FEATURE_ID ||
@@ -107,10 +114,11 @@ export const projectOrganizationSettingsRow = (
     matterNumberPadding:
       row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
     matterNumberingEnabled: row?.matterNumberingEnabled ?? false,
-    practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
+    practiceJurisdictions,
     promptCachingEnabled: row?.promptCachingEnabled ?? true,
     managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
     memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
+    localRunMaxApprovalMode: localRunApprovalCeilingOf(row),
     timeMinimumUnitMinutes:
       row?.timeMinimumUnitMinutes ?? DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
     timeEditWindowDays:
@@ -120,7 +128,11 @@ export const projectOrganizationSettingsRow = (
       row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
     timeZone: effectiveOrganizationTimeZone({
       timeZone: row?.timeZone ?? null,
-      practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
+      practiceJurisdictions,
+    }),
+    primaryJurisdictionTimeZone: effectiveOrganizationTimeZone({
+      timeZone: null,
+      practiceJurisdictions,
     }),
     timeZoneSource:
       (row?.timeZone ?? null) === null
@@ -145,6 +157,7 @@ const readOrganizationSettings = createSafeRootHandler(
             promptCachingEnabled: true,
             managedAIResidency: true,
             memoryExtractionEnabled: true,
+            localRunMaxApprovalMode: true,
             timeMinimumUnitMinutes: true,
             timeEditWindowDays: true,
             timeLockedThroughMonth: true,

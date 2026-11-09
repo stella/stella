@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "PL_UODO",
   "key": "pl-uodo",
-  "parserVersion": 17,
+  "parserVersion": 19,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "AT_BVWG",
   "key": "at-bvwg",
-  "parserVersion": 11,
+  "parserVersion": 13,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

@@ -49,7 +49,7 @@
         "id": "b3",
         "anchorId": "p-3",
         "type": "paragraph",
-        "role": "holding",
+        "role": "intro",
         "inlines": [
           {
             "type": "text",
@@ -145,7 +145,7 @@
         "id": "b4",
         "anchorId": "p-4",
         "type": "paragraph",
-        "role": "holding",
+        "role": "intro",
         "inlines": [
           {
             "type": "text",
@@ -297,6 +297,7 @@
         "id": "b15",
         "anchorId": "p-15",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -336,6 +337,7 @@
         "id": "b16",
         "anchorId": "p-16",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -349,6 +351,7 @@
         "id": "b17",
         "anchorId": "p-17",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -362,6 +365,7 @@
         "id": "b18",
         "anchorId": "p-18",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -375,6 +379,7 @@
         "id": "b19",
         "anchorId": "p-19",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -388,6 +393,7 @@
         "id": "b20",
         "anchorId": "p-20",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -401,6 +407,7 @@
         "id": "b21",
         "anchorId": "p-21",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -414,6 +421,7 @@
         "id": "b22",
         "anchorId": "p-22",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -426,6 +434,7 @@
         "id": "b23",
         "anchorId": "p-23",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -464,6 +473,7 @@
         "id": "b24",
         "anchorId": "p-24",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -503,6 +513,7 @@
         "id": "b25",
         "anchorId": "p-25",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -516,6 +527,7 @@
         "id": "b26",
         "anchorId": "p-26",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -529,6 +541,7 @@
         "id": "b27",
         "anchorId": "p-27",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -542,6 +555,7 @@
         "id": "b28",
         "anchorId": "p-28",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -567,6 +581,7 @@
         "id": "b29",
         "anchorId": "p-29",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -579,6 +594,7 @@
         "id": "b30",
         "anchorId": "p-30",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -619,6 +635,7 @@
         "id": "b31",
         "anchorId": "p-31",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -644,6 +661,7 @@
         "id": "b32",
         "anchorId": "p-32",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -656,6 +674,7 @@
         "id": "b33",
         "anchorId": "p-33",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -669,6 +688,7 @@
         "id": "b34",
         "anchorId": "p-34",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -682,6 +702,7 @@
         "id": "b35",
         "anchorId": "p-35",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -695,6 +716,7 @@
         "id": "b36",
         "anchorId": "p-36",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -708,6 +730,7 @@
         "id": "b37",
         "anchorId": "p-37",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -720,6 +743,7 @@
         "id": "b38",
         "anchorId": "p-38",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -733,6 +757,7 @@
         "id": "b39",
         "anchorId": "p-39",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -746,6 +771,7 @@
         "id": "b40",
         "anchorId": "p-40",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -759,6 +785,7 @@
         "id": "b41",
         "anchorId": "p-41",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -772,6 +799,7 @@
         "id": "b42",
         "anchorId": "p-42",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -785,6 +813,7 @@
         "id": "b43",
         "anchorId": "p-43",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -797,6 +826,7 @@
         "id": "b44",
         "anchorId": "p-44",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -836,6 +866,7 @@
         "id": "b45",
         "anchorId": "p-45",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -861,6 +892,7 @@
         "id": "b46",
         "anchorId": "p-46",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -873,6 +905,7 @@
         "id": "b47",
         "anchorId": "p-47",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -885,6 +918,7 @@
         "id": "b48",
         "anchorId": "p-48",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -945,6 +979,7 @@
         "id": "b49",
         "anchorId": "p-49",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -957,6 +992,7 @@
         "id": "b50",
         "anchorId": "p-50",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -982,6 +1018,7 @@
         "id": "b51",
         "anchorId": "p-51",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1042,6 +1079,7 @@
         "id": "b52",
         "anchorId": "p-52",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1054,6 +1092,7 @@
         "id": "b53",
         "anchorId": "p-53",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1092,6 +1131,7 @@
         "id": "b54",
         "anchorId": "p-54",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1144,6 +1184,7 @@
         "id": "b55",
         "anchorId": "p-55",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1210,6 +1251,7 @@
         "id": "b56",
         "anchorId": "p-56",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1235,6 +1277,7 @@
         "id": "b57",
         "anchorId": "p-57",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1345,6 +1388,7 @@
         "id": "b62",
         "anchorId": "p-62",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1357,6 +1401,7 @@
         "id": "b63",
         "anchorId": "p-63",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1423,6 +1468,7 @@
         "id": "b64",
         "anchorId": "p-64",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1435,6 +1481,7 @@
         "id": "b65",
         "anchorId": "p-65",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1447,6 +1494,7 @@
         "id": "b66",
         "anchorId": "p-66",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1472,6 +1520,7 @@
         "id": "b67",
         "anchorId": "p-67",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1497,6 +1546,7 @@
         "id": "b68",
         "anchorId": "p-68",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1509,6 +1559,7 @@
         "id": "b69",
         "anchorId": "p-69",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1521,6 +1572,7 @@
         "id": "b70",
         "anchorId": "p-70",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1533,6 +1585,7 @@
         "id": "b71",
         "anchorId": "p-71",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1545,6 +1598,7 @@
         "id": "b72",
         "anchorId": "p-72",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1571,6 +1625,7 @@
         "id": "b73",
         "anchorId": "p-73",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1583,6 +1638,7 @@
         "id": "b74",
         "anchorId": "p-74",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1596,6 +1652,7 @@
         "id": "b75",
         "anchorId": "p-75",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1609,6 +1666,7 @@
         "id": "b76",
         "anchorId": "p-76",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1622,6 +1680,7 @@
         "id": "b77",
         "anchorId": "p-77",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1648,6 +1707,7 @@
         "id": "b78",
         "anchorId": "p-78",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1661,6 +1721,7 @@
         "id": "b79",
         "anchorId": "p-79",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1674,6 +1735,7 @@
         "id": "b80",
         "anchorId": "p-80",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1687,6 +1749,7 @@
         "id": "b81",
         "anchorId": "p-81",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1700,6 +1763,7 @@
         "id": "b82",
         "anchorId": "p-82",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1712,6 +1776,7 @@
         "id": "b83",
         "anchorId": "p-83",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1724,6 +1789,7 @@
         "id": "b84",
         "anchorId": "p-84",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1737,6 +1803,7 @@
         "id": "b85",
         "anchorId": "p-85",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1750,6 +1817,7 @@
         "id": "b86",
         "anchorId": "p-86",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1763,6 +1831,7 @@
         "id": "b87",
         "anchorId": "p-87",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1776,6 +1845,7 @@
         "id": "b88",
         "anchorId": "p-88",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1789,6 +1859,7 @@
         "id": "b89",
         "anchorId": "p-89",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1802,6 +1873,7 @@
         "id": "b90",
         "anchorId": "p-90",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1815,6 +1887,7 @@
         "id": "b91",
         "anchorId": "p-91",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1828,6 +1901,7 @@
         "id": "b92",
         "anchorId": "p-92",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1841,6 +1915,7 @@
         "id": "b93",
         "anchorId": "p-93",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1854,6 +1929,7 @@
         "id": "b94",
         "anchorId": "p-94",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1867,6 +1943,7 @@
         "id": "b95",
         "anchorId": "p-95",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1880,6 +1957,7 @@
         "id": "b96",
         "anchorId": "p-96",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1893,6 +1971,7 @@
         "id": "b97",
         "anchorId": "p-97",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1919,6 +1998,7 @@
         "id": "b98",
         "anchorId": "p-98",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1932,6 +2012,7 @@
         "id": "b99",
         "anchorId": "p-99",
         "type": "paragraph",
+        "role": "argumentation",
         "listDepth": 1,
         "inlines": [
           {
@@ -1945,6 +2026,7 @@
         "id": "b100",
         "anchorId": "p-100",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1957,6 +2039,7 @@
         "id": "b101",
         "anchorId": "p-101",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1969,6 +2052,7 @@
         "id": "b102",
         "anchorId": "p-102",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -1981,6 +2065,7 @@
         "id": "b103",
         "anchorId": "p-103",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -2007,6 +2092,7 @@
         "id": "b104",
         "anchorId": "p-104",
         "type": "paragraph",
+        "role": "argumentation",
         "inlines": [
           {
             "type": "text",
@@ -2085,5 +2171,5 @@
       }
     ]
   },
-  "parserVersion": 17
+  "parserVersion": 19
 }

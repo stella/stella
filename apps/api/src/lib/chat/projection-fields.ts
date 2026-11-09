@@ -29,6 +29,16 @@ const projectionBranchSources = new WeakMap<
  * strict parse; the annotation walk can then follow that branch without
  * validating it again.
  */
+/** The answer of a read that outlived its response deadline. */
+export const publicReadRunningFields = {
+  status: v.literal("running"),
+  // The opaque token to send back as `continuation_token`.
+  continuationToken: v.string(),
+  retryAfterMs: v.number(),
+  phase: v.picklist(["queued", "running", "not_started"]),
+  message: v.string(),
+} as const;
+
 export const projectionBranch = <TSchema extends ChatProjectionSchema>(
   schema: TSchema,
 ) => {

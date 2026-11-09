@@ -3,12 +3,12 @@ import type { ComponentProps } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { contactsOptions } from "@/lib/contacts/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { Workspace } from "@/lib/workspaces/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts" });
 const originalFetch = globalThis.fetch;
@@ -356,12 +356,10 @@ test("picker pending read hides creation and only successful absence is empty", 
   await testing.act(async () => {
     jest.advanceTimersByTime(201);
   });
-  await testing.act(async () => {
-    // Keep the deliberately pending read pending: draining the fake clock also
-    // fires the API fetcher's total request deadline. One second covers the
-    // component library's short cleanup timers without reaching that deadline.
-    restoreRealTimers({ advanceMs: 1000 });
-  });
+  // Keep the deliberately pending read pending: draining the fake clock also
+  // fires the API fetcher's total request deadline. One second covers the
+  // component library's short cleanup timers without reaching that deadline.
+  restoreRealTimers({ advanceMs: 1000 });
   await testing.waitFor(() =>
     expect(reads.some((url) => url.searchParams.get("q") === "Eva")).toBe(true),
   );

@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "HU_BHGY",
   "key": "hu-bhgy",
-  "parserVersion": 23,
+  "parserVersion": 29,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

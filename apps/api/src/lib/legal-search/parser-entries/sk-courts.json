@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "SK_COURTS",
   "key": "sk-courts",
-  "parserVersion": 23,
+  "parserVersion": 31,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

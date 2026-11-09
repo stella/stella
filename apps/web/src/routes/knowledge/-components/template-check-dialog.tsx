@@ -288,7 +288,7 @@ const FindingRow = ({ finding, severity }: FindingRowProps) => {
         <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-4 shrink-0" />
       )}
       <div className="min-w-0">
-        <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
+        <code className="bg-muted rounded-sm px-1 py-0.5 font-mono text-xs">
           {findingSubject(finding)}
         </code>
         <p className="mt-1">{message}</p>

@@ -53,6 +53,7 @@ import type {
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
   createChatRunLog,
   createChatRunLogReplay,
@@ -135,8 +136,12 @@ const seedRunningTurn = async (): Promise<{
       createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     ),
   );
-  const inserted = await scopedDb(
-    async (tx) => await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+  const inserted = await withChatRunPings(
+    async (pings) =>
+      await scopedDb(
+        async (tx) =>
+          await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx }),
+      ),
   );
   if (Result.isError(inserted)) {
     panic("Could not seed chat turn", inserted.error);
@@ -444,14 +449,18 @@ describe("chat run log database contract", () => {
             ...log,
             close: async () => {
               await log.close();
-              await scopedDbA(
-                async (tx) =>
-                  await settleChatTurnOnTx({
-                    assistantMessageId: null,
-                    execution: run.execution,
-                    outcome: USER_STOP_OUTCOME,
-                    tx,
-                  }),
+              await withChatRunPings(
+                async (pings) =>
+                  await scopedDbA(
+                    async (tx) =>
+                      await settleChatTurnOnTx({
+                        pings,
+                        assistantMessageId: null,
+                        execution: run.execution,
+                        outcome: USER_STOP_OUTCOME,
+                        tx,
+                      }),
+                  ),
               );
             },
           },
@@ -579,14 +588,18 @@ describe("chat run log database contract", () => {
           finishSettlement: async () => {
             settlements += 1;
             await run.settle(async () => {
-              const settled = await scopedDbA(
-                async (tx) =>
-                  await settleChatTurnOnTx({
-                    assistantMessageId: messageId,
-                    execution: seeded.execution,
-                    outcome,
-                    tx,
-                  }),
+              const settled = await withChatRunPings(
+                async (pings) =>
+                  await scopedDbA(
+                    async (tx) =>
+                      await settleChatTurnOnTx({
+                        pings,
+                        assistantMessageId: messageId,
+                        execution: seeded.execution,
+                        outcome,
+                        tx,
+                      }),
+                  ),
               );
               expect(settled).toBe("settled");
               return { type: "stored", outcome };
@@ -675,14 +688,18 @@ describe("chat run log database contract", () => {
       });
       await Bun.sleep(50);
       expect(received.value).toBeNull();
-      await scopedDbA(
-        async (tx) =>
-          await settleChatTurnOnTx({
-            assistantMessageId: null,
-            execution: run.execution,
-            outcome: USER_STOP_OUTCOME,
-            tx,
-          }),
+      await withChatRunPings(
+        async (pings) =>
+          await scopedDbA(
+            async (tx) =>
+              await settleChatTurnOnTx({
+                pings,
+                assistantMessageId: null,
+                execution: run.execution,
+                outcome: USER_STOP_OUTCOME,
+                tx,
+              }),
+          ),
       );
       const timing = await readChatTurnTiming({
         execution: run.execution,
@@ -957,14 +974,18 @@ describe("chat run log database contract", () => {
   test("settlement closes an existing run log", async () => {
     const run = await seedRunningTurn();
     await logFor(run).append([chunk("before settlement")]);
-    const settled = await scopedDbA(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId: null,
-          execution: run.execution,
-          outcome: USER_STOP_OUTCOME,
-          tx,
-        }),
+    const settled = await withChatRunPings(
+      async (pings) =>
+        await scopedDbA(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId: null,
+              execution: run.execution,
+              outcome: USER_STOP_OUTCOME,
+              tx,
+            }),
+        ),
     );
     expect(settled).toBe("settled");
     const [header] = await testDb
@@ -976,14 +997,18 @@ describe("chat run log database contract", () => {
 
   test("settlement before delivery logging creates no log rows", async () => {
     const run = await seedRunningTurn();
-    await scopedDbA(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId: null,
-          execution: run.execution,
-          outcome: USER_STOP_OUTCOME,
-          tx,
-        }),
+    await withChatRunPings(
+      async (pings) =>
+        await scopedDbA(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId: null,
+              execution: run.execution,
+              outcome: USER_STOP_OUTCOME,
+              tx,
+            }),
+        ),
     );
     const headers = await testDb
       .select()
@@ -1010,9 +1035,16 @@ describe("chat run log database contract", () => {
         })
         .where(eq(chatTurns.id, run.execution.id));
     });
-    await scopedDbA(
-      async (tx) =>
-        await reapOwnerlessChatTurnOnTx({ threadId: run.threadId, tx }),
+    await withChatRunPings(
+      async (pings) =>
+        await scopedDbA(
+          async (tx) =>
+            await reapOwnerlessChatTurnOnTx({
+              pings,
+              threadId: run.threadId,
+              tx,
+            }),
+        ),
     );
     const [header] = await testDb
       .select({ closedAt: chatRunLogs.closedAt })
@@ -1049,14 +1081,18 @@ describe("chat run log database contract", () => {
     const run = await seedRunningTurn();
     const log = logFor(run);
     await log.append([chunk("abandoned")]);
-    await scopedDbA(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId: null,
-          execution: run.execution,
-          outcome: USER_STOP_OUTCOME,
-          tx,
-        }),
+    await withChatRunPings(
+      async (pings) =>
+        await scopedDbA(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId: null,
+              execution: run.execution,
+              outcome: USER_STOP_OUTCOME,
+              tx,
+            }),
+        ),
     );
     // Simulate an orphaned header while preserving the settled turn contract.
     await rawDb.transaction(async (tx) => {

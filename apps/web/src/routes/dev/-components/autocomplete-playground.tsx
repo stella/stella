@@ -30,6 +30,8 @@ import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { createUuid } from "@/lib/uuid";
 
+import { consumeStream } from "./autocomplete-stream";
+
 const DEBOUNCE_MS = 1500;
 const MIN_PREFIX_CHARS = 8;
 const MAX_PREFIX_CHARS = 8000;
@@ -78,49 +80,6 @@ const extractPrefix = (
   return { prefix, anchor };
 };
 
-type SSEEvent = { event: string; data: string };
-
-const parseSSEBlock = (block: string): SSEEvent | null => {
-  if (block.length === 0) {
-    return null;
-  }
-  let event = "message";
-  const dataLines: string[] = [];
-  for (const line of block.split("\n")) {
-    if (line.startsWith("event:")) {
-      event = line.slice("event:".length).trim();
-    } else if (line.startsWith("data:")) {
-      dataLines.push(line.slice("data:".length).trim());
-    }
-  }
-  return { event, data: dataLines.join("\n") };
-};
-
-const parseSSE = (raw: string): SSEEvent[] => {
-  const events: SSEEvent[] = [];
-  for (const block of raw.split("\n\n")) {
-    const parsed = parseSSEBlock(block);
-    if (parsed !== null) {
-      events.push(parsed);
-    }
-  }
-  return events;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const parseJson = (data: string): unknown => JSON.parse(data);
-
-const readStringField = (data: string, field: string): string | null => {
-  const parsed = Result.try(() => parseJson(data));
-  if (Result.isError(parsed) || !isRecord(parsed.value)) {
-    return null;
-  }
-  const value = parsed.value[field];
-  return typeof value === "string" ? value : null;
-};
-
 type Status = "idle" | "thinking" | "streaming" | "error";
 
 const startStream = async (
@@ -133,59 +92,9 @@ const startStream = async (
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ prefix, language: "en" }),
     signal,
-    timeout: { type: "idle", ms: 15_000 },
+    timeout: { type: "headers", ms: 15_000 },
   });
   return response;
-};
-
-type StreamHandlers = {
-  onToken: (text: string) => void;
-  onStreamError: (message: string) => void;
-};
-
-const consumeStream = async (
-  body: ReadableStream<Uint8Array>,
-  handlers: StreamHandlers,
-): Promise<void> => {
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let done = false;
-  const reader = body.getReader();
-  try {
-    while (!done) {
-      const chunk = await reader.read();
-      if (chunk.done) {
-        break;
-      }
-      buffer += decoder.decode(chunk.value, { stream: true });
-      const boundary = buffer.lastIndexOf("\n\n");
-      if (boundary === -1) {
-        continue;
-      }
-      const ready = buffer.slice(0, boundary + 2);
-      buffer = buffer.slice(boundary + 2);
-      for (const event of parseSSE(ready)) {
-        if (event.event === "token") {
-          const text = readStringField(event.data, "text");
-          if (text !== null && text.length > 0) {
-            handlers.onToken(text);
-          }
-        } else if (event.event === "error") {
-          handlers.onStreamError(
-            readStringField(event.data, "message") ?? "stream error",
-          );
-          done = true;
-          break;
-        } else if (event.event === "done") {
-          done = true;
-          break;
-        }
-      }
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined);
-    reader.releaseLock();
-  }
 };
 
 export const AutocompletePlayground = () => {
@@ -311,7 +220,7 @@ export const AutocompletePlayground = () => {
         let firstToken = true;
         const streamError: { value: string | null } = { value: null };
 
-        await consumeStream(response.body, {
+        await consumeStream(response, controller.signal, {
           onToken: (text) => {
             const live = viewRef.current;
             if (live === null) {

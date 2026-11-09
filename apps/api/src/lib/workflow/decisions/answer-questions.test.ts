@@ -129,8 +129,11 @@ const requestBytes = (plan: SystemOneAnswerPlan): number =>
   ).byteLength;
 
 describe("planSystemOneAnswers", () => {
-  test("text columns are not System One questions", () => {
+  test("text and money columns are not System One questions", () => {
     expect(isSystemOneAnswerable({ version: 1, type: "text" })).toBe(false);
+    expect(
+      isSystemOneAnswerable({ version: 1, type: "money", currency: "EUR" }),
+    ).toBe(false);
     expect(isSystemOneAnswerable({ version: 1, type: "date" })).toBe(true);
   });
 

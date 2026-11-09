@@ -84,6 +84,16 @@ export const searchDecisionsBodySchema = v.object({
     ),
   ),
   category: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  docketRegisters: v.optional(
+    v.pipe(
+      v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(16))),
+      v.minLength(1),
+      v.maxLength(8),
+    ),
+  ),
+  senate: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(999)),
+  ),
   hasLegalSentence: v.optional(v.boolean()),
   // Decisions whose recorded provision links cite this provision. Applied to
   // live rows within the bounded candidate scan, like the metadata filters.
@@ -292,6 +302,8 @@ export const searchDecisionsSuccessResponseSchema = v.object({
   total: searchTotalSchema,
   /** Hits on this page appended by the any-word phase, outside `total`. */
   relaxedHitCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  /** Set when the any-word phase was due and could not be read. */
+  relaxedTopUp: v.optional(v.literal("skipped")),
   nextCursor: nullableBoundedString(
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   ),

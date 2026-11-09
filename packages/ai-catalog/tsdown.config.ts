@@ -8,6 +8,7 @@ export default defineConfig({
     "src/benchmark-frontier.ts",
     "src/benchmarks.ts",
     "src/model-defaults-ledger.ts",
+    "src/transcription.ts",
   ],
   format: ["esm"],
   platform: "neutral",

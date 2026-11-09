@@ -18,6 +18,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { stellaToast } from "@stll/ui/toast";
 
 import type { DownloadVariant } from "@/components/inspector/file-download-service.logic";
@@ -25,7 +26,6 @@ import type { FileTab } from "@/components/inspector/inspector-store-types";
 import englishMessages from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { InspectorTabsStore } from "./inspector-store-types";
 
@@ -811,11 +811,13 @@ test("download errors preserve every admission refusal for all renditions", asyn
   const { actionAdmissionOutcome } =
     await import("@/lib/errors/action-admission");
   const variants = {
+    marked: "marked",
     original: "original",
     pdf: "pdf",
     reference: "reference",
     "reference-scrubbed": "reference-scrubbed",
     scrubbed: "scrubbed",
+    withComments: "withComments",
   } as const satisfies Record<DownloadVariant, DownloadVariant>;
   for (const variant of Object.values(variants)) {
     for (const code of Object.values(ACTION_ADMISSION_CODES)) {

@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "PL_KIS",
   "key": "pl-kis",
-  "parserVersion": 14,
+  "parserVersion": 30,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

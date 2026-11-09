@@ -15,6 +15,7 @@ import {
   createSuggestion,
 } from "@/components/workspaces/properties/property-input/custom-mention";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 const getMentions = (editor: Editor): string[] => {
@@ -77,13 +78,14 @@ export const PropertyPromptInput = ({
   aiEditAction,
 }: PropertyPromptInputProps) => {
   const t = useTranslations();
+  const displayName = usePropertyDisplayName();
   const didAutoPopulate = useRef(false);
   const [editor, setEditor] = useState<Editor | null>(null);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const suggestionOptions: { id: string; label: string }[] = [];
   for (const item of properties) {
     if (item.id !== propertyId) {
-      suggestionOptions.push({ id: item.id, label: item.name });
+      suggestionOptions.push({ id: item.id, label: displayName(item) });
     }
   }
   const fileProperty = properties.find((p) => p.content.type === "file");

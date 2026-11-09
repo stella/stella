@@ -13,6 +13,11 @@ import type { DecisionProvisionCard } from "@stll/decision-reader/decision-text"
 import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import {
+  READER_BREADCRUMB_CLEARANCE,
+  scrollReaderToBlock,
+} from "@stll/decision-reader/reader-landing";
+import { decisionReaderTextPieces } from "@stll/decision-reader/reader-text-pieces.logic";
+import {
   readerSelectionMatches,
   visibleDecisionBlocks,
   visibleReaderAnchorPiecesOf,
@@ -41,6 +46,7 @@ import {
 } from "@/components/inspector/case-decision-view";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
+import { OrphanedAnnotationsNotice } from "@/components/legal-reader/annotations/orphaned-annotations-notice";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
@@ -55,7 +61,6 @@ import type {
   AnswerMarginItem,
   ProvisionMarginItem,
 } from "@/components/legal-reader/margin-notes";
-import { READER_BREADCRUMB_CLEARANCE } from "@/components/legal-reader/reader-breadcrumb-scroll";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
@@ -84,6 +89,7 @@ import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-vie
 import type { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
+import { judgePortraitSrc } from "@/features/case-law/components/case-viewer/decision-judges";
 import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
 import { decisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
 import {
@@ -103,6 +109,7 @@ import { useDecisionCitationAnchors } from "@/features/case-law/components/case-
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { ReaderProvisionModeToggle } from "@/features/case-law/components/reader-provision-mode-toggle";
+import { withSeparateOpinion } from "@/features/case-law/decision-outline.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
@@ -160,7 +167,8 @@ type DecisionWorkspaceDecision = Pick<
   | "sourceAttributionUrl"
   | "textFields"
   | "updatedAt"
->;
+> &
+  Partial<Pick<PublicCaseLawDecision, "languageAlternates">>;
 
 type DecisionWorkspaceBaseProps = {
   decision: DecisionWorkspaceDecision;
@@ -444,6 +452,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     marks: MARKS_FOR_NOTES_FILTER[notesFilter],
     scrollContainerRef: mainRef,
     target: annotationTarget,
+    text: decisionReaderTextPieces(decision),
   });
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -669,7 +678,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const isDragging = useRef(false);
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
-  const citationAnchors = useDecisionCitationAnchors(decisionId);
+  const { citationAnchors, unresolvedCitationAnchors } =
+    useDecisionCitationAnchors(decisionId);
   const {
     anchors: provisionAnchors,
     externalAnchors: externalProvisionAnchors,
@@ -768,13 +778,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     if (!container || !el) {
       return;
     }
-    container.scrollTo({
-      top:
-        el.getBoundingClientRect().top -
-        container.getBoundingClientRect().top +
-        container.scrollTop,
-      behavior: "instant",
-    });
+    scrollReaderToBlock(el, container);
     const blocks = astBlocks;
     const range = paragraphRangeIndices(blocks, {
       startAnchorId: anchorId,
@@ -840,6 +844,21 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     }
     return { items, anchorById };
   })();
+
+  // The analysis follows the notes filter; who wrote separately is the
+  // court's, not a note, so their entry stays whatever the filter shows.
+  const railOutline = withSeparateOpinion({
+    blocks: marginBlocks,
+    formatPortraitCredit: (source) =>
+      t("caseLaw.viewer.portraitCredit", { source }),
+    judges: decision.judges,
+    opinionLabel: t("caseLaw.viewer.judgeRole.dissenting"),
+    outline:
+      showAiNotes && hasAnalysis
+        ? analysisOutline
+        : { anchorById: new Map(), items: [] },
+    portraitSrc: judgePortraitSrc,
+  });
 
   const marginItems = flatAnalysisHeadings.flatMap((heading) => {
     const items: AnalysisMarginItem[] = [];
@@ -943,6 +962,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         </ChromeHeaderActions>
       )}
       <GuestAnnotationPrompt count={annotations.guestCount} />
+      <OrphanedAnnotationsNotice
+        onRemove={annotations.removeOrphaned}
+        orphaned={annotations.orphaned}
+      />
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
@@ -1000,14 +1023,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
           >
             {/* The outline shares the composer's positioned host so it inherits
                 the published block-end inset as the composer grows. */}
-            {showAiNotes && hasAnalysis && analysisTree.length > 0 && (
+            {railOutline.items.length > 0 && (
               <OutlineRail
                 ariaLabel={t("statutes.outline")}
-                items={analysisOutline.items}
+                items={[...railOutline.items]}
                 // The shared breadcrumb and zoom row owns the top band.
                 topOffset={READER_BREADCRUMB_CLEARANCE}
                 onJump={(id, container) => {
-                  const anchorId = analysisOutline.anchorById.get(id);
+                  const anchorId = railOutline.anchorById.get(id);
                   if (anchorId === undefined) {
                     return;
                   }
@@ -1018,19 +1041,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   if (!el) {
                     return;
                   }
-                  container.scrollTo({
-                    top:
-                      el.getBoundingClientRect().top -
-                      container.getBoundingClientRect().top +
-                      container.scrollTop,
-                    behavior: "instant",
-                  });
+                  scrollReaderToBlock(el, container);
                   delete el.dataset["highlight"];
                   forceReflow(el);
                   el.dataset["highlight"] = "";
                 }}
                 resolvePct={(id, container) => {
-                  const anchorId = analysisOutline.anchorById.get(id);
+                  const anchorId = railOutline.anchorById.get(id);
                   if (anchorId === undefined || container.scrollHeight <= 0) {
                     return null;
                   }
@@ -1122,6 +1139,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   {showAiNotes && analysisState.status === "error" && (
                     <AnalysisErrorNotice
                       error={analysisState.error}
+                      languageVersions={decision.languageAlternates}
                       sourceUrl={decision.sourceAttributionUrl}
                       onRetry={() => {
                         detached(generate(), "decision-workspace.generate");
@@ -1223,6 +1241,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                       ),
                     ]}
                     citationAnchors={citationAnchors}
+                    unresolvedCitationAnchors={unresolvedCitationAnchors}
                     decision={decision}
                     decisionId={decisionId}
                     expandProvisions={

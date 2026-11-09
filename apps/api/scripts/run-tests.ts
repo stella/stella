@@ -42,6 +42,7 @@ import {
   snapshotKey,
 } from "./test-db-snapshot-cache";
 import {
+  API_TEST_FILES_ENCODED_ENV,
   API_TEST_SHARD_ENV,
   restrictApiTestFiles,
   selectApiTestFiles,
@@ -82,7 +83,7 @@ const forwardedArguments = runnerArguments.filter(
 
 const allTestPaths = restrictApiTestFiles(
   listApiTestPaths(apiRoot),
-  process.env["API_TEST_FILES"],
+  process.env[API_TEST_FILES_ENCODED_ENV],
 );
 const durationWeights = loadTestDurationWeights({
   files: allTestPaths,

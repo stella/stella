@@ -265,7 +265,8 @@ describe("required dependency review workflow boundary", () => {
     expect(setup.with?.["bun-version-file"]).toBe(
       `\${{ steps.changes.outputs.manifest }}`,
     );
-    expect(setup.with?.["no-cache"]).toBe(true);
+    // setup-bun caches only its executable; no-cache would re-download it.
+    expect(setup.with?.["no-cache"]).toBeUndefined();
     const reviewCondition =
       "steps.changes.outputs.required == 'true' || steps.actions.outputs.required == 'true'";
     expect(checkout.if).toBe(reviewCondition);

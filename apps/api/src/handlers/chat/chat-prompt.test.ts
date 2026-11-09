@@ -1,14 +1,18 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_EXTENSION_STATUS,
   CHAT_DECISION_HREF_TEMPLATE,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   CHAT_USER_HREF_TEMPLATE,
   toChatDecisionPassageHref,
 } from "@stll/api-contract";
+import type { BrowserExtensionStatus } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -19,7 +23,10 @@ import type {
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
-import { UNBOUND } from "@/api/lib/agent-skills/binding";
+import {
+  NO_SKILL_BINDING_SCOPE,
+  UNBOUND,
+} from "@/api/lib/agent-skills/binding";
 import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type {
@@ -33,6 +40,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   ANNOTATIONS_SECTION_MAX_CHARS,
   appendAnonymizedModeHintToChatSafePrompt,
+  browserExtensionPromptLine,
   buildActiveDecisionPrompt,
   buildActiveDecisionSection,
   buildActiveDraftPrompt,
@@ -41,6 +49,7 @@ import {
   buildActiveStatutePrompt,
   buildActiveTemplatePrompt,
   buildChatPromptCacheKey,
+  buildChatSystemPromptParts,
   buildContextMatterScopeSection,
   buildCorpusOnlyCaseLawSection,
   buildGlobalPrompt,
@@ -84,48 +93,196 @@ const SKILL_METADATA = [
   },
 ] as const;
 
+const ONLY_ON_A_WEBSITE_REQUEST =
+  "Only if the user asks you to open, visit, read or operate a website, or to do something in their browser, tell them, in their language, ";
+const OTHERWISE_NO_EXTENSION_MENTION =
+  "otherwise do not mention the browser extension.";
+
+test("checking browser state asks for a resend only on a website request", () => {
+  expect(
+    browserExtensionPromptLine({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "checking",
+    }),
+  ).toContain(
+    `${ONLY_ON_A_WEBSITE_REQUEST}to send the message again in a moment, before you answer another way`,
+  );
+});
+
+test.each([
+  BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+  BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+])(
+  "protocol version %s offers a stella tab reload only on a website request",
+  (protocolVersion) => {
+    const line = browserExtensionPromptLine({
+      protocolVersion,
+      status: "connected",
+    });
+    expect(line).toContain(
+      `${ONLY_ON_A_WEBSITE_REQUEST}to reload this stella tab to use the browser extension, before you answer another way`,
+    );
+    expect(line).toContain(OTHERWISE_NO_EXTENSION_MENTION);
+  },
+);
+
+test("not-paired browser state names the connect step only on a website request", () => {
+  expect(
+    browserExtensionPromptLine({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "not-paired",
+    }),
+  ).toContain(
+    `${ONLY_ON_A_WEBSITE_REQUEST}to click the stella extension icon in the browser toolbar and connect stella once for all their stella tabs, before you answer another way`,
+  );
+});
+
+describe("browser extension line in the chat prompt", () => {
+  const promptFor = async (status: BrowserExtensionStatus) =>
+    (
+      await buildChatSystemPromptParts({
+        activeDecision: undefined,
+        activeExternal: undefined,
+        activeFile: undefined,
+        activeSkillContext: null,
+        activeStatute: undefined,
+        browserExtension: {
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          status,
+        },
+        contextMatterIds: [],
+        hasReachableMatter: false,
+        offeredToolNamesForSkills: () => new Set(),
+        practiceJurisdictions: [],
+        refRegistry: createChatRefRegistry(),
+        safeDb: asTestRaw<SafeDb>(async () => Result.ok([])),
+        // An ordinary legal question: nothing in the turn asks for a website.
+        messages: [
+          {
+            id: toSafeId<"chatMessage">("00000000-0000-4000-8000-000000000b01"),
+            role: "user",
+          },
+        ],
+        requestedSkillNames: new Set(),
+        skillBindingScope: NO_SKILL_BINDING_SCOPE,
+        threadId: toSafeId<"chatThread">(
+          "00000000-0000-4000-8000-000000000b02",
+        ),
+        toolAvailability: {
+          docxEditMode: null,
+          templateAuthoring: false,
+          webResearch: false,
+          folioAgentDocTools: false,
+          subagents: false,
+        },
+        userContext: undefined,
+        workspaceId: null,
+      })
+    ).unwrap();
+
+  test("an ordinary request without the extension gets the conditional line, not an install instruction", async () => {
+    const prompt = await promptFor(BROWSER_EXTENSION_STATUS.notInstalled);
+    const line = browserExtensionPromptLine({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: BROWSER_EXTENSION_STATUS.notInstalled,
+    });
+
+    expect(prompt.fullPrompt).toContain(line);
+    expect(prompt.fullPrompt).toContain(
+      `${ONLY_ON_A_WEBSITE_REQUEST}to install the stella browser extension for Chrome`,
+    );
+    expect(prompt.fullPrompt).toContain(OTHERWISE_NO_EXTENSION_MENTION);
+    expect(prompt.fullPrompt).not.toMatch(/tell the user[^.]*\binstall\b/iu);
+    expect(prompt.fullPrompt).not.toMatch(/BROWSER: Tell\b/u);
+  });
+
+  test.each(
+    Object.values(BROWSER_EXTENSION_STATUS).filter(
+      (status) => status !== BROWSER_EXTENSION_STATUS.connected,
+    ),
+  )(
+    "%s reaches the prompt only behind the website-request condition",
+    async (status) => {
+      const prompt = await promptFor(status);
+      const browserLines = prompt.fullPrompt
+        .split("\n")
+        .filter((promptLine) => promptLine.includes("BROWSER:"));
+
+      expect(browserLines).toHaveLength(1);
+      expect(browserLines[0]).toContain(ONLY_ON_A_WEBSITE_REQUEST);
+      expect(browserLines[0]).toContain(OTHERWISE_NO_EXTENSION_MENTION);
+    },
+  );
+});
+
 describe("reader marks in the prompt", () => {
+  const paragraph = (anchorId: string, text: string): Block => ({
+    anchorId,
+    id: `id-${anchorId}`,
+    inlines: [{ text, type: "text" }],
+    plainText: text,
+    type: "paragraph",
+  });
+
   const mark = (index: number, quoteChars: number, bodyChars: number) =>
     ({
       blockAnchorId: `p-${String(index)}`,
       body: "n".repeat(bodyChars),
       color: null,
+      endOffset: quoteChars,
       groupId: null,
       id: `annotation-${String(index)}`,
       kind: "comment",
       mine: true,
       quote: "q".repeat(quoteChars),
+      quotePrefix: "",
+      quoteSuffix: "",
+      startOffset: 0,
       style: null,
       visibility: "private",
     }) as const;
 
+  const marksText = (count: number, quoteChars: number) =>
+    Array.from({ length: count }).map((_unused, index) =>
+      paragraph(`p-${String(index)}`, "q".repeat(quoteChars)),
+    );
+
+  const highlight = {
+    body: null,
+    color: "red",
+    groupId: "group-1",
+    kind: "highlight",
+    mine: true,
+    style: "strikethrough",
+    visibility: "shared",
+  } as const;
+
   test("ties a mark to the anchors, style and audience of its rows", () => {
-    const formatted = formatAnnotationsForPrompt([
-      {
-        blockAnchorId: "p-3",
-        body: null,
-        color: "red",
-        groupId: "group-1",
-        id: "annotation-a",
-        kind: "highlight",
-        mine: true,
-        quote: "first half",
-        style: "strikethrough",
-        visibility: "shared",
-      },
-      {
-        blockAnchorId: "p-4",
-        body: null,
-        color: "red",
-        groupId: "group-1",
-        id: "annotation-b",
-        kind: "highlight",
-        mine: true,
-        quote: "second half",
-        style: "strikethrough",
-        visibility: "shared",
-      },
-    ]);
+    const formatted = formatAnnotationsForPrompt(
+      [
+        {
+          ...highlight,
+          blockAnchorId: "p-3",
+          endOffset: 10,
+          id: "annotation-a",
+          quote: "first half",
+          quotePrefix: "",
+          quoteSuffix: "",
+          startOffset: 0,
+        },
+        {
+          ...highlight,
+          blockAnchorId: "p-4",
+          endOffset: 11,
+          id: "annotation-b",
+          quote: "second half",
+          quotePrefix: "",
+          quoteSuffix: "",
+          startOffset: 0,
+        },
+      ],
+      [paragraph("p-3", "first half"), paragraph("p-4", "second half")],
+    );
 
     expect(formatted).toContain(
       "Highlight by the user, shared with the organization (red, strikethrough), at [p-3], [p-4] (mark id annotation-a)",
@@ -133,9 +290,59 @@ describe("reader marks in the prompt", () => {
     expect(formatted).toContain("first half second half");
   });
 
+  test("names the anchor a re-parse moved the words to, never the stored one", () => {
+    // Made when "przepisy ustawy." was its own paragraph p-2; the re-parse
+    // joined it to the paragraph before, so p-2 now names the next one.
+    const formatted = formatAnnotationsForPrompt(
+      [
+        {
+          ...highlight,
+          blockAnchorId: "p-2",
+          endOffset: 16,
+          groupId: null,
+          id: "annotation-moved",
+          quote: "przepisy ustawy.",
+          quotePrefix: "",
+          quoteSuffix: "",
+          startOffset: 0,
+        },
+        {
+          ...highlight,
+          blockAnchorId: "p-3",
+          endOffset: 4,
+          groupId: null,
+          id: "annotation-gone",
+          quote: "Sąd zważył",
+          quotePrefix: "",
+          quoteSuffix: "",
+          startOffset: 0,
+        },
+      ],
+      [
+        paragraph("p-1", "Sąd rozważył przepisy ustawy."),
+        paragraph("p-2", "Skarga została oddalona."),
+      ],
+    );
+
+    expect(formatted).toContain("at [p-1] (mark id annotation-moved)");
+    expect(formatted).toContain(
+      "with no place in the anchored document text above (mark id annotation-gone)",
+    );
+    expect(formatted).not.toContain("[p-2]");
+  });
+
+  test("marks have no anchored location when the decision has no AST", () => {
+    const formatted = formatAnnotationsForPrompt([mark(0, 40, 40)], null);
+    expect(formatted).toContain(
+      "with no place in the anchored document text above",
+    );
+    expect(formatted).not.toContain("at [");
+  });
+
   test("lists every mark when the whole set fits", () => {
     const formatted = formatAnnotationsForPrompt(
       Array.from({ length: 3 }).map((_unused, index) => mark(index, 40, 40)),
+      marksText(3, 40),
     );
 
     expect(formatted).not.toContain("further marks are not listed here");
@@ -149,6 +356,7 @@ describe("reader marks in the prompt", () => {
       Array.from({ length: 200 }).map((_unused, index) =>
         mark(index, 1200, 2000),
       ),
+      marksText(200, 1200),
     );
 
     const notice = formatted.split("\n").at(-1) ?? "";
