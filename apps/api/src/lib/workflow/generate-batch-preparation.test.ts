@@ -115,3 +115,50 @@ describe("workflow batch input preparation", () => {
     ).toEqual([inputObjectKey]);
   });
 });
+
+describe("an answer the batch request never returned", () => {
+  const selectProperty = {
+    ...aiProperty,
+    id: toSafeId<"property">("property_select"),
+    content: { version: 1, type: "single-select", options: [], fallback: null },
+  } as const satisfies AIBatchProperty;
+
+  const batchWithout = (properties: readonly AIBatchProperty[]) =>
+    generateBatch(
+      {
+        ...props,
+        batch: {
+          id: "batch_0",
+          inputs: [propertyId],
+          properties: [...properties],
+        },
+      },
+      {
+        ...dependencies,
+        fetchAndPrepareFiles: async () => [],
+        // The request answered nothing for any property it was asked.
+        generateWorkflowData: async () =>
+          Result.ok({
+            output: {},
+            refusedPropertyIds: new Set(),
+            properties: [...properties],
+            fit: { type: "whole", files: [] },
+          }),
+      },
+    );
+
+  test("fails the batch instead of settling the property as not stated", async () => {
+    const result = await batchWithout([aiProperty]);
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(WorkflowIntegrationError.is(result.error)).toBe(true);
+    }
+  });
+
+  test("still settles a select with no options, which is never asked, as not stated", async () => {
+    const result = Result.unwrap(await batchWithout([selectProperty]));
+
+    expect([...result.settlements]).toEqual([[selectProperty.id, "notStated"]]);
+  });
+});

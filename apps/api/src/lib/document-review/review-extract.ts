@@ -16,7 +16,10 @@ import { createDefaultTool } from "@/api/lib/properties/create-schema";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandDerivedPropertyId } from "@/api/lib/safe-id-boundaries";
 import type { AnswerShape } from "@/api/lib/workflow/ai-answer-schema";
-import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
+import {
+  generateWorkflowData,
+  propertyOutput,
+} from "@/api/lib/workflow/ai-generate-batch";
 import {
   fieldContentFromValidated,
   validateAIOutput,
@@ -71,6 +74,18 @@ export type AskExtraction = {
   citations: ReviewCitation[];
 };
 
+/**
+ * What extraction settled for one ask. A failure is not one of these: it fails
+ * the whole extraction, so no caller can grade a position whose extraction
+ * broke as if the document were silent on it.
+ */
+export type AskOutcome =
+  | ({ type: "answered" } & AskExtraction)
+  /** The model read the document and found no value. */
+  | { type: "not-stated" }
+  /** The model declined; this says nothing about the document. */
+  | { type: "refused" };
+
 // One eligible ASK prompt: a position whose `ask.question` is non-empty and
 // whose `ask.content` the model can produce a value for (a file column holds
 // the document, not an extracted value; see AiExtractablePropertyContent).
@@ -83,10 +98,8 @@ export type ReviewAsk = {
 };
 
 export type ReviewExtractionResult = {
-  // Extracted ASK value + citations keyed by the originating position sourceId.
-  contentBySourceId: Map<string, AskExtraction>;
-  // Asks the model declined to answer, which say nothing about the document.
-  refusedSourceIds: ReadonlySet<string>;
+  // One outcome for every ask, keyed by the originating position sourceId.
+  outcomeBySourceId: ReadonlyMap<string, AskOutcome>;
   // Last folio block id of the active DOCX, used as the insert anchor when a
   // FIX has no clause citation to replace. Null when no DOCX block exists.
   lastBlockId: string | null;
@@ -107,11 +120,13 @@ export type ExtractAskContentsArgs = {
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
+  /** External file and model boundaries; supplied by focused tests. */
+  fetchAndPrepareFiles?: typeof fetchAndPrepareFiles | undefined;
+  generateWorkflowData?: typeof generateWorkflowData | undefined;
 };
 
 const EMPTY_RESULT: ReviewExtractionResult = {
-  contentBySourceId: new Map(),
-  refusedSourceIds: new Set(),
+  outcomeBySourceId: new Map(),
   lastBlockId: null,
   withheld: [],
 };
@@ -233,6 +248,8 @@ export const extractAskContents = async ({
   promptCachingEnabled,
   serviceTier,
   usageMetering,
+  fetchAndPrepareFiles: prepareFiles = fetchAndPrepareFiles,
+  generateWorkflowData: generate = generateWorkflowData,
 }: ExtractAskContentsArgs): Promise<
   Result<
     ReviewExtractionResult,
@@ -240,9 +257,18 @@ export const extractAskContents = async ({
   >
 > =>
   await Result.gen(async function* () {
-    const supportedFiles = resolvedFiles.filter(isAISupportedFile);
-    if (asks.length === 0 || supportedFiles.length === 0) {
+    if (asks.length === 0) {
       return Result.ok(EMPTY_RESULT);
+    }
+    // Asks with nothing the model can read have no answer to give. An empty
+    // result here would grade every one of them as a missing clause.
+    const supportedFiles = resolvedFiles.filter(isAISupportedFile);
+    if (supportedFiles.length === 0) {
+      return Result.err(
+        new WorkflowIntegrationError({
+          message: "No review input file can be read by the model",
+        }),
+      );
     }
 
     // Force DOCX block preparation: the files-table batch prefers a converted
@@ -260,7 +286,7 @@ export const extractAskContents = async ({
     const preparedFiles = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await fetchAndPrepareFiles(reviewFiles, organizationId, workspaceId),
+          await prepareFiles(reviewFiles, organizationId, workspaceId),
         catch: (cause) =>
           new WorkflowIntegrationError({
             message: "Failed to prepare review input files",
@@ -273,26 +299,26 @@ export const extractAskContents = async ({
     const lastBlockId = lastDocxBlockId(preparedFiles);
 
     const properties: AIBatchProperty[] = [];
-    const sourceIdByPropertyId = new Map<string, string>();
+    const asked: { sourceId: string; property: AIBatchProperty }[] = [];
     for (const ask of asks) {
       // Derived from the ask, not minted per call: the ids name the output
       // schema and the prompts message, both of which sit in the model
       // request, so a fresh id per run would make two extractions of the
       // same document look different to the prompt cache.
-      const propertyId = brandDerivedPropertyId(ask.sourceId);
-      sourceIdByPropertyId.set(propertyId, ask.sourceId);
-      properties.push({
-        id: propertyId,
+      const property: AIBatchProperty = {
+        id: brandDerivedPropertyId(ask.sourceId),
         status: "stale",
         content: ask.content,
         answerShape: ask.answerShape,
         dependencies: [],
         tool: buildAiTool(ask.question),
-      });
+      };
+      properties.push(property);
+      asked.push({ sourceId: ask.sourceId, property });
     }
 
     const generation = yield* Result.await(
-      generateWorkflowData({
+      generate({
         files: preparedFiles,
         properties,
         filenames,
@@ -311,21 +337,32 @@ export const extractAskContents = async ({
       }),
     );
 
-    const contentBySourceId = new Map<string, AskExtraction>();
-    const refusedSourceIds = new Set<string>();
-    for (const property of properties) {
-      const sourceId = sourceIdByPropertyId.get(property.id);
-      if (
-        sourceId !== undefined &&
-        generation.refusedPropertyIds.has(property.id)
-      ) {
-        refusedSourceIds.add(sourceId);
-        continue;
+    const outcomeBySourceId = new Map<string, AskOutcome>();
+    for (const { sourceId, property } of asked) {
+      const output = propertyOutput(generation, property);
+      switch (output.type) {
+        case "returned":
+          break;
+        case "refused":
+          outcomeBySourceId.set(sourceId, { type: "refused" });
+          continue;
+        case "not-asked":
+          outcomeBySourceId.set(sourceId, { type: "not-stated" });
+          continue;
+        // An answer the request owed but never returned is a failure, not a
+        // document that is silent on the question.
+        case "omitted":
+          return Result.err(
+            new WorkflowIntegrationError({
+              message: "Review extraction returned no answer for an ask",
+              cause: { sourceId },
+            }),
+          );
+        default:
+          output satisfies never;
+          return panic("Unhandled review extraction output");
       }
-      const propertyResult = generation.output[property.id];
-      if (sourceId === undefined || !propertyResult) {
-        continue;
-      }
+      const propertyResult = output.result;
 
       const validated = validateAIOutput({
         aiResult: propertyResult,
@@ -345,9 +382,10 @@ export const extractAskContents = async ({
 
       const content = fieldContentFromValidated(validated.value);
       if (content === null) {
-        // The model reported no value for this text/int ASK. Leave the
-        // position unextracted so presence grading reads it as absent
-        // rather than a fabricated answer.
+        // The model reported no value for this text/int ASK: the document
+        // does not state it, which grading reads as absent rather than as a
+        // fabricated answer.
+        outcomeBySourceId.set(sourceId, { type: "not-stated" });
         continue;
       }
 
@@ -362,15 +400,11 @@ export const extractAskContents = async ({
           )
         : [];
 
-      contentBySourceId.set(sourceId, {
-        content,
-        citations,
-      });
+      outcomeBySourceId.set(sourceId, { type: "answered", content, citations });
     }
 
     return Result.ok({
-      contentBySourceId,
-      refusedSourceIds,
+      outcomeBySourceId,
       lastBlockId,
       withheld: generation.fit.type === "cut" ? generation.fit.withheld : [],
     });

@@ -862,8 +862,7 @@ const runGradingPass = async ({
   const graded: ReviewFinding[] = await buildFindings({
     positions,
     passageTextById,
-    contentBySourceId: extraction.value.contentBySourceId,
-    refusedSourceIds: extraction.value.refusedSourceIds,
+    askOutcomes: extraction.value.outcomeBySourceId,
     tiersBySourceId,
     target,
     documentRead: fit.value.type,
