@@ -39,6 +39,7 @@ import {
 const MODEL = "gpt-test";
 const RUN_ID = "run-1";
 const THREAD_ID = "thread-1";
+const WORKSPACE_DIR = "/workspace";
 
 const counter = () => {
   let next = 0;
@@ -61,6 +62,7 @@ const localChunks = async (events: readonly HarnessEvent[]) => {
     model: MODEL,
     runId: RUN_ID,
     threadId: THREAD_ID,
+    workspaceDir: WORKSPACE_DIR,
     generateId: counter(),
     now: () => 0,
   })) {
@@ -305,6 +307,50 @@ describe("local harness chunks", () => {
     expect(finished).toContainEqual(
       expect.objectContaining({ type: "text", content: "Left it in place." }),
     );
+  });
+
+  test("an approval's call carries the same bounded input as the call it pauses on", async () => {
+    const write = {
+      id: "call-write",
+      name: "command_execution",
+      input: {
+        command:
+          "cat > /workspace/notes.md <<'EOF'\nPrivate settlement terms\nEOF",
+      },
+    } as const satisfies HarnessToolCall;
+    const chunks = await localChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("native-3"),
+        continuation: { type: "fresh" },
+      },
+      {
+        type: "approval.requested",
+        request: {
+          requestId: "approval-1",
+          kind: "command",
+          toolCall: write,
+          reason: null,
+          options: [{ id: "accept", decision: "approve" }],
+        },
+      },
+    ]);
+    const shown = { command: "cat > /workspace/notes.md <<'EOF'…" };
+    const pause = chunks.find(
+      (chunk) =>
+        chunk.type === EventType.RUN_FINISHED &&
+        chunk.outcome?.type === "interrupt",
+    );
+    expect(pause).toMatchObject({
+      outcome: { interrupts: [{ metadata: { input: shown } }] },
+    });
+    const call = fold(chunks)
+      .flatMap(({ parts }) => parts)
+      .find((part) => part.type === "tool-call" && part.id === write.id);
+    expect(call).toMatchObject({
+      input: shown,
+      arguments: JSON.stringify(shown),
+    });
   });
 
   test("a question answered by the next message completes its call without pausing", async () => {

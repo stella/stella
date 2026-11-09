@@ -889,6 +889,7 @@ export class SidecarHost {
       model: message.model,
       runId,
       threadId: message.threadId,
+      workspaceDir: message.workspaceDir,
       generateId: () => crypto.randomUUID(),
       now: () => Temporal.Now.instant().epochMilliseconds,
     });

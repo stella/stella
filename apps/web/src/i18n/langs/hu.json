@@ -2052,6 +2052,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# karakter} other {# karakter}}",
+      "commandExited": "{command} (kilépési kód: {code})",
       "consoleLogs": "Konzolkimenet",
       "exactCall": "Pontos hívás",
       "failed": "Ez a lépés nem sikerült; a stella másképp oldja meg.",
@@ -2059,10 +2060,14 @@
       "input": "Bemenet",
       "interrupted": "Befejezés előtt megszakadt",
       "output": "Kimenet",
+      "patternInPath": "{pattern} itt: {path}",
+      "readFile": "Fájl olvasása",
+      "searchFiles": "Keresés a fájlokban",
       "sourceCode": "Forráskód",
       "statusWaiting": "Várakozik",
       "toggleDetails": "Részletek megjelenítése",
-      "unrestoredFields": "Anonimizált módban {count, plural, one {# mezőt} other {# mezőt}} nem sikerült valódi értékekkel kitölteni. Ellenőrizze: {fields}"
+      "unrestoredFields": "Anonimizált módban {count, plural, one {# mezőt} other {# mezőt}} nem sikerült valódi értékekkel kitölteni. Ellenőrizze: {fields}",
+      "updatePlan": "A terv frissítése"
     },
     "turnNotification": {
       "failedBody": "Egy stella-csevegés válasza nem fejeződött be.",

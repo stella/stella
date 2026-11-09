@@ -2052,6 +2052,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# Zeichen} other {# Zeichen}}",
+      "commandExited": "{command} (Exit-Code {code})",
       "consoleLogs": "Konsolenausgabe",
       "exactCall": "Exakter Aufruf",
       "failed": "Dieser Schritt ist fehlgeschlagen; stella arbeitet auf anderem Weg weiter.",
@@ -2059,10 +2060,14 @@
       "input": "Eingabe",
       "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
+      "patternInPath": "{pattern} in {path}",
+      "readFile": "Datei wird gelesen",
+      "searchFiles": "Dateien werden durchsucht",
       "sourceCode": "Quellcode",
       "statusWaiting": "Wartet",
       "toggleDetails": "Details ein-/ausblenden",
-      "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
+      "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}",
+      "updatePlan": "Plan wird aktualisiert"
     },
     "turnNotification": {
       "failedBody": "Eine Chat-Antwort in stella wurde nicht abgeschlossen.",

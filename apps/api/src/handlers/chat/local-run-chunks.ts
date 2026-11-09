@@ -18,6 +18,11 @@ import {
 } from "@stll/api-contract/chat";
 import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
 import {
+  type ChatLocalRunToolName,
+  isChatLocalRunToolName,
+  parseChatLocalRunToolCall,
+} from "@stll/api-contract/chat-local-run-tool";
+import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
@@ -384,6 +389,43 @@ const withCheckedContext = (
 };
 
 /**
+ * Each call one read saw open: the tool name its start gave it, and whether
+ * its arguments have been carried. A harness-native step's input is the
+ * contract's (`@stll/api-contract/chat-local-run-tool`): a command line, file
+ * names, a search or a plan's titles, bounded. Whatever else a desktop puts on
+ * it, a command's output or a file's contents included, is not carried.
+ */
+type LocalRunToolCalls = Map<string, { name: string; argsCarried: boolean }>;
+
+/** The input chat keeps for a native step, from what the desktop sent. */
+const nativeInput = (name: ChatLocalRunToolName, input: unknown) =>
+  parseChatLocalRunToolCall(name, input)?.input ?? {};
+
+/**
+ * What TanStack's normaliser keeps of a chunk beyond the AG-UI spec, under
+ * `metadata.tanstack`: a tool call's end carries its input there.
+ */
+const tanstackOf = (metadata: unknown): Record<string, unknown> => {
+  const tanstack = isRecord(metadata) ? metadata["tanstack"] : undefined;
+  return isRecord(tanstack) ? tanstack : {};
+};
+
+/** The model a harness names on a chunk, the one field it reports there. */
+const reportedModel = (metadata: unknown) => {
+  const model = tanstackOf(metadata)["model"];
+  return typeof model === "string" ? { model } : {};
+};
+
+/** A native step's streamed arguments, as the JSON they spell. */
+const parsedArguments = (delta: string): unknown => {
+  try {
+    return JSON.parse(delta);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
  * The chunk as this chat run carries it: its run, thread and call ids, and
  * every call owned by the harness that ran it, whatever the desktop said, so
  * no call of a local turn ever reads as one the API or the browser runs.
@@ -392,19 +434,76 @@ const withCheckedContext = (
 const asChatChunk = (
   chunk: PublicStreamChunk,
   { runnerRunId, chatRunId, threadId }: RewriteContext,
+  calls: LocalRunToolCalls,
 ): PublicStreamChunk | null => {
   if (LOCAL_RUN_EVENT_DISPOSITION[chunk.type] === "drop") {
     return null;
   }
   const callId = (id: string) => localCallId(runnerRunId, id);
   if (chunk.type === EventType.TOOL_CALL_START) {
+    calls.set(chunk.toolCallId, {
+      name: chunk.toolCallName,
+      argsCarried: false,
+    });
+    // A start's metadata becomes the call's: only the model a harness names
+    // and the owner the API names are carried.
+    const model = reportedModel(chunk.metadata);
     return {
       ...chunk,
       toolCallId: callId(chunk.toolCallId),
       metadata: {
-        ...chunk.metadata,
+        ...(model.model === undefined ? {} : { tanstack: model }),
         [CHAT_TOOL_EXECUTOR_METADATA_KEY]: CHAT_TOOL_EXECUTOR.harness,
       },
+    };
+  }
+  if (
+    chunk.type === EventType.TOOL_CALL_ARGS ||
+    chunk.type === EventType.TOOL_CALL_END
+  ) {
+    const call = calls.get(chunk.toolCallId);
+    if (call === undefined) {
+      // A call this read never saw start has no name to check it by.
+      return null;
+    }
+    const { name } = call;
+    if (!isChatLocalRunToolName(name)) {
+      return { ...chunk, toolCallId: callId(chunk.toolCallId) };
+    }
+    const stamp =
+      chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp };
+    if (chunk.type === EventType.TOOL_CALL_END) {
+      // The normalised end the harness sends, its input rebuilt; anything
+      // else on the chunk, a top-level input included, is not carried.
+      const reported = tanstackOf(chunk.metadata);
+      return {
+        type: EventType.TOOL_CALL_END,
+        toolCallId: callId(chunk.toolCallId),
+        ...stamp,
+        metadata: {
+          tanstack: {
+            toolCallName: name,
+            toolName: name,
+            input: nativeInput(name, reported["input"]),
+            ...reportedModel(chunk.metadata),
+          },
+        },
+      };
+    }
+    // A harness sends a native step's arguments whole, in one chunk; a
+    // second would append to the first.
+    if (call.argsCarried) {
+      return null;
+    }
+    call.argsCarried = true;
+    const args = JSON.stringify(
+      nativeInput(name, parsedArguments(chunk.delta)),
+    );
+    return {
+      type: EventType.TOOL_CALL_ARGS,
+      toolCallId: callId(chunk.toolCallId),
+      delta: args,
+      ...stamp,
     };
   }
   // Only these name a run, a thread or a call; every other chunk passes as is.
@@ -420,24 +519,33 @@ const asChatChunk = (
         ? {
             outcome: {
               ...chunk.outcome,
-              interrupts: chunk.outcome.interrupts.map((interrupt) =>
-                interrupt.toolCallId === undefined
-                  ? interrupt
-                  : {
-                      ...interrupt,
-                      toolCallId: callId(interrupt.toolCallId),
-                    },
-              ),
+              interrupts: chunk.outcome.interrupts.map((interrupt) => {
+                if (interrupt.toolCallId === undefined) {
+                  return interrupt;
+                }
+                const name = calls.get(interrupt.toolCallId)?.name;
+                return {
+                  ...interrupt,
+                  toolCallId: callId(interrupt.toolCallId),
+                  // A paused native step's input is its call's.
+                  ...(name !== undefined &&
+                  isChatLocalRunToolName(name) &&
+                  interrupt.metadata !== undefined
+                    ? {
+                        metadata: {
+                          ...interrupt.metadata,
+                          input: nativeInput(name, interrupt.metadata["input"]),
+                        },
+                      }
+                    : {}),
+                };
+              }),
             },
           }
         : {}),
     };
   }
-  if (
-    chunk.type === EventType.TOOL_CALL_ARGS ||
-    chunk.type === EventType.TOOL_CALL_END ||
-    chunk.type === EventType.TOOL_CALL_RESULT
-  ) {
+  if (chunk.type === EventType.TOOL_CALL_RESULT) {
     return { ...chunk, toolCallId: callId(chunk.toolCallId) };
   }
   if (chunk.type === EventType.CUSTOM) {
@@ -971,6 +1079,7 @@ async function* readRunChunks({
   const computer = computerStatusChunks(start);
   const runOutputChunks = createRunOutputs(context, rewrite);
   const runApps = createRunApps(context, runnerRunId);
+  const toolCalls: LocalRunToolCalls = new Map();
   const fail = function* (
     code: LocalRunFailure,
     message?: string,
@@ -1053,7 +1162,7 @@ async function* readRunChunks({
               yield* await runOutputChunks(output.value);
               continue;
             }
-            const chunk = asChatChunk(message.chunk, rewrite);
+            const chunk = asChatChunk(message.chunk, rewrite, toolCalls);
             if (chunk === null) {
               continue;
             }

@@ -2295,6 +2295,7 @@ describe("chat turns on a computer", () => {
       model: CHAT_MODEL,
       runId,
       threadId: "desktop-thread",
+      workspaceDir: "/workspace",
       generateId: () => {
         generated += 1;
         return `generated-${String(generated)}`;
@@ -4542,6 +4543,154 @@ describe("chat turns on a computer", () => {
       },
     });
     await client.sendMessage("Summarise the lease");
+    expect(shownParts(client.getMessages().at(-1)?.parts ?? [])).toEqual(
+      shownParts(stored.reloaded.parts),
+    );
+  });
+
+  test("a native step keeps only its command, file names or search, whatever else a desktop sends, and reloads as streamed", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const responseMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    const served = serveTurn(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: Bun.randomUUIDv7(),
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "Draft the notice" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+      responseMessageId,
+    );
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const secret = "Private settlement terms";
+    const command = {
+      id: "item_cmd",
+      name: "command_execution",
+      input: { command: "cat > notes.md <<'EOF'\nterms\nEOF" },
+    };
+    const read = {
+      id: "item_read",
+      name: "harness_native_tool",
+      input: {
+        tool: "Read",
+        detail: { kind: "read", path: "/workspace/a.md" },
+      },
+    };
+    const sent = await harnessStreamChunks(start.runId, [
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("codex-session-native"),
+        continuation: { type: "fresh" },
+      },
+      ...[command, read].map((toolCall): HarnessEvent => ({
+        type: "tool.completed",
+        toolCall,
+        result: {
+          content: JSON.stringify({ status: "completed" }),
+          status: "succeeded",
+        },
+      })),
+      { type: "text.completed", messageId: "msg_n1", text: "Drafted." },
+      { type: "turn.completed", usage: null },
+    ]);
+    // A desktop that adds what must stay on the computer: a command's output
+    // and a file's contents beside the contract's fields, a second arguments
+    // chunk, and metadata on the call's start.
+    const tanstackOf = (metadata: unknown) => {
+      const tanstack = isRecord(metadata) ? metadata["tanstack"] : undefined;
+      return isRecord(tanstack) ? tanstack : {};
+    };
+    const tampered = sent.flatMap((chunk): unknown[] => {
+      if (chunk.type === EventType.TOOL_CALL_START) {
+        const tanstack = tanstackOf(chunk.metadata);
+        return [
+          {
+            ...chunk,
+            metadata: { output: secret, tanstack: { ...tanstack, secret } },
+          },
+        ];
+      }
+      if (chunk.type === EventType.TOOL_CALL_ARGS) {
+        const args = JSON.stringify({
+          ...v.parse(
+            v.record(v.string(), v.unknown()),
+            JSON.parse(chunk.delta),
+          ),
+          output: secret,
+          content: secret,
+        });
+        return [
+          { ...chunk, delta: args },
+          { ...chunk, delta: `{"content":"${secret}"}` },
+        ];
+      }
+      if (chunk.type === EventType.TOOL_CALL_END) {
+        const tanstack = tanstackOf(chunk.metadata);
+        const input = isRecord(tanstack["input"]) ? tanstack["input"] : {};
+        const detail = input["detail"];
+        const forged = {
+          ...input,
+          output: secret,
+          ...(isRecord(detail)
+            ? { detail: { ...detail, content: secret } }
+            : {}),
+        };
+        return [
+          {
+            ...chunk,
+            input: forged,
+            metadata: { tanstack: { ...tanstack, input: forged, secret } },
+          },
+        ];
+      }
+      return [chunk];
+    });
+    const run = desktopRun(desktop, start.runId);
+    await run.events(tampered);
+    await run.finish("completed", "codex-session-native");
+    const turn = await served;
+    expect(turn.finish.outcome).toMatchObject({ type: "completed" });
+
+    expect(JSON.stringify(turn.emitted)).not.toContain(secret);
+    const stored = persistTurn(turn.finish, "harness").unwrap();
+    expect(JSON.stringify(stored.content)).not.toContain(secret);
+    const calls = stored.reloaded.parts.flatMap((part): unknown[] =>
+      part.type === "tool-call"
+        ? [{ name: part.name, input: part.input, arguments: part.arguments }]
+        : [],
+    );
+    const shownCommand = { command: "cat > notes.md <<'EOF'…" };
+    const shownRead = {
+      tool: "Read",
+      detail: { kind: "read", path: "a.md" },
+    };
+    expect(calls).toEqual([
+      {
+        name: "command_execution",
+        input: shownCommand,
+        arguments: JSON.stringify(shownCommand),
+      },
+      {
+        name: "harness_native_tool",
+        input: shownRead,
+        arguments: JSON.stringify(shownRead),
+      },
+    ]);
+    // The page that streamed the turn shows what a reload shows.
+    const client = new ChatClient({
+      threadId: chatThreadId,
+      connection: {
+        async *connect() {
+          yield* turn.emitted;
+        },
+      },
+    });
+    await client.sendMessage("Draft the notice");
     expect(shownParts(client.getMessages().at(-1)?.parts ?? [])).toEqual(
       shownParts(stored.reloaded.parts),
     );

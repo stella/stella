@@ -1,9 +1,14 @@
 import { panic } from "better-result";
 
+import type { ChatLocalRunToolDetail } from "@stll/api-contract/chat-local-run-tool";
 import type { DESKTOP_RUNNER_APPROVAL_KINDS } from "@stll/api-contract/desktop-runner";
 
 import type { HarnessToolCall, HarnessToolResult } from "../events";
-import { HARNESS_TOOL_NAMES, mcpToolCallName } from "../tool-parts";
+import {
+  HARNESS_TOOL_NAMES,
+  mcpToolCallName,
+  nativeToolCall,
+} from "../tool-parts";
 import type {
   ClaudeMessageType,
   ClaudeSystemSubtype,
@@ -17,7 +22,9 @@ import type {
  * turn gives the same tool, and its result is the tool's JSON text, so the
  * web chat's cards, citations and source chips read it as they read a cloud
  * turn. Built-in tools become generic activity built from the fields named
- * here; other native fields are never forwarded.
+ * here (a command line, file names, a search, a web address, plan titles);
+ * other native fields, such as an edit's text or a file's contents, are
+ * never forwarded.
  */
 
 type ClaudeMessageHandling =
@@ -195,6 +202,58 @@ const stringField = (input: Readonly<Record<string, unknown>>, key: string) => {
   return typeof value === "string" ? value : "";
 };
 
+const optionalStringField = (
+  input: Readonly<Record<string, unknown>>,
+  key: string,
+) => {
+  const value = input[key];
+  return typeof value === "string" && value !== "" ? value : undefined;
+};
+
+/** The titles of a `TodoWrite` list; its statuses and other fields stay. */
+const todoTitles = (input: Readonly<Record<string, unknown>>) => {
+  const todos = input["todos"];
+  return Array.isArray(todos)
+    ? todos.flatMap((todo: unknown) =>
+        typeof todo === "object" &&
+        todo !== null &&
+        "content" in todo &&
+        typeof todo.content === "string"
+          ? [todo.content]
+          : [],
+      )
+    : [];
+};
+
+/**
+ * What chat may show of a built-in tool beyond its name, by the tool's
+ * native name. A tool not named here shows its name only.
+ */
+const nativeDetail = (
+  name: string,
+  input: Readonly<Record<string, unknown>>,
+): ChatLocalRunToolDetail | undefined => {
+  switch (name) {
+    case "Read":
+      return { kind: "read", path: stringField(input, "file_path") };
+    case "Grep":
+    case "Glob": {
+      const path = optionalStringField(input, "path");
+      return {
+        kind: "search",
+        pattern: stringField(input, "pattern"),
+        ...(path === undefined ? {} : { path }),
+      };
+    }
+    case "WebFetch":
+      return { kind: "fetch", url: stringField(input, "url") };
+    case "TodoWrite":
+      return { kind: "plan", items: todoTitles(input) };
+    default:
+      return undefined;
+  }
+};
+
 /**
  * The MCP server and tool a `mcp__<server>__<tool>` name stands for. The
  * stella server is matched by its registered name first, since a server name
@@ -219,7 +278,9 @@ const mcpName = (name: string, stellaServer: string) => {
 const fileChanges = (
   name: keyof typeof FILE_TOOL_PATHS,
   input: Readonly<Record<string, unknown>>,
-) => [{ path: stringField(input, FILE_TOOL_PATHS[name]), kind: "update" }];
+) => [
+  { path: stringField(input, FILE_TOOL_PATHS[name]), kind: "update" as const },
+];
 
 /** `stellaServer` is the server name the stella MCP binding is under. */
 export const toolCallForUse = (
@@ -230,23 +291,20 @@ export const toolCallForUse = (
   const kind = toolKind(name);
   switch (kind) {
     case "command":
-      return {
-        id,
+      return nativeToolCall(id, {
         name: HARNESS_TOOL_NAMES.commandExecution,
         input: { command: stringField(input, "command") },
-      };
+      });
     case "file_change":
-      return {
-        id,
+      return nativeToolCall(id, {
         name: HARNESS_TOOL_NAMES.fileChange,
         input: { changes: isFileTool(name) ? fileChanges(name, input) : [] },
-      };
+      });
     case "web_search":
-      return {
-        id,
+      return nativeToolCall(id, {
         name: HARNESS_TOOL_NAMES.webSearch,
         input: { query: stringField(input, "query") },
-      };
+      });
     case "question":
       return { id, name: HARNESS_TOOL_NAMES.question, input };
     case "mcp":
@@ -255,13 +313,17 @@ export const toolCallForUse = (
         name: mcpToolCallName({ ...mcpName(name, stellaServer), stellaServer }),
         input,
       };
-    case "native":
-      return {
+    case "native": {
+      const detail = nativeDetail(name, input);
+      return nativeToolCall(
         id,
-        name: HARNESS_TOOL_NAMES.nativeTool,
-        input: { tool: name },
-        localInput: input,
-      };
+        {
+          name: HARNESS_TOOL_NAMES.nativeTool,
+          input: { tool: name, ...(detail === undefined ? {} : { detail }) },
+        },
+        input,
+      );
+    }
     default:
       kind satisfies never;
       return panic("Unhandled Claude tool kind");

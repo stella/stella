@@ -26,6 +26,7 @@ import {
   type HarnessToolCall,
   type HarnessUsage,
 } from "./events";
+import { shownToolInput } from "./tool-parts";
 
 /**
  * The one mapping from harness events to TanStack stream chunks for local
@@ -52,6 +53,11 @@ export type HarnessChunkContext = {
   model: string;
   runId: string;
   threadId: string;
+  /**
+   * The run's folder: a native step's file names are reported relative to
+   * it.
+   */
+  workspaceDir: string;
   generateId: () => string;
   now: () => number;
 };
@@ -307,8 +313,8 @@ class ChunkMapper {
     }
     this.opened.add(toolCall.id);
     this.unresolved.add(toolCall.id);
-    const args =
-      toolCall.input === undefined ? "{}" : JSON.stringify(toolCall.input);
+    const input = this.shownInput(toolCall);
+    const args = input === undefined ? "{}" : JSON.stringify(input);
     this.push(
       {
         type: EventType.TOOL_CALL_START,
@@ -327,9 +333,13 @@ class ChunkMapper {
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
         toolName: toolCall.name,
-        input: toolCall.input,
+        input,
       },
     );
+  }
+
+  private shownInput(toolCall: HarnessToolCall) {
+    return shownToolInput(toolCall, this.context.workspaceDir);
   }
 
   private resolveToolCall(
@@ -424,7 +434,7 @@ class ChunkMapper {
                 kind: "approval",
                 reason: request.reason,
                 toolName: request.toolCall.name,
-                input: request.toolCall.input,
+                input: this.shownInput(request.toolCall),
                 approvalKind: request.kind,
                 decisions: request.options.map(({ decision }) => decision),
               },

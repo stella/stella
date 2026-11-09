@@ -2052,6 +2052,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# character} other {# characters}}",
+      "commandExited": "{command} (exit code {code})",
       "consoleLogs": "Console output",
       "exactCall": "Exact call",
       "failed": "This step failed; stella will work around it.",
@@ -2059,10 +2060,14 @@
       "input": "Input",
       "interrupted": "Interrupted before finishing",
       "output": "Output",
+      "patternInPath": "{pattern} in {path}",
+      "readFile": "Reading a file",
+      "searchFiles": "Searching files",
       "sourceCode": "Source code",
       "statusWaiting": "Waiting",
       "toggleDetails": "Toggle details",
-      "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}"
+      "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}",
+      "updatePlan": "Updating the plan"
     },
     "turnNotification": {
       "failedBody": "A chat reply in stella did not finish.",

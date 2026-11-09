@@ -40,7 +40,9 @@ import { createDetached } from "@stll/errors";
 
 import {
   FAKE_CONTEXT_WINDOW,
+  FAKE_LONG_COMMAND,
   FAKE_MCP_CALL,
+  FAKE_PRIVATE_TEXT,
   FAKE_RESUMED_THREAD_ID,
   FAKE_TEXT_ONLY_MODEL,
   FAKE_THREAD_ID,
@@ -533,6 +535,7 @@ describe("Codex adapter over a stdio app-server", () => {
       model: "gpt-test",
       runId: "run-1",
       threadId: "stella-thread-1",
+      workspaceDir: "/workspace",
       generateId: counter(),
       now: () => 0,
     })) {
@@ -1164,6 +1167,7 @@ const localChunks = async (events: readonly HarnessEvent[]) => {
     model: "gpt-test",
     runId: "run-1",
     threadId: "stella-thread-1",
+    workspaceDir: "/workspace",
     generateId: () => `result-${(next += 1)}`,
     now: () => 0,
   })) {
@@ -1309,6 +1313,70 @@ describe("Codex items as chat parts", () => {
     expect(
       parts.flatMap((part) => (part.type === "text" ? [part.content] : [])),
     ).toEqual([FAKE_STELLA_ANSWER]);
+  });
+
+  test("a native step shows its command, file names and plan titles, and never the text it carries", async () => {
+    const { events } = await run("native_tools");
+    const parts = storedMessages(await localChunks(events)).flatMap(
+      ({ parts: stored }) => stored,
+    );
+    const calls = parts.flatMap((part) =>
+      part.type === "tool-call"
+        ? [{ id: part.id, name: part.name, input: part.input }]
+        : [],
+    );
+    const plan = (items: string[]) => ({
+      tool: "update_plan",
+      detail: { kind: "plan", items },
+    });
+    expect(calls).toEqual([
+      {
+        id: "turn-1:plan:1",
+        name: "harness_native_tool",
+        input: plan(["Read the lease", "Draft the notice"]),
+      },
+      // A heredoc shows the line that runs it, never the lines it writes.
+      {
+        id: "call-heredoc",
+        name: "command_execution",
+        input: { command: `/bin/zsh -lc "cat > notes.md <<'EOF'…` },
+      },
+      {
+        id: "call-long",
+        name: "command_execution",
+        input: { command: `${FAKE_LONG_COMMAND.slice(0, 299)}…` },
+      },
+      {
+        id: "call-edit",
+        name: "file_change",
+        input: {
+          changes: [
+            { path: "drafts/lease.md", kind: "update" },
+            { path: "drafts/notice.md", kind: "add" },
+          ],
+        },
+      },
+      {
+        id: "turn-1:plan:2",
+        name: "harness_native_tool",
+        input: plan(["Read the lease", "Draft the notice"]),
+      },
+    ]);
+    // A command's exit status stays on its result.
+    expect(
+      parts.find(
+        (part) => part.type === "tool-call" && part.id === "call-heredoc",
+      ),
+    ).toMatchObject({ output: { exit_code: 1, status: "failed" } });
+    const callText = JSON.stringify(
+      parts
+        .filter((part) => part.type === "tool-call")
+        .map(({ input }) => input),
+    );
+    for (const text of Object.values(FAKE_PRIVATE_TEXT)) {
+      expect(callText).not.toContain(text);
+    }
+    expect(callText).not.toContain("y".repeat(300));
   });
 
   test("harness-native items become generic activity and never carry the native payload", async () => {

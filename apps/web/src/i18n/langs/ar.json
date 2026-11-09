@@ -2052,6 +2052,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, zero {# حرف} one {# حرف} two {# حرفين} few {# أحرف} many {# حرفاً} other {# حرف}}",
+      "commandExited": "{command} (رمز الخروج {code})",
       "consoleLogs": "مخرجات وحدة التحكم",
       "exactCall": "الاستدعاء الدقيق",
       "failed": "فشلت هذه الخطوة؛ ستتجاوزها stella وتتابع العمل.",
@@ -2059,10 +2060,14 @@
       "input": "المدخلات",
       "interrupted": "توقّف قبل الاكتمال",
       "output": "المخرجات",
+      "patternInPath": "{pattern} في {path}",
+      "readFile": "قراءة ملف",
+      "searchFiles": "البحث في الملفات",
       "sourceCode": "الشيفرة المصدرية",
       "statusWaiting": "في الانتظار",
       "toggleDetails": "إظهار/إخفاء التفاصيل",
-      "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}"
+      "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}",
+      "updatePlan": "تحديث الخطة"
     },
     "turnNotification": {
       "failedBody": "لم يكتمل رد في دردشة stella.",

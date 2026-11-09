@@ -2052,6 +2052,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaku}}",
+      "commandExited": "{command} (kod wyjścia {code})",
       "consoleLogs": "Dane wyjściowe konsoli",
       "exactCall": "Dokładne wywołanie",
       "failed": "Ten krok się nie powiódł; stella poradzi sobie inaczej.",
@@ -2059,10 +2060,14 @@
       "input": "Dane wejściowe",
       "interrupted": "Przerwano przed ukończeniem",
       "output": "Wynik",
+      "patternInPath": "{pattern} w {path}",
+      "readFile": "Czytanie pliku",
+      "searchFiles": "Przeszukiwanie plików",
       "sourceCode": "Kod źródłowy",
       "statusWaiting": "Oczekuje",
       "toggleDetails": "Przełącz szczegóły",
-      "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}"
+      "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}",
+      "updatePlan": "Aktualizowanie planu"
     },
     "turnNotification": {
       "failedBody": "Odpowiedź na czacie w stelli nie została ukończona.",

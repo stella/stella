@@ -2052,6 +2052,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, zero {# rakstzīmju} one {# rakstzīme} other {# rakstzīmes}}",
+      "commandExited": "{command} (izejas kods {code})",
       "consoleLogs": "Konsoles izvade",
       "exactCall": "Precīzs izsaukums",
       "failed": "Šis solis neizdevās; stella turpinās citādi.",
@@ -2059,10 +2060,14 @@
       "input": "Ievade",
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "output": "Izvade",
+      "patternInPath": "{pattern} ({path})",
+      "readFile": "Faila lasīšana",
+      "searchFiles": "Meklēšana failos",
       "sourceCode": "Pirmkods",
       "statusWaiting": "Gaida",
       "toggleDetails": "Pārslēgt detaļas",
-      "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}"
+      "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}",
+      "updatePlan": "Plāna atjaunināšana"
     },
     "turnNotification": {
       "failedBody": "stellas tērzēšanas atbilde netika pabeigta.",
