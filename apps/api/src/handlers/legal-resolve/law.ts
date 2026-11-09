@@ -436,24 +436,36 @@ const createLawResolver =
     if (expression.type !== "expression") {
       return { status: "not_found", reason: "unknown_document" };
     }
-    const readCited = async () => {
-      for (const provision of provisions) {
-        // db-await-in-loop: At most one read per section unit, and the article is asked only when the section is missing.
-        const preview = await readPreview({
-          documentId: expression.id,
-          anchor: provision.anchor,
-          citedAnchor: undefined,
-          legislationDb,
-        });
-        if ("blocks" in preview) {
-          return { section: provision.section, preview };
+    // The next candidate is asked only when the one before it is missing.
+    const readCited = async (
+      remaining: readonly CitedProvision[],
+    ): Promise<
+      | {
+          section: string;
+          preview: Extract<
+            Awaited<ReturnType<typeof readPreview>>,
+            { blocks: unknown }
+          >;
         }
+      | undefined
+    > => {
+      const [provision, ...rest] = remaining;
+      if (provision === undefined) {
+        return undefined;
       }
-      return undefined;
+      const preview = await readPreview({
+        documentId: expression.id,
+        anchor: provision.anchor,
+        citedAnchor: undefined,
+        legislationDb,
+      });
+      return "blocks" in preview
+        ? { section: provision.section, preview }
+        : await readCited(rest);
     };
     const [document, found] = await Promise.all([
       readDocument(expression.id, legislationDb, "search"),
-      readCited(),
+      readCited(provisions),
     ]);
     if (!("eli" in document)) {
       return { status: "not_found", reason: "unknown_document" };
