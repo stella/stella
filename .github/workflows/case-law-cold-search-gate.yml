@@ -1,7 +1,7 @@
 name: Case-law cold search gate
 
 # First-hit search latency per corpus country on a many-split fixture
-# (apps/api/scripts/case-law-cold-search-gate.ts). Runs on demand and is
+# (apps/api/src/tests/query-perf/case-law-cold-search-gate.ts). Runs on demand and is
 # report-only: nothing depends on it and STELLA_COLD_SEARCH_MODE is not set to
 # enforce, so it cannot hold a release.
 
@@ -65,7 +65,7 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           STELLA_COLD_SEARCH_DROP_PAGE_CACHE: "true"
-        run: bun --preload ./src/tests/setup-env.ts --preload ./scripts/corpus-engine-test-env.ts scripts/case-law-cold-search-gate.ts
+        run: bun --preload ./src/tests/setup-env.ts --preload ./scripts/corpus-engine-test-env.ts src/tests/query-perf/case-law-cold-search-gate.ts
 
       - name: Corpus engine diagnostics and cleanup
         if: always()
