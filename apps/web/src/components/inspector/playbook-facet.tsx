@@ -13,7 +13,11 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
-import { DOCUMENT_REVIEW_LIMITS, REVIEW_FLAGS } from "@stll/api-contract";
+import {
+  DOCUMENT_REVIEW_LIMITS,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
+  REVIEW_FLAGS,
+} from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import type { DocxEditorRef } from "@stll/folio-react";
 import { Temporal } from "@stll/time";
@@ -481,6 +485,7 @@ export const PlaybookFacet = ({
         entityId,
         fileFieldId,
         unexpectedErrorMessage: t("common.unexpectedError"),
+        documentsTooLargeMessage: t("inspector.review.documentsTooLarge"),
         startMode,
         seededPositions,
       }),
@@ -1409,7 +1414,7 @@ const ReviewRunPanel = ({
       <ErrorState
         detail={run.errorCode}
         message={t(
-          run.errorCode === "document_too_large"
+          run.errorCode === DOCUMENT_TOO_LARGE_ERROR_CODE
             ? "inspector.review.documentTooLarge"
             : "inspector.review.failed",
         )}

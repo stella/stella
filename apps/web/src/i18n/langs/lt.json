@@ -4049,6 +4049,7 @@
       "documentChanged": "Šis dokumentas pasikeitė po šios peržiūros.",
       "documentCutNotice": "<strong>Dokumentas {documentName} nebuvo perskaitytas visas.</strong> Šiam modeliui jis per ilgas, todėl praleista apie {percent} jo teksto. Pozicija be atsakymo pažymima peržiūrai, nes atsakymas gali būti praleistoje dalyje.",
       "documentTooLarge": "Šis dokumentas per ilgas, kad šis modelis perskaitytų pakankamą jo dalį. Išbandykite modelį su didesniu konteksto langu.",
+      "documentsTooLarge": "Šie dokumentai per ilgi, kad šis modelis galėtų juos perskaityti kartu. Naudokite mažiau arba trumpesnių dokumentų arba išbandykite modelį su didesniu konteksto langu.",
       "export": {
         "counterparty": "Atsisiųsti priešingai šaliai",
         "counterpartyFailed": "Nepavyko eksportuoti dokumento",

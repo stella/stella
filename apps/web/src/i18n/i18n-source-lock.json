@@ -3365,6 +3365,7 @@
   "inspector.review.documentChanged": "This document changed after this review.",
   "inspector.review.documentCutNotice": "<strong>{documentName} was not read in full.</strong> It is too long for this model, so about {percent} of its text was left out. A position with no answer is flagged for review, because the answer may be in the part left out.",
   "inspector.review.documentTooLarge": "This document is too long for this model to read enough of it. Try a model with a larger context window.",
+  "inspector.review.documentsTooLarge": "These documents are too long for this model to read together. Use fewer or shorter documents, or try a model with a larger context window.",
   "inspector.review.export.counterparty": "Download for counterparty",
   "inspector.review.export.counterpartyFailed": "Could not export the document",
   "inspector.review.export.counterpartyHint": "The saved document with tracked changes, without the internal review notes",

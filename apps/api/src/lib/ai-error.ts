@@ -9,7 +9,11 @@ import { panic, Result } from "better-result";
  * checked against one source.
  */
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
-import { AI_FAILURE_CODES, isAIFailureCode } from "@stll/api-contract";
+import {
+  AI_FAILURE_CODES,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
+  isAIFailureCode,
+} from "@stll/api-contract";
 import type { AIErrorKind, AIFailureCode } from "@stll/api-contract";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { classifyFailure, FAILURE_REASON_GRADE } from "@stll/errors";
@@ -781,7 +785,7 @@ export const aiHandlerError = (
   // Raised before any model call, so no provider failure kind describes it.
   if (DocumentTooLargeError.is(error)) {
     return new HandlerError({
-      code: "document_too_large",
+      code: DOCUMENT_TOO_LARGE_ERROR_CODE,
       status: 413,
       message: error.message,
       cause: error,

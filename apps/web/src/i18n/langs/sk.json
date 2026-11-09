@@ -4049,6 +4049,7 @@
       "documentChanged": "Dokument sa od tejto kontroly zmenil.",
       "documentCutNotice": "<strong>Dokument {documentName} nebol prečítaný celý.</strong> Pre tento model je príliš dlhý, preto bolo vynechaných približne {percent} jeho textu. Pozícia bez odpovede je označená na kontrolu, pretože odpoveď môže byť vo vynechanej časti.",
       "documentTooLarge": "Tento dokument je príliš dlhý na to, aby z neho tento model prečítal dostatočnú časť. Skúste model s väčším kontextovým oknom.",
+      "documentsTooLarge": "Tieto dokumenty sú príliš dlhé na to, aby ich tento model prečítal spoločne. Použite menej dokumentov alebo kratšie dokumenty, prípadne skúste model s väčším kontextovým oknom.",
       "export": {
         "counterparty": "Stiahnuť pre protistranu",
         "counterpartyFailed": "Dokument sa nepodarilo exportovať",

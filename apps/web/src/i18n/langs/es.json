@@ -4049,6 +4049,7 @@
       "documentChanged": "Este documento cambió después de esta revisión.",
       "documentCutNotice": "<strong>{documentName} no se leyó por completo.</strong> Es demasiado largo para este modelo, por lo que se omitió aproximadamente el {percent} del texto. Una posición sin respuesta se marca para revisión, porque la respuesta puede estar en la parte omitida.",
       "documentTooLarge": "Este documento es demasiado largo para que este modelo lea una parte suficiente. Pruebe con un modelo con una ventana de contexto mayor.",
+      "documentsTooLarge": "Estos documentos son demasiado largos para que este modelo los lea juntos. Use menos documentos o documentos más cortos, o pruebe con un modelo con una ventana de contexto mayor.",
       "export": {
         "counterparty": "Descargar para la contraparte",
         "counterpartyFailed": "No se pudo exportar el documento",
