@@ -117,6 +117,7 @@ import {
   CHAT_SKILL_SOURCE,
   listAvailableChatSkillMetadata,
 } from "@/api/lib/agent-skills/skills";
+import { estimateTextTokens } from "@/api/lib/ai-generation/token-estimate";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -134,7 +135,6 @@ import type {
   ChatOrganizationPromptLayer,
   ChatSafePromptLayers,
 } from "@/api/lib/chat/chat-prompt-layers";
-import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
@@ -3159,9 +3159,7 @@ export const buildActiveSkillSection = (
     );
   const resourceOverflow =
     resourcesList.length > ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT
-      ? `\n- ...${String(
-          resourcesList.length - ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT,
-        )} more`
+      ? `\n- ...${String(resourcesList.length - ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT)} more`
       : "";
   const resources =
     resourceLines.length > 0

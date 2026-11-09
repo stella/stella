@@ -109,6 +109,7 @@ const basis = {
           },
         ],
       },
+      scope: null,
     },
   },
   references: [

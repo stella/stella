@@ -1,10 +1,13 @@
 import { panic, Result } from "better-result";
+import { and, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { AiCellSettlement } from "@stll/api-contract";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { ConditionNode } from "@stll/conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { justifications } from "@/api/db/schema";
 import type { JustificationContent, VerdictMatchedRef } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -13,16 +16,25 @@ import {
   type AIUsageMetering,
   createTanStackAIAnalyticsCallbacks,
 } from "@/api/lib/analytics/tanstack-ai";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { recordText } from "@/api/lib/fields/record-text";
+import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { UNTRUSTED_DOCUMENT_INSTRUCTION } from "@/api/lib/workflow/ai-prompts";
+import {
+  buildPassageListMessage,
+  sharePassages,
+  verifiedPassageTexts,
+} from "@/api/lib/workflow/cited-passages";
 import type {
   AIJustification,
   AIResult,
+  InputFieldRow,
 } from "@/api/lib/workflow/generate-batch-shared";
 import { fetchInputFieldsForBatch } from "@/api/lib/workflow/generate-batch-shared";
 import type { VerdictBatchProperty } from "@/api/lib/workflow/get-execution-plan";
@@ -87,6 +99,50 @@ export const askPresence = (
   }
 };
 
+type AskCell = {
+  content: FieldContent;
+  aiSettlement: AiCellSettlement | null;
+};
+
+/**
+ * What an ASK cell can support. `unfinished` means it says nothing about the
+ * document, because extraction failed, is unfinished, was refused or could not
+ * read the file, so it must never grade as a missing clause. `cutUnanswered`
+ * means no answer turned up in a document that was only partly read. A model's
+ * "not stated" answer is stored as `unsupported` too, and only its settlement
+ * tells these apart. No cell at all stays gradable: a failed extraction always
+ * leaves a cell.
+ */
+const askCellStanding = (
+  cell: AskCell | undefined,
+): "gradable" | "unfinished" | "cutUnanswered" => {
+  if (cell === undefined) {
+    return "gradable";
+  }
+  if (cell.content.type !== "unsupported") {
+    return askPresence(cell.content) === "missing" ? "unfinished" : "gradable";
+  }
+  switch (cell.aiSettlement?.type) {
+    case "notStated":
+      return "gradable";
+    case "notFoundInCutDocument":
+      return "cutUnanswered";
+    case "value":
+    case "refused":
+    case "failed":
+    case undefined:
+      return "unfinished";
+    default:
+      cell.aiSettlement satisfies never;
+      return panic("Unhandled AI cell settlement");
+  }
+};
+
+/** Why a position with no answer in a partly read document needs a person. */
+export const CUT_DOCUMENT_RATIONALE =
+  "No answer was found, but this document was too long to read in full, so " +
+  "the answer may be in the part that was withheld.";
+
 /** The ASK value a finding records: the raw value and the prose rendering of
  *  it. Null when the cell holds no answer (or a placeholder). */
 export type ExtractedAskValue = { value: string; text: string };
@@ -140,6 +196,28 @@ export const extractedFromContent = (
       return panic(`Unhandled content: ${String(content)}`);
     }
   }
+};
+
+const CITED_PASSAGE_SEPARATOR = "\n\n";
+
+/**
+ * A tier-match answer is a summary in the model's words, and the verified
+ * passages it cites are the document's own. The finding records those passages
+ * as the text the value was read from, so its evidence stays the same across
+ * runs that word the summary differently.
+ */
+export const extractedFromCitedClause = (
+  content: FieldContent | undefined,
+  passages: readonly string[],
+): ExtractedAskValue | null => {
+  const extracted = extractedFromContent(content);
+  if (extracted === null || passages.length === 0) {
+    return extracted;
+  }
+  return {
+    value: extracted.value,
+    text: passages.join(CITED_PASSAGE_SEPARATOR),
+  };
 };
 
 // Flatten the ASK field to the prose the positionMatch model compares against.
@@ -229,14 +307,20 @@ export const TIER_MATCH_SYSTEM_PROMPT =
   "structurally out of scope, so it counts neither for nor against compliance; " +
   "omit matched. Do not use not-applicable merely because a clause is absent " +
   '(that is a "missing" gap). Judge by legal substance and effect, not wording. ' +
-  "Give a short one-sentence rationale.";
+  "Give a short one-sentence rationale. Some values come with contract " +
+  "passages, listed by label: the passages are the contract's exact wording and " +
+  "the value is only a summary of them. When a value has passages, grade what " +
+  "the passages say, so a term they state counts even when the summary leaves it " +
+  `out. ${UNTRUSTED_DOCUMENT_INSTRUCTION}`;
 
 export const buildTierMatchUserMessage = ({
   tiers,
   askValue,
+  passageLabels,
 }: {
   tiers: ResolvedTiers;
   askValue: string;
+  passageLabels: readonly string[];
 }): string => {
   const lines: string[] = [];
 
@@ -270,7 +354,14 @@ export const buildTierMatchUserMessage = ({
     lines.push("(none)");
   }
 
-  lines.push("", "Extracted value:", askValue);
+  lines.push(
+    "",
+    "Extracted value:",
+    sanitizeForPrompt(untrustedText(askValue)),
+  );
+  if (passageLabels.length > 0) {
+    lines.push("", `Contract passages: ${passageLabels.join(", ")}`);
+  }
   return lines.join("\n");
 };
 
@@ -354,9 +445,37 @@ export const resolveMatchedRef = (
   return { kind: "redLine", ruleId: rule.id, text: rule.text };
 };
 
+type TierMatchPromptItem = Pick<
+  GradeTierMatchArgs,
+  "askValue" | "tiers" | "passages"
+>;
+
+export const buildTierMatchPrompt = (
+  items: readonly TierMatchPromptItem[],
+  numbering: "numbered" | "unnumbered",
+): string => {
+  const { unique, labeled } = sharePassages(items);
+  const parts = labeled.map(({ item: { askValue, tiers }, labels }, index) => {
+    const message = buildTierMatchUserMessage({
+      tiers,
+      askValue,
+      passageLabels: labels,
+    });
+    return numbering === "numbered"
+      ? `Item ${String(index + 1)}:\n${message}`
+      : message;
+  });
+  return [
+    ...(unique.length > 0 ? [buildPassageListMessage(unique)] : []),
+    ...parts,
+  ].join("\n\n");
+};
+
 export type GradeTierMatchArgs = {
   askValue: string;
   tiers: ResolvedTiers;
+  /** Exact wording of the blocks the answer cites; empty when it cites none. */
+  passages: readonly string[];
   abortSignal: AbortSignal;
   organizationId: SafeId<"organization">;
   admission: ModelDispatchAdmission;
@@ -373,6 +492,7 @@ export type GradeTierMatchArgs = {
 export const gradeTierMatch = async ({
   askValue,
   tiers,
+  passages,
   abortSignal,
   organizationId,
   admission,
@@ -434,7 +554,10 @@ export const gradeTierMatch = async ({
         }),
         serviceTier,
         system: TIER_MATCH_SYSTEM_PROMPT,
-        prompt: buildTierMatchUserMessage({ tiers, askValue }),
+        prompt: buildTierMatchPrompt(
+          [{ askValue, tiers, passages }],
+          "unnumbered",
+        ),
         abortSignal,
         outputSchema: tierMatchSchema,
       });
@@ -465,7 +588,9 @@ export const TIER_MATCH_BATCH_SIZE = 8;
 const TIER_MATCH_BATCH_SYSTEM_PROMPT =
   `${TIER_MATCH_SYSTEM_PROMPT} ` +
   "The input lists several independent items, each numbered and carrying its " +
-  "own rules, ideal language, fallback options, red lines, and extracted value. " +
+  "own rules, ideal language, fallback options, red lines, and extracted value; " +
+  "passages listed before the items are shared, and an item uses only the ones " +
+  "it names. " +
   "Grade every item on its own, keep its item number, and return exactly one " +
   "verdict per item.";
 
@@ -484,11 +609,12 @@ export type TierMatchItem = {
   key: string;
   askValue: string;
   tiers: ResolvedTiers;
+  passages: readonly string[];
 };
 
 export type GradeTierMatchesArgs = Omit<
   GradeTierMatchArgs,
-  "askValue" | "tiers" | "propertyId"
+  "askValue" | "tiers" | "passages" | "propertyId"
 > & {
   items: readonly TierMatchItem[];
 };
@@ -571,12 +697,7 @@ export const gradeTierMatches = async ({
         }),
         serviceTier,
         system: TIER_MATCH_BATCH_SYSTEM_PROMPT,
-        prompt: pending
-          .map(
-            (item, index) =>
-              `Item ${String(index + 1)}:\n${buildTierMatchUserMessage(item)}`,
-          )
-          .join("\n\n"),
+        prompt: buildTierMatchPrompt(pending, "numbered"),
         abortSignal,
         outputSchema: tierMatchBatchSchema,
       });
@@ -608,6 +729,40 @@ export const gradeTierMatches = async ({
 };
 
 // ── Batch entry point ─────────────────────────────────
+type FetchCitedPassagesOptions = {
+  scopedDb: ScopedDb;
+  workspaceId: SafeId<"workspace">;
+  fieldIds: SafeId<"field">[];
+};
+
+/** One justification per field, so the row count is bounded by `fieldIds`. */
+const fetchCitedPassagesByFieldId = async ({
+  scopedDb,
+  workspaceId,
+  fieldIds,
+}: FetchCitedPassagesOptions): Promise<ReadonlyMap<string, string[]>> => {
+  if (fieldIds.length === 0) {
+    return new Map();
+  }
+  const rows = await scopedDb((tx) =>
+    tx
+      .select({
+        fieldId: justifications.fieldId,
+        content: justifications.content,
+      })
+      .from(justifications)
+      .where(
+        and(
+          eq(justifications.workspaceId, workspaceId),
+          inArray(justifications.fieldId, fieldIds),
+        ),
+      ),
+  );
+  return new Map(
+    rows.map((row) => [row.fieldId, verifiedPassageTexts(row.content)]),
+  );
+};
+
 const buildVerdictResult = (
   propertyId: SafeId<"property">,
   tier: VerdictTier,
@@ -669,6 +824,67 @@ export type ComputeVerdictBatchArgs = {
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
+  /** External model-dispatch boundary; supplied by focused tests. */
+  gradeTierMatch?: typeof gradeTierMatch | undefined;
+};
+
+// The same flag the review panel raises: a deviation a person must look at, with
+// the reason in its rationale.
+const cutDocumentFlag = (propertyId: SafeId<"property">) => {
+  const result = buildVerdictResult(propertyId, "deviation");
+  const justification: AIJustification = {
+    fieldId: result.fieldId,
+    justificationId: createSafeId<"justification">(),
+    content: {
+      version: 1,
+      blocks: [{ kind: "playbook-verdict", rationale: CUT_DOCUMENT_RATIONALE }],
+    },
+    fileFieldIds: [],
+  };
+  const graded: GradedVerdict = {
+    propertyId,
+    verdict: "deviation",
+    rationale: CUT_DOCUMENT_RATIONALE,
+    extracted: null,
+  };
+  return { result, justification, graded };
+};
+
+// The cell, the finding record and the rationale of one graded tier match.
+const tierMatchRecords = ({
+  propertyId,
+  graded: { tier, rationale, matchedRef },
+  extracted,
+}: {
+  propertyId: SafeId<"property">;
+  graded: TierMatchVerdict;
+  extracted: GradedVerdict["extracted"];
+}) => {
+  const fieldId = createSafeId<"field">();
+  const result: AIResult = {
+    fieldId,
+    propertyId,
+    content: { type: "single-select", version: 1, value: tier },
+  };
+  const ref = matchedRef === undefined ? {} : { matchedRef };
+  const graded: GradedVerdict = {
+    propertyId,
+    verdict: tier,
+    rationale,
+    ...ref,
+    extracted,
+  };
+  const content: JustificationContent = {
+    version: 1,
+    blocks: [{ kind: "playbook-verdict", rationale, ...ref }],
+  };
+  const justification: AIJustification = {
+    fieldId,
+    justificationId: createSafeId<"justification">(),
+    content,
+    fileFieldIds: [],
+  };
+  return { result, graded, justification };
 };
 
 // Each positionMatch verdict issues one LLM compare. Up to
@@ -700,6 +916,7 @@ export const computeVerdictBatch = async ({
   promptCachingEnabled,
   serviceTier,
   usageMetering,
+  gradeTierMatch: gradeTierMatchForVerdict = gradeTierMatch,
 }: ComputeVerdictBatchArgs): Promise<VerdictBatchOutput> => {
   const inputFields = await fetchInputFieldsForBatch({
     entityVersionId,
@@ -708,6 +925,9 @@ export const computeVerdictBatch = async ({
   });
   const fieldContentByPropertyId = new Map<string, FieldContent>(
     inputFields.map((field) => [field.propertyId, field.content]),
+  );
+  const inputFieldByPropertyId = new Map<string, InputFieldRow>(
+    inputFields.map((field) => [field.propertyId, field]),
   );
 
   const aiResults: AIResult[] = [];
@@ -741,6 +961,7 @@ export const computeVerdictBatch = async ({
   type PositionMatchTask = {
     property: VerdictBatchProperty;
     askValue: string;
+    askFieldId: SafeId<"field"> | undefined;
   };
   const positionMatchTasks: PositionMatchTask[] = [];
 
@@ -757,6 +978,23 @@ export const computeVerdictBatch = async ({
     const { tool } = property;
     const askContent = fieldContentByPropertyId.get(tool.askPropertyId);
     const rule: PositionRule = tool.rule;
+
+    const standing = askCellStanding(
+      inputFieldByPropertyId.get(tool.askPropertyId),
+    );
+    if (rule.kind !== "extractOnly" && standing === "unfinished") {
+      erroredPropertyIds.push(property.id);
+      settlements.set(property.id, "failedTransient");
+      continue;
+    }
+    if (rule.kind !== "extractOnly" && standing === "cutUnanswered") {
+      const flag = cutDocumentFlag(property.id);
+      aiResults.push(flag.result);
+      aiJustifications.push(flag.justification);
+      gradedVerdicts.push(flag.graded);
+      settlements.set(property.id, "answered");
+      continue;
+    }
 
     switch (rule.kind) {
       case "extractOnly":
@@ -786,7 +1024,11 @@ export const computeVerdictBatch = async ({
           recordDeterministic(property, "missing");
           break;
         }
-        positionMatchTasks.push({ property, askValue });
+        positionMatchTasks.push({
+          property,
+          askValue,
+          askFieldId: inputFieldByPropertyId.get(tool.askPropertyId)?.id,
+        });
         break;
       }
       default: {
@@ -796,6 +1038,14 @@ export const computeVerdictBatch = async ({
     }
   }
 
+  const passagesByFieldId = await fetchCitedPassagesByFieldId({
+    scopedDb,
+    workspaceId,
+    fieldIds: positionMatchTasks.flatMap(({ askFieldId }) =>
+      askFieldId === undefined ? [] : [askFieldId],
+    ),
+  });
+
   // Drain the position-match compares in bounded chunks so the per-entity LLM
   // fan-out stays capped (see POSITION_MATCH_CONCURRENCY).
   for (const chunk of chunkItems(
@@ -803,10 +1053,15 @@ export const computeVerdictBatch = async ({
     POSITION_MATCH_CONCURRENCY,
   )) {
     await Promise.all(
-      chunk.map(async ({ property, askValue }) => {
-        const graded = await gradeTierMatch({
+      chunk.map(async ({ property, askValue, askFieldId }) => {
+        const passages =
+          askFieldId === undefined
+            ? []
+            : arrayOrEmpty(passagesByFieldId.get(askFieldId));
+        const graded = await gradeTierMatchForVerdict({
           askValue,
           tiers: resolveVerdictTiers(property.tool),
+          passages,
           abortSignal,
           organizationId,
           admission,
@@ -824,38 +1079,17 @@ export const computeVerdictBatch = async ({
           settlements.set(property.id, "failedTransient");
           return;
         }
-        const { tier, rationale, matchedRef } = graded.value;
-        const fieldId = createSafeId<"field">();
-        aiResults.push({
-          fieldId,
+        const records = tierMatchRecords({
           propertyId: property.id,
-          content: { type: "single-select", version: 1, value: tier },
-        });
-        gradedVerdicts.push({
-          propertyId: property.id,
-          verdict: tier,
-          rationale,
-          ...(matchedRef === undefined ? {} : { matchedRef }),
-          extracted: extractedFromContent(
+          graded: graded.value,
+          extracted: extractedFromCitedClause(
             fieldContentByPropertyId.get(property.tool.askPropertyId),
+            passages,
           ),
         });
-        const content: JustificationContent = {
-          version: 1,
-          blocks: [
-            {
-              kind: "playbook-verdict",
-              rationale,
-              ...(matchedRef === undefined ? {} : { matchedRef }),
-            },
-          ],
-        };
-        aiJustifications.push({
-          fieldId,
-          justificationId: createSafeId<"justification">(),
-          content,
-          fileFieldIds: [],
-        });
+        aiResults.push(records.result);
+        gradedVerdicts.push(records.graded);
+        aiJustifications.push(records.justification);
         settlements.set(property.id, "answered");
       }),
     );

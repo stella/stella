@@ -3,6 +3,10 @@ import { expect, expectTypeOf, test } from "bun:test";
 import { GUIDANCE_KINDS } from "@stll/legal-ast/document-kind";
 
 import { validateSoftLawAuthorityMetadata } from "@/api/lib/legal-search/soft-law-authority-policy";
+import {
+  softLawDescriptorFlags,
+  softLawServingSettingOf,
+} from "@/api/lib/legal-search/soft-law-serving";
 import type { SoftLawMetadata } from "@/api/lib/legal-search/soft-law-types";
 
 import {
@@ -14,14 +18,16 @@ test("unregistered authorities cannot enter the sync contract", () => {
   expectTypeOf<"eu-edps">().not.toExtend<RegisteredSoftLawAuthority>();
   expectTypeOf<"de-bfdi">().toExtend<RegisteredSoftLawAuthority>();
   expectTypeOf<"sk-uoou">().toExtend<RegisteredSoftLawAuthority>();
+  expectTypeOf<"cz-uoou">().toExtend<RegisteredSoftLawAuthority>();
 });
 
 test("every registered adapter belongs to its authority; pending kinds are refused", () => {
   for (const [authority, disposition] of Object.entries(SOFT_LAW_ADMISSIONS)) {
     if (disposition.state === "registered") {
       expect(authority).toBe(disposition.adapter.authority);
-      expect(disposition.descriptor.allowsRedistribution).toBe(false);
-      expect(disposition.descriptor.allowsDerivedAi).toBe(false);
+      expect(disposition.descriptor).toMatchObject(
+        softLawDescriptorFlags(softLawServingSettingOf(authority)),
+      );
       continue;
     }
     expect(disposition).not.toHaveProperty("adapter");

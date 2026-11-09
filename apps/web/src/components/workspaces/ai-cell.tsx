@@ -51,6 +51,15 @@ export const AiCell = ({
           {t("aiColumns.nothingFound")}
         </span>
       );
+    case "not_found_in_cut_document":
+      return (
+        <span
+          data-ai-cell-state="not_found_in_cut_document"
+          className="text-foreground-placeholder text-xs"
+        >
+          {t("aiColumns.nothingFoundInCutDocument")}
+        </span>
+      );
     case "queued":
     case "running":
       return (

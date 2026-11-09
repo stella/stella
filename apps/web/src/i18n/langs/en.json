@@ -92,6 +92,7 @@
     "countSummary": "{columns} columns × {rows} rows = {answers, plural, one {# answer} other {# answers}}. Answers spend budget.",
     "modelRefused": "The model refused to answer",
     "nothingFound": "Nothing found",
+    "nothingFoundInCutDocument": "Nothing found in the part that was read",
     "refusedBudget": "Not run: answer budget unavailable",
     "rerunAllPage": "Rerun all (this page)",
     "rerunColumnPage": "Rerun column (this page)",
@@ -4041,6 +4042,8 @@
       "description": "Choose an authored playbook, reference documents, or both.",
       "dismissFinding": "Dismiss finding",
       "documentChanged": "This document changed after this review.",
+      "documentCutNotice": "<strong>{documentName} was not read in full.</strong> It is too long for this model, so about {percent} of its text was left out. A position with no answer is flagged for review, because the answer may be in the part left out.",
+      "documentTooLarge": "This document is too long for this model to read enough of it. Try a model with a larger context window.",
       "export": {
         "counterparty": "Download for counterparty",
         "counterpartyFailed": "Could not export the document",

@@ -94,6 +94,7 @@ const basisWith = (
     definitionSnapshot: {
       name: "Positions confirmed for this review",
       positions: { version: 3, items: positions },
+      scope: null,
     },
   },
   references: [

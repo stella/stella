@@ -1659,7 +1659,8 @@ describe("durable chat turn persistence", () => {
           needsApproval: true,
         },
         input: { query: "Draft" },
-        state: "approval-responded",
+        // Declined, as the engine stores a call the user declined.
+        state: "error",
       },
       { approval: undefined, input: undefined, state: "error" },
     ]);

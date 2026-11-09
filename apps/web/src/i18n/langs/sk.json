@@ -92,6 +92,7 @@
     "countSummary": "{columns} stĺpcov × {rows} riadkov = {answers, plural, one {# odpoveď} few {# odpovede} many {# odpovede} other {# odpovedí}}. Odpovede čerpajú rozpočet.",
     "modelRefused": "Model odmietol odpovedať",
     "nothingFound": "Nič sa nenašlo",
+    "nothingFoundInCutDocument": "V prečítanej časti sa nič nenašlo",
     "refusedBudget": "Nespustené: rozpočet na odpovede nie je k dispozícii",
     "rerunAllPage": "Spustiť všetko znova (táto stránka)",
     "rerunColumnPage": "Spustiť stĺpec znova (táto stránka)",
@@ -4041,6 +4042,8 @@
       "description": "Vyberte pripravený playbook, referenčné dokumenty alebo oboje.",
       "dismissFinding": "Zamietnuť zistenie",
       "documentChanged": "Dokument sa od tejto kontroly zmenil.",
+      "documentCutNotice": "<strong>Dokument {documentName} nebol prečítaný celý.</strong> Pre tento model je príliš dlhý, preto bolo vynechaných približne {percent} jeho textu. Pozícia bez odpovede je označená na kontrolu, pretože odpoveď môže byť vo vynechanej časti.",
+      "documentTooLarge": "Tento dokument je príliš dlhý na to, aby z neho tento model prečítal dostatočnú časť. Skúste model s väčším kontextovým oknom.",
       "export": {
         "counterparty": "Stiahnuť pre protistranu",
         "counterpartyFailed": "Dokument sa nepodarilo exportovať",
