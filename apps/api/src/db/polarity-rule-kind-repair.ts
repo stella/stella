@@ -1,5 +1,5 @@
 /**
- * Online repair behind migration 20261030213329_case_law_polarity_kind_evidence,
+ * Online repair behind migration 20261109103200_case_law_polarity_kind_evidence,
  * which gave polarity rules a `kind` defaulting to `stance`. Each registered
  * seed rule (`SEED_RULES`) stored before then takes its typed kind here; a
  * citation-form rule also takes the neutral polarity its kind requires, in
@@ -10,8 +10,9 @@
  * run resumes by running again and a completed run finds nothing.
  */
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { POLARITY_RULE_KIND } from "@/api/handlers/case-law/polarity/consts";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 
@@ -121,7 +122,7 @@ const correctUntilEmpty = async (
     name: POLARITY_RULE_KIND_REPAIR_NAME,
     tableName: TABLE_NAME,
     initialSize: BATCH,
-    config: defaultConfig,
+    config: loadGateHealthConfig(),
     connection,
     readVerdict,
     clock,
@@ -145,7 +146,7 @@ const correctUntilEmpty = async (
 const createPolarityRuleKindRepair = (
   options: RepairRuntimeOptions = {},
 ): OnlineRepair => ({
-  introducedBy: "20261030213329_case_law_polarity_kind_evidence",
+  introducedBy: "20261109103200_case_law_polarity_kind_evidence",
   name: POLARITY_RULE_KIND_REPAIR_NAME,
   readCompletion,
   repair: async (connection) => {
