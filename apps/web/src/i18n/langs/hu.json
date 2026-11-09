@@ -3109,6 +3109,7 @@
       "organizationMemberLimitReached": "Ez a szervezet elérte a tagok korlátját.",
       "providerKeyRejected": "A szolgáltató elutasította az API-kulcsot.",
       "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",
+      "skillSourceUnreachable": "A készség forrását nem sikerült betölteni. Ellenőrizze, hogy a hivatkozás nyilvános GitHub-tárolóra mutat-e, vagy próbálja újra később.",
       "thirdPartyBoundaryRefusal": "A kérés a megengedett munkaterület-környezeten kívüli tartalmat próbált használni.",
       "usageLimitExceeded": "Elérte a használati korlátot.",
       "validationInvalid": "Egy mező olyan értéket tartalmaz, amely nem menthető.",

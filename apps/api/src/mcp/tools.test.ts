@@ -115,6 +115,11 @@ import {
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  remainingRequestBudgetMs,
+  requestBudgetExpiry,
+  runWithinRequestLatencyBudget,
+} from "@/api/lib/load/request-latency-budget";
 import { currentReadWork } from "@/api/lib/observability/request-work";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
@@ -1902,6 +1907,8 @@ describe("OpenAI-compatible MCP tools", () => {
       "read_statute",
       "read_statute_provisions",
       "read_provision_history",
+      "search_guidance",
+      "read_guidance",
       "resolve_case_law_decision",
       "resolve_law_citation",
       "list_templates",
@@ -1944,6 +1951,8 @@ describe("OpenAI-compatible MCP tools", () => {
       "read_statute",
       "read_statute_provisions",
       "read_provision_history",
+      "search_guidance",
+      "read_guidance",
       "resolve_case_law_decision",
       "resolve_law_citation",
     ]);
@@ -4357,11 +4366,179 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(slow?.warnings.map(({ code }) => code)).toEqual([
         "phrasing_timed_out",
       ]);
-      // A first page has no cursor to carry, so the hint names the rerun.
-      expect(slow?.warnings.at(0)?.hint).toContain('queries: ["slow"]');
+      // The slow phrasing's first page never ran, so the cursor carries it as
+      // pending rather than ended.
+      expect(page.nextCursor).toBe(encodePaginationCursor([null, ""]));
+      expect(slow?.warnings.at(0)?.hint).toContain("nextCursor");
       expect(page.searches.at(0)?.paginationOutcome).toEqual(
         SEARCH_PAGINATION_COMPLETE,
       );
+    });
+
+    test("resumes a phrasing whose first page never ran from the returned cursor", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) =>
+          query === "slow" ? timedOut() : answered(query, "engine-fast-2"),
+      );
+      const interrupted = asTestRaw<PartialPage>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: { country: "CZE", queries: ["fast", "slow"] },
+            context: createContext(),
+            toolName: "search_case_law",
+          }),
+        ),
+      );
+      expect(interrupted.nextCursor).toBe(
+        encodePaginationCursor(["engine-fast-2", ""]),
+      );
+
+      searchDecisionsHandlerMock.mockClear();
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) =>
+          answered(`${query} resumed`, null),
+      );
+      const resumed = asTestRaw<PartialPage>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: {
+              country: "CZE",
+              cursor: interrupted.nextCursor ?? undefined,
+              queries: ["fast", "slow"],
+            },
+            context: createContext(),
+            toolName: "search_case_law",
+          }),
+        ),
+      );
+
+      const cursorByQuery = new Map(
+        searchDecisionsHandlerMock.mock.calls.map(([args]) => [
+          args.body.query,
+          args.body.cursor,
+        ]),
+      );
+      expect(cursorByQuery.get("fast")).toBe("engine-fast-2");
+      // Absent, not the marker: a first page carries no engine cursor.
+      expect(cursorByQuery.has("slow")).toBe(true);
+      expect(cursorByQuery.get("slow")).toBeUndefined();
+      expect(resumed.paginationOutcome).toEqual(SEARCH_PAGINATION_COMPLETE);
+      expect(resumed.nextCursor).toBeNull();
+    });
+
+    const budgetExpiry = () =>
+      runWithinRequestLatencyBudget(
+        { label: "search_case_law", budgetMs: 8000 },
+        () =>
+          requestBudgetExpiry(new Error("private read diagnostics"), {
+            clampedTimeout: true,
+          }) ?? panic("A budget expiry inside a scope is always attributed"),
+      );
+
+    test("records a thrown timeout beside a phrasing that finished", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => {
+          if (query === "slow") {
+            throw budgetExpiry();
+          }
+          return answered(query, null);
+        },
+      );
+      const logs = installRecordingLogger();
+      try {
+        const result = await handleMcpToolCall({
+          args: { country: "CZE", queries: ["fast", "slow"] },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+
+        expect(result.isError).not.toBe(true);
+        expect(logs.at("WARN").map(({ message }) => message)).toContain(
+          "mcp.case_law_search_timeout",
+        );
+      } finally {
+        logs.restore();
+      }
+    });
+
+    test("isolates a phrasing the request's deadline ended on a database read", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => {
+          if (query === "slow") {
+            throw budgetExpiry();
+          }
+          return answered(query, null);
+        },
+      );
+
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["fast", "slow"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(result.isError).not.toBe(true);
+      const page = asTestRaw<PartialPage>(parseToolPayload(result));
+      expect(page.results.map(({ decisionId }) => decisionId)).toEqual([
+        "dec-fast",
+      ]);
+      expect(page.paginationOutcome).toEqual(
+        SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+      );
+      expect(page.searches.at(1)?.warnings.map(({ code }) => code)).toEqual([
+        "phrasing_timed_out",
+      ]);
+      expect(JSON.stringify(result)).not.toContain("private read diagnostics");
+    });
+
+    test("answers a continuation when every phrasing hit the deadline, however it expired", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => {
+          if (query === "thrown") {
+            throw budgetExpiry();
+          }
+          return timedOut();
+        },
+      );
+
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["thrown", "answered"] },
+        context: createContext({
+          testDependencies: {
+            caseLawSearchContinuation: createCaseLawContinuation({
+              store: createFakeContinuationStore().store,
+            }),
+          },
+        }),
+        toolName: "search_case_law",
+      });
+
+      expect(result.isError).not.toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({ status: "running" });
+      expect(JSON.stringify(result)).not.toContain("private read diagnostics");
+    });
+
+    test("stops each phrasing a reserve before its run's deadline", async () => {
+      const budgetsSeen: (number | undefined)[] = [];
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => {
+          budgetsSeen.push(remainingRequestBudgetMs());
+          return answered(query, null);
+        },
+      );
+
+      await handleMcpToolCall({
+        args: { country: "CZE", queries: ["one", "two"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      // A run has 60 s (`PUBLIC_READ_RUN_BUDGET_MS`); the reserve is 1 s of it.
+      expect(budgetsSeen).toHaveLength(2);
+      for (const budget of budgetsSeen) {
+        expect(budget).toBeLessThanOrEqual(59_000);
+        expect(budget).toBeGreaterThan(50_000);
+      }
     });
 
     test("keeps a timed-out continuation in the cursor, so the next page retries it", async () => {
@@ -4393,7 +4570,7 @@ describe("OpenAI-compatible MCP tools", () => {
         encodePaginationCursor(["engine-fast-2", "engine-slow-2"]),
       );
       expect(page.searches.at(1)?.warnings.at(0)?.hint).toContain(
-        "returned cursor",
+        "returned nextCursor",
       );
     });
 

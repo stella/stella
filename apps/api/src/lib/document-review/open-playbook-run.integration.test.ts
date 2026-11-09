@@ -23,7 +23,6 @@ import {
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   documentReviewRuns,
   documentTypes,
@@ -35,7 +34,6 @@ import {
   properties,
   propertyDependencies,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -50,7 +48,10 @@ import type {
 import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  memberSafeDb,
+  memberScopedDb,
+} from "@/api/tests/helpers/application-role-db";
 import {
   createTestIds,
   setupRlsTestData,
@@ -235,11 +236,22 @@ beforeAll(async () => {
     createdBy: ids.userA1,
   });
 
-  const latestApprovedVersion = await loadLatestApprovedVersion({
-    tx: asTestRaw<Transaction>(db),
+  const scope = {
     organizationId: ids.orgA,
-    playbookDefinitionId: definitionId,
-  });
+    workspaceIds: [ids.wsA1],
+    userId: ids.userA1,
+  };
+  const latestApprovedVersion = await memberScopedDb(
+    db,
+    scope,
+  )(
+    async (tx) =>
+      await loadLatestApprovedVersion({
+        tx,
+        organizationId: ids.orgA,
+        playbookDefinitionId: definitionId,
+      }),
+  );
   if (latestApprovedVersion === null) {
     throw new Error("The seeded approval must resolve");
   }
@@ -254,14 +266,12 @@ beforeAll(async () => {
     },
   });
 
-  const result = await createSafeDb(
+  const result = await memberSafeDb(
     db,
-    [ids.wsA1],
-    ids.orgA,
-    ids.userA1,
+    scope,
   )(async (tx) =>
     openPlaybookRun({
-      tx: asTestRaw<Transaction>(tx),
+      tx,
       workspaceId: ids.wsA1,
       organizationId: ids.orgA,
       userId: ids.userA1,

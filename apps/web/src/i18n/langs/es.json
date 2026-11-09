@@ -3109,6 +3109,7 @@
       "organizationMemberLimitReached": "Esta organización ha alcanzado su límite de miembros.",
       "providerKeyRejected": "El proveedor rechazó la clave de API.",
       "providerRateLimited": "Se alcanzó el límite de solicitudes del proveedor. Inténtalo de nuevo en breve.",
+      "skillSourceUnreachable": "No se pudo cargar la fuente de la habilidad. Comprueba que el enlace apunte a un repositorio público de GitHub o inténtalo de nuevo más tarde.",
       "thirdPartyBoundaryRefusal": "La solicitud intentó usar contenido fuera del contexto de espacio de trabajo permitido.",
       "usageLimitExceeded": "Se alcanzó el límite de uso.",
       "validationInvalid": "Un campo tiene un valor que no se puede guardar.",

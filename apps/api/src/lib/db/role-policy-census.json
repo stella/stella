@@ -11421,6 +11421,16 @@
   },
   {
     "schema": "public",
+    "table": "soft_law_document_locators",
+    "policy": "public_law_reader_access",
+    "command": "SELECT",
+    "roles": ["stella_public_law_reader"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
     "table": "soft_law_document_versions",
     "policy": "case_law_ingestion_access",
     "command": "ALL",
@@ -11431,6 +11441,16 @@
   },
   {
     "schema": "public",
+    "table": "soft_law_document_versions",
+    "policy": "public_law_reader_access",
+    "command": "SELECT",
+    "roles": ["stella_public_law_reader"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
     "table": "soft_law_documents",
     "policy": "case_law_ingestion_access",
     "command": "ALL",
@@ -11438,6 +11458,16 @@
     "permissive": "PERMISSIVE",
     "using": "true",
     "withCheck": "true"
+  },
+  {
+    "schema": "public",
+    "table": "soft_law_documents",
+    "policy": "public_law_reader_access",
+    "command": "SELECT",
+    "roles": ["stella_public_law_reader"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
   },
   {
     "schema": "public",
@@ -11538,6 +11568,16 @@
     "permissive": "PERMISSIVE",
     "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('synthetic_session_control'::regclass)::oid)))",
     "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('synthetic_session_control'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "system_audit_runs",
+    "policy": "system_audit_runs_ingestion_insert",
+    "command": "INSERT",
+    "roles": ["stella_ingestion"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "true"
   },
   {
     "schema": "public",

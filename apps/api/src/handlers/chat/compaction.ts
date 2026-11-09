@@ -6,6 +6,10 @@ import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
 import { classifyFailure, readFailureBrand } from "@stll/errors";
 
 import {
+  supersededBrowserParts,
+  type SupersededBrowserResult,
+} from "@/api/handlers/chat/browser-snapshot-history";
+import {
   getChatAttachmentFilename,
   getChatAttachmentMimeType,
   isChatAttachmentPart,
@@ -13,7 +17,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-boundary";
-import type { ChatMessage } from "@/api/handlers/chat/types";
+import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { estimateTextTokens } from "@/api/lib/ai-generation/token-estimate";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -96,7 +100,9 @@ type PlanChatCompactionOptions = {
 export const shouldCompactChatMessages = (
   messages: readonly ChatMessage[],
   triggerTokens: number = DEFAULT_TRIGGER_TOKENS,
-): boolean => estimateMessagesTokens(messages) > triggerTokens;
+): boolean =>
+  estimateMessagesTokens(messages, supersededBrowserParts(messages)) >
+  triggerTokens;
 
 type ChatThreadNeedsCompactionOptions = {
   /** The post-checkpoint history window, as loaded for this send. */
@@ -201,6 +207,8 @@ export const computeThreadContextUsage = ({
 
   let conversationTokens = conversationContextTokens;
   let attachmentTokens = 0;
+  // Estimated as the model receives it: superseded page snapshots shrink.
+  const superseded = supersededBrowserParts(messages);
   for (const message of messages) {
     const messageAttachmentTokens =
       countAttachmentParts(message) * FILE_PART_ESTIMATED_TOKENS;
@@ -209,7 +217,7 @@ export const computeThreadContextUsage = ({
     // whatever estimateMessageTokens counts beyond its file parts, so the split
     // stays exact against the estimator the send path uses.
     conversationTokens +=
-      estimateMessageTokens(message) - messageAttachmentTokens;
+      estimateMessageTokens(message, superseded) - messageAttachmentTokens;
   }
 
   return {
@@ -241,7 +249,13 @@ export const planChatCompaction = ({
   triggerTokens = DEFAULT_TRIGGER_TOKENS,
 }: PlanChatCompactionOptions): ChatCompactionPlan => {
   const providerVisibleMessages = getProviderVisibleMessages(messages);
-  const totalTokens = estimateMessagesTokens(providerVisibleMessages);
+  // Token counts use the model's view (superseded page snapshots shrink);
+  // the plan itself keeps the stored messages.
+  const superseded = supersededBrowserParts(providerVisibleMessages);
+  const totalTokens = estimateMessagesTokens(
+    providerVisibleMessages,
+    superseded,
+  );
   if (totalTokens <= triggerTokens) {
     return { totalTokens, type: "none" };
   }
@@ -255,7 +269,7 @@ export const planChatCompaction = ({
       continue;
     }
 
-    const messageTokens = estimateMessageTokens(message);
+    const messageTokens = estimateMessageTokens(message, superseded);
     if (
       recentMessages.length > 0 &&
       preservedTokens + messageTokens > preserveTokens &&
@@ -845,13 +859,22 @@ const createModelCompactionSummaryMessage = ({
   ].join("\n\n"),
 });
 
-const estimateMessagesTokens = (messages: readonly ChatMessage[]): number =>
+const NO_SUPERSEDED_PARTS: ReadonlyMap<ChatPart, SupersededBrowserResult> =
+  new Map();
+
+const estimateMessagesTokens = (
+  messages: readonly ChatMessage[],
+  superseded = NO_SUPERSEDED_PARTS,
+): number =>
   messages.reduce(
-    (total, message) => total + estimateMessageTokens(message),
+    (total, message) => total + estimateMessageTokens(message, superseded),
     0,
   );
 
-const estimateMessageTokens = (message: ChatMessage): number => {
+const estimateMessageTokens = (
+  message: ChatMessage,
+  superseded = NO_SUPERSEDED_PARTS,
+): number => {
   const visibleParts = getProviderVisibleParts(message);
   if (visibleParts.length === 0) {
     return 0;
@@ -860,7 +883,11 @@ const estimateMessageTokens = (message: ChatMessage): number => {
   let total = MESSAGE_OVERHEAD_TOKENS;
 
   for (const part of visibleParts) {
-    total += estimatePartTokens(part);
+    const stub = superseded.get(part);
+    total +=
+      stub === undefined
+        ? estimatePartTokens(part)
+        : estimateTextTokens(safeStringify({ ...part, output: stub }));
   }
 
   return total;

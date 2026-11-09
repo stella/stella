@@ -158,7 +158,10 @@ by the RC run.
    open release pull request blocks another cut. The command runs the existing
    pre-cut heavy, dependency-audit, npm-publish-lag and deploy-env-contract gates before writing.
    The npm gate checks that same newest final tag, regardless of main's
-   `VERSION`.
+   `VERSION`. When `VERSION` is ahead of every final tag, a release pull request
+   merged before its final tag; the cut then takes the next patch after
+   `VERSION` and folds that untagged version's notes into the new changelog.
+   If that version's final tag lands during the cut, the cut refuses; run it again.
    `--allow-unproven-main` permits missing heavy evidence at the cut only;
    dependency waivers require `WAIVE_DEPENDENCY_AUDIT=true` and
    `WAIVER_REASON='<reason>'`. There is no `--refresh` path.

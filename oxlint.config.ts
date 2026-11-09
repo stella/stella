@@ -799,6 +799,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-computed-key-record-assignment.fixture.ts", [
     "no-computed-key-record-assignment/no-computed-key-record-assignment",
   ]),
+  fixtureRuleOverride("exhaustive-union-map.fixture.ts", [
+    "exhaustive-union-map/exhaustive-union-map",
+  ]),
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
   ]),
@@ -2283,6 +2286,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-unbounded-response-body.ts",
     "./.oxlint-plugins/no-computed-key-record-assignment.ts",
+    "./.oxlint-plugins/exhaustive-union-map.ts",
     "./.oxlint-plugins/no-dynamic-key-in-operator.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
@@ -6584,6 +6588,22 @@ const config = defineConfig({
       rules: {
         "no-computed-key-record-assignment/no-computed-key-record-assignment":
           "error",
+      },
+    },
+    {
+      // A lookup table over a fixed set of keys is keyed by the union it
+      // covers, so a new member fails to compile at the map. The rule reads
+      // only the web and API apps; existing sites carry count ceilings in
+      // scripts/design-lint-baseline.json and are switched off here by
+      // `designLintBacklogOverrides` below.
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "exhaustive-union-map/exhaustive-union-map": "error",
       },
     },
     {

@@ -2615,6 +2615,7 @@
   "errors.apiCodes.organizationMemberLimitReached": "This organization has reached its member limit.",
   "errors.apiCodes.providerKeyRejected": "The provider rejected the API key.",
   "errors.apiCodes.providerRateLimited": "The provider rate limit was reached. Try again shortly.",
+  "errors.apiCodes.skillSourceUnreachable": "The skill source could not be loaded. Check that the link points to a public GitHub repository, or try again later.",
   "errors.apiCodes.thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.",
   "errors.apiCodes.usageLimitExceeded": "Usage limit reached.",
   "errors.apiCodes.validationInvalid": "A field has a value that cannot be saved.",

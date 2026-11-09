@@ -64,6 +64,7 @@ import {
   chunkCarriesAnswer,
   snapshotMessageAddsAnswer,
 } from "@/api/handlers/chat/attempt-answer";
+import { supersedeBrowserSnapshots } from "@/api/handlers/chat/browser-snapshot-history";
 import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
@@ -2134,10 +2135,13 @@ const createChatRuntimeMiddleware = ({
         }
       }
 
+      // Superseded page snapshots shrink before compaction measures the
+      // history, so a browsing turn holds one page instead of every page.
+      const projectedMessages = supersedeBrowserSnapshots(config.messages);
       const compactedMessages = await compactModelMessagesForModel({
         abortSignal,
         aiAnalytics: compactionAnalytics,
-        messages: config.messages,
+        messages: projectedMessages,
         modelId,
         organizationId,
         admission: modelAdmission,

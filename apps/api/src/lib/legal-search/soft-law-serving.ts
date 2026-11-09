@@ -2,6 +2,8 @@ import { panic } from "better-result";
 
 import type { GuidanceKind } from "@stll/legal-ast/document-kind";
 
+import { isCapabilityRoute } from "@/api/lib/capability-route";
+
 import type { SoftLawAuthority } from "./soft-law-types";
 
 /** How far a source's documents may be served to people. */
@@ -72,7 +74,7 @@ export const SOFT_LAW_SERVING_SETTINGS = {
       conditions: [],
       summaryDisclaimer: null,
     },
-    withheldKinds: ["inspection_report"],
+    withheldKinds: ["inspection_report", "other"],
   },
   "cz-suip": {
     serve: SOFT_LAW_SERVE_MODE.full,
@@ -83,7 +85,7 @@ export const SOFT_LAW_SERVING_SETTINGS = {
       conditions: [],
       summaryDisclaimer: null,
     },
-    withheldKinds: ["inspection_report"],
+    withheldKinds: ["inspection_report", "other"],
   },
   "eu-edpb": {
     serve: SOFT_LAW_SERVE_MODE.full,
@@ -187,6 +189,12 @@ export const SOFT_LAW_READ_SURFACE = {
 
 export type SoftLawReadSurface =
   (typeof SOFT_LAW_READ_SURFACE)[keyof typeof SOFT_LAW_READ_SURFACE];
+
+/** A capability call serves a connected model; every other route serves a person. */
+export const softLawSurfaceOfRoute = (route: string): SoftLawReadSurface =>
+  isCapabilityRoute(route)
+    ? SOFT_LAW_READ_SURFACE.mcp
+    : SOFT_LAW_READ_SURFACE.people;
 
 export type SoftLawAccess = "text" | "metadata" | "none";
 

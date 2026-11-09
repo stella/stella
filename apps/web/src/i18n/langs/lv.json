@@ -3109,6 +3109,7 @@
       "organizationMemberLimitReached": "Šī organizācija ir sasniegusi dalībnieku limitu.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
+      "skillSourceUnreachable": "Prasmes avotu neizdevās ielādēt. Pārbaudiet, vai saite ved uz publisku GitHub repozitoriju, vai mēģiniet vēlreiz vēlāk.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
       "usageLimitExceeded": "Sasniegts lietošanas limits.",
       "validationInvalid": "Laukā ir vērtība, ko nevar saglabāt.",

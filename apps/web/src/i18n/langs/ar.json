@@ -3109,6 +3109,7 @@
       "organizationMemberLimitReached": "بلغت هذه المؤسسة الحد الأقصى للأعضاء.",
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
+      "skillSourceUnreachable": "تعذر تحميل مصدر المهارة. تحقق من أن الرابط يشير إلى مستودع GitHub عام، أو حاول مرة أخرى لاحقًا.",
       "thirdPartyBoundaryRefusal": "حاول الطلب استخدام محتوى خارج سياق مساحة العمل المسموح به.",
       "usageLimitExceeded": "تم بلوغ حد الاستخدام.",
       "validationInvalid": "يحتوي حقل على قيمة لا يمكن حفظها.",
