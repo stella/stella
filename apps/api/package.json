@@ -236,7 +236,7 @@
   "devDependencies": {
     "@anthropic-ai/sdk": "0.97.1",
     "@aws-sdk/client-bedrock-runtime": "^3.1160.0",
-    "@electric-sql/pglite": "^0.5.13",
+    "@electric-sql/pglite": "^0.5.15",
     "@modelcontextprotocol/client": "2.4.0",
     "@modelcontextprotocol/ext-apps": "^2.0.4",
     "@myriaddreamin/typst-ts-renderer": "0.7.0",
