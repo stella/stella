@@ -1251,8 +1251,6 @@ const countAdHocRelativeTimeFormatting: FileCounter = (content, { file }) => {
   );
 };
 
-// Every hand-written API module, not only `src`: a script or eval that reaches
-// an owner-level handle is as much a use of it as a lib module.
 // Database tests of document review and workflows, the code that runs queued
 // work through the handles a run's actor holds.
 const TEST_DATABASE_HANDLE_CAST_GLOBS = [
@@ -1263,6 +1261,8 @@ const TEST_DATABASE_HANDLE_CAST_GLOBS = [
   "apps/api/src/lib/workflow-*.test.ts",
 ] as const;
 
+// Every hand-written API module, not only `src`: a script or eval that reaches
+// an owner-level handle is as much a use of it as a lib module.
 const API_OWNER_HANDLE_GLOBS = [
   "apps/api/*.{ts,tsx}",
   "apps/api/contracts/**/*.{ts,tsx}",
