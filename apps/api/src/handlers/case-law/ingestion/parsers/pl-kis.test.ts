@@ -364,11 +364,17 @@ const parseDetail = async (detail: URL) =>
 
 const singleSpaced = (text: string): string => text.replaceAll(/\s+/gu, " ");
 
+type Part = {
+  type: string;
+  role: string | undefined;
+  text: string;
+};
+
 /** Each block as its type, role and text, spaces made single. */
-const partsOf = (blocks: readonly Block[]) =>
+const partsOf = (blocks: readonly Block[]): Part[] =>
   blocks.map((block) => ({
     type: block.type,
-    role: block.role,
+    role: "role" in block ? block.role : undefined,
     text: singleSpaced(block.plainText),
   }));
 
