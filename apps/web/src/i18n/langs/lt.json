@@ -4059,6 +4059,7 @@
       "failed": "Nepavyko peržiūrėti dokumento",
       "filterCoverage": "Aprėptis",
       "filterDeviations": "Nukrypimai",
+      "fixesWithheldNotice": "Šiai peržiūrai siūlomi pakeitimai nebuvo sukurti, nes joje naudotas referencinis dokumentas iš bylos, kuri ją paleidusiam asmeniui nepasiekiama. Išvadoms tai įtakos neturi.",
       "flag": "Pažymėti",
       "flaggedPositions": "{total, plural, one {Pažymėta {flagged, number} iš # pozicijos} few {Pažymėta {flagged, number} iš # pozicijų} many {Pažymėta {flagged, number} iš # pozicijų} other {Pažymėta {flagged, number} iš # pozicijų}}",
       "fromChat": "Iš pokalbio",

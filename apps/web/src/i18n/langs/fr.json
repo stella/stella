@@ -4059,6 +4059,7 @@
       "failed": "Échec de la révision du document",
       "filterCoverage": "Couverture",
       "filterDeviations": "Écarts",
+      "fixesWithheldNotice": "Aucune modification proposée n'a été créée pour cette révision, car elle s'appuyait sur un document de référence provenant d'un dossier qui n'est pas disponible pour la personne qui l'a lancée. Les constats ne sont pas affectés.",
       "flag": "Signaler",
       "flaggedPositions": "{total, plural, one {{flagged, number} sur # critère signalé} other {{flagged, number} sur # critères signalés} many {{flagged, number} sur # critères signalés}}",
       "fromChat": "Depuis la conversation",

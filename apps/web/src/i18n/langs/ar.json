@@ -4059,6 +4059,7 @@
       "failed": "فشلت مراجعة المستند",
       "filterCoverage": "التغطية",
       "filterDeviations": "الانحرافات",
+      "fixesWithheldNotice": "لم تُنشأ تغييرات مقترحة لهذه المراجعة لأنها استخدمت مستندًا مرجعيًا من ملف قانوني غير متاح للشخص الذي شغّلها. لم تتأثر النتائج.",
       "flag": "تمييز",
       "flaggedPositions": "{total, plural, zero {لا مواقف مُعلَّمة} one {{flagged, number} من أصل موقف واحد مُعلَّم} two {{flagged, number} من أصل موقفين مُعلَّمين} few {{flagged, number} من أصل # مواقف مُعلَّمة} many {{flagged, number} من أصل # موقفًا مُعلَّمًا} other {{flagged, number} من أصل # موقف مُعلَّم}}",
       "fromChat": "من الدردشة",

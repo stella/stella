@@ -4059,6 +4059,7 @@
       "failed": "A dokumentum ellenőrzése nem sikerült",
       "filterCoverage": "Lefedettség",
       "filterDeviations": "Eltérések",
+      "fixesWithheldNotice": "Ehhez az ellenőrzéshez nem készültek javasolt módosítások, mert olyan ügyből használt referenciadokumentumot, amely nem érhető el az ellenőrzést indító személy számára. A megállapításokat ez nem érinti.",
       "flag": "Megjelölés",
       "flaggedPositions": "{total, plural, one {{flagged, number} megjelölve # álláspontból} other {{flagged, number} megjelölve # álláspontból}}",
       "fromChat": "Csevegésből",
