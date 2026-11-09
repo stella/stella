@@ -14,6 +14,7 @@ const OPEN_LABELS = {
   deviation: "Deviates",
 } as const satisfies Record<string, string>;
 
+// expect-clean: exhaustive-union-map/exhaustive-union-map
 const TIER_LABELS = {
   compliant: "On standard",
   deviation: "Deviates",

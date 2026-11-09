@@ -162,7 +162,10 @@ const isLiteralKey = (node: unknown): boolean => {
 };
 
 /** Whether `identifier` is read as a lookup table, or exported by name. */
-const lookupUse = (identifier: AstNode): "lookup" | "export" | null => {
+const lookupUse = (identifier: unknown): "lookup" | "export" | null => {
+  if (!isAstNode(identifier)) {
+    return null;
+  }
   const parent: unknown = identifier.parent;
   if (!isAstNode(parent)) {
     return null;
