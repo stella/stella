@@ -110,6 +110,18 @@ const CHAT_RUN_LOG_REFUSED = failureSink({
   expected: [],
 });
 
+/**
+ * Which refusals this log reports as failures. A size refusal ends a turn the
+ * member watches; a lost fence or a closed log means another owner settles
+ * the turn, which is an expected outcome rather than a defect.
+ */
+const OBSERVED_REFUSALS = {
+  "chunk-too-large": true,
+  "run-too-large": true,
+  "fence-lost": false,
+  closed: false,
+} as const satisfies Record<ChatRunLogRefusalReason, boolean>;
+
 /** A resume cursor this run's log never issued: the caller's input, not a defect. */
 export class ChatRunLogOffsetBeyondTailError extends TaggedError(
   "ChatRunLogOffsetBeyondTailError",
@@ -1565,10 +1577,12 @@ export const createChatRunLog = ({
           return outcome.offsets;
         case "refused": {
           const error = refusal(outcome.reason);
-          observeFailure(error, {
-            sink: CHAT_RUN_LOG_REFUSED,
-            ctx: { runId },
-          });
+          if (OBSERVED_REFUSALS[outcome.reason]) {
+            observeFailure(error, {
+              sink: CHAT_RUN_LOG_REFUSED,
+              ctx: { runId },
+            });
+          }
           throw error;
         }
         default:
