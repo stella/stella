@@ -18,8 +18,11 @@ import {
 } from "@stll/api-contract/chat";
 import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
 import {
+  CHAT_LOCAL_RUN_INTERRUPT_REASONS,
+  CHAT_LOCAL_RUN_TOOL_LIMITS,
   chatLocalRunApprovalMessage,
   chatLocalRunApprovalReason,
+  chatLocalRunShownText,
   type ChatLocalRunToolName,
   chatLocalRunToolStatusContent,
   isChatLocalRunToolName,
@@ -32,6 +35,7 @@ import {
   CHAT_LOCAL_RUN_FILES_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_QUESTION_TOOL,
   type ChatLocalRunComputerEvent,
   chatLocalRunContextSchema,
   type ChatLocalRunFile,
@@ -66,6 +70,7 @@ import type {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import { appCallArgumentsHash } from "@/api/lib/desktop-runner/app-calls";
 import {
+  questionInterruptOf,
   questionPauseOf,
   questionReplyOf,
 } from "@/api/lib/desktop-runner/chunk";
@@ -556,34 +561,21 @@ const APPROVAL_DECISIONS: ReadonlySet<unknown> = new Set(
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
 );
 
-/**
- * A pause under its chat call id. An approval is rebuilt from what the
- * runner protocol names (kind, decisions), the harness's shown reason and
- * what chat keeps of its call, and its message from those: a pause is kept
- * in the turn's resume snapshot, so nothing else a desktop puts on it is
- * carried. A question is checked where it is answered (`questionPauseOf`).
- */
-const asChatInterrupt = (
-  interrupt: ChatInterrupt,
+const approvalInterrupt = (
+  { id, toolCallId }: { id: string; toolCallId: string },
+  metadata: Readonly<Record<string, unknown>>,
   calls: LocalRunToolCalls,
   callId: CallId,
 ): ChatInterrupt => {
-  if (interrupt.toolCallId === undefined) {
-    return interrupt;
-  }
-  const metadata = isRecord(interrupt.metadata) ? interrupt.metadata : {};
-  if (metadata["kind"] !== "approval") {
-    return { ...interrupt, toolCallId: callId(interrupt.toolCallId) };
-  }
-  const name = calls.get(interrupt.toolCallId)?.name ?? null;
+  const name = calls.get(toolCallId)?.name ?? null;
   const input = approvalInput(name, metadata["input"]);
   const reason = chatLocalRunApprovalReason(metadata["reason"]);
   const approvalKind = metadata["approvalKind"];
   const decisions = metadata["decisions"];
   return {
-    id: interrupt.id,
-    reason: interrupt.reason,
-    toolCallId: callId(interrupt.toolCallId),
+    id,
+    reason: CHAT_LOCAL_RUN_INTERRUPT_REASONS.approval,
+    toolCallId: callId(toolCallId),
     message: chatLocalRunApprovalMessage({ toolName: name, input, reason }),
     metadata: {
       kind: "approval",
@@ -595,6 +587,55 @@ const asChatInterrupt = (
         ? decisions.filter((decision) => APPROVAL_DECISIONS.has(decision))
         : [],
     },
+  };
+};
+
+/**
+ * A pause under its chat call id, rebuilt from what the runner protocol
+ * names: a pause is kept in the turn's resume snapshot, so nothing else a
+ * desktop puts on it is carried. An approval keeps its kind, decisions, the
+ * harness's shown reason and what chat keeps of its call, with its message
+ * built from those; a question keeps the questions `questionPauseOf`
+ * answers by; any other pause names only itself.
+ */
+const asChatInterrupt = (
+  interrupt: ChatInterrupt,
+  calls: LocalRunToolCalls,
+  callId: CallId,
+): ChatInterrupt => {
+  const metadata = isRecord(interrupt.metadata) ? interrupt.metadata : {};
+  if (metadata["kind"] === "approval" && interrupt.toolCallId !== undefined) {
+    return approvalInterrupt(
+      { id: interrupt.id, toolCallId: interrupt.toolCallId },
+      metadata,
+      calls,
+      callId,
+    );
+  }
+  const question = questionInterruptOf([interrupt]);
+  if (question.type === "question") {
+    return {
+      id: question.requestId,
+      reason: CHAT_LOCAL_RUN_INTERRUPT_REASONS.question,
+      message: question.questions.map(({ prompt }) => prompt).join("\n"),
+      toolCallId: callId(question.toolCallId),
+      metadata: {
+        kind: "question",
+        toolName:
+          calls.get(question.toolCallId)?.name ?? CHAT_LOCAL_RUN_QUESTION_TOOL,
+        questions: question.questions,
+      },
+    };
+  }
+  return {
+    id: interrupt.id,
+    reason: chatLocalRunShownText(
+      interrupt.reason,
+      CHAT_LOCAL_RUN_TOOL_LIMITS.name,
+    ),
+    ...(interrupt.toolCallId === undefined
+      ? {}
+      : { toolCallId: callId(interrupt.toolCallId) }),
   };
 };
 

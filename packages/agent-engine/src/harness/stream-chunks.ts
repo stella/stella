@@ -9,7 +9,10 @@ import {
 import { panic } from "better-result";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
-import { chatLocalRunApprovalReason } from "@stll/api-contract/chat-local-run-tool";
+import {
+  CHAT_LOCAL_RUN_INTERRUPT_REASONS,
+  chatLocalRunApprovalReason,
+} from "@stll/api-contract/chat-local-run-tool";
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
@@ -437,7 +440,7 @@ class ChunkMapper {
           interrupts: [
             {
               id: request.requestId,
-              reason: "tool_call",
+              reason: CHAT_LOCAL_RUN_INTERRUPT_REASONS.approval,
               message: approvalMessage(request),
               toolCallId: request.toolCall.id,
               metadata: {
@@ -479,7 +482,7 @@ class ChunkMapper {
           interrupts: [
             {
               id: request.requestId,
-              reason: "user_input",
+              reason: CHAT_LOCAL_RUN_INTERRUPT_REASONS.question,
               message: request.questions.map(({ prompt }) => prompt).join("\n"),
               toolCallId: request.toolCall.id,
               metadata: {

@@ -296,6 +296,16 @@ export const shownChatLocalRunToolResult = (
 };
 
 /**
+ * Why a local run paused, as its interrupt says it: an approval pauses on a
+ * tool call, a blocking question on the member's input. A pause states
+ * nothing else there.
+ */
+export const CHAT_LOCAL_RUN_INTERRUPT_REASONS = {
+  approval: "tool_call",
+  question: "user_input",
+} as const;
+
+/**
  * A harness's reason for asking an approval, as chat shows it: one line,
  * bounded, or `null` without one.
  */

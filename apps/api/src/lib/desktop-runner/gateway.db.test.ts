@@ -4802,6 +4802,7 @@ describe("chat turns on a computer", () => {
                   ? {
                       ...interrupt,
                       message: heredoc.input.command,
+                      reason: secret,
                       expiresAt: secret,
                       metadata: {
                         ...interrupt["metadata"],
@@ -5178,6 +5179,9 @@ describe("chat turns on a computer", () => {
    * the live chunks, the stored message with the resume snapshot the send
    * attaches to an awaiting turn, and a reload of it.
    */
+  /** What a desktop adds to a question's pause; it is never kept. */
+  const QUESTION_PAUSE_EXTRA = "Desktop-only note";
+
   const servedQuestionPause = async () => {
     const chatThreadId = await newThread();
     const chatTurnId = turnOf(chatThreadId);
@@ -5253,7 +5257,35 @@ describe("chat turns on a computer", () => {
       ) + 1;
     expect(pauseAt).toBeGreaterThan(0);
     const run = desktopRun(desktop, start.runId);
-    await run.events(sent.slice(0, pauseAt));
+    // A desktop that puts more on the question's pause than it asks.
+    await run.events(
+      sent.slice(0, pauseAt).map((chunk) =>
+        isRecord(chunk) &&
+        chunk["type"] === EventType.RUN_FINISHED &&
+        isRecord(chunk["outcome"]) &&
+        Array.isArray(chunk["outcome"]["interrupts"])
+          ? {
+              ...chunk,
+              outcome: {
+                ...chunk["outcome"],
+                interrupts: chunk["outcome"]["interrupts"].map(
+                  (interrupt: unknown) =>
+                    isRecord(interrupt) && isRecord(interrupt["metadata"])
+                      ? {
+                          ...interrupt,
+                          expiresAt: QUESTION_PAUSE_EXTRA,
+                          metadata: {
+                            ...interrupt["metadata"],
+                            output: QUESTION_PAUSE_EXTRA,
+                          },
+                        }
+                      : interrupt,
+                ),
+              },
+            }
+          : chunk,
+      ),
+    );
     const paused = await pausedServed;
     const pause = paused.emitted.findLast(
       (chunk) =>
@@ -5387,6 +5419,11 @@ describe("chat turns on a computer", () => {
     expect(
       questionInterruptOf(reloadedSnapshot?.pendingInterrupts ?? []),
     ).toEqual(questionPauseOf(served.pause));
+    // What the desktop added to the pause is in neither the stream nor the
+    // stored turn.
+    expect(
+      JSON.stringify({ pause: served.pause, stored: served.stored }),
+    ).not.toContain(QUESTION_PAUSE_EXTRA);
     expect(questionPauseOf(served.pause)).toMatchObject({
       type: "question",
       requestId: served.requestId,
