@@ -9,6 +9,7 @@ import {
 import { panic } from "better-result";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import { chatLocalRunApprovalReason } from "@stll/api-contract/chat-local-run-tool";
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
@@ -441,7 +442,7 @@ class ChunkMapper {
               toolCallId: request.toolCall.id,
               metadata: {
                 kind: "approval",
-                reason: request.reason,
+                reason: chatLocalRunApprovalReason(request.reason),
                 toolName: request.toolCall.name,
                 input: this.shownInput(request.toolCall),
                 approvalKind: request.kind,

@@ -84,7 +84,6 @@ const HARNESS_GRACE_MS = 5000;
  * catches a harness that stopped answering.
  */
 const HARNESS_REQUEST_TIMEOUT_MS = 30_000;
-const MAX_SUMMARY_CHARS = 4000;
 const MAX_PROBED_MODELS = 100;
 
 export type HarnessLaunch = {
@@ -828,10 +827,7 @@ export class SidecarHost {
               runId,
               requestId,
               kind: event.request.kind,
-              summary: approvalMessage(event.request).slice(
-                0,
-                MAX_SUMMARY_CHARS,
-              ),
+              summary: approvalMessage(event.request),
             });
             break;
           }

@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import { CHAT_LOCAL_RUN_TOOL_LIMITS } from "@stll/api-contract/chat-local-run-tool";
 import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
@@ -481,7 +482,12 @@ export const sidecarMessageSchema = v.variant("type", [
     seq: seqSchema,
     requestId: requestIdSchema,
     kind: v.picklist(DESKTOP_RUNNER_APPROVAL_KINDS),
-    summary: v.pipe(v.string(), v.minLength(1), v.maxLength(4000)),
+    /** `chatLocalRunApprovalMessage`, as the runner protocol bounds it. */
+    summary: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(CHAT_LOCAL_RUN_TOOL_LIMITS.approval),
+    ),
   }),
   /** The run's last message; every accepted `run.start` ends with one. */
   v.object({

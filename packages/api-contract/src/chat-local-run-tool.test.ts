@@ -7,6 +7,7 @@ import {
   CHAT_LOCAL_RUN_TOOL_LIMITS,
   CHAT_LOCAL_RUN_TOOL_NAMES,
   CHAT_LOCAL_RUN_TOOL_STATUSES,
+  chatLocalRunApprovalMessage,
   chatLocalRunShownText,
   parseChatLocalRunToolCall,
   shownChatLocalRunToolResult,
@@ -15,9 +16,9 @@ import {
 const text = fc.string({ unit: "binary", maxLength: 700 });
 
 describe("what a local run's native step shows", () => {
-  test("shown text is one line within its limit, and showing it again changes nothing", async () => {
-    await assertProperty(
-      "shown text is bounded, single-line and idempotent",
+  test("shown text is one line within its limit, and showing it again changes nothing", () => {
+    assertProperty(
+      "shown text is one line within its limit, and showing it again changes nothing",
       fc.property(text, fc.integer({ min: 2, max: 600 }), (raw, limit) => {
         const shown = chatLocalRunShownText(raw, limit);
         expect(shown.length).toBeLessThanOrEqual(limit);
@@ -45,7 +46,7 @@ describe("what a local run's native step shows", () => {
     expect(shown).toBe(`${"a".repeat(8)}…`);
   });
 
-  test("a call keeps only its schema's fields, and parsing what it kept gives the same call", async () => {
+  test("a call keeps only its schema's fields, and parsing what it kept gives the same call", () => {
     const extra = fc.dictionary(
       fc.constantFrom("output", "content", "diff", "old_string", "prompt"),
       fc.string(),
@@ -82,8 +83,8 @@ describe("what a local run's native step shows", () => {
         }),
       }),
     );
-    await assertProperty(
-      "parsed calls drop extra fields and are stable",
+    assertProperty(
+      "a call keeps only its schema's fields, and parsing what it kept gives the same call",
       fc.property(calls, extra, (call, added) => {
         const parsed = parseChatLocalRunToolCall(call.name, {
           ...call.input,
@@ -129,9 +130,9 @@ describe("what a local run's native step shows", () => {
     ).toBeNull();
   });
 
-  test("a native step's result keeps how it ended and never what it produced", async () => {
-    await assertProperty(
-      "native results keep only their schema's fields",
+  test("a native step's result keeps how it ended and never what it produced", () => {
+    assertProperty(
+      "a native step's result keeps how it ended and never what it produced",
       fc.property(
         fc.constantFrom(...Object.values(CHAT_LOCAL_RUN_TOOL_NAMES)),
         fc.constantFrom(...CHAT_LOCAL_RUN_TOOL_STATUSES),
@@ -175,5 +176,29 @@ describe("what a local run's native step shows", () => {
         false,
       ),
     ).toBe(JSON.stringify({ status: "completed" }));
+  });
+
+  test("an approval names a command by its shown line, and anything else by a shown reason or its tool", () => {
+    expect(
+      chatLocalRunApprovalMessage({
+        toolName: CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution,
+        input: { command: "cat > notes.md <<'EOF'\nPrivate terms\nEOF" },
+        reason: "Private terms",
+      }),
+    ).toBe("cat > notes.md <<'EOF'…");
+    expect(
+      chatLocalRunApprovalMessage({
+        toolName: CHAT_LOCAL_RUN_TOOL_NAMES.fileChange,
+        input: { changes: [] },
+        reason: "Edits notes\nPrivate terms",
+      }),
+    ).toBe("Edits notes…");
+    expect(
+      chatLocalRunApprovalMessage({
+        toolName: "mcp__docs__read",
+        input: { id: "1" },
+        reason: null,
+      }),
+    ).toBe("Approval required to run mcp__docs__read");
   });
 });

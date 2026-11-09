@@ -18,6 +18,8 @@ import {
 } from "@stll/api-contract/chat";
 import { RUN_OUTPUT_FILE_EXTENSIONS } from "@stll/api-contract/chat-file-types";
 import {
+  chatLocalRunApprovalMessage,
+  chatLocalRunApprovalReason,
   type ChatLocalRunToolName,
   chatLocalRunToolStatusContent,
   isChatLocalRunToolName,
@@ -38,7 +40,8 @@ import {
   chatLocalRunLimitSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
-  type DESKTOP_RUNNER_APPROVAL_DECISIONS,
+  DESKTOP_RUNNER_APPROVAL_DECISIONS,
+  DESKTOP_RUNNER_APPROVAL_KINDS,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
   DESKTOP_RUNNER_OUTPUT_EVENT,
   type DesktopRunnerApprovalMode,
@@ -535,7 +538,31 @@ type ChatInterrupt = Extract<
   { type: "interrupt" }
 >["interrupts"][number];
 
-/** A pause under its chat call id; a paused native step's input is its call's. */
+/**
+ * The input an approval names: a native step's shown input, a connector
+ * call's arguments, nothing for a call this run never opened.
+ */
+const approvalInput = (name: string | null, input: unknown): unknown => {
+  if (name === null) {
+    return {};
+  }
+  return isChatLocalRunToolName(name) ? nativeInput(name, input) : input;
+};
+
+const APPROVAL_KINDS: ReadonlySet<unknown> = new Set(
+  DESKTOP_RUNNER_APPROVAL_KINDS,
+);
+const APPROVAL_DECISIONS: ReadonlySet<unknown> = new Set(
+  DESKTOP_RUNNER_APPROVAL_DECISIONS,
+);
+
+/**
+ * A pause under its chat call id. An approval is rebuilt from what the
+ * runner protocol names (kind, decisions), the harness's shown reason and
+ * what chat keeps of its call, and its message from those: a pause is kept
+ * in the turn's resume snapshot, so nothing else a desktop puts on it is
+ * carried. A question is checked where it is answered (`questionPauseOf`).
+ */
 const asChatInterrupt = (
   interrupt: ChatInterrupt,
   calls: LocalRunToolCalls,
@@ -544,20 +571,30 @@ const asChatInterrupt = (
   if (interrupt.toolCallId === undefined) {
     return interrupt;
   }
-  const name = calls.get(interrupt.toolCallId)?.name;
+  const metadata = isRecord(interrupt.metadata) ? interrupt.metadata : {};
+  if (metadata["kind"] !== "approval") {
+    return { ...interrupt, toolCallId: callId(interrupt.toolCallId) };
+  }
+  const name = calls.get(interrupt.toolCallId)?.name ?? null;
+  const input = approvalInput(name, metadata["input"]);
+  const reason = chatLocalRunApprovalReason(metadata["reason"]);
+  const approvalKind = metadata["approvalKind"];
+  const decisions = metadata["decisions"];
   return {
-    ...interrupt,
+    id: interrupt.id,
+    reason: interrupt.reason,
     toolCallId: callId(interrupt.toolCallId),
-    ...(name !== undefined &&
-    isChatLocalRunToolName(name) &&
-    interrupt.metadata !== undefined
-      ? {
-          metadata: {
-            ...interrupt.metadata,
-            input: nativeInput(name, interrupt.metadata["input"]),
-          },
-        }
-      : {}),
+    message: chatLocalRunApprovalMessage({ toolName: name, input, reason }),
+    metadata: {
+      kind: "approval",
+      reason,
+      ...(name === null ? {} : { toolName: name }),
+      input,
+      ...(APPROVAL_KINDS.has(approvalKind) ? { approvalKind } : {}),
+      decisions: Array.isArray(decisions)
+        ? decisions.filter((decision) => APPROVAL_DECISIONS.has(decision))
+        : [],
+    },
   };
 };
 
@@ -577,10 +614,18 @@ const asChatChunk = (
   }
   const callId = (id: string) => localCallId(runnerRunId, id);
   if (chunk.type === EventType.TOOL_CALL_START) {
-    calls.set(chunk.toolCallId, {
-      name: chunk.toolCallName,
-      argsCarried: false,
-    });
+    // A call's first start names it for good: the chat keeps the first part
+    // of an id, so a start naming another tool is not carried.
+    const opened = calls.get(chunk.toolCallId);
+    if (opened !== undefined && opened.name !== chunk.toolCallName) {
+      return null;
+    }
+    if (opened === undefined) {
+      calls.set(chunk.toolCallId, {
+        name: chunk.toolCallName,
+        argsCarried: false,
+      });
+    }
     // A start's metadata becomes the call's: only the model a harness names
     // and the owner the API names are carried.
     const model = reportedModel(chunk.metadata);
@@ -1157,7 +1202,8 @@ const openedCalls = async (
           : null;
       if (
         isPublicStreamChunk(chunk) &&
-        chunk.type === EventType.TOOL_CALL_START
+        chunk.type === EventType.TOOL_CALL_START &&
+        !calls.has(chunk.toolCallId)
       ) {
         calls.set(chunk.toolCallId, {
           name: chunk.toolCallName,

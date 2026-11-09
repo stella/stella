@@ -46,6 +46,8 @@ export const CHAT_LOCAL_RUN_TOOL_LIMITS = {
   planItems: 50,
   planItem: 200,
   name: 128,
+  /** A harness's reason for an approval, and the approval's whole message. */
+  approval: 300,
 } as const;
 
 const ELLIPSIS = "…";
@@ -291,4 +293,50 @@ export const shownChatLocalRunToolResult = (
   return parsed === null
     ? chatLocalRunToolStatusContent(failed)
     : JSON.stringify(parsed.result);
+};
+
+/**
+ * A harness's reason for asking an approval, as chat shows it: one line,
+ * bounded, or `null` without one.
+ */
+export const chatLocalRunApprovalReason = (reason: unknown): string | null =>
+  typeof reason === "string" && reason.trim() !== ""
+    ? chatLocalRunShownText(reason, CHAT_LOCAL_RUN_TOOL_LIMITS.approval)
+    : null;
+
+/**
+ * What an approval asks the member to allow, built from what chat keeps of
+ * the call: a command names its shown command line (as t3code, MIT, shows
+ * command approvals), anything else the harness's shown `reason`, or its
+ * tool. The desktop's summary and the chat's interrupt both read this, so
+ * neither carries more of a step than its call does.
+ */
+export const chatLocalRunApprovalMessage = ({
+  toolName,
+  input,
+  reason,
+}: {
+  toolName: string | null;
+  input: unknown;
+  reason: string | null;
+}): string => {
+  if (toolName === CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution) {
+    const call = parseChatLocalRunToolCall(toolName, input);
+    if (
+      call?.name === CHAT_LOCAL_RUN_TOOL_NAMES.commandExecution &&
+      call.input.command !== ""
+    ) {
+      return call.input.command;
+    }
+  }
+  const shownReason = chatLocalRunApprovalReason(reason);
+  if (shownReason !== null) {
+    return shownReason;
+  }
+  return chatLocalRunShownText(
+    toolName === null
+      ? "Approval required"
+      : `Approval required to run ${toolName}`,
+    CHAT_LOCAL_RUN_TOOL_LIMITS.approval,
+  );
 };
