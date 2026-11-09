@@ -81,6 +81,7 @@ export const TAGGED_FAILURE_REASON = {
   ChatReconnectError: "tagged_failure",
   ChatRunLogError: "tagged_failure",
   ChatRunLogOffsetBeyondTailError: "tagged_failure",
+  ChatRunLogRefusedError: "tagged_failure",
   ChatStreamError: "tagged_failure",
   ChatToolError: "tagged_failure",
   ChatToolValidationError: "tagged_failure",
