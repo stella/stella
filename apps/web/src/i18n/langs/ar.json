@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, zero {لا يوجد حكم يحمل} one {حكم واحد يحمل} two {حكمان يحملان} few {# أحكام تحمل} many {# حكمًا تحمل} other {# حكم تحمل}} رقم القضية هذا. اختر المحكمة.",
     "searchLabel": "البحث في السوابق القضائية",
     "searchPlaceholder": "رقم القضية أو ECLI أو كلمات، مثل 22 Cdo 2653/2012",
+    "searchStillSearching": "خدمة البحث مشغولة. لا يزال البحث جاريًا…",
     "searchUnavailable": {
       "description": "تعذّر الوصول إلى بحث الاجتهاد القضائي. الاستعلام محفوظ في شريط العنوان، لذا أعد المحاولة بعد لحظات.",
       "title": "البحث غير متاح مؤقتًا"
@@ -3107,6 +3108,7 @@
       "organizationMemberLimitReached": "بلغت هذه المؤسسة الحد الأقصى للأعضاء.",
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
+      "skillSourceUnreachable": "تعذر تحميل مصدر المهارة. تحقق من أن الرابط يشير إلى مستودع GitHub عام، أو حاول مرة أخرى لاحقًا.",
       "thirdPartyBoundaryRefusal": "حاول الطلب استخدام محتوى خارج سياق مساحة العمل المسموح به.",
       "usageLimitExceeded": "تم بلوغ حد الاستخدام.",
       "validationInvalid": "يحتوي حقل على قيمة لا يمكن حفظها.",
@@ -4059,6 +4061,7 @@
       "failed": "فشلت مراجعة المستند",
       "filterCoverage": "التغطية",
       "filterDeviations": "الانحرافات",
+      "fixesWithheldNotice": "لم تُنشأ تغييرات مقترحة لهذه المراجعة لأنها استخدمت مستندًا مرجعيًا من ملف قانوني غير متاح للشخص الذي شغّلها. لم تتأثر النتائج.",
       "flag": "تمييز",
       "flaggedPositions": "{total, plural, zero {لا مواقف مُعلَّمة} one {{flagged, number} من أصل موقف واحد مُعلَّم} two {{flagged, number} من أصل موقفين مُعلَّمين} few {{flagged, number} من أصل # مواقف مُعلَّمة} many {{flagged, number} من أصل # موقفًا مُعلَّمًا} other {{flagged, number} من أصل # موقف مُعلَّم}}",
       "fromChat": "من الدردشة",

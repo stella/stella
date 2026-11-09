@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# decisão tem} other {# decisões têm} many {# decisões têm}} este número de processo. Escolha o tribunal.",
     "searchLabel": "Pesquisar jurisprudência",
     "searchPlaceholder": "Número do processo, ECLI ou palavras, p. ex. 22 Cdo 2653/2012",
+    "searchStillSearching": "O serviço de busca está ocupado. Ainda buscando…",
     "searchUnavailable": {
       "description": "Não foi possível acessar a pesquisa de jurisprudência. Sua consulta permanece na barra de endereços; tente novamente em instantes.",
       "title": "A pesquisa está temporariamente indisponível"
@@ -3107,6 +3108,7 @@
       "organizationMemberLimitReached": "Esta organização atingiu o limite de membros.",
       "providerKeyRejected": "O provedor rejeitou a chave de API.",
       "providerRateLimited": "O limite de solicitações do provedor foi atingido. Tente novamente em instantes.",
+      "skillSourceUnreachable": "Não foi possível carregar a origem da habilidade. Verifique se o link aponta para um repositório público do GitHub ou tente novamente mais tarde.",
       "thirdPartyBoundaryRefusal": "A solicitação tentou usar conteúdo fora do contexto permitido do espaço de trabalho.",
       "usageLimitExceeded": "Limite de uso atingido.",
       "validationInvalid": "Um campo tem um valor que não pode ser salvo.",
@@ -4059,6 +4061,7 @@
       "failed": "A revisão do documento falhou",
       "filterCoverage": "Cobertura",
       "filterDeviations": "Desvios",
+      "fixesWithheldNotice": "Não foram criadas alterações propostas para esta revisão porque ela usou um documento de referência de um caso que não está disponível para a pessoa que a iniciou. As constatações não foram afetadas.",
       "flag": "Sinalizar",
       "flaggedPositions": "{total, plural, one {{flagged, number} de # posição sinalizada} other {{flagged, number} de # posições sinalizadas} many {{flagged, number} de # posições sinalizadas}}",
       "fromChat": "Do chat",

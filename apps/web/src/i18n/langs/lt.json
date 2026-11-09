@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# sprendimas turi} few {# sprendimai turi} many {# sprendimo turi} other {# sprendimų turi}} šį bylos numerį. Pasirinkite teismą.",
     "searchLabel": "Ieškoti teismų praktikoje",
     "searchPlaceholder": "Bylos numeris, ECLI arba žodžiai, pvz. 22 Cdo 2653/2012",
+    "searchStillSearching": "Paieškos paslauga užimta. Vis dar ieškoma…",
     "searchUnavailable": {
       "description": "Nepavyko pasiekti teismų praktikos paieškos. Jūsų užklausa lieka adreso juostoje, pabandykite po akimirkos dar kartą.",
       "title": "Paieška laikinai nepasiekiama"
@@ -3107,6 +3108,7 @@
       "organizationMemberLimitReached": "Ši organizacija pasiekė narių ribą.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
+      "skillSourceUnreachable": "Nepavyko įkelti įgūdžio šaltinio. Patikrinkite, ar nuoroda veda į viešą „GitHub“ saugyklą, arba bandykite vėliau.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
       "usageLimitExceeded": "Pasiektas naudojimo limitas.",
       "validationInvalid": "Lauke yra reikšmė, kurios negalima išsaugoti.",
@@ -4059,6 +4061,7 @@
       "failed": "Nepavyko peržiūrėti dokumento",
       "filterCoverage": "Aprėptis",
       "filterDeviations": "Nukrypimai",
+      "fixesWithheldNotice": "Šiai peržiūrai siūlomi pakeitimai nebuvo sukurti, nes joje naudotas referencinis dokumentas iš bylos, kuri ją paleidusiam asmeniui nepasiekiama. Išvadoms tai įtakos neturi.",
       "flag": "Pažymėti",
       "flaggedPositions": "{total, plural, one {Pažymėta {flagged, number} iš # pozicijos} few {Pažymėta {flagged, number} iš # pozicijų} many {Pažymėta {flagged, number} iš # pozicijų} other {Pažymėta {flagged, number} iš # pozicijų}}",
       "fromChat": "Iš pokalbio",

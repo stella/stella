@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, zero {# nolēmumu ir} one {# nolēmumam ir} other {# nolēmumiem ir}} šis lietas numurs. Izvēlieties tiesu.",
     "searchLabel": "Meklēt judikatūrā",
     "searchPlaceholder": "Lietas numurs, ECLI vai vārdi, piem. 22 Cdo 2653/2012",
+    "searchStillSearching": "Meklēšanas pakalpojums ir noslogots. Joprojām meklējam…",
     "searchUnavailable": {
       "description": "Neizdevās sazināties ar tiesu prakses meklēšanu. Jūsu vaicājums saglabājas adreses joslā, mēģiniet vēlreiz pēc brīža.",
       "title": "Meklēšana īslaicīgi nav pieejama"
@@ -3107,6 +3108,7 @@
       "organizationMemberLimitReached": "Šī organizācija ir sasniegusi dalībnieku limitu.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
+      "skillSourceUnreachable": "Prasmes avotu neizdevās ielādēt. Pārbaudiet, vai saite ved uz publisku GitHub repozitoriju, vai mēģiniet vēlreiz vēlāk.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
       "usageLimitExceeded": "Sasniegts lietošanas limits.",
       "validationInvalid": "Laukā ir vērtība, ko nevar saglabāt.",
@@ -4059,6 +4061,7 @@
       "failed": "Neizdevās pārbaudīt dokumentu",
       "filterCoverage": "Aptvērums",
       "filterDeviations": "Novirzes",
+      "fixesWithheldNotice": "Šai pārbaudei ierosinātās izmaiņas netika izveidotas, jo tajā izmantots atsauces dokuments no lietas, kas nav pieejama personai, kura to palaida. Secinājumus tas neietekmē.",
       "flag": "Atzīmēt",
       "flaggedPositions": "{total, plural, zero {Nav atzīmētu pozīciju} one {{flagged, number} no # pozīcijas atzīmēta} other {{flagged, number} no # pozīcijām atzīmētas}}",
       "fromChat": "No tērzēšanas",
