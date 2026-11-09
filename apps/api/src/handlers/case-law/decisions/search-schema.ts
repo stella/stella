@@ -302,6 +302,8 @@ export const searchDecisionsSuccessResponseSchema = v.object({
   total: searchTotalSchema,
   /** Hits on this page appended by the any-word phase, outside `total`. */
   relaxedHitCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  /** Set when the any-word phase was due and could not be read. */
+  relaxedTopUp: v.optional(v.literal("skipped")),
   nextCursor: nullableBoundedString(
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   ),

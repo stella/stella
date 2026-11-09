@@ -1596,7 +1596,7 @@ describe("OpenAI-compatible MCP tools", () => {
           minLength: 1,
           maxLength: 256,
           description:
-            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total.',
+            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". EU acts such as GDPR have no recorded links yet: use queries. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total.',
         },
         has_legal_sentence: {
           type: "boolean",
@@ -3931,6 +3931,32 @@ describe("OpenAI-compatible MCP tools", () => {
       }[];
     };
 
+    test("names the phrasing whose partial matches went unread", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => ({
+          ...answered(query, null),
+          relaxedHitCount: 0,
+          ...(query === "short" ? { relaxedTopUp: "skipped" as const } : {}),
+        }),
+      );
+
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["full", "short"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(result.isError).not.toBe(true);
+      const page = asTestRaw<PartialPage>(parseToolPayload(result));
+      expect(page.searches.at(0)?.warnings).toEqual([]);
+      const warnings = page.searches.at(1)?.warnings ?? [];
+      expect(warnings.map(({ code }) => code)).toEqual([
+        "partial_matches_unread",
+      ]);
+      expect(JSON.stringify(warnings)).toContain('\\"short\\"');
+      expect(warnings.at(0)?.hint).toContain("strict: true");
+    });
+
     test("leaves the phrasings that finished on the page and says it timed out", async () => {
       searchDecisionsHandlerMock.mockImplementation(
         async ({ body: { query } }: { body: { query: string } }) =>
@@ -4018,6 +4044,28 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       );
     });
+
+    test.each([
+      { status: 400, code: "validation_error", message: "Invalid country" },
+      { status: 500, code: "internal_error", message: "Tool execution failed" },
+    ] as const)(
+      "a $status from the search answers in the typed envelope",
+      async ({ status, code, message }) => {
+        searchDecisionsHandlerMock.mockImplementation(
+          async () =>
+            new HttpStatusResponse(status, { message: "Invalid country" }),
+        );
+
+        const result = await handleMcpToolCall({
+          args: { country: "CZE", queries: ["broken"] },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+
+        expect(result.isError).toBe(true);
+        expect(validationEnvelope(result)).toMatchObject({ code, message });
+      },
+    );
 
     test("any other phrasing failure still fails the call", async () => {
       searchDecisionsHandlerMock.mockImplementation(
@@ -6343,6 +6391,23 @@ describe("OpenAI-compatible MCP tools", () => {
         });
         expect(JSON.stringify(payload)).toContain(message);
         expect(JSON.stringify(payload)).toContain('"hint"');
+      },
+    );
+
+    test.each(["Article 5 and Article 6 GDPR", "citing Article 6(1)(a) GDPR"])(
+      "the refusal of %s sends the caller to queries, not to another EU filter",
+      async (provision) => {
+        const result = await handleMcpToolCall({
+          args: { queries: ["kamera"], country: "CZE", provision },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+        expect(parseToolPayload(result)).toMatchObject({
+          error: {
+            code: "validation_error",
+            hint: "Omit provision and name the EU provisions in queries.",
+          },
+        });
       },
     );
 

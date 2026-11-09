@@ -20,6 +20,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
+import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
@@ -1014,10 +1015,7 @@ const TemplateStudioChatInner = ({
         }
         continue;
       }
-      if (
-        part.state === "approval-responded" &&
-        part.approval?.approved === false
-      ) {
+      if (isDeclinedChatToolCall(part)) {
         discardStreamedPlacements(part.id);
       }
     }

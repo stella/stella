@@ -50,7 +50,10 @@ import { provisionScopeLinksQuery } from "@/api/lib/case-law/provision-filter";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
-import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CorpusIndexError,
+  getCorpusIndexClient,
+} from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -1013,6 +1016,7 @@ test("a short strict page is topped up with new partial matches only, after the 
   // match. Highlights run through the search endpoint, facets through the
   // aggregate one.
   let scans = 0;
+  let coverageRefuses = false;
   const engine = getCorpusIndexClient(manifest.cluster);
   const scoredSpy = spyOn(engine, "scoredSearch").mockImplementation(
     async () => {
@@ -1047,6 +1051,9 @@ test("a short strict page is topped up with new partial matches only, after the 
   const aggregateSpy = spyOn(engine, "aggregate").mockImplementation(
     async ({ aggs, query }) => {
       if ("term_coverage" in aggs) {
+        if (coverageRefuses) {
+          return Result.err(new CorpusIndexError({ message: "over budget" }));
+        }
         const ids = query.includes("promlčení")
           ? [czechId, slovakId, projectedId].filter((id) => query.includes(id))
           : [];
@@ -1126,6 +1133,16 @@ test("a short strict page is topped up with new partial matches only, after the 
     // The total and facets stay the strict set's.
     expect(relaxed.result.total).toEqual(strictOnly.result.total);
     expect(relaxed.result.facets).toEqual(strictOnly.result.facets);
+    expect(relaxed.result.relaxedTopUp).toBeUndefined();
+
+    // A top-up that cannot finish keeps the strict page and says so.
+    coverageRefuses = true;
+    const unread = await search(false);
+    expect(unread.result.hits.map(({ decisionId }) => decisionId)).toEqual([
+      String(czechId),
+    ]);
+    expect(unread.result.relaxedHitCount).toBe(0);
+    expect(unread.result.relaxedTopUp).toBe("skipped");
   } finally {
     scoredSpy.mockRestore();
     searchSpy.mockRestore();

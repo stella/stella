@@ -92,6 +92,7 @@
     "countSummary": "{columns} Spalten × {rows} Zeilen = {answers, plural, one {# Antwort} other {# Antworten}}. Antworten verbrauchen Budget.",
     "modelRefused": "Das Modell hat die Antwort verweigert",
     "nothingFound": "Nichts gefunden",
+    "nothingFoundInCutDocument": "Im gelesenen Teil nichts gefunden",
     "refusedBudget": "Nicht ausgeführt: Antwortbudget nicht verfügbar",
     "rerunAllPage": "Alle erneut ausführen (diese Seite)",
     "rerunColumnPage": "Spalte erneut ausführen (diese Seite)",
@@ -4041,6 +4042,8 @@
       "description": "Wählen Sie ein erstelltes Playbook, Referenzdokumente oder beides.",
       "dismissFinding": "Ergebnis verwerfen",
       "documentChanged": "Dieses Dokument hat sich seit dieser Prüfung geändert.",
+      "documentCutNotice": "<strong>{documentName} wurde nicht vollständig gelesen.</strong> Das Dokument ist für dieses Modell zu lang, daher wurden etwa {percent} des Textes ausgelassen. Eine Position ohne Antwort wird zur Prüfung markiert, weil die Antwort im ausgelassenen Teil stehen kann.",
+      "documentTooLarge": "Dieses Dokument ist zu lang, als dass dieses Modell genug davon lesen könnte. Versuchen Sie ein Modell mit einem größeren Kontextfenster.",
       "export": {
         "counterparty": "Für die Gegenpartei herunterladen",
         "counterpartyFailed": "Das Dokument konnte nicht exportiert werden",

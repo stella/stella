@@ -56,6 +56,7 @@ import type {
 } from "@/api/lib/document-review/review-delta";
 import {
   buildReviewDocumentParts,
+  fitReviewDocuments,
   reviewDocumentsScopeKey,
 } from "@/api/lib/document-review/review-document-messages";
 import type { DocxFolioCitation } from "@/api/lib/document-review/review-extract";
@@ -69,6 +70,7 @@ import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { PositionTermKind } from "@/api/lib/workflow/playbook-positions";
+import { requestBudgetBytesForTask } from "@/api/lib/workflow/request-budget";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
 const REFERENCE_GRADE_TIMEOUT_MS = 120_000;
@@ -745,6 +747,19 @@ export const gradeReferencePositions = async ({
 }: GradeReferencePositionsArgs): Promise<
   Result<Map<string, ReferenceGrading>, WorkflowIntegrationError>
 > => {
+  const fitted = fitReviewDocuments({
+    target,
+    references: [],
+    budgetBytes: requestBudgetBytesForTask(REFERENCE_GRADE_TASK, orgAIConfig, {
+      dataClass: "customer",
+      organizationId,
+      modelTier: admission.modelTier,
+    }),
+  });
+  if (Result.isError(fitted)) {
+    return Result.err(fitted.error);
+  }
+
   const caching = resolveCaching({
     promptCachingEnabled,
     task: REFERENCE_GRADE_TASK,
@@ -771,7 +786,11 @@ export const gradeReferencePositions = async ({
   const request: ModelMessage = {
     role: "user",
     content: [
-      ...buildReviewDocumentParts({ target, references: [], caching }),
+      ...buildReviewDocumentParts({
+        target: fitted.value.target,
+        references: [],
+        caching,
+      }),
       {
         type: "text",
         content: buildPositionsPart({ positions, perspective, targetLanguage }),

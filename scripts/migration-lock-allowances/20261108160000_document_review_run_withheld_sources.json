@@ -1,0 +1,4 @@
+{
+  "add-column": "A jsonb column with a constant default is a catalog change that rewrites no rows, and the lock is bounded to one second. document_review_runs holds one row per review run.",
+  "add-constraint": "The widened error code CHECK is added NOT VALID without scanning existing rows, under a one-second lock timeout; the online phase validates it after the schema lock is released."
+}

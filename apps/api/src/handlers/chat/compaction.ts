@@ -15,6 +15,7 @@ import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-bou
 import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
+import { estimateTextTokens } from "@/api/lib/ai-generation/token-estimate";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -27,7 +28,6 @@ import {
   compactionGenerationRequest,
   DEFAULT_PRESERVE_TOKENS,
   DEFAULT_TRIGGER_TOKENS,
-  estimateTextTokens,
   FILE_PART_ESTIMATED_TOKENS,
   MAX_STRUCTURED_PART_CHARS,
   MAX_TEXT_PART_CHARS,
@@ -351,7 +351,10 @@ export type CompactedHistory<TMessage> = {
 
 const compacted = <TMessage>(
   messages: TMessage[],
-): CompactedHistory<TMessage> => ({ messages, notice: null });
+): CompactedHistory<TMessage> => ({
+  messages,
+  notice: null,
+});
 
 /**
  * The newest history that fits `budgetTokens`, from a user turn boundary:
