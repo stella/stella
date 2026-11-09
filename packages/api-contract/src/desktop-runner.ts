@@ -6,7 +6,10 @@ import * as v from "valibot";
 import { AGENT_HARNESSES } from "./agent-harness";
 import { API_STORABLE_INSTANT_CHECK } from "./api-date";
 import { STELLA_API_VERSION_PREFIX } from "./api-version";
-import { CHAT_LOCAL_RUN_TOOL_LIMITS } from "./chat-local-run-tool";
+import {
+  CHAT_LOCAL_RUN_TOOL_LIMITS,
+  chatLocalRunShownText,
+} from "./chat-local-run-tool";
 import type { DesktopFeatureId } from "./desktop-feature-access";
 import {
   desktopProtocolSchema,
@@ -686,14 +689,17 @@ export const desktopRunnerDesktopMessageSchema = v.variant("type", [
     seq: seqSchema,
     requestId: requestIdSchema,
     kind: v.picklist(DESKTOP_RUNNER_APPROVAL_KINDS),
-    /** `chatLocalRunApprovalMessage`: one bounded line, never a step's text. */
+    /**
+     * What the approval asks, kept as one bounded line however a desktop
+     * wrote it (`chatLocalRunApprovalMessage` already is one), so a longer
+     * summary is stored shown and the run still resumes.
+     */
     summary: v.pipe(
       v.string(),
       v.minLength(1),
-      v.maxLength(CHAT_LOCAL_RUN_TOOL_LIMITS.approval),
-      v.check(
-        (summary) => !/[\n\r\u2028\u2029]/u.test(summary),
-        "An approval summary is one line",
+      v.maxLength(4000),
+      v.transform((summary) =>
+        chatLocalRunShownText(summary, CHAT_LOCAL_RUN_TOOL_LIMITS.approval),
       ),
     ),
   }),

@@ -626,7 +626,7 @@ describe("Codex adapter over a stdio app-server", () => {
     }
     const stored = fold(cloud);
     expect(stored.flatMap(({ parts }) => parts).length).toBeGreaterThan(4);
-    expect<unknown>(fold(local)).toEqual(withoutCommandOutput(stored));
+    expect(withoutCommandOutput(stored)).toEqual(fold(local));
     expect(JSON.stringify(local)).not.toContain("aggregated_output");
   });
 

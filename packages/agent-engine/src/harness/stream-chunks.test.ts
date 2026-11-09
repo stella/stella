@@ -253,8 +253,8 @@ describe("local harness chunks", () => {
     const cloudStored = storedParts(fold(await cloudChunks(cloud)));
     const localStream = await localChunks(local);
     expect(cloudStored.flatMap(({ parts }) => parts).length).toBeGreaterThan(3);
-    expect<unknown>(storedParts(fold(localStream))).toEqual(
-      withoutCommandOutput(cloudStored),
+    expect(withoutCommandOutput(cloudStored)).toEqual(
+      storedParts(fold(localStream)),
     );
     expect(JSON.stringify(localStream)).not.toContain("aggregated_output");
 

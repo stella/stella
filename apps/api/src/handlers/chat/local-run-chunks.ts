@@ -680,12 +680,18 @@ const asChatChunk = (
         endCarried: false,
       });
     }
-    // A start's metadata becomes the call's: only the model a harness names
-    // and the owner the API names are carried.
+    // A start is rebuilt from the fields it names: its metadata becomes the
+    // call's, so only the model a harness names and the owner the API names
+    // are carried, and nothing else a desktop adds (an input, an output).
     const model = reportedModel(chunk.metadata);
     return {
-      ...chunk,
+      type: EventType.TOOL_CALL_START,
       toolCallId: callId(chunk.toolCallId),
+      toolCallName: chunk.toolCallName,
+      ...(chunk.parentMessageId === undefined
+        ? {}
+        : { parentMessageId: chunk.parentMessageId }),
+      ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
       metadata: {
         ...(model.model === undefined ? {} : { tanstack: model }),
         [CHAT_TOOL_EXECUTOR_METADATA_KEY]: CHAT_TOOL_EXECUTOR.harness,

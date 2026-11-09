@@ -4730,6 +4730,8 @@ describe("chat turns on a computer", () => {
         return [
           {
             ...chunk,
+            input: { content: secret },
+            output: secret,
             metadata: { output: secret, tanstack: { ...tanstack, secret } },
           },
         ];
@@ -4947,7 +4949,7 @@ describe("chat turns on a computer", () => {
       pause?.type !== EventType.RUN_FINISHED ||
       pause.outcome?.type !== "interrupt"
     ) {
-      return panic("the served turn did not pause");
+      panic("the served turn did not pause");
     }
     // As `streamChat` stores an awaiting turn: with its interrupts.
     const stored = persistTurn(
