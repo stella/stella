@@ -26,9 +26,9 @@ import { judgeMcpToolLatency } from "@/api/mcp/tool-latency-budgets";
  *
  * This is a fixture and not production: it reproduces the split counts of an
  * index whose small splits were never merged, on a single CI runner with
- * local-disk storage and a few thousand short documents. It shows what the
- * split layout and the query shape cost on a first hit, and how that moves
- * between revisions. It does not predict production latency, where the
+ * local-disk storage and a few thousand short documents. It shows how long
+ * a first hit takes under that split layout and query shape, and how that
+ * moves between revisions. It does not predict production latency, where the
  * document count, the object-store reads and the concurrent load differ.
  *
  * Report-only unless STELLA_COLD_SEARCH_MODE=enforce.
