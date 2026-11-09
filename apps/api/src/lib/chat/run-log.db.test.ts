@@ -1095,11 +1095,13 @@ describe("chat run log database contract", () => {
     );
     const delivered = (await response.text())
       .split("\n")
-      .flatMap((line) =>
-        line.startsWith("data: ")
-          ? [JSON.parse(line.slice("data: ".length)) as StreamChunk]
-          : [],
-      );
+      .flatMap((line): unknown[] => {
+        if (!line.startsWith("data: ")) {
+          return [];
+        }
+        const event: unknown = JSON.parse(line.slice("data: ".length));
+        return [event];
+      });
     const refusal = "Chat run log chunk exceeds its size limit";
     // The live reader ends on the refusal itself, not on a follow-on failure
     // of the terminal append it would otherwise have blocked.
