@@ -1363,17 +1363,9 @@ test("persisted streaming answers poll to completion and release mutations", asy
 });
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are test server behaviors, not API domain values.
-for (const { settlement, name } of [
-  {
-    settlement: "never",
-    name: "persisted claims stop polling at timeout when the server is never",
-  },
-  {
-    settlement: "hanging",
-    name: "persisted claims stop polling at timeout when the server is hanging",
-  },
-] as const) {
-  test(name, async () => {
+test.each(["never", "hanging"] as const)(
+  "persisted claims stop polling at timeout when the server is %s",
+  async (settlement) => {
     const server = pollingServer(settlement);
     const { client, wrapper } = setup();
     deliverQueryNotificationsInline();
@@ -1434,8 +1426,8 @@ for (const { settlement, name } of [
       await hook.result.current.remove("answer-1");
     });
     expect(server.deletions()).toBe(1);
-  });
-}
+  },
+);
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are fake recovery HTTP outcomes, not API domain values.
 test.each([
