@@ -110,6 +110,48 @@ const markerOf = ($: cheerio.CheerioAPI, unit: Element): string => {
   return `${text}${name?.attribs["xSffx"] ?? ""}`;
 };
 
+/** Unit types that divide the decision into its parts and chapters. */
+const SECTION_UNIT_TYPES = new Set(["bran", "chpt", "part"]);
+
+/** A paragraph unit's name when it is a plain running number (`12`). */
+const PARAGRAPH_NUMBER_NAME_RE = /^\d{1,4}$/u;
+
+/**
+ * The authority's own number of a paragraph of its reasons. The portal sets
+ * every numbered paragraph as a `pass` unit naming its number (`<xName
+ * xSffx=".">12</xName>`). Placed straight in a branch or chapter of the
+ * reasons, it is the decision's running paragraph numbering, which the
+ * authority cites; nested in another unit (a list a sentence announces, a
+ * quoted provision) it numbers that list only, and stays a printed marker.
+ * The operative part's points are the ruling, not paragraphs of reasons.
+ */
+const paragraphNumberOf = ({
+  $,
+  unit,
+  parentType,
+  role,
+}: {
+  $: cheerio.CheerioAPI;
+  unit: Element;
+  parentType: string | undefined;
+  role: ParagraphRole | undefined;
+}): number | undefined => {
+  if (
+    unit.attribs["xType"] !== "pass" ||
+    parentType === undefined ||
+    !SECTION_UNIT_TYPES.has(parentType) ||
+    role !== "argumentation"
+  ) {
+    return undefined;
+  }
+  const name = ownText($, childElements(unit, "xName").at(0));
+  if (!PARAGRAPH_NUMBER_NAME_RE.test(name)) {
+    return undefined;
+  }
+  const number = Number(name);
+  return number >= 1 ? number : undefined;
+};
+
 /** Trim the outer edges of a paragraph's inline run, and nothing inside. */
 const trimInlines = (inlines: Inline[]): Inline[] => {
   const first = inlines.at(0);
@@ -230,6 +272,8 @@ const inlinesOf = (state: ParseState, node: AnyNode): Inline[] => {
 type ParagraphContext = {
   role: ParagraphRole | undefined;
   listDepth: number;
+  /** The type of the unit the walk is inside, read by a unit nested in it. */
+  parentType?: string | undefined;
 };
 
 const pushParagraph = (
@@ -340,14 +384,41 @@ const walkUnit = (
 ): void => {
   const { $ } = state;
   const type = unit.attribs["xType"] ?? "";
-  const enumerated = ENUMERATED_UNIT_TYPES.has(type);
-  const marker = markerOf($, unit);
   const nameNode = childElements(unit, "xName").at(0);
   const titleNode = childElements(unit, "xTitle").at(0);
   const title = ownText($, titleNode);
+  const firstContent = unit.children.find(
+    (child): child is Element =>
+      isTag(child) && child !== nameNode && child !== titleNode,
+  );
+  // A numbered paragraph keeps its number as structure, on the text that
+  // opens it; a unit that opens on anything else keeps its printed marker.
+  let pendingNumber =
+    title === "" &&
+    firstContent?.tagName === "xText" &&
+    ownText($, firstContent) !== ""
+      ? paragraphNumberOf({
+          $,
+          unit,
+          parentType: context.parentType,
+          role: context.role,
+        })
+      : undefined;
+  const enumerated =
+    pendingNumber === undefined && ENUMERATED_UNIT_TYPES.has(type);
+  const marker = pendingNumber === undefined ? markerOf($, unit) : "";
   const unitContext: ParagraphContext = {
     role: type === "cite" ? "quote" : context.role,
     listDepth: enumerated ? context.listDepth + 1 : context.listDepth,
+    parentType: type,
+  };
+  const numbered = (): Partial<ParagraphBlock> => {
+    if (pendingNumber === undefined) {
+      return {};
+    }
+    const number = pendingNumber;
+    pendingNumber = undefined;
+    return { number };
   };
 
   if (title !== "") {
@@ -399,7 +470,7 @@ const walkUnit = (
         pendingMarker = "";
         pushParagraph(state, opened, unitContext);
       } else {
-        pushParagraph(state, inlines, unitContext);
+        pushParagraph(state, inlines, unitContext, numbered());
       }
       continue;
     }

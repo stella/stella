@@ -1,3 +1,7 @@
+// parser-output-unchanged: [pl-kio] only adds the common-court reader with its paragraph numbering, which the procurement chamber's reader does not call.
+// parser-output-unchanged: [pl-kis] only adds the common-court reader with its paragraph numbering, which the tax-ruling reader does not call.
+// parser-output-unchanged: [pl-sn] only adds the common-court reader with its paragraph numbering, which the Supreme Court's reader does not call.
+// parser-output-unchanged: [pl-uokik] only adds the common-court reader with its paragraph numbering, which the competition authority's reader does not call.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: footnoteIds is supplied only by the PL-SN and UOKIK PDF readers; other callers retain sanitizeUrl and their existing link output.
 // parser-output-unchanged: [cz-nss] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
@@ -94,6 +98,7 @@ import {
   renderHtmlWhiteSpace,
 } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { readInlineLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
@@ -2096,5 +2101,35 @@ export const parsePlDecisionContent = (
   return {
     documentAst,
     fulltext,
+  };
+};
+
+/**
+ * A common court's decision, as SAOS and the courts' own portal publish it.
+ * Neither marks the court's paragraph numbers as structure: the portal's
+ * numbered units are its ruling's points and the lists inside a paragraph,
+ * and the court prints the numbers of its reasons as text (`1. Pozwana
+ * podniosła …`). So the printed numbers move into the blocks through the
+ * one court-numbering reading, which takes them only where the reasons read
+ * as one numbering.
+ */
+export const parsePlCommonCourtDecision = (
+  input: Omit<ParsePlDecisionInput, "markup">,
+  parser: "pl-courts" | "pl-ncourt",
+): ParsePlDecisionOutput => {
+  const parsed = parsePlDecisionContent({
+    ...input,
+    markup: PL_DECISION_MARKUP.COMMON_COURT,
+  });
+  const blocks = courtParagraphNumbers(parsed.documentAst.blocks, {
+    parser,
+    caseNumber: input.caseNumber,
+    url: input.sourceUrl,
+  });
+  return {
+    documentAst: { ...parsed.documentAst, blocks },
+    fulltext: blocks
+      .flatMap((block) => (block.plainText ? [block.plainText] : []))
+      .join("\n\n"),
   };
 };

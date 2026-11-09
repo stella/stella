@@ -539,3 +539,27 @@ describe("a Polish decision's head matter set as headings", () => {
     ]);
   });
 });
+
+describe("a Polish common court's paragraph numbers", () => {
+  test("IV GC 42/26: the numbers printed in the reasons move into the paragraphs", async () => {
+    const numbered = paragraphs(await saosBlocks("546903")).filter(
+      (block) => block.number !== undefined,
+    );
+
+    expect(numbered.map((block) => block.number)).toEqual(
+      Array.from({ length: 19 }, (_, index) => index + 1),
+    );
+    expect(numbered[0]?.plainText).toStartWith("(...) sp. z o.o. pozwała");
+    expect(numbered.some((block) => /^\d+\. /u.test(block.plainText))).toBe(
+      false,
+    );
+  });
+
+  test("I C 155/19: the ruling's numbered points number no paragraph", async () => {
+    const blocks = await ncourtBlocks("pl-ncourt-i-c-155-19.xml.gz");
+
+    expect(
+      paragraphs(blocks).filter((block) => block.number !== undefined),
+    ).toEqual([]);
+  });
+});
