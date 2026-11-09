@@ -55,6 +55,7 @@ const suite = (
     const organizationId = mintAuthProviderId<"organization">();
     const userId = mintAuthProviderId<"user">();
     await database.insert(organization).values({
+      createdAt: now,
       id: organizationId,
       name: "Limit reminder fixture",
       slug: organizationId,
@@ -69,6 +70,7 @@ const suite = (
       name: "Limit reminder fixture",
     });
     await database.insert(member).values({
+      createdAt: now,
       id: mintAuthProviderIdValue(),
       organizationId,
       role: "member",
@@ -210,7 +212,8 @@ const suite = (
       const found = await read(limited.threadId);
       expect(found.isOk() && found.value).toEqual({
         resetsAt: later,
-        turnId: limited.turnIds.at(1),
+        turnId:
+          limited.turnIds.at(1) ?? panic("The limited chat has two turns"),
       });
       for (const { threadId } of [continued, otherFailure, alreadyReset]) {
         const refused = await read(threadId);

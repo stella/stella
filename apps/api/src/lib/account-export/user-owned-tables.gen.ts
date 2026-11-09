@@ -21,6 +21,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "case_law_matter_links",
   "case_law_research_columns",
   "cell_metadata",
+  "chat_limit_reminders",
   "chat_message_revisions",
   "chat_messages",
   "chat_secrets",
