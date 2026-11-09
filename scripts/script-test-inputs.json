@@ -16,6 +16,7 @@
     "scripts/capability-catalog-readers.test.ts": ["**"],
     "scripts/cargo-deny-fetch.test.ts": ["**"],
     "scripts/cargo-deny-install.test.ts": ["**"],
+    "scripts/cargo-update.test.ts": ["**"],
     "scripts/check-actionlint-baseline.test.ts": ["**"],
     "scripts/check-bridge-version.test.ts": ["**"],
     "scripts/check-ci-job-classification.test.ts": ["**"],
@@ -112,7 +113,7 @@
     "scripts/dev-seeded-e2e-guard.test.ts": ["**"],
     "scripts/diff-scoped-steps.test.ts": ["**"],
     "scripts/disarm-auto-merge.test.ts": ["**"],
-    "scripts/dom-test-isolation.test.ts": ["apps/**", "packages/**"],
+    "scripts/dom-test-isolation.test.ts": ["**"],
     "scripts/download-run-artifact.test.ts": ["**"],
     "scripts/draft-release-reads.test.ts": ["**"],
     "scripts/drizzle-config.test.ts": ["**"],
@@ -138,7 +139,7 @@
     "scripts/generate-mobile-ui-theme.test.ts": ["**"],
     "scripts/generate-npm-release-jobs.test.ts": ["**"],
     "scripts/generate-playwright-devices.test.ts": ["**"],
-    "scripts/generate-tailwind-classes.test.ts": ["turbo.json"],
+    "scripts/generate-tailwind-classes.test.ts": ["**"],
     "scripts/generated-conflicts-workflows.test.ts": ["**"],
     "scripts/generated-conflicts.test.ts": ["**"],
     "scripts/generated-files-format.test.ts": ["**"],
@@ -146,7 +147,7 @@
     "scripts/generated-files.test.ts": ["**"],
     "scripts/generated-markdown-merge.test.ts": ["**"],
     "scripts/generated-web-merge.test.ts": ["**"],
-    "scripts/gh-dispatch-workflow.test.ts": [".github/**", "scripts/**"],
+    "scripts/gh-dispatch-workflow.test.ts": ["**"],
     "scripts/gh-retry-processes.test.ts": ["**"],
     "scripts/github-expression.test.ts": ["**"],
     "scripts/gitleaks.test.ts": ["**"],
@@ -169,6 +170,7 @@
     "scripts/merge-web-assets.test.ts": ["**"],
     "scripts/migration-catalog.test.ts": ["**"],
     "scripts/migration-lock-census.test.ts": ["**"],
+    "scripts/migration-rehearsal-startup-refusal.test.ts": ["**"],
     "scripts/migration-rehearsal-writer-gap.test.ts": ["**"],
     "scripts/migration-restamp.test.ts": ["**"],
     "scripts/model-catalog-check.test.ts": ["**"],
@@ -248,6 +250,7 @@
     "scripts/rust-toolchain-pins.test.ts": ["**"],
     "scripts/safe-chain-install.test.ts": ["**"],
     "scripts/schema-import-changes.test.ts": ["**"],
+    "scripts/seed-test-determinism-baselines.test.ts": ["**"],
     "scripts/selfhost-contract.test.ts": ["**"],
     "scripts/sha256-migration-ledger.test.ts": ["**"],
     "scripts/sha256-storage-parity.test.ts": ["**"],
@@ -289,9 +292,6 @@
     "scripts/workflow-steps.test.ts": ["**"]
   },
   "noTrackedInputs": {
-    "scripts/cargo-update.test.ts": "Uses only fake crates.io responses, in-memory lockfiles and its static import closure.",
-    "scripts/migration-rehearsal-startup-refusal.test.ts": "Uses only inline log and ledger fixtures and its static import closure.",
-    "scripts/query-perf-baseline.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/seed-test-determinism-baselines.test.ts": "Uses only inline census fixtures and its static import closure."
+    "scripts/query-perf-baseline.test.ts": "Uses only temporary fixtures and its static import closure."
   }
 }
