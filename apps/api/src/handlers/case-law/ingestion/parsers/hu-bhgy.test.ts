@@ -1392,6 +1392,89 @@ describe("a decision the publisher served", () => {
       "Záradék:",
     ]);
   });
+
+  // The writer set "§" in a Japanese (`\fcharset128`) font as the Shift-JIS
+  // pair `\'81\'98`, and typed some "ő" as `\u245` ("õ").
+  test("M.6030/2010/24: every character reads as the letter it is", async () => {
+    const bytes = await Bun.file(
+      new URL("hu-bhgy-m-6030-2010-24.rtf", FIXTURES_DIR),
+    ).bytes();
+    const parsed = parseHuBhgyDecision({
+      document: readRtf(bytes),
+      listedCaseNumber: "M.6030/2010/24",
+      court: "Fővárosi Munkaügyi Bíróság",
+      sourceUrl: "https://eakta.birosag.hu/anonimizalt-hatarozatok",
+      documentUrl: "https://eakta.birosag.hu/hatarozat-letoltes/",
+      documentId: "AHK4T__14414829",
+      statutes: [],
+    });
+
+    expect(parsed.readerWarnings).toEqual([]);
+    expect(parsed.fulltext.match(/§/gu)).toHaveLength(18);
+    expect(parsed.fulltext).toContain("Mt.134. § (2) bekezdése");
+    expect(parsed.fulltext).toContain("Pp. 87. § (2) bekezdése");
+    expect(parsed.fulltext).toContain("Jst. 11/A. §-a alapján");
+    for (const block of parsed.documentAst.blocks) {
+      expect(block.plainText).not.toMatch(/[\u0080-\u009f\ufffd]/u);
+      expect(block.plainText).not.toMatch(/[õûÕÛ]/u);
+    }
+    expect(parsed.fulltext).toContain("illetőleg");
+    expect(parsed.fulltext).toContain("megfelelően");
+    expect(parsed.fulltext).toContain("szerződés");
+  });
+});
+
+describe("the Latin-1 stand-ins for ő and ű", () => {
+  test("a Word package's õ and û read as the Hungarian letters", () => {
+    const parsed = parse([
+      { text: "Indokolás" },
+      { text: "A felperes illetõleg az alperes ŐSZI szerzõdése BÛNÖS" },
+    ]);
+    expect(parsed.fulltext).toContain(
+      "A felperes illetőleg az alperes ŐSZI szerződése BŰNÖS",
+    );
+  });
+
+  test("no stand-in survives, and nothing else changes", () => {
+    // Each word as the court wrote it, and as a Latin-1 tool wrote it.
+    const WORDS = [
+      ["illetőleg", "illetõleg"],
+      ["előtt", "elõtt"],
+      ["ŐSZI", "ÕSZI"],
+      ["bűnös", "bûnös"],
+      ["BŰNÖS", "BÛNÖS"],
+      ["szerződés", "szerzõdés"],
+      ["törvény", "törvény"],
+      ["Mt.", "Mt."],
+      ["134.", "134."],
+      ["§", "§"],
+      ["(2)", "(2)"],
+    ] as const;
+    assertProperty(
+      "no stand-in survives, and nothing else changes",
+      fc.property(
+        fc.array(
+          fc.record({
+            word: fc.constantFrom(...WORDS),
+            standIn: fc.boolean(),
+          }),
+          { minLength: 1, maxLength: 12 },
+        ),
+        (picks) => {
+          const written = picks.map(
+            ({ word: [letter, standIn], standIn: s }) => (s ? standIn : letter),
+          );
+          const meant = picks.map(({ word: [letter] }) => letter);
+          const [, body] = parse([
+            { text: "Indokolás" },
+            { text: `A bíróság ${written.join(" ")}` },
+          ]).documentAst.blocks;
+          expect(body?.plainText).toBe(`A bíróság ${meant.join(" ")}`);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
 });
 
 test("footnotes stay with their referenced paragraphs across Hungarian sections", () => {
