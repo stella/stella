@@ -16,9 +16,10 @@ import committedWeights from "../../mcp-connect-tool-weights.json" with { type: 
 // a country's courts through list_case_law_courts (844 characters). A
 // citation read offers a compact detail and a passage filter (499 characters).
 // The two public-law searches say they can answer "still running" and take its
-// continuation_token (492 characters).
+// continuation_token (492 characters). search_case_law says how it reports a
+// phrasing that ran out of time (67).
 // These measured limits include that shape; lower them as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 137_040;
+const TOTAL_CONNECT_CHAR_BUDGET = 137_107;
 const PER_TOOL_CONNECT_CHAR_CAP = 8179;
 
 describe("MCP connect-time tool budget", () => {
