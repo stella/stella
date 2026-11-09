@@ -181,7 +181,7 @@ test.describe("workspace file drop", () => {
     const folder = await createFolder(request, testWorkspace.id, folderName);
 
     await openFilesView(page, request, testWorkspace);
-    const folderLabel = page.getByText(folderName, { exact: true });
+    const folderLabel = page.getByTitle(folderName, { exact: true });
     await expect(folderLabel).toBeVisible({
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
@@ -227,7 +227,7 @@ test.describe("workspace file drop", () => {
     const folder = await createFolder(request, testWorkspace.id, folderName);
 
     await openFilesView(page, request, testWorkspace);
-    const folderLabel = page.getByText(folderName, { exact: true });
+    const folderLabel = page.getByTitle(folderName, { exact: true });
     await expect(folderLabel).toBeVisible({
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
