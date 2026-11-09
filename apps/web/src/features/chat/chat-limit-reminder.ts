@@ -14,10 +14,9 @@ type ChatLimitReminderKey = {
   userId: string;
 };
 
-const limitReminderEndpoint = (threadRef: ChatThreadRef) =>
-  api.chat.threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })[
-    "limit-reminder"
-  ];
+const threadParams = (threadRef: ChatThreadRef) => ({
+  threadId: toSafeId<"chatThread">(threadRef.threadId),
+});
 
 const scopeQuery = (threadRef: ChatThreadRef) =>
   threadRef.scope === "workspace"
@@ -41,7 +40,7 @@ export const chatLimitReminderOptions = ({
     ),
     queryFn: async ({ signal }) =>
       unwrapApiResponse(
-        await limitReminderEndpoint(threadRef).get({
+        await api.chat.threads(threadParams(threadRef))["limit-reminder"].get({
           query: scopeQuery(threadRef),
           fetch: { signal },
         }),
@@ -49,16 +48,20 @@ export const chatLimitReminderOptions = ({
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
-export const setChatLimitReminder = async (threadRef: ChatThreadRef) =>
-  unwrapApiResponse(
-    await limitReminderEndpoint(threadRef).put(undefined, {
+export const setChatLimitReminder = async (threadRef: ChatThreadRef) => {
+  const thread = api.chat.threads(threadParams(threadRef));
+  return unwrapApiResponse(
+    await thread["limit-reminder"].put(undefined, {
       query: scopeQuery(threadRef),
     }),
   );
+};
 
-export const cancelChatLimitReminder = async (threadRef: ChatThreadRef) =>
-  unwrapApiResponse(
-    await limitReminderEndpoint(threadRef).delete(undefined, {
+export const cancelChatLimitReminder = async (threadRef: ChatThreadRef) => {
+  const thread = api.chat.threads(threadParams(threadRef));
+  return unwrapApiResponse(
+    await thread["limit-reminder"].delete(undefined, {
       query: scopeQuery(threadRef),
     }),
   );
+};

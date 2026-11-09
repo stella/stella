@@ -1,3 +1,6 @@
 {
-  "add-constraint": "The widened notification kind and entity-type CHECKs are added NOT VALID without scanning existing notifications, and the new table's foreign keys are added while it is empty, under 1s lock_timeout and 5s statement_timeout; the online phase validates the CHECKs after the schema lock is released."
+  "add-constraint": "The widened notification kind and entity-type CHECKs are added NOT VALID without scanning existing notifications, under 1s lock_timeout and 5s statement_timeout; the online phase validates them after the schema lock is released.",
+  "add-foreign-key": "Foreign keys are added to the new empty reminder table without an existing-row scan; lock acquisition on the referenced chat, organization and user tables is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  "row-level-security": "ENABLE and FORCE RLS change only catalog flags on the new empty reminder table before application traffic can use it, under 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The reminder table's policies are installed on the new empty table without reading application rows, under 1s lock_timeout and 5s statement_timeout."
 }

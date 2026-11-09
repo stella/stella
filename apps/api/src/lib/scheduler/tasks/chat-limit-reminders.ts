@@ -1,6 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, inArray, lte } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { desc, inArray, lte, sql } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
@@ -22,8 +21,6 @@ export const SEND_CHAT_LIMIT_REMINDERS_TASK =
 
 /** Reminders handled per run; a larger backlog continues on the next run. */
 const REMINDER_BATCH_SIZE = 200;
-
-const laterTurns = alias(chatTurns, "later_chat_turns");
 
 type DueReminder = {
   threadId: SafeId<"chatThread">;
@@ -52,25 +49,28 @@ const fileDueReminders = async (
       due.map(({ threadId }) => threadId),
     ),
   );
-  const continued = await tx
-    .selectDistinct({ threadId: chatTurns.threadId })
+  // The newest turn of each chat, ordered as readLimitedLatestTurn orders it;
+  // DISTINCT ON keeps exactly one row per chat, so the limit is exact.
+  const latest = await tx
+    .selectDistinctOn([chatTurns.threadId], {
+      threadId: chatTurns.threadId,
+      turnId: chatTurns.id,
+    })
     .from(chatTurns)
-    .innerJoin(
-      laterTurns,
-      and(
-        eq(laterTurns.threadId, chatTurns.threadId),
-        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both operands are columns compared inside the database at full precision.
-        gt(laterTurns.createdAt, chatTurns.createdAt),
-      ),
-    )
     .where(
       inArray(
-        chatTurns.id,
-        due.map(({ turnId }) => turnId),
+        chatTurns.threadId,
+        due.map(({ threadId }) => threadId),
       ),
-    );
-  const continuedThreads = new Set(continued.map(({ threadId }) => threadId));
-  const waiting = due.filter(({ threadId }) => !continuedThreads.has(threadId));
+    )
+    .orderBy(chatTurns.threadId, desc(chatTurns.createdAt), desc(chatTurns.id))
+    .limit(due.length);
+  const latestTurnOf = new Map(
+    latest.map(({ threadId, turnId }) => [threadId, turnId]),
+  );
+  const waiting = due.filter(
+    ({ threadId, turnId }) => latestTurnOf.get(threadId) === turnId,
+  );
   if (waiting.length === 0) {
     return { due: due.length, notified: 0, pings: [] };
   }
@@ -125,7 +125,6 @@ export const takeDueChatLimitReminders = async ({
   await withSkipLockedBatch({
     database,
     limit: REMINDER_BATCH_SIZE,
-    // SAFETY: withSkipLockedBatch bounds the select with REMINDER_BATCH_SIZE.
     select: (tx) =>
       tx
         .select({
@@ -135,10 +134,12 @@ export const takeDueChatLimitReminders = async ({
           userId: chatLimitReminders.userId,
         })
         .from(chatLimitReminders)
-        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- `now` is the run's claim instant, a cutoff: a reminder at the boundary is taken by this run or the next.
-        .where(lte(chatLimitReminders.remindAt, now))
-        // oxlint-disable-next-line require-query-limit/require-query-limit -- withSkipLockedBatch applies the limit; see SAFETY above
-        .orderBy(asc(chatLimitReminders.remindAt)),
+        .where(
+          lte(
+            chatLimitReminders.remindAt,
+            sql`${now.toISOString()}::timestamptz`,
+          ),
+        ),
     run: fileDueReminders,
   });
 
