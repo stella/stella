@@ -10,9 +10,14 @@
 // the dependency install. This run takes the remainder, so the set of tests CI
 // executes is derived from the directory rather than kept by hand.
 //
-//   bun scripts/run-unlisted-script-tests.ts
+// A pull request runs only the tests its diff can affect. Tracing a test's
+// file accesses against its declared inputs costs minutes, so a pull request
+// traces only the tests whose own file or declaration changed (all selected
+// tests when the runner itself changed); the nightly run traces every test.
+//
+//   bun scripts/run-unlisted-script-tests.ts [--depth] [--verify-declarations]
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   mkdtempSync,
   readFileSync,
@@ -23,6 +28,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -38,6 +44,8 @@ type ScriptTestArguments =
       readonly type: "valid";
       readonly timeout: number | undefined;
       readonly depth: boolean;
+      /** Run and trace every test, whatever the diff. */
+      readonly verifyDeclarations: boolean;
     }
   | { readonly type: "invalid"; readonly message: string };
 
@@ -46,6 +54,7 @@ export const parseScriptTestArguments = (
 ): ScriptTestArguments => {
   let timeout: number | undefined;
   let depth = false;
+  let verifyDeclarations = false;
   const argumentsIterator = args.values();
   for (const argument of argumentsIterator) {
     if (argument === "--depth") {
@@ -53,6 +62,16 @@ export const parseScriptTestArguments = (
         return { type: "invalid", message: "--depth may be supplied once" };
       }
       depth = true;
+      continue;
+    }
+    if (argument === "--verify-declarations") {
+      if (verifyDeclarations) {
+        return {
+          type: "invalid",
+          message: "--verify-declarations may be supplied once",
+        };
+      }
+      verifyDeclarations = true;
       continue;
     }
     if (argument !== "--timeout") {
@@ -77,7 +96,7 @@ export const parseScriptTestArguments = (
     }
     timeout = parsed;
   }
-  return { type: "valid", timeout, depth };
+  return { type: "valid", timeout, depth, verifyDeclarations };
 };
 
 type UnlistedTestCommandOptions = {
@@ -213,6 +232,7 @@ const DEPTH_TESTS = Object.keys(
 );
 const RUNNER_PATH = "scripts/run-unlisted-script-tests.ts";
 export const SCAN_PRELOAD_PATH = "scripts/script-test-scan-preload.ts";
+export const SCRIPT_TEST_INPUTS_PATH = "scripts/script-test-inputs.json";
 
 /**
  * Files a traced test may open without declaring them: its own import
@@ -236,7 +256,12 @@ type ScriptTestSelection = {
   readonly files: string[];
   readonly skipped: number;
   readonly reason?: string;
+  /** The runner or its scan preload changed: its verification changed. */
+  readonly verifierChanged?: boolean;
 };
+
+/** Tests whose declaration entry changed, or "all" when unknown. */
+type DeclarationChanges = ReadonlySet<string> | "all";
 
 type SelectScriptTestsOptions = {
   readonly tests: readonly string[];
@@ -246,6 +271,97 @@ type SelectScriptTestsOptions = {
   readonly exemptions?: Readonly<Record<string, string>>;
   /** Tracked files; a closure file outside it is generated output. */
   readonly tracked?: ReadonlySet<string>;
+  /**
+   * Tests whose entry in the declarations file changed. A declaration edit
+   * selects only its own test; without this, it selects every test.
+   */
+  readonly declarationChanges?: DeclarationChanges;
+};
+
+const scriptTestDeclarationsSchema = v.object({
+  inputs: v.optional(v.record(v.string(), v.array(v.string()))),
+  noTrackedInputs: v.optional(v.record(v.string(), v.string())),
+});
+
+type ScriptTestDeclarations = {
+  readonly inputs?: Readonly<Record<string, readonly string[]>>;
+  readonly noTrackedInputs?: Readonly<Record<string, string>>;
+};
+
+/**
+ * Tests whose input declaration or exemption differs between two versions of
+ * the declarations file. An unreadable base version changes every test.
+ */
+export const changedDeclarations = (
+  base: ScriptTestDeclarations | undefined,
+  head: ScriptTestDeclarations,
+): DeclarationChanges => {
+  if (base === undefined) {
+    return "all";
+  }
+  const entry = (declarations: ScriptTestDeclarations, test: string) =>
+    JSON.stringify([
+      declarations.inputs?.[test] ?? null,
+      declarations.noTrackedInputs?.[test] ?? null,
+    ]);
+  const tests = new Set(
+    [base, head].flatMap((declarations) => [
+      ...Object.keys(declarations.inputs ?? {}),
+      ...Object.keys(declarations.noTrackedInputs ?? {}),
+    ]),
+  );
+  return new Set(
+    [...tests].filter((test) => entry(base, test) !== entry(head, test)),
+  );
+};
+
+/** The declarations file at `revision`, or undefined when unreadable. */
+const declarationsAt = (
+  revision: string,
+): ScriptTestDeclarations | undefined => {
+  const shown = Bun.spawnSync(
+    ["git", "show", `${revision}:${SCRIPT_TEST_INPUTS_PATH}`],
+    { cwd: REPO_ROOT, stdout: "pipe", stderr: "ignore" },
+  );
+  if (shown.exitCode !== 0) {
+    return undefined;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(shown.stdout.toString()));
+  if (parsed.isErr()) {
+    return undefined;
+  }
+  const declarations = v.safeParse(scriptTestDeclarationsSchema, parsed.value);
+  return declarations.success ? declarations.output : undefined;
+};
+
+/**
+ * The selected tests whose declarations this run verifies by tracing: all of
+ * them on request or when the verifier changed, otherwise only those whose
+ * own file or declaration changed. Every other test's declarations are
+ * verified by the nightly run.
+ */
+export const testsToTrace = ({
+  selection,
+  changed,
+  declarationChanges,
+  verifyAll,
+}: {
+  readonly selection: ScriptTestSelection;
+  readonly changed: readonly string[];
+  readonly declarationChanges: DeclarationChanges;
+  readonly verifyAll: boolean;
+}): string[] => {
+  if (
+    verifyAll ||
+    selection.verifierChanged === true ||
+    declarationChanges === "all"
+  ) {
+    return [...selection.files];
+  }
+  const changedSet = new Set(changed);
+  return selection.files.filter(
+    (test) => changedSet.has(test) || declarationChanges.has(test),
+  );
 };
 
 // A submodule's gitlink is a commit pointer, not a file a test reads; the
@@ -282,6 +398,7 @@ export const selectAffectedScriptTests = ({
   inputs = scriptTestInputs.inputs,
   exemptions = scriptTestInputs.noTrackedInputs,
   tracked = root === REPO_ROOT ? trackedFiles() : undefined,
+  declarationChanges = "all",
 }: SelectScriptTestsOptions): ScriptTestSelection => {
   const realRoot = realpathSync(root);
   const graph = buildImportGraph(realRoot, [
@@ -295,10 +412,15 @@ export const selectAffectedScriptTests = ({
     ...graph.closure(RUNNER_PATH),
     ...graph.closure(SCAN_PRELOAD_PATH),
   ]);
+  // The declarations file is in the runner's closure, but an edit to one
+  // test's entry affects only that test when the changed entries are known.
+  const declarationsKnown =
+    declarationChanges !== "all" || !changed.includes(SCRIPT_TEST_INPUTS_PATH);
   if (
     changed.some(
       (file) =>
-        runnerClosure.has(file) ||
+        (runnerClosure.has(file) &&
+          (file !== SCRIPT_TEST_INPUTS_PATH || !declarationsKnown)) ||
         Object.values(SCRIPT_TEST_ALL_RULES).some((rule) => rule.test(file)),
     )
   ) {
@@ -306,6 +428,12 @@ export const selectAffectedScriptTests = ({
       files: [...tests],
       skipped: 0,
       reason: "shared test configuration or runner changed",
+      verifierChanged: changed.some(
+        (file) =>
+          file === RUNNER_PATH ||
+          file === SCAN_PRELOAD_PATH ||
+          (file === SCRIPT_TEST_INPUTS_PATH && !declarationsKnown),
+      ),
     };
   }
   const undeclared = tests.filter((test) => {
@@ -347,7 +475,10 @@ export const selectAffectedScriptTests = ({
   }
   const changedSet = new Set(changed);
   const files = tests.filter((test) => {
-    if (changedSet.has(test)) {
+    if (
+      changedSet.has(test) ||
+      (declarationChanges !== "all" && declarationChanges.has(test))
+    ) {
       return true;
     }
     if ([...graph.closure(test)].some((file) => changedSet.has(file))) {
@@ -1076,12 +1207,16 @@ export const uncoveredScans = ({
   );
 };
 
-type RunOptions = {
-  readonly command: readonly string[];
+type Verification = {
   readonly testFile: string;
-  readonly trace: boolean;
   readonly graph: ReturnType<typeof buildImportGraph>;
   readonly tracked: ReadonlySet<string>;
+};
+
+type RunOptions = {
+  readonly command: readonly string[];
+  /** Trace the one test file of `command` against its declarations. */
+  readonly verification?: Verification;
 };
 
 /**
@@ -1089,13 +1224,7 @@ type RunOptions = {
  * running at once never interleave their reports. Files, not pipes: a piped
  * stdout is truncated for large test reports.
  */
-const run = async ({
-  command,
-  testFile,
-  trace,
-  graph,
-  tracked,
-}: RunOptions): Promise<boolean> => {
+const run = async ({ command, verification }: RunOptions): Promise<boolean> => {
   const directory = mkdtempSync(path.join(tmpdir(), "unlisted-script-tests-"));
   const stdoutPath = path.join(directory, "stdout.log");
   const stderrPath = path.join(directory, "stderr.log");
@@ -1104,7 +1233,9 @@ const run = async ({
     const scanLogPath = path.join(directory, "scans.log");
     writeFileSync(scanLogPath, "");
     const testCommand =
-      command[0] === "bun" && command[1] === "test"
+      verification !== undefined &&
+      command[0] === "bun" &&
+      command[1] === "test"
         ? [
             command[0],
             command[1],
@@ -1113,52 +1244,56 @@ const run = async ({
             ...command.slice(2),
           ]
         : [...command];
-    const invoked = trace
-      ? [
-          "strace",
-          "-f",
-          // A kernel filter stops the test only at the traced calls; without
-          // it every syscall of Bun's threads round-trips through strace.
-          "--seccomp-bpf",
-          "-yy",
-          // strace cuts strings at 32 bytes by default; a cut path would
-          // not match a tracked file and escape verification.
-          "-s",
-          String(TRACE_STRING_LIMIT),
-          "-e",
-          SCRIPT_TEST_TRACE_FILTER,
-          "-o",
-          tracePath,
-          ...testCommand,
-        ]
-      : testCommand;
+    const invoked =
+      verification === undefined
+        ? testCommand
+        : [
+            "strace",
+            "-f",
+            // A kernel filter stops the test only at the traced calls; without
+            // it every syscall of Bun's threads round-trips through strace.
+            "--seccomp-bpf",
+            "-yy",
+            // strace cuts strings at 32 bytes by default; a cut path would
+            // not match a tracked file and escape verification.
+            "-s",
+            String(TRACE_STRING_LIMIT),
+            "-e",
+            SCRIPT_TEST_TRACE_FILTER,
+            "-o",
+            tracePath,
+            ...testCommand,
+          ];
     const started = performance.now();
     const child = Bun.spawn(invoked, {
       cwd: REPO_ROOT,
       stdout: Bun.file(stdoutPath),
       stderr: Bun.file(stderrPath),
-      env: { ...process.env, SCRIPT_TEST_SCAN_LOG: scanLogPath },
+      env:
+        verification === undefined
+          ? process.env
+          : { ...process.env, SCRIPT_TEST_SCAN_LOG: scanLogPath },
     });
     const exitCode = await child.exited;
     console.log(`$ ${command.join(" ")}`);
     process.stdout.write(readFileSync(stdoutPath, "utf-8"));
     process.stderr.write(readFileSync(stderrPath, "utf-8"));
-    const traceText = trace ? readFileSync(tracePath, "utf-8") : "";
-    const undeclared = trace
-      ? undeclaredTracedFiles({
-          trace: traceText,
-          closure: tracedAllowance((file) => graph.closure(file), testFile),
-          declared: declaredInputs.get(testFile) ?? [],
-          tracked,
-        })
-      : [];
-    if (trace) {
-      console.log(
-        `Traced ${testFile} in ${Math.round(performance.now() - started)}ms.`,
-      );
-      for (const file of undeclared) {
-        console.error(`${testFile} opened undeclared tracked file ${file}`);
-      }
+    if (verification === undefined) {
+      return exitCode === 0;
+    }
+    const { testFile, graph, tracked } = verification;
+    const traceText = readFileSync(tracePath, "utf-8");
+    const undeclared = undeclaredTracedFiles({
+      trace: traceText,
+      closure: tracedAllowance((file) => graph.closure(file), testFile),
+      declared: declaredInputs.get(testFile) ?? [],
+      tracked,
+    });
+    console.log(
+      `Traced ${testFile} in ${Math.round(performance.now() - started)}ms.`,
+    );
+    for (const file of undeclared) {
+      console.error(`${testFile} opened undeclared tracked file ${file}`);
     }
     const scans = uncoveredScans({
       scanLog: readFileSync(scanLogPath, "utf-8"),
@@ -1170,7 +1305,7 @@ const run = async ({
     for (const uncovered of scans) {
       const declaration = scanInputDeclaration(uncovered.directory);
       console.error(
-        `${testFile}: scans ${uncovered.directory} (${uncovered.pattern ?? "directory entries"}) without a declared glob covering it; add ${JSON.stringify(declaration)} to inputs[${JSON.stringify(testFile)}] in scripts/script-test-inputs.json`,
+        `${testFile}: scans ${uncovered.directory} (${uncovered.pattern ?? "directory entries"}) without a declared glob covering it; add ${JSON.stringify(declaration)} to inputs[${JSON.stringify(testFile)}] in ${SCRIPT_TEST_INPUTS_PATH}`,
       );
     }
     return exitCode === 0 && undeclared.length === 0 && scans.length === 0;
@@ -1187,7 +1322,7 @@ if (import.meta.main) {
   const options = parseScriptTestArguments(process.argv.slice(2));
   if (options.type === "invalid") {
     console.error(
-      `Usage: bun scripts/run-unlisted-script-tests.ts [--depth] [--timeout <positive integer>]\n${options.message}`,
+      `Usage: bun scripts/run-unlisted-script-tests.ts [--depth] [--verify-declarations] [--timeout <positive integer>]\n${options.message}`,
     );
     process.exitCode = 2;
   } else {
@@ -1198,17 +1333,25 @@ if (import.meta.main) {
       workflowText,
     );
     const unlisted = selectScriptTests(discovered, DEPTH_TESTS, options.depth);
-    const base = comparisonBase();
+    const base = options.verifyDeclarations ? undefined : comparisonBase();
+    const changed = base === undefined ? [] : changedFilesSince(base);
+    const declarationChanges =
+      base === undefined || !changed.includes(SCRIPT_TEST_INPUTS_PATH)
+        ? new Set<string>()
+        : changedDeclarations(declarationsAt(base), scriptTestInputs);
     const selection =
       base === undefined
         ? {
             files: unlisted,
             skipped: 0,
-            reason: "no comparison base is available",
+            reason: options.verifyDeclarations
+              ? "every declaration is verified"
+              : "no comparison base is available",
           }
         : selectAffectedScriptTests({
             tests: unlisted,
-            changed: changedFilesSince(base),
+            changed,
+            declarationChanges,
           });
     console.log(
       `Selected ${selection.files.length} and skipped ${selection.skipped} unlisted script test file(s).`,
@@ -1216,35 +1359,63 @@ if (import.meta.main) {
     if (selection.reason !== undefined) {
       console.log(`Full run: ${selection.reason}.`);
     }
+    const traced = new Set(
+      testsToTrace({
+        selection,
+        changed,
+        declarationChanges,
+        verifyAll: options.verifyDeclarations,
+      }),
+    );
     const hasStrace = () =>
       Bun.spawnSync(["sh", "-c", "command -v strace"], { stdout: "ignore" })
         .exitCode === 0;
     // Hosted runner images ship without strace. CI installs it only when a
-    // test will run, so a change that selects none pays nothing for it.
+    // test will be traced, so a change that traces none pays nothing for it.
     const straceAvailable = prepareStrace({
       ci: process.env["CI"] === "true",
-      selectedTests: selection.files.length,
+      selectedTests: traced.size,
       available: hasStrace,
     });
-    if (!straceAvailable) {
+    if (traced.size > 0 && !straceAvailable) {
       console.log("Tracing skipped: strace is not installed.");
+      traced.clear();
     }
-    const graph = buildImportGraph(REPO_ROOT, [
-      ...selection.files.filter((file) => file.endsWith(".ts")),
-      RUNNER_PATH,
-      SCAN_PRELOAD_PATH,
-    ]);
-    const tracked = trackedFiles();
-    const commands = selection.files.map((file) => ({
-      file,
-      command:
-        unlistedTestCommands({
-          files: [file],
-          timeout: options.timeout,
-          groups: UNLISTED_TEST_GROUPS,
-          weightOf: (entry) => statSync(path.join(REPO_ROOT, entry)).size,
-        })[0] ?? panic(`No command for ${file}`),
-    }));
+    console.log(
+      `Tracing ${traced.size} test file(s) against their declared inputs; the nightly declaration run traces the other ${selection.files.length - traced.size}.`,
+    );
+    const graph =
+      traced.size === 0
+        ? undefined
+        : buildImportGraph(REPO_ROOT, [
+            ...[...traced].filter((file) => file.endsWith(".ts")),
+            RUNNER_PATH,
+            SCAN_PRELOAD_PATH,
+          ]);
+    const tracked = traced.size === 0 ? new Set<string>() : trackedFiles();
+    const weightOf = (entry: string) =>
+      statSync(path.join(REPO_ROOT, entry)).size;
+    const commands: RunOptions[] = [
+      // Each traced test runs alone, so its trace names only its accesses.
+      ...[...traced].map((file) => ({
+        command:
+          unlistedTestCommands({
+            files: [file],
+            timeout: options.timeout,
+          })[0] ?? panic(`No command for ${file}`),
+        verification: {
+          testFile: file,
+          graph: graph ?? panic("Traced tests have an import graph"),
+          tracked,
+        },
+      })),
+      ...unlistedTestCommands({
+        files: selection.files.filter((file) => !traced.has(file)),
+        timeout: options.timeout,
+        groups: UNLISTED_TEST_GROUPS,
+        weightOf,
+      }).map((command) => ({ command })),
+    ];
     let nextCommand = 0;
     const results: boolean[] = [];
     await Promise.all(
@@ -1255,15 +1426,7 @@ if (import.meta.main) {
             const entry = commands[nextCommand];
             nextCommand += 1;
             if (entry !== undefined) {
-              results.push(
-                await run({
-                  command: entry.command,
-                  testFile: entry.file,
-                  trace: straceAvailable,
-                  graph,
-                  tracked,
-                }),
-              );
+              results.push(await run(entry));
             }
           }
         },

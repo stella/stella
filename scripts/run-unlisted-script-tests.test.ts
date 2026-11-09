@@ -16,6 +16,7 @@ import { readCiCheckCommandText } from "./ci-check-pool-registry";
 import { comparisonBase } from "./ci-comparison-base";
 import {
   balanceTestFiles,
+  changedDeclarations,
   decodeTraceString,
   gitInvocation,
   parseScriptTestArguments,
@@ -26,6 +27,7 @@ import {
   SCRIPT_TEST_TRACE_SYSCALLS,
   selectAffectedScriptTests,
   selectScriptTests,
+  testsToTrace,
   tracedAllowance,
   uncoveredScans,
   undeclaredTracedFiles,
@@ -150,11 +152,13 @@ describe("parseScriptTestArguments", () => {
       type: "valid",
       timeout: undefined,
       depth: false,
+      verifyDeclarations: false,
     });
     expect(parseScriptTestArguments(["--timeout", "35000"])).toEqual({
       type: "valid",
       timeout: 35_000,
       depth: false,
+      verifyDeclarations: false,
     });
   });
 
@@ -165,6 +169,7 @@ describe("parseScriptTestArguments", () => {
       type: "valid",
       timeout: 120_000,
       depth: true,
+      verifyDeclarations: false,
     });
     expect(
       parseScriptTestArguments(["--timeout", "120000", "--depth"]),
@@ -172,11 +177,27 @@ describe("parseScriptTestArguments", () => {
       type: "valid",
       timeout: 120_000,
       depth: true,
+      verifyDeclarations: false,
+    });
+  });
+
+  test("accepts the declaration verification mode with depth", () => {
+    expect(
+      parseScriptTestArguments(["--depth", "--verify-declarations"]),
+    ).toEqual({
+      type: "valid",
+      timeout: undefined,
+      depth: true,
+      verifyDeclarations: true,
     });
   });
 
   test.each([
     [["--depth", "--depth"], "--depth may be supplied once"],
+    [
+      ["--verify-declarations", "--verify-declarations"],
+      "--verify-declarations may be supplied once",
+    ],
     [["--unknown"], "unknown argument"],
     [["--timeout"], "requires a positive integer"],
     [["--timeout", "0"], "requires a positive integer"],
@@ -315,6 +336,45 @@ describe("script test impact selection", () => {
             .files,
         ).toEqual(tests);
       }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a declaration edit selects only its own test when the edit is known", () => {
+    const root = makeFixture();
+    const tests = ["scripts/subject.test.ts", "scripts/reader.test.ts"];
+    const inputs = { "scripts/reader.test.ts": ["data/**"] };
+    const changed = ["scripts/script-test-inputs.json"];
+    writeFileSync(
+      path.join(root, "scripts/run-unlisted-script-tests.ts"),
+      'import inputs from "./script-test-inputs.json" with { type: "json" };\nexport { inputs };\n',
+    );
+    writeFileSync(path.join(root, "scripts/script-test-inputs.json"), "{}\n");
+    try {
+      expect(
+        selectAffectedScriptTests({
+          tests,
+          changed,
+          root,
+          inputs,
+          declarationChanges: new Set(["scripts/reader.test.ts"]),
+        }),
+      ).toEqual({ files: ["scripts/reader.test.ts"], skipped: 1 });
+      expect(
+        selectAffectedScriptTests({
+          tests,
+          changed,
+          root,
+          inputs,
+          declarationChanges: "all",
+        }),
+      ).toEqual({
+        files: tests,
+        skipped: 0,
+        reason: "shared test configuration or runner changed",
+        verifierChanged: true,
+      });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -1293,6 +1353,64 @@ test("CI does not require or install strace when no tests are selected", () => {
     }),
   ).toBe(false);
   expect(installs).toBe(0);
+});
+
+describe("declaration verification on pull requests", () => {
+  test("names tests whose declaration or exemption changed", () => {
+    expect(
+      changedDeclarations(
+        {
+          inputs: { "a.test.ts": ["data/**"], "b.test.ts": ["x"] },
+          noTrackedInputs: { "c.test.ts": "fixtures only" },
+        },
+        {
+          inputs: { "a.test.ts": ["data/**"], "b.test.ts": ["x", "y"] },
+          noTrackedInputs: { "d.test.ts": "fixtures only" },
+        },
+      ),
+    ).toEqual(new Set(["b.test.ts", "c.test.ts", "d.test.ts"]));
+    expect(changedDeclarations(undefined, { inputs: {} })).toBe("all");
+  });
+
+  const selection = {
+    files: ["a.test.ts", "b.test.ts", "c.test.ts"],
+    skipped: 0,
+  };
+
+  test("traces only tests whose own file or declaration changed", () => {
+    expect(
+      testsToTrace({
+        selection,
+        changed: ["a.test.ts", "lib.ts"],
+        declarationChanges: new Set(["c.test.ts", "gone.test.ts"]),
+        verifyAll: false,
+      }),
+    ).toEqual(["a.test.ts", "c.test.ts"]);
+    expect(
+      testsToTrace({
+        selection,
+        changed: ["lib.ts"],
+        declarationChanges: new Set(),
+        verifyAll: false,
+      }),
+    ).toEqual([]);
+  });
+
+  test("traces every selected test on request, for a changed verifier, or for unknown declaration edits", () => {
+    for (const options of [
+      { verifyAll: true, declarationChanges: new Set<string>() },
+      {
+        verifyAll: false,
+        declarationChanges: new Set<string>(),
+        selection: { ...selection, verifierChanged: true },
+      },
+      { verifyAll: false, declarationChanges: "all" as const },
+    ]) {
+      expect(testsToTrace({ selection, changed: [], ...options })).toEqual(
+        selection.files,
+      );
+    }
+  });
 });
 
 describe("repository script test census", () => {
