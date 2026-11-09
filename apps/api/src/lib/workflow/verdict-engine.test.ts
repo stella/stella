@@ -16,6 +16,7 @@ import type {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
+import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { VerdictBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type {
   PositionRule,
@@ -560,17 +561,10 @@ describe("computeVerdictBatch — a failed extraction is not a missing clause", 
       answered: [],
     },
     unsupported: {
+      // A refused ask is neither: the document was read, so the position is
+      // flagged rather than failed (tested below).
       unfinished: [
         plain({ type: "unsupported", version: 1 }),
-        {
-          content: { type: "unsupported", version: 1 },
-          aiSettlement: {
-            type: "refused",
-            reason: "modelRefusal",
-            runId: "run",
-            settledAt,
-          },
-        },
         {
           content: { type: "unsupported", version: 1 },
           aiSettlement: settlement("failed"),
@@ -697,7 +691,11 @@ describe("computeVerdictBatch — a failed extraction is not a missing clause", 
     PositionRule
   >;
 
-  const gradeCell = async (rule: PositionRule, cell: Cell | undefined) => {
+  const gradeCell = async (
+    rule: PositionRule,
+    cell: Cell | undefined,
+    gradeTierMatchForTest?: typeof gradeTierMatch,
+  ) => {
     const tx = {
       select: () => ({
         from: () => ({
@@ -748,6 +746,7 @@ describe("computeVerdictBatch — a failed extraction is not a missing clause", 
       managedAIResidency: "eu",
       promptCachingEnabled: false,
       serviceTier: "standard",
+      gradeTierMatch: gradeTierMatchForTest,
     });
   };
 
@@ -828,6 +827,53 @@ describe("computeVerdictBatch — a failed extraction is not a missing clause", 
       expect(output.aiJustifications).toHaveLength(1);
     },
   );
+
+  test.each(ruleCases)(
+    "%s: a refused ask leaves the position ungraded, never missing",
+    async (_, rule) => {
+      const output = await gradeCell(rule, {
+        content: { type: "unsupported", version: 1 },
+        aiSettlement: {
+          type: "refused",
+          reason: "modelRefusal",
+          runId: "run",
+          settledAt,
+        },
+      });
+
+      // The cell stays re-runnable; the position is flagged, not failed.
+      expect(output.settlements.get(verdictPropertyId)).toBe("failedTransient");
+      expect(output.ungradedVerdicts).toEqual([
+        { propertyId: verdictPropertyId, extracted: null },
+      ]);
+      expect(output.erroredPropertyIds).toEqual([]);
+      expect(output.aiResults).toEqual([]);
+      expect(output.gradedVerdicts).toEqual([]);
+    },
+  );
+
+  test("a failed tier-match call leaves the position ungraded with its answer", async () => {
+    const output = await gradeCell(
+      { kind: "positionMatch" },
+      plain({ type: "text", version: 1, value: "Sixty days." }),
+      async () =>
+        await Promise.resolve(
+          Result.err(
+            new WorkflowIntegrationError({ message: "Grading failed" }),
+          ),
+        ),
+    );
+
+    expect(output.settlements.get(verdictPropertyId)).toBe("failedTransient");
+    expect(output.ungradedVerdicts).toEqual([
+      {
+        propertyId: verdictPropertyId,
+        extracted: { value: "Sixty days.", text: "Sixty days." },
+      },
+    ]);
+    expect(output.erroredPropertyIds).toEqual([]);
+    expect(output.gradedVerdicts).toEqual([]);
+  });
 
   test("an extract-only position stays skipped when its extraction failed", async () => {
     const output = await gradeCell(
