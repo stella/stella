@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { SlidersHorizontalIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import {
   Popover,
   PopoverPanel,
@@ -144,13 +145,14 @@ export const ShowAllButton = ({
   children: ReactNode;
   onClick: () => void;
 }) => (
-  <button
-    className="text-muted-foreground hover:text-foreground -mx-1 min-h-11 px-1 py-1.5 text-xs"
+  <Button
+    className="-mx-2 min-h-11"
     onClick={onClick}
-    type="button"
+    size="xs"
+    variant="muted"
   >
     {children}
-  </button>
+  </Button>
 );
 
 /**
@@ -180,7 +182,7 @@ export const FacetOptions = ({
         const checked = item.value === selectedValue;
         return (
           <li key={item.value}>
-            <label className="hover:bg-muted/60 has-[:focus-visible]:ring-ring flex min-h-11 cursor-pointer items-center gap-2 rounded-sm py-1.5 ps-1 pe-1 text-xs has-[:focus-visible]:ring-2">
+            <Label className="text-xs" variant="choice">
               <input
                 checked={checked}
                 className="accent-primary size-3.5 shrink-0"
@@ -209,7 +211,7 @@ export const FacetOptions = ({
                   {formatFacetCount(item, format.number)}
                 </bdi>
               )}
-            </label>
+            </Label>
           </li>
         );
       })}

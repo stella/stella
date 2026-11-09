@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "9ad5da3f03195112e6041d9c937b1b5f34413ad6c300a62753c0cec66d7e7655",
+  "sourceUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgement/content?id=150515000000503_I_C_000155_2019_Uz_2019-12-31_002",
+  "capturedAt": "2026-11-07T20:41:35.091Z",
+  "note": "I C 155/19: portal judgment that repeats its docket (\"Sygn. akt. I C 155/19\") between the ruling and the reasons; gzip of the captured content"
+}

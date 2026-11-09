@@ -16,6 +16,7 @@ type FilterToolsCatalogueOptions<T extends SearchableTool> = {
   entries: readonly T[];
   filter: ToolsCatalogueKind;
   jurisdictionFilter: ReadonlySet<string>;
+  localizedDescription: (entry: T) => string;
   localizedName: (entry: T) => string;
   query: string;
 };
@@ -25,6 +26,7 @@ export const filterToolsCatalogueEntries = <T extends SearchableTool>({
   entries,
   filter,
   jurisdictionFilter,
+  localizedDescription,
   localizedName,
   query,
 }: FilterToolsCatalogueOptions<T>): T[] => {
@@ -44,6 +46,7 @@ export const filterToolsCatalogueEntries = <T extends SearchableTool>({
       matches(entry.displayName) ||
       matches(localizedName(entry)) ||
       matches(entry.description) ||
+      matches(localizedDescription(entry)) ||
       entry.tags.some(matches)
     );
   });

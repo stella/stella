@@ -54,7 +54,11 @@ for (const action of ["grant", "grant-and-connect"] as const) {
       const view = popupView({
         activeTab:
           action === "grant-and-connect"
-            ? { kind: "stella", tabId: renderedTab.id }
+            ? {
+                kind: "stella",
+                origin: new URL(renderedTab.url).origin,
+                tabId: renderedTab.id,
+              }
             : { kind: "controllable" },
         controller: null,
         granted: false,

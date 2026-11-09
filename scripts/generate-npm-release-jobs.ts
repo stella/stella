@@ -3,10 +3,11 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
 
 export const NPM_RELEASE_WORKFLOW =
-  "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8";
+  "stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d";
 const START = "  # npm-release-jobs:start";
 const END = "  # npm-release-jobs:end";
 const SUMMARY_NEEDS = "    # npm-release-summary-needs";
@@ -350,6 +351,7 @@ export const npmReleaseGraphProblems = ({
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
   const root = path.resolve(import.meta.dirname, "..");
   const file = path.join(root, WORKFLOW_PATH);
   const source = readFileSync(file, "utf-8");

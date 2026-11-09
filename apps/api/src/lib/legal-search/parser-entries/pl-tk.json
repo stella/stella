@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "PL_TK",
   "key": "pl-tk",
-  "parserVersion": 12,
+  "parserVersion": 14,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

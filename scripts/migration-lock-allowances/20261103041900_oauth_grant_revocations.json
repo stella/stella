@@ -1,0 +1,5 @@
+{
+  "create-table-references": "Foreign keys are installed on the new empty revocation table without an existing-row scan; lock acquisition on referenced auth tables is bounded by 5s lock_timeout and each statement by 30s statement_timeout.",
+  "row-level-security": "ENABLE RLS changes only catalog flags on the new empty revocation table before application traffic can use it, under 5s lock_timeout and 30s statement_timeout.",
+  "create-policy": "The deny-all application policy is installed on the new empty revocation table without reading application rows, under 5s lock_timeout and 30s statement_timeout."
+}

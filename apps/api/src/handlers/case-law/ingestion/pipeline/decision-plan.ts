@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 
 import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
-import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -45,6 +46,7 @@ import type {
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import { nssPublisherColumns } from "@/api/handlers/case-law/ingestion/pipeline/nss-publisher-columns";
 import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -86,6 +88,12 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 import { sortDeep } from "@/api/lib/sort-deep";
+
+/** The writer contract without the head-matter order rule, with content. */
+const hasPreparedUsableAst = (
+  ast: IngestionResult["documentAst"] | null,
+): ast is DocumentAst =>
+  isDocumentAstInAnyBlockOrder(ast) && ast.blocks.length > 0;
 
 type PendingMirrorPayload = InferOk<
   Awaited<ReturnType<typeof loadPendingMirrorPayload>>
@@ -230,7 +238,9 @@ const reportStoredDocumentQuality = ({
     return undefined;
   }
   const warnings = markupResidueWarnings(fulltext ?? "");
-  const astBlocks = hasUsableAst(documentAst) ? documentAst.blocks.length : 0;
+  const astBlocks = hasPreparedUsableAst(documentAst)
+    ? documentAst.blocks.length
+    : 0;
   const signal = storedDecisionSignal({
     hasFulltext: Boolean(fulltext),
     astBlocks,
@@ -550,7 +560,7 @@ const preparedCitationMetadata = (
     [CITATION_SCOPE_METADATA_KEY]: _untrustedScope,
     ...ordinaryMetadata
   } = metadata;
-  return citationScopes && hasUsableAst(documentAst)
+  return citationScopes && hasPreparedUsableAst(documentAst)
     ? {
         ...ordinaryMetadata,
         [CITATION_SCOPE_METADATA_KEY]: citationScopeEnvelope(
@@ -622,7 +632,7 @@ export const planDecisionWrite = async ({
     return Result.ok(RECONCILE_CONTENTION);
   }
 
-  if (result.citationScopes && !hasUsableAst(result.documentAst)) {
+  if (result.citationScopes && !hasPreparedUsableAst(result.documentAst)) {
     return Result.err(
       new CitationScopesRejectedError({
         message: "Citation scopes require a document AST",
@@ -633,8 +643,9 @@ export const planDecisionWrite = async ({
   }
   const extraction = extractDecisionCitations({
     country: result.country,
+    language: result.language,
     sections: sections.map(({ index, text }) => ({ index, text })),
-    documentAst: hasUsableAst(result.documentAst)
+    documentAst: hasPreparedUsableAst(result.documentAst)
       ? result.documentAst
       : undefined,
     citationScopes: result.citationScopes,
@@ -737,11 +748,15 @@ export const planDecisionWrite = async ({
     pendingMirrorPayload,
   });
 
-  const docketColumns = decisionDocketColumns({
-    caseNumber: result.caseNumber,
-    caseNumberType,
-    country: result.country,
-  });
+  const docketColumns = {
+    ...decisionDocketColumns({
+      caseNumber: result.caseNumber,
+      caseNumberType,
+      country: result.country,
+    }),
+    // Written wherever the docket columns are: the insert and the refresh.
+    ...nssPublisherColumns(preparedMetadata),
+  };
   const incomingCitationKey = docketColumns.citationKey;
   // Built here, outside the write transaction: classifying a citation
   // reads the polarity rules, and the write path must not hold a row

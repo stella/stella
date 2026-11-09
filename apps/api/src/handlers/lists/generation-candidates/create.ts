@@ -17,7 +17,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
@@ -33,7 +33,7 @@ const sourceSchema = v.object({
   quote: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(5000)))),
 });
 const candidateSchema = v.object({
-  name: v.pipe(v.string(), v.minLength(1), v.maxLength(2000)),
+  name: displayNameSchema({ maxLength: 2000 }),
   description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
   itemType: v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
   status: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),

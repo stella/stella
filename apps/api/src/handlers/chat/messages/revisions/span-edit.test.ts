@@ -107,7 +107,10 @@ const runProposal = async ({
           ? null
           : {
               id,
-              status: workspaceAccess === "deleting" ? "deleting" : "active",
+              status:
+                workspaceAccess === "deleting" || workspaceAccess === "archived"
+                  ? workspaceAccess
+                  : "active",
             },
       session: { activeOrganizationId: organizationId },
       user: { id: userId },
@@ -153,6 +156,11 @@ describe("answer rewrite endpoint", () => {
     },
     {
       options: { workspaceAccess: "deleting" },
+      status: 404,
+      message: "Chat message not found",
+    },
+    {
+      options: { workspaceAccess: "archived" },
       status: 404,
       message: "Chat message not found",
     },

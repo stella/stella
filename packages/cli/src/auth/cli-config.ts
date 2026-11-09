@@ -1,12 +1,8 @@
 import { Result } from "better-result";
-// Non-secret CLI configuration: the default server origin and, per server,
-// the dynamically-registered OAuth client id (a public client id is not a
-// secret; there is no client_secret for `token_endpoint_auth_method: "none"`
-// clients). Stored separately from `credential-store.ts`'s file, which holds
-// tokens and is mode 0600.
+// Non-secret CLI configuration: the default server origin. Stored separately
+// from `credential-store.ts`'s file, which holds tokens and is mode 0600.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 // Hand-written rather than `v.InferOutput<typeof schema>`: this package
@@ -18,29 +14,17 @@ import * as v from "valibot";
 export type CliConfig = {
   readonly version: 1;
   readonly defaultServerUrl?: string | undefined;
-  readonly oauthClients: Readonly<Record<string, StoredClientRegistration>>;
 };
 
-export type StoredClientRegistration = {
-  readonly clientId: string;
-  readonly registeredAt: number;
-  /** Missing only on config entries written before scope-aware registration. */
-  readonly registeredScopes?: readonly string[] | undefined;
-};
-
-const oauthClientEntrySchema = v.strictObject({
-  clientId: v.string(),
-  registeredAt: v.number(),
-  registeredScopes: v.optional(v.array(v.string())),
-});
-
-const cliConfigSchema = v.strictObject({
+// Not strict: files written by earlier CLI versions also hold the OAuth
+// clients those versions registered, which nothing reads any more and the
+// next write drops.
+const cliConfigSchema = v.object({
   version: v.literal(1),
   defaultServerUrl: v.optional(v.string()),
-  oauthClients: v.record(v.string(), oauthClientEntrySchema),
 });
 
-const EMPTY_CONFIG: CliConfig = { oauthClients: {}, version: 1 };
+const EMPTY_CONFIG: CliConfig = { version: 1 };
 
 export const configFilePath = (configDir: string): string =>
   path.join(configDir, "config.json");
@@ -74,43 +58,4 @@ export const writeCliConfig = async (
     configFilePath(configDir),
     `${JSON.stringify(config, null, 2)}\n`,
   );
-};
-
-export const getRegisteredClient = async (
-  configDir: string,
-  serverUrl: string,
-): Promise<StoredClientRegistration | undefined> => {
-  const config = await readCliConfig(configDir);
-  return config.oauthClients[serverUrl];
-};
-
-export const registeredClientSupportsScopes = (
-  client: StoredClientRegistration,
-  scopes: readonly string[],
-): boolean => {
-  const registeredScopes = client.registeredScopes;
-  if (registeredScopes === undefined) {
-    return false;
-  }
-  return scopes.every((scope) => registeredScopes.includes(scope));
-};
-
-export const setRegisteredClient = async (
-  configDir: string,
-  serverUrl: string,
-  clientId: string,
-  registeredScopes: readonly string[],
-): Promise<void> => {
-  const config = await readCliConfig(configDir);
-  await writeCliConfig(configDir, {
-    ...config,
-    oauthClients: {
-      ...config.oauthClients,
-      [serverUrl]: {
-        clientId,
-        registeredAt: Temporal.Now.instant().epochMilliseconds,
-        registeredScopes,
-      },
-    },
-  });
 };

@@ -28,12 +28,16 @@ const definition: PlaybookDefinitionForPin = {
   id: toSafeId<"playbookDefinition">(Bun.randomUUIDv7()),
   name: "Live draft name",
   positions: positionsWithIssue("Edited after approval"),
+  // The scope as edited after approval: the live definition now targets
+  // leases, while the approval below still covers NDAs.
+  scope: { documentTypeKey: "lease" },
 };
 
 const approvedVersion: PlaybookVersionForPin = {
   id: toSafeId<"playbookDefinitionVersion">(Bun.randomUUIDv7()),
   name: "Approved name",
   positions: positionsWithIssue("As approved"),
+  scope: { documentTypeKey: "nda" },
 };
 
 describe("resolvePlaybookPin", () => {
@@ -51,7 +55,23 @@ describe("resolvePlaybookPin", () => {
     expect(pin.definitionSnapshot).toEqual({
       name: approvedVersion.name,
       positions: approvedVersion.positions,
+      scope: approvedVersion.scope,
     });
+  });
+
+  test("pins the approved scope, not the scope edited after approval", () => {
+    // The issue's reproduction: approved scoped to NDA, then edited to
+    // Lease without re-approval. A run pinned to the approval must keep
+    // grading NDAs, never the leases the unapproved edit targets.
+    const pin = resolvePlaybookPin({
+      definition,
+      latestApprovedVersion: approvedVersion,
+    });
+
+    expect(pin.definitionSnapshot.scope).toEqual({
+      documentTypeKey: "nda",
+    });
+    expect(pin.definitionSnapshot.scope).not.toEqual(definition.scope);
   });
 
   test("records draft provenance when the playbook was never approved", () => {
@@ -68,6 +88,18 @@ describe("resolvePlaybookPin", () => {
     expect(pin.definitionSnapshot).toEqual({
       name: definition.name,
       positions: definition.positions,
+      scope: definition.scope,
+    });
+  });
+
+  test("a never-approved playbook keeps its live scope", () => {
+    const pin = resolvePlaybookPin({
+      definition,
+      latestApprovedVersion: null,
+    });
+
+    expect(pin.definitionSnapshot.scope).toEqual({
+      documentTypeKey: "lease",
     });
   });
 });

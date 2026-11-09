@@ -183,6 +183,14 @@ const RAW_ROUTES: ReadonlyMap<ApiRouteKey, RawRouteReview> = new Map([
     },
   ],
   [
+    "GET /v1/desktop/runner",
+    {
+      access: RAW_ROUTE_ACCESS.sessionless,
+      reason:
+        "Runner socket upgrade, authorized by the desktop account token and a single-use device proof.",
+    },
+  ],
+  [
     "GET /v1/dev/public-law-connection",
     {
       access: RAW_ROUTE_ACCESS.localDevelopment,
@@ -276,6 +284,22 @@ const RAW_ROUTES: ReadonlyMap<ApiRouteKey, RawRouteReview> = new Map([
     {
       access: RAW_ROUTE_ACCESS.sessionless,
       reason: "Public feedback intake, rate-limited per IP and deduplicated.",
+    },
+  ],
+  [
+    "GET /smoke/scheduled-jobs",
+    {
+      access: RAW_ROUTE_ACCESS.sessionless,
+      reason:
+        "Authorized by a shared secret and refused outside the staging deployment. Reads the scheduler's recent run records of fixed corpus jobs.",
+    },
+  ],
+  [
+    "POST /smoke/scheduled-jobs",
+    {
+      access: RAW_ROUTE_ACCESS.sessionless,
+      reason:
+        "Authorized by a shared secret and refused outside the staging deployment. Only moves fixed recurring corpus jobs' next run forward.",
     },
   ],
   [

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
@@ -26,18 +25,16 @@ const makePackage = async ({
   mainRootNamespace,
 }: MakePackageOptions) => {
   const config = DESKTOP_EDIT_FILE_TYPE_CONFIG[fileType];
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0"?><Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/${config.mainPartPath}" ContentType="${mainPartContentType ?? config.mainPartContentType}"/></Types>`,
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     config.mainPartPath,
     `<?xml version="1.0"?><x:${config.mainRootLocalName} xmlns:x="${mainRootNamespace ?? config.mainRootNamespaces[0]}"/>`,
   );
-  return await zip.generateAsync({ type: "arraybuffer" });
+  return (await zip.generate({ compression: "store" })).buffer;
 };
 
 describe("desktop edit file validation", () => {
@@ -98,13 +95,12 @@ describe("desktop edit file validation", () => {
   });
 
   test("rejects a package without content type declarations", async () => {
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
     );
-    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    const buffer = (await zip.generate({ compression: "store" })).buffer;
 
     expect(
       await validateDesktopEditFileBuffer({ buffer, fileType: "docx" }),
@@ -116,18 +112,16 @@ describe("desktop edit file validation", () => {
 
   test("rejects a malformed main part", async () => {
     const config = DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx;
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "[Content_Types].xml",
       `<?xml version="1.0"?><Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/${config.mainPartPath}" ContentType="${config.mainPartContentType}"/></Types>`,
     );
-    writeZipEntry(
-      zip,
+    zip.set(
       config.mainPartPath,
       `<x:workbook xmlns:x="${config.mainRootNamespaces[0]}">`,
     );
-    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    const buffer = (await zip.generate({ compression: "store" })).buffer;
 
     const result = await validateDesktopEditFileBuffer({
       buffer,

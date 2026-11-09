@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "AT_ASYLGH",
   "key": "at-asylgh",
-  "parserVersion": 11,
+  "parserVersion": 13,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

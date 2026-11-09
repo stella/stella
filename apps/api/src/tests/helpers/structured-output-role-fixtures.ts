@@ -1,5 +1,10 @@
 import type * as v from "valibot";
 
+import {
+  desktopBillingDraftModelResponseSchema,
+  desktopBillingPlainDraftModelResponseSchema,
+} from "@stll/api-contract/desktop-billing-drafts";
+
 import { analysisOutputSchema } from "@/api/handlers/case-law/analysis/analysis-output";
 import { significanceOutputSchema } from "@/api/handlers/case-law/analysis/significance";
 import { expansionOutputSchema } from "@/api/handlers/case-law/decisions/search-expand";
@@ -45,7 +50,7 @@ import { fieldSuggestionsSchema } from "@/api/lib/templates/suggest-template-fie
 import { buildBatchSchema } from "@/api/lib/workflow/ai-prompts";
 import { generativeDecisionsSchema } from "@/api/lib/workflow/decisions/decide";
 import { choice, noul } from "@/api/lib/workflow/decisions/system-one";
-import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import {
   tierMatchBatchSchema,
   tierMatchSchema,
@@ -66,10 +71,11 @@ const batchTool = {
   type: "ai-model",
   prompt: "Extract it.",
 } as const;
-const batchProperties: BatchProperty[] = [
+const batchProperties: AIBatchProperty[] = [
   {
     id: toSafeId<"property">("prop-governing-law"),
     status: "stale",
+    answerShape: "value",
     content: { version: 1, type: "text" },
     dependencies: [],
     tool: batchTool,
@@ -77,6 +83,7 @@ const batchProperties: BatchProperty[] = [
   {
     id: toSafeId<"property">("prop-assignment"),
     status: "stale",
+    answerShape: "value",
     content: {
       version: 1,
       type: "single-select",
@@ -109,6 +116,7 @@ export const STRUCTURED_OUTPUT_ENTRY_POINTS = [
   "streamTanStackObjectForTask",
   "generateTanStackChatObject",
   "createVerificationCall",
+  "generateAdmittedObject",
 ] as const;
 
 /**
@@ -134,6 +142,20 @@ export type StructuredOutputRoleFixture = {
 
 export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixture[] =
   [
+    {
+      file: "handlers/desktop-time-entries/billing-drafts.ts",
+      outputSchema: "desktopBillingDraftModelResponseSchema",
+      schema: desktopBillingDraftModelResponseSchema,
+      answer:
+        '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","classification":{"type":"activity_group","activityGroup":"client"},"flags":[],"matchedEarlierEntryIds":[],"operations":[]}],"checkedGuidelines":[]}',
+    },
+    {
+      file: "handlers/desktop-time-entries/billing-drafts.ts",
+      outputSchema: "desktopBillingPlainDraftModelResponseSchema",
+      schema: desktopBillingPlainDraftModelResponseSchema,
+      answer:
+        '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","matchedEarlierEntryIds":[]}]}',
+    },
     {
       file: "handlers/case-law/decisions/search-expand.ts",
       outputSchema: "expansionOutputSchema",

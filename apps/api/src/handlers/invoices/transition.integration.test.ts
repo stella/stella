@@ -10,6 +10,8 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
+import { INVOICE_ISSUE_BLOCKER } from "@stll/api-contract/billing";
+
 import { user as authUser } from "@/api/db/auth-schema";
 import {
   BILLING_STATUS,
@@ -30,6 +32,10 @@ import { VatRateUnavailableError } from "@/api/lib/billing/vat-exchange-rates";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  removeIssuingSeller,
+  seedIssuingSeller,
+} from "@/api/tests/helpers/issuing-seller";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -53,6 +59,8 @@ const seededInvoiceIds: SafeId<"invoice">[] = [];
 const seededTimeEntryIds: SafeId<"timeEntry">[] = [];
 const seededSeriesIds: SafeId<"numberSeries">[] = [];
 const seededExpenseIds: SafeId<"expense">[] = [];
+/** The seller every seeded invoice is issued by unless a test says otherwise. */
+let issuingSellerId: SafeId<"sellerProfile">;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -73,6 +81,7 @@ beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
+  issuingSellerId = await seedIssuingSeller(testDb, ids.orgA);
 });
 
 afterAll(async () => {
@@ -97,6 +106,7 @@ afterAll(async () => {
         .delete(invoices)
         .where(inArray(invoices.id, seededInvoiceIds));
     }
+    await removeIssuingSeller(testDb, issuingSellerId);
   } finally {
     await releaseRlsFixture();
   }
@@ -797,7 +807,10 @@ describe("invoice transition integration", () => {
     });
     expect(await runTransition(unnumbered, "finalize")).toMatchObject({
       code: 409,
-      response: { hint: expect.any(String) },
+      response: {
+        code: INVOICE_ISSUE_BLOCKER.numberSeriesMissing,
+        hint: expect.stringContaining("number-series.create"),
+      },
     });
     expect(await readInvoiceStatus(unnumbered)).toBe(INVOICE_STATUS.DRAFT);
     const manual = await seedInvoice({
@@ -811,6 +824,55 @@ describe("invoice transition integration", () => {
         columns: { invoiceNumber: true },
       }),
     ).toEqual({ invoiceNumber: "MANUAL-001" });
+  });
+
+  test("refuses to issue an invoice without a seller profile, before any number is allocated", async () => {
+    const seriesId = createSafeId<"numberSeries">();
+    seededSeriesIds.push(seriesId);
+    // A series for all sellers would number it: only the seller is missing.
+    await testDb.insert(numberSeries).values({
+      id: seriesId,
+      organizationId: ids.orgA,
+      documentType: "invoice",
+      name: "Sellerless invoices",
+      pattern: "NOSELLER-{SEQ}",
+      padding: 3,
+      isDefault: true,
+    });
+    const invoiceId = await seedInvoice({
+      status: INVOICE_STATUS.DRAFT,
+      invoiceNumber: null,
+      sellerProfileId: null,
+    });
+
+    expect(await runTransition(invoiceId, "finalize")).toMatchObject({
+      code: 409,
+      response: {
+        code: INVOICE_ISSUE_BLOCKER.sellerProfileMissing,
+        hint: expect.stringContaining("seller-profiles.create"),
+      },
+    });
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+        columns: { status: true, invoiceNumber: true },
+      }),
+    ).toEqual({ status: INVOICE_STATUS.DRAFT, invoiceNumber: null });
+
+    await testDb
+      .update(invoices)
+      .set({ sellerProfileId: issuingSellerId })
+      .where(eq(invoices.id, invoiceId));
+    expect(await runTransition(invoiceId, "finalize")).toEqual({
+      id: invoiceId,
+    });
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+        columns: { invoiceNumber: true },
+      }),
+    ).toEqual({ invoiceNumber: "NOSELLER-001" });
+    await testDb.delete(numberSeries).where(eq(numberSeries.id, seriesId));
   });
 
   test("paid is not a transition, and voiding clears the paid timestamp", async () => {
@@ -895,9 +957,11 @@ describe("invoice transition integration", () => {
 const seedInvoice = async ({
   status,
   invoiceNumber,
+  sellerProfileId = issuingSellerId,
 }: {
   status: (typeof INVOICE_STATUS)[keyof typeof INVOICE_STATUS];
   invoiceNumber?: string | null;
+  sellerProfileId?: SafeId<"sellerProfile"> | null;
 }) => {
   const invoiceId = createSafeId<"invoice">();
   seededInvoiceIds.push(invoiceId);
@@ -909,6 +973,7 @@ const seedInvoice = async ({
       invoiceNumber === undefined ? `INV-TEST-${invoiceId}` : invoiceNumber,
     invoiceDate: "2026-06-23",
     currency: "USD",
+    sellerProfileId,
     status,
   });
   return invoiceId;

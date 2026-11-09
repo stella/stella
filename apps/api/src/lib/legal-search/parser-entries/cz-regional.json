@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "CZ_REGIONAL",
   "key": "cz-regional",
-  "parserVersion": 17,
+  "parserVersion": 25,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "PL_KIO",
   "key": "pl-kio",
-  "parserVersion": 14,
+  "parserVersion": 28,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

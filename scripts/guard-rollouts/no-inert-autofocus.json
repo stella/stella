@@ -1,0 +1,17 @@
+{
+  "id": "no-inert-autofocus",
+  "rules": ["no-inert-autofocus/no-inert-autofocus"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-inert-autofocus/no-inert-autofocus",
+    "."
+  ]
+}

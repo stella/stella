@@ -42,6 +42,10 @@ type DecisionSource =
   | { type: "working-tree"; root: string }
   | { type: "git-revision"; root: string; revision: string };
 
+type ReadDecisionsOptions = {
+  observeRead?: ((file: string) => void) | undefined;
+};
+
 const git = (root: string, args: string[]) => {
   const result = Bun.spawnSync(["git", "-C", root, ...args], {
     stdout: "pipe",
@@ -56,6 +60,7 @@ const git = (root: string, args: string[]) => {
 
 export const readDecisions = (
   source: DecisionSource,
+  { observeRead }: ReadDecisionsOptions = {},
 ): Record<string, unknown> => {
   const collect = (entries: [string, unknown][]) => {
     const decisions: Record<string, unknown> = {};
@@ -87,6 +92,7 @@ export const readDecisions = (
       .map((entry) => {
         const name = entry.name;
         const file = `${CLASSIFICATION_DECISIONS_PATH}/${name}/decision.json`;
+        observeRead?.(file);
         const decision = parseRecord(
           readFileSync(path.resolve(source.root, file), "utf-8"),
         );
@@ -94,6 +100,7 @@ export const readDecisions = (
           (approval) => /^[0-9a-f]{64}\.json$/u.test(approval),
         );
         const approvedDigests = approvalNames.map((approval) => {
+          observeRead?.(`${CLASSIFICATION_DECISIONS_PATH}/${name}/${approval}`);
           const record = parseRecord(
             readFileSync(path.resolve(directory, name, approval), "utf-8"),
           );
@@ -137,6 +144,7 @@ export const readDecisions = (
     .toSorted();
   if (files.length > 0) {
     const entries = files.map((file) => {
+      observeRead?.(file);
       const shown = git(source.root, ["show", `${source.revision}:${file}`]);
       if (shown.exitCode !== 0) {
         throw new AdmissionError({ message: shown.stderr.trim() });
@@ -151,6 +159,7 @@ export const readDecisions = (
         );
       const decision = parseRecord(shown.stdout);
       const approvedDigests = approvalFiles.map((approvalFile) => {
+        observeRead?.(approvalFile);
         const approval = git(source.root, [
           "show",
           `${source.revision}:${approvalFile}`,

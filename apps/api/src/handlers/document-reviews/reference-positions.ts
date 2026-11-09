@@ -56,6 +56,7 @@ import { perspectivePartyPhrase } from "@/api/lib/document-review/contract";
 import type { ReviewPerspective } from "@/api/lib/document-review/contract";
 import {
   buildReviewDocumentParts,
+  fitReviewDocuments,
   reviewDocumentsScopeKey,
 } from "@/api/lib/document-review/review-document-messages";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
@@ -66,6 +67,7 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
+import { requestBudgetBytesForTask } from "@/api/lib/workflow/request-budget";
 
 const MODEL_TASK = "pdf" as const;
 
@@ -167,6 +169,19 @@ const buildProposalRequest = ({
   abortSignal,
   timeoutMs,
 }: ProposalRequestArgs) => {
+  const fitted = fitReviewDocuments({
+    target,
+    references: references.map((reference) => reference.file),
+    budgetBytes: requestBudgetBytesForTask(MODEL_TASK, orgAIConfig, {
+      dataClass: "customer",
+      organizationId,
+      modelTier: admission.modelTier,
+    }),
+  });
+  if (Result.isError(fitted)) {
+    return Result.err(fitted.error);
+  }
+
   const caching = resolveCaching({
     promptCachingEnabled,
     task: MODEL_TASK,
@@ -202,8 +217,8 @@ const buildProposalRequest = ({
       role: "user",
       content: [
         ...buildReviewDocumentParts({
-          target,
-          references: references.map((reference) => reference.file),
+          target: fitted.value.target,
+          references: fitted.value.references,
           caching,
         }),
         { type: "text", content: perspectiveLine(perspective) },
@@ -215,7 +230,7 @@ const buildProposalRequest = ({
     },
   ];
 
-  return {
+  return Result.ok({
     analytics,
     options: {
       userId: admission.userId,
@@ -235,7 +250,7 @@ const buildProposalRequest = ({
       deadlineMs: timeoutMs,
       outputSchema: proposedPositionsSchema,
     },
-  };
+  });
 };
 
 export type ProposeReferencePositionsArgs = Omit<
@@ -251,10 +266,14 @@ export const proposeReferencePositions = async ({
 }: ProposeReferencePositionsArgs): Promise<
   Result<ReviewPositionProposal, WorkflowIntegrationError>
 > => {
-  const { analytics, options } = buildProposalRequest({
+  const built = buildProposalRequest({
     ...request,
     timeoutMs: TIMEOUT_MS,
   });
+  if (Result.isError(built)) {
+    return Result.err(built.error);
+  }
+  const { analytics, options } = built.value;
 
   return await Result.tryPromise({
     try: async () =>
@@ -297,10 +316,14 @@ export const streamReferenceProposal = async function* ({
   positionsMax,
   ...request
 }: StreamReferenceProposalArgs): AsyncGenerator<ReviewProposalStreamEvent> {
-  const { analytics, options } = buildProposalRequest({
+  const built = buildProposalRequest({
     ...request,
     timeoutMs: STREAM_TIMEOUT_MS,
   });
+  if (Result.isError(built)) {
+    throw built.error;
+  }
+  const { analytics, options } = built.value;
   const normalizer = createProposalNormalizer({
     seededPositions: request.seededPositions,
     sources: request.references,

@@ -29,6 +29,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -86,9 +87,7 @@ const withHistory = async (
     });
     await work({ db: testDb, organizationId, userId });
   } finally {
-    await testDb
-      .delete(organization)
-      .where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(testDb, [organizationId]);
     await testDb.delete(user).where(eq(user.id, userId));
   }
 };

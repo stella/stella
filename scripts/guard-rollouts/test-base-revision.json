@@ -1,0 +1,17 @@
+{
+  "id": "test-base-revision",
+  "rules": ["no-live-test-base/no-live-test-base"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-live-test-base/no-live-test-base",
+    "."
+  ]
+}
