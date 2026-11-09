@@ -37,6 +37,8 @@ import {
   compactModelMessages,
   compactModelMessagesForModel,
   computeThreadContextUsage,
+  isModelCompactionSummaryMessage,
+  MODEL_COMPACTION_CHECKPOINT_NOTE,
   planChatCompaction,
   planModelCompaction,
   renderChatMessagesForCompaction,
@@ -700,8 +702,12 @@ Continue drafting the termination analysis.
       messages: [
         {
           role: "user",
-          content:
-            "Earlier model-step history compacted from 2 message(s).\n\nstep summary",
+          content: [
+            "Earlier model-step history compacted from 2 message(s).",
+            MODEL_COMPACTION_CHECKPOINT_NOTE,
+            "step summary",
+          ].join("\n\n"),
+          metadata: { stellaCompactionSummary: true },
         },
         { role: "user", content: "latest request" },
       ],
@@ -740,8 +746,12 @@ Continue drafting the termination analysis.
     expect(transcriptSeenBySummarizer).toContain("old request");
     expect(compacted.value.messages.at(0)).toEqual({
       role: "user",
-      content:
-        "Earlier model-step history compacted from 2 message(s).\n\ntanstack summary",
+      content: [
+        "Earlier model-step history compacted from 2 message(s).",
+        MODEL_COMPACTION_CHECKPOINT_NOTE,
+        "tanstack summary",
+      ].join("\n\n"),
+      metadata: { stellaCompactionSummary: true },
     });
   });
 
@@ -1069,6 +1079,96 @@ Continue drafting the termination analysis.
         }
       }
     }
+  });
+
+  test("repeated compaction of one turn keeps the member's request, not the checkpoint", async () => {
+    const first = await compactModelMessages({
+      messages: agenticTurn(6),
+      preserveTokens: 1000,
+      triggerTokens: 2000,
+      summarizeTranscript: async () => "first checkpoint",
+    });
+    if (Result.isError(first)) {
+      throw first.error;
+    }
+    const request = agenticTurn(0).at(2);
+    if (request === undefined) {
+      throw new Error("The turn fixture opens with a request");
+    }
+    const continued = [
+      ...first.value.messages,
+      ...agenticTurn(10).slice(3 + 12),
+    ];
+    let transcript = "";
+    const second = await compactModelMessages({
+      messages: continued,
+      preserveTokens: 1000,
+      triggerTokens: 2000,
+      summarizeTranscript: async (text) => {
+        transcript = text;
+        return "second checkpoint";
+      },
+    });
+    if (Result.isError(second)) {
+      throw second.error;
+    }
+
+    expect(second.value.messages.at(0)).toEqual(request);
+    expect(second.value.messages.at(1)?.content).toContain("second checkpoint");
+    expect(
+      isModelCompactionSummaryMessage(second.value.messages.at(1) ?? request),
+    ).toBe(true);
+    expect(transcript).toContain("first checkpoint");
+    expect(
+      second.value.messages.filter(isModelCompactionSummaryMessage),
+    ).toHaveLength(1);
+  });
+
+  test("a large request counts against the step budget it is pinned on top of", () => {
+    const request: ModelMessage = {
+      role: "user",
+      content: `najdi ${"pasted contract text ".repeat(300)}`,
+    };
+    const messages = [request, ...agenticTurn(6).slice(3)];
+    const requestTokens = planModelCompaction({
+      messages: [request],
+      triggerTokens: Number.MAX_SAFE_INTEGER,
+    }).totalTokens;
+    const preserveTokens = requestTokens + 1200;
+
+    const plan = planModelCompaction({
+      messages,
+      preserveTokens,
+      triggerTokens: preserveTokens,
+    });
+
+    expect(plan.type).toBe("compact");
+    if (plan.type === "none") {
+      return;
+    }
+    expect(plan.requestPinned).toBe(true);
+    expect(plan.recentMessages.at(0)).toBe(request);
+    expect(plan.preservedTokens).toBeLessThanOrEqual(preserveTokens);
+  });
+
+  test("the summarizer sees each step's tool calls next to its text", () => {
+    const transcript = renderModelMessagesForCompaction([
+      {
+        role: "assistant",
+        content: "Opening the commentary",
+        toolCalls: [
+          {
+            id: "call_1",
+            type: "function",
+            function: { name: "use-browser", arguments: '{"action":"open"}' },
+          },
+        ],
+      },
+    ]);
+
+    expect(transcript).toContain("Opening the commentary");
+    expect(transcript).toContain("use-browser");
+    expect(transcript).toContain("open");
   });
 
   test("skips model-message compaction below the token trigger", () => {
