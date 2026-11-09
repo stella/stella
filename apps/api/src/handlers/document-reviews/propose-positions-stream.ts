@@ -27,6 +27,8 @@ import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { memberSessionStreamBinding, sseResponse } from "@/api/lib/sse";
 
@@ -59,6 +61,10 @@ export const REVIEW_PROPOSAL_STREAM_ERROR = {
 } as const;
 
 const PROPOSE_POSITIONS_ACTION_KIND = "document-reviews.propose-positions";
+const PIN_FAILURE = failureSink({
+  event: "document_review.proposal.pin_failed",
+  expected: [],
+});
 
 export const createProposePositionsStream = ({
   prepareProposal = prepareReferenceProposal,
@@ -196,6 +202,7 @@ export const createProposePositionsStream = ({
                       }),
                   );
                   if (Result.isError(pinned)) {
+                    observeFailure(pinned.error, { sink: PIN_FAILURE });
                     throw pinned.error;
                   }
                   writeEvent("position", {
@@ -222,8 +229,9 @@ export const createProposePositionsStream = ({
               }
             }
           } catch {
-            // The proposal stream already reported the cause to analytics;
-            // the wire carries a code, never a provider message.
+            // Every failure is reported before it reaches here, by the proposal
+            // stream or by the pin above; the wire carries a code, never a
+            // provider message.
             writeEvent("error", { code: REVIEW_PROPOSAL_STREAM_ERROR.FAILED });
           } finally {
             await admission.release();

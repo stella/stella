@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { entities, fields } from "@/api/db/schema";
 import type { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepare-proposal";
@@ -9,10 +9,12 @@ import type {
 } from "@/api/handlers/document-reviews/reference-positions";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  DatabaseError,
   DocumentTooLargeError,
   HandlerError,
   WorkflowIntegrationError,
 } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import type {
   ExecutionAdmission,
   startExecutionAdmission,
@@ -25,7 +27,10 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import type proposePositionsStream from "./propose-positions-stream";
-import { createProposePositionsStream } from "./propose-positions-stream";
+import {
+  createProposePositionsStream,
+  REVIEW_PROPOSAL_STREAM_ERROR,
+} from "./propose-positions-stream";
 
 type StreamCtx = Parameters<typeof proposePositionsStream.handler>[0];
 
@@ -83,31 +88,39 @@ const admissionFake = ({
   return { calls, startAdmission };
 };
 
+const scopedDbMock = () =>
+  createScopedDbMock({
+    select: () => ({
+      from: (table: unknown) => ({
+        where: () => ({
+          limit: async () => {
+            if (table === entities) {
+              return [{ id: body.target.entityId }];
+            }
+            if (table === fields) {
+              return [{ id: body.target.fileFieldId }];
+            }
+            return [];
+          },
+        }),
+      }),
+    }),
+  });
+
 const callHandler = async (
   handler: ReturnType<typeof createProposePositionsStream>,
+  db: Pick<
+    ReturnType<typeof scopedDbMock>,
+    "safeDb" | "scopedDb"
+  > = scopedDbMock(),
 ) =>
   await handler.handler(
     createTestHandlerContext<StreamCtx>({
       audit: NO_AUDIT,
       body,
       session: SESSION,
-      ...createScopedDbMock({
-        select: () => ({
-          from: (table: unknown) => ({
-            where: () => ({
-              limit: async () => {
-                if (table === entities) {
-                  return [{ id: body.target.entityId }];
-                }
-                if (table === fields) {
-                  return [{ id: body.target.fileFieldId }];
-                }
-                return [];
-              },
-            }),
-          }),
-        }),
-      }),
+      safeDb: db.safeDb,
+      scopedDb: db.scopedDb,
       workspaceId: WORKSPACE_ID,
     }),
   );
@@ -198,5 +211,54 @@ describe("proposePositionsStream", () => {
     }
     expect(result.code).toBe(429);
     expect(calls).toEqual({ release: 1, reservePeriod: 1 });
+  });
+
+  test("reports a failed position pin and ends the stream with a code", async () => {
+    const logged = spyOn(logger, "error").mockImplementation(() => {});
+    try {
+      const { calls, startAdmission } = admissionFake();
+      const pinFailure = new DatabaseError({ message: "Pin failed" });
+      const db = scopedDbMock();
+      const state = { pinning: false };
+      const handler = createProposePositionsStream({
+        prepareProposal: prepareProposalFake,
+        startAdmission,
+        openProposalStream: asTestRaw<typeof openReferenceProposalStream>(() =>
+          Result.ok(
+            (async function* () {
+              await Promise.resolve();
+              state.pinning = true;
+              yield asTestRaw<ReviewProposalStreamEvent>({
+                type: "position",
+                index: 0,
+                position: {},
+              });
+            })(),
+          ),
+        ),
+      });
+
+      const result = await callHandler(handler, {
+        scopedDb: db.scopedDb,
+        safeDb: asTestRaw<typeof db.safeDb>(
+          async (run: Parameters<typeof db.safeDb>[0]) =>
+            state.pinning ? Result.err(pinFailure) : await db.safeDb(run),
+        ),
+      });
+
+      if (!(result instanceof Response)) {
+        throw new TypeError("Expected a streaming response");
+      }
+      const frames = await result.text();
+      expect(frames).toContain("event: error");
+      expect(frames).toContain(REVIEW_PROPOSAL_STREAM_ERROR.FAILED);
+      expect(frames).not.toContain("Pin failed");
+      expect(logged.mock.calls.map(([event]) => event)).toEqual([
+        "document_review.proposal.pin_failed",
+      ]);
+      expect(calls.release).toBe(1);
+    } finally {
+      logged.mockRestore();
+    }
   });
 });
