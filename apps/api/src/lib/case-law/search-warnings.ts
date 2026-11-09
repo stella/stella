@@ -131,6 +131,8 @@ export const caseLawSearchWarnings = ({
  * - `phrasing_timed_out`: one of several phrasings ran out of the call's time
  *   budget, so the page holds the phrasings that finished and none of its
  *   hits; the hint names how to run it again.
+ * - `partial_matches_unread`: the partial matches a short page tops up with
+ *   were due and could not be read, so the list is shorter than usual.
  */
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
@@ -139,6 +141,7 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "many_required_terms",
   "provision_cited_widely",
   "phrasing_timed_out",
+  "partial_matches_unread",
 ] as const;
 
 type AgentCaseLawSearchWarningCode =
@@ -323,6 +326,21 @@ export const phrasingTimedOutWarning = ({
     : `Search this phrasing on its own (queries: [${JSON.stringify(query)}]), or narrow it with a court, date range or provision filter.`,
 });
 
+/**
+ * A short page whose top-up with partial matches did not finish. What it holds
+ * is correct but not everything it would normally hold, which the caller cannot
+ * tell from the hits. The phrasing is named for the same reason as above.
+ */
+export const partialMatchesUnreadWarning = ({
+  query,
+}: {
+  query: string;
+}): AgentCaseLawSearchWarning => ({
+  code: "partial_matches_unread",
+  message: `Decisions holding only some of the words of ${JSON.stringify(query)} could not be read in time, so this page may hold fewer "some_terms" hits than usual, or none. Do not read the shorter list as all there is.`,
+  hint: "Repeat this search to read the partial matches, or narrow it with a court or date range. Pass strict: true if only decisions holding every word are wanted.",
+});
+
 export const manyRequiredTermsWarning = ({
   terms,
   wordCount,
@@ -444,6 +462,8 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       query: "náhrada škody promlčení",
       retriedByCursor: false,
     }),
+  partial_matches_unread: () =>
+    partialMatchesUnreadWarning({ query: "náhrada škody promlčení" }),
 } as const satisfies Record<
   AgentCaseLawSearchWarningCode,
   () => AgentCaseLawSearchWarning
