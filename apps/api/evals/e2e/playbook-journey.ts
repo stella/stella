@@ -90,8 +90,8 @@ const parseArgs = (argv: readonly string[]): Options => {
     model: null,
   };
   for (let index = 0; index < argv.length; index += 2) {
-    const flag = argv[index];
-    const value = argv[index + 1] ?? panic(`${String(flag)} needs a value`);
+    const flag = argv[index] ?? panic("Missing flag");
+    const value = argv[index + 1] ?? panic(`${flag} needs a value`);
     switch (flag) {
       case "--api-url":
         options.apiUrl = value;
@@ -106,7 +106,7 @@ const parseArgs = (argv: readonly string[]): Options => {
         options.model = value;
         break;
       default:
-        return panic(`Unknown flag ${String(flag)}`);
+        return panic(`Unknown flag ${flag}`);
     }
   }
   return options;
