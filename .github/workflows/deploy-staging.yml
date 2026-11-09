@@ -496,7 +496,7 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -733,6 +733,7 @@ jobs:
             scripts/api-health.ts
             apps/api/src/db-components.ts
             apps/api/src/deploy-env-contract.ts
+            apps/api/src/bullmq-queue-hosts.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -747,6 +748,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"{check-api-deployment,api-health,staging-ecs-readiness}.ts "$RUNNER_TEMP/scripts/"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/db-components.ts" "$RUNNER_TEMP/apps/api/src/db-components.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/bullmq-queue-hosts.ts" "$RUNNER_TEMP/apps/api/src/bullmq-queue-hosts.ts"
           echo "STAGING_PROOF_GATE_DIR=$RUNNER_TEMP/scripts" >> "$GITHUB_ENV"
           echo "STAGING_PROOF_STATE_PATH=$RUNNER_TEMP/scripts/state.json" >> "$GITHUB_ENV"
 
@@ -893,7 +895,7 @@ jobs:
         if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && github.event.pull_request.head.repo.fork != true && github.token != '' }}
         timeout-minutes: 2
         continue-on-error: true
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -1074,6 +1076,9 @@ jobs:
           # Release verification requires every journey, including the
           # authenticated probes, rather than accepting partial coverage.
           MCP_CANARY_REQUIRE_CREDENTIALS: "true"
+          # About a minute of concurrent heavy-tool calls while the scheduled
+          # corpus jobs run; each tool's p95 against its latency budget.
+          MCP_CANARY_RELEASE_LOAD: "on"
           APP_REVIEW_ACCOUNT_EMAIL: ${{ vars.APP_REVIEW_ACCOUNT_EMAIL || 'review@stll.app' }}
           APP_REVIEW_ORGANIZATION_ID: ${{ vars.STAGING_APP_REVIEW_ORGANIZATION_ID }}
           REVIEW_ACCOUNT_PASSWORD: ${{ secrets.REVIEW_ACCOUNT_PASSWORD }}

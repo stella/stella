@@ -1028,6 +1028,10 @@ fn remove_file_if_present(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
   use chrono::{TimeZone, Utc};
@@ -1835,7 +1839,7 @@ mod tests {
     assert_eq!(store.load_drafted(day).unwrap(), vec![marker]);
     assert_eq!(store.load_assignments(day).unwrap(), vec![assignment]);
     assert_eq!(store.load_day(day).unwrap(), vec![segment("word")]);
-    let _ = fs::remove_dir_all(root);
+    fs::remove_dir_all(root).unwrap();
   }
 
   #[test]
@@ -1862,8 +1866,8 @@ mod tests {
     assert_eq!(restored.load_drafted(day).unwrap()[0].entry_id, "entry_a");
     store_a.delete_day(day).unwrap();
     assert!(store_a.load_drafted(day).unwrap().is_empty());
-    let _ = fs::remove_dir_all(root_a);
-    let _ = fs::remove_dir_all(root_b);
+    fs::remove_dir_all(root_a).unwrap();
+    assert!(!root_b.exists());
   }
 
   #[test]

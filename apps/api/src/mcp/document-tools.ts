@@ -176,6 +176,8 @@ const PROPERTY_WRITE_METHODS = {
   // alongside the amount and a person needs resolving to a workspace member.
   money: "unsupported",
   person: "unsupported",
+  // A record comes from its data source or its AI column, never typed in.
+  record: "unsupported",
   text: "set_field_value",
   "single-select": "set_field_value",
   "multi-select": "set_field_value",
@@ -2286,8 +2288,8 @@ const handleListPropertiesTool: TypedMcpToolHandler<
 const SET_FIELD_VALUE_TYPE_DESCRIPTION =
   "Value type; must match the property's value type";
 const SET_FIELD_VALUE_VALUE_DESCRIPTION =
-  "The value: string for text, string or null for single-select, array of " +
-  "strings for multi-select, ISO YYYY-MM-DD or null for date, integer for " +
+  "The value: string for text, string or null for single-select, string " +
+  "array for multi-select, YYYY-MM-DD or null for date, integer for " +
   "int. Null or empty clears the cell.";
 
 const setFieldValueContentSchema = v.variant("type", [
@@ -2334,8 +2336,7 @@ const setFieldValueContentSchema = v.variant("type", [
       v.description(SET_FIELD_VALUE_TYPE_DESCRIPTION),
     ),
     value: v.pipe(
-      v.number(),
-      v.integer(),
+      v.nullable(v.pipe(v.number(), v.integer())),
       v.description(SET_FIELD_VALUE_VALUE_DESCRIPTION),
     ),
     currency: v.optional(
@@ -2362,8 +2363,14 @@ const setFieldValueArgsSchema = nullAsAbsent(
 
 type SetFieldValueContent = v.InferOutput<typeof setFieldValueContentSchema>;
 
-const toFieldContent = (content: SetFieldValueContent): FieldWriteContent => {
+const toFieldContent = (
+  content: SetFieldValueContent,
+): FieldWriteContent | null => {
   if (content.type === "int") {
+    // An int has no empty value, so a null value clears the cell.
+    if (content.value === null) {
+      return null;
+    }
     return {
       version: 1,
       type: "int",
@@ -2442,6 +2449,8 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
       entityId,
       propertyId: brandPersistedPropertyId(parsed.output.property_id),
       content: toFieldContent(parsed.output.content),
+      // A null int clear still names its type, so it must match the property.
+      expectedType: parsed.output.content.type,
     }),
   );
   if (Result.isError(result)) {

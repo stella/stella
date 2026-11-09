@@ -182,6 +182,20 @@
       "system": "Izskats: automātisks",
       "light": "Izskats: gaišs",
       "dark": "Izskats: tumšs"
+    },
+    "edit": {
+      "saved": "Saglabāts",
+      "saving": "Saglabā…",
+      "notSaved": "Vēl nav saglabāts",
+      "done": "Gatavs",
+      "openFailed": "Šo dokumentu pašlaik nevar rediģēt",
+      "resumed": "Šim dokumentam ir nepabeigts labojums, tāpēc tas turpinās no turienes. Tikko ierakstītais netika saglabāts.",
+      "newerVersion": "Pa to laiku tika saglabāta jaunāka šī dokumenta versija, tāpēc labošana turpinās no tās. Tikko ierakstītais netika saglabāts.",
+      "takenOver": "Šo dokumentu tagad rediģē kāds cits. Jūsu izmaiņas kopš pēdējās saglabāšanas netika saglabātas.",
+      "finishFailed": "Jūsu izmaiņas ir saglabātas, bet no tām vēl nav izveidota jauna versija. Vēlreiz pieskarieties Gatavs vai izejiet: nākamā rediģēšana turpināsies no tām.",
+      "notStored": "Pēdējās izmaiņas neizdevās saglabāt. Palieciet, lai mēģinātu vēlreiz, vai aizejiet bez tām.",
+      "stay": "Palikt",
+      "leave": "Iziet"
     }
   },
   "signIn": {
@@ -211,7 +225,10 @@
     "signOut": "Atslēgties",
     "deleteAccount": "Dzēst kontu",
     "deleteAccountHint": "Atver jūsu kontu tīmeklī, kur varat to dzēst kopā ar visu, kas ir jūsu.",
-    "signOutFailed": "Neizdevās pabeigt izrakstīšanos. Mēģiniet vēlreiz."
+    "signOutFailed": "Neizdevās pabeigt izrakstīšanos. Mēģiniet vēlreiz.",
+    "lockScreenTitle": "Bloķēšanas ekrāns",
+    "timerDetails": "Taimera informācija",
+    "timerDetailsHint": "Kad taimeris mainās citā ierīcē, Apple paziņojumu pakalpojums nogādā tā aprakstu un lietu bloķēšanas ekrānā. Izslēgtā stāvoklī redzams tikai laiks, līdz atverat lietotni."
   },
   "header": {
     "search": "Meklēt"
@@ -225,7 +242,6 @@
     "headnote": "Kopsavilkums",
     "textUnavailable": "Šim nolēmumam teksts nav pieejams",
     "openSource": "Atvērt sākotnējo avotu",
-    "openFailed": "Saiti neizdevās atvērt.",
     "loadFailed": "Tiesu praksi neizdevās ielādēt.",
     "share": "Kopīgot"
   },
@@ -251,12 +267,6 @@
     "newTimer": "Jauns taimeris",
     "description": "Pie kā strādājat?",
     "matterTitle": "Lieta",
-    "noMatter": "Bez lietas",
-    "noDescription": "Bez apraksta",
-    "running": "Darbojas",
-    "paused": "Apturēts",
-    "pause": "Apturēt",
-    "resume": "Turpināt",
     "save": "Saglabāt",
     "discard": "Atmest",
     "emptyTitle": "Nav taimeru",
@@ -265,8 +275,7 @@
     "retry": "Mēģināt vēlreiz",
     "unavailable": "Jūsu organizācijā laika uzskaite nav ieslēgta.",
     "startFailed": "Taimeri neizdevās sākt. Mēģiniet vēlreiz.",
-    "changeFailed": "Taimeri neizdevās mainīt. Mēģiniet vēlreiz.",
-    "more": "{count, plural, zero {vēl # taimeru} one {vēl # taimeris} other {vēl # taimeri}}"
+    "changeFailed": "Taimeri neizdevās mainīt. Mēģiniet vēlreiz."
   },
   "scan": {
     "title": "Skenēt dokumentu",
@@ -336,5 +345,11 @@
   "pane": {
     "showList": "Rādīt sarakstu",
     "hideList": "Paslēpt sarakstu"
+  },
+  "link": {
+    "open": "Atvērt",
+    "share": "Kopīgot",
+    "cancel": "Atcelt",
+    "openFailed": "Saiti neizdevās atvērt."
   }
 }

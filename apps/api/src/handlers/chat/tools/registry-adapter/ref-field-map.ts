@@ -54,6 +54,10 @@ import {
   UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
   UPDATE_READER_ANNOTATION_PROJECTION,
 } from "@/api/lib/chat/projections";
+import {
+  READ_GUIDANCE_PROJECTION,
+  SEARCH_GUIDANCE_PROJECTION,
+} from "@/api/lib/chat/soft-law-result-projections";
 import type {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   MODEL_VISIBLE_MCP_TOOL_DEFINITIONS,
@@ -165,6 +169,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
   open_case_law_decision: { chatProjectable: false },
   read_case_law_decision_blocks: { chatProjectable: false },
   preview_cited_provision: { chatProjectable: false },
+  list_case_law_courts: { chatProjectable: false },
   // --- OpenAI-compat shims: not projected to chat ---------------------------
   // `fetch`/`search` duplicate read_content_across_matters /
   // search_across_matters and additionally emit `url` (and `metadata`) fields
@@ -334,6 +339,16 @@ export const READ_TOOL_REF_FIELD_MAP = {
     chatProjectable: true,
     inputRefs: [],
     projection: READ_PROVISION_HISTORY_PROJECTION,
+  },
+  search_guidance: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: SEARCH_GUIDANCE_PROJECTION,
+  },
+  read_guidance: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: READ_GUIDANCE_PROJECTION,
   },
   lookup_business_registry: {
     chatProjectable: true,

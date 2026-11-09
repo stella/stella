@@ -1,5 +1,6 @@
-//! Consent to AI drafts, read and changed from the activity window or
-//! Settings. Nothing here reaches recorded activity.
+//! Consent to AI drafts and the remembered drafting instruction, read and
+//! changed from the activity window or Settings. Nothing here reaches
+//! recorded activity.
 use tauri::State;
 
 use crate::{
@@ -86,6 +87,30 @@ pub async fn billing_draft_grant_consent(
   require_settings_scope(&account.identity, &scope_key)?;
   let settings =
     billing_draft_submit::grant_consent(&account, revision.as_deref()).await?;
+  require_account(&caller, &gates, &account)?;
+  let answer = scoped(&account.identity, settings);
+  drop(account);
+  Ok(answer)
+}
+
+/// The instruction future drafts follow, or `None` to forget it.
+#[tauri::command]
+pub async fn billing_draft_set_preference(
+  caller: ActivitySettingsCaller,
+  gates: State<'_, FeatureGates>,
+  accounts: State<'_, AccountState>,
+  scope_key: String,
+  revision: Option<String>,
+  preference: Option<String>,
+) -> Result<serde_json::Value, String> {
+  let account = linked_account(&caller, &gates, &accounts).await?;
+  require_settings_scope(&account.identity, &scope_key)?;
+  let settings = billing_draft_submit::set_preference(
+    &account,
+    preference.as_deref(),
+    revision.as_deref(),
+  )
+  .await?;
   require_account(&caller, &gates, &account)?;
   let answer = scoped(&account.identity, settings);
   drop(account);

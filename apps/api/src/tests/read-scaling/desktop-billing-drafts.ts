@@ -28,6 +28,7 @@ import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { seedEntityReadScaling } from "@/api/tests/read-scaling/entity-fixture";
 
@@ -256,8 +257,6 @@ export const measureDesktopBillingDraftSettings = async (
       .where(eq(featureEnrolments.organizationId, organizationId));
     await db.delete(member).where(eq(member.organizationId, organizationId));
     await db.delete(user).where(inArray(user.id, unrelatedUsers));
-    await db
-      .delete(organization)
-      .where(eq(organization.id, otherOrganizationId));
+    await deleteOrganizationsForTest(db, [otherOrganizationId]);
   }
 };

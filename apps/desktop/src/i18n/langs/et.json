@@ -38,7 +38,7 @@
     "reconnectAccount": "Ühenda stella webiga uuesti…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Muudatused jäävad kohalikuks ja proovitakse automaatselt uuesti",
+    "checkpointDelayedBody": "{fileName}: muudatused jäävad kohalikuks ja proovitakse automaatselt uuesti",
     "checkpointDelayedTitle": "Kontrollpunkti sünkroonimine viibib",
     "diagnosticsCopiedBody": "Kleepige see vajadusel oma tugipäringule.",
     "diagnosticsCopiedTitle": "Diagnostika kopeeritud",
@@ -54,11 +54,13 @@
     "recoveryResetTitle": "Kohalikud taasteandmed lähtestati",
     "revisionCreatedBody": "{fileName} salvestatud versioonina {versionNumber}. Töölaua muutmine lõpetatud",
     "revisionCreatedTitle": "stella versioon loodud",
-    "sessionClosedSaved": "{fileName} — Kohalik koopia jääb säilitatuks Ajutistes töökoopiates",
-    "sessionClosedUnsaved": "{fileName} — Teil on salvestamata kohalikud muudatused. Leidke oma koopia Ajutiste töökoopiate alt.",
-    "takenOverBody": "{fileName} — Avage uuesti stella-st, et muutmine tagasi võtta",
+    "sessionClosedSaved": "{fileName}: kohalik koopia jääb säilitatuks Ajutistes töökoopiates",
+    "sessionClosedUnsaved": "{fileName}: teil on salvestamata kohalikud muudatused. Leidke oma koopia Ajutiste töökoopiate alt.",
+    "takenOverBody": "{fileName}: avage uuesti stella-st, et muutmine tagasi võtta",
     "takenOverLocalError": "Töölaua muutmine teisaldatud teise seadmesse. See kohalik koopia on säilitatud.",
-    "takenOverTitle": "Muutmine teisaldatud teise seadmesse"
+    "takenOverTitle": "Muutmine teisaldatud teise seadmesse",
+    "editsSetAsideTitle": "Muudatused pandi kõrvale",
+    "editsSetAsideBody": "Salvestamata muudatused pandi kõrvale. Taastekausta avamiseks seadetes ühenda uuesti sama konto."
   },
   "dialog": {
     "accountWindowTitle": "Ühenda konto",
@@ -232,7 +234,16 @@
     "permissionDenied": "Süsteemi seadetes välja lülitatud.",
     "permissionManaged": "Haldab teie organisatsioon",
     "errorUpdateAutostart": "stella desktop ei saanud sisselogimisel käivitamist uuendada.",
-    "errorPermissions": "stella desktop ei saanud seda õigust lugeda ega muuta."
+    "errorPermissions": "stella desktop ei saanud seda õigust lugeda ega muuta.",
+    "recoveryTitle": "Kõrvale pandud muudatused",
+    "recoveryBody": "Salvestamata muudatusi hoitakse siin sinu konto jaoks. Nende taastamiseks ava kaust.",
+    "recoverySignIn": "Muudatused pandi kõrvale selle konto jaoks. Selle kausta avamiseks ühenda konto uuesti.",
+    "recoveryUnassigned": "Mõnel muudatusel pole registreeritud kontot. Nende käsitsi taastamiseks ava kaust.",
+    "recoveryPending": "Mõnda muudatust alles pannakse kõrvale. Lõpetamiseks proovi uuesti.",
+    "recoveryOpenFolder": "Ava taastekaust",
+    "recoveryOpenUnassigned": "Ava määramata muudatused",
+    "recoveryFilePending": "Ootab kõrvale panemist",
+    "recoveryError": "Taastekausta avamine ebaõnnestus. Proovi uuesti."
   },
   "clipboard": {
     "registryUnavailable": "Teie tegevusjurisdiktsioonide jaoks pole registreid lubatud.",
@@ -321,6 +332,12 @@
     "save": "Salvesta",
     "search": "Otsi lõikelaua ajaloost",
     "searchPlaceholder": "Otsi lõikelaua ajaloost",
+    "searchOptions": "Otsingu valikud",
+    "searchOptionExactPhrase": "Täpne fraas",
+    "searchOptionWholeWords": "Ainult terved sõnad",
+    "searchOptionMatchCase": "Erista suur- ja väiketähti",
+    "searchOptionMatchDiacritics": "Erista diakriitilisi märke",
+    "searchOptionsReset": "Lähtesta otsingu valikud",
     "registrySearch": "Otsi äriregistrist",
     "registrySearchPlaceholder": "Ettevõtte nimi või registrikood",
     "registryPreview": "Äriregistri eelvaade",
@@ -484,6 +501,10 @@
     "evidenceTitles": "Pealkirjad",
     "evidenceApps": "Rakendused",
     "rangeEmpty": "Selles vahemikus ei salvestatud midagi.",
+    "entryStart": "Algus",
+    "entryEnd": "Lõpp",
+    "rangeEndBeforeStart": "Valige lõpuaeg pärast algust.",
+    "rangeDraftedLeftOut": "{duration}, mustandina juba kirjas olevat aega arvestamata",
     "calendarHint": "Avage katkendjoonega soovitus, et see üle vaadata, või lohistage veerus Ajakanded, et koostada kanne mis tahes vahemiku kohta.",
     "aiDraftWrite": "Koosta stella AI-ga",
     "aiDraftAgain": "Koosta uuesti",
@@ -509,7 +530,27 @@
     "billingDraftsUnavailable": "stella AI kavandite seadeid ei saa praegu laadida.",
     "aiDraftCodes": "Ülesanne {task} · Tegevus {activity}",
     "aiDraftFlags": "Märkused arveldusjuhiste kohta",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Täpsusta",
+    "aiRefinePlaceholder": "Kirjutage stellale, kuidas kavandit muuta…",
+    "aiRefining": "stella AI muudab selgitust…",
+    "aiProposal": "stella AI soovitab",
+    "aiAccept": "Nõustu",
+    "aiDismiss": "Loobu",
+    "aiUndo": "Võta tagasi",
+    "aiUseOriginal": "Kasuta originaali",
+    "aiSteerShorter": "Lühemalt",
+    "aiSteerMoreDetail": "Üksikasjalikumalt",
+    "aiSteerClientFriendly": "Kliendile arusaadavalt",
+    "aiSteerWriteIn": "Kirjuta keeles: {language}",
+    "aiSteerRemember": "Jäta järgmiseks korraks meelde",
+    "billingDraftsPreference": "Teie kavandite eelistus",
+    "billingDraftsForgetPreference": "Unusta eelistus",
+    "aiStructureSplit": "{count, plural, one {stella AI soovitab jagada selle # kandeks} other {stella AI soovitab jagada selle # kandeks}}",
+    "aiStructureMove": "stella AI soovitab viia {duration} toimikusse {matter}",
+    "aiStructureCreate": "{count, plural, one {Loo # kanne} other {Loo # kannet}}",
+    "aiStructureMoveAccept": "Vii üle",
+    "aiFlagSplit": "Jaga kanne"
   },
   "dictation": {
     "title": "Dikteerimine",
@@ -691,6 +732,61 @@
     "callbackConnectedTitle": "ChatGPT on ühendatud",
     "callbackConnectedBody": "Võite selle vahekaardi sulgeda ja stellasse naasta.",
     "callbackNotConnectedTitle": "ChatGPT-d ei ühendatud",
-    "callbackNotConnectedBody": "Naaske stellasse, et näha, mis juhtus, ja proovige uuesti."
+    "callbackNotConnectedBody": "Naaske stellasse, et näha, mis juhtus, ja proovige uuesti.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Kasutage stella kohalike agentide jaoks oma Claude’i tellimust. Kasutus arvestatakse teie Claude’i paketist, stella tellimusest eraldi.",
+      "notInstalled": "Claude Code ei ole sellesse arvutisse veel installitud.",
+      "signIn": "Logi sisse Claude’iga",
+      "openSignInPage": "Ava sisselogimisleht",
+      "signedIn": "Claude’i sisse logitud",
+      "signedInAs": "Claude’i sisse logitud · {email}",
+      "signOut": "Logi välja",
+      "apiKey": "Claude Code on sisse logitud API-võtmega, mida stella ei kasuta. Logige välja ja seejärel oma Claude’i tellimusega uuesti sisse.",
+      "failure": {
+        "notCompleted": "Sisselogimine jäi pooleli. Proovige uuesti.",
+        "timedOut": "Sisselogimine võttis liiga kaua aega. Proovige uuesti.",
+        "unavailable": "Claude Code’i ei õnnestunud selles arvutis käivitada. Proovige uuesti."
+      }
+    },
+    "install": {
+      "notInstalled": "{name} ei ole sellesse arvutisse veel installitud.",
+      "install": "Installi",
+      "downloading": "{name} {version} allalaadimine: {percent}%",
+      "verifying": "{name} {version} kontrollimine",
+      "ready": "{name} {version} on installitud.",
+      "retry": "Proovi uuesti",
+      "activeStays": "Kasutusel jääb versioon {version}.",
+      "failure": {
+        "download": "{name} allalaadimine ebaõnnestus. Kontrollige internetiühendust ja proovige uuesti.",
+        "verification": "{name} kontrollimine ebaõnnestus, seega seda ei installitud.",
+        "storage": "{name} salvestamine sellesse arvutisse ebaõnnestus. Kontrollige, kas kettal on vaba ruumi."
+      }
+    }
+  },
+  "localSkills": {
+    "title": "Kohalikud oskused",
+    "description": "Oskuste kaustad selles arvutis. Selle arvuti kohalikud käivitused saavad neid kasutada ja nende sisust ei laadita midagi üles.",
+    "add": "Lisa kaust",
+    "remove": "Eemalda",
+    "removeFolder": "Eemalda {path}",
+    "unusable": "Pole kasutatav",
+    "notice": {
+      "action_failed": "See ei õnnestunud. Proovige uuesti.",
+      "too_many": "Selles arvutis on juba nii palju oskuste kaustu, kui saab kasutada. Eemaldage esmalt üks.",
+      "already_listed": "See kaust on juba loendis.",
+      "missing": "Seda kausta enam pole.",
+      "not_a_folder": "See pole enam kaust.",
+      "no_skill_file": "Selles kaustas pole faili SKILL.md.",
+      "skill_file_not_regular": "SKILL.md peab olema tavaline fail, mitte link.",
+      "skill_file_too_large": "SKILL.md on lugemiseks liiga suur.",
+      "unreadable": "Seda kausta ei õnnestunud lugeda.",
+      "no_name": "SKILL.md päises pole nime.",
+      "invalid_name": "SKILL.md-s olev nimi tohib sisaldada ainult tähti, numbreid, punkte, sidekriipse ja allkriipse ning peab algama tähe või numbriga.",
+      "duplicate_name": "Teises loendis olevas kaustas on sama nimega oskus.",
+      "runs_can_write": "Kohalikud käivitused saavad sellesse kausta kirjutada, seega ei saa selles oskust hoida.",
+      "network_folder": "See kaust asub võrguketta jagatud alal. Oskused peavad olema selle arvuti enda kettal.",
+      "path_changed": "Ülemkaust on muutunud. Eemaldage see kaust ja lisage see uuesti."
+    }
   }
 }

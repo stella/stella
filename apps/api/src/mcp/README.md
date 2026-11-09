@@ -31,11 +31,11 @@ instructions, because an orchestrator picks tools from the names it was handed:
 - `/mcp-documents`: the least-privilege document surface. Document tools plus
   the version-upload lifecycle through `write_capability`, whose capability IDs
   are allowlisted for that surface.
-- `/mcp-law`: the public legal corpus. Exactly 13 read tools (`search`,
+- `/mcp-law`: the public legal corpus. Exactly 15 read tools (`search`,
   `fetch`, `search_case_law`, `resolve_case_law_decision`, `resolve_law_citation`, `read_case_law_decision`,
   `read_case_law_citations`, `open_case_law_decision`, `case_law_coverage`,
   `search_legislation`, `read_statute`, `read_statute_provisions`,
-  `read_provision_history`). Resolution uses `stella:law_read` (also implied by
+  `read_provision_history`, `search_guidance`, `read_guidance`). Resolution uses `stella:law_read` (also implied by
   `stella:read`); the other tools use `stella:search` or `stella:read`. The
   decision reader app also calls two app-only tools there; `tools/list` keeps
   them for the host, which hides them from the model, and they are not
@@ -357,9 +357,15 @@ observations of those versions, not protocol guarantees:
 | instructions       | once, in the first user message | prefixed to every tool description                    | once, in the tool-search description |
 | call result        | `structuredContent` JSON only   | the script receives `content` and `structuredContent` | `structuredContent` JSON only        |
 
-Claude Code sends every tool upfront or, when the definitions are large, only
-the names (and instructions) and loads a definition when a tool is searched
-for. Codex always defers MCP tools behind discovery.
+Claude Code 2.1.283 sent every tool upfront or, when the definitions were
+large, only the names (and instructions) and loaded a definition when a tool
+was searched for. Claude Code 2.1.309 defers every MCP tool behind its tool
+search by default, whatever the size: its context usage report lists each
+stella tool as not loaded until the model searches for it. A tool whose
+`tools/list` entry carries `_meta: {"anthropic/alwaysLoad": true}` is loaded
+upfront; `false` keeps it deferred. The OpenAI-compatible `search` and `fetch`
+carry `true` (`COMPAT_PAIR_HOST_META` in `compat-shared.ts`) and every other
+tool stays deferred. Codex always defers MCP tools behind discovery.
 
 `scripts/mcp-surface-token-calibration.ts` measures the chars-per-token ratios
 behind the estimates with the Anthropic count_tokens endpoint; it needs

@@ -198,7 +198,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // request role has no direct access to this ingestion-owned relation.
   "legislation_work_identifiers",
   "synthetic_session_control",
-  // Guidance ingestion is owner-only until a read capability is introduced.
+  // Guidance is ingestion-owned; reads go through the public-law reader only.
   "soft_law_sources",
   "soft_law_ingestion_attempts",
   "soft_law_documents",
@@ -208,6 +208,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "database_backfill_states",
   "case_law_sitemap_changes",
   "case_law_sitemap_drain_progress",
+  // Ranking-signal changes: owner-run triggers enqueue, the ingestion role's
+  // projection drain consumes; request code never reads them.
+  "case_law_ranking_signal_changes",
   "case_law_sitemap_refresh_cursor",
   "case_law_sitemap_shard_counts",
   // Coverage populations: owner-maintained, read only by the public-law reader.
@@ -228,6 +231,8 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "eu_completion_controls",
   "action_cost_records",
   "action_cost_calls",
+  // Provider erasure intents belong to the scheduler, never request roles.
+  "hosted_customer_erasures",
   // Chat content repair receipts: forced owner-only RLS; the owner-run
   // backfill and deploy repair write them, request roles never see them.
   "chat_content_v3_backfill_receipts",
@@ -246,11 +251,19 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "agent_delegation",
   "agent_assertion_replay",
   "desktop_device_proof_replays",
+  // Desktop runner sockets, runs, commands and events: the gateway serves
+  // sockets and sweeps leases across organizations on the owner connection.
+  "desktop_runners",
+  "desktop_runner_runs",
+  "desktop_runner_commands",
+  "desktop_runner_events",
+  "desktop_runner_app_calls",
   // Better Auth OAuth control-plane state. Request-role access would expose
   // resource policy or let tenant traffic change token authorization rules.
   "oauth_resource",
   "oauth_client_resource",
   "oauth_client_assertion",
+  "oauth_grant_revocations",
   "mcp_web_handoff",
   "service_oauth_clients",
   // Machine API keys: credential digests plus the permission set each key

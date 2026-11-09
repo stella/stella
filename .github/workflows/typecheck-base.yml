@@ -38,6 +38,7 @@ jobs:
           NPM_TOKEN: ""
       - name: Generate types
         run: |
+          bun --cwd=packages/cli run codegen:runtime
           bun --filter @stll/api generate:capability-runtime
           bun run generate
           bun run typegen

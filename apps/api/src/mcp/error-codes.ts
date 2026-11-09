@@ -52,7 +52,11 @@ export const MCP_ERROR_CODES = [
   "rate_limited",
   /** A named external dependency is temporarily unavailable; retry is safe. */
   "upstream_unavailable",
-  /** The public corpus read exceeded its statement budget; narrow and retry. */
+  /**
+   * The public corpus read (a database statement or a search index request)
+   * exceeded its statement budget or the tool call's latency budget; narrow
+   * and retry.
+   */
   "public_read_timeout",
   /**
    * The case-law and legislation search index could not be reached (refused
@@ -61,6 +65,10 @@ export const MCP_ERROR_CODES = [
    * same call once the index is back succeeds.
    */
   "search_index_unavailable",
+  /** A continuation_token is unknown or expired; repeat the original call. */
+  "continuation_expired",
+  /** A continued read ran out of attempts without an answer; nothing returned. */
+  "public_read_unfinished",
   /** No tool with the given name is exposed on this surface. */
   "unknown_tool",
   /** An unexpected server-side failure; details are not leaked to the caller. */

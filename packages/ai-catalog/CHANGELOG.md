@@ -1,5 +1,23 @@
 # @stll/ai-catalog
 
+## 0.11.0
+
+### Minor Changes
+
+- [#8036](https://github.com/stella/stella/pull/8036) [`a673b9c`](https://github.com/stella/stella/commit/a673b9ce9ae19be276457c14a29969f176e3daba) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer GPT-6.1 Terra. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
+## 0.10.1
+
+### Patch Changes
+
+- [#7357](https://github.com/stella/stella/pull/7357) [`14ae497`](https://github.com/stella/stella/commit/14ae497b31a86e96931d734fd3441c4bbe8aac29) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Refresh upstream model rates and request capabilities.
+
+## 0.10.0
+
+### Minor Changes
+
+- Add `defaultTranscriptionModelId`, the cheapest transcription model offered in a region. The `dictation transcribe` capability no longer requires a model: without one the server uses that default for the organization's region.
+
 ## 0.9.0
 
 ### Minor Changes

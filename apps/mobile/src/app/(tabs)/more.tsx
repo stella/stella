@@ -1,7 +1,11 @@
 import { useRouter } from "expo-router";
 import type { Href } from "expo-router";
+import { useHeaderHeight } from "expo-router/react-navigation";
 import { Pressable, ScrollView, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
 import { Text } from "@stll/ui/text";
@@ -34,6 +38,9 @@ const MoreScreen = () => {
   const t = useTranslations();
   const colors = useAppColors();
   const scan = useScan();
+  const headerHeight = useHeaderHeight();
+  // Inside a tab the bottom inset includes the tab bar.
+  const { bottom } = useSafeAreaInsets();
 
   const groups: readonly (readonly MoreRow[])[] = [
     [
@@ -78,9 +85,19 @@ const MoreScreen = () => {
     >
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={screenStyles.content}
-        // The header is the platform's translucent bar; the list scrolls under it.
-        contentInsetAdjustmentBehavior="automatic"
+        // The tab turns the system's automatic insets off (see the tab
+        // layout), so the list clears the translucent header and the tab bar
+        // itself. Left to the system, a list too short to scroll kept its
+        // first offset and sat under the header.
+        contentContainerStyle={[
+          screenStyles.content,
+          {
+            paddingBottom: bottom + screenStyles.content.padding,
+            paddingTop: headerHeight + screenStyles.content.paddingTop,
+          },
+        ]}
+        contentInsetAdjustmentBehavior="never"
+        scrollIndicatorInsets={{ bottom, top: headerHeight }}
       >
         {groups.map((rows) => (
           <View

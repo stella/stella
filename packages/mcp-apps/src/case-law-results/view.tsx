@@ -32,6 +32,7 @@ import { DateRangeFilter } from "@stll/ui/date-range-filter";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { FIELD_TRIGGER_CLASS_NAME } from "@stll/ui/field-trigger";
+import { Form } from "@stll/ui/form";
 import {
   CaseLawIcon,
   ChevronRightIcon,
@@ -76,12 +77,25 @@ import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { createReaderController } from "../decision-reader/controller";
 import { createEmbeddedReaderBridge } from "../decision-reader/embedded-bridge";
 import { ReaderView } from "../decision-reader/view";
+import { parseAppToolPayload } from "../shared/bridge";
 import type { createPresentationBridge } from "../shared/bridge";
+import type { CourtCatalog } from "../shared/generated/contracts";
 import { appLocale } from "../shared/locale";
 import { SearchNotice } from "../shared/notice";
 import { getAppToolArrayLimit } from "../shared/tool-input";
-import { filterDefaults, searchFilterInput, sortResultRows } from "./model";
+import {
+  appendCourtCatalogPage,
+  courtPickerGroups,
+  filterDefaults,
+  originalSearchQuery,
+  searchSubmitInput,
+  sortResultRows,
+} from "./model";
 import type { CaseLawView, ResultRow, ResultSort } from "./model";
+import { parseCourtCatalog } from "./parse";
+
+/** Pages of a country's courts the picker reads before asking for a search. */
+const COURT_CATALOG_PAGE_CAP = 20;
 
 export type CaseLawBridge = ReturnType<
   typeof createPresentationBridge<CaseLawView>
@@ -150,7 +164,7 @@ const ResultTableRow = ({
               kind: "decision",
               courtAbbreviation: row.courtAbbreviation,
             }}
-            title={`${row.caseNumber} — ${row.court}`}
+            title={`${row.caseNumber}: ${row.court}`}
           />
           <PreviewCard>
             <PreviewCardTrigger
@@ -432,10 +446,7 @@ const SearchControls = ({
   const locale = useLocale();
   const format = useFormatter();
   const maxCourts = getAppToolArrayLimit("search_case_law", "courts");
-  const initialQueries = normalizeStringList(input["queries"], {
-    split: "never",
-  });
-  const originalQuery = initialQueries.ok ? initialQueries.value.join(" ") : "";
+  const originalQuery = originalSearchQuery(input);
   const [query, setQuery] = useState(originalQuery);
   const [country, setCountry] = useState(defaults.country);
   const [from, setFrom] = useState(defaults.from);
@@ -452,7 +463,73 @@ const SearchControls = ({
     })();
     return [...new Set(selected)];
   });
-  const facets = page.facets;
+  // The page's facets describe the searched country; after a country switch
+  // they describe another one and name none of the chosen country's courts.
+  const facets = country === defaults.country ? page.facets : null;
+  // Per country: a page answering after a country switch joins its own
+  // country's catalog, and a reader coming back finds it where it stopped.
+  const [catalogs, setCatalogs] = useState<ReadonlyMap<string, CourtCatalog>>(
+    () => new Map(),
+  );
+  const [catalogsLoading, setCatalogsLoading] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const countryCatalog = catalogs.get(country) ?? null;
+  const loadCatalog = () => {
+    if (catalogsLoading.has(country) || countryCatalog?.nextCursor === null) {
+      return;
+    }
+    const requested = country;
+    setCatalogsLoading((current) => new Set(current).add(requested));
+    bridge.detached(
+      (async () => {
+        // One bounded page per call, appended as it arrives, from where the
+        // country's catalog stopped. A cap or an unreadable page ends the
+        // round; the facets stand in, and the next opening picks up from here.
+        let cursor = countryCatalog?.nextCursor ?? null;
+        for (
+          let pageIndex = 0;
+          pageIndex < COURT_CATALOG_PAGE_CAP;
+          pageIndex += 1
+        ) {
+          // In turn: each page starts from the previous page's cursor.
+          const result = await bridge.requestTool({
+            name: "list_case_law_courts",
+            arguments: {
+              country: requested,
+              ...(cursor === null ? {} : { cursor }),
+            },
+          });
+          const parsed =
+            result.isError === true
+              ? undefined
+              : parseCourtCatalog(parseAppToolPayload(result));
+          if (parsed === undefined) {
+            break;
+          }
+          setCatalogs((current) =>
+            new Map(current).set(
+              requested,
+              appendCourtCatalogPage(current.get(requested) ?? null, parsed),
+            ),
+          );
+          cursor = parsed.nextCursor;
+          if (cursor === null) {
+            break;
+          }
+        }
+        setCatalogsLoading((current) => {
+          const next = new Set(current);
+          next.delete(requested);
+          return next;
+        });
+      })(),
+      "caseLawResults.courts",
+    );
+  };
+  const courtGroups = courtPickerGroups({ catalog: countryCatalog, facets });
+  const catalogPending =
+    countryCatalog === null && catalogsLoading.has(country);
   const dateLabels = {
     locale,
     placeholderLabel: t("selectDate"),
@@ -467,27 +544,27 @@ const SearchControls = ({
     nextDecadeLabel: t("nextDecade"),
     outOfRangeLabel: t("outOfRange"),
   };
+  const submission = searchSubmitInput({
+    input,
+    query,
+    originalQuery,
+    country,
+    court:
+      courts.length === 0 ? { type: "all" } : { type: "courts", names: courts },
+    from,
+    to,
+  });
   return (
-    <form
-      className="space-y-4"
+    <Form
       onSubmit={(event) => {
         event.preventDefault();
+        if (submission.type !== "search") {
+          return;
+        }
         bridge.detached(
           bridge.call({
             name: "search_case_law",
-            arguments: {
-              ...searchFilterInput({
-                input,
-                country,
-                court:
-                  courts.length === 0
-                    ? { type: "all" }
-                    : { type: "courts", names: courts },
-                from,
-                to,
-              }),
-              queries: query === originalQuery ? input["queries"] : [query],
-            },
+            arguments: submission.input,
           }),
           "caseLawResults.filter",
         );
@@ -506,6 +583,7 @@ const SearchControls = ({
           type="submit"
           variant="outline"
           className="h-auto shrink-0 max-sm:h-11 sm:h-auto"
+          disabled={submission.type !== "search"}
         >
           {t("search")}
         </Button>
@@ -540,7 +618,13 @@ const SearchControls = ({
           <FieldLabel className="text-muted-foreground text-xs">
             {t("court")}
           </FieldLabel>
-          <Popover>
+          <Popover
+            onOpenChange={(open) => {
+              if (open) {
+                loadCatalog();
+              }
+            }}
+          >
             <PopoverTrigger
               className={cn(
                 FIELD_TRIGGER_CLASS_NAME,
@@ -571,21 +655,22 @@ const SearchControls = ({
                   maximum: format.number(maxCourts),
                 })}
                 matchText={foldSearchMatchText}
-                groups={
-                  facets === null
-                    ? []
-                    : facets.court.map(({ tierLabel, courts: options }) => ({
-                        value: tierLabel,
-                        label: t(tierLabel),
-                        courts: options,
-                      }))
-                }
+                groups={courtGroups.map(({ tierLabel, courts: options }) => ({
+                  value: tierLabel,
+                  label: t(tierLabel),
+                  courts: options.map(({ value, count }) => ({
+                    value,
+                    ...(count === null
+                      ? {}
+                      : { badgeText: format.number(count) }),
+                  })),
+                }))}
                 selected={courts}
                 onChange={setCourts}
                 label={t("court")}
                 searchLabel={t("search")}
                 clearLabel={t("reset")}
-                emptyLabel={t("noResults")}
+                emptyLabel={catalogPending ? t("loading") : t("noResults")}
               />
             </PopoverPopup>
           </Popover>
@@ -603,11 +688,16 @@ const SearchControls = ({
           onFromChange={(value) => setFrom(value ?? "")}
           onToChange={(value) => setTo(value ?? "")}
         />
-        <Button type="submit" variant="outline" className="max-sm:col-span-2">
+        <Button
+          type="submit"
+          variant="outline"
+          className="max-sm:col-span-2"
+          disabled={submission.type !== "search"}
+        >
           {t("filter")}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };
 
@@ -728,10 +818,15 @@ const SearchResults = ({
   );
 };
 
-const LoadingResults = () => {
+const LoadingResults = ({ continuing }: { continuing: boolean }) => {
   const t = useTranslations();
   return (
     <div role="status" aria-label={t("loading")} className="space-y-4">
+      {continuing && (
+        <p className="text-muted-foreground text-sm">
+          {t("searchStillRunning")}
+        </p>
+      )}
       <Skeleton className="h-9 w-full" />
       {["first", "second", "third"].map((id) => (
         <div key={id} className="flex items-center gap-4 rounded-lg border p-4">
@@ -830,8 +925,9 @@ const ResultContent = ({
   );
   switch (result.status) {
     case "idle":
+      return <LoadingResults continuing={false} />;
     case "loading":
-      return <LoadingResults />;
+      return <LoadingResults continuing={result.phase === "continuing"} />;
     case "error":
       if (result.previous.status === "ready") {
         return (

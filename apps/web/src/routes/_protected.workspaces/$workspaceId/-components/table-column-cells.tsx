@@ -1,18 +1,26 @@
-import { type PropsWithChildren, type ReactNode, useState } from "react";
+import {
+  type PropsWithChildren,
+  type ReactElement,
+  type ReactNode,
+  useState,
+} from "react";
 
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
+  BanIcon,
   CheckIcon,
   EqualIcon,
   EyeIcon,
   MinusIcon,
+  PlusIcon,
   RefreshCwIcon,
   XIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
 
+import type { ReviewVerdict } from "@/components/ai-suggestions/document-review-queries";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import { ActiveEditBadge } from "@/components/workspaces/active-edit-badge";
@@ -32,6 +40,8 @@ import {
 import { offersCellReview } from "@/components/workspaces/row-actions.logic";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import type {
   WorkspaceEntity,
   WorkspaceField,
@@ -43,6 +53,7 @@ import {
   useWorkspaceStore,
 } from "@/lib/workspaces/store";
 import { AICellSourceCard } from "@/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card";
+import { CellOverrideCard } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-override-card";
 import {
   type AIExtractionTarget,
   isAIExtractionProperty,
@@ -74,6 +85,25 @@ const PropertyCellContent = ({
   const justification = useWorkspaceStore((s) =>
     selectJustificationByFieldId(s.justifications, field?.id),
   );
+  // Only a cell that holds an override asks for the beta decision.
+  const tableAnalysisEnabled = useCallerFeatureEnabled(
+    CALLER_FEATURE.tableAnalysis,
+    { enabled: cellMetadata?.override !== undefined },
+  );
+  const override = tableAnalysisEnabled ? cellMetadata?.override : undefined;
+  const withOverride = (cell: ReactElement): ReactElement =>
+    override === undefined || cellMetadata === undefined ? (
+      cell
+    ) : (
+      <CellOverrideCard
+        entity={entity}
+        metadata={cellMetadata}
+        override={override}
+        property={property}
+      >
+        {cell}
+      </CellOverrideCard>
+    );
   const extractionPreview = useWorkspaceStore((s) =>
     fieldContent?.type === "pending"
       ? s.getExtractionPreview(entity.entityId, property.id)
@@ -233,7 +263,7 @@ const PropertyCellContent = ({
       );
 
       if (!justification) {
-        return cell;
+        return withOverride(cell);
       }
       return (
         <AICellSourceCard
@@ -260,7 +290,7 @@ const PropertyCellContent = ({
     }
   }
 
-  return (
+  return withOverride(
     <>
       <CellMetadataFlags
         entityId={entity.entityId}
@@ -279,7 +309,7 @@ const PropertyCellContent = ({
         showDateIcon={false}
         workspaceId={property.workspaceId}
       />
-    </>
+    </>,
   );
 };
 
@@ -320,17 +350,22 @@ const VERDICT_TIER_LABEL_KEYS = {
   fallback: "knowledge.playbooks.verdict.fallback",
   deviation: "knowledge.playbooks.verdict.deviation",
   missing: "knowledge.playbooks.verdict.missing",
-} as const satisfies Record<string, TranslationKey>;
+  additional: "knowledge.playbooks.verdict.additional",
+  "not-applicable": "knowledge.playbooks.verdict.notApplicable",
+} as const satisfies Record<ReviewVerdict, TranslationKey>;
 
 // Each tier also carries a distinct glyph so the badge encodes the verdict by
 // shape as well as color (colorblind-safe): check = on standard, equals = an
-// accepted alternative, cross = a deviation, dash = nothing extracted.
+// accepted alternative, cross = a deviation, dash = nothing extracted, plus =
+// beyond the standard, ban = does not pertain to this document.
 const VERDICT_TIER_ICONS = {
   compliant: CheckIcon,
   fallback: EqualIcon,
   deviation: XIcon,
   missing: MinusIcon,
-} as const satisfies Record<string, LucideIcon>;
+  additional: PlusIcon,
+  "not-applicable": BanIcon,
+} as const satisfies Record<ReviewVerdict, LucideIcon>;
 
 // Narrows an arbitrary tier id to a known tier without widening to the full
 // TranslationKey union, so `t()` resolves the placeholder-free overload.

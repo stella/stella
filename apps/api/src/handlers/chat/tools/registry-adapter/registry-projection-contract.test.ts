@@ -21,7 +21,10 @@ import {
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { Block } from "@stll/legal-ast/document-ast";
+import type { ReaderTextQuoteSelector } from "@stll/legal-ast/reader-text-quote";
 import { cents } from "@stll/money";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -54,6 +57,10 @@ import * as projectionModule from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
+import {
+  SOFT_LAW_DOCUMENT_CLASS,
+  SOFT_LAW_NATURE_NOTICE,
+} from "@/api/lib/legal-search/soft-law-read";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
@@ -109,6 +116,8 @@ beforeEach(() => {
   searchConsolidatedLegislationMock.mockReset();
   searchDecisionsHandlerMock.mockReset();
   searchLegislationHandlerMock.mockReset();
+  searchServedSoftLawMock.mockReset();
+  readServedSoftLawMock.mockReset();
   searchProviderSearchMock.mockReset();
 });
 
@@ -158,6 +167,8 @@ const readGatedDecisionCitationsMock = mock();
 const readGatedDecisionCitationDigestMock = mock();
 const withRedistributableSubjectMock = mock();
 const searchLegislationHandlerMock = mock();
+const searchServedSoftLawMock = mock();
+const readServedSoftLawMock = mock();
 const resolveStatuteExpressionMock = mock();
 const resolveStatuteWorkVersionMock = mock();
 const readPublicLegislationHandlerMock = mock();
@@ -249,6 +260,20 @@ const selectQueue = (queue: readonly (readonly unknown[])[]) => {
   };
 };
 
+const ANNOTATION_BLOCKS = [
+  { anchorId: "p-3", text: "The court held" },
+  { anchorId: "p-4", text: "that the claim was time-barred" },
+].map(
+  ({ anchorId, text }) =>
+    ({
+      type: "paragraph",
+      id: anchorId,
+      anchorId,
+      inlines: [{ type: "text", text }],
+      plainText: text,
+    }) satisfies Block,
+);
+
 const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
   const scopedDb = asTestRaw<ScopedDb>(
     async (run: (transaction: unknown) => unknown) => await run(tx),
@@ -263,6 +288,7 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         accessibleWorkspaceIds: [toSafeId<"workspace">(WS)],
         pinnedIds: [],
       }),
+      workspaceStatusById: new Map([[WS, "active" as const]]),
       userId: toSafeId<"user">("user_1"),
       userEmail: "standard@example.test",
       testDependencies: {
@@ -286,6 +312,8 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         readGatedDecisionCitations: readGatedDecisionCitationsMock,
         readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
         searchLegislationHandler: searchLegislationHandlerMock,
+        searchServedSoftLaw: searchServedSoftLawMock,
+        readServedSoftLaw: readServedSoftLawMock,
         resolveStatuteExpression: resolveStatuteExpressionMock,
         resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
         readPublicLegislationHandler: readPublicLegislationHandlerMock,
@@ -297,7 +325,11 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         resolveAnnotationTarget: async () =>
           await Promise.resolve({
             status: "available" as const,
-            readBlocks: async () => await Promise.resolve([]),
+            readBlocks: async () => await Promise.resolve(ANNOTATION_BLOCKS),
+            readTextPieces: async () =>
+              await Promise.resolve(
+                ANNOTATION_BLOCKS.flatMap(readerAnchorPiecesOf),
+              ),
           }),
         searchConsolidatedLegislation: searchConsolidatedLegislationMock,
         getLawTextBlock: getLawTextBlockMock,
@@ -483,6 +515,32 @@ const entityRef = (refRegistry: ChatRefRegistry, entityId: string): string =>
     entityId: toSafeId<"entity">(entityId),
     workspaceId: toSafeId<"workspace">(WS),
   });
+
+const guidanceFixture = (documentId: string) => ({
+  documentId: toSafeId<"softLawDocument">(documentId),
+  documentClass: SOFT_LAW_DOCUMENT_CLASS,
+  notice: SOFT_LAW_NATURE_NOTICE,
+  issuer: {
+    authority: "eu-edpb",
+    name: "European Data Protection Board",
+    jurisdiction: "EU",
+  },
+  kind: "guideline" as const,
+  sourceKind: "Guideline",
+  title: "Guidelines on consent",
+  reference: "05/2020",
+  issuedOn: "2020-05-04",
+  validity: { state: "not_stated", basis: "source_stated" },
+  language: "en",
+  publisherUrl: "https://publisher.example/guidelines-05-2020",
+  attribution: {
+    text: "European Data Protection Board, edpb.europa.eu",
+    termsUrl: "https://www.edpb.europa.eu/copyright_en",
+    conditions: ["Acknowledge the source."],
+    summaryDisclaimer: "Summary disclaimer the publisher requires.",
+  },
+  access: "text" as const,
+});
 
 const CONTRACT_CORPUS = {
   list_matters: [
@@ -2004,6 +2062,38 @@ const CONTRACT_CORPUS = {
       JSON.stringify({ match: { type: matchType } }).slice(1, -1),
     ],
   })),
+  search_guidance: [
+    {
+      mode: "search",
+      buildArgs: () => ({ query: "consent" }),
+      setup: () => {
+        searchServedSoftLawMock.mockResolvedValue({
+          items: [{ ...guidanceFixture(uid(96)), snippet: "valid consent" }],
+          nextOffset: null,
+        });
+      },
+      expectRefPaths: [],
+      expectPayloadContains: [SOFT_LAW_DOCUMENT_CLASS],
+    },
+  ],
+  read_guidance: [
+    {
+      mode: "read",
+      buildArgs: () => ({ document_id: uid(96) }),
+      setup: () => {
+        readServedSoftLawMock.mockResolvedValue({
+          ...guidanceFixture(uid(96)),
+          textState: "available",
+          text: "Consent must be freely given.",
+        });
+      },
+      expectRefPaths: [],
+      expectPayloadContains: [
+        SOFT_LAW_DOCUMENT_CLASS,
+        "Summary disclaimer the publisher requires.",
+      ],
+    },
+  ],
   read_statute: [
     {
       mode: "read",
@@ -2238,20 +2328,21 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ target_type: "decision", target_id: uid(60) }),
       tx: () => ({
         select: selectQueue([
-          [
-            ["p-3", "The court held"],
-            ["p-4", "that the claim was time-barred"],
-          ].map(([blockAnchorId, quote], index) => ({
+          ANNOTATION_BLOCKS.map(({ anchorId, plainText }, index) => ({
             id: uid(61 + index),
             groupId: uid(63),
             kind: "comment",
             visibility: "shared",
             color: null,
             style: null,
-            blockAnchorId,
-            startOffset: 0,
-            endOffset: 10,
-            quote,
+            ...({
+              blockAnchorId: anchorId,
+              startOffset: 0,
+              endOffset: plainText.length,
+              quote: plainText,
+              quotePrefix: "",
+              quoteSuffix: "",
+            } satisfies ReaderTextQuoteSelector),
             body: index === 0 ? "Check the limitation date" : null,
             createdAt: new Date("2026-01-01"),
             updatedAt: new Date("2026-01-01"),
@@ -2403,7 +2494,7 @@ describe("registry projection contract", () => {
           if (!isRecord(item)) {
             panic("Invalid citation result");
           }
-          expect(item["url"]).toBe(item["sourceUrl"]);
+          expect(item["sourceUrl"]).toBeUndefined();
           expect(item["url"]).toMatch(/^https:/u);
           expect(item["source_url"]).toBeUndefined();
         }
@@ -2504,16 +2595,12 @@ describe("registry projection contract", () => {
             "appUrl" in value,
             `${toolName}: primary/source links must not expose appUrl`,
           ).toBe(false);
-          if (
-            "url" in value &&
-            typeof value.url === "string" &&
-            "sourceUrl" in value &&
-            typeof value.sourceUrl === "string" &&
-            value.url !== new URL(value.sourceUrl).href
-          ) {
-            expect("source_url" in value && value.source_url).toBe(
-              new URL(value.sourceUrl).href,
+          // The publisher link is a distinct, parsed link or absent.
+          if ("source_url" in value) {
+            expect(value.source_url).toBe(
+              new URL(String(value.source_url)).href,
             );
+            expect("url" in value && value.url).not.toBe(value.source_url);
           }
           for (const child of Object.values(value)) {
             assertCitationLinks(child);

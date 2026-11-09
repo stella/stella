@@ -36,6 +36,7 @@ import {
   installPgliteCaseLawObservationFence,
   installPgliteCaseLawParsedSourceInvalidation,
   installPgliteCaseLawPopulationCounts,
+  installPgliteCaseLawRankingSignalChanges,
   installPgliteCaseLawSitemapChanges,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatRunLogRls,
@@ -44,6 +45,7 @@ import {
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
   installPgliteCorpusProjectionRevisionFence,
+  installPgliteCorrespondenceSources,
   installPgliteDecisionAliases,
   installPgliteDecisionCitationStats,
   installPgliteDecisionDocketFilingYear,
@@ -54,6 +56,7 @@ import {
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteListVerificationBudgets,
+  installPgliteOrganizationDeleteOwnerGuard,
   installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
@@ -381,9 +384,12 @@ export const availableSchemaRelationNames = new Set<string>(
  * is how a REVOKE goes missing from the harness.
  */
 export const ROLE_GRANT_STATEMENTS = [
+  `GRANT SELECT (generation_provenance), UPDATE (generation_provenance), INSERT (generation_provenance) ON chat_threads TO stella`,
   `GRANT SELECT ON TABLE "soft_law_sources", "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT INSERT, UPDATE ON TABLE "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT UPDATE (listing_baseline, listing_seen, listing_expected_total, sync_cursor, last_sync_at, run_state, run_id, run_started_at, lease_token, lease_expires_at, failure_tag) ON TABLE "soft_law_sources" TO stella_ingestion`,
+  `GRANT INSERT ON TABLE "soft_law_sources" TO stella_ingestion`,
+  `GRANT INSERT ON TABLE "system_audit_runs" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_decision_alias_moved_identities" TO stella_ingestion`,
   caseLawDecisionViewGrantStatement("later", "stella_ingestion"),
@@ -506,8 +512,13 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_browse_facet_counts",
       "case_law_coverage_summaries",
       "case_law_sitemap_shard_counts",
+      "case_law_ranking_signal_changes",
       "case_law_sitemap_shards",
       "case_law_source_arrivals"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE ("claimed_until") ON TABLE "case_law_ranking_signal_changes"
     TO stella_ingestion
   `,
   `
@@ -821,6 +832,11 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
   await db.execute(
     sql.raw(
+      "CREATE ROLE stella_correspondence_source NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
+    ),
+  );
+  await db.execute(
+    sql.raw(
       "CREATE ROLE stella_entity_gate NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
     ),
   );
@@ -871,6 +887,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawObservationFence(db);
   await installPgliteCaseLawParsedSourceInvalidation(db);
   await installPgliteCaseLawSitemapChanges(db);
+  await installPgliteCaseLawRankingSignalChanges(db);
   await installPgliteCaseLawPopulationCounts(db);
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteDesktopPresenceRls(db);
@@ -887,6 +904,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteReaderAnnotationMatterRows(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
+  await installPgliteOrganizationDeleteOwnerGuard(db);
 
   await applyStellaTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {
@@ -896,6 +914,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatStoredContentEgress(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPglitePlaybookDocumentTypeKey(db);
+  await db.transaction(async (tx) => {
+    await installPgliteCorrespondenceSources(tx);
+  });
 
   return client;
 };

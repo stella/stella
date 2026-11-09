@@ -36,6 +36,7 @@ import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
 import { MiddleTruncate } from "@stll/ui/middle-truncate";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
+import { RecordFieldValue } from "@stll/workspace-ui/field-value";
 
 import { DocumentIcon } from "@/components/document-icon";
 import {
@@ -893,7 +894,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       </div>
       <div
         className={cn(
-          "text-muted-foreground mt-1 flex items-center gap-2 rounded border border-dashed px-3 py-1.5 text-xs",
+          "text-muted-foreground mt-1 flex items-center gap-2 rounded-sm border border-dashed px-3 py-1.5 text-xs",
           isDragActive ? "visible" : "hidden",
           isRootDropTarget
             ? "border-primary bg-primary/10 text-foreground"
@@ -1133,7 +1134,7 @@ const ColumnHeaderCell = ({
       <Button
         className={cn(
           "flex min-w-0 shrink",
-          align === "end" ? "justify-end text-end" : "justify-start text-start",
+          align === "end" ? "justify-end" : "justify-start",
         )}
         onClick={() => onSort(propertyId)}
         variant="plain"
@@ -1141,7 +1142,9 @@ const ColumnHeaderCell = ({
         <span
           className={cn(
             "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5",
-            align === "end" ? "justify-end" : "justify-start",
+            align === "end"
+              ? "justify-end text-end"
+              : "justify-start text-start",
             isActive && "text-foreground",
           )}
         >
@@ -1638,12 +1641,12 @@ export const FilesystemRow = ({
   ));
 
   const gridCls = cn(
-    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded px-2 text-start text-sm",
+    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded-sm px-2 text-start text-sm",
     (isFolderDropTarget || isExternalDropTarget) && "bg-accent",
     isSelected && "bg-accent",
   );
   const rowButtonCls =
-    "min-w-0 rounded text-start outline-none focus-visible:bg-muted/70";
+    "min-w-0 rounded-sm text-start outline-none focus-visible:bg-muted/70";
 
   // Content area: Name + Type + extras (interactive, clickable)
   // gridColumn spans all content columns (excluding the actions column)
@@ -1846,6 +1849,16 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
     return (
       <span className="text-muted-foreground truncate text-xs">
         {formatted || "-"}
+      </span>
+    );
+  }
+
+  // A record's state (candidates to choose, a count, review) is part of
+  // what it says; the flat text would hide it behind "-".
+  if (field?.content.type === "record") {
+    return (
+      <span className="text-muted-foreground truncate text-xs">
+        <RecordFieldValue content={field.content} variant="table" />
       </span>
     );
   }

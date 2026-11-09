@@ -37,6 +37,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import createHostedSetup from "./create-hosted-setup";
@@ -413,9 +414,9 @@ if (!databaseUrl || !runPostgresTests) {
           } finally {
             provider.restore();
             releaseProvider.resolve(undefined);
-            await setup.db
-              .delete(organization)
-              .where(eq(organization.id, fixture.organizationId));
+            await deleteOrganizationsForTest(setup.db, [
+              fixture.organizationId,
+            ]);
             await setup.db
               .delete(user)
               .where(inArray(user.id, [fixture.userId, secondOwnerId]));
@@ -517,9 +518,9 @@ if (!databaseUrl || !runPostgresTests) {
                     expect(claims.at(0)?.claimId).not.toBe(staleClaimId);
                   } finally {
                     provider.restore();
-                    await setup.db
-                      .delete(organization)
-                      .where(eq(organization.id, fixture.organizationId));
+                    await deleteOrganizationsForTest(setup.db, [
+                      fixture.organizationId,
+                    ]);
                     await setup.db
                       .delete(user)
                       .where(eq(user.id, fixture.userId));

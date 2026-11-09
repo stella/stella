@@ -53,9 +53,12 @@ import type {
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
+  ChatRunLogRefusedError,
   createChatRunLog,
   createChatRunLogReplay,
+  MAX_RUN_BYTES,
   sweepClosedChatRunLogs,
 } from "@/api/lib/chat/run-log";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
@@ -135,8 +138,12 @@ const seedRunningTurn = async (): Promise<{
       createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     ),
   );
-  const inserted = await scopedDb(
-    async (tx) => await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+  const inserted = await withChatRunPings(
+    async (pings) =>
+      await scopedDb(
+        async (tx) =>
+          await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx }),
+      ),
   );
   if (Result.isError(inserted)) {
     panic("Could not seed chat turn", inserted.error);
@@ -444,14 +451,18 @@ describe("chat run log database contract", () => {
             ...log,
             close: async () => {
               await log.close();
-              await scopedDbA(
-                async (tx) =>
-                  await settleChatTurnOnTx({
-                    assistantMessageId: null,
-                    execution: run.execution,
-                    outcome: USER_STOP_OUTCOME,
-                    tx,
-                  }),
+              await withChatRunPings(
+                async (pings) =>
+                  await scopedDbA(
+                    async (tx) =>
+                      await settleChatTurnOnTx({
+                        pings,
+                        assistantMessageId: null,
+                        execution: run.execution,
+                        outcome: USER_STOP_OUTCOME,
+                        tx,
+                      }),
+                  ),
               );
             },
           },
@@ -579,14 +590,18 @@ describe("chat run log database contract", () => {
           finishSettlement: async () => {
             settlements += 1;
             await run.settle(async () => {
-              const settled = await scopedDbA(
-                async (tx) =>
-                  await settleChatTurnOnTx({
-                    assistantMessageId: messageId,
-                    execution: seeded.execution,
-                    outcome,
-                    tx,
-                  }),
+              const settled = await withChatRunPings(
+                async (pings) =>
+                  await scopedDbA(
+                    async (tx) =>
+                      await settleChatTurnOnTx({
+                        pings,
+                        assistantMessageId: messageId,
+                        execution: seeded.execution,
+                        outcome,
+                        tx,
+                      }),
+                  ),
               );
               expect(settled).toBe("settled");
               return { type: "stored", outcome };
@@ -675,14 +690,18 @@ describe("chat run log database contract", () => {
       });
       await Bun.sleep(50);
       expect(received.value).toBeNull();
-      await scopedDbA(
-        async (tx) =>
-          await settleChatTurnOnTx({
-            assistantMessageId: null,
-            execution: run.execution,
-            outcome: USER_STOP_OUTCOME,
-            tx,
-          }),
+      await withChatRunPings(
+        async (pings) =>
+          await scopedDbA(
+            async (tx) =>
+              await settleChatTurnOnTx({
+                pings,
+                assistantMessageId: null,
+                execution: run.execution,
+                outcome: USER_STOP_OUTCOME,
+                tx,
+              }),
+          ),
       );
       const timing = await readChatTurnTiming({
         execution: run.execution,
@@ -957,14 +976,18 @@ describe("chat run log database contract", () => {
   test("settlement closes an existing run log", async () => {
     const run = await seedRunningTurn();
     await logFor(run).append([chunk("before settlement")]);
-    const settled = await scopedDbA(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId: null,
-          execution: run.execution,
-          outcome: USER_STOP_OUTCOME,
-          tx,
-        }),
+    const settled = await withChatRunPings(
+      async (pings) =>
+        await scopedDbA(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId: null,
+              execution: run.execution,
+              outcome: USER_STOP_OUTCOME,
+              tx,
+            }),
+        ),
     );
     expect(settled).toBe("settled");
     const [header] = await testDb
@@ -976,14 +999,18 @@ describe("chat run log database contract", () => {
 
   test("settlement before delivery logging creates no log rows", async () => {
     const run = await seedRunningTurn();
-    await scopedDbA(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId: null,
-          execution: run.execution,
-          outcome: USER_STOP_OUTCOME,
-          tx,
-        }),
+    await withChatRunPings(
+      async (pings) =>
+        await scopedDbA(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId: null,
+              execution: run.execution,
+              outcome: USER_STOP_OUTCOME,
+              tx,
+            }),
+        ),
     );
     const headers = await testDb
       .select()
@@ -1010,9 +1037,16 @@ describe("chat run log database contract", () => {
         })
         .where(eq(chatTurns.id, run.execution.id));
     });
-    await scopedDbA(
-      async (tx) =>
-        await reapOwnerlessChatTurnOnTx({ threadId: run.threadId, tx }),
+    await withChatRunPings(
+      async (pings) =>
+        await scopedDbA(
+          async (tx) =>
+            await reapOwnerlessChatTurnOnTx({
+              pings,
+              threadId: run.threadId,
+              tx,
+            }),
+        ),
     );
     const [header] = await testDb
       .select({ closedAt: chatRunLogs.closedAt })
@@ -1045,18 +1079,123 @@ describe("chat run log database contract", () => {
     await log.close();
   });
 
+  test("delivery stores the terminal error of a batch refused for its size, and surfaces the refusal itself", async () => {
+    const run = await seedRunningTurn();
+    const log = logFor(run);
+    const before = chunk("before");
+    const oversized = chunk("x".repeat(1024 * 1024));
+    const response = toServerSentEventsResponse(
+      (async function* () {
+        yield before;
+        yield oversized;
+        yield chunk("never produced");
+      })(),
+      // One chunk per append, so the refusal drops only the oversized batch.
+      { durability: { adapter: log, batch: 1 } },
+    );
+    const delivered = (await response.text())
+      .split("\n")
+      .flatMap((line): unknown[] => {
+        if (!line.startsWith("data: ")) {
+          return [];
+        }
+        const event: unknown = JSON.parse(line.slice("data: ".length));
+        return [event];
+      });
+    const refusal = "Chat run log chunk exceeds its size limit";
+    // The live reader ends on the refusal itself, not on a follow-on failure
+    // of the terminal append it would otherwise have blocked.
+    expect(delivered.at(-1)).toMatchObject({
+      type: EventType.RUN_ERROR,
+      message: refusal,
+    });
+    const stored = (await log.snapshot()).map(({ chunk: entry }) => entry);
+    expect(stored.slice(1, -1)).toEqual([before]);
+    expect(stored.at(-1)).toMatchObject({
+      type: EventType.RUN_ERROR,
+      message: refusal,
+    });
+    const [header] = await testDb
+      .select({ closedAt: chatRunLogs.closedAt })
+      .from(chatRunLogs)
+      .where(eq(chatRunLogs.runId, run.runId));
+    expect(header?.closedAt).toBeInstanceOf(Date);
+  });
+
+  test("a run refused for its total size still stores its terminal error", async () => {
+    const run = await seedRunningTurn();
+    const log = logFor(run);
+    expect(await log.append([chunk("first")])).toEqual(["1"]);
+    // Fill the budget ordinary output may use, leaving the terminal reserve.
+    await rawDb.transaction(async (tx) => {
+      await tx
+        .update(chatRunLogs)
+        .set({ bytesUsed: BigInt(MAX_RUN_BYTES - 64 * 1024) })
+        .where(eq(chatRunLogs.runId, run.runId));
+    });
+    const refused = await Result.tryPromise(
+      async () => await log.append([chunk("over budget")]),
+    );
+    expect(
+      refused.isErr() && ChatRunLogRefusedError.is(refused.error.cause)
+        ? refused.error.cause.reason
+        : null,
+    ).toBe("run-too-large");
+    const terminal = {
+      type: EventType.RUN_ERROR,
+      message: "Chat run log exceeds its size limit",
+    } as const satisfies StreamChunk;
+    expect(await log.append([terminal])).toEqual(["2"]);
+    await log.close();
+    expect(
+      (await log.snapshot()).map(({ chunk: entry }) => entry.type),
+    ).toEqual([EventType.CUSTOM, EventType.RUN_ERROR]);
+  });
+
+  test("only a failure of unknown outcome holds the log for its batch", async () => {
+    const run = await seedRunningTurn();
+    let injectFailure = false;
+    const flakyDb: ScopedDb = async (fn) => {
+      if (injectFailure) {
+        injectFailure = false;
+        throw new Error("injected connection loss");
+      }
+      return await scopedDbA(fn);
+    };
+    const log = logFor(run, flakyDb);
+    injectFailure = true;
+    expect(await rejectionMessage(log.append([chunk("ambiguous")]))).toBe(
+      "injected connection loss",
+    );
+    // The ambiguous batch may have committed: only its own retry may append.
+    expect(await rejectionMessage(log.append([chunk("other")]))).toContain(
+      "awaiting retry",
+    );
+    expect(await log.append([chunk("ambiguous")])).toEqual(["1"]);
+    // A refusal is known not to be stored and never holds the log.
+    expect(
+      await rejectionMessage(log.append([chunk("x".repeat(1024 * 1024))])),
+    ).toBe("Chat run log chunk exceeds its size limit");
+    expect(await log.append([chunk("after refusal")])).toEqual(["2"]);
+    await log.close();
+  });
+
   test("sweep closes an open log whose turn is no longer running", async () => {
     const run = await seedRunningTurn();
     const log = logFor(run);
     await log.append([chunk("abandoned")]);
-    await scopedDbA(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId: null,
-          execution: run.execution,
-          outcome: USER_STOP_OUTCOME,
-          tx,
-        }),
+    await withChatRunPings(
+      async (pings) =>
+        await scopedDbA(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId: null,
+              execution: run.execution,
+              outcome: USER_STOP_OUTCOME,
+              tx,
+            }),
+        ),
     );
     // Simulate an orphaned header while preserving the settled turn contract.
     await rawDb.transaction(async (tx) => {

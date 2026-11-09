@@ -97,6 +97,7 @@ import {
   statusWriteCalls,
   unmanagedTransitionTables,
 } from "./status-write-shapes";
+import { countTestDatabaseHandleCasts } from "./test-database-handle-casts";
 import { countUndeclaredApiClientWrites } from "./undeclared-api-client-writes";
 import {
   countUnsignalledSkips,
@@ -108,6 +109,8 @@ const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const INTERNAL_MODULE_MOCK_LEDGER_REL =
   "scripts/internal-module-mock-ledger.json";
+const INSTRUCTION_ENFORCEMENT_LEDGER_REL =
+  "scripts/instruction-enforcement-ledger.json";
 
 // The single owners of a transport: callers reach fetch, Bun SQL, SQS and
 // APNs HTTP/2 clients through them, so their own acquisition is the
@@ -1235,7 +1238,7 @@ const countAdHocRelativeTimeFormatting: FileCounter = (content, { file }) => {
       total +
       countMatches(
         code,
-        new RegExp("title=\\{" + escapeRegExp(binding) + "\\s*\\(", "gu"),
+        new RegExp(`title=\\{${escapeRegExp(binding)}\\s*\\(`, "gu"),
       ),
     0,
   );
@@ -1247,6 +1250,16 @@ const countAdHocRelativeTimeFormatting: FileCounter = (content, { file }) => {
     )
   );
 };
+
+// Database tests of document review and workflows, the code that runs queued
+// work through the handles a run's actor holds.
+const TEST_DATABASE_HANDLE_CAST_GLOBS = [
+  "apps/api/src/handlers/document-reviews/**/*.test.ts",
+  "apps/api/src/handlers/workspaces/workflow/**/*.test.ts",
+  "apps/api/src/lib/document-review/**/*.test.ts",
+  "apps/api/src/lib/workflow/**/*.test.ts",
+  "apps/api/src/lib/workflow-*.test.ts",
+] as const;
 
 // Every hand-written API module, not only `src`: a script or eval that reaches
 // an owner-level handle is as much a use of it as a lib module.
@@ -2631,6 +2644,21 @@ const countInternalModuleMockLedgerEntries: FileCounter = (content) => {
   return parsed.length;
 };
 
+// The count scripts/check-instruction-enforcement.ts holds equal to the
+// `[review]` tags in the instruction sources; this metric keeps it falling.
+const countReviewOnlyInstructionRules: FileCounter = (content) => {
+  const parsed: unknown = JSON.parse(content);
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("reviewOnlyRules" in parsed) ||
+    typeof parsed.reviewOnlyRules !== "number"
+  ) {
+    return panic("instruction-enforcement ledger must hold reviewOnlyRules");
+  }
+  return parsed.reviewOnlyRules;
+};
+
 const countOutboundIndirectAccessExceptions = (
   context: ScanContext,
 ): RepoMetricResult => {
@@ -3552,6 +3580,18 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "test-database-handle-casts",
+    description:
+      "database handles that document-review and workflow database tests cast by hand (`asTestRaw<Transaction>(testDb)`, `asTestRaw<ScopedDb>(...)`, `value as SafeDb`) and give the code under test. The test database connects as the owner, which row security never refuses, so such a test passes where production, on the application role, would refuse the write. New tests take their handles from apps/api/src/tests/helpers/application-role-db.ts, which need no cast; a cast that mirrors an owner handle production itself passes needs a justified allowance. Each file's count can only shrink",
+    include: TEST_DATABASE_HANDLE_CAST_GLOBS,
+    exclude: isExcludedTestInclusiveSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: ((content, { file }) =>
+      countTestDatabaseHandleCasts(content, file)) satisfies FileCounter,
+  },
+  {
+    scope: "file",
     id: "inline-timestamp-cursor-sql",
     description:
       "Z-less PostgreSQL microsecond cursor formats and inline UTC timestamp re-anchors outside db-pagination and non-cursor date arithmetic",
@@ -3737,6 +3777,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: [INTERNAL_MODULE_MOCK_LEDGER_REL],
     exclude: () => false,
     count: countInternalModuleMockLedgerEntries,
+  },
+  {
+    scope: "file",
+    id: "review-only-instruction-rules",
+    description:
+      "instruction rules whose only control is a reader (`[review]` in .ai/local and .ai/local-skills); a rule leaves the count when a lint, check or test enforces it",
+    include: [INSTRUCTION_ENFORCEMENT_LEDGER_REL],
+    exclude: () => false,
+    count: countReviewOnlyInstructionRules,
   },
   {
     scope: "file",
@@ -5202,6 +5251,22 @@ const SELF_TEST_AUDIT_SKIP_DIRECTIVES = `${AUDIT_SKIP_FIXTURE_LINES.join("\n")}\
 const EXPECTED_AUDIT_SKIP_DIRECTIVES = 4;
 const EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL = 2;
 
+// Counted: the owner database and an owner transaction cast to production
+// handle types, by call and by `as`. Not counted: the row-security database
+// the production factories wrap, a stub object, and a test-only type.
+const SELF_TEST_TEST_DATABASE_HANDLE_CASTS = [
+  'import { getRlsFixture } from "@/api/tests/security/rls-fixture";',
+  "const { testDb } = await getRlsFixture();",
+  "await finalize({ tx: asTestRaw<Transaction>(testDb) });",
+  "await testDb.transaction(async (tx) => await upsert(asTestRaw<Transaction>(tx)));",
+  "const scopedDb = testDb as unknown as ScopedDb;",
+  "const database = asTestRaw<RlsDatabase<Transaction>>(testDb);",
+  "const stub = asTestRaw<Transaction>({ select: () => [] });",
+  "const raw = asTestRaw<TestDatabase>(testDb);",
+  "",
+].join("\n");
+const EXPECTED_TEST_DATABASE_HANDLE_CASTS = 3;
+
 const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: error instanceof Error ? error.message : fallback });",
   "stellaToast.add({ title: error.message ?? fallback });",
@@ -5324,7 +5389,6 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "no-unowned-file-version-write/no-unowned-file-version-write": 0,
   "no-direct-audit-log-insert/no-direct-audit-log-insert": 0,
   "scanned-file-boundary/scanned-file-boundary": 0,
-  "no-raw-zip-load/no-raw-zip-load": 0,
   "no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete": 0,
   "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write": 0,
   "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status": 0,
@@ -5669,6 +5733,12 @@ const SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER = `${JSON.stringify(
   2,
 )}\n`;
 const EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES = 3;
+const SELF_TEST_INSTRUCTION_ENFORCEMENT_LEDGER = `${JSON.stringify(
+  { reviewOnlyRules: 4, excludedSources: [], excludedSections: [] },
+  null,
+  2,
+)}\n`;
+const EXPECTED_REVIEW_ONLY_INSTRUCTION_RULES = 4;
 // Expected: the two tables that declare organizationId AND spread wsPolicies().
 // Excluded: the workspace-only table with no organizationId column, the table
 // already on wsOrganizationPolicies, the org-only table, the table whose only
@@ -6358,6 +6428,10 @@ const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
       expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
     },
     {
+      id: "review-only-instruction-rules",
+      expected: EXPECTED_REVIEW_ONLY_INSTRUCTION_RULES,
+    },
+    {
       id: "outbound-indirect-access-exceptions",
       expected: 1,
     },
@@ -6877,6 +6951,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/api/src/handlers/document-reviews/handle-casts.integration.test.ts",
+      SELF_TEST_TEST_DATABASE_HANDLE_CASTS,
+    );
+    writeFixture(
+      root,
       "apps/api/scripts/implicit-root-connection.ts",
       SELF_TEST_IMPLICIT_ROOT_CONNECTION,
     );
@@ -7038,6 +7117,11 @@ const runSelfTest = (): number => {
       root,
       INTERNAL_MODULE_MOCK_LEDGER_REL,
       SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER,
+    );
+    writeFixture(
+      root,
+      INSTRUCTION_ENFORCEMENT_LEDGER_REL,
+      SELF_TEST_INSTRUCTION_ENFORCEMENT_LEDGER,
     );
     writeFixture(
       root,
@@ -7323,6 +7407,7 @@ const runSelfTest = (): number => {
         EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES,
       ],
       ["inline-timestamp-cursor-sql", EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL],
+      ["test-database-handle-casts", EXPECTED_TEST_DATABASE_HANDLE_CASTS],
     ] as const;
     for (const [id, expected] of sharedHelperMetricExpectations) {
       const metric = requireSnapshot(snapshot, id);

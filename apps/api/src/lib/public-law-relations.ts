@@ -60,6 +60,9 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   legislationSources: "legislation_sources",
   legislationWorkNames: "legislation_work_names",
   legislationWorkIdentifiers: "legislation_work_identifiers",
+  softLawDocuments: "soft_law_documents",
+  softLawDocumentVersions: "soft_law_document_versions",
+  softLawDocumentLocators: "soft_law_document_locators",
   statuteSitemapShards: "statute_sitemap_shards",
 } as const;
 
@@ -686,6 +689,33 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     source_id: "required",
     identifier: "required",
     eli: "required",
+  },
+  // Guidance as served; raw payloads, identity keys and run state stay with
+  // ingestion, and `soft_law_sources` is not readable at all.
+  soft_law_documents: {
+    id: "required",
+    jurisdiction: "required",
+    authority: "required",
+    kind: "required",
+    title: "required",
+    stated_reference: "required",
+    issued_on: "required",
+    listing_state: "required",
+    validity_state: "required",
+    validity_basis: "required",
+  },
+  soft_law_document_versions: {
+    document_id: "required",
+    metadata: "required",
+    extracted_text: "required",
+    extraction_quality: "required",
+    observed_to: "required",
+  },
+  soft_law_document_locators: {
+    document_id: "required",
+    url: "required",
+    state: "required",
+    last_seen_at: "required",
   },
   // The name lookup a legislation search places named acts first by: the
   // match keys and what they point at, not the names' text.

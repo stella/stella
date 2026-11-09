@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
@@ -40,6 +40,7 @@ import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
+  failureReason,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import { calendarDate, shiftDate } from "./activity-logic";
@@ -135,18 +136,20 @@ function reportSettingsError(
     "activityRead" | "activitySubscribe" | "activityUpdate"],
   code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[
     "eventSubscriptionFailed" | "invalidResponse" | "invokeFailed"],
+  rejection?: unknown,
 ) {
   // Fixed codes only: nothing about what was recorded leaves the window.
   reportDesktopError({
     code,
     operation,
+    ...(rejection === undefined ? {} : { reason: failureReason(rejection) }),
     window: DESKTOP_TELEMETRY_WINDOWS.main,
   });
 }
 
 function useActivitySettings(
   date: string | null,
-  onReadError: (message: string) => void,
+  setError: Dispatch<SetStateAction<string | null>>,
 ) {
   const t = useTranslations("activity");
   const [view, setView] = useState<ActivitySettingsView>({ type: "loading" });
@@ -158,12 +161,17 @@ function useActivitySettings(
     const fail = (
       code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[
         "invalidResponse" | "invokeFailed"],
+      rejection?: unknown,
     ) => {
-      reportSettingsError(DESKTOP_TELEMETRY_OPERATIONS.activityRead, code);
+      reportSettingsError(
+        DESKTOP_TELEMETRY_OPERATIONS.activityRead,
+        code,
+        rejection,
+      );
       setView((previousView) =>
         previousView.type === "ready" ? previousView : { type: "failed" },
       );
-      onReadError(errorRead);
+      setError(errorRead);
     };
     const read = () => {
       requestId.current += 1;
@@ -178,13 +186,15 @@ function useActivitySettings(
             return undefined;
           }
           setView({ settings: value, type: "ready" });
+          // Only the read's own error: a failed change still needs saying.
+          setError((shown) => (shown === errorRead ? null : shown));
           return undefined;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (disposed || current !== requestId.current) {
             return;
           }
-          fail(DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed);
+          fail(DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed, error);
         });
     };
     read();
@@ -203,7 +213,7 @@ function useActivitySettings(
       disposed = true;
       stopListening();
     };
-  }, [date, errorRead, onReadError]);
+  }, [date, errorRead, setError]);
 
   return view;
 }
@@ -857,6 +867,7 @@ export const ActivitySettingsPane = () => {
         reportSettingsError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          error,
         );
         const failure = deletionFailure(error);
         switch (failure) {
@@ -1003,7 +1014,7 @@ export const ActivitySettingsPane = () => {
  */
 const BillingDraftConsentSettings = () => {
   const t = useTranslations("activity");
-  const { settings, setConsent } = useBillingDraftSettings(true);
+  const { settings, setConsent, setPreference } = useBillingDraftSettings(true);
   if (settings.type === "loading" || settings.type === "unavailable") {
     return null;
   }
@@ -1031,6 +1042,24 @@ const BillingDraftConsentSettings = () => {
           {t("billingDraftsWithdrawPending")}
         </p>
       ) : null}
+      {settings.preference === null ? null : (
+        <div className="flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs">
+            {t("billingDraftsPreference")}
+          </span>
+          <bdi className="text-sm text-pretty">{settings.preference}</bdi>
+          <Button
+            className="self-start"
+            onClick={() => {
+              void setPreference(null);
+            }}
+            size="xs"
+            variant="ghost"
+          >
+            {t("billingDraftsForgetPreference")}
+          </Button>
+        </div>
+      )}
       {consent === "granted" ? (
         <Button
           className="self-start"

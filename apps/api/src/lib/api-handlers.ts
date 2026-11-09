@@ -4,10 +4,16 @@ import { panic, Result, UnhandledException } from "better-result";
 import * as v from "valibot";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import {
+  parseResourceMutationId,
+  RESOURCE_MUTATION_ID_HEADER,
+} from "@stll/api-contract";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract/mcp";
 import type { ORGANIZATION_CREATE_SCOPE } from "@stll/api-contract/organization-create";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
+import type { FailureGrade } from "@stll/errors";
 import type { PermissionInput } from "@stll/permissions";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -38,7 +44,7 @@ import {
   authenticateSession,
   authorizeWorkspace,
 } from "@/api/lib/auth";
-import type { WorkspaceStatusAccess } from "@/api/lib/auth";
+import type { WorkspaceStatusAccess } from "@/api/lib/auth/accessible-workspace";
 import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
 import type { AccountAccess } from "@/api/lib/auth/account-access";
 import { hasAccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
@@ -99,6 +105,7 @@ import {
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
+  answeredFailureSeverity,
   legacyChannelOf,
   observeShadow,
   SHADOW_SINKS,
@@ -298,6 +305,9 @@ type McpCapabilityReason =
  * - `native_device`: a native app registering the device it runs on (push
  *   alert delivery). Only the signed-in app holds the device token; an agent
  *   that could register one could route a person's alerts elsewhere.
+ * - `agent_autonomy_ceiling`: an organization's limit on how much an agent
+ *   may do without asking. An agent that could change it could raise its
+ *   own limit, so only an administrator in the app sets it.
  */
 type McpInternalReason =
   | "auth_plumbing"
@@ -322,7 +332,8 @@ type McpInternalReason =
   | "native_tool_ui"
   | "billing_ui"
   | "compound_consent"
-  | "native_device";
+  | "native_device"
+  | "agent_autonomy_ceiling";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler
@@ -1778,14 +1789,22 @@ const createSafeScopedHandler = <
           config.realtime.scope !== "none" &&
           isSuccessfulHandlerResult(result)
         ) {
-          const announcement = Result.try(() =>
+          const mutationId = parseResourceMutationId(
+            ctx.request.headers.get(RESOURCE_MUTATION_ID_HEADER),
+          );
+          const announcement = await Result.tryPromise(async () => {
+            const mutationDigest =
+              mutationId === undefined
+                ? undefined
+                : await resourceMutationDigest(mutationId);
             announce({
               realtime: config.realtime,
+              ...(mutationDigest === undefined ? {} : { mutationDigest }),
               result,
               organizationId: ctx.session.activeOrganizationId,
               workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
-            }),
-          );
+            });
+          });
           if (Result.isError(announcement)) {
             observeFailure(announcement.error, {
               sink: REALTIME_ANNOUNCEMENT_FAILURE,
@@ -2255,7 +2274,8 @@ export const createSafeRootHandler = <
     : [dependencies?: HandlerAdmissionDependencies<RootHandlerContext<TConfig>>]
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> => {
   const admission = dependencies.at(0);
-  if (config.idempotency !== undefined && admission?.authorize === undefined) {
+  const authorizesBeforeReplay = admission?.authorize !== undefined;
+  if (config.idempotency !== undefined && !authorizesBeforeReplay) {
     panic("Replay-enabled root handlers require pre-replay authorization");
   }
   const core = createSafeScopedHandler("member", config, handler, admission);
@@ -2731,18 +2751,19 @@ const logAndCaptureSafeError = ({
   }
   const reqCtx = getRequestContext();
   const evidence = readEvidence(error);
-  const severity =
-    statusCode >= 500 &&
-    !(
-      HandlerError.is(error) &&
-      error.code === ACTION_ADMISSION_CODES.featureDisabled
-    )
-      ? "ERROR"
-      : "WARN";
+  const featureDisabled =
+    HandlerError.is(error) &&
+    error.code === ACTION_ADMISSION_CODES.featureDisabled;
+  const severityFor = (grade: FailureGrade | undefined) =>
+    featureDisabled ? "WARN" : answeredFailureSeverity(statusCode, grade);
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.handler,
-    channel: legacyChannelOf({ severity, capture: telemetry === "capture" }),
+    channel: ({ grade }) =>
+      legacyChannelOf({
+        severity: severityFor(grade),
+        capture: telemetry === "capture",
+      }),
     request,
     route,
     requestState: { answeredStatus: statusCode },
@@ -2794,12 +2815,11 @@ const logAndCaptureSafeError = ({
     attributes["enduser.organization_id"] = reqCtx.organizationId;
   }
 
-  // The owner's grade rides along in shadow; it decides nothing here yet.
   Object.assign(attributes, shadowFields(grading));
 
   // Operator feature refusals retain 503 on the wire while remaining an
-  // expected warning. Other server failures keep their error severity.
-  if (severity === "ERROR") {
+  // expected warning. Other server failures take their grade's severity.
+  if (severityFor(grading?.grade) === "ERROR") {
     logger.error("request.failed", attributes);
   } else {
     logger.warn("request.failed", attributes);

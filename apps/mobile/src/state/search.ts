@@ -3,6 +3,8 @@ import type { Result } from "better-result";
 import type { Href } from "expo-router";
 import * as v from "valibot";
 
+import { documentFormat } from "@stll/api-contract/document-format";
+import type { DocumentFormat } from "@stll/api-contract/document-format";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import type { GlobalSearchResultType } from "@stll/api-contract/search";
 
@@ -66,6 +68,8 @@ const hitSchema = v.object({
   title: v.nullish(v.string()),
   headline: v.nullish(v.string()),
   updatedAt: v.string(),
+  /** A document's file type, which picks its mark. */
+  mimeType: v.nullish(v.string()),
   entityId: v.nullish(v.string()),
   workspaceId: v.nullish(v.string()),
   workspaceName: v.nullish(v.string()),
@@ -110,6 +114,8 @@ export type SearchResult =
       readonly matterName: string | null;
       readonly title: string;
       readonly updatedAt: string;
+      /** A document's format, from its file type; none for other items. */
+      readonly format: DocumentFormat | undefined;
     }
   | {
       readonly kind: "matter";
@@ -226,6 +232,10 @@ const toSearchResult = (hit: SearchHit): SearchResult | null => {
           matterName: hit.workspaceName ?? null,
           title,
           updatedAt,
+          format:
+            hit.type === "document" && present(hit.mimeType)
+              ? documentFormat(hit.mimeType)
+              : undefined,
         }
       : null;
   }

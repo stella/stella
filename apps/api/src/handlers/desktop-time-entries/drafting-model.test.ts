@@ -8,7 +8,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type {
   DispatchCheck,
   generateTanStackObjectForTask,
-  generateTanStackTextForTask,
 } from "@/api/lib/tanstack-ai-generate";
 import { runDispatchCheck } from "@/api/tests/helpers/dispatch-check";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -17,7 +16,6 @@ import type { BillingDraftGate } from "./billing-draft-mode";
 import {
   admitDraftingWithGateReader,
   generateAdmittedObject,
-  generateAdmittedText,
 } from "./drafting-model";
 
 const consenting: BillingDraftGate = {
@@ -43,10 +41,18 @@ const admitWith = async (gates: readonly BillingDraftGate[]) => {
   return { admission, reads: () => reads };
 };
 
-type TextRequest = Parameters<typeof generateTanStackTextForTask>[0];
-const textRequest = asTestRaw<TextRequest>({
-  finishPolicy: "require-complete",
-});
+const objectRequest = asTestRaw<
+  Parameters<typeof generateAdmittedObject>[0]["request"]
+>({});
+
+/** A structured generation that runs `attempt` with the gate's check. */
+const generation = (
+  attempt: (beforeEachDispatch: DispatchCheck | undefined) => Promise<unknown>,
+) =>
+  asTestRaw<typeof generateTanStackObjectForTask>(
+    async ({ beforeEachDispatch }: { beforeEachDispatch?: DispatchCheck }) =>
+      await attempt(beforeEachDispatch),
+  );
 
 test("the directory reaches a model only through the gated module", async () => {
   const modelImport =
@@ -92,19 +98,20 @@ test("every provider request reads the gate again, retries and fallbacks include
     withdrawn,
   ]);
   let sent = 0;
-  const generated = await generateAdmittedText({
+  const generated = await generateAdmittedObject({
     admission: admission.unwrap(),
-    request: textRequest,
+    expectedMode: "plain",
+    request: objectRequest,
     // A first request, a retry after a provider delay, then a fallback model
     // the member no longer consents to. The real generation runs its check
     // the same way; tanstack-ai-generate.test.ts proves it for each step.
-    generate: async ({ beforeEachDispatch }) => {
+    generate: generation(async (beforeEachDispatch) => {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         await runDispatchCheck(beforeEachDispatch);
         sent += 1;
       }
-      return "never returned";
-    },
+      return {};
+    }),
   });
   expect(sent).toBe(2);
   expect(reads()).toBe(4);
@@ -160,13 +167,14 @@ test("a firm guideline binding that changes before a request refuses with 409", 
 test("a generation failure is the model's, not the gate's", async () => {
   const { admission } = await admitWith([consenting]);
   const cause = new Error("Provider unavailable");
-  const generated = await generateAdmittedText({
+  const generated = await generateAdmittedObject({
     admission: admission.unwrap(),
-    request: textRequest,
-    generate: async ({ beforeEachDispatch }) => {
+    expectedMode: "plain",
+    request: objectRequest,
+    generate: generation(async (beforeEachDispatch) => {
       await runDispatchCheck(beforeEachDispatch);
       throw cause;
-    },
+    }),
   });
   expect(generated.isErr()).toBe(true);
   if (generated.isErr()) {

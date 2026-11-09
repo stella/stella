@@ -47,6 +47,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -146,9 +147,7 @@ const suite = (
       await database
         .delete(chatThreads)
         .where(eq(chatThreads.organizationId, organizationId));
-      await database
-        .delete(organization)
-        .where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(database, [organizationId]);
       await database
         .delete(user)
         .where(inArray(user.id, [ownerId, colleagueId]));

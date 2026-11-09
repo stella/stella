@@ -1,7 +1,7 @@
 import { lazy, Suspense, useRef, useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useRouterState } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -118,6 +118,15 @@ export const DefaultErrorComponent = ({
   const routeTemplate = useRouterState({
     select: ({ matches }) => resolveCaughtRouteTemplate(matches),
   });
+  const router = useRouter();
+  // A loader's failure stays on its match until the loader runs again:
+  // resetting the boundary alone would only show the same error.
+  const loaderFailed = useRouterState({
+    select: ({ matches }) =>
+      matches.some(
+        (match) => match.status === "error" && match.error === error,
+      ),
+  });
   const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const isCancelledError = error instanceof CancelledError;
@@ -141,7 +150,15 @@ export const DefaultErrorComponent = ({
           });
         });
 
-      reset();
+      if (loaderFailed) {
+        // Running the failed loaders again replaces their matches, which
+        // resets this boundary with the outcome.
+        await router.invalidate({
+          filter: (match) => match.status === "error",
+        });
+      } else {
+        reset();
+      }
       // Don't reset networkRetryCount here. If the error
       // persists, the error boundary re-catches and the
       // counter keeps accumulating toward AUTO_RETRY_LIMIT.
@@ -332,8 +349,6 @@ const UnexpectedRouteError = ({
             var(--error-gradient-end)
           );
         }
-        :root { --error-gradient-end: #fbe9e4; }
-        .dark { --error-gradient-end: #261815; }
       `}</style>
       <section
         aria-labelledby="route-error-title"
@@ -516,4 +531,19 @@ export const DefaultPendingComponent = ({
   </div>
 );
 
-export const DefaultNotFoundComponent = () => <Navigate to="/workspaces" />;
+export const DefaultNotFoundComponent = () => {
+  const t = useTranslations();
+
+  return (
+    <main className="flex min-h-0 flex-1 items-center justify-center p-6">
+      <section className="flex max-w-md flex-col items-center gap-4 text-center">
+        <h1 className="text-foreground text-xl font-medium">
+          {t("errors.api.notFound")}
+        </h1>
+        <Button render={<Link to="/workspaces" />} variant="outline">
+          {t("auth.invitation.goToWorkspaces")}
+        </Button>
+      </section>
+    </main>
+  );
+};

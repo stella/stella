@@ -8,6 +8,7 @@ import nodePath from "node:path";
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
+import { ORGANIZATION_DELETION_FOR_TEST_SQL } from "@/api/tests/helpers/organization-deletion";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: PGlite;
@@ -105,10 +106,9 @@ const fixture = async () => {
     matterMembers,
     orphans,
     cleanUp: async () => {
-      await client.query(
-        `DELETE FROM organization WHERE id = ANY($1::text[])`,
-        [[...organizations]],
-      );
+      await client.query(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+        [...organizations].join(","),
+      ]);
       await client.query(`DELETE FROM "user" WHERE id = ANY($1::text[])`, [
         users,
       ]);

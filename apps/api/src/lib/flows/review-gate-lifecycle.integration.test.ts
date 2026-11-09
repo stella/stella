@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { createTestClock } from "@stll/test-kit";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -21,8 +23,11 @@ import {
 import type { FlowRunStatus, FlowStep } from "@/api/lib/flows/flow-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+
+const stateClock = createTestClock();
 
 const db = await getTestDb();
 const organizationId = mintAuthProviderId<"organization">();
@@ -81,14 +86,20 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   try {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   } finally {
     await releaseTestDb();
   }
 });
 
-const seedRun = async (status: FlowRunStatus = "pending") => {
+const seedRun = async (
+  status: Extract<
+    FlowRunStatus,
+    "pending" | "running" | "awaiting_review"
+  > = "pending",
+) => {
+  const startedAt = status === "pending" ? null : new Date(stateClock.now());
   const runId = createSafeId<"flowRun">();
   const steps = [
     { kind: "review-gate", name: "Review", instructions: "" },
@@ -98,6 +109,7 @@ const seedRun = async (status: FlowRunStatus = "pending") => {
     id: runId,
     workspaceId,
     status,
+    startedAt,
     definitionSnapshot: { name: "Lifecycle", steps },
     triggerSource: { type: "manual", userId },
   });
@@ -108,10 +120,9 @@ const seedRun = async (status: FlowRunStatus = "pending") => {
       runId,
       index,
       kind: step.kind,
-      status:
-        index === 0 && status === "awaiting_review"
-          ? ("awaiting_review" as const)
-          : ("pending" as const),
+      ...(index === 0 && status === "awaiting_review"
+        ? { status: "awaiting_review" as const, startedAt }
+        : { status: "pending" as const }),
     })),
   );
   return runId;
@@ -209,6 +220,7 @@ describe("flow review lifecycle", () => {
             .set({
               status: "running",
               currentStepIndex: observedStatus === "pending" ? 0 : 1,
+              startedAt: new Date(stateClock.now()),
             })
             .where(eq(flowRuns.id, runId));
         }

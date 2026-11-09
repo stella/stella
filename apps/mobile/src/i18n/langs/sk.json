@@ -182,6 +182,20 @@
       "system": "Vzhľad: automaticky",
       "light": "Vzhľad: svetlý",
       "dark": "Vzhľad: tmavý"
+    },
+    "edit": {
+      "saved": "Uložené",
+      "saving": "Ukladá sa…",
+      "notSaved": "Zatiaľ neuložené",
+      "done": "Hotovo",
+      "openFailed": "Tento dokument sa teraz nedá upraviť",
+      "resumed": "Tento dokument máte rozpracovaný, úprava preto pokračuje odtiaľ. To, čo ste práve napísali, sa nezachovalo.",
+      "newerVersion": "Medzitým bola uložená novšia verzia tohto dokumentu, úprava preto pokračuje z nej. To, čo ste práve napísali, sa nezachovalo.",
+      "takenOver": "Tento dokument teraz upravuje niekto iný. Zmeny od posledného uloženia sa nezachovali.",
+      "finishFailed": "Zmeny sú uložené, ale zatiaľ z nich nevznikla nová verzia. Ťuknite znova na Hotovo alebo odíďte: ďalšia úprava na ne nadviaže.",
+      "notStored": "Posledné zmeny sa nepodarilo uložiť. Zostaňte a skúste to znova, alebo odíďte bez nich.",
+      "stay": "Zostať",
+      "leave": "Odísť"
     }
   },
   "signIn": {
@@ -211,7 +225,10 @@
     "signOut": "Odhlásiť sa",
     "deleteAccount": "Odstrániť účet",
     "deleteAccountHint": "Otvorí váš účet na webe, kde ho môžete odstrániť aj so všetkým, čo je vaše.",
-    "signOutFailed": "Odhlásenie sa nepodarilo dokončiť. Skúste to znova."
+    "signOutFailed": "Odhlásenie sa nepodarilo dokončiť. Skúste to znova.",
+    "lockScreenTitle": "Zamknutá obrazovka",
+    "timerDetails": "Podrobnosti časovača",
+    "timerDetailsHint": "Keď sa časovač zmení na inom zariadení, doručí jeho popis a spis na zamknutú obrazovku služba oznámení Apple. Po vypnutí sa zobrazí len čas, kým aplikáciu neotvoríte."
   },
   "header": {
     "search": "Hľadať"
@@ -225,7 +242,6 @@
     "headnote": "Právna veta",
     "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
     "openSource": "Otvoriť originál",
-    "openFailed": "Odkaz sa nepodarilo otvoriť.",
     "loadFailed": "Judikatúru sa nepodarilo načítať.",
     "share": "Zdieľať"
   },
@@ -251,12 +267,6 @@
     "newTimer": "Nový časovač",
     "description": "Na čom pracujete?",
     "matterTitle": "Spis",
-    "noMatter": "Bez spisu",
-    "noDescription": "Bez popisu",
-    "running": "Beží",
-    "paused": "Pozastavené",
-    "pause": "Pozastaviť",
-    "resume": "Pokračovať",
     "save": "Uložiť",
     "discard": "Zahodiť",
     "emptyTitle": "Žiadne časovače",
@@ -265,8 +275,7 @@
     "retry": "Skúsiť znova",
     "unavailable": "Vaša organizácia nemá zapnuté vykazovanie času.",
     "startFailed": "Časovač sa nepodarilo spustiť. Skúste to znova.",
-    "changeFailed": "Časovač sa nepodarilo zmeniť. Skúste to znova.",
-    "more": "{count, plural, one {a # ďalší časovač} few {a # ďalšie časovače} other {a # ďalších časovačov}}"
+    "changeFailed": "Časovač sa nepodarilo zmeniť. Skúste to znova."
   },
   "scan": {
     "title": "Naskenovať dokument",
@@ -336,5 +345,11 @@
   "pane": {
     "showList": "Zobraziť zoznam",
     "hideList": "Skryť zoznam"
+  },
+  "link": {
+    "open": "Otvoriť",
+    "share": "Zdieľať",
+    "cancel": "Zrušiť",
+    "openFailed": "Odkaz sa nepodarilo otvoriť."
   }
 }
