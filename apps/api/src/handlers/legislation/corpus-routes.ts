@@ -6,6 +6,7 @@ import listMatterLinks from "@/api/handlers/legislation/matter-links/list";
 import searchLegislation from "@/api/handlers/legislation/search";
 import { mount, routes } from "@/api/http/route";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
+import { corpusRetryAfter } from "@/api/lib/legal-search/corpus-retry-after";
 
 /**
  * Corpus-legislation routes (ingested statutes searchable via the
@@ -18,7 +19,7 @@ const corpusRoute = routes(
     "/search": { POST: searchLegislation },
     "/:documentId": { GET: readLegislation },
   },
-  { prefix: "/legislation/corpus" },
+  { prefix: "/legislation/corpus", middleware: [corpusRetryAfter] },
 );
 
 const matterLinksRoute = routes(

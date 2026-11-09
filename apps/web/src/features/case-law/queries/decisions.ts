@@ -19,6 +19,12 @@ import {
   type PublicLawPageSize,
 } from "@/components/public-law-table/public-law-route-pagination.logic";
 import { defaultCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
+import {
+  retryAfterMsFrom,
+  searchRetryDelayMs,
+  shouldRetrySearch,
+  withRetryAfterDetail,
+} from "@/features/case-law/search-busy.logic";
 import { api } from "@/lib/api";
 import {
   APIError,
@@ -28,6 +34,7 @@ import {
 import {
   PUBLIC_LAW_READ_TIMEOUT_MS,
   type PublicLawData,
+  toPublicLawError,
   unwrapPublicLawResponse,
 } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
@@ -374,6 +381,19 @@ export const decisionsPageOptions = ({
           },
         );
 
+        const retryAfterMs =
+          response.error === null
+            ? undefined
+            : retryAfterMsFrom(response.headers);
+        if (response.error !== null && retryAfterMs !== undefined) {
+          throw toPublicLawError(
+            {
+              ...response.error,
+              value: withRetryAfterDetail(response.error.value, retryAfterMs),
+            },
+            "searchPublicCaseLawDecisions",
+          );
+        }
         const data = unwrapPublicLawResponse(
           response,
           "searchPublicCaseLawDecisions",
@@ -477,7 +497,8 @@ export const decisionsPageOptions = ({
       };
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
-    retry: shouldRetryAPIRequest,
+    retry: shouldRetrySearch,
+    retryDelay: searchRetryDelayMs,
   });
 
 type UsePrefetchedDecisionPageInput = Omit<

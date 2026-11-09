@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie} many {# rozhodnutia nesie}} túto spisovú značku. Vyberte súd.",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
+    "searchStillSearching": "Vyhľadávanie je preťažené. Stále hľadáme…",
     "searchUnavailable": {
       "description": "Vyhľadávanie v judikatúre sa nepodarilo kontaktovať. Váš dotaz zostáva v adresnom riadku, skúste to prosím o chvíľu znova.",
       "title": "Vyhľadávanie je dočasne nedostupné"

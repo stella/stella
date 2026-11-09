@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# rozhodnutí nese} few {# rozhodnutí nesou} other {# rozhodnutí nese} many {# rozhodnutí nese}} tuto spisovou značku. Vyberte soud.",
     "searchLabel": "Hledat v judikatuře",
     "searchPlaceholder": "Spisová značka, ECLI nebo slova, např. 22 Cdo 2653/2012",
+    "searchStillSearching": "Vyhledávání je přetížené. Stále hledáme…",
     "searchUnavailable": {
       "description": "Vyhledávání v judikatuře se nepodařilo kontaktovat. Váš dotaz zůstává v adresním řádku, zkuste to prosím za chvíli znovu.",
       "title": "Vyhledávání je dočasně nedostupné"
