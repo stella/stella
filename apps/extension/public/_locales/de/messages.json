@@ -5,6 +5,14 @@
   "adoptUnsupported": {
     "message": "Mit stella lassen sich nur öffentliche HTTPS-Seiten verwenden."
   },
+  "containedTabs": {
+    "message": "Tabs, die stella verwendet: $TABS$",
+    "placeholders": {
+      "tabs": {
+        "content": "$1"
+      }
+    }
+  },
   "downloadKept": {
     "message": "Downloads, die abgeschlossen wurden, während stella einen Tab gesteuert hat, und behalten wurden: $COUNT$. Prüfen Sie vor dem Öffnen, woher sie stammen.",
     "placeholders": {

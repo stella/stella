@@ -138,7 +138,11 @@ const downloads = async ({ worker }: Harness) =>
         }
         return { saved: state === "complete" && exists, source };
       })
-      .toSorted((left, right) => left.source.localeCompare(right.source));
+      .toSorted(
+        (left, right) =>
+          left.source.localeCompare(right.source) ||
+          Number(left.saved) - Number(right.saved),
+      );
   });
 
 const latestPong = async (stella: Page): Promise<unknown> =>
@@ -272,6 +276,15 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     const { send } = createCommandSender(harness.stella, CONTROLLER_ID);
     let snapshot = await openContainmentPage(harness, send);
     const page = () => ({ revision: snapshot.revision, url: snapshot.url });
+
+    // The popup names the tab stella keeps contained, so the user can find
+    // it among their tabs and disconnect.
+    const popupPage = await harness.context.newPage();
+    await popupPage.goto(new URL("/popup.html", harness.worker.url()).href);
+    await expect(popupPage.locator("#contained-tabs")).toHaveText(
+      `Tabs stella is using: Containment (${new URL(FIXTURE_ORIGIN).host})`,
+    );
+    await popupPage.close();
 
     // While stella controls a tab, the user's own downloads elsewhere go
     // through; the stella tab stands in for any tab the user browses in.
@@ -431,8 +444,10 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     snapshot = successful(await send({ action: "snapshot" }));
     expect(snapshot.url).toBe(`${FIXTURE_ORIGIN}/containment.html`);
 
-    // A page saving a file from script (blob: and data: URLs, no network
-    // request) is cancelled before the file is written.
+    // A page saving a file from script (blob: URL, no network request) is
+    // cancelled before the file is written, and so is one a cross-origin
+    // frame inside the controlled tab saves: only the controlled tab has
+    // that origin open.
     const controlledPage = harness.context
       .pages()
       .find((candidate) => candidate.url() === snapshot.url);
@@ -440,14 +455,6 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
       throw new TypeError("Controlled tab not found");
     }
     await saveFromScript(controlledPage, "blob");
-    await saveFromScript(controlledPage, "data");
-    // A small file a cross-origin frame inside the controlled tab saves is
-    // stopped before it is written, and so is one the user saves from their
-    // own tab on that same site: either could have started it, so it is
-    // stopped while it runs but never deleted.
-    const userSiteTab = await harness.context.newPage();
-    await harness.stella.waitForTimeout(500);
-    await userSiteTab.goto(`${ELSEWHERE_ORIGIN}/landing.html`);
     await controlledPage
       .frameLocator("iframe[title='Tools frame']")
       .locator("body")
@@ -460,29 +467,37 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
         document.body.append(link);
         link.click();
       });
-    await saveFromScript(userSiteTab, "blob");
     await expect
       .poll(async () => await downloads(harness))
       .toEqual([
-        { saved: false, source: "data:" },
         { saved: true, source: harness.stellaOrigin },
-        { saved: false, source: ELSEWHERE_ORIGIN },
         { saved: false, source: ELSEWHERE_ORIGIN },
         { saved: false, source: FIXTURE_ORIGIN },
       ]);
-    expect(
-      await harness.worker.evaluate(async () =>
-        (await chrome.downloads.search({}))
-          .filter(({ url }) => url.includes("elsewhere"))
-          .map(({ state }) => state),
-      ),
-    ).toEqual(["interrupted", "interrupted"]);
+    // A file the user saves from their own tab goes through, even on a site
+    // the controlled tab also has open: the user may have started it, and
+    // stopping it would leave them no way to get it. So does one traced to
+    // no open tab at all, such as a `data:` URL saved with no referrer.
+    const userSiteTab = await harness.context.newPage();
+    await harness.stella.waitForTimeout(500);
+    await userSiteTab.goto(`${ELSEWHERE_ORIGIN}/landing.html`);
+    await saveFromScript(userSiteTab, "blob");
+    await saveFromScript(userSiteTab, "data");
+    await expect
+      .poll(async () => await downloads(harness))
+      .toEqual([
+        { saved: true, source: "data:" },
+        { saved: true, source: harness.stellaOrigin },
+        { saved: false, source: ELSEWHERE_ORIGIN },
+        { saved: true, source: ELSEWHERE_ORIGIN },
+        { saved: false, source: FIXTURE_ORIGIN },
+      ]);
     // The toolbar icon counts the stopped downloads.
     expect(
       await harness.worker.evaluate(
         async () => await chrome.action.getBadgeText({}),
       ),
-    ).toBe("4");
+    ).toBe("2");
 
     // A document served without an attachment header that Chrome would
     // save instead of render leaves no file either. (The tab's rules block

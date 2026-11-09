@@ -5,6 +5,14 @@
   "adoptUnsupported": {
     "message": "Com a stella só é possível usar páginas HTTPS públicas."
   },
+  "containedTabs": {
+    "message": "Guias que a stella está usando: $TABS$",
+    "placeholders": {
+      "tabs": {
+        "content": "$1"
+      }
+    }
+  },
   "downloadKept": {
     "message": "Downloads concluídos enquanto o stella controlava uma aba e mantidos: $COUNT$. Verifique a origem antes de abri-los.",
     "placeholders": {

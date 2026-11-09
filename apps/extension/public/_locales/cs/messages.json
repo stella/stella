@@ -5,6 +5,14 @@
   "adoptUnsupported": {
     "message": "Se stellou lze používat jen veřejné stránky na HTTPS."
   },
+  "containedTabs": {
+    "message": "Karty, které stella používá: $TABS$",
+    "placeholders": {
+      "tabs": {
+        "content": "$1"
+      }
+    }
+  },
   "downloadKept": {
     "message": "Stahování dokončená během ovládání karty stellou a ponechaná: $COUNT$. Před otevřením ověřte, odkud pocházejí.",
     "placeholders": {

@@ -72,23 +72,27 @@ export const downloadOwner = (
 type DownloadAction = "allow" | "cancel" | "keep-and-flag";
 
 /**
- * What to do with a download while stella controls a tab. Any download not
- * traced to the user alone is stopped while it runs. A file is never
- * deleted: tracing by origin samples the frames open at one moment and
- * cannot prove who started a download, so a finished one stays on disk and
- * the user is told about it. Chrome holds each download until it is judged,
- * so a finished one means Chrome skipped that step.
+ * What to do with a download while stella controls a tab. Only a download
+ * traced to confined tabs alone is stopped while it runs. One the user may
+ * have started (traced to their tabs, to both sides, or to no open frame,
+ * as a site that strips its referrer and serves files from another host
+ * does) goes through: stopping it would leave the user with no way to get
+ * their file. A file is never deleted: tracing by origin samples the frames
+ * open at one moment and cannot prove who started a download, so a finished
+ * one stays on disk and the user is told about it. Chrome holds each
+ * download until it is judged, so a finished one means Chrome skipped that
+ * step.
  */
 export const downloadAction = (
   owner: DownloadOwner,
   state: chrome.downloads.DownloadItem["state"],
 ): DownloadAction => {
   switch (owner) {
+    case "ambiguous":
+    case "unknown":
     case "user":
       return "allow";
-    case "ambiguous":
     case "contained":
-    case "unknown":
       return state === "complete" ? "keep-and-flag" : "cancel";
     default:
       owner satisfies never;
@@ -234,8 +238,9 @@ const kept = new Set<number>();
 
 type DownloadScope = TabOwners;
 
-// The owners of tabs, kept in memory so a download can be stopped in the
-// same task Chrome reports it; null until first read after the worker starts.
+// The owners of tabs, kept in memory so a download is judged under the owners
+// in force when Chrome reports it; null until first read after the worker
+// starts.
 let scopeNow: DownloadScope | null = null;
 
 const readScope = async (): Promise<DownloadScope> => {
@@ -276,27 +281,12 @@ const runJudgement = async (
   if (isOtherExtensionDownload(download)) {
     return;
   }
-  // A download with no web origin can be traced to nobody. It is stopped in
-  // this same task, before the frame lookups below give it time to finish.
-  if (
-    scopeNow !== null &&
-    scopeNow.contained.length > 0 &&
-    downloadOrigins(download).length === 0
-  ) {
-    stopped.add(download.id);
-    const cancelled = chrome.downloads.cancel(download.id);
-    await cancelled.catch(() => undefined);
-    // It may have finished before the cancel landed; then it was kept.
-    const [after] = await chrome.downloads.search({ id: download.id });
-    await (after?.state === "complete"
-      ? keepFinishedDownload(download.id)
-      : recordDownloadNotice("stopped"));
-    return;
-  }
   const scope = scopeNow ?? (await readScope());
   if (scope.contained.length === 0) {
     return;
   }
+  // A download with no web origin can be traced to nobody: there is nothing
+  // to look up.
   const origins =
     downloadOrigins(download).length === 0
       ? null

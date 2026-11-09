@@ -5,6 +5,14 @@
   "adoptUnsupported": {
     "message": "لا يمكن استخدام سوى الصفحات العامة عبر HTTPS مع stella."
   },
+  "containedTabs": {
+    "message": "علامات التبويب التي تستخدمها stella: $TABS$",
+    "placeholders": {
+      "tabs": {
+        "content": "$1"
+      }
+    }
+  },
   "downloadKept": {
     "message": "تنزيلات اكتملت أثناء تحكّم stella في علامة تبويب فأُبقيت: $COUNT$. تحقّق من مصدرها قبل فتحها.",
     "placeholders": {

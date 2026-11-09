@@ -106,3 +106,70 @@ export const handedTabView = (origin: string): PopupView => ({
   state: { origin, type: "tab-handed-to-stella" },
   statusMessageKey: "statusTabHandedOver",
 });
+
+type NamedTab = Pick<chrome.tabs.Tab, "title" | "url">;
+
+/** Long titles are cut so the popup line stays readable. */
+const TAB_TITLE_LIMIT = 60;
+
+const webHost = (rawUrl: string | undefined): string | null => {
+  if (rawUrl === undefined) {
+    return null;
+  }
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.host
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const shortTitle = (title: string | undefined): string | null => {
+  const trimmed = title?.trim() ?? "";
+  if (trimmed === "") {
+    return null;
+  }
+  const characters = [...trimmed];
+  return characters.length > TAB_TITLE_LIMIT
+    ? `${characters
+        .slice(0, TAB_TITLE_LIMIT - 1)
+        .join("")
+        .trimEnd()}…`
+    : trimmed;
+};
+
+/**
+ * How the popup names a tab stella keeps contained, so the user can find it
+ * among their tabs: its title and host, or whichever Chrome reported. Null
+ * when it reported neither.
+ */
+export const containedTabLabel = ({ title, url }: NamedTab): string | null => {
+  const name = shortTitle(title);
+  const host = webHost(url);
+  if (name !== null && host !== null) {
+    return name === host ? host : `${name} (${host})`;
+  }
+  return name ?? host;
+};
+
+/**
+ * The popup line naming the tabs stella keeps contained, which stay so
+ * until stella is disconnected or they close; null when there are none.
+ */
+export const containedTabsMessage = (
+  tabs: readonly NamedTab[],
+  locale: string,
+): { name: PopupMessageKey; substitutions: string[] } | null => {
+  const labels = tabs.map(containedTabLabel).filter((label) => label !== null);
+  if (labels.length === 0) {
+    return null;
+  }
+  return {
+    name: "containedTabs",
+    substitutions: [
+      new Intl.ListFormat(locale, { type: "conjunction" }).format(labels),
+    ],
+  };
+};

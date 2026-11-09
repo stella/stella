@@ -5,6 +5,14 @@
   "adoptUnsupported": {
     "message": "stellaga saab kasutada ainult avalikke HTTPS-lehti."
   },
+  "containedTabs": {
+    "message": "Vahekaardid, mida stella kasutab: $TABS$",
+    "placeholders": {
+      "tabs": {
+        "content": "$1"
+      }
+    }
+  },
   "downloadKept": {
     "message": "Allalaadimised, mis lõppesid, kui stella vahekaarti juhtis, ja jäeti alles: $COUNT$. Enne avamist kontrolli, kust need pärinevad.",
     "placeholders": {

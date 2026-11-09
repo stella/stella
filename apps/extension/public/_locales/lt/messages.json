@@ -5,6 +5,14 @@
   "adoptUnsupported": {
     "message": "Su stella galima naudoti tik viešus HTTPS puslapius."
   },
+  "containedTabs": {
+    "message": "Skirtukai, kuriuos naudoja „stella“: $TABS$",
+    "placeholders": {
+      "tabs": {
+        "content": "$1"
+      }
+    }
+  },
   "downloadKept": {
     "message": "Atsisiuntimai, kurie baigėsi, kol stella valdė skirtuką, ir buvo palikti: $COUNT$. Prieš atidarydami patikrinkite, iš kur jie.",
     "placeholders": {

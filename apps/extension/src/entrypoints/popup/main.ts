@@ -7,6 +7,7 @@ import { parseControllableUrl } from "../../lib/origin-policy";
 import { type PopupTab, runPopupAction } from "../../lib/popup-actions";
 import { type PopupResponse, sendPopupRequest } from "../../lib/popup-request";
 import {
+  containedTabsMessage,
   handedTabView,
   type PopupAction,
   type PopupActiveTab,
@@ -15,11 +16,13 @@ import {
   type PopupView,
   popupView,
 } from "../../lib/popup-view";
+import { containedTabIds, readContainedTabs } from "../../lib/tab-containment";
 import { trustedStellaOriginFromUrl } from "../../lib/trusted-origin";
 
 const purposeElement = document.querySelector("#purpose");
 const statusElement = document.querySelector("#status");
 const statusLine = document.querySelector(".status-line");
+const containedTabsElement = document.querySelector("#contained-tabs");
 const primaryButton = document.querySelector("#primary");
 const secondaryActions = document.querySelector("#secondary-actions");
 const titleElement = document.querySelector("#title");
@@ -32,6 +35,9 @@ if (!(statusElement instanceof HTMLParagraphElement)) {
 }
 if (!(statusLine instanceof HTMLDivElement)) {
   panic("Missing popup status line");
+}
+if (!(containedTabsElement instanceof HTMLParagraphElement)) {
+  panic("Missing popup contained tabs element");
 }
 if (!(primaryButton instanceof HTMLButtonElement)) {
   panic("Missing popup primary button");
@@ -87,6 +93,22 @@ const statusSubstitutions = (view: PopupView): string[] | undefined => {
       view.state satisfies never;
       return panic("Unhandled popup state");
   }
+};
+
+/** The tabs stella keeps contained: the controlled one first. */
+const readContainedTabsList = async (): Promise<chrome.tabs.Tab[]> => {
+  const tabIds = containedTabIds(await readContainedTabs());
+  const tabs = await Promise.all(
+    tabIds.map(async (tabId) => await chrome.tabs.get(tabId).catch(() => null)),
+  );
+  return tabs.filter((tab) => tab !== null);
+};
+
+const renderContainedTabs = (tabs: readonly chrome.tabs.Tab[]): void => {
+  const line = containedTabsMessage(tabs, chrome.i18n.getUILanguage());
+  containedTabsElement.hidden = line === null;
+  containedTabsElement.textContent =
+    line === null ? "" : message(line.name, line.substitutions);
 };
 
 const renderFailure = (key: PopupMessageKey): void => {
@@ -163,6 +185,7 @@ const adoptActiveTab = async (activeTab: PopupTab | null): Promise<void> => {
       return;
     }
     render(handedTabView(new URL(result.url).origin));
+    renderContainedTabs(await readContainedTabsList());
   } else {
     renderFailure("unsupportedTab");
   }
@@ -208,15 +231,17 @@ primaryButton.addEventListener("click", () => {
 let renderedTab: PopupTab | null = null;
 
 const renderAccess = async (): Promise<void> => {
-  const [granted, controller, activeTab] = await Promise.all([
+  const [granted, controller, activeTab, containedTabs] = await Promise.all([
     hasAllSiteAccess(),
     readBrowserController(),
     readActiveTab(),
+    readContainedTabsList(),
   ]);
   renderedTab = activeTab;
   render(
     popupView({ activeTab: activeTabKind(activeTab), controller, granted }),
   );
+  renderContainedTabs(containedTabs);
 };
 
 await renderAccess();

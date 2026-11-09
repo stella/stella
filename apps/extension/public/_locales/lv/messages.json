@@ -5,6 +5,14 @@
   "adoptUnsupported": {
     "message": "Ar stella var izmantot tikai publiskas HTTPS lapas."
   },
+  "containedTabs": {
+    "message": "Cilnes, ko izmanto stella: $TABS$",
+    "placeholders": {
+      "tabs": {
+        "content": "$1"
+      }
+    }
+  },
   "downloadKept": {
     "message": "Lejupielādes, kas pabeidzās, kamēr stella vadīja cilni, un tika saglabātas: $COUNT$. Pirms atvēršanas pārbaudiet, no kurienes tās ir.",
     "placeholders": {

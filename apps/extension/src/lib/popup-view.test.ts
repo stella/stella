@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
 
 import {
+  containedTabLabel,
+  containedTabsMessage,
   handedTabView,
   type PopupActiveTab,
   type PopupController,
@@ -133,6 +135,68 @@ for (const granted of grants) {
 }
 const handed = handedTabView("https://example.com");
 returnedMessageKeys.add(handed.statusMessageKey);
+const containedLine = containedTabsMessage(
+  [{ title: "Invoices", url: "https://portal.example.com/invoices" }],
+  "en",
+);
+if (containedLine !== null) {
+  returnedMessageKeys.add(containedLine.name);
+}
+
+describe("naming the tabs stella keeps contained", () => {
+  test("a tab is named by its title and host", () => {
+    expect(
+      containedTabLabel({
+        title: "Invoices",
+        url: "https://portal.example.com/invoices?page=2",
+      }),
+    ).toBe("Invoices (portal.example.com)");
+  });
+
+  test("whichever of title and host Chrome reported names the tab", () => {
+    expect(
+      containedTabLabel({ title: "  ", url: "https://portal.example.com/" }),
+    ).toBe("portal.example.com");
+    expect(
+      containedTabLabel({
+        title: "portal.example.com",
+        url: "https://portal.example.com/",
+      }),
+    ).toBe("portal.example.com");
+    expect(containedTabLabel({ title: "Loading", url: "about:blank" })).toBe(
+      "Loading",
+    );
+    expect(containedTabLabel({})).toBe(null);
+  });
+
+  test("a long title is cut without splitting a character", () => {
+    const label = containedTabLabel({
+      title: `${"a".repeat(58)}😀😀😀`,
+      url: "https://portal.example.com/",
+    });
+    expect(label).toBe(`${"a".repeat(58)}😀… (portal.example.com)`);
+  });
+
+  test("lists every contained tab, the controlled one first, or nothing", () => {
+    expect(
+      containedTabsMessage(
+        [
+          { title: "Invoices", url: "https://portal.example.com/" },
+          {},
+          { title: "Report", url: "https://files.example.net/r" },
+        ],
+        "en",
+      ),
+    ).toEqual({
+      name: "containedTabs",
+      substitutions: [
+        "Invoices (portal.example.com) and Report (files.example.net)",
+      ],
+    });
+    expect(containedTabsMessage([], "en")).toBe(null);
+    expect(containedTabsMessage([{}], "en")).toBe(null);
+  });
+});
 
 test("every locale contains every message returned by the view", async () => {
   const localesRoot = new URL("../../public/_locales/", import.meta.url);

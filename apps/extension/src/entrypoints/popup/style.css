@@ -36,6 +36,10 @@ main {
   background: var(--status-access-needed);
 }
 
+#contained-tabs {
+  overflow-wrap: anywhere;
+}
+
 .mark {
   align-items: center;
   background: var(--primary);
