@@ -17,7 +17,10 @@ import { panic, Result } from "better-result";
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
 import { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepare-proposal";
-import { streamReferenceProposal } from "@/api/handlers/document-reviews/reference-positions";
+import {
+  openReferenceProposalStream,
+  proposalHandlerError,
+} from "@/api/handlers/document-reviews/reference-positions";
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
@@ -45,8 +48,8 @@ const config = {
 /**
  * Why a stream stopped short. Everything a caller can be refused for — a
  * matter they cannot open, a model the organization has not enabled, an
- * exhausted budget — is decided before the response starts and answered with
- * an ordinary status code; only a failure once bytes are flowing arrives as an
+ * exhausted budget, documents too large for the model — is decided before the
+ * response starts and answered with an ordinary status code; only a failure once bytes are flowing arrives as an
  * event.
  */
 export const REVIEW_PROPOSAL_STREAM_ERROR = {
@@ -57,165 +60,184 @@ export const REVIEW_PROPOSAL_STREAM_ERROR = {
 
 const PROPOSE_POSITIONS_ACTION_KIND = "document-reviews.propose-positions";
 
-const proposePositionsStream = createSafeHandler(
-  config,
-  async function* ({
-    body,
-    orgAIConfig,
-    managedAIResidency,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    request,
-    safeDb,
-    scopedDb,
-    session,
-    user,
-    workspaceId,
-  }) {
-    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-      return Result.err(storedAIConfigUnreadableError());
-    }
-
-    const organizationId = session.activeOrganizationId;
-    const prepared = yield* yield* prepareReferenceProposal({
+export const createProposePositionsStream = ({
+  prepareProposal = prepareReferenceProposal,
+  openProposalStream = openReferenceProposalStream,
+  startAdmission = startExecutionAdmission,
+}: {
+  /** External document-preparation boundary; supplied by focused handler tests. */
+  prepareProposal?: typeof prepareReferenceProposal | undefined;
+  /** External model-dispatch boundary; supplied by focused handler tests. */
+  openProposalStream?: typeof openReferenceProposalStream | undefined;
+  /** External admission boundary; supplied by focused handler tests. */
+  startAdmission?: typeof startExecutionAdmission | undefined;
+} = {}) =>
+  createSafeHandler(
+    config,
+    async function* ({
       body,
       orgAIConfig,
-      orgAIConfigStatus,
-      organizationId,
-      safeDb,
-      userId: user.id,
-      workspaceId,
-    });
-
-    // The proposal streams after the handler returns, so its admission is
-    // held by the stream and released when the stream ends.
-    const admission = yield* Result.await(
-      startExecutionAdmission({
-        organizationId,
-        userId: user.id,
-        organizationStateDb: scopedDb,
-        mode: "concurrency-only",
-        actionKind: PROPOSE_POSITIONS_ACTION_KIND,
-      }),
-    );
-    const reserved = await admission.reservePeriod(
-      {
-        actionKind: PROPOSE_POSITIONS_ACTION_KIND,
-        logicalPhaseId: Bun.randomUUIDv7(),
-      },
-      scopedDb,
-    );
-    if (Result.isError(reserved)) {
-      await admission.release();
-      return Result.err(reserved.error);
-    }
-
-    const serviceTier = "standard" as const;
-    const events = streamReferenceProposal({
-      admission: admission.modelAdmission,
-      target: prepared.target,
-      references: prepared.references,
-      seededPositions: body.seededPositions,
-      perspective: body.perspective,
-      positionsMax: DOCUMENT_REVIEW_LIMITS.positionsMax,
-      targetEntityVersionId: prepared.targetEntityVersionId,
-      organizationId,
-      workspaceId,
-      orgAIConfig,
       managedAIResidency,
+      orgAIConfigStatus,
       promptCachingEnabled,
-      serviceTier,
-      usageMetering: {
-        actionType: "chat",
+      request,
+      safeDb,
+      scopedDb,
+      session,
+      user,
+      workspaceId,
+    }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError());
+      }
+
+      const organizationId = session.activeOrganizationId;
+      const prepared = yield* yield* prepareProposal({
+        body,
+        orgAIConfig,
+        orgAIConfigStatus,
         organizationId,
         safeDb,
-        serviceTier,
         userId: user.id,
         workspaceId,
-      },
-      // The client hanging up cancels the model call: nobody is left to read
-      // the rest of the checklist, and the tokens are still being paid for.
-      abortSignal: AbortSignal.any([request.signal, admission.signal]),
-    });
+      });
 
-    const sse = new ReadableStream<Uint8Array>({
-      async start(controller) {
-        const encoder = new TextEncoder();
-        const writeEvent = (event: string, data: unknown): void => {
-          if (request.signal.aborted) {
-            return;
-          }
-          controller.enqueue(
-            encoder.encode(
-              `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
-            ),
-          );
-        };
-        try {
-          for await (const event of events) {
+      // The proposal streams after the handler returns, so its admission is
+      // held by the stream and released when the stream ends.
+      const admission = yield* Result.await(
+        startAdmission({
+          organizationId,
+          userId: user.id,
+          organizationStateDb: scopedDb,
+          mode: "concurrency-only",
+          actionKind: PROPOSE_POSITIONS_ACTION_KIND,
+        }),
+      );
+
+      const serviceTier = "standard" as const;
+      const opened = openProposalStream({
+        admission: admission.modelAdmission,
+        target: prepared.target,
+        references: prepared.references,
+        seededPositions: body.seededPositions,
+        perspective: body.perspective,
+        positionsMax: DOCUMENT_REVIEW_LIMITS.positionsMax,
+        targetEntityVersionId: prepared.targetEntityVersionId,
+        organizationId,
+        workspaceId,
+        orgAIConfig,
+        managedAIResidency,
+        promptCachingEnabled,
+        serviceTier,
+        usageMetering: {
+          actionType: "chat",
+          organizationId,
+          safeDb,
+          serviceTier,
+          userId: user.id,
+          workspaceId,
+        },
+        // The client hanging up cancels the model call: nobody is left to read
+        // the rest of the checklist, and the tokens are still being paid for.
+        abortSignal: AbortSignal.any([request.signal, admission.signal]),
+      });
+      if (Result.isError(opened)) {
+        await admission.release();
+        return Result.err(proposalHandlerError(opened.error.cause));
+      }
+
+      const reserved = await admission.reservePeriod(
+        {
+          actionKind: PROPOSE_POSITIONS_ACTION_KIND,
+          logicalPhaseId: Bun.randomUUIDv7(),
+        },
+        scopedDb,
+      );
+      if (Result.isError(reserved)) {
+        await admission.release();
+        return Result.err(reserved.error);
+      }
+
+      const events = opened.value;
+
+      const sse = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const encoder = new TextEncoder();
+          const writeEvent = (event: string, data: unknown): void => {
             if (request.signal.aborted) {
-              break;
+              return;
             }
-            switch (event.type) {
-              case "parties":
-                writeEvent("parties", { parties: event.parties });
-                break;
-              case "position": {
-                // The words leave through their own rows, never through the
-                // wire: the position is pinned before its frame is written
-                // and the frame carries ids. One write per position, in
-                // stream order, because each is answered as it is decided.
-                // db-await-in-loop: SAFETY: one write per streamed position, bounded by the proposal cap; the frame must carry row ids, so it cannot be written before its pin lands
-                const pinned = await safeDb(
-                  async (tx) =>
-                    await pinProposedPositions(tx, {
-                      organizationId,
-                      positions: [event.position],
-                    }),
-                );
-                if (Result.isError(pinned)) {
-                  throw pinned.error;
-                }
-                writeEvent("position", {
-                  index: event.index,
-                  position: pinned.value[0],
-                });
+            controller.enqueue(
+              encoder.encode(
+                `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
+              ),
+            );
+          };
+          try {
+            for await (const event of events) {
+              if (request.signal.aborted) {
                 break;
               }
-              case "skipped":
-                writeEvent("skipped", {
-                  index: event.index,
-                  skipped: event.skipped,
-                });
-                break;
-              case "done":
-                writeEvent("done", {
-                  positionCount: event.positionCount,
-                  skippedCount: event.skippedCount,
-                });
-                break;
-              default:
-                event satisfies never;
-                panic(`Unhandled event: ${String(event)}`);
+              switch (event.type) {
+                case "parties":
+                  writeEvent("parties", { parties: event.parties });
+                  break;
+                case "position": {
+                  // The words leave through their own rows, never through the
+                  // wire: the position is pinned before its frame is written
+                  // and the frame carries ids. One write per position, in
+                  // stream order, because each is answered as it is decided.
+                  // db-await-in-loop: SAFETY: one write per streamed position, bounded by the proposal cap; the frame must carry row ids, so it cannot be written before its pin lands
+                  const pinned = await safeDb(
+                    async (tx) =>
+                      await pinProposedPositions(tx, {
+                        organizationId,
+                        positions: [event.position],
+                      }),
+                  );
+                  if (Result.isError(pinned)) {
+                    throw pinned.error;
+                  }
+                  writeEvent("position", {
+                    index: event.index,
+                    position: pinned.value[0],
+                  });
+                  break;
+                }
+                case "skipped":
+                  writeEvent("skipped", {
+                    index: event.index,
+                    skipped: event.skipped,
+                  });
+                  break;
+                case "done":
+                  writeEvent("done", {
+                    positionCount: event.positionCount,
+                    skippedCount: event.skippedCount,
+                  });
+                  break;
+                default:
+                  event satisfies never;
+                  panic(`Unhandled event: ${String(event)}`);
+              }
+            }
+          } catch {
+            // The proposal stream already reported the cause to analytics;
+            // the wire carries a code, never a provider message.
+            writeEvent("error", { code: REVIEW_PROPOSAL_STREAM_ERROR.FAILED });
+          } finally {
+            await admission.release();
+            if (!request.signal.aborted) {
+              controller.close();
             }
           }
-        } catch {
-          // `streamReferenceProposal` already reported the cause to analytics;
-          // the wire carries a code, never a provider message.
-          writeEvent("error", { code: REVIEW_PROPOSAL_STREAM_ERROR.FAILED });
-        } finally {
-          await admission.release();
-          if (!request.signal.aborted) {
-            controller.close();
-          }
-        }
-      },
-    });
+        },
+      });
 
-    return Result.ok(
-      sseResponse(sse, memberSessionStreamBinding({ session, user })),
-    );
-  },
-);
+      return Result.ok(
+        sseResponse(sse, memberSessionStreamBinding({ session, user })),
+      );
+    },
+  );
 
-export default proposePositionsStream;
+export default createProposePositionsStream();
