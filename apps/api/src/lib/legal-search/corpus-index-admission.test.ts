@@ -5,6 +5,7 @@ import {
   createCorpusSearchAdmission,
   runAsCorpusSearchCaller,
   runInCorpusSearchLane,
+  runWithPatientCorpusReads,
 } from "@/api/lib/legal-search/corpus-index-admission";
 import {
   CorpusIndexError,
@@ -360,5 +361,31 @@ test("an unmeasured queue never refuses for its estimate", async () => {
   const result = await queued;
   if (result.type === "admitted") {
     result.release();
+  }
+});
+
+test("a patient read waits out a full queue where another is refused", async () => {
+  const admission = createCorpusSearchAdmission({ slots: 1, maxWaiters: 1 });
+  const held = await admitted(admission);
+  const queued = admission.acquire({ waitLimit: unbounded() });
+  await Promise.resolve();
+
+  expect(await admission.acquire({ waitLimit: unbounded() })).toMatchObject({
+    type: "refused",
+    reason: "busy",
+  });
+
+  const patient = runWithPatientCorpusReads(
+    async () => await admission.acquire({ waitLimit: unbounded() }),
+  );
+  held();
+  const first = await queued;
+  if (first.type === "admitted") {
+    first.release();
+  }
+  const admittedPatient = await patient;
+  expect(admittedPatient.type).toBe("admitted");
+  if (admittedPatient.type === "admitted") {
+    admittedPatient.release();
   }
 });
