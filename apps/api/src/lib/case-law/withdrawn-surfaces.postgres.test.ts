@@ -1287,23 +1287,25 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       await upsertChatThreadSearchDocument(shortId, tx);
     });
     const search = async (text: string) =>
-      await request(async () =>
-        searchGlobal(
-          {
-            organizationId,
-            userId,
-            accessibleWorkspaceIds: [workspaceId],
-            selectedWorkspaceIds: [],
-            types: ["chat"],
-            editedByUserIds: [],
-            mimeTypes: [],
-            query: text,
-            limit: 10,
-            grantedScopes: undefined,
-          },
-          { scopedDb },
-        ),
-      );
+      (
+        await request(async () =>
+          searchGlobal(
+            {
+              organizationId,
+              userId,
+              accessibleWorkspaceIds: [workspaceId],
+              selectedWorkspaceIds: [],
+              types: ["chat"],
+              editedByUserIds: [],
+              mimeTypes: [],
+              query: text,
+              limit: 10,
+              grantedScopes: undefined,
+            },
+            { scopedDb },
+          ),
+        )
+      ).unwrap();
 
     const found = await search(query);
     expect(found.hits.map(({ id }) => id).toSorted()).toEqual(
@@ -1361,6 +1363,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
                     accessibleWorkspaceIds: [workspaceId],
                     selectedWorkspaceIds: [],
                     types: ["chat"],
+                    grantedScopes: undefined,
                     editedByUserIds: [],
                     mimeTypes: [],
                     query: "",

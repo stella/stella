@@ -362,6 +362,7 @@ describe("search handler workspace scoping", () => {
   test("search returns a server failure for unreadable provenance before processing hits", async () => {
     const result = await searchHandler({
       accessibleWorkspaceIds,
+      grantedScopes: undefined,
       body: { ...emptySearchFilters(), query: "closing memo" },
       organizationId,
       userId,

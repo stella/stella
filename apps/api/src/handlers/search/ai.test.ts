@@ -523,6 +523,7 @@ test("search summary refuses unreadable provenance before writing a chat thread"
   const { safeDb, scopedDb } = createScopedDbMock({ insert: write });
   const result = await createSearchSummaryChatThread({
     accessibleWorkspaceIds: [],
+    grantedScopes: undefined,
     body: {
       ...emptySearchSummaryFilters(),
       citations: [],

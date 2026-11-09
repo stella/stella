@@ -93,6 +93,7 @@ describe("global search SQL scope", () => {
           accessibleWorkspaceIds: [],
           selectedWorkspaceIds: [],
           types: ["chat"],
+          grantedScopes: undefined,
           editedByUserIds: [],
           mimeTypes: [],
           limit: 10,

@@ -581,6 +581,7 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
         accessibleWorkspaceIds: [],
         selectedWorkspaceIds: [],
         types: ["chat"] as const,
+        grantedScopes: undefined,
         editedByUserIds: [],
         mimeTypes: [],
         limit: 10,
@@ -631,8 +632,8 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
           scopedDb,
         )
       ).unwrap();
-      expect(preview.type).toBe("plain-text");
-      if (preview.type !== "plain-text") {
+      expect(preview?.type).toBe("plain-text");
+      if (preview?.type !== "plain-text") {
         return;
       }
       expect(preview.content).toBe(exportSource?.title);
