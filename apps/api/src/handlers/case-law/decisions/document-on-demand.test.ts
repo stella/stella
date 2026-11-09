@@ -556,6 +556,8 @@ describe("deferral reporting", () => {
           },
         },
         recordDemand: false,
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       }),
     ).toBeNull();
     expect(captured).toEqual([]);
@@ -576,6 +578,8 @@ describe("deferral reporting", () => {
           },
         },
         recordDemand: false,
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       }),
     ).toBeNull();
     expect(captured).toHaveLength(1);

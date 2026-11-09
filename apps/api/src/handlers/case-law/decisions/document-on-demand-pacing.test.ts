@@ -116,6 +116,8 @@ test("a deferred read returns metadata when its request budget is spent", async 
         adapterKey: "sk-courts",
         deps,
         recordDemand: false,
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       }),
   ).then((result) => {
     resolved = true;
