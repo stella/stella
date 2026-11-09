@@ -523,14 +523,14 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "cursor": {
           "type": "string",
           "maxLength": 128,
-          "description": "matches.nextCursor from a previous query, to read the next matches. Pass it with the same query and section and one decision id."
+          "description": "matches.nextCursor of a previous query; pass the same query and section, one decision id."
         },
         "section": {
           "enum": [
             "court_reasoning"
           ],
           "type": "string",
-          "description": "With query, court_reasoning keeps matches from the first heading that opens the court's own assessment, reported in matches.section. Headings are recognised by wording in Czech, Slovak and English; where none is found (usual for Czech Supreme Court decisions) status is not_found and all matches are returned."
+          "description": "With query, court_reasoning keeps matches from the first heading opening the court's own assessment, reported in matches.section. Recognised by wording (cs, sk, en); where none is found status is not_found and all matches return."
         },
         "include": {
           "type": "array",
@@ -7886,14 +7886,14 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "maxLength": 128,
-          "description": "matches.nextCursor from a previous query, to read the next matches. Pass it with the same query and section and one decision id."
+          "description": "matches.nextCursor of a previous query; pass the same query and section, one decision id."
         },
         "section": {
           "enum": [
             "court_reasoning"
           ],
           "type": "string",
-          "description": "With query, court_reasoning keeps matches from the first heading that opens the court's own assessment, reported in matches.section. Headings are recognised by wording in Czech, Slovak and English; where none is found (usual for Czech Supreme Court decisions) status is not_found and all matches are returned."
+          "description": "With query, court_reasoning keeps matches from the first heading opening the court's own assessment, reported in matches.section. Recognised by wording (cs, sk, en); where none is found status is not_found and all matches return."
         },
         "include": {
           "type": "array",
@@ -15985,14 +15985,14 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "maxLength": 128,
-          "description": "matches.nextCursor from a previous query, to read the next matches. Pass it with the same query and section and one decision id."
+          "description": "matches.nextCursor of a previous query; pass the same query and section, one decision id."
         },
         "section": {
           "enum": [
             "court_reasoning"
           ],
           "type": "string",
-          "description": "With query, court_reasoning keeps matches from the first heading that opens the court's own assessment, reported in matches.section. Headings are recognised by wording in Czech, Slovak and English; where none is found (usual for Czech Supreme Court decisions) status is not_found and all matches are returned."
+          "description": "With query, court_reasoning keeps matches from the first heading opening the court's own assessment, reported in matches.section. Recognised by wording (cs, sk, en); where none is found status is not_found and all matches return."
         },
         "include": {
           "type": "array",
@@ -18075,14 +18075,14 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "cursor": {
           "type": "string",
           "maxLength": 128,
-          "description": "matches.nextCursor from a previous query, to read the next matches. Pass it with the same query and section and one decision id."
+          "description": "matches.nextCursor of a previous query; pass the same query and section, one decision id."
         },
         "section": {
           "enum": [
             "court_reasoning"
           ],
           "type": "string",
-          "description": "With query, court_reasoning keeps matches from the first heading that opens the court's own assessment, reported in matches.section. Headings are recognised by wording in Czech, Slovak and English; where none is found (usual for Czech Supreme Court decisions) status is not_found and all matches are returned."
+          "description": "With query, court_reasoning keeps matches from the first heading opening the court's own assessment, reported in matches.section. Recognised by wording (cs, sk, en); where none is found status is not_found and all matches return."
         },
         "include": {
           "type": "array",

@@ -1822,21 +1822,15 @@ const caseLawDecisionProjection = v.strictObject({
         ),
       ),
       section: v.optional(
-        v.variant("status", [
-          v.strictObject({
-            status: v.literal("found"),
-            heading: v.string(),
-            position: v.number(),
-            hitsBefore: v.number(),
-          }),
-          v.strictObject({
-            status: v.literal("not_found"),
-            reason: v.picklist([
-              "no_assessment_heading",
-              "language_unsupported",
-            ]),
-          }),
-        ]),
+        v.strictObject({
+          status: v.picklist(["found", "not_found"]),
+          heading: v.optional(v.string()),
+          position: v.optional(v.number()),
+          hitsBefore: v.optional(v.number()),
+          reason: v.optional(
+            v.picklist(["no_assessment_heading", "language_unsupported"]),
+          ),
+        }),
       ),
       // Only on an empty answer: which words matched nothing, and the next call.
       warnings: v.optional(

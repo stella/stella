@@ -811,14 +811,14 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
       paginationCursorSchema({
         maxChars: LIMITS.caseLawDecisionQueryCursorMaxLength,
         description:
-          "matches.nextCursor from a previous query, to read the next matches. Pass it with the same query and section and one decision id.",
+          "matches.nextCursor of a previous query; pass the same query and section, one decision id.",
       }),
     ),
     section: v.optional(
       v.pipe(
         v.picklist(DECISION_QUERY_SECTIONS),
         v.description(
-          "With query, court_reasoning keeps matches from the first heading that opens the court's own assessment, reported in matches.section. Headings are recognised by wording in Czech, Slovak and English; where none is found (usual for Czech Supreme Court decisions) status is not_found and all matches are returned.",
+          "With query, court_reasoning keeps matches from the first heading opening the court's own assessment, reported in matches.section. Recognised by wording (cs, sk, en); where none is found status is not_found and all matches return.",
         ),
       ),
     ),
