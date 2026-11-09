@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 3,
+  "reason": "The run log append transaction moved out of createChatRunLog into appendRunLogBatch; its three writes leave the audit mutation ledger (row createChatRunLog.append removed) and carry inline skips with the same reason instead."
+}

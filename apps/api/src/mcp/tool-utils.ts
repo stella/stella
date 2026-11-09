@@ -41,6 +41,7 @@ import {
   SEARCH_INDEX_UNAVAILABLE_MESSAGE,
 } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { findRequestBudgetExpiry } from "@/api/lib/load/request-latency-budget";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { StableExceptionKey } from "@/api/lib/observability/exception-fingerprint";
@@ -538,13 +539,16 @@ const CASE_LAW_SEARCH_TIMEOUT_SINK = failureSink({
 
 /**
  * Whether a case-law search failure is its time budget running out: a
- * cancelled statement or a public-read timeout, thrown or answered. Reads
+ * cancelled statement, a read the request's deadline ended (the corpus
+ * database reports that as the budget's own `TimeoutError`, not a refusal), or
+ * a public-read timeout, thrown or answered. Reads
  * only; `caseLawSearchTimeoutResult` records and answers the same failures.
  */
 export const isCaseLawSearchTimeout = (error: unknown): boolean => {
   const response = isRecord(error) ? error["response"] : undefined;
   return (
     getPgErrorCode(error) === PG_ERROR.QUERY_CANCELED ||
+    findRequestBudgetExpiry(error) !== undefined ||
     resolveHandlerError(error)?.code === PUBLIC_READ_TIMEOUT_CODE ||
     (isRecord(response) && response["code"] === PUBLIC_READ_TIMEOUT_CODE)
   );
