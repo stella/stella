@@ -66,7 +66,7 @@ const BY_MODEL_LIST = {
 
 /** Each output of `steps` after a pause, so a turn takes long enough to watch. */
 const paced = (steps: readonly FakeStep[]): FakeStep[] =>
-  steps.flatMap((step) =>
+  steps.flatMap((step): FakeStep[] =>
     "notify" in step || "request" in step ? [{ sleep: PACE_MS }, step] : [step],
   );
 

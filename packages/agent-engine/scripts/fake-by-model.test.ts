@@ -166,7 +166,7 @@ describe("Codex by model", () => {
         events.push(event);
       }
       await started.value.dispose();
-      return events.at(-1)?.type;
+      return events.at(-1)?.type ?? "no event";
     };
     // The adapter refuses the start or fails the turn; it never answers.
     expect(["refused", "turn.failed"]).toContain(await outcome());
