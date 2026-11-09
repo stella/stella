@@ -1,3 +1,7 @@
+import { Result } from "better-result";
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import {
   APIError,
   shouldRetryAPIRequest,
@@ -24,8 +28,10 @@ export const isSearchBusy = (error: unknown): boolean =>
 
 /** A `Retry-After` in seconds as a delay, or nothing when it says no such thing. */
 const retryAfterMsFrom = (headers: Headers): number | undefined => {
-  const seconds = Number(headers.get("retry-after") ?? Number.NaN);
-  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : undefined;
+  const seconds = parseIntegerToken(headers.get("retry-after"), {
+    sign: "unsigned",
+  });
+  return Result.isOk(seconds) ? seconds.value * 1000 : undefined;
 };
 
 /**
