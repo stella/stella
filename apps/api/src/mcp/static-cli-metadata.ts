@@ -396,6 +396,16 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "search",
       itemsKey: "results",
     },
+    search_guidance: {
+      command: ["guidance", "search"],
+      scope: "search",
+      itemsKey: "results",
+    },
+    // No windowedText: the attribution must stay with the text in every output.
+    read_guidance: {
+      command: ["guidance", "read"],
+      scope: "read",
+    },
     read_statute: {
       command: ["legislation", "read"],
       scope: "read",

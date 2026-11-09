@@ -26,6 +26,7 @@ import { lockActiveTableRun } from "@/api/lib/db/aggregate-lock";
 import type { ReviewWithheldSource } from "@/api/lib/document-review/contract";
 import {
   buildDocumentReviewFindingRow,
+  recountDocumentReviewFindingProgress,
   upsertDocumentReviewFindings,
 } from "@/api/lib/document-review/finding-write";
 import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
@@ -326,6 +327,11 @@ export const recordTableRunVerdicts = async ({
     }
 
     await upsertDocumentReviewFindings(tx, rows);
+    await recountDocumentReviewFindingProgress({
+      tx,
+      workspaceId,
+      runId: run.id,
+    });
 
     const finalized = await finalizeReviewRun({
       tx,

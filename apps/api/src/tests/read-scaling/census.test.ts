@@ -47,6 +47,10 @@ import {
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import {
+  softLawReadScalingScenario,
+  softLawSearchScalingScenario,
+} from "./soft-law";
+import {
   apiScalingSurface,
   mcpScalingSurface,
   parseScalingLedger,
@@ -86,6 +90,8 @@ const measuredApiScenarios = [
   dictationScalingScenario,
   organizationSlugScalingScenario,
   organizationAuditExportScalingScenario,
+  softLawSearchScalingScenario,
+  softLawReadScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

@@ -414,6 +414,14 @@
       "estimatedTokens": 508
     },
     {
+      "name": "read_guidance",
+      "nameChars": 13,
+      "descriptionChars": 506,
+      "inputSchemaChars": 363,
+      "totalChars": 882,
+      "estimatedTokens": 325
+    },
+    {
       "name": "read_provision_history",
       "nameChars": 22,
       "descriptionChars": 618,
@@ -574,6 +582,14 @@
       "estimatedTokens": 2987
     },
     {
+      "name": "search_guidance",
+      "nameChars": 15,
+      "descriptionChars": 592,
+      "inputSchemaChars": 1779,
+      "totalChars": 2386,
+      "estimatedTokens": 944
+    },
+    {
       "name": "search_legislation",
       "nameChars": 18,
       "descriptionChars": 783,
@@ -639,7 +655,7 @@
     }
   ],
   "totals": {
-    "characters": 137107,
-    "estimatedTokens": 54536
+    "characters": 140375,
+    "estimatedTokens": 55805
   }
 }
