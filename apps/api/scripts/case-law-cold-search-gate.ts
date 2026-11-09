@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { Buffer } from "node:buffer";
 
 import { printError } from "@stll/errors";
+import { fetchWithTimeout } from "@stll/fetch";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { envBase } from "@/api/env-base";
@@ -44,8 +45,6 @@ const CONTROL_SERIAL_BASE = 9_000_000;
 const DECISIONS_PER_SPLIT = 5;
 const PASSAGE_MIN_CHARS = 1100;
 const QUERY_PAGE_SIZE = 20;
-const ENGINE_READY_ATTEMPTS = 120;
-const ENGINE_READY_PAUSE_MS = 500;
 const CONTROL_DOCUMENT_BATCHES = 400;
 
 type CountryProfile = {
@@ -230,7 +229,7 @@ const mutationBase = (): string => {
   if (base === undefined || base.length === 0) {
     return panic("CORPUS_INDEX_Q09_ENDPOINT is required");
   }
-  return base.replace(/\/+$/u, "");
+  return base;
 };
 
 /**
@@ -240,7 +239,7 @@ const mutationBase = (): string => {
  */
 const createUnmergedIndex = async (indexId: string): Promise<void> => {
   const config = corpusIndexConfigFromManifest(MANIFEST, indexId);
-  const response = await fetch(`${mutationBase()}/api/v1/indexes`, {
+  const response = await fetchWithTimeout(`${mutationBase()}/api/v1/indexes`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -250,7 +249,7 @@ const createUnmergedIndex = async (indexId: string): Promise<void> => {
         merge_policy: { type: "no_merge" },
       },
     }),
-    signal: AbortSignal.timeout(60_000),
+    timeoutMs: 60_000,
   });
   if (!response.ok) {
     panic(
@@ -268,13 +267,13 @@ const ingestSplit = async (
   if (Buffer.byteLength(ndjson) > CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES) {
     panic(`A fixture split for ${indexId} exceeds the engine's ingest limit`);
   }
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${mutationBase()}/api/v1/${indexId}/ingest?commit=force`,
     {
       method: "POST",
       headers: { "content-type": "application/x-ndjson" },
       body: ndjson,
-      signal: AbortSignal.timeout(120_000),
+      timeoutMs: 120_000,
     },
   );
   if (!response.ok) {
@@ -320,8 +319,8 @@ const seedControl = async (): Promise<void> => {
   await ingestSplit(indexId, documents);
 };
 
-const runDocker = async (args: readonly string[]): Promise<void> => {
-  const child = Bun.spawn(["docker", ...args], {
+const runCommand = async (command: readonly string[]): Promise<void> => {
+  const child = Bun.spawn([...command], {
     stdout: "ignore",
     stderr: "pipe",
   });
@@ -330,43 +329,44 @@ const runDocker = async (args: readonly string[]): Promise<void> => {
     new Response(child.stderr).text(),
   ]);
   if (exitCode !== 0) {
-    panic(`docker ${args.join(" ")} failed (${String(exitCode)}): ${stderr}`);
+    panic(`${command.join(" ")} failed (${String(exitCode)}): ${stderr}`);
   }
 };
 
 const dropPageCache = async (): Promise<void> => {
-  const child = Bun.spawn(
-    ["sudo", "-n", "sh", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"],
-    { stdout: "ignore", stderr: "pipe" },
-  );
-  const [exitCode, stderr] = await Promise.all([
-    child.exited,
-    new Response(child.stderr).text(),
+  await runCommand([
+    "sudo",
+    "-n",
+    "sh",
+    "-c",
+    "sync; echo 3 > /proc/sys/vm/drop_caches",
   ]);
-  if (exitCode !== 0) {
-    panic(`Dropping the page cache failed: ${stderr}`);
-  }
 };
 
+/** The same readiness wait the workflow does before the engine is first used. */
 const waitForEngine = async (): Promise<void> => {
-  for (let attempt = 0; attempt < ENGINE_READY_ATTEMPTS; attempt += 1) {
-    const ready = await fetch(`${ENGINE_ENDPOINT}/health/readyz`, {
-      signal: AbortSignal.timeout(2000),
-    }).then(
-      (response) => response.ok,
-      () => false,
-    );
-    if (ready) {
-      return;
-    }
-    await Bun.sleep(ENGINE_READY_PAUSE_MS);
-  }
-  panic("The corpus engine did not come back after a restart");
+  await runCommand([
+    "curl",
+    "--fail",
+    "--silent",
+    "--show-error",
+    "--retry",
+    "60",
+    "--retry-connrefused",
+    "--retry-all-errors",
+    "--retry-delay",
+    "1",
+    "--retry-max-time",
+    "120",
+    "--max-time",
+    "2",
+    `${ENGINE_ENDPOINT}/health/readyz`,
+  ]);
 };
 
 /** Empties the engine's in-process caches and, in CI, the host page cache. */
 const makeCold = async (): Promise<void> => {
-  await runDocker(["restart", ENGINE_CONTAINER]);
+  await runCommand(["docker", "restart", ENGINE_CONTAINER]);
   if (DROP_PAGE_CACHE) {
     await dropPageCache();
   }

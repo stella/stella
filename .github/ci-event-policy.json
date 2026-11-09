@@ -162,7 +162,7 @@
     "generated-conflicts-publish.yml/publish": "main",
     "desktop-release-canary.yml/check-latest": "main",
     "journey-canary.yml/journeys": "main",
-    "case-law-cold-search-gate.yml/cold-search": "main",
+    "case-law-cold-search-gate.yml/cold-search": "dispatch-only",
     "user-journeys.yml/staging-commit": "main",
     "user-journeys.yml/staging": "main",
     "user-journeys.yml/local-stack": "main",

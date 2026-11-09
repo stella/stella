@@ -1,18 +1,15 @@
 name: Case-law cold search gate
 
 # First-hit search latency per corpus country on a many-split fixture
-# (apps/api/scripts/case-law-cold-search-gate.ts). Runs for each release
-# candidate tag and on demand. Report-only: nothing depends on it and
-# STELLA_COLD_SEARCH_MODE is not set to enforce, so it cannot hold a release.
+# (apps/api/scripts/case-law-cold-search-gate.ts). Runs on demand and is
+# report-only: nothing depends on it and STELLA_COLD_SEARCH_MODE is not set to
+# enforce, so it cannot hold a release.
 
 defaults:
   run:
     shell: bash
 
 on:
-  push:
-    tags:
-      - "v*-rc.*"
   workflow_dispatch:
 
 permissions: {}
@@ -40,7 +37,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
-          save: false
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         timeout-minutes: 3
