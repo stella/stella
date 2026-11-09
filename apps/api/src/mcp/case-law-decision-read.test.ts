@@ -695,9 +695,37 @@ describe("paragraphs matching a query", () => {
     );
   });
 
+  test("a continuation repeats no paragraph across adjacent matches", () => {
+    const adjacent = decisionParagraphs({
+      located: null,
+      text: Array.from({ length: 30 }, () => "hit").join("\n"),
+    });
+    const first = paragraphsMatching({
+      budget: 1_000_000,
+      language: "xx",
+      paragraphs: adjacent,
+      query: "hit",
+    });
+    const second = paragraphsMatching({
+      after: first.nextAfter ?? 0,
+      budget: 1_000_000,
+      language: "xx",
+      paragraphs: adjacent,
+      query: "hit",
+    });
+    const firstPositions = new Set(
+      first.paragraphs.map(({ position }) => position),
+    );
+    expect(
+      second.paragraphs.filter(({ position }) => firstPositions.has(position)),
+    ).toEqual([]);
+  });
+
   test("a query cursor is bound to its query and section", () => {
+    const issuedFor = "decision-a";
     const cursor = encodeDecisionQueryCursor({
       after: 7,
+      decisionId: issuedFor,
       query: "výpověď",
       section: undefined,
       textVersion: "version",
@@ -705,16 +733,31 @@ describe("paragraphs matching a query", () => {
     expect(
       decodeDecisionQueryCursor({
         cursor,
+        decisionId: issuedFor,
         query: "výpověď",
         section: undefined,
       }),
     ).toEqual({ after: 7, textVersion: "version" });
     expect(
-      decodeDecisionQueryCursor({ cursor, query: "jiné", section: undefined }),
+      decodeDecisionQueryCursor({
+        cursor,
+        decisionId: "decision-b",
+        query: "výpověď",
+        section: undefined,
+      }),
     ).toBeNull();
     expect(
       decodeDecisionQueryCursor({
         cursor,
+        decisionId: issuedFor,
+        query: "jiné",
+        section: undefined,
+      }),
+    ).toBeNull();
+    expect(
+      decodeDecisionQueryCursor({
+        cursor,
+        decisionId: issuedFor,
         query: "výpověď",
         section: "court_reasoning",
       }),
@@ -722,6 +765,7 @@ describe("paragraphs matching a query", () => {
     expect(
       decodeDecisionQueryCursor({
         cursor: "not a cursor",
+        decisionId: issuedFor,
         query: "výpověď",
         section: undefined,
       }),
@@ -792,6 +836,40 @@ describe("paragraphs matching a query", () => {
         reason: "language_unsupported",
       });
       expect(found.hitCount).toBe(1);
+    });
+
+    test("does not take a heading about a court below for the assessment", () => {
+      const found = paragraphsMatching({
+        budget: 8000,
+        language: "cs",
+        paragraphs: [
+          paragraph(["II. Posouzení věci krajským soudem"], "výpověď první"),
+          paragraph([ASSESSMENT], "výpověď druhá"),
+        ],
+        query: "výpověď",
+        section: "court_reasoning",
+      });
+      expect(found.section).toMatchObject({
+        status: "found",
+        heading: ASSESSMENT,
+        hitsBefore: 1,
+      });
+    });
+
+    test("words found only before the boundary are no miss", () => {
+      const found = paragraphsMatching({
+        budget: 8000,
+        language: "cs",
+        paragraphs: [
+          paragraph([REASONS], "žalobce namítá výpověď"),
+          paragraph([ASSESSMENT], "soud rozhodl"),
+        ],
+        query: "výpověď",
+        section: "court_reasoning",
+      });
+      expect(found.hitCount).toBe(0);
+      expect(found.warning).toBeNull();
+      expect(found.section).toMatchObject({ hitsBefore: 1 });
     });
 
     test("a query with no section reports none", () => {

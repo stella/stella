@@ -3301,6 +3301,7 @@ type FoundDecision = Extract<
 >["decision"];
 
 type DecisionTextPartOptions = {
+  decisionId: string;
   url: string | null;
   language: string;
   located: readonly LocatedDecisionBlock[] | null;
@@ -3315,6 +3316,7 @@ type DecisionTextPartOptions = {
 
 /** The text an entry answers with: its page, or the paragraphs a query matched. */
 const decisionTextPart = ({
+  decisionId,
   url,
   language,
   located,
@@ -3360,6 +3362,7 @@ const decisionTextPart = ({
           : {
               resumeAfter: encodeDecisionQueryCursor({
                 after: found.nextAfter,
+                decisionId,
                 query: position.query,
                 section: position.section,
                 textVersion: version,
@@ -3584,6 +3587,7 @@ const decisionItemResult = ({
     text === null || starts === null
       ? {}
       : decisionTextPart({
+          decisionId,
           url,
           language: read.language,
           located: blocks === null ? null : locateDecisionBlocks(blocks, text),
@@ -3697,6 +3701,26 @@ const decisionReadArgumentError = (
 
 type DecisionReadArgs = v.InferOutput<typeof readCaseLawDecisionArgsSchema>;
 
+/** A `resume_after` read back, or null when absent or issued for something else. */
+const decodedResumeAfter = ({
+  decision_ids: decisionIds,
+  query,
+  resume_after: resumeAfter,
+  section,
+}: Pick<
+  DecisionReadArgs,
+  "decision_ids" | "query" | "resume_after" | "section"
+>) =>
+  query === undefined || resumeAfter === undefined
+    ? null
+    : decodeDecisionQueryCursor({
+        cursor: resumeAfter,
+        decisionId:
+          decisionIds.at(0) ?? panic("A decision read names at least one id"),
+        query,
+        section,
+      });
+
 /** The input combinations the schema admits and the read refuses, if any. */
 const decisionReadArgumentRefusal = ({
   decision_ids: decisionIds,
@@ -3742,9 +3766,10 @@ const decisionReadArgumentRefusal = ({
       );
     }
     if (
-      decodeDecisionQueryCursor({
-        cursor: resumeAfter,
+      decodedResumeAfter({
+        decision_ids: decisionIds,
         query,
+        resume_after: resumeAfter,
         section,
       }) === null
     ) {
@@ -3773,20 +3798,19 @@ const decisionReadArgumentRefusal = ({
 };
 
 /** Where each entry's text starts: a query replaces the page. */
-const decisionTextPositionOf = ({
-  resume_after: resumeAfter,
-  page,
-  query,
-  section,
-}: DecisionReadArgs): DecisionTextPosition => {
+const decisionTextPositionOf = (
+  args: DecisionReadArgs,
+): DecisionTextPosition => {
+  const { page, query, section } = args;
   if (query === undefined) {
     return { type: "page", page: page ?? LIMITS.caseLawDecisionFirstPage };
   }
-  const resumed =
-    resumeAfter === undefined
-      ? null
-      : decodeDecisionQueryCursor({ cursor: resumeAfter, query, section });
-  return { type: "query", query, section, after: resumed?.after ?? 0 };
+  return {
+    type: "query",
+    query,
+    section,
+    after: decodedResumeAfter(args)?.after ?? 0,
+  };
 };
 
 const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
@@ -3812,15 +3836,8 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   const includedFields = decisionIncludedFields({ include, position });
   // A cursor carries the version it was issued against, so a text that
   // changed between its pages is marked without the caller passing it.
-  const cursorTextVersion =
-    parsed.output.resume_after === undefined || position.type !== "query"
-      ? undefined
-      : decodeDecisionQueryCursor({
-          cursor: parsed.output.resume_after,
-          query: position.query,
-          section: position.section,
-        })?.textVersion;
-  const seenVersion = seenTextVersion ?? cursorTextVersion;
+  const seenVersion =
+    decodedResumeAfter(parsed.output)?.textVersion ?? seenTextVersion;
 
   // The same gate the public route applies, in the same shape: a
   // restricted decision does not exist for any caller, and the read that

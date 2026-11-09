@@ -465,6 +465,17 @@ const COURT_ASSESSMENT_HEADINGS = new Map<string, readonly RegExp[]>([
   ],
 ]);
 
+/** A heading naming a court below reports that court's reasoning, not this one's. */
+const LOWER_COURT_HEADING_WORDS = [
+  "krajsk",
+  "okresn",
+  "obvodn",
+  "mestsk",
+  "prvniho stupne",
+  "prveho stupna",
+  "odvolac",
+];
+
 type CourtReasoningBoundary =
   | { type: "found"; index: number; heading: string }
   | {
@@ -488,7 +499,10 @@ const courtReasoningBoundary = ({
   for (const [index, { headingPath }] of paragraphs.entries()) {
     const heading = headingPath.find((title) => {
       const folded = fold(title);
-      return headings.some((pattern) => pattern.test(folded));
+      return (
+        !LOWER_COURT_HEADING_WORDS.some((word) => folded.includes(word)) &&
+        headings.some((pattern) => pattern.test(folded))
+      );
     });
     if (heading !== undefined) {
       return { type: "found", index, heading };
@@ -521,23 +535,26 @@ const queryCursorSchema = v.tuple([
   v.string(),
 ]);
 
-const queryCursorBinding = (
-  query: string,
-  section: DecisionQuerySection | undefined,
-): string =>
+const queryCursorBinding = ({
+  decisionId,
+  query,
+  section,
+}: DecisionQueryCursorScope): string =>
   createSha256()
-    .update(JSON.stringify([query, section ?? null]))
+    .update(JSON.stringify([decisionId, query, section ?? null]))
     .digest("base64url")
     .slice(0, QUERY_CURSOR_BINDING_CHARS);
 
 type DecisionQueryCursorScope = {
+  decisionId: string;
   query: string;
   section: DecisionQuerySection | undefined;
 };
 
-/** Continues after paragraph `after`, for the same query and section only. */
+/** Continues after paragraph `after`, for the same decision, query and section only. */
 export const encodeDecisionQueryCursor = ({
   after,
+  decisionId,
   query,
   section,
   textVersion,
@@ -546,11 +563,16 @@ export const encodeDecisionQueryCursor = ({
   textVersion: string;
 }): string =>
   Buffer.from(
-    JSON.stringify([after, textVersion, queryCursorBinding(query, section)]),
+    JSON.stringify([
+      after,
+      textVersion,
+      queryCursorBinding({ decisionId, query, section }),
+    ]),
   ).toString("base64url");
 
 export const decodeDecisionQueryCursor = ({
   cursor,
+  decisionId,
   query,
   section,
 }: DecisionQueryCursorScope & { cursor: string }): {
@@ -568,7 +590,7 @@ export const decodeDecisionQueryCursor = ({
     return null;
   }
   const [after, textVersion, binding] = parsed.output;
-  return binding === queryCursorBinding(query, section)
+  return binding === queryCursorBinding({ decisionId, query, section })
     ? { after, textVersion }
     : null;
 };
@@ -716,11 +738,11 @@ export const paragraphsMatching = ({
       paragraphs: [],
       section: sectionReport,
       truncated: false,
-      warning: queryMissWarning({
-        language,
-        spellings,
-        termSets: termSets.slice(floor),
-      }),
+      // Matches before the boundary are not a miss: `section` counts them.
+      warning:
+        allHits.length > 0
+          ? null
+          : queryMissWarning({ language, spellings, termSets }),
     };
   }
   const hits = scopedHits.filter((index) => index + 1 > after);
@@ -756,7 +778,10 @@ export const paragraphsMatching = ({
       break;
     }
     for (const neighbour of [hit - 1, hit + 1]) {
-      if (neighbour >= floor && neighbour < paragraphs.length) {
+      if (
+        neighbour >= Math.max(floor, after) &&
+        neighbour < paragraphs.length
+      ) {
         take(neighbour);
       }
     }
