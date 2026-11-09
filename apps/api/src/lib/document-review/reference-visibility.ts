@@ -32,7 +32,10 @@ import type {
   PinnedReference,
 } from "@/api/lib/document-review/run-contract";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
-import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
+import type {
+  PlaybookPositions,
+  PlaybookScope,
+} from "@/api/lib/workflow/playbook-positions";
 
 /** The matters each reference position's passages came from, by `sourceId`. */
 export const referenceWorkspacesByPosition = (
@@ -162,6 +165,7 @@ export type ReaderBasis = {
       positions: Omit<PlaybookPositions, "items"> & {
         items: ReaderPosition[];
       };
+      scope: PlaybookScope | null;
     };
   };
   references: ReaderReference[];
@@ -193,6 +197,10 @@ export const basisForReader = (
             positionForReader(position, readable),
           ),
         },
+        // A basis stored before the snapshot carried a scope has no key
+        // for it; the reader contract is `PlaybookScope | null`, so the
+        // missing key reads as null rather than surfacing undefined.
+        scope: definitionSnapshot.scope ?? null,
       },
     },
     references: referencesForReader(basis.references, readable),

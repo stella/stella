@@ -62,10 +62,12 @@ import {
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import {
   CASE_LAW_SEARCH_DB_READ,
-  createCaseLawSearchDbTimer,
+  type CaseLawSearchTrace,
+  createCaseLawSearchTrace,
   decisionQueryClass,
   reportCaseLawFunctionWordsExcluded,
   reportCaseLawSearchCompleted,
+  runTracedCaseLawSearch,
 } from "@/api/handlers/case-law/decisions/search-telemetry";
 import { status } from "@/api/http/status";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -189,6 +191,7 @@ import {
   indexedCaseLawCandidateRow,
 } from "@/api/lib/legal-search/case-law-indexed-candidates";
 import {
+  canonicalCorpusJson,
   type CorpusAggregateCacheOutcome,
   createCorpusAggregateCache,
 } from "@/api/lib/legal-search/corpus-aggregate-cache";
@@ -286,6 +289,7 @@ import {
 } from "@/api/lib/legal-search/legal-alternatives";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import { readPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
+import { createPublicSearchCoalescer } from "@/api/lib/legal-search/public-search-coalescer";
 import {
   blendStableCitationAuthority,
   courtTierSignal,
@@ -417,6 +421,72 @@ type SearchDecisionsHandlerArgs = Omit<
   "dependencies"
 >;
 
+/**
+ * Answers an API process keeps per search it has answered. The time to live is
+ * a burst's length, so a revoked source or a withdrawn decision leaves the
+ * cache as fast as it leaves a request already in flight; the byte bound holds
+ * a storm of distinct queries to a few percent of the process heap.
+ */
+const CASE_LAW_SEARCH_COALESCER_TTL_MS = 30 * 1000;
+const CASE_LAW_SEARCH_COALESCER_MAX_ENTRIES = 512;
+const CASE_LAW_SEARCH_COALESCER_MAX_BYTES = 32 * 1024 * 1024;
+
+type CorpusIndexCaseLawSearchAnswer = Awaited<
+  ReturnType<typeof tracedCorpusIndexSearch>
+>;
+
+const caseLawSearchCoalescer =
+  createPublicSearchCoalescer<CorpusIndexCaseLawSearchAnswer>({
+    limits: {
+      maxEntries: CASE_LAW_SEARCH_COALESCER_MAX_ENTRIES,
+      maxBytes: CASE_LAW_SEARCH_COALESCER_MAX_BYTES,
+      ttlMs: CASE_LAW_SEARCH_COALESCER_TTL_MS,
+    },
+    now: () => Temporal.Now.instant().epochMilliseconds,
+  });
+
+/**
+ * The identity of a search's answer: the normalized request and the
+ * generation it reads. A caller's identity is deliberately absent, because
+ * nothing below this point reads it; the one per-tenant input the handler
+ * applies, the page limit, is in the key as the value it resolves to. The
+ * provision's citing set is derived from `provision`, which the key carries.
+ */
+export const caseLawSearchCoalescingKey = (
+  {
+    provisionDecisionIds: _provisionDecisionIds,
+    provisionScope: _provisionScope,
+    limit,
+    ...request
+  }: SearchDecisionsBody,
+  serving: ServingCorpusIndexGeneration,
+): string =>
+  sha256Hex(
+    canonicalCorpusJson({
+      family: "case_law",
+      serving,
+      request: {
+        ...request,
+        limit: normalizeTenantPageLimit(
+          limit ?? LIMITS.caseLawSearchPageSizeDefault,
+        ),
+      },
+    }),
+  );
+
+/**
+ * Whether a search answer may be kept for the next caller. Only a page the
+ * search finished: a non-200 answer, a page cut short, or one whose relaxed
+ * top-up was skipped says something about the load of the moment and must not
+ * outlive it.
+ */
+const isCacheableCaseLawSearch = (
+  answer: CorpusIndexCaseLawSearchAnswer,
+): boolean =>
+  "hits" in answer &&
+  answer.paginationOutcome.type === "complete" &&
+  answer.relaxedTopUp === undefined;
+
 export const searchDecisionsHandler = async ({
   body,
   caseLawDb,
@@ -474,26 +544,50 @@ export const searchDecisionsHandler = async ({
 
   const scopedBody = { ...body, country };
   if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
-    const { provision } = scopedBody;
-    const provisionScope =
-      scopedBody.provisionScope ??
-      (provision === undefined
-        ? null
-        : await caseLawDb(
-            async (tx) =>
-              await readCaseLawProvisionScope(tx, {
-                jurisdiction: country,
-                provision,
-              }),
-          ));
-    return await searchCorpusIndexDecisions({
-      body:
-        provisionScope?.type === "decisions"
-          ? { ...scopedBody, provisionDecisionIds: provisionScope.decisionIds }
-          : scopedBody,
+    const readServingTarget = corpusIndexRequestConfiguration({
+      body: scopedBody,
       caseLawDb,
-      observer,
+      dependencies: {},
+    }).readServingTarget;
+    const servingTarget = await readServingTarget();
+    const dependencies = {
+      readServingTarget: async () => await Promise.resolve(servingTarget),
+    };
+    const run = async (searchSignal?: AbortSignal) => {
+      const { provision } = scopedBody;
+      const provisionScope =
+        scopedBody.provisionScope ??
+        (provision === undefined
+          ? null
+          : await caseLawDb(
+              async (tx) =>
+                await readCaseLawProvisionScope(tx, {
+                  jurisdiction: country,
+                  provision,
+                }),
+            ));
+      return await tracedCorpusIndexSearch({
+        body:
+          provisionScope?.type === "decisions"
+            ? {
+                ...scopedBody,
+                provisionDecisionIds: provisionScope.decisionIds,
+              }
+            : scopedBody,
+        caseLawDb,
+        observer,
+        signal: searchSignal,
+        dependencies,
+      });
+    };
+    if (Result.isError(servingTarget)) {
+      return await run(signal);
+    }
+    return await caseLawSearchCoalescer.search({
+      key: caseLawSearchCoalescingKey(scopedBody, servingTarget.value.serving),
       signal,
+      cacheable: isCacheableCaseLawSearch,
+      run,
     });
   }
 
@@ -3026,13 +3120,16 @@ const caseLawIndexRanking = ({
     : { scanFields: undefined, projections: () => undefined };
 };
 
-export const searchCorpusIndexDecisions = async ({
-  signal,
-  body,
-  caseLawDb,
-  observer,
-  dependencies = {},
-}: SearchCorpusIndexDecisionsOptions) => {
+export const searchCorpusIndexDecisions = async (
+  {
+    signal,
+    body,
+    caseLawDb,
+    observer,
+    dependencies = {},
+  }: SearchCorpusIndexDecisionsOptions,
+  trace: CaseLawSearchTrace = createCaseLawSearchTrace(body.country),
+) => {
   const {
     readServingTarget,
     configuredVariant,
@@ -3045,7 +3142,7 @@ export const searchCorpusIndexDecisions = async ({
     caseLawDb,
     dependencies,
   });
-  const startedAt = performance.now();
+  const { startedAt } = trace;
   // Only the first page of a result set describes it (its total, its facets,
   // the decisions a reference pins above it); a page reached by cursor or by
   // offset is a slice of a set the first page already described.
@@ -3067,7 +3164,7 @@ export const searchCorpusIndexDecisions = async ({
   // the numbers are wait, not work: the candidate read hands the timer down to
   // where it opens its transaction, because the ranking, folding and
   // collapsing around it are not database time.
-  const dbTimer = createCaseLawSearchDbTimer();
+  const { dbTimer } = trace;
   const hitDispositions = createCorpusHitDispositionCounter();
   // The scan's record of rows read. The identity path keeps its own: it
   // admits every published row, which must never stand in for a search hit
@@ -3096,7 +3193,9 @@ export const searchCorpusIndexDecisions = async ({
     configuredVariant,
   });
   const queryClass = decisionQueryClass(intent);
+  trace.queryClass = queryClass;
   const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {
+    trace.reported = true;
     reportCaseLawSearchCompleted({
       candidatesHydrated: hydrated.size + namedHydrated.size,
       hitDispositions: hitDispositions.snapshot(),
@@ -3183,6 +3282,7 @@ export const searchCorpusIndexDecisions = async ({
   let pinned: readonly RankedHit[] = [];
   let pinnedIds: ReadonlySet<string> = new Set();
   if (intent.type === "identifier" && identityRole !== "none") {
+    trace.phase = "identity";
     const ids = await findDecisionIdsByIdentity({
       caseLawDb,
       country: body.country,
@@ -3302,6 +3402,7 @@ export const searchCorpusIndexDecisions = async ({
   // read may reach (`corpusIndexReadTarget`).
   const { indexId, jurisdictionClause } = route;
 
+  trace.phase = "query_resolve";
   const { facetQueries, resolved } = await resolveCorpusIndexQuery({
     body,
     generation,
@@ -3442,7 +3543,11 @@ export const searchCorpusIndexDecisions = async ({
       },
     });
   const concurrentStartedAt = performance.now();
-  const pageRead = readTextPage(resolved.query, limit, null);
+  trace.phase = "scan_and_facets";
+  const pageRead = readTextPage(resolved.query, limit, null).then((read) => {
+    trace.scanSettled = true;
+    return read;
+  });
   // Stamped where it resolves rather than after the phase: the reader waits on
   // the slower arm, and which arm that was is the whole point of the pair.
   const facetRead = readsResultSetDescription(body, isFirstPage)
@@ -3465,6 +3570,7 @@ export const searchCorpusIndexDecisions = async ({
         totalQuery: resolved.query,
       }).then((read) => {
         facetMs = performance.now() - concurrentStartedAt;
+        trace.facetMs = facetMs;
         return read;
       })
     : null;
@@ -3492,6 +3598,7 @@ export const searchCorpusIndexDecisions = async ({
   // scrubbed mid-request; it drops out of the page rather than being served
   // from a stale copy, and the cursor keeps pointing past it.
   // The pinned decisions were named by an identifier, the rest are hits.
+  trace.phase = "page_rows";
   const byId = new Map([
     ...(await readPageRows(
       readCaseLawPageDecisionRows,
@@ -3504,6 +3611,7 @@ export const searchCorpusIndexDecisions = async ({
   ]);
 
   // Timed around the call for the same reason as on the identity path.
+  trace.phase = "alternates";
   const alternatesStartedAt = performance.now();
   const alternatesByGroupKey =
     await readPublicDecisionLanguageAlternatesByGroup({
@@ -3515,6 +3623,7 @@ export const searchCorpusIndexDecisions = async ({
     performance.now() - alternatesStartedAt,
   );
 
+  trace.phase = "partial_top_up";
   const page = decisionHitsPage({
     alternatesByGroupKey,
     anchorIdById,
@@ -3687,16 +3796,14 @@ export const searchCorpusIndexDecisions = async ({
   const hits = [...page.hits, ...relaxedHits];
   // An unrelaxed request adds the empty scan, which changes nothing.
   report(hits.length, sumCorpusIndexScans(scan, relaxed.scan));
-  if (interpretation.droppedFunctionWords.length > 0) {
-    reportCaseLawFunctionWordsExcluded({
-      country: body.country,
-      excludedTokens: interpretation.droppedFunctionWords.length,
-      hitsReturned: hits.length,
-      queryTokens:
-        tokenizeCorpusFreeText(interpretation.queryUsed).length +
-        interpretation.droppedFunctionWords.length,
-    });
-  }
+  reportCaseLawFunctionWordsExcluded({
+    country: body.country,
+    excludedTokens: interpretation.droppedFunctionWords.length,
+    hitsReturned: hits.length,
+    queryTokens:
+      tokenizeCorpusFreeText(interpretation.queryUsed).length +
+      interpretation.droppedFunctionWords.length,
+  });
   const answer = searchAnswer({
     body,
     interpretation,
@@ -3718,6 +3825,17 @@ export const searchCorpusIndexDecisions = async ({
     decisionHeadnoteMaxChars(body.headnotePresentation),
   );
 };
+
+/** The corpus search, leaving a record of itself when it does not complete. */
+const tracedCorpusIndexSearch = async (
+  options: SearchCorpusIndexDecisionsOptions,
+) =>
+  await runTracedCaseLawSearch({
+    country: options.body.country,
+    observer: options.observer,
+    run: async (trace, observer) =>
+      await searchCorpusIndexDecisions({ ...options, observer }, trace),
+  });
 
 type ListCaseLawProvisionDecisionsOptions = {
   body: SearchDecisionsBody & { provision: CaseLawProvisionFilter };

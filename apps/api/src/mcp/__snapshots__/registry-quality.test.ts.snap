@@ -190,7 +190,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -334,6 +334,15 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "minLength": 1,
           "maxLength": 8,
           "description": "Filter by language code. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "preferred_language": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8,
+          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, its snippet still in the language that matched; otherwise it stays as matched. Ignored together with language. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -535,6 +544,14 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "maxLength": 24,
           "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
         },
+        "preferred_language": {
+          "type": "string",
+          "maxLength": 8,
+          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
         "query": {
           "type": "string",
           "maxLength": 256,
@@ -571,7 +588,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). \`detail\`, \`passage_query\` narrow replies. Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -618,6 +635,20 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           ],
           "type": "string",
           "description": "Only citations with this polarity reading."
+        },
+        "detail": {
+          "enum": [
+            "full",
+            "compact"
+          ],
+          "type": "string",
+          "description": "Defaults to 'full'. 'compact' cuts each passage to 240 characters around the citation, without evidenceQuote."
+        },
+        "passage_query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Only citations whose citing paragraph holds every word, in any inflection. Filters page by page: \`scannedCitations\` is how many the page read; an empty page with \`nextCursor\` may still match later."
         },
         "limit": {
           "type": "integer",
@@ -7561,7 +7592,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -7705,6 +7736,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "minLength": 1,
           "maxLength": 8,
           "description": "Filter by language code. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "preferred_language": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8,
+          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, its snippet still in the language that matched; otherwise it stays as matched. Ignored together with language. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -7906,6 +7946,14 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "maxLength": 24,
           "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
         },
+        "preferred_language": {
+          "type": "string",
+          "maxLength": 8,
+          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
         "query": {
           "type": "string",
           "maxLength": 256,
@@ -7942,7 +7990,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). \`detail\`, \`passage_query\` narrow replies. Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -7989,6 +8037,20 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           ],
           "type": "string",
           "description": "Only citations with this polarity reading."
+        },
+        "detail": {
+          "enum": [
+            "full",
+            "compact"
+          ],
+          "type": "string",
+          "description": "Defaults to 'full'. 'compact' cuts each passage to 240 characters around the citation, without evidenceQuote."
+        },
+        "passage_query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Only citations whose citing paragraph holds every word, in any inflection. Filters page by page: \`scannedCitations\` is how many the page read; an empty page with \`nextCursor\` may still match later."
         },
         "limit": {
           "type": "integer",
@@ -15668,7 +15730,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -15812,6 +15874,15 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "minLength": 1,
           "maxLength": 8,
           "description": "Filter by language code. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "preferred_language": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8,
+          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, its snippet still in the language that matched; otherwise it stays as matched. Ignored together with language. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -16013,6 +16084,14 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "maxLength": 24,
           "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
         },
+        "preferred_language": {
+          "type": "string",
+          "maxLength": 8,
+          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
         "query": {
           "type": "string",
           "maxLength": 256,
@@ -16049,7 +16128,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). \`detail\`, \`passage_query\` narrow replies. Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -16096,6 +16175,20 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           ],
           "type": "string",
           "description": "Only citations with this polarity reading."
+        },
+        "detail": {
+          "enum": [
+            "full",
+            "compact"
+          ],
+          "type": "string",
+          "description": "Defaults to 'full'. 'compact' cuts each passage to 240 characters around the citation, without evidenceQuote."
+        },
+        "passage_query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Only citations whose citing paragraph holds every word, in any inflection. Filters page by page: \`scannedCitations\` is how many the page read; an empty page with \`nextCursor\` may still match later."
         },
         "limit": {
           "type": "integer",
@@ -17803,7 +17896,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -17947,6 +18040,15 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "minLength": 1,
           "maxLength": 8,
           "description": "Filter by language code. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "preferred_language": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8,
+          "description": "A language code such as cs or en. A result whose decision has a version in this language is returned as that version, its snippet still in the language that matched; otherwise it stays as matched. Ignored together with language. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -18111,6 +18213,14 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "maxLength": 24,
           "description": "The textVersion a previous page returned. If the text has changed since, the answer is the requested page of the current text, marked versionChanged. Single decision id only."
         },
+        "preferred_language": {
+          "type": "string",
+          "maxLength": 8,
+          "description": "A language code such as cs or en. Each decision with a version in this language is read as that version; requestedDecisionId then names the id you passed. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
         "query": {
           "type": "string",
           "maxLength": 256,
@@ -18147,7 +18257,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read citations with citing passages. \`cited_by\` reads citers; \`cites\` reads citations. Filters \`doctrine\` and \`polarity\` combine with AND. \`polarity\`: 'unclassified' means unread; 'mixed' means mentions disagreed. \`doctrine\` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). \`detail\`, \`passage_query\` narrow replies. Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -18194,6 +18304,20 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           ],
           "type": "string",
           "description": "Only citations with this polarity reading."
+        },
+        "detail": {
+          "enum": [
+            "full",
+            "compact"
+          ],
+          "type": "string",
+          "description": "Defaults to 'full'. 'compact' cuts each passage to 240 characters around the citation, without evidenceQuote."
+        },
+        "passage_query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Only citations whose citing paragraph holds every word, in any inflection. Filters page by page: \`scannedCitations\` is how many the page read; an empty page with \`nextCursor\` may still match later."
         },
         "limit": {
           "type": "integer",

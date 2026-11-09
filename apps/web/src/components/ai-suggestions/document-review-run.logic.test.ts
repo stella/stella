@@ -381,6 +381,7 @@ const cachedRun = (
         definitionSnapshot: {
           name: "Positions confirmed for this review",
           positions: { version: 3, items: [referencePosition()] },
+          scope: null,
         },
       },
       perspective: { type: "party", role: "Buyer", name: null },

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type { FolioAIBlock } from "@stll/folio-core/server";
@@ -9,10 +10,10 @@ import {
   untrustedText,
 } from "@/api/lib/prompt-safety";
 import type { PromptSafeText } from "@/api/lib/prompt-safety";
-import { answerSchemaForContent } from "@/api/lib/workflow/ai-answer-schema";
-import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
+import { answerSchemaForShape } from "@/api/lib/workflow/ai-answer-schema";
+import type { Answer, AnswerShape } from "@/api/lib/workflow/ai-answer-schema";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
-import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type {
   AIJustificationOutput,
   JustificationFilenames,
@@ -68,7 +69,31 @@ export const buildExtractedFileMessage = ({
 
 // --------------- Schema builders ---------------
 
-const createJustificationSchema = (filenames: JustificationFilenames) => {
+const CITE_EVERY_TERM_INSTRUCTION =
+  "Cite every block that states a term the question covers, including any " +
+  "definition or sub-clause those terms rely on: a reviewer reads the exact " +
+  "wording of the cited blocks and nothing else, so a term in an uncited block " +
+  "counts as absent. Cite the block holding the main term first, and do not " +
+  'cite a block that only holds a heading. Keep "text" to a few words; one ' +
+  "statement can carry all the citations.";
+
+const citationInstructions = (shape: AnswerShape): string[] => {
+  switch (shape) {
+    case "clause-summary":
+      return [CITE_EVERY_TERM_INSTRUCTION];
+    case "value":
+    case "clause-quote":
+      return [];
+    default:
+      shape satisfies never;
+      return panic(`Unhandled answer shape: ${String(shape)}`);
+  }
+};
+
+const createJustificationSchema = (
+  filenames: JustificationFilenames,
+  shape: AnswerShape,
+) => {
   const hasPdf = filenames.some((file) => file.kind === "pdf-bates");
   const hasDocx = filenames.some((file) => file.kind === "docx-folio");
 
@@ -77,7 +102,7 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
       if (filename.kind === "pdf-bates") {
         return `- ${filename.simplified} (PDF — cite Bates stamps from the page corners, e.g. ${filename.simplified}-0002)`;
       }
-      return `- ${filename.simplified} (DOCX — cite folio blockIds from the JSON list, e.g. seq-0010)`;
+      return `- ${filename.simplified} (DOCX — cite folio blockIds from its block list, e.g. seq-0010)`;
     })
     .join("\n");
   const hasCitableFiles = filenames.length > 0;
@@ -92,7 +117,7 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
   if (hasDocx) {
     citationGuide.push(
       "DOCX files: each citation is a folio blockId taken verbatim " +
-        'from that file\'s JSON block list (e.g., "seq-0010").',
+        'from the first field of that file\'s block list (e.g., "seq-0010").',
     );
   }
   if (hasPdf && hasDocx) {
@@ -155,6 +180,7 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
             ]
           : []),
         ...citationGuide,
+        ...citationInstructions(shape),
         "Do not include markup, HTML, Markdown, or narrative outside " +
           "the object.",
         `Example: ${JSON.stringify(
@@ -178,11 +204,9 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
 };
 
 export const buildBatchSchema = (
-  properties: readonly BatchProperty[],
+  properties: readonly AIBatchProperty[],
   filenames: JustificationFilenames,
 ) => {
-  const justificationSchema = createJustificationSchema(filenames);
-
   const schemaShape: Record<
     string,
     v.GenericSchema<{ answer: Answer; justification: AIJustificationOutput }>
@@ -191,13 +215,13 @@ export const buildBatchSchema = (
   for (const property of properties) {
     // Null only for a select with no options: there is nothing to choose from,
     // so the column is left out of the batch rather than asked unanswerably.
-    const answer = answerSchemaForContent(property.content);
+    const answer = answerSchemaForShape(property.content, property.answerShape);
     if (answer === null) {
       continue;
     }
     schemaShape[property.id] = v.strictObject({
       answer,
-      justification: justificationSchema,
+      justification: createJustificationSchema(filenames, property.answerShape),
     });
   }
 
@@ -232,53 +256,64 @@ const stripControlTokenHalves = (text: string): string => {
   return kept.join("");
 };
 
-// JSON escapes control characters, which would hide them from the sanitizer.
+// Every character a reader could take for a line end or a field break, so that
+// one block is always one line whatever its text holds.
+const BLOCK_LINE_ESCAPES = new Map([
+  ["\\", "\\\\"],
+  ["\n", "\\n"],
+  ["\r", "\\r"],
+  ["\t", "\\t"],
+  ["\v", "\\u000b"],
+  ["\f", "\\u000c"],
+  ["\u0085", "\\u0085"],
+  ["\u2028", "\\u2028"],
+  ["\u2029", "\\u2029"],
+]);
+const BLOCK_LINE_UNSAFE = /[\\\n\r\t\v\f\u0085\u2028\u2029]/gu;
+
+const escapeBlockField = (field: string): string =>
+  field.replace(
+    BLOCK_LINE_UNSAFE,
+    (char) =>
+      BLOCK_LINE_ESCAPES.get(char) ?? panic("Unmapped block line character"),
+  );
+
+// Escaping would hide control characters from the sanitizer, so each field is
+// cleaned before it is escaped.
 const cleanBlockField = (text: string): string =>
   stripControlTokenHalves(stripPromptUnsafeChars(text));
 
-const toPromptBlock = (block: FolioAIBlock, text: string) => {
-  const out: {
-    blockId: string;
-    kind: typeof block.kind;
-    text: string;
-    label?: string;
-    styleId?: string;
-  } = {
-    blockId: block.id,
-    kind: block.kind,
-    text,
-  };
-  if (block.displayLabel) {
-    out.label = cleanBlockField(block.displayLabel);
-  }
-  if (block.styleId) {
-    out.styleId = cleanBlockField(block.styleId);
-  }
-  return out;
-};
+const encodeBlockLine = (block: FolioAIBlock, text: string): string =>
+  [block.id, block.kind, block.displayLabel ?? "", block.styleId ?? "", text]
+    .map((field) => escapeBlockField(cleanBlockField(field)))
+    .join("\t");
+
+export const encodeDocxBlockLine = (block: FolioAIBlock): string =>
+  encodeBlockLine(block, block.text);
 
 /** Bytes one block adds to its file's message beyond its text. */
 export const docxBlockOverheadBytes = (block: FolioAIBlock): number =>
-  Buffer.byteLength(`${JSON.stringify(toPromptBlock(block, ""))},`);
+  Buffer.byteLength(`${encodeBlockLine(block, "")}\n`);
 
 export const buildDocxBlocksMessage = ({
   simplifiedName,
   blocks,
-}: DocxBlocksMessageProps): string => {
-  const promptBlocks = blocks.map((block) =>
-    toPromptBlock(block, cleanBlockField(block.text)),
-  );
-
-  return [
+}: DocxBlocksMessageProps): string =>
+  [
     `DOCX file ${simplifiedName} — folio block list. Cite blocks by ` +
-      `their "blockId" in any justification that references this file.`,
+      "their blockId in any justification that references this file. Each " +
+      "line is one block, with tab-separated fields: blockId, kind, label, " +
+      "styleId, text. A field the block lacks is empty. In a field, \\n, \\r " +
+      "and \\t stand for a line break, a carriage return and a tab, \\\\ for a " +
+      "backslash, and \\uXXXX for that character.",
     UNTRUSTED_DOCUMENT_INSTRUCTION,
     WITHHELD_TEXT_INSTRUCTION,
     sanitizeForPrompt(
-      untrustedText(`\`\`\`json\n${JSON.stringify(promptBlocks)}\n\`\`\``),
+      untrustedText(
+        ["```text", ...blocks.map(encodeDocxBlockLine), "```"].join("\n"),
+      ),
     ),
   ].join("\n");
-};
 
 export const buildTextInputsMessage = (textInputs: readonly TextInput[]) => {
   const list = textInputs
