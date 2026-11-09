@@ -163,6 +163,7 @@
     "desktop-release-canary.yml/check-latest": "main",
     "journey-canary.yml/journeys": "main",
     "case-law-cold-search-gate.yml/cold-search": "dispatch-only",
+    "case-law-search-probe.yml/probe": "main",
     "user-journeys.yml/staging-commit": "main",
     "user-journeys.yml/staging": "main",
     "user-journeys.yml/local-stack": "main",

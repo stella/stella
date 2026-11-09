@@ -57,6 +57,10 @@ import * as projectionModule from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
+import {
+  SOFT_LAW_DOCUMENT_CLASS,
+  SOFT_LAW_NATURE_NOTICE,
+} from "@/api/lib/legal-search/soft-law-read";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
@@ -112,6 +116,8 @@ beforeEach(() => {
   searchConsolidatedLegislationMock.mockReset();
   searchDecisionsHandlerMock.mockReset();
   searchLegislationHandlerMock.mockReset();
+  searchServedSoftLawMock.mockReset();
+  readServedSoftLawMock.mockReset();
   searchProviderSearchMock.mockReset();
 });
 
@@ -161,6 +167,8 @@ const readGatedDecisionCitationsMock = mock();
 const readGatedDecisionCitationDigestMock = mock();
 const withRedistributableSubjectMock = mock();
 const searchLegislationHandlerMock = mock();
+const searchServedSoftLawMock = mock();
+const readServedSoftLawMock = mock();
 const resolveStatuteExpressionMock = mock();
 const resolveStatuteWorkVersionMock = mock();
 const readPublicLegislationHandlerMock = mock();
@@ -304,6 +312,8 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         readGatedDecisionCitations: readGatedDecisionCitationsMock,
         readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
         searchLegislationHandler: searchLegislationHandlerMock,
+        searchServedSoftLaw: searchServedSoftLawMock,
+        readServedSoftLaw: readServedSoftLawMock,
         resolveStatuteExpression: resolveStatuteExpressionMock,
         resolveStatuteWorkVersion: resolveStatuteWorkVersionMock,
         readPublicLegislationHandler: readPublicLegislationHandlerMock,
@@ -505,6 +515,32 @@ const entityRef = (refRegistry: ChatRefRegistry, entityId: string): string =>
     entityId: toSafeId<"entity">(entityId),
     workspaceId: toSafeId<"workspace">(WS),
   });
+
+const guidanceFixture = (documentId: string) => ({
+  documentId: toSafeId<"softLawDocument">(documentId),
+  documentClass: SOFT_LAW_DOCUMENT_CLASS,
+  notice: SOFT_LAW_NATURE_NOTICE,
+  issuer: {
+    authority: "eu-edpb",
+    name: "European Data Protection Board",
+    jurisdiction: "EU",
+  },
+  kind: "guideline" as const,
+  sourceKind: "Guideline",
+  title: "Guidelines on consent",
+  reference: "05/2020",
+  issuedOn: "2020-05-04",
+  validity: { state: "not_stated", basis: "source_stated" },
+  language: "en",
+  publisherUrl: "https://publisher.example/guidelines-05-2020",
+  attribution: {
+    text: "European Data Protection Board, edpb.europa.eu",
+    termsUrl: "https://www.edpb.europa.eu/copyright_en",
+    conditions: ["Acknowledge the source."],
+    summaryDisclaimer: "Summary disclaimer the publisher requires.",
+  },
+  access: "text" as const,
+});
 
 const CONTRACT_CORPUS = {
   list_matters: [
@@ -2026,6 +2062,38 @@ const CONTRACT_CORPUS = {
       JSON.stringify({ match: { type: matchType } }).slice(1, -1),
     ],
   })),
+  search_guidance: [
+    {
+      mode: "search",
+      buildArgs: () => ({ query: "consent" }),
+      setup: () => {
+        searchServedSoftLawMock.mockResolvedValue({
+          items: [{ ...guidanceFixture(uid(96)), snippet: "valid consent" }],
+          nextOffset: null,
+        });
+      },
+      expectRefPaths: [],
+      expectPayloadContains: [SOFT_LAW_DOCUMENT_CLASS],
+    },
+  ],
+  read_guidance: [
+    {
+      mode: "read",
+      buildArgs: () => ({ document_id: uid(96) }),
+      setup: () => {
+        readServedSoftLawMock.mockResolvedValue({
+          ...guidanceFixture(uid(96)),
+          textState: "available",
+          text: "Consent must be freely given.",
+        });
+      },
+      expectRefPaths: [],
+      expectPayloadContains: [
+        SOFT_LAW_DOCUMENT_CLASS,
+        "Summary disclaimer the publisher requires.",
+      ],
+    },
+  ],
   read_statute: [
     {
       mode: "read",

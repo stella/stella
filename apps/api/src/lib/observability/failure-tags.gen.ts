@@ -70,6 +70,7 @@ export const FAILURE_TAGS = [
   "ChatReconnectError",
   "ChatRunLogError",
   "ChatRunLogOffsetBeyondTailError",
+  "ChatRunLogRefusedError",
   "ChatStreamError",
   "ChatToolError",
   "ChatToolValidationError",

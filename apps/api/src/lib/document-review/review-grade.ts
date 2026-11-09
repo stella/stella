@@ -751,3 +751,7 @@ const projectFinding = ({
     fix,
   };
 };
+
+/** The files-table run flags a position it could not grade with the same
+ *  verdict and reason the worker gives one. */
+export { UNGRADED_VERDICT };
