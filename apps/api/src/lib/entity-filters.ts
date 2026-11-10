@@ -4,7 +4,6 @@ import type { SQL } from "drizzle-orm";
 
 import { ENTITY_FIND_TERM_MIN_LENGTH, isEntityKind } from "@stll/api-contract";
 import type { EntityFind } from "@stll/api-contract";
-import { compareByLocale } from "@stll/collation";
 import {
   type BuiltinField,
   type CompareNode,
@@ -96,28 +95,6 @@ const getFieldValue = (content: FieldContent | undefined): string => {
   }
 };
 
-// Numeric value for sort comparison: int content uses its number; a
-// missing field or a legacy/coerced non-int value parses its string form,
-// returning null when no finite number is available (sorts to the end).
-const numericContentValue = (
-  content: FieldContent | undefined,
-): number | null => {
-  if (content?.type === "int") {
-    return content.value;
-  }
-  // Money sorts on its minor-unit amount, which is exact; comparing across
-  // currencies is the caller's problem, as it is in SQL.
-  if (content?.type === "money") {
-    return content.amountCents;
-  }
-  const raw = getFieldValue(content).trim();
-  if (raw === "" || !NUMERIC_TEXT_RE.test(raw)) {
-    return null;
-  }
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
-};
-
 const findField = (
   entityFields: EntityField[],
   propertyId: string,
@@ -133,8 +110,8 @@ const findField = (
  *  - everything else collapses to the same scalar text SQL's
  *    `content->>'value'` (or `->>'fileName'`) produces.
  *
- * Distinct from `getFieldValue`, which the sort comparators need as a plain
- * string; filtering must not flatten multi-select arrays.
+ * Distinct from `getFieldValue`, which flattens every type to a plain string;
+ * filtering must not flatten multi-select arrays.
  */
 const getFilterValue = (content: FieldContent | undefined): ConditionValue => {
   if (content?.type === "multi-select") {
@@ -308,65 +285,6 @@ export const applyFilters = <T extends FilterableEntity>(
       }
       return evaluateCondition(gateMissingCompareFields(node, entity), resolve);
     });
-  });
-};
-
-export const applySorts = <T extends FilterableEntity>(
-  items: T[],
-  sorts: ViewSort[],
-  // Property values are user-entered text (as opposed to e.g. an id), so
-  // sorting them needs the viewer's locale, not codepoint order. Callers must
-  // pass the request locale (extractLangFromRequest) explicitly; there is no
-  // implicit default, since an implicit locale is the bug this module guards
-  // against.
-  locale: string,
-): T[] => {
-  if (sorts.length === 0) {
-    return items;
-  }
-
-  const compareText = compareByLocale(locale);
-
-  return [...items].toSorted((a, b) => {
-    for (const sort of sorts) {
-      const fieldA = findField(a.fields, sort.propertyId);
-      const fieldB = findField(b.fields, sort.propertyId);
-      const dir = sort.desc ? -1 : 1;
-
-      // Numeric ordering whenever the property is numeric on at least one
-      // side. Comparing only when BOTH sides are int dropped to a string
-      // compare the moment a row was missing the field or held a legacy
-      // non-int value, so 10 sorted before 9. Rows without a numeric value
-      // bucket to the end, independent of sort direction.
-      if (fieldA?.content.type === "int" || fieldB?.content.type === "int") {
-        const numA = numericContentValue(fieldA?.content);
-        const numB = numericContentValue(fieldB?.content);
-        if (numA !== null && numB !== null) {
-          const cmp = (numA - numB) * dir;
-          if (cmp !== 0) {
-            return cmp;
-          }
-          continue;
-        }
-        if (numA === null && numB !== null) {
-          return 1;
-        }
-        if (numA !== null && numB === null) {
-          return -1;
-        }
-        continue;
-      }
-
-      const valueA = getFieldValue(fieldA?.content);
-      const valueB = getFieldValue(fieldB?.content);
-      const cmp = compareText(valueA, valueB) * dir;
-
-      if (cmp !== 0) {
-        return cmp;
-      }
-    }
-
-    return 0;
   });
 };
 
