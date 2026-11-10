@@ -193,6 +193,10 @@ export const DIFF_SCOPED_STEPS = {
   "deploy-landing.yml:scope#Decide whether the push changes the site": expands(
     "Follows the landing's workspace graph and declared inputs from the pushed range.",
   ),
+  "deploy-outlook-addin.yml:scope#Decide whether the push changes the add-in":
+    expands(
+      "Follows the add-in's workspace graph and declared inputs from the pushed range.",
+    ),
   "ci.yml:ci-plan#Resolve comparison base": operational(
     "Resolves the base the plan compares against.",
   ),
