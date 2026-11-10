@@ -517,8 +517,10 @@ const finalizeAcceptance = async ({
         eq(legalListGenerationCandidateSources.listId, body.listId),
         eq(legalListGenerationCandidateSources.workspaceId, workspaceId),
       ),
-    )
-    .for("update");
+    );
+  // No row lock here: candidate sources are insert-only, so the candidate
+  // row locked above already holds them still, and the application role has
+  // no UPDATE grant on the table that FOR UPDATE would need.
   const claimedSourceIds = new Set(claimedSources.map((source) => source.id));
   if (
     liveSources.length === 0 ||

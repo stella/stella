@@ -1464,12 +1464,6 @@
     "reason": "builder-for in apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts",
-    "fingerprint": "f18f111e71767c1c423cf0e70b1918593be113200c50c5f9ae9df5a5b568d8a0",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/lists/generation-candidates/rejection/create.ts",
     "fingerprint": "94ceca32ba58c615e8c521dc24cdb555496bae7ef88905dc9f7683d553d57527",
     "count": 1,
