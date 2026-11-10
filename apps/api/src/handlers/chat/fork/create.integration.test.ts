@@ -58,10 +58,6 @@ import getMessages from "../messages/list";
 import getThreads from "../threads/list";
 import { createForkThread } from "./create";
 
-beforeEach(() => {
-  indexChatThreadMock.mockClear();
-});
-
 // Search indexing writes through the root (unscoped) database, which this
 // fixture deliberately does not stand up; the handler takes it as an injectable
 // boundary so the fork's own behaviour is what these tests observe.
@@ -126,6 +122,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
+  indexChatThreadMock.mockClear();
   fakeS3 = startFakeS3();
 });
 

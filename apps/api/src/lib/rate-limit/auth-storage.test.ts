@@ -17,7 +17,9 @@ class FakeRedisClient {
     if (redisDown) {
       throw new Error("redis unreachable");
     }
-    expect(command).toBe("EVAL");
+    if (command !== "EVAL") {
+      throw new TypeError(`Unexpected Redis command: ${String(command)}`);
+    }
     const key = args[2];
     const windowMs = Number(args[3]);
     const max = Number(args[4]);

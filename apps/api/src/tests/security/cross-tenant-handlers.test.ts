@@ -3592,10 +3592,6 @@ testState.beforeAll(async () => {
   ]);
 });
 
-afterAll(async () => {
-  await releaseTestDb();
-});
-
 describe("cross-tenant handler isolation", () => {
   test.each([
     "reader answers across organizations",
@@ -4144,6 +4140,7 @@ const desktopServer = (): TestServer => {
 let desktopRoutes: TestServer | undefined;
 
 afterAll(async () => {
+  await releaseTestDb();
   await desktopRoutes?.stop();
 });
 

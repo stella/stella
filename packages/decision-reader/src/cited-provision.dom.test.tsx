@@ -17,9 +17,9 @@ import {
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
-import { fakeReaderAdapters } from "./decision-text.test";
 import { BlockRenderer } from "./document-ast-text";
 import { DecisionReaderProvider } from "./reader-adapters";
+import { fakeReaderAdapters } from "./reader-adapters.fixture";
 import type {
   CitedProvisionTarget,
   ProvisionPreviewData,
