@@ -30,6 +30,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { lintCommand as repositoryLintCommand } from "./lint";
 
 export const RECEIVER_TYPED_AUTOFIX_RULES = [
   // `x.match(y)` -> `y.test(x)`: assumes `x` is a string (wrong for `Bun.Glob#match`).
@@ -51,18 +52,13 @@ export const RECEIVER_TYPED_AUTOFIX_RULES = [
   "unicorn/no-typeof-undefined",
 ] as const;
 
-export const lintCommand = (files: readonly string[]): string[] => [
-  "bun",
-  "--bun",
-  "oxlint",
-  "-c",
-  "oxlint.config.ts",
-  "--threads=2",
-  "--no-error-on-unmatched-pattern",
-  "--fix",
-  ...RECEIVER_TYPED_AUTOFIX_RULES.flatMap((rule) => ["-A", rule]),
-  ...files,
-];
+export const lintCommand = (files: readonly string[]): string[] =>
+  repositoryLintCommand({ mode: "fix", typeAware: false }, [
+    "--threads=2",
+    "--no-error-on-unmatched-pattern",
+    ...RECEIVER_TYPED_AUTOFIX_RULES.flatMap((rule) => ["-A", rule]),
+    ...files,
+  ]);
 
 // A staged deletion or rename source has no working-tree file to compare.
 const readOrNull = (file: string): string | null =>

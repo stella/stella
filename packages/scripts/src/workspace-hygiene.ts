@@ -959,6 +959,52 @@ const findBunCommandFiles = (rootDir: string) => [
   ),
 ];
 
+// scripts/lint.ts owns the linter binary, the configs and the shared flags,
+// so a change of linter is an edit to that one file. A package script names
+// only what it lints: `cd ../.. && bun scripts/lint.ts <paths>` for `lint`,
+// with `--fix` for `lint:fix`.
+export const LINT_ENTRY_COMMAND = "bun scripts/lint.ts";
+// The linter as a command word: bare, through `bunx`/`bun --bun`, or by its
+// path under node_modules. `oxlint.config.ts`, `@stll/oxlint-config` and
+// `.oxlint-plugins` are not commands.
+const DIRECT_LINTER_PATTERN = /(?:^|[\s;&|(/])oxlint(?=$|[\s;&|)])/u;
+const LINT_SCRIPT_FORMS = [
+  { name: "lint", entry: LINT_ENTRY_COMMAND },
+  { name: "lint:fix", entry: `${LINT_ENTRY_COMMAND} --fix` },
+] as const;
+
+export const validateLintScripts = (
+  packagePath: string,
+  packageJson: Record<string, unknown> | null,
+): WorkspaceIssue[] => {
+  const scripts = packageJson?.["scripts"];
+  if (!isRecord(scripts)) {
+    return [];
+  }
+  const issues: WorkspaceIssue[] = [];
+  for (const [name, command] of Object.entries(scripts)) {
+    if (typeof command === "string" && DIRECT_LINTER_PATTERN.test(command)) {
+      issues.push({
+        message: `scripts.${name} runs oxlint directly; lint through \`${LINT_ENTRY_COMMAND} <paths>\` from the repository root`,
+        path: packagePath,
+      });
+    }
+  }
+  if (packagePath === "package.json") {
+    return issues;
+  }
+  for (const { name, entry } of LINT_SCRIPT_FORMS) {
+    const command = readStringProperty(packageJson, "scripts", name);
+    if (command !== null && !command.includes(entry)) {
+      issues.push({
+        message: `scripts.${name} must lint through \`${entry} <paths>\`; found ${command}`,
+        path: packagePath,
+      });
+    }
+  }
+  return issues;
+};
+
 const validateBunCwdRunForm = (rootDir: string): WorkspaceIssue[] =>
   findBunCommandFiles(rootDir)
     .filter((filePath) => existsSync(filePath))
@@ -1000,6 +1046,10 @@ export const validateWorkspaceRoot = async (
       ),
     ),
     ...validateDeniedCargoDependencies(rootDir),
+    ...validateLintScripts(
+      "package.json",
+      readPackageJson(path.resolve(rootDir, "package.json")),
+    ),
   ];
 
   for (const parentDir of WORKSPACE_PARENT_DIRS) {
@@ -1072,6 +1122,10 @@ export const validateWorkspaceRoot = async (
         ...validateInstalledCatalogVersions(
           rootDir,
           path.resolve(parentPath, entry.name),
+          `${relativePath}/package.json`,
+          readPackageJson(packageJsonPath),
+        ),
+        ...validateLintScripts(
           `${relativePath}/package.json`,
           readPackageJson(packageJsonPath),
         ),

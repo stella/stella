@@ -23,6 +23,7 @@ import { repoRelativePath } from "@stll/portable-path";
 import oxlintConfig from "../oxlint.config.ts";
 import { TAILWIND_CLASS_CACHE } from "../packages/scripts/src/generated-files";
 import { hasPreparedGeneratedDirectory } from "../packages/scripts/src/prepared-generated-sources";
+import { lintCommand } from "./lint.ts";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const generatedCache = path.join(
@@ -281,15 +282,11 @@ const tailwindFailures = async (
   pass: string,
 ) => {
   const { exitCode, stdout } = await runLintPass(
-    [
-      process.execPath,
-      path.join(repositoryRoot, "node_modules/oxlint/bin/oxlint"),
-      "-c",
-      "oxlint.tailwind.config.ts",
+    lintCommand({ config: "tailwind", inProcess: { root: repositoryRoot } }, [
       "--format",
       "json",
       ...lintTargets,
-    ],
+    ]),
     // The plugin's debug lines are the pass's progress; runLintPass keeps
     // them out of the log unless the pass stalls.
     { env: { ...env, DEBUG: "oxlint-tailwindcss" }, pass },

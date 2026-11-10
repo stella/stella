@@ -1,3 +1,4 @@
+import { lintCommand } from "./lint";
 import { isChangedLintPath } from "./lint-paths";
 
 export const isRootScriptLintPath = (file: string): boolean =>
@@ -8,16 +9,5 @@ export const isRootScriptLintPath = (file: string): boolean =>
 export const rootScriptLintPaths = (files: readonly string[]): string[] =>
   [...new Set(files.filter(isRootScriptLintPath))].toSorted();
 
-export const rootTypeAwareLintCommand = (
-  files: readonly string[],
-): string[] => [
-  "bun",
-  "--bun",
-  "oxlint",
-  "-c",
-  "oxlint.config.ts",
-  "--report-unused-disable-directives-severity=error",
-  "--type-aware",
-  "--type-check",
-  ...files,
-];
+export const rootTypeAwareLintCommand = (files: readonly string[]): string[] =>
+  lintCommand({}, files);
