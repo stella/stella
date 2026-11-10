@@ -16,6 +16,9 @@ import {
   claimQualifiers,
   GRADER_CLAIM_QUALIFIERS,
   graderQualifierFits,
+  QUALIFIER_REVIEW,
+  QUALIFIER_REVIEWS,
+  qualifiersNeedJudgement,
   restingFactIds,
 } from "@/api/lib/lists/verification/qualifiers";
 import type {
@@ -135,7 +138,9 @@ describe("claimQualifiers", () => {
     const graded: GraderClaimQualifier[] = [
       { kind: "record-silent", explanation: "Background only." },
     ];
-    expect(claimQualifiers({ graded, resting: [] })).toEqual(graded);
+    expect(claimQualifiers({ graded, resting: [] })).toEqual([
+      { ...graded[0], review: "routine" },
+    ]);
   });
 
   test("system qualifiers carry no explanation of their own", () => {
@@ -145,9 +150,39 @@ describe("claimQualifiers", () => {
         resting: [{ scoring: "held", sourcing: "unsourced" }],
       }),
     ).toEqual([
-      { kind: "unsourced-only", explanation: null },
-      { kind: "rests-on-held", explanation: null },
+      { kind: "unsourced-only", explanation: null, review: "routine" },
+      { kind: "rests-on-held", explanation: null, review: "needs-judgement" },
     ]);
+  });
+});
+
+describe("QUALIFIER_REVIEW", () => {
+  // The map is total at compile time; this holds it to the closed list at
+  // run time as well, so a qualifier is never routine by omission.
+  test("every qualifier names the review it asks for", () => {
+    expect(Object.keys(QUALIFIER_REVIEW).toSorted()).toEqual(
+      [...CLAIM_QUALIFIERS].toSorted(),
+    );
+    for (const kind of CLAIM_QUALIFIERS) {
+      expect(QUALIFIER_REVIEWS).toContain(QUALIFIER_REVIEW[kind]);
+    }
+  });
+
+  test("a held footing needs judgement; unsourced knowledge is disclosed, not doubted", () => {
+    expect(QUALIFIER_REVIEW["rests-on-held"]).toBe("needs-judgement");
+    expect(QUALIFIER_REVIEW["unsourced-only"]).toBe("routine");
+    const read = (resting: FactStanding[]) =>
+      claimQualifiers({ graded: [], resting });
+    expect(
+      qualifiersNeedJudgement(
+        read([{ scoring: "included", sourcing: "unsourced" }]),
+      ),
+    ).toBe(false);
+    expect(
+      qualifiersNeedJudgement(
+        read([{ scoring: "held", sourcing: "unsourced" }]),
+      ),
+    ).toBe(true);
   });
 });
 

@@ -312,8 +312,11 @@
       "nocover": "Žádný referenční fakt se tohoto tvrzení netýká, takže je nelze s ničím porovnat. Schválení je nepovinné.",
       "notverifiable": "Odloženo jako neověřitelné; schválení je nepovinné. Pokud lze tvrzení ve skutečnosti ověřit, znovu je otevřete níže.",
       "recordconflict": "Dva důkazní materiály ve spise si odporují. Výše určete, který je rozhodující, nebo věc označte pro tým pro důkazy; nástroj nerozhodne za vás.",
+      "restsOnHeld": "Fakt, o který se tento závěr opírá, je pozastaven ke kontrole; potvrďte, že závěr platí i bez něj, nebo tvrzení po vyřešení faktu ověřte znovu.",
+      "scopeMismatch": "Citovaný fakt má jiný rozsah než tvrzení. Než závěr potvrdíte, zvažte, zda tvrzení v jeho znění skutečně rozhoduje.",
       "supported": "Záznamy toto tvrzení potvrzují. Svým schválením potvrdíte, že je nástroj vyložil správně; není třeba žádný hodnotící úsudek.",
-      "tension": "Záznamy toto tvrzení podporují jen částečně. Než bude možné závěr potvrdit, zvažte výše uvedená podpůrná a odporující fakta."
+      "tension": "Záznamy toto tvrzení podporují jen částečně. Než bude možné závěr potvrdit, zvažte výše uvedená podpůrná a odporující fakta.",
+      "unsourcedOnly": "Záznamy toto tvrzení potvrzují, ale jen prostřednictvím faktů, které zatím nemají zdroj. Svým schválením potvrdíte, že je nástroj vyložil správně; fakta zůstanou označena jako bez zdroje."
     },
     "documents": {
       "claimSummary": "V rozporu: {contradicted} · Částečný rozpor: {tension} · Rozpor v záznamech: {conflicts}",

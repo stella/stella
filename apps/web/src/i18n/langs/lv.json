@@ -312,8 +312,11 @@
       "nocover": "Neviens enkurfakts neattiecas uz šo apgalvojumu, tāpēc nav nekā, pret ko to pārbaudīt. Apstiprināšana nav obligāta.",
       "notverifiable": "Atlikts kā nepārbaudāms; apstiprināšana nav obligāta. Ja apgalvojumu patiesībā var pārbaudīt, atveriet to vēlreiz tālāk.",
       "recordconflict": "Divi pierādījumi reģistrā ir pretrunā. Iepriekš izlemiet, kurš ir noteicošais, vai nododiet jautājumu pierādījumu komandai; rīks neizvēlēsies jūsu vietā.",
+      "restsOnHeld": "Fakts, uz kuru balstās šis slēdziens, ir aizturēts pārskatīšanai; apstipriniet, ka slēdziens ir spēkā arī bez tā, vai pārbaudiet apgalvojumu vēlreiz, kad fakts būs noskaidrots.",
+      "scopeMismatch": "Citētā fakta tvērums atšķiras no apgalvojuma. Pirms slēdziens tiek apstiprināts, izvērtējiet, vai tas izšķir apgalvojumu tā formulējumā.",
       "supported": "Reģistrs to apstiprina. Jūsu apstiprinājums apliecina, ka rīks to nolasīja pareizi; vērtējošs lēmums nav vajadzīgs.",
-      "tension": "Reģistrs to pamato tikai daļēji. Pirms slēdziena apstiprināšanas izvērtējiet iepriekš minētos pamatojošos un pretrunīgos faktus."
+      "tension": "Reģistrs to pamato tikai daļēji. Pirms slēdziena apstiprināšanas izvērtējiet iepriekš minētos pamatojošos un pretrunīgos faktus.",
+      "unsourcedOnly": "Reģistrs to apstiprina, bet tikai ar faktiem, kuriem vēl nav avota. Jūsu apstiprinājums apliecina, ka rīks tos izlasīja pareizi; fakti paliek atzīmēti kā bez avota."
     },
     "documents": {
       "claimSummary": "Pretrunā: {contradicted} · Daļēji pretrunā: {tension} · Reģistra pretruna: {conflicts}",

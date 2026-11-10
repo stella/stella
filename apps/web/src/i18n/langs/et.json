@@ -312,8 +312,11 @@
       "nocover": "Ükski ankurfakt ei käsitle seda väidet, seega pole seda millegi põhjal kontrollida. Kinnitamine on vabatahtlik.",
       "notverifiable": "Kõrvale jäetud kui kontrollimatu; kinnitamine on vabatahtlik. Kui väidet saab tegelikult kontrollida, avage see allpool uuesti.",
       "recordconflict": "Registri kaks tõendit on vastuolus. Otsustage eespool, kumb on aluseks, või edastage asi tõendite töörühmale; tööriist ei vali teie eest.",
+      "restsOnHeld": "Fakt, millele see otsus tugineb, on ülevaatuseks peatatud; kinnitage, et otsus kehtib ka ilma selleta, või kontrollige väidet uuesti, kui fakt on selgunud.",
+      "scopeMismatch": "Viidatud fakti ulatus erineb väite omast. Enne kui otsus jääb kehtima, kaaluge, kas see lahendab väite selle sõnastuses.",
       "supported": "Register kinnitab seda väidet. Teie kinnitus näitab, et tööriist tõlgendas seda õigesti; kaalutlusotsust pole vaja.",
-      "tension": "Register toetab seda vaid osaliselt. Enne otsuse kinnitamist kaaluge eespool toodud toetavaid ja vastuolulisi fakte."
+      "tension": "Register toetab seda vaid osaliselt. Enne otsuse kinnitamist kaaluge eespool toodud toetavaid ja vastuolulisi fakte.",
+      "unsourcedOnly": "Register kinnitab seda, kuid ainult faktide kaudu, millel pole veel allikat. Teie kinnitus näitab, et tööriist luges neid õigesti; faktid jäävad allikata märgituks."
     },
     "documents": {
       "claimSummary": "Vastuolus: {contradicted} · Osaliselt vastuolus: {tension} · Registri vastuolu: {conflicts}",

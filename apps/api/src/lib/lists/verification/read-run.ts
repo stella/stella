@@ -21,6 +21,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
+  ClaimRef,
   ClaimState,
   ClaimVerdict,
   RecordConflict,
@@ -31,7 +32,10 @@ import {
   claimQualifiers,
   restingFactIds,
 } from "@/api/lib/lists/verification/qualifiers";
-import type { FactStanding } from "@/api/lib/lists/verification/qualifiers";
+import type {
+  FactStanding,
+  GraderClaimQualifier,
+} from "@/api/lib/lists/verification/qualifiers";
 import type { ClaimReview } from "@/api/lib/lists/verification/review-fold";
 import {
   contestedFactIds,
@@ -192,10 +196,48 @@ export const readRunEvidenceForGrading = async ({
   return run === undefined ? null : run.evidence;
 };
 
-/** Only the fact identities needed to decide which claims need attention. */
-export const readContestedFactIds = async (args: ReadVerificationRunArgs) => {
+type FactStandings = ReadonlyMap<SafeId<"entity">, FactStanding>;
+
+type QualifiedClaimRow = ClaimVerdictColumns & {
+  refs: readonly ClaimRef[];
+  qualifiers: readonly GraderClaimQualifier[];
+};
+
+/** Every qualifier of a stored claim: the grader's, and the ones the facts
+ *  its verdict rests on give it as they stand now. */
+export const qualifiersOfClaim = (
+  claim: QualifiedClaimRow,
+  review: ClaimReview | null,
+  standings: FactStandings,
+) =>
+  claimQualifiers({
+    graded: claim.qualifiers,
+    resting: restingFactIds(
+      { verdict: toClaimVerdict(claim), refs: claim.refs },
+      review,
+    ).map(
+      (factEntityId) =>
+        standings.get(factEntityId) ??
+        panic("A claim rests on a fact its run did not pin"),
+    ),
+  });
+
+/** What deciding which claims need attention reads of a run: the facts whose
+ *  meaning is contested, and how every pinned fact stands now. `null` when
+ *  the workspace holds no such run. */
+export const readRunAttentionInputs = async (args: ReadVerificationRunArgs) => {
   const evidence = await readRunEvidenceForGrading(args);
-  return evidence === null ? null : contestedFactIds(evidence);
+  if (evidence === null) {
+    return null;
+  }
+  return {
+    contested: contestedFactIds(evidence),
+    standings: await readFactStandings({
+      tx: args.tx,
+      workspaceId: args.workspaceId,
+      evidence,
+    }),
+  };
 };
 
 type ReadFactStandingsArgs = {
@@ -333,9 +375,6 @@ export const readVerificationRun = async ({
     workspaceId,
     evidence: run.evidence,
   });
-  const standingOf = (factEntityId: SafeId<"entity">) =>
-    standings.get(factEntityId) ??
-    panic("A claim rests on a fact its run did not pin");
 
   return {
     id: run.id,
@@ -368,12 +407,7 @@ export const readVerificationRun = async ({
         type: claim.type,
         framing: claim.framing,
         verdict,
-        qualifiers: claimQualifiers({
-          graded: claim.qualifiers,
-          resting: restingFactIds({ verdict, refs: claim.refs }, review).map(
-            standingOf,
-          ),
-        }),
+        qualifiers: qualifiersOfClaim(claim, review, standings),
         text: claim.text,
         anchor: claim.anchor,
         refs: claim.refs,
@@ -435,8 +469,10 @@ export const readClaimsForBulkReview = ({
     .select({
       id: legalListClaims.id,
       state: legalListClaims.state,
+      score: legalListClaims.score,
       refs: legalListClaims.refs,
       recordConflict: legalListClaims.recordConflict,
+      qualifiers: legalListClaims.qualifiers,
     })
     .from(legalListClaims)
     .where(

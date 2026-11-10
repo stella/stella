@@ -16,6 +16,8 @@ import {
   AVT_CLAIM_REVIEW_DECISION,
   CLAIM_STATE,
 } from "@/api/lib/lists/verification/contract";
+import { qualifiersNeedJudgement } from "@/api/lib/lists/verification/qualifiers";
+import type { ClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
 
 type ClaimReviewEvent = {
   payload: ClaimReviewEventPayload;
@@ -186,23 +188,29 @@ const CONFLICT_STATES: ReadonlySet<ClaimState> = new Set([
   CLAIM_STATE.RECORDCONFLICT,
 ]);
 
-type AttentionTarget = {
+type ReviewedClaim = {
   state: ClaimState;
   refs: readonly ClaimRef[];
 };
 
+type AttentionTarget = ReviewedClaim & {
+  qualifiers: readonly Pick<ClaimQualifier, "review">[];
+};
+
 /**
- * A claim needs a human when its verdict is a conflict or it rests on a fact
- * whose meaning is contested. Everything else is routine: it may be accepted
- * in bulk, and its per-claim controls stay available for the record.
+ * A claim needs a human when its verdict is a conflict, it rests on a fact
+ * whose meaning is contested, or it carries a qualifier that asks for
+ * judgement (`QUALIFIER_REVIEW`). Everything else is routine: it may be
+ * accepted in bulk, and its per-claim controls stay available for the record.
  */
 export const needsAttention = (
-  { state, refs }: AttentionTarget,
+  { state, refs, qualifiers }: AttentionTarget,
   contested: ReadonlySet<SafeId<"entity">>,
 ): boolean =>
   state !== CLAIM_STATE.NOTVERIFIABLE &&
   (CONFLICT_STATES.has(state) ||
-    refs.some((ref) => contested.has(ref.factEntityId)));
+    refs.some((ref) => contested.has(ref.factEntityId)) ||
+    qualifiersNeedJudgement(qualifiers));
 
 /** Facts of a run's evidence whose meaning is contested. */
 export const contestedFactIds = (
@@ -214,7 +222,7 @@ export const contestedFactIds = (
       .map((fact) => fact.factEntityId),
   );
 
-type ViewTarget = AttentionTarget & { recordConflict: RecordConflict | null };
+type ViewTarget = ReviewedClaim & { recordConflict: RecordConflict | null };
 
 /**
  * The claim as a reviewer sees it after their own decisions: a reopened
@@ -225,7 +233,7 @@ type ViewTarget = AttentionTarget & { recordConflict: RecordConflict | null };
 export const reviewedView = (
   claim: ViewTarget,
   review: ClaimReview,
-): AttentionTarget => {
+): ReviewedClaim => {
   if (review.reopened && claim.state === CLAIM_STATE.NOTVERIFIABLE) {
     return { state: CLAIM_STATE.NOCOVER, refs: [] };
   }

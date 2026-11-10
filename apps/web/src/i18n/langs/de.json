@@ -312,8 +312,11 @@
       "nocover": "Kein Ankerfakt betrifft diese Behauptung; sie kann daher mit nichts abgeglichen werden. Die Freigabe ist optional.",
       "notverifiable": "Als nicht überprüfbar zurückgestellt – die Freigabe ist optional. Öffnen Sie die Behauptung unten erneut, falls sie doch überprüfbar ist.",
       "recordconflict": "Zwei Anlagen im Bestand widersprechen sich. Klären Sie oben, welche maßgeblich ist, oder markieren Sie den Fall für das Belegteam – das Tool entscheidet nicht für Sie.",
+      "restsOnHeld": "Ein Fakt, auf dem dieses Ergebnis beruht, ist zur Prüfung zurückgestellt; bestätigen Sie, dass das Ergebnis auch ohne ihn trägt, oder prüfen Sie die Behauptung erneut, sobald der Fakt geklärt ist.",
+      "scopeMismatch": "Ein zitierter Fakt hat einen anderen Umfang als die Behauptung. Wägen Sie ab, ob er die Behauptung in ihrem Wortlaut klärt, bevor das Ergebnis steht.",
       "supported": "Der Bestand bestätigt dies. Mit Ihrer Freigabe bestätigen Sie, dass das Tool ihn richtig gelesen hat – eine Ermessensentscheidung ist nicht erforderlich.",
-      "tension": "Der Bestand stützt dies nur teilweise. Wägen Sie die oben aufgeführten stützenden und widersprechenden Fakten ab, bevor das Ergebnis Bestand hat."
+      "tension": "Der Bestand stützt dies nur teilweise. Wägen Sie die oben aufgeführten stützenden und widersprechenden Fakten ab, bevor das Ergebnis Bestand hat.",
+      "unsourcedOnly": "Der Bestand bestätigt dies, jedoch nur über Fakten ohne Quelle. Mit Ihrer Freigabe bestätigen Sie, dass das Tool sie richtig gelesen hat; die Fakten bleiben als ohne Quelle markiert."
     },
     "documents": {
       "claimSummary": "Widersprochen: {contradicted} · Teilweise widersprochen: {tension} · Bestandswiderspruch: {conflicts}",

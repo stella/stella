@@ -31,7 +31,18 @@ import type {
   VerificationEvidenceFact,
   VerificationEvidenceSource,
 } from "@/api/lib/lists/verification/contract";
-import { readVerificationRun } from "@/api/lib/lists/verification/read-run";
+import {
+  qualifiersOfClaim,
+  readClaimReviews,
+  readClaimsForBulkReview,
+  readRunAttentionInputs,
+  readVerificationRun,
+} from "@/api/lib/lists/verification/read-run";
+import {
+  EMPTY_CLAIM_REVIEW,
+  needsAttention,
+  reviewedView,
+} from "@/api/lib/lists/verification/review-fold";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -394,5 +405,48 @@ test("qualifiers follow the facts as they stand when the run is read", async () 
     [leaveCalendar]: { scoring: "included", sourcing: "sourced" },
     [marginNote]: { scoring: "held", sourcing: "unsourced" },
     [removedEmail]: { scoring: "included", sourcing: "sourced" },
+  });
+
+  // Bulk accept reads the same footing: a verdict now resting on a held fact
+  // is not routine, one resting only on unsourced facts still is.
+  const routine = await testDb.transaction(
+    async (tx: TestDatabaseTransaction) => {
+      await tx.execute(sql.raw("RESET ROLE"));
+      const raw = asTestRaw<Transaction>(tx);
+      const inputs = await readRunAttentionInputs({
+        tx: raw,
+        workspaceId,
+        runId,
+      });
+      if (inputs === null) {
+        throw new Error("The seeded run is not readable");
+      }
+      const rows = await readClaimsForBulkReview({
+        tx: raw,
+        workspaceId,
+        runId,
+        claimIds: [claimIds.governedByHeld, claimIds.unsourcedSupport],
+      });
+      const reviews = await readClaimReviews({ tx: raw, workspaceId, runId });
+      return Object.fromEntries(
+        rows.map((claim) => {
+          const review = reviews.get(claim.id)?.review ?? EMPTY_CLAIM_REVIEW;
+          return [
+            claim.id,
+            needsAttention(
+              {
+                ...reviewedView(claim, review),
+                qualifiers: qualifiersOfClaim(claim, review, inputs.standings),
+              },
+              inputs.contested,
+            ),
+          ];
+        }),
+      );
+    },
+  );
+  expect(routine).toEqual({
+    [claimIds.governedByHeld]: true,
+    [claimIds.unsourcedSupport]: false,
   });
 });

@@ -312,8 +312,11 @@
       "nocover": "Joks atraminis faktas nesusijęs su šiuo teiginiu, todėl nėra su kuo jo palyginti. Patvirtinti neprivaloma.",
       "notverifiable": "Atidėta kaip nepatikrinama; patvirtinti neprivaloma. Jei teiginį iš tiesų galima patikrinti, atverkite jį iš naujo toliau.",
       "recordconflict": "Du registro įrodymai prieštarauja vienas kitam. Aukščiau nuspręskite, kuris yra vadovaujamasis, arba perduokite įrodymų grupei; įrankis už jus nepasirinks.",
+      "restsOnHeld": "Faktas, kuriuo grindžiama ši išvada, sulaikytas peržiūrai; patvirtinkite, kad išvada galioja ir be jo, arba patikrinkite teiginį iš naujo, kai faktas bus išspręstas.",
+      "scopeMismatch": "Cituojamo fakto apimtis skiriasi nuo teiginio. Prieš patvirtindami išvadą įvertinkite, ar jis išsprendžia teiginį taip, kaip jis suformuluotas.",
       "supported": "Registras tai patvirtina. Jūsų patvirtinimas rodo, kad įrankis perskaitė teisingai; vertinamojo sprendimo nereikia.",
-      "tension": "Registras tai patvirtina tik iš dalies. Prieš patvirtindami išvadą įvertinkite aukščiau pateiktus patvirtinančius ir prieštaraujančius faktus."
+      "tension": "Registras tai patvirtina tik iš dalies. Prieš patvirtindami išvadą įvertinkite aukščiau pateiktus patvirtinančius ir prieštaraujančius faktus.",
+      "unsourcedOnly": "Registras tai patvirtina, bet tik faktais, kurie dar neturi šaltinio. Jūsų patvirtinimas reiškia, kad įrankis juos perskaitė teisingai; faktai lieka pažymėti kaip be šaltinio."
     },
     "documents": {
       "claimSummary": "Prieštarauja: {contradicted} · Nevisiškai sutampa: {tension} · Registro prieštaravimas: {conflicts}",

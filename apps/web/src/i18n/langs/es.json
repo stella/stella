@@ -312,8 +312,11 @@
       "nocover": "Ningún hecho de referencia aborda esta afirmación, por lo que no hay nada con que contrastarla. La aprobación es opcional.",
       "notverifiable": "Reservada como no verificable; la aprobación es opcional. Reábrala abajo si realmente puede comprobarse.",
       "recordconflict": "Dos documentos del registro discrepan. Resuelva arriba cuál prevalece o avise al equipo de pruebas; la herramienta no decidirá por usted.",
+      "restsOnHeld": "Un hecho en el que se basa este resultado está retenido para revisión; confirme que el resultado se sostiene sin él o vuelva a verificar la afirmación cuando el hecho esté resuelto.",
+      "scopeMismatch": "Un hecho citado tiene un alcance distinto del de la afirmación. Valore si la resuelve tal como está redactada antes de que el resultado se mantenga.",
       "supported": "El registro lo confirma. Su aprobación confirma que la herramienta lo ha interpretado correctamente; no se requiere una valoración.",
-      "tension": "El registro solo respalda parcialmente la afirmación. Sopese los hechos favorables y contradictorios anteriores antes de dar por válido el resultado."
+      "tension": "El registro solo respalda parcialmente la afirmación. Sopese los hechos favorables y contradictorios anteriores antes de dar por válido el resultado.",
+      "unsourcedOnly": "El registro lo confirma, pero solo mediante hechos que aún no tienen fuente. Su aprobación confirma que la herramienta los leyó correctamente; los hechos siguen marcados como sin fuente."
     },
     "documents": {
       "claimSummary": "Contradicha: {contradicted} · En tensión: {tension} · Conflicto del registro: {conflicts}",

@@ -312,8 +312,11 @@
       "nocover": "Žiadny referenčný fakt sa tohto tvrdenia netýka, takže ho nemožno s ničím porovnať. Schválenie je nepovinné.",
       "notverifiable": "Odložené ako neoveriteľné; schválenie je nepovinné. Ak sa tvrdenie v skutočnosti dá overiť, znovu ho otvorte nižšie.",
       "recordconflict": "Dva dôkazné materiály v spise si odporujú. Vyššie určte, ktorý je rozhodujúci, alebo vec označte pre tím pre dôkazy; nástroj nerozhodne za vás.",
+      "restsOnHeld": "Fakt, o ktorý sa tento záver opiera, je pozastavený na kontrolu; potvrďte, že záver platí aj bez neho, alebo tvrdenie po vyriešení faktu overte znova.",
+      "scopeMismatch": "Citovaný fakt má iný rozsah než tvrdenie. Skôr než záver potvrdíte, zvážte, či tvrdenie v jeho znení skutočne rozhoduje.",
       "supported": "Záznamy toto tvrdenie potvrdzujú. Svojím schválením potvrdíte, že ich nástroj vyložil správne; nie je potrebný žiadny hodnotiaci úsudok.",
-      "tension": "Záznamy toto tvrdenie podporujú len čiastočne. Pred potvrdením záveru zvážte vyššie uvedené podporné a odporujúce fakty."
+      "tension": "Záznamy toto tvrdenie podporujú len čiastočne. Pred potvrdením záveru zvážte vyššie uvedené podporné a odporujúce fakty.",
+      "unsourcedOnly": "Záznamy toto tvrdenie potvrdzujú, ale len prostredníctvom faktov, ktoré zatiaľ nemajú zdroj. Svojím schválením potvrdíte, že ich nástroj vyložil správne; fakty zostanú označené ako bez zdroja."
     },
     "documents": {
       "claimSummary": "V rozpore: {contradicted} · V napätí: {tension} · Rozpor v záznamoch: {conflicts}",

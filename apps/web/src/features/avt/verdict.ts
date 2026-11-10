@@ -41,7 +41,15 @@ export const contestedFactIds = (
 type TriageTarget = {
   state: ClaimState;
   refs: VerificationClaim["refs"];
+  qualifiers: VerificationClaim["qualifiers"];
 };
+
+/** The server decides the review each qualifier asks for; a qualifier that
+ *  needs judgement takes the claim out of the routine ones. */
+const judgementQualifier = ({ qualifiers }: Pick<TriageTarget, "qualifiers">) =>
+  // The server lists computed qualifiers after the grader's and a held
+  // footing last, so the last one is the one the reviewer must settle first.
+  qualifiers.findLast((qualifier) => qualifier.review === "needs-judgement");
 
 /** True when any fact this claim cites carries an interpretation caveat. */
 export const isContested = (
@@ -51,17 +59,20 @@ export const isContested = (
 
 /**
  * A claim NEEDS ATTENTION if its verdict is a conflict (contradicted, in
- * tension, record conflict) OR its interpretation is contested. Everything
- * else (cleanly supported, no coverage, or set aside) is ROUTINE: the
- * per-claim review controls stay available for the record, but it needs no
- * individual sign-off.
+ * tension, record conflict), its interpretation is contested, or it carries
+ * a qualifier that asks for judgement (a held or differently scoped
+ * footing). Everything else is ROUTINE: the per-claim review controls stay
+ * available for the record, but it needs no individual sign-off. The server
+ * holds bulk acceptance to the same rule.
  */
 export const needsAttention = (
   claim: TriageTarget,
   contested: ReadonlySet<FactId>,
 ): boolean =>
   claim.state !== "notverifiable" &&
-  (isConflictState(claim.state) || isContested(claim, contested));
+  (isConflictState(claim.state) ||
+    isContested(claim, contested) ||
+    judgementQualifier(claim) !== undefined);
 
 /** A claim is SETTLED once a human dispositions it either way. */
 export const isSettled = (review: ClaimReview | null): boolean =>
@@ -155,9 +166,27 @@ const DISPOSITION_COPY = {
   notverifiable: "avt.disposition.notverifiable",
 } as const satisfies Record<ClaimState, TranslationKey>;
 
+/** What each qualifier asks of the reviewer, when it is the claim's
+ *  deciding caveat. */
+const QUALIFIER_ASK = {
+  "record-silent": "avt.qualifiers.recordSilent.hint",
+  "scope-mismatch": "avt.disposition.scopeMismatch",
+  "unsourced-only": "avt.disposition.unsourcedOnly",
+  "rests-on-held": "avt.disposition.restsOnHeld",
+} as const satisfies Record<
+  VerificationClaim["qualifiers"][number]["kind"],
+  TranslationKey
+>;
+
 type DispositionAskKey =
   | (typeof DISPOSITION_COPY)[keyof typeof DISPOSITION_COPY]
+  | (typeof QUALIFIER_ASK)[keyof typeof QUALIFIER_ASK]
   | "avt.disposition.contested";
+
+const hasQualifier = (
+  { qualifiers }: Pick<TriageTarget, "qualifiers">,
+  kind: keyof typeof QUALIFIER_ASK,
+) => qualifiers.some((qualifier) => qualifier.kind === kind);
 
 export type DispositionGuidance = {
   tone: DispositionTone;
@@ -180,6 +209,14 @@ export const dispositionGuidance = (
       askKey: DISPOSITION_COPY.recordconflict,
     };
   }
+  const judgement = judgementQualifier(claim);
+  if (judgement !== undefined && claim.state !== "notverifiable") {
+    return {
+      tone: "manual",
+      guideKey: GUIDANCE_KEYS.manual,
+      askKey: QUALIFIER_ASK[judgement.kind],
+    };
+  }
   if (claim.state === "contradicted" || claim.state === "tension") {
     return {
       tone: "manual",
@@ -195,16 +232,22 @@ export const dispositionGuidance = (
     };
   }
   if (claim.state === "supported") {
+    // Knowledge without a source is allowed; the sign-off copy discloses it.
     return {
       tone: "ready",
       guideKey: GUIDANCE_KEYS.ready,
-      askKey: DISPOSITION_COPY.supported,
+      askKey: hasQualifier(claim, "unsourced-only")
+        ? QUALIFIER_ASK["unsourced-only"]
+        : DISPOSITION_COPY.supported,
     };
   }
   return {
     tone: "routine",
     guideKey: GUIDANCE_KEYS.routine,
-    askKey: DISPOSITION_COPY[claim.state],
+    askKey:
+      claim.state === "nocover" && hasQualifier(claim, "record-silent")
+        ? QUALIFIER_ASK["record-silent"]
+        : DISPOSITION_COPY[claim.state],
   };
 };
 
@@ -253,7 +296,12 @@ export const countClaims = (
     const state = effectiveState(claim, claim.review);
     byState[state] += 1;
     const settled = isSettled(claim.review);
-    if (needsAttention({ state, refs: claim.refs }, contested)) {
+    if (
+      needsAttention(
+        { state, refs: claim.refs, qualifiers: claim.qualifiers },
+        contested,
+      )
+    ) {
       attnTotal += 1;
       if (settled) {
         attnSettled += 1;
@@ -284,7 +332,11 @@ export const routineUnsettledClaimIds = (
     .filter(
       (claim) =>
         !needsAttention(
-          { state: effectiveState(claim, claim.review), refs: claim.refs },
+          {
+            state: effectiveState(claim, claim.review),
+            refs: claim.refs,
+            qualifiers: claim.qualifiers,
+          },
           contested,
         ) && !isSettled(claim.review),
     )

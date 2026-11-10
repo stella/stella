@@ -120,7 +120,10 @@ export const ClaimDetailPanel = ({
   const conflicts = claim.refs.filter((ref) => ref.rel === "conflicts");
   const contestedClaim = isContested(claim, contested);
   const settled = isSettled(review);
-  const guidance = dispositionGuidance({ state, refs: claim.refs }, contested);
+  const guidance = dispositionGuidance(
+    { state, refs: claim.refs, qualifiers: claim.qualifiers },
+    contested,
+  );
   // Escalating a record conflict hands it to the evidence team: there is no
   // verdict left for this reviewer to confirm or dispute until it is
   // resolved, so those controls go inactive rather than settling the claim.

@@ -312,8 +312,11 @@
       "nocover": "Żaden fakt referencyjny nie odnosi się do tego twierdzenia, więc nie ma z czym go porównać. Zatwierdzenie jest opcjonalne.",
       "notverifiable": "Odłożone jako niemożliwe do zweryfikowania; zatwierdzenie jest opcjonalne. Jeśli twierdzenie można jednak sprawdzić, otwórz je ponownie poniżej.",
       "recordconflict": "Dwa materiały dowodowe w aktach są ze sobą sprzeczne. Powyżej wskaż, który jest nadrzędny, albo oznacz sprawę dla zespołu ds. dowodów; narzędzie nie dokona wyboru za Ciebie.",
+      "restsOnHeld": "Fakt, na którym opiera się to rozstrzygnięcie, jest wstrzymany do weryfikacji; potwierdź, że rozstrzygnięcie obowiązuje również bez niego, albo sprawdź twierdzenie ponownie po wyjaśnieniu faktu.",
+      "scopeMismatch": "Przywołany fakt ma inny zakres niż twierdzenie. Zanim rozstrzygnięcie zostanie utrzymane, oceń, czy rozstrzyga ono twierdzenie w jego brzmieniu.",
       "supported": "Rejestr potwierdza to twierdzenie. Zatwierdzenie potwierdza, że narzędzie odczytało je prawidłowo; nie jest potrzebna decyzja uznaniowa.",
-      "tension": "Rejestr potwierdza to twierdzenie tylko częściowo. Przed zatwierdzeniem rozstrzygnięcia rozważ powyższe fakty potwierdzające i przeczące."
+      "tension": "Rejestr potwierdza to twierdzenie tylko częściowo. Przed zatwierdzeniem rozstrzygnięcia rozważ powyższe fakty potwierdzające i przeczące.",
+      "unsourcedOnly": "Rejestr to potwierdza, ale tylko poprzez fakty, które nie mają jeszcze źródła. Twoje zatwierdzenie potwierdza, że narzędzie odczytało je poprawnie; fakty pozostają oznaczone jako bez źródła."
     },
     "documents": {
       "claimSummary": "Sprzeczne: {contradicted} · Częściowo sprzeczne: {tension} · Sprzeczność w rejestrze: {conflicts}",

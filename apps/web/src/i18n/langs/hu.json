@@ -312,8 +312,11 @@
       "nocover": "Egyetlen referenciatény sem foglalkozik ezzel az állítással, ezért nincs mihez viszonyítani. A jóváhagyás nem kötelező.",
       "notverifiable": "Nem ellenőrizhetőként félretéve; a jóváhagyás nem kötelező. Ha mégis ellenőrizhető, nyissa újra alább.",
       "recordconflict": "Az ügyirat két bizonyítéka ellentmond egymásnak. Fent válassza ki az irányadó bizonyítékot, vagy jelezze a bizonyítékkezelő csapatnak; az eszköz nem dönt Ön helyett.",
+      "restsOnHeld": "A következtetés alapjául szolgáló egyik tény felülvizsgálatra vár; erősítse meg, hogy a következtetés nélküle is megáll, vagy ellenőrizze újra az állítást, miután a tény tisztázódott.",
+      "scopeMismatch": "Egy hivatkozott tény hatóköre eltér az állításétól. Mielőtt a következtetés megáll, mérlegelje, hogy eldönti-e az állítást a megfogalmazása szerint.",
       "supported": "A nyilvántartás megerősíti ezt az állítást. Jóváhagyásával azt igazolja, hogy az eszköz helyesen értelmezte; nincs szükség mérlegelésre.",
-      "tension": "A nyilvántartás csak részben támasztja alá ezt az állítást. A következtetés jóváhagyása előtt mérlegelje a fenti alátámasztó és ellentmondó tényeket."
+      "tension": "A nyilvántartás csak részben támasztja alá ezt az állítást. A következtetés jóváhagyása előtt mérlegelje a fenti alátámasztó és ellentmondó tényeket.",
+      "unsourcedOnly": "A nyilvántartás ezt alátámasztja, de csak még forrás nélküli tényeken keresztül. Jóváhagyásával megerősíti, hogy az eszköz helyesen értelmezte őket; a tények forrás nélküliként jelölve maradnak."
     },
     "documents": {
       "claimSummary": "Cáfolt: {contradicted} · Részben ellentmondó: {tension} · Nyilvántartási ellentmondás: {conflicts}",

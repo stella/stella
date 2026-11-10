@@ -312,8 +312,11 @@
       "nocover": "Aucun fait d’ancrage ne traite de cette affirmation ; il n’y a donc rien pour la confirmer. La validation est facultative.",
       "notverifiable": "Écartée comme non vérifiable ; la validation est facultative. Rouvrez-la ci-dessous si elle est en réalité vérifiable.",
       "recordconflict": "Deux pièces du dossier se contredisent. Déterminez ci-dessus laquelle fait foi, ou signalez-le à l’équipe chargée des preuves ; l’outil ne choisira pas à votre place.",
+      "restsOnHeld": "Un fait sur lequel repose ce verdict est en attente de vérification ; confirmez que le verdict tient sans lui, ou revérifiez l’affirmation une fois le fait tranché.",
+      "scopeMismatch": "Un fait cité a une portée différente de celle de l’affirmation. Appréciez s’il tranche l’affirmation telle qu’elle est formulée avant que le verdict ne soit retenu.",
       "supported": "Le dossier confirme cette affirmation. Votre validation atteste que l’outil l’a bien lue ; aucun jugement à rendre.",
-      "tension": "Le dossier n’étaye cette affirmation qu’en partie. Pesez les faits favorables et contraires ci-dessus avant que le verdict soit retenu."
+      "tension": "Le dossier n’étaye cette affirmation qu’en partie. Pesez les faits favorables et contraires ci-dessus avant que le verdict soit retenu.",
+      "unsourcedOnly": "Le dossier l’affirme, mais seulement au moyen de faits encore sans source. Votre validation confirme que l’outil les a bien lus ; les faits restent marqués sans source."
     },
     "documents": {
       "claimSummary": "Contredite : {contradicted} · En tension : {tension} · Conflit de dossier : {conflicts}",

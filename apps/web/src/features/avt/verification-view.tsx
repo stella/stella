@@ -596,8 +596,10 @@ const claimMatchesFilter = (
     }
     case "needsreview": {
       return (
-        needsAttention({ state, refs: claim.refs }, contested) &&
-        !isSettled(claim.review)
+        needsAttention(
+          { state, refs: claim.refs, qualifiers: claim.qualifiers },
+          contested,
+        ) && !isSettled(claim.review)
       );
     }
     case "reviewed": {

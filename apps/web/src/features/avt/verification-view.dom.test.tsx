@@ -450,6 +450,7 @@ test("a claim's qualifiers show beside its verdict and in its detail, and a sile
           kind: "record-silent",
           explanation:
             "The witness's own expectation; no minute would record it.",
+          review: "routine",
         },
       ],
     }),
@@ -464,9 +465,10 @@ test("a claim's qualifiers show beside its verdict and in its detail, and a sile
         {
           kind: "scope-mismatch",
           explanation: "The calendar covers 2 to 20 August only.",
+          review: "needs-judgement",
         },
-        { kind: "unsourced-only", explanation: null },
-        { kind: "rests-on-held", explanation: null },
+        { kind: "unsourced-only", explanation: null, review: "routine" },
+        { kind: "rests-on-held", explanation: null, review: "needs-judgement" },
       ],
     }),
     text: widenedText,

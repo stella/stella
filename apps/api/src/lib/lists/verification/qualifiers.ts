@@ -39,6 +39,32 @@ export const CLAIM_QUALIFIERS = [
   ...SYSTEM_CLAIM_QUALIFIERS,
 ] as const;
 
+type ClaimQualifierKind = (typeof CLAIM_QUALIFIERS)[number];
+
+/** Whether a claim carrying the qualifier may be accepted with the routine
+ *  claims, or needs a reviewer's own decision. */
+export const QUALIFIER_REVIEWS = ["routine", "needs-judgement"] as const;
+type QualifierReview = (typeof QUALIFIER_REVIEWS)[number];
+
+/**
+ * The review each qualifier asks for, total so a new qualifier cannot slip
+ * into the routine claims unnoticed. A silent record and unsourced facts are
+ * disclosed, not doubted: knowledge without a source is allowed, so the
+ * verdict stays routine and its copy names the caveat. A cited fact of a
+ * different scope, or one now held out of scoring, leaves the verdict on
+ * footing a person has to weigh.
+ */
+export const QUALIFIER_REVIEW = {
+  "record-silent": "routine",
+  "scope-mismatch": "needs-judgement",
+  "unsourced-only": "routine",
+  "rests-on-held": "needs-judgement",
+} as const satisfies Record<ClaimQualifierKind, QualifierReview>;
+
+export const qualifiersNeedJudgement = (
+  qualifiers: readonly Pick<ClaimQualifier, "review">[],
+): boolean => qualifiers.some(({ review }) => review === "needs-judgement");
+
 export const CLAIM_QUALIFIER_EXPLANATION_MAX = 500;
 
 /** A grader qualifier carries the grader's one-line reason for it. */
@@ -48,8 +74,11 @@ export type GraderClaimQualifier = {
 };
 
 /** A system qualifier's reason is its rule, so it carries none of its own. */
-export type ClaimQualifier =
-  GraderClaimQualifier | { kind: SystemClaimQualifierKind; explanation: null };
+/** A qualifier as a claim is read: what it is, why, and the review it asks
+ *  for, so every reader triages from this one rule. */
+export type ClaimQualifier = (
+  GraderClaimQualifier | { kind: SystemClaimQualifierKind; explanation: null }
+) & { review: QualifierReview };
 
 /**
  * The verdicts each grader qualifier may accompany. A record that is not
@@ -140,9 +169,19 @@ export const claimQualifiers = ({
   resting,
 }: ClaimQualifiersArgs): ClaimQualifier[] => [
   ...GRADER_CLAIM_QUALIFIERS.flatMap((kind) =>
-    graded.filter((qualifier) => qualifier.kind === kind),
+    graded
+      .filter((qualifier) => qualifier.kind === kind)
+      .map(({ explanation }) => ({
+        kind,
+        explanation,
+        review: QUALIFIER_REVIEW[kind],
+      })),
   ),
   ...SYSTEM_CLAIM_QUALIFIERS.filter((kind) =>
     SYSTEM_QUALIFIER_RULES[kind](resting),
-  ).map((kind) => ({ kind, explanation: null })),
+  ).map((kind) => ({
+    kind,
+    explanation: null,
+    review: QUALIFIER_REVIEW[kind],
+  })),
 ];
