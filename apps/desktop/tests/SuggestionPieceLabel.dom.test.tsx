@@ -40,7 +40,7 @@ const classes = (element: HTMLElement) => element.className.split(/\s+/u);
 describe("a suggestion piece's label", () => {
   test("reads as the matter, then the piece's range and minutes", () => {
     const { container } = renderLabel();
-    expect(container.textContent?.replaceAll(" ", " ")).toBe(
+    expect(container.textContent.replaceAll(" ", " ")).toBe(
       `${MATTER} · 15:40–15:56 · 16 min`,
     );
   });
