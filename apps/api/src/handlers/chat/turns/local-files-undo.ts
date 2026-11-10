@@ -6,6 +6,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -26,6 +27,17 @@ const UNDO_ACCEPTED_STATUS = 202;
 /** The turn cannot be undone now; the body says why. */
 const UNDO_REFUSED_STATUS = 409;
 
+type UndoDependencies = {
+  control: () => Pick<
+    DesktopRunnerControl,
+    "readFolderRestore" | "requestFolderRestore"
+  >;
+};
+
+/** This process's runner control, unless a test hands its own. */
+const controlOf = (dependencies: UndoDependencies | undefined) =>
+  dependencies?.control() ?? getDesktopRunnerControl().control;
+
 const readConfig = {
   contract: "patch",
   description:
@@ -39,25 +51,26 @@ const readConfig = {
 } satisfies HandlerConfig;
 
 /** Where the undo of a turn's file changes stands. */
-export const readLocalFilesUndo = createSafeRootHandler(
-  readConfig,
-  async function* ({ params: { threadId, turnId }, session, user }) {
-    const read = yield* Result.await(
-      getDesktopRunnerControl().control.readFolderRestore({
-        owner: {
-          userId: user.id,
-          organizationId: session.activeOrganizationId,
-        },
-        threadId,
-        turnId,
-      }),
-    );
-    if (read === null) {
-      return Result.err(turnNotFound());
-    }
-    return Result.ok({ undoable: read.undoable, undo: read.restore });
-  },
-);
+export const createReadLocalFilesUndo = (dependencies?: UndoDependencies) =>
+  createSafeRootHandler(
+    readConfig,
+    async function* ({ params: { threadId, turnId }, session, user }) {
+      const read = yield* Result.await(
+        controlOf(dependencies).readFolderRestore({
+          owner: {
+            userId: user.id,
+            organizationId: session.activeOrganizationId,
+          },
+          threadId,
+          turnId,
+        }),
+      );
+      if (read === null) {
+        return Result.err(turnNotFound());
+      }
+      return Result.ok({ undoable: read.undoable, undo: read.restore });
+    },
+  );
 
 const undoConfig = {
   contract: "patch",
@@ -75,64 +88,68 @@ const undoConfig = {
 } satisfies HandlerConfig;
 
 /** Ask the turn's computer to undo the turn's file changes. */
-export const undoLocalFiles = createSafeRootHandler(
-  undoConfig,
-  async function* ({
-    params: { threadId, turnId },
-    recordAuditEvent,
-    safeDb,
-    session,
-    set,
-    user,
-  }) {
-    const outcome = yield* Result.await(
-      getDesktopRunnerControl().control.requestFolderRestore({
-        owner: {
-          userId: user.id,
-          organizationId: session.activeOrganizationId,
-        },
-        threadId,
-        turnId,
-      }),
-    );
-    switch (outcome.type) {
-      case "accepted": {
-        if (outcome.restore.state === "queued") {
-          yield* Result.await(
-            safeDb(async (tx) => {
-              await recordAuditEvent(tx, {
-                action: AUDIT_ACTION.UPDATE,
-                resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-                resourceId: threadId,
-                metadata: {
-                  reason: "undo_local_files",
-                  turnId,
-                  undoId: outcome.restore.restoreId,
-                },
-              });
-            }),
-          );
+export const createUndoLocalFiles = (dependencies?: UndoDependencies) =>
+  createSafeRootHandler(
+    undoConfig,
+    async function* ({
+      params: { threadId, turnId },
+      recordAuditEvent,
+      safeDb,
+      session,
+      set,
+      user,
+    }) {
+      const outcome = yield* Result.await(
+        controlOf(dependencies).requestFolderRestore({
+          owner: {
+            userId: user.id,
+            organizationId: session.activeOrganizationId,
+          },
+          threadId,
+          turnId,
+        }),
+      );
+      switch (outcome.type) {
+        case "accepted": {
+          if (outcome.restore.state === "queued") {
+            yield* Result.await(
+              safeDb(async (tx) => {
+                await recordAuditEvent(tx, {
+                  action: AUDIT_ACTION.UPDATE,
+                  resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+                  resourceId: threadId,
+                  metadata: {
+                    reason: "undo_local_files",
+                    turnId,
+                    undoId: outcome.restore.restoreId,
+                  },
+                });
+              }),
+            );
+          }
+          set.status = UNDO_ACCEPTED_STATUS;
+          return Result.ok({
+            status: "accepted" as const,
+            undo: outcome.restore,
+            reason: null,
+          });
         }
-        set.status = UNDO_ACCEPTED_STATUS;
-        return Result.ok({
-          status: "accepted" as const,
-          undo: outcome.restore,
-          reason: null,
-        });
+        case "refused":
+          if (outcome.reason === "not_found") {
+            return Result.err(turnNotFound());
+          }
+          set.status = UNDO_REFUSED_STATUS;
+          return Result.ok({
+            status: "refused" as const,
+            undo: null,
+            reason: outcome.reason,
+          });
+        default:
+          outcome satisfies never;
+          return panic("Unknown local files undo outcome");
       }
-      case "refused":
-        if (outcome.reason === "not_found") {
-          return Result.err(turnNotFound());
-        }
-        set.status = UNDO_REFUSED_STATUS;
-        return Result.ok({
-          status: "refused" as const,
-          undo: null,
-          reason: outcome.reason,
-        });
-      default:
-        outcome satisfies never;
-        return panic("Unknown local files undo outcome");
-    }
-  },
-);
+    },
+  );
+
+export const readLocalFilesUndo = createReadLocalFilesUndo();
+export const undoLocalFiles = createUndoLocalFiles();
