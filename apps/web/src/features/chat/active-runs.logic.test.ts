@@ -78,7 +78,7 @@ describe("matterRunsByWorkspace", () => {
 
   test("every chat in a matter is listed exactly once, under its own state, in list order", () => {
     assertProperty(
-      "active-runs.matter-runs-partition",
+      "every chat in a matter is listed exactly once, under its own state, in list order",
       fc.property(fc.array(runArbitrary, { maxLength: 40 }), (runs) => {
         const grouped = matterRunsByWorkspace(runs);
         for (const matter of MATTERS) {

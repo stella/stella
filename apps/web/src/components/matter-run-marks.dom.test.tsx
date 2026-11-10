@@ -223,7 +223,7 @@ describe("MatterRunBadge", () => {
         "summary",
       ].map((threadId) => `/chat/workspaces/${MATTER_ID}/${threadId}`),
     );
-    expect(rows.map((row) => row.textContent?.split(" · ")[0])).toEqual([
+    expect(rows.map((row) => row.textContent.split(" · ")[0])).toEqual([
       "!lease-questionAsks you a question",
       "!filing-approvalNeeds your approval",
       "!draft-buildContinues when you open this chat",
