@@ -13595,6 +13595,9 @@
         {
           "type": "object",
           "properties": {
+            "aiInstructions": {
+              "type": "string"
+            },
             "managedAIResidency": {
               "enum": ["eu", "us"],
               "type": "string"

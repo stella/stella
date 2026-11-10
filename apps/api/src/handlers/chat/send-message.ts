@@ -3315,6 +3315,7 @@ export const createSendMessage = (
             externalConnectors,
             modelAdmission,
             externalTools: externalMcpTools?.tools ?? {},
+            organizationAIInstructions: chatContext.organizationAIInstructions,
             skillMetadata: chatContext.skillMetadata,
             skillBindingScope: chatContext.skillBindingScope,
             activeSkillContext: chatContext.activeSkillContext,
@@ -3875,6 +3876,7 @@ type PrepareChatContextProps = {
 
 type PrepareChatContextResult = Result<
   {
+    organizationAIInstructions: string;
     hydratedMessages: ChatMessage[];
     /** The files a turn on the member's computer copies into its folder. */
     localRunAttachments: readonly LocalRunAttachment[];
@@ -3980,10 +3982,11 @@ const prepareChatContext = async ({
       safeDb((tx) =>
         tx.query.organizationSettings.findFirst({
           where: { organizationId: { eq: organizationId } },
-          columns: { practiceJurisdictions: true },
+          columns: { aiInstructions: true, practiceJurisdictions: true },
         }),
       ),
     );
+    const organizationAIInstructions = orgSettingsRow?.aiInstructions ?? "";
     const practiceJurisdictions = normalizeOptionalArray(
       orgSettingsRow?.practiceJurisdictions,
     );
@@ -4004,6 +4007,7 @@ const prepareChatContext = async ({
         offeredToolNamesForSkills,
         organizationId,
         practiceJurisdictions,
+        organizationAIInstructions,
         refRegistry,
         safeDb,
         messages: messageWindow,
@@ -4071,6 +4075,7 @@ const prepareChatContext = async ({
     );
 
     return Result.ok({
+      organizationAIInstructions,
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
       systemSafe: systemPrompt.safeLayers,
       systemUntrusted: systemPrompt.untrustedSuffix,

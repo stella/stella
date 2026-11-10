@@ -826,11 +826,17 @@ test("only Accept sends the edited billing fields and the suggestion becomes a d
   await installNativeBoundary({ page });
   const suggestions = page.locator(SUGGESTION_BLOCKS);
   await expect(suggestions).toHaveCount(1);
+  // The piece names its own range and minutes and the entry's total.
   await expect(suggestions).toHaveAttribute(
     "aria-label",
-    enMessages.activity.suggestionLabel
-      .replace("{matter}", "Example matter")
-      .replace("{hours}", "0.5"),
+    new RegExp(
+      `^${escapePattern(enMessages.activity.suggestionPieceLabel)
+        .replace("\\{matter\\}", "Example matter")
+        .replace("\\{range\\}", ".+")
+        .replace("\\{duration\\}", "30 min")
+        .replace("\\{hours\\}", "0\\.5")}$`,
+      "u",
+    ),
   );
   await openSuggestion(page, "Example matter");
   const card = suggestionCard(page, "Example matter");
@@ -2935,6 +2941,12 @@ test("a card asks for consent once, then drafts its description and shows the ea
   await installNativeBoundary({ page, snapshot: TRIAGE_SNAPSHOT });
   await openSuggestion(page, "Example matter");
   const card = suggestionCard(page, "Example matter");
+  // One line asks; what a draft sends is a click away.
+  await expect(card.getByText(enMessages.activity.aiDraftOffer)).toBeVisible();
+  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toBeHidden();
+  await card
+    .getByRole("button", { name: enMessages.activity.aiDraftWhatIsSent })
+    .click();
   await expect(
     card.getByText(enMessages.activity.aiDraftConsent),
   ).toBeVisible();
@@ -2988,6 +3000,63 @@ test("a card asks for consent once, then drafts its description and shows the ea
     0,
   );
   expect(await draftInvocations(page)).toHaveLength(2);
+});
+
+test("a long card keeps its actions in view in the activity window, its details scrolling inside", async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP_WINDOW_SIZES.activity);
+  // Late in the day, with a guided draft's notes and many titles: taller
+  // than the window.
+  const titles = Array.from(
+    { length: 10 },
+    (_, index) => `Lease schedule ${String(index + 1)}.docx`,
+  );
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...TRIAGE_SNAPSHOT,
+      segments: titles.map((windowTitle, index) => ({
+        appIdentifier: "com.example.editor",
+        appName: "Example Editor",
+        matterId: "matter-1",
+        windowTitle,
+        start: `2026-10-07T14:${String(index * 5).padStart(2, "0")}:00Z`,
+        end: `2026-10-07T14:${String(index * 5 + 4).padStart(2, "0")}:00Z`,
+      })),
+    },
+    drafting: { ...DRAFTING, mode: "guided", consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card.getByText("List each task separately.")).toBeAttached();
+  const body = card.locator(
+    '[data-activity-card-body] [data-slot="scroll-area-viewport"]',
+  );
+  // The fixture must outgrow the window, or nothing here is tested.
+  await expect
+    .poll(async () =>
+      body.evaluate((element) => element.scrollHeight > element.clientHeight),
+    )
+    .toBe(true);
+  const box = await card.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box?.y).toBeGreaterThanOrEqual(0);
+  expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(
+    DESKTOP_WINDOW_SIZES.activity.height,
+  );
+  for (const action of [
+    card.getByRole("button", { name: acceptName(enMessages) }),
+    card.getByRole("button", { name: rejectName(enMessages) }),
+    card.getByRole("switch", { name: enMessages.activity.entryBillable }),
+  ]) {
+    await expect(action).toBeInViewport({ ratio: 1 });
+  }
+  await expect(card).toBeFocused();
+  await pressCardShortcut(page, "Enter");
+  await expect
+    .poll(async () => batchRequests(await tauriInvocations(page)))
+    .toHaveLength(1);
 });
 
 test("an accepted drafted entry carries the drafted description", async ({
