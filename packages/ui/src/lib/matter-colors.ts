@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 
+import { stableHash } from "./stable-hash";
+
 // Fallback swatches for older or imported workspaces without a stored color.
 const DEFAULT_MATTER_SWATCH = "--option-blue";
 
@@ -14,42 +16,11 @@ export const MATTER_SWATCHES = [
   "--option-teal",
 ] as const;
 
-/** A stable, non-negative hash of a key, so one key always picks one swatch. */
-const stableHash = (key: string) => {
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) {
-    hash = Math.imul(hash, 31) + (key.codePointAt(i) ?? 0);
-  }
-  return Math.abs(hash);
-};
-
 export const getMatterSwatch = (id: string) =>
   MATTER_SWATCHES[stableHash(id) % MATTER_SWATCHES.length] ??
   DEFAULT_MATTER_SWATCH;
 
 export const getMatterColor = (id: string) => `var(${getMatterSwatch(id)})`;
-
-/**
- * Swatches for time no matter claimed yet, such as one document's or window's
- * stretch of a day. A separate low-chroma set (`--topic-*` in theme.css), so
- * a topic is never painted in a colour a matter can have.
- */
-const DEFAULT_TOPIC_SWATCH = "--topic-sand";
-
-export const TOPIC_SWATCHES = [
-  DEFAULT_TOPIC_SWATCH,
-  "--topic-sage",
-  "--topic-mist",
-  "--topic-heather",
-  "--topic-clay",
-  "--topic-slate",
-] as const;
-
-export const getTopicSwatch = (key: string) =>
-  TOPIC_SWATCHES[stableHash(key) % TOPIC_SWATCHES.length] ??
-  DEFAULT_TOPIC_SWATCH;
-
-export const getTopicColor = (key: string) => `var(${getTopicSwatch(key)})`;
 
 const hexColorPattern = /^#?[0-9A-Fa-f]{6}$/u;
 

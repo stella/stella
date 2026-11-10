@@ -7,11 +7,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
-import {
-  getMatterColor,
-  getTopicColor,
-  MATTER_SWATCHES,
-} from "../lib/matter-colors";
+import { getMatterColor, MATTER_SWATCHES } from "../lib/matter-colors";
 import { DayCalendar } from "./day-calendar";
 import type { DayCalendarColumn } from "./day-calendar";
 import {
@@ -19,6 +15,7 @@ import {
   getDayBounds,
 } from "./day-calendar.logic";
 import type { DayCalendarRange } from "./day-calendar.logic";
+import { getTopicColor } from "./topic-colors";
 
 const TIME_ZONE = "Europe/Prague";
 const DATE = "2026-10-30";

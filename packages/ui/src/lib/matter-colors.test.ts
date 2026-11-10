@@ -6,14 +6,16 @@ import path from "node:path";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  getTopicColor,
+  getTopicSwatch,
+  TOPIC_SWATCHES,
+} from "../calendar/topic-colors";
+import {
   getMatterColor,
   getMatterPickerColor,
   getMatterSwatch,
-  getTopicColor,
-  getTopicSwatch,
   MATTER_SWATCHES,
   resolveMatterColor,
-  TOPIC_SWATCHES,
   toStoredMatterColor,
 } from "./matter-colors";
 

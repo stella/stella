@@ -11,7 +11,7 @@ import { panic } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/tooltip";
-import { getTopicColor, resolveMatterColor } from "../lib/matter-colors";
+import { resolveMatterColor } from "../lib/matter-colors";
 import { cn } from "../lib/utils";
 import {
   boundsHeight,
@@ -33,6 +33,7 @@ import type {
   DayCalendarLanePlacement,
   DayCalendarRange,
 } from "./day-calendar.logic";
+import { getTopicColor } from "./topic-colors";
 
 /**
  * A block paints in its matter's colour, with the matter's edge; in a topic's
