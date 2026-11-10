@@ -59,8 +59,8 @@ const STOP_WORDS = new Set([
 const TOKEN = /[\p{L}\p{N}][\p{L}\p{N},.]*[\p{L}\p{N}]/gu;
 
 const tokens = (text: string): string[] =>
-  (text.match(TOKEN) ?? [])
-    .map((token) => token.replaceAll(",", ""))
+  [...text.matchAll(TOKEN)]
+    .map(([token]) => token.replaceAll(",", ""))
     .filter(
       (token) => token.length >= 4 && !STOP_WORDS.has(token.toLowerCase()),
     );
@@ -91,10 +91,10 @@ const requestBlocks = (request: string): Map<string, string> => {
 };
 
 export const mockExtractedClaims = (request: string) => {
-  const asked =
-    /List the claims in these blocks only: (?<ids>.+)$/mu
-      .exec(request)
-      ?.groups?.["ids"]?.split(", ") ?? [];
+  const askedList = /List the claims in these blocks only: (?<ids>.+)$/mu.exec(
+    request,
+  )?.groups?.["ids"];
+  const asked = askedList === undefined ? [] : askedList.split(", ");
   const blocks = requestBlocks(request);
   return asked.flatMap((blockId) =>
     sentencesOf(blocks.get(blockId) ?? "")

@@ -17,7 +17,7 @@ import type { ClaimState, VerificationClaim } from "@/features/avt/types";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 
-export type ClaimQualifier = VerificationClaim["qualifiers"][number];
+type ClaimQualifier = VerificationClaim["qualifiers"][number];
 type ClaimQualifierKind = ClaimQualifier["kind"];
 
 type QualifierMeta = {

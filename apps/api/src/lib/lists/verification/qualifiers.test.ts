@@ -48,7 +48,7 @@ const kindsOf = (args: Parameters<typeof claimQualifiers>[0]) =>
 describe("claimQualifiers", () => {
   test("each kind at most once, in the declared order", () => {
     assertProperty(
-      "claim qualifiers are unique and declared-order",
+      "each kind at most once, in the declared order",
       fc.property(
         gradedArbitrary,
         fc.array(standingArbitrary, { maxLength: 6 }),
@@ -64,7 +64,7 @@ describe("claimQualifiers", () => {
 
   test("the facts a verdict rests on count as a set, not a sequence", () => {
     assertProperty(
-      "claim qualifiers ignore the order of resting facts",
+      "the facts a verdict rests on count as a set, not a sequence",
       fc.property(
         gradedArbitrary,
         fc.array(standingArbitrary, { maxLength: 6 }),
@@ -79,7 +79,7 @@ describe("claimQualifiers", () => {
 
   test("one sourced fact is enough to lift unsourced-only", () => {
     assertProperty(
-      "a sourced resting fact never leaves a verdict unsourced-only",
+      "one sourced fact is enough to lift unsourced-only",
       fc.property(
         fc.array(standingArbitrary, { maxLength: 6 }),
         fc.constantFrom(...FACT_SCORING),
@@ -106,7 +106,7 @@ describe("claimQualifiers", () => {
 
   test("holding any one resting fact marks the verdict, releasing all clears it", () => {
     assertProperty(
-      "rests-on-held follows the held resting facts",
+      "holding any one resting fact marks the verdict, releasing all clears it",
       fc.property(
         fc.array(standingArbitrary, { minLength: 1, maxLength: 6 }),
         fc.nat(),

@@ -70,7 +70,7 @@ export const graderQualifierFits = (
 };
 
 /** Whether a fact currently has a source that has not been rejected. */
-export type FactSourcing = "sourced" | "unsourced";
+type FactSourcing = "sourced" | "unsourced";
 
 /** What the system qualifiers read of one fact, as it stands now. */
 export type FactStanding = {
