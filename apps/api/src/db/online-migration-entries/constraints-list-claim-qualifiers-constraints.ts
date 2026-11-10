@@ -3,7 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 
 export default {
   id: "constraints-list-claim-qualifiers-constraints",
-  revision: 1430,
+  revision: 1433,
   type: "constraints",
   values: [...LIST_CLAIM_QUALIFIERS_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;
