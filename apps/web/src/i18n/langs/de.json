@@ -1761,7 +1761,7 @@
     "localFilesUndo": {
       "action": "Dateiänderungen rückgängig machen",
       "computer": {
-        "failed": "Ihr Computer konnte die Änderungen nicht rückgängig machen. Die Dateien sind so, wie sie vor Ihrer Anfrage waren.",
+        "failed": "Das Rückgängigmachen wurde auf Ihrem Computer nicht abgeschlossen. Einige Dateien wurden möglicherweise schon geändert. Prüfen Sie deshalb den Ordner des Chats.",
         "folderBusy": "Ein Lauf auf Ihrem Computer verwendet diesen Ordner. Versuchen Sie es erneut, wenn er beendet ist.",
         "noCheckpoint": "Ihr Computer hat keine gespeicherte Kopie der Dateien von vor diesem Schritt, daher wurde nichts rückgängig gemacht.",
         "notNewest": "Ihr Computer hat neuere Änderungen in diesem Ordner, daher wurde nichts rückgängig gemacht."

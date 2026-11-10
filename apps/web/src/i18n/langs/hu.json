@@ -1761,7 +1761,7 @@
     "localFilesUndo": {
       "action": "Fájlmódosítások visszavonása",
       "computer": {
-        "failed": "A számítógépe nem tudta visszavonni a módosításokat. A fájlok olyanok, amilyenek a kérése előtt voltak.",
+        "failed": "A visszavonás nem fejeződött be a számítógépén. Előfordulhat, hogy néhány fájl már megváltozott, ezért ellenőrizze a csevegés mappáját.",
         "folderBusy": "Egy futás használja ezt a mappát a számítógépén. Próbálja újra, ha befejeződött.",
         "noCheckpoint": "A számítógépén nincs mentett másolat a fájlokról a lépés előtti állapotból, így semmi sem vonódott vissza.",
         "notNewest": "A számítógépén újabb módosítások vannak ebben a mappában, így semmi sem vonódott vissza."

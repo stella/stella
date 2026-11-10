@@ -1761,7 +1761,7 @@
     "localFilesUndo": {
       "action": "Atšaukti failų pakeitimus",
       "computer": {
-        "failed": "Jūsų kompiuteris negalėjo atšaukti pakeitimų. Failai yra tokie, kokie buvo prieš jūsų užklausą.",
+        "failed": "Atšaukimas jūsų kompiuteryje nebuvo baigtas. Kai kurie failai jau galėjo pasikeisti, todėl patikrinkite pokalbio aplanką.",
         "folderBusy": "Šį aplanką jūsų kompiuteryje naudoja kitas vykdymas. Bandykite dar kartą, kai jis baigsis.",
         "noCheckpoint": "Jūsų kompiuteryje nėra išsaugotos failų kopijos iš laiko prieš šį žingsnį, todėl niekas neatšaukta.",
         "notNewest": "Jūsų kompiuteryje šiame aplanke yra naujesnių pakeitimų, todėl niekas neatšaukta."

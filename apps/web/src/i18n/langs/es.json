@@ -1761,7 +1761,7 @@
     "localFilesUndo": {
       "action": "Deshacer cambios en archivos",
       "computer": {
-        "failed": "Tu ordenador no pudo deshacer los cambios. Los archivos están como estaban antes de tu solicitud.",
+        "failed": "La acción de deshacer no terminó en tu ordenador. Es posible que algunos archivos ya hayan cambiado, así que revisa la carpeta del chat.",
         "folderBusy": "Una ejecución en tu ordenador está usando esta carpeta. Inténtalo de nuevo cuando termine.",
         "noCheckpoint": "Tu ordenador no tiene una copia guardada de los archivos de antes de este paso, así que no se deshizo nada.",
         "notNewest": "Tu ordenador tiene cambios más recientes en esta carpeta, así que no se deshizo nada."

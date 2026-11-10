@@ -1761,7 +1761,7 @@
     "localFilesUndo": {
       "action": "Vrátiť zmeny súborov",
       "computer": {
-        "failed": "Váš počítač zmeny vrátiť nedokázal. Súbory sú v stave, v akom boli pred vašou žiadosťou.",
+        "failed": "Vrátenie zmien sa vo vašom počítači nedokončilo. Niektoré súbory už mohli byť zmenené, preto skontrolujte priečinok chatu.",
         "folderBusy": "Tento priečinok vo vašom počítači práve používa iný beh. Skúste to znova, keď skončí.",
         "noCheckpoint": "Váš počítač nemá uloženú kópiu súborov spred tohto kroku, takže sa nič nevrátilo.",
         "notNewest": "Váš počítač má v tomto priečinku novšie zmeny, takže sa nič nevrátilo."

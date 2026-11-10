@@ -1761,7 +1761,7 @@
     "localFilesUndo": {
       "action": "Cofnij zmiany w plikach",
       "computer": {
-        "failed": "Twój komputer nie mógł cofnąć zmian. Pliki są takie, jakie były przed Twoją prośbą.",
+        "failed": "Cofanie zmian nie zakończyło się na Twoim komputerze. Niektóre pliki mogły już zostać zmienione, więc sprawdź folder czatu.",
         "folderBusy": "Ten folder na Twoim komputerze jest używany przez inne uruchomienie. Spróbuj ponownie, gdy się zakończy.",
         "noCheckpoint": "Twój komputer nie ma zapisanej kopii plików sprzed tego kroku, więc nic nie zostało cofnięte.",
         "notNewest": "Twój komputer ma nowsze zmiany w tym folderze, więc nic nie zostało cofnięte."

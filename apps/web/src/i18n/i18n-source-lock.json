@@ -1398,7 +1398,7 @@
   "chat.loadEarlierMessagesError": "Couldn't load earlier messages",
   "chat.loadingEarlierMessages": "Loading earlier messages…",
   "chat.localFilesUndo.action": "Undo file changes",
-  "chat.localFilesUndo.computer.failed": "Your computer could not undo the changes. The files are as they were before you asked.",
+  "chat.localFilesUndo.computer.failed": "The undo did not finish on your computer. Some files may already have changed, so check the chat's folder.",
   "chat.localFilesUndo.computer.folderBusy": "A run on your computer is using this folder. Try again when it finishes.",
   "chat.localFilesUndo.computer.noCheckpoint": "Your computer has no saved copy of the files from before this turn, so nothing was undone.",
   "chat.localFilesUndo.computer.notNewest": "Your computer has newer changes in this folder, so nothing was undone.",

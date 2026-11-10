@@ -1761,7 +1761,7 @@
     "localFilesUndo": {
       "action": "Annuler les modifications de fichiers",
       "computer": {
-        "failed": "Votre ordinateur n’a pas pu annuler les modifications. Les fichiers sont tels qu’ils étaient avant votre demande.",
+        "failed": "L’annulation ne s’est pas terminée sur votre ordinateur. Certains fichiers ont peut-être déjà été modifiés ; vérifiez le dossier de la conversation.",
         "folderBusy": "Une exécution sur votre ordinateur utilise ce dossier. Réessayez quand elle sera terminée.",
         "noCheckpoint": "Votre ordinateur n’a pas de copie enregistrée des fichiers d’avant cette étape ; rien n’a été annulé.",
         "notNewest": "Votre ordinateur a des modifications plus récentes dans ce dossier ; rien n’a été annulé."
@@ -1775,7 +1775,7 @@
         "desktopOffline": "Votre ordinateur est hors ligne. Ouvrez l’application de bureau stella et réessayez.",
         "noCheckpoint": "Cette étape n’a pas de copie enregistrée des fichiers à laquelle revenir.",
         "notNewest": "Seules les modifications de fichiers de l’étape la plus récente peuvent être annulées.",
-        "threadBusy": "Ce chat travaille encore. Réessayez quand il aura terminé."
+        "threadBusy": "Une réponse est encore en cours dans cette conversation. Réessayez quand elle sera terminée."
       },
       "restored": "Modifications de fichiers annulées"
     },

@@ -1761,7 +1761,7 @@
     "localFilesUndo": {
       "action": "Desfazer alterações nos arquivos",
       "computer": {
-        "failed": "Seu computador não conseguiu desfazer as alterações. Os arquivos estão como estavam antes do seu pedido.",
+        "failed": "A ação de desfazer não terminou no seu computador. Alguns arquivos podem já ter sido alterados, então verifique a pasta do chat.",
         "folderBusy": "Uma execução no seu computador está usando esta pasta. Tente novamente quando ela terminar.",
         "noCheckpoint": "Seu computador não tem uma cópia salva dos arquivos de antes desta etapa, então nada foi desfeito.",
         "notNewest": "Seu computador tem alterações mais recentes nesta pasta, então nada foi desfeito."

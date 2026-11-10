@@ -1761,7 +1761,7 @@
     "localFilesUndo": {
       "action": "Undo file changes",
       "computer": {
-        "failed": "Your computer could not undo the changes. The files are as they were before you asked.",
+        "failed": "The undo did not finish on your computer. Some files may already have changed, so check the chat's folder.",
         "folderBusy": "A run on your computer is using this folder. Try again when it finishes.",
         "noCheckpoint": "Your computer has no saved copy of the files from before this turn, so nothing was undone.",
         "notNewest": "Your computer has newer changes in this folder, so nothing was undone."

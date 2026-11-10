@@ -1761,7 +1761,7 @@
     "localFilesUndo": {
       "action": "Atsaukt failu izmaiņas",
       "computer": {
-        "failed": "Jūsu dators nevarēja atsaukt izmaiņas. Faili ir tādi, kādi tie bija pirms jūsu pieprasījuma.",
+        "failed": "Atsaukšana jūsu datorā netika pabeigta. Daži faili, iespējams, jau ir mainīti, tāpēc pārbaudiet tērzēšanas mapi.",
         "folderBusy": "Šo mapi jūsu datorā pašlaik izmanto cits izpildes process. Mēģiniet vēlreiz, kad tas beigsies.",
         "noCheckpoint": "Jūsu datorā nav saglabātas failu kopijas no laika pirms šī soļa, tāpēc nekas netika atsaukts.",
         "notNewest": "Jūsu datorā šajā mapē ir jaunākas izmaiņas, tāpēc nekas netika atsaukts."
