@@ -177,6 +177,7 @@
     "scripts/npm-release-summary.test.ts": ["**"],
     "scripts/online-ddl-lock-census.test.ts": ["**"],
     "scripts/oxlint-additional-guards.test.ts": ["**"],
+    "scripts/oxlint-config-json-options.test.ts": ["**"],
     "scripts/oxlint-idle-scheduler.test.ts": ["**"],
     "scripts/oxlint-rule-decisions.test.ts": ["**"],
     "scripts/oxlint-safe-fixers.test.ts": ["**"],
