@@ -15,6 +15,10 @@ import {
   FACT_DETAIL_LIMITS,
   FACT_SCORING,
 } from "../../lib/lists/fact-details";
+import {
+  LIST_GENERATION_PRODUCERS,
+  LIST_GENERATION_RUN_ERROR_CODES,
+} from "../../lib/lists/generation/contract";
 import type { LegalListSourceLocator } from "../../lib/lists/types";
 import {
   entityFeatureGateChecks,
@@ -26,6 +30,7 @@ import {
   LIST_ITEM_TYPES,
   p,
   pUuid,
+  safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
@@ -33,6 +38,7 @@ import {
   user,
   workspaceCheck,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 } from "./common";
 import type { SafeId } from "./common";
 import { workspaces } from "./contacts";
@@ -120,6 +126,13 @@ const LEGAL_LIST_GENERATION_CANDIDATE_STATUS_SQL_VALUES =
   LEGAL_LIST_GENERATION_CANDIDATE_STATUSES.map((status) =>
     sql.raw(`'${status}'`),
   );
+
+const LIST_GENERATION_PRODUCER_SQL_VALUES = LIST_GENERATION_PRODUCERS.map(
+  (producer) => sql.raw(`'${producer}'`),
+);
+
+const LIST_GENERATION_RUN_ERROR_CODE_SQL_VALUES =
+  LIST_GENERATION_RUN_ERROR_CODES.map((code) => sql.raw(`'${code}'`));
 
 const LEGAL_LIST_REVIEW_DECISION_SQL_VALUES = LEGAL_LIST_REVIEW_DECISIONS.map(
   (decision) => sql.raw(`'${decision}'`),
@@ -640,12 +653,28 @@ export const legalListGenerationRuns = p.pgTable(
       .notNull()
       .default("queued"),
     instruction: p.varchar({ length: 4000 }).notNull(),
+    // Who writes the candidates. Only `external` runs accept submitted
+    // candidates; only `stella` runs are claimed by the extraction worker.
+    producer: p
+      .text("producer", { enum: LIST_GENERATION_PRODUCERS })
+      .notNull()
+      .default("external"),
+    // The worker rebuilds its tenant scope from the row, so the organization
+    // is recorded rather than looked up. Null only on runs started before it
+    // was recorded.
+    organizationId: safeOrganizationId("organization_id"),
+    // The one item type a `stella` run proposes; external runs may mix types.
+    itemType: p.text("item_type", { enum: LIST_ITEM_TYPES }),
+    errorCode: p.text("error_code", {
+      enum: LIST_GENERATION_RUN_ERROR_CODES,
+    }),
     requestedBy: p.text("requested_by").references(() => user.id, {
       onDelete: "set null",
     }),
     error: p.text(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    startedAt: timestamptz("started_at"),
     completedAt: timestamptz("completed_at"),
   },
   (table) => [
@@ -654,6 +683,13 @@ export const legalListGenerationRuns = p.pgTable(
         name: "legal_list_generation_runs_list_fk",
         columns: [table.listId, table.workspaceId],
         foreignColumns: [legalLists.id, legalLists.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "legal_list_generation_runs_workspace_organization_fk",
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
       })
       .onDelete("cascade"),
     p
@@ -669,7 +705,27 @@ export const legalListGenerationRuns = p.pgTable(
       "legal_list_generation_runs_status_check",
       sql`${table.status} in (${sql.join(LEGAL_LIST_GENERATION_STATUS_SQL_VALUES, sql`, `)})`,
     ),
-    ...wsPolicies({ columns: table }),
+    p.check(
+      "legal_list_generation_runs_producer_check",
+      sql`${table.producer} in (${sql.join(LIST_GENERATION_PRODUCER_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "legal_list_generation_runs_item_type_check",
+      sql`${table.itemType} is null or ${table.itemType} in (${sql.join(LIST_ITEM_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
+    // A stella run is claimed by a worker that needs its organization and
+    // the one item type it proposes.
+    p.check(
+      "legal_list_generation_runs_stella_shape_check",
+      sql`${table.producer} = 'external' or (${table.organizationId} is not null and ${table.itemType} is not null)`,
+    ),
+    // A failed stella run says why; nothing else carries a code.
+    p.check(
+      "legal_list_generation_runs_error_code_check",
+      sql`(${table.errorCode} is null or (${table.status} = 'failed' and ${table.errorCode} in (${sql.join(LIST_GENERATION_RUN_ERROR_CODE_SQL_VALUES, sql`, `)}))) and (${table.producer} = 'external' or (${table.status} = 'failed') = (${table.errorCode} is not null))`,
+    ),
+    // Runs started before the organization was recorded carry none.
+    ...wsRecordedOrganizationPolicies(),
   ],
 );
 
@@ -793,6 +849,23 @@ export const legalListGenerationCandidates = p.pgTable(
       .$type<SafeId<"user">[]>()
       .notNull()
       .default([]),
+    // The proposed `legal_list_fact_details` of a fact candidate, written
+    // onto the item when it is accepted. Same columns and checks; all null
+    // on other item types.
+    occurredOn: p.date("occurred_on", { mode: "string" }),
+    occurredOnPrecision: p.text("occurred_on_precision", {
+      enum: FACT_DATE_PRECISIONS,
+    }),
+    evidenceKind: p.varchar("evidence_kind", {
+      length: FACT_DETAIL_LIMITS.EVIDENCE_KIND_MAX,
+    }),
+    medium: p.varchar({ length: FACT_DETAIL_LIMITS.MEDIUM_MAX }),
+    confidence: p.text("confidence", { enum: FACT_CONFIDENCES }),
+    interpretationNote: p.varchar("interpretation_note", {
+      length: FACT_DETAIL_LIMITS.INTERPRETATION_NOTE_MAX,
+    }),
+    // Null means not stated; acceptance then writes `included`.
+    scoring: p.text("scoring", { enum: FACT_SCORING }),
     status: p
       .text("status", { enum: LEGAL_LIST_GENERATION_CANDIDATE_STATUSES })
       .notNull()
@@ -853,6 +926,27 @@ export const legalListGenerationCandidates = p.pgTable(
     p.check(
       "legal_list_generation_candidates_status_check",
       sql`${table.status} in (${sql.join(LEGAL_LIST_GENERATION_CANDIDATE_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "legal_list_generation_candidates_confidence_check",
+      sql`${table.confidence} in (${sql.join(FACT_CONFIDENCE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "legal_list_generation_candidates_scoring_check",
+      sql`${table.scoring} in (${sql.join(FACT_SCORING_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "legal_list_generation_candidates_occurred_on_canonical_check",
+      sql`${table.occurredOnPrecision} is null or ${table.occurredOnPrecision} = 'day' or (extract(day from ${table.occurredOn}) = 1 and (${table.occurredOnPrecision} = 'month' or extract(month from ${table.occurredOn}) = 1))`,
+    ),
+    p.check(
+      "legal_list_generation_candidates_occurred_on_check",
+      sql`(${table.occurredOn} is null) = (${table.occurredOnPrecision} is null) and (${table.occurredOnPrecision} is null or ${table.occurredOnPrecision} in (${sql.join(FACT_DATE_PRECISION_SQL_VALUES, sql`, `)}))`,
+    ),
+    // Only a fact carries fact details.
+    p.check(
+      "legal_list_generation_candidates_fact_details_check",
+      sql`${table.itemType} = 'fact' or (${table.occurredOn} is null and ${table.evidenceKind} is null and ${table.medium} is null and ${table.confidence} is null and ${table.interpretationNote} is null and ${table.scoring} is null)`,
     ),
     p.check(
       "legal_list_generation_candidates_accepted_entity_scope_check",
