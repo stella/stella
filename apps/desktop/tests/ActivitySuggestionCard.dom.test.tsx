@@ -216,6 +216,7 @@ describe("the stella AI consent on a card", () => {
           onRestoreTemplate={noop}
           onUndo={noop}
           sourceAppVisuals={[]}
+          titlesNotice={null}
           structure={null}
           suggestion={manualSuggestion({
             drafted: [],
