@@ -21,10 +21,8 @@ import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import { emailToPreview } from "@/api/lib/files/email-to-html";
 import { convertToPdf, isConvertibleMimeType } from "@/api/lib/files/gotenberg";
-import {
-  FILE_READ_URL_EXPIRY_SECONDS,
-  fileFieldQuery,
-} from "@/api/lib/files/read-file";
+import { fileFieldQuery } from "@/api/lib/files/live-version-field";
+import { FILE_READ_URL_EXPIRY_SECONDS } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";

@@ -10,7 +10,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { lockLiveVersionField } from "@/api/lib/files/read-file";
+import { lockLiveVersionField } from "@/api/lib/files/live-version-field";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";

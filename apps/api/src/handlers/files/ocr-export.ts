@@ -7,7 +7,7 @@ import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { loadCurrentOcrExport } from "@/api/lib/document-content-provenance";
 import { createOcrSearchablePdfKey } from "@/api/lib/file-key";
-import { lockLiveVersionField } from "@/api/lib/files/read-file";
+import { lockLiveVersionField } from "@/api/lib/files/live-version-field";
 import { getS3 } from "@/api/lib/s3";
 import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";

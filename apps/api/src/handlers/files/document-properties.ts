@@ -13,7 +13,7 @@ import {
   constrainDocumentPropertiesEditability,
   extractDocumentProperties,
 } from "@/api/lib/files/document-properties";
-import { fileFieldQuery } from "@/api/lib/files/read-file";
+import { fileFieldQuery } from "@/api/lib/files/live-version-field";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";

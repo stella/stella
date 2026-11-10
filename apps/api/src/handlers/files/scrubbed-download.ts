@@ -10,7 +10,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
-import { fileFieldQuery } from "@/api/lib/files/read-file";
+import { fileFieldQuery } from "@/api/lib/files/live-version-field";
 import { createFileKey } from "@/api/lib/files/utils";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
