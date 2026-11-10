@@ -172,6 +172,7 @@ export const MODEL_BENCHMARK_SOURCES = {
   "claude-sonnet-5": [
     { sourceModelId: "claude-sonnet-5-high", reasoningEffort: "high" },
   ],
+  "claude-fable-5-2": [],
   "claude-fable-5-1": [
     { sourceModelId: "claude-fable-5.1-max", reasoningEffort: "max" },
   ],
@@ -278,6 +279,7 @@ export const MODEL_UNRATED_REASON = {
   "gpt-6.1-sol": "too_new",
   "gpt-6.1-terra": "too_new",
   "claude-sonnet-5-5": "too_new",
+  "claude-fable-5-2": "too_new",
   "mistral-large-4": "too_new",
   "mistral-large-latest": "floating_alias",
   "mistral-medium-latest": "floating_alias",
