@@ -52,7 +52,9 @@ const render = async (
   let exit: NodeJS.Process["exitCode"];
   const fakeProcess = new Proxy(process, {
     get: (target, property) =>
-      property === "exitCode" ? exit : Reflect.get(target, property),
+      property === "exitCode"
+        ? exit
+        : (Reflect.get(target, property) as unknown),
     set: (_target, property, value) => {
       if (property !== "exitCode") {
         throw new TypeError(`Unexpected process mutation ${String(property)}`);

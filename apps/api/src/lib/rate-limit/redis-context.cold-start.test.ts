@@ -65,7 +65,8 @@ describe("rate limiter cold start against a reachable Valkey", () => {
         return {
           close: () => client.close(),
           connect: async () => await client.connect(),
-          send: async (command, args) => await client.send(command, args),
+          send: async (command, args): Promise<unknown> =>
+            await client.send(command, args),
         };
       },
       failurePolicy: "fail_open_local",

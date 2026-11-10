@@ -31,7 +31,7 @@ describe.skipIf(!enabled)(
       const redis = createRedisClient({ storeClass: "cache" });
       await redis.connect();
       const admissionRedis = {
-        send: async (command: string, args: string[]) =>
+        send: async (command: string, args: string[]): Promise<unknown> =>
           await redis.send(command, args),
       };
       try {
@@ -56,7 +56,7 @@ describe.skipIf(!enabled)(
             caller,
             limit: 1,
             redis: {
-              send: async (command, args) => {
+              send: async (command, args): Promise<unknown> => {
                 if (args.at(0) === RENEW_SCRIPT) {
                   // A refused renewal aborts work while its current lease still owns the slot.
                   return 0;
@@ -123,9 +123,10 @@ describe.skipIf(!enabled)(
               description: "public-read backend is running pg_sleep",
               timeoutMs: 3000,
               read: async () => {
-                const [row] =
-                  await observer`SELECT count(*)::int AS running FROM pg_stat_activity WHERE pid = ANY(${pidArray}::int[]) AND state = 'active' AND wait_event = 'PgSleep'`;
-                return row?.["running"] === 2;
+                const [row] = await observer<
+                  { running: number }[]
+                >`SELECT count(*)::int AS running FROM pg_stat_activity WHERE pid = ANY(${pidArray}::int[]) AND state = 'active' AND wait_event = 'PgSleep'`;
+                return row?.running === 2;
               },
             });
             const renew = await renewReady.promise;
@@ -139,9 +140,10 @@ describe.skipIf(!enabled)(
               description: "cancelled public-read backend is closed",
               timeoutMs: 3000,
               read: async () => {
-                const [row] =
-                  await observer`SELECT NOT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid = ANY(${pidArray}::int[])) AS closed`;
-                return row?.["closed"] === true;
+                const [row] = await observer<
+                  { closed: boolean }[]
+                >`SELECT NOT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid = ANY(${pidArray}::int[])) AS closed`;
+                return row?.closed === true;
               },
             });
             expect(sleepSettled).toBe(2);
@@ -218,7 +220,7 @@ describe.skipIf(!enabled)(
             caller,
             limit: 1,
             redis: {
-              send: async (command, args) => {
+              send: async (command, args): Promise<unknown> => {
                 if (args.at(0) === RENEW_SCRIPT) {
                   renewalFailed.resolve(undefined);
                   throw new Error("renewal transport unavailable");
@@ -259,9 +261,10 @@ describe.skipIf(!enabled)(
               "public-read backend is running pg_sleep before renewal",
             timeoutMs: 3000,
             read: async () => {
-              const [row] =
-                await observer`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid = ${pid} AND state = 'active' AND wait_event = 'PgSleep') AS running`;
-              return row?.["running"] === true;
+              const [row] = await observer<
+                { running: boolean }[]
+              >`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid = ${pid} AND state = 'active' AND wait_event = 'PgSleep') AS running`;
+              return row?.running === true;
             },
           });
           renew();

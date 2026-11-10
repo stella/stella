@@ -40,7 +40,7 @@ const readPreloadedCredentials = (
     timeout: 10_000,
   });
   expect(child.exitCode, child.stderr.toString()).toBe(0);
-  return JSON.parse(child.stdout.toString());
+  return JSON.parse(child.stdout.toString()) as unknown;
 };
 
 describe("API test preload credentials", () => {

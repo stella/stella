@@ -44,7 +44,7 @@ const htmlOf = async (detail: URL): Promise<string> => {
       Bun.gunzipSync(new Uint8Array(await Bun.file(detail).arrayBuffer())),
     ),
   );
-  const fields =
+  const fields: unknown[] =
     typeof parsed === "object" &&
     parsed !== null &&
     "dokument" in parsed &&
@@ -55,7 +55,7 @@ const htmlOf = async (detail: URL): Promise<string> => {
       ? parsed.dokument.fields
       : [];
   const html: unknown = fields.find(
-    (field: unknown) =>
+    (field: unknown): field is { key: unknown; value?: unknown } =>
       typeof field === "object" &&
       field !== null &&
       "key" in field &&

@@ -762,7 +762,7 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
       const branches = record["anyOf"];
       if (
         Array.isArray(branches) &&
-        branches.some(
+        (branches as unknown[]).some(
           (branch) =>
             typeof branch === "object" &&
             branch !== null &&

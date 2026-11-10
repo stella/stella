@@ -276,9 +276,17 @@ describe("auto-run playbooks handler", () => {
     // What applicability and the opener received is the playbook carrying
     // its approved scope; the edited live scope appears nowhere downstream.
     expect(
-      resolveApplicablePlaybooksMock.mock.calls.at(0)?.[0].playbooks,
+      (
+        resolveApplicablePlaybooksMock.mock.calls.at(0)?.[0] as
+          { playbooks: unknown } | undefined
+      )?.playbooks,
     ).toEqual([{ ...livePlaybook, scope: { documentTypeKey: "nda" } }]);
-    expect(openPlaybookRunMock.mock.calls.at(0)?.[0].definition.scope).toEqual({
+    expect(
+      (
+        openPlaybookRunMock.mock.calls.at(0)?.[0] as
+          { definition: { scope: unknown } } | undefined
+      )?.definition.scope,
+    ).toEqual({
       documentTypeKey: "nda",
     });
   });

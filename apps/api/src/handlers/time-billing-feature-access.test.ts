@@ -348,14 +348,16 @@ describe("time billing admission census", () => {
         if (!/createSafe(?:Root)?Handler\(/u.test(source)) {
           continue;
         }
-        const module = await import(`${absolute}/${filename}`);
+        const module = (await import(`${absolute}/${filename}`)) as {
+          default?: unknown;
+        };
         expect(
-          isRecord(module.default) && isRecord(module.default.config),
+          isRecord(module.default) && isRecord(module.default["config"]),
         ).toBe(true);
-        if (!isRecord(module.default) || !isRecord(module.default.config)) {
+        if (!isRecord(module.default) || !isRecord(module.default["config"])) {
           continue;
         }
-        expect(module.default.config.featureAccess).toEqual({
+        expect(module.default["config"]["featureAccess"]).toEqual({
           featureId: FEATURE_ID,
           type: "required",
         });

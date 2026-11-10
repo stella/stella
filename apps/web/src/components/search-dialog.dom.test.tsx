@@ -174,7 +174,7 @@ globalThis.fetch = Object.assign(
       } satisfies PublicLawData<typeof api.law.statutes.get>);
     }
     if (url.pathname.endsWith("/search")) {
-      const body = await request.json();
+      const body = (await request.json()) as { types?: string[] };
       searchRequestBodies.push(body);
       await searchResponseGate;
       return Response.json({

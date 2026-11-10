@@ -318,7 +318,7 @@ describe("downstream capability tools", () => {
       if (!Array.isArray(items)) {
         throw new TypeError("Expected capability items");
       }
-      for (const item of items) {
+      for (const item of items as unknown[]) {
         if (
           typeof item !== "object" ||
           item === null ||

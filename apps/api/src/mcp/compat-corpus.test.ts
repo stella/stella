@@ -536,7 +536,9 @@ describe("the corpus page cap split across countries", () => {
 
       expect(
         askedFor(
-          searchDecisionsHandlerMock.mock.calls.map(([{ body }]) => [body]),
+          searchDecisionsHandlerMock.mock.calls.map(([{ body }]) => [
+            body as unknown,
+          ]),
         ),
       ).toBe(LIMITS.mcpCompatDecisionPageSizeDefault);
       expect(askedFor(searchLegislationHandlerMock.mock.calls)).toBe(

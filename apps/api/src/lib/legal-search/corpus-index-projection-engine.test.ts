@@ -311,7 +311,9 @@ test("one revision is split into requests under both byte ceilings", () => {
     );
     expect(
       planned.value.flatMap(({ ndjson }) =>
-        ndjson.split("\n").map((line) => JSON.parse(line).seq),
+        ndjson
+          .split("\n")
+          .map((line) => (JSON.parse(line) as { seq: unknown }).seq),
       ),
     ).toEqual(entry.documents.map(({ seq }) => seq));
   }

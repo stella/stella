@@ -55,6 +55,9 @@ const parseSignedHeaders = (url: string): Set<string> => {
 const HELLO_BODY = "hello";
 const HELLO_SHA256_BASE64 = hashSha256Base64(HELLO_BODY);
 const HELLO_BYTES = new TextEncoder().encode(HELLO_BODY);
+type TenantS3OperationHooks = Required<
+  Parameters<typeof setTenantS3OperationHooksForTesting>[0]
+>;
 
 describe("isS3KeyInSigningScope", () => {
   test("accepts document keys under the requested workspace prefix", () => {
@@ -504,12 +507,16 @@ describe("scoped object operations", () => {
   });
   const installHooks = () => {
     const hooks = {
-      headObjectSize: mock(
+      headObjectSize: mock<TenantS3OperationHooks["headObjectSize"]>(
         async (_client, _command, _signal) => HELLO_BYTES.byteLength,
       ),
-      readObject: mock(async (_client, _command, _signal) => HELLO_BYTES),
+      readObject: mock<TenantS3OperationHooks["readObject"]>(
+        async (_client, _command, _signal) => HELLO_BYTES,
+      ),
       resolveClient: mock(async () => client),
-      writeObject: mock(async (_client, _command, _signal) => undefined),
+      writeObject: mock<TenantS3OperationHooks["writeObject"]>(
+        async (_client, _command, _signal) => undefined,
+      ),
     } satisfies Parameters<typeof setTenantS3OperationHooksForTesting>[0];
     setTenantS3OperationHooksForTesting(hooks);
     return hooks;
@@ -554,7 +561,7 @@ describe("scoped object operations", () => {
     expect(hooks.readObject).toHaveBeenCalledTimes(1);
     const call = hooks.readObject.mock.calls.at(0);
     expect(call?.at(0)).toBe(client);
-    expect(call?.at(1).input).toEqual({
+    expect(call?.[1].input).toEqual({
       Bucket: "stella",
       Key: "org_1/ws_1/file.pdf",
     });
@@ -580,7 +587,7 @@ describe("scoped object operations", () => {
     });
     const call = hooks.headObjectSize.mock.calls.at(0);
     expect(call?.at(0)).toBe(client);
-    expect(call?.at(1).input).toEqual({
+    expect(call?.[1].input).toEqual({
       Bucket: "stella",
       Key: "org_1/ws_1/file.pdf",
     });
@@ -620,7 +627,7 @@ describe("scoped object operations", () => {
     expect(hooks.writeObject).toHaveBeenCalledTimes(1);
     const call = hooks.writeObject.mock.calls.at(0);
     expect(call?.at(0)).toBe(client);
-    expect(call?.at(1).input).toEqual({
+    expect(call?.[1].input).toEqual({
       Body: HELLO_BYTES,
       Bucket: "stella",
       ContentType: "application/pdf",

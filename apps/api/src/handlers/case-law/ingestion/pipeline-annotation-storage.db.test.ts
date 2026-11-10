@@ -187,8 +187,12 @@ const storedAst = async (pack: EncodedPack, decisionId: string) => {
     pack.bytes.slice(offset, offset + length),
     10 * 1024 * 1024,
   );
-  return JSON.parse(decoded);
+  return JSON.parse(decoded) as unknown;
 };
+
+/** Narrows a proxied member to a callable that can be bound to its owner. */
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
 
 const runBeforeQuery = <T extends object>(
   target: T,
@@ -206,7 +210,11 @@ const runBeforeQuery = <T extends object>(
           onRejected?: (reason: unknown) => unknown,
         ) => {
           await before();
-          return await Reflect.apply(value, object, [onFulfilled, onRejected]);
+          const settled: unknown = await Reflect.apply(value, object, [
+            onFulfilled,
+            onRejected,
+          ]);
+          return settled;
         };
       }
       return (...args: unknown[]) => {
@@ -225,7 +233,7 @@ const wrapLockedSelect = <T extends object>(
   new Proxy(target, {
     get(object, key) {
       const method: unknown = Reflect.get(object, key);
-      if (typeof method !== "function") {
+      if (!isCallable(method)) {
         return method;
       }
       if (key === "then") {
@@ -269,7 +277,7 @@ const withDocumentWinner = (
               });
             };
           }
-          return typeof value === "function" ? value.bind(object) : value;
+          return isCallable(value) ? value.bind(object) : value;
         },
       });
       return await callback(asTestRaw(racing));
@@ -310,7 +318,7 @@ const withScopeReadWinner = (
               });
             };
           }
-          return typeof value === "function" ? value.bind(object) : value;
+          return isCallable(value) ? value.bind(object) : value;
         },
       });
       return await callback(asTestRaw(racing));

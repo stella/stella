@@ -344,9 +344,9 @@ test("account switching preserves the signed OAuth query through auth routing", 
   await expect
     .poll(
       async () =>
-        await (
+        (await (
           await context.request.get(`${AUTH_BASE_URL}/get-session`)
-        ).json(),
+        ).json()) as unknown,
     )
     .toBeNull();
 });
@@ -450,9 +450,9 @@ test("organization picker names the signed-in account and switches it without lo
   await expect
     .poll(
       async () =>
-        await (
+        (await (
           await context.request.get(`${AUTH_BASE_URL}/get-session`)
-        ).json(),
+        ).json()) as unknown,
     )
     .toBeNull();
 });
@@ -514,7 +514,9 @@ test("a client asking for account selection gets the organization step with the 
     `${AUTH_BASE_URL}/organization/list`,
   );
   const organizations: unknown = await organizationsResponse.json();
-  const [organization] = Array.isArray(organizations) ? organizations : [];
+  const [organization] = Array.isArray(organizations)
+    ? (organizations as unknown[])
+    : [];
   const organizationName =
     typeof organization === "object" &&
     organization !== null &&

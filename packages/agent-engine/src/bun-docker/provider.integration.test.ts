@@ -41,7 +41,7 @@ const inspectContainer = async (containerId: string) => {
   if (!Array.isArray(parsed) || parsed.length !== 1) {
     throw new Error("docker inspect returned an unexpected response");
   }
-  return parsed.at(0);
+  return (parsed as unknown[]).at(0);
 };
 
 const listImageContainers = async (): Promise<string[]> => {

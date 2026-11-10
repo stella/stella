@@ -204,14 +204,15 @@ const createEntitlementInsertBarrier = () => {
                 bothReady.resolve(undefined);
               }
               await bothReady.promise;
-              return await Reflect.apply(call, thisArg, args);
+              const result: unknown = await Reflect.apply(call, thisArg, args);
+              return result;
             },
           });
         }
         if (property === "values" || property === "onConflictDoNothing") {
           return new Proxy(method, {
             apply(call, thisArg, args) {
-              return pauseInsert(Reflect.apply(call, thisArg, args));
+              return pauseInsert<object>(Reflect.apply(call, thisArg, args));
             },
           });
         }
@@ -227,11 +228,11 @@ const createEntitlementInsertBarrier = () => {
       new Proxy(tx, {
         get(target, property, receiver) {
           if (property !== "insert") {
-            return Reflect.get(target, property, receiver);
+            return Reflect.get(target, property, receiver) as unknown;
           }
           return new Proxy(target.insert, {
             apply(call, thisArg, args) {
-              const builder = Reflect.apply(call, thisArg, args);
+              const builder = Reflect.apply(call, thisArg, args) as object;
               return args.at(0) === usageEntitlements
                 ? pauseInsert(builder)
                 : builder;

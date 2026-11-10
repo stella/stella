@@ -218,7 +218,7 @@ test("an expanding provision card pushes the following gutter note below its new
   };
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
-    get() {
+    get(this: HTMLElement) {
       return this.parentElement?.dataset["marginNote"] === "provision"
         ? provisionHeight
         : 20;

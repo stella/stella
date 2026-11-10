@@ -11,7 +11,9 @@ test("email reauthentication keeps the current session while showing the OTP cha
 }) => {
   const sessionUrl = `${E2E_API_ORIGIN}/api/auth/get-session`;
   const previousResponse = await page.request.get(sessionUrl);
-  const previousSession = await previousResponse.json();
+  const previousSession = (await previousResponse.json()) as {
+    session: { id: string };
+  };
   expect(previousSession).toMatchObject({
     session: { id: expect.any(String) },
   });

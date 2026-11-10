@@ -25,9 +25,21 @@ type ProbeOptions = {
   preAborted?: boolean;
 };
 
+/** The JSON line the isolated probe prints; fields depend on the outcome. */
+type ProbeResult = {
+  status?: number;
+  body?: string;
+  error?: string;
+  name?: string;
+  attempts: { address: string; family: number }[];
+  authorities: { host: string; servername: string; agent: unknown }[];
+  resolutions: number;
+  elapsedMs: number;
+};
+
 // Built-in module mocks stay in an isolated test runner so concurrent auth tests
 // retain real transports and Bun applies mocks to the dependency's ESM imports.
-const probe = async (options: ProbeOptions) => {
+const probe = async (options: ProbeOptions): Promise<ProbeResult> => {
   const script = `
     import { mock, test } from "bun:test";
     import { EventEmitter } from "node:events";
@@ -139,7 +151,9 @@ const probe = async (options: ProbeOptions) => {
       .split("\n")
       .filter((line) => line.startsWith(PROBE_RESULT_PREFIX));
     expect(results, stdout).toHaveLength(1);
-    return JSON.parse(results.join("").slice(PROBE_RESULT_PREFIX.length));
+    return JSON.parse(
+      results.join("").slice(PROBE_RESULT_PREFIX.length),
+    ) as ProbeResult;
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

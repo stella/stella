@@ -146,7 +146,7 @@ const withFixture = async (
               await session.unsafe(`SET search_path TO ${schema}, public`);
               return session;
             },
-            cancelBackend: async (pid) =>
+            cancelBackend: async (pid): Promise<unknown> =>
               await operator.unsafe("SELECT pg_cancel_backend($1)", [pid]),
             signal,
             work: async (session, setTransactionBudget) =>
@@ -158,7 +158,7 @@ const withFixture = async (
                     unsafe: async (
                       statement: string,
                       parameters: unknown[] = [],
-                    ) => {
+                    ): Promise<unknown> => {
                       await beforeQuery(statement, session);
                       // Production catalog reads intentionally name public; isolate
                       // those reads alongside the real cloned constraints here.

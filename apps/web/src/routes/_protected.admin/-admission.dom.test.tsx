@@ -30,6 +30,12 @@ const { workspacesNavigationOptions } =
 const routeModule: unknown =
   await import("@/routes/_protected.settings/organization");
 
+/** Narrows a route hook to a callable taking the router's context object. */
+const isRouteHook = (
+  value: unknown,
+): value is (args: Record<string, unknown>) => unknown =>
+  typeof value === "function";
+
 const readAdmission = () => {
   if (
     typeof routeModule !== "object" ||
@@ -47,7 +53,7 @@ const readAdmission = () => {
     typeof options !== "object" ||
     options === null ||
     !("beforeLoad" in options) ||
-    typeof options.beforeLoad !== "function"
+    !isRouteHook(options.beforeLoad)
   ) {
     throw new TypeError("Missing organization settings admission guard");
   }

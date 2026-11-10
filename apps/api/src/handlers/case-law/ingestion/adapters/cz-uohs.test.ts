@@ -773,7 +773,7 @@ describe("ÚOHS JSON-LD", () => {
     const provenance = JSON.parse(
       decodeSourceRawEnvelope(decision.sourceRaw ?? "")?.["provenance"] ??
         "null",
-    );
+    ) as { documents: Record<string, unknown> };
     expect(Object.keys(provenance.documents)).toEqual([
       "document",
       "document-1",
@@ -871,7 +871,7 @@ describe("ÚOHS JSON-LD", () => {
     if (first.nextCursor === null) {
       return;
     }
-    const cursor = JSON.parse(first.nextCursor);
+    const cursor = JSON.parse(first.nextCursor) as { snapshotId: string };
     cursor.snapshotId = "not-cached";
     const second = (
       await czUohsAdapter.fetchPage(JSON.stringify(cursor), {}, undefined)

@@ -119,11 +119,11 @@ const packPrefix = (jurisdiction: string) =>
 
 /** The key of a pack that carries this jurisdiction's members. */
 const packKeyUnder = (jurisdiction: string) =>
-  expect.stringContaining(packPrefix(jurisdiction));
+  expect.stringContaining(packPrefix(jurisdiction)) as string;
 
 /** Every stored pointer addresses a member of such a pack. */
 const packedUnder = (jurisdiction: string) =>
-  expect.stringContaining(`pack:${packPrefix(jurisdiction)}`);
+  expect.stringContaining(`pack:${packPrefix(jurisdiction)}`) as string;
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("sk-courts document backfill — corpus storage", () => {

@@ -6,6 +6,8 @@ import {
 } from "@/features/knowledge/public/tools/tool-detail.logic";
 import { spdxLicenseUrl } from "@/lib/spdx-license";
 
+type GhSnippet = { mcpServers: { gh: { auth?: unknown } } };
+
 describe("tool-detail.logic", () => {
   test("spdx url points at the canonical license page", () => {
     expect(spdxLicenseUrl("MIT")).toBe("https://spdx.org/licenses/MIT.html");
@@ -48,7 +50,7 @@ describe("tool-detail.logic", () => {
       authType: "oauth",
       oauthRequestedScopes: ["repo", "read:org"],
     });
-    const parsed = JSON.parse(snippet);
+    const parsed = JSON.parse(snippet) as GhSnippet;
     expect(parsed.mcpServers.gh.auth).toEqual({
       type: "oauth",
       scopes: ["repo", "read:org"],
@@ -61,7 +63,9 @@ describe("tool-detail.logic", () => {
       url: "https://mcp.example.com",
       authType: "oauth",
     });
-    expect(JSON.parse(snippet).mcpServers.gh.auth).toEqual({ type: "oauth" });
+    expect((JSON.parse(snippet) as GhSnippet).mcpServers.gh.auth).toEqual({
+      type: "oauth",
+    });
   });
 
   test("mcp snippet never emits secrets, only a bearer marker", () => {
@@ -70,7 +74,9 @@ describe("tool-detail.logic", () => {
       url: "https://mcp.example.com",
       authType: "bearer",
     });
-    expect(JSON.parse(snippet).mcpServers.gh.auth).toEqual({ type: "bearer" });
+    expect((JSON.parse(snippet) as GhSnippet).mcpServers.gh.auth).toEqual({
+      type: "bearer",
+    });
     expect(snippet).not.toMatch(/token|secret|key/iu);
   });
 });

@@ -40,7 +40,7 @@ const storedSeparators = (): Record<string, string> => {
       groups?.["jurisdiction"],
       groups?.["separator"],
     ]),
-  );
+  ) as Record<string, string>;
 };
 
 describe("provision anchor lineage", () => {

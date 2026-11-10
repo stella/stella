@@ -10,6 +10,15 @@ import {
   TRANSCRIPTION_MODELS,
 } from "./transcription";
 
+// The catalog entries are distinct literal types, so Object.values needs the
+// shared element type spelled out.
+type RegionalAvailability =
+  | {
+      status: "available";
+      price: { usdNumerator: number; secondsDenominator: number };
+    }
+  | { status: "unavailable" | "unknown" };
+
 test("transcription lookup accepts exactly the catalog model identifiers", () => {
   assertProperty(
     "transcription lookup accepts exactly the catalog model identifiers",
@@ -45,7 +54,9 @@ test("transcription lookup preserves the evidence for every catalog model", () =
     expect(Number.isSafeInteger(metadata.price.secondsDenominator)).toBe(true);
     expect(metadata.price.usdNumerator).toBeGreaterThan(0);
     expect(metadata.price.secondsDenominator).toBeGreaterThan(0);
-    for (const availability of Object.values(metadata.residency)) {
+    for (const availability of Object.values<RegionalAvailability>(
+      metadata.residency,
+    )) {
       if (availability.status !== "available") {
         continue;
       }

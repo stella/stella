@@ -524,7 +524,7 @@ describePostgres("database role privilege census", () => {
             "CREATE TEMP TABLE search_path_probe_log (id integer) ON COMMIT DROP",
           );
           await tx.unsafe("SELECT public.search_path_probe_write()");
-          return tx.unsafe(`
+          return tx.unsafe<{ shadowed: number; stored: number }[]>(`
             SELECT (SELECT count(*)::int FROM pg_temp.search_path_probe_log) AS shadowed,
               (SELECT count(*)::int FROM public.search_path_probe_log) AS stored
           `);

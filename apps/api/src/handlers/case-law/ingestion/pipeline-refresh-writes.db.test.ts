@@ -197,6 +197,10 @@ const citationHeaders = async (decisionId: string): Promise<unknown> =>
  * on the chain returns a wrapped builder, so the hook fires when the whole
  * statement is sent, not when it starts being built.
  */
+/** Narrows a proxied member to a callable that can be bound to its owner. */
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
+
 const runningFirst = <T extends object>(
   target: T,
   before: () => Promise<void>,
@@ -260,7 +264,7 @@ const racingScopedDb = (
               });
             };
           }
-          return typeof value === "function" ? value.bind(object) : value;
+          return isCallable(value) ? value.bind(object) : value;
         },
       });
       return await callback(asTestRaw(racing));

@@ -245,7 +245,7 @@ const decodeJwt = (jwt: string): Json => {
   if (!segment) {
     throw new Error("malformed jwt");
   }
-  return JSON.parse(Buffer.from(segment, "base64url").toString());
+  return JSON.parse(Buffer.from(segment, "base64url").toString()) as Json;
 };
 
 /** Create a verified user with a password-less email, plus an org. */

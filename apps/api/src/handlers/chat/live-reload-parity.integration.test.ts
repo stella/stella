@@ -1913,7 +1913,7 @@ describe("a conversation's live view", () => {
         expect(
           reload.flatMap(({ parts }) =>
             parts.flatMap((part) =>
-              part.type === "tool-call" ? [part.output] : [],
+              part.type === "tool-call" ? [part.output as unknown] : [],
             ),
           ),
         ).toEqual([ASK_USER_ANSWER]);
@@ -2192,7 +2192,7 @@ describe("a conversation's live view", () => {
         expect(
           calls.map((options) =>
             typeof options === "object" && options !== null
-              ? Reflect.get(options, "max_output_tokens")
+              ? (Reflect.get(options, "max_output_tokens") as unknown)
               : undefined,
           ),
         ).toEqual([

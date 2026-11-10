@@ -2231,7 +2231,7 @@ describe("assistant turn settlement", () => {
       failureCode,
       failureRetryable: true,
       status: "failed",
-    });
+    }) as unknown;
 
   test("fails the turn when the generated tool parts do not validate", async () => {
     const { onFinish, turnUpdates } = await startStreamingTurn();

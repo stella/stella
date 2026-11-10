@@ -64,7 +64,7 @@ globalThis.fetch = Object.assign(
       const payload =
         body instanceof FormData
           ? { templateId: body.get("templateId"), file: body.get("file") }
-          : JSON.parse(body);
+          : (JSON.parse(body) as { templateId?: unknown; file?: unknown });
       expect(payload.file).toBeUndefined();
       const templateId = payload.templateId;
       discoveredTemplateIds.push(templateId);

@@ -276,7 +276,9 @@ if (!databaseUrl || !runPostgresTests) {
         const staleClient = openClient({
           connection: { statement_timeout: 5000 },
         }).sql;
-        const [writer] = await staleClient`SELECT pg_backend_pid() AS pid`;
+        const [writer] = await staleClient<
+          { pid: unknown }[]
+        >`SELECT pg_backend_pid() AS pid`;
         const writerPid: unknown = writer?.pid;
         if (typeof writerPid !== "number") {
           throw new TypeError("Expected PostgreSQL backend PID");
@@ -300,7 +302,9 @@ if (!databaseUrl || !runPostgresTests) {
             timeoutMs: 3000,
             read: async () =>
               (
-                await session`SELECT locktype, classid::int AS classid, objid::int AS objid
+                await session<
+                  { locktype: string; classid: number; objid: number }[]
+                >`SELECT locktype, classid::int AS classid, objid::int AS objid
                 FROM pg_locks WHERE pid = ${writerPid} AND NOT granted`
               ).at(0),
           });

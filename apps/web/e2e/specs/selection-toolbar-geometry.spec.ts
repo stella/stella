@@ -10,6 +10,9 @@ import {
   waitForStableGeometry,
 } from "../helpers/stable-geometry";
 
+// DOMRect.toJSON() is typed any; these are the fields the assertions read.
+type RectJson = Pick<DOMRect, "bottom" | "height" | "left" | "right" | "top">;
+
 const directory = mkdtempSync(path.join(tmpdir(), "selection-toolbar-"));
 const fixture = { bundle: "" };
 test.use({
@@ -247,8 +250,8 @@ for (const [name, selectionCase] of Object.entries(cases)) {
       const end = visibleLines.at(-1);
       const y = usePointer ? bounds.top + 110 : end?.bottom;
       return {
-        pane: bounds.toJSON(),
-        toolbar: bar.toJSON(),
+        pane: bounds.toJSON() as RectJson,
+        toolbar: bar.toJSON() as RectJson,
         y,
         selectionEnd: range?.getBoundingClientRect().bottom,
         headerBottom: window.document

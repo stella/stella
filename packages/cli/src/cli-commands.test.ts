@@ -500,7 +500,10 @@ describe("contact discovery", () => {
     await server.stop();
 
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout).items.at(0)?.id).toBe("contact-1");
+    expect(
+      (JSON.parse(result.stdout) as { items: { id: string }[] }).items.at(0)
+        ?.id,
+    ).toBe("contact-1");
     expect(result.stderr).toBe("");
   });
 });
@@ -674,10 +677,9 @@ describe("list rendering and pagination (S4)", () => {
     });
     await server.stop();
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout).matters).toEqual([
-      { id: "m1" },
-      { id: "m2" },
-    ]);
+    expect((JSON.parse(result.stdout) as { matters: unknown }).matters).toEqual(
+      [{ id: "m1" }, { id: "m2" }],
+    );
     expect(server.requests).toHaveLength(2);
     expect(server.requests.at(1)?.params.arguments?.["cursor"]).toBe("c1");
   });
@@ -713,7 +715,7 @@ describe("list rendering and pagination (S4)", () => {
     });
     await server.stop();
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout).matter).toEqual({
+    expect((JSON.parse(result.stdout) as { matter: unknown }).matter).toEqual({
       id: "m1",
       name: "Acme",
     });
@@ -966,11 +968,13 @@ describe("windowed text (S4)", () => {
     });
     await server.stop();
     expect(result.exitCode).toBe(0);
-    const printed = JSON.parse(result.stdout);
+    const printed = JSON.parse(result.stdout) as {
+      items: { status: string; decision?: { text: string } }[];
+    };
     expect(
       printed.items.map((item: { status: string }) => item.status),
     ).toEqual(["found", "not_found"]);
-    expect(printed.items.at(0).decision.text).toBe("THE DECISION BODY");
+    expect(printed.items.at(0)?.decision?.text).toBe("THE DECISION BODY");
     expect(printed).not.toHaveProperty("text");
     expect(server.requests).toHaveLength(1);
     expect(server.requests.at(0)?.params.name).toBe("read_case_law_decision");
@@ -2082,7 +2086,9 @@ describe("feedback (S4)", () => {
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("prepare_feedback");
     expect(server.requests.at(0)?.params.arguments).toEqual(report);
-    expect(JSON.parse(result.stdout).report).toEqual(report);
+    expect((JSON.parse(result.stdout) as { report: unknown }).report).toEqual(
+      report,
+    );
   });
 
   test("submit --yes sends the approved report and prints the receipt", async () => {
@@ -2115,7 +2121,9 @@ describe("feedback (S4)", () => {
       approval_token: APPROVAL_TOKEN,
       confirm: true,
     });
-    expect(JSON.parse(result.stdout).receipt).toBe("FB-7K2M-9QXA");
+    expect((JSON.parse(result.stdout) as { receipt: unknown }).receipt).toBe(
+      "FB-7K2M-9QXA",
+    );
   });
 });
 

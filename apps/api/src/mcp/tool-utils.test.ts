@@ -643,12 +643,14 @@ describe("structuredErrorResult", () => {
   });
 
   test("carries the active request receipt under error.requestId", () => {
-    const parsed = runWithRequestId("req_envelope", () =>
-      JSON.parse(
-        errorText(
-          structuredErrorResult({ code: "not_found", message: "gone" }),
-        ),
-      ),
+    const parsed = runWithRequestId(
+      "req_envelope",
+      () =>
+        JSON.parse(
+          errorText(
+            structuredErrorResult({ code: "not_found", message: "gone" }),
+          ),
+        ) as unknown,
     );
 
     expect(parsed).toEqual({
@@ -704,7 +706,9 @@ describe("validationErrorResult", () => {
     const result = validationErrorResult(parsed.issues);
 
     expect(result.status).toBe("error");
-    const payload = JSON.parse(errorText(result));
+    const payload: {
+      error: { code: unknown; message: unknown; issues: unknown };
+    } = JSON.parse(errorText(result));
     expect(payload.error.code).toBe("validation_error");
     expect(payload.error.message).toBe(parsed.issues.at(0)?.message);
     expect(payload.error.issues).toEqual([

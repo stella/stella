@@ -147,9 +147,10 @@ test("updater rejects working-file growth and committed growth, preserving the b
         documentedAdapters: new Set(["source"]),
       }),
     });
-    expect(JSON.parse(readFileSync(baselinePath, "utf-8")).findings).toEqual(
-      census([]),
+    const baseline: { findings: unknown } = JSON.parse(
+      readFileSync(baselinePath, "utf-8"),
     );
+    expect(baseline.findings).toEqual(census([]));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

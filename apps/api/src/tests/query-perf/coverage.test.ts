@@ -272,7 +272,7 @@ describe.skipIf(!enabled)("coverage refresh read budget", () => {
             const metrics = [];
             for (const statement of statements) {
               // db-await-in-loop: sequential cache warmup and five measurements of the actual reader statements.
-              const result = await client.unsafe(
+              const result = await client.unsafe<unknown[]>(
                 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${statement.text}`,
                 statement.params,
               );

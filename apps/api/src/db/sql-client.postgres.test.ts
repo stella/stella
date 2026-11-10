@@ -25,8 +25,10 @@ describe.skipIf(!enabled)("int8 decoding with PostgreSQL", () => {
     }
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const client = openClient({ max: 1 }).sql;
-      const [row] =
-        await client`SELECT 9::int8 AS small, 10::int8 AS ten, ${LARGE.toString()}::int8 AS large, count(*) AS rows FROM (VALUES (1), (2)) AS v(x)`;
+      // An aggregate without GROUP BY returns exactly one row.
+      const [row] = await client<
+        [{ small: bigint; ten: bigint; large: bigint; rows: bigint }]
+      >`SELECT 9::int8 AS small, 10::int8 AS ten, ${LARGE.toString()}::int8 AS large, count(*) AS rows FROM (VALUES (1), (2)) AS v(x)`;
       expect(row).toEqual({ small: 9n, ten: 10n, large: LARGE, rows: 2n });
       expect(row.ten > row.small).toBe(true);
     });

@@ -62,7 +62,11 @@ for (const file of locales) {
         arg: null,
         handlers: () => ({
           fit_static_dialog: (size) =>
-            Reflect.get(window, "resizeDialog")(size),
+            (
+              Reflect.get(window, "resizeDialog") as (
+                size: Record<string, unknown>,
+              ) => unknown
+            )(size),
         }),
       });
       const params = new URLSearchParams({

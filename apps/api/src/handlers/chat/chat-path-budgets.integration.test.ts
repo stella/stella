@@ -458,7 +458,7 @@ const readSseUntil = async (response: Response, lastId: bigint) => {
   let buffered = "";
   let bytes = 0;
   const eventIds: (bigint | undefined)[] = [];
-  const reader = body.getReader();
+  const reader: ReadableStreamDefaultReader<Uint8Array> = body.getReader();
   try {
     while (!((eventIds.at(-1) ?? -1n) >= lastId)) {
       const { done, value } = await reader.read();

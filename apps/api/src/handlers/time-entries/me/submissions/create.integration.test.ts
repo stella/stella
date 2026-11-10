@@ -284,6 +284,10 @@ describe("submitting a week", () => {
 // Runs `edit` in the submit's own transaction just before its guarded write,
 // as a concurrent edit committed between the submit's read and its write
 // would look to that write.
+/** Narrows a proxied member to a callable that can be bound to its owner. */
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
+
 const safeDbEditingBeforeWrite = (
   actor: SafeId<"user">,
   edit: (tx: TestDatabaseTransaction) => Promise<unknown>,
@@ -305,7 +309,7 @@ const safeDbEditingBeforeWrite = (
             new Proxy(tx, {
               get: (target, property) => {
                 const value: unknown = Reflect.get(target, property, target);
-                if (typeof value !== "function") {
+                if (!isCallable(value)) {
                   return value;
                 }
                 if (property !== "execute") {
@@ -316,7 +320,10 @@ const safeDbEditingBeforeWrite = (
                     pending = false;
                     await edit(target);
                   }
-                  return await Reflect.apply(value, target, [query]);
+                  const executed: unknown = await Reflect.apply(value, target, [
+                    query,
+                  ]);
+                  return executed;
                 };
               },
             }),

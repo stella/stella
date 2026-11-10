@@ -468,7 +468,7 @@ describe("memory extraction for a compaction's owner", () => {
           ? () => {
               throw new Error("scheduler connection lost");
             }
-          : Reflect.get(target, property, receiver),
+          : (Reflect.get(target, property, receiver) as unknown),
     });
     dedupSpy.mockImplementationOnce(() => {
       crashed = true;

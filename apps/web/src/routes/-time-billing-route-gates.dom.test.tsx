@@ -33,6 +33,12 @@ const { workspacesNavigationOptions } =
 
 const CALLER = { userId: "unenrolled-owner", organizationId: "org-a" };
 
+/** Narrows a route hook to a callable taking the router's context object. */
+const isRouteHook = (
+  value: unknown,
+): value is (args: Record<string, unknown>) => unknown =>
+  typeof value === "function";
+
 const readRouteAdmission = async (filePath: string) => {
   const module: unknown = await import(filePath);
   if (typeof module !== "object" || module === null || !("Route" in module)) {
@@ -51,7 +57,7 @@ const readRouteAdmission = async (filePath: string) => {
     throw new TypeError(`Missing admission guard: ${filePath}`);
   }
   const beforeLoad = options.beforeLoad;
-  if (typeof beforeLoad !== "function") {
+  if (!isRouteHook(beforeLoad)) {
     throw new TypeError(`Missing admission guard: ${filePath}`);
   }
   return {

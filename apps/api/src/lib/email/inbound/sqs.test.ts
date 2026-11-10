@@ -178,10 +178,16 @@ describe("queue message envelope", () => {
           if (parsed.isErr()) {
             return;
           }
-          const envelope = JSON.parse(body);
+          const envelope = JSON.parse(body) as {
+            Type: string;
+            TopicArn: string;
+            Message: string;
+          };
           expect(envelope.Type).toBe("Notification");
           expect(envelope.TopicArn).toBe(topicArn);
-          const kind = JSON.parse(envelope.Message).notificationType;
+          const kind = (
+            JSON.parse(envelope.Message) as { notificationType: unknown }
+          ).notificationType;
           expect(kind).toBe(
             parsed.value.type === "received"
               ? "Received"

@@ -239,7 +239,7 @@ const readTurn = async ({
 const appParts = (chunks: readonly PublicStreamChunk[]) =>
   chunks.flatMap((chunk) =>
     chunk.type === EventType.CUSTOM && chunk.name === "ui-resource"
-      ? [chunk.value]
+      ? [chunk.value as unknown]
       : [],
   );
 

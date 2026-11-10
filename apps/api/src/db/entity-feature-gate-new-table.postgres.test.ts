@@ -208,7 +208,7 @@ describe.skipIf(!runPostgresTests)(
           );
           expect(
             (
-              await client.unsafe(
+              await client.unsafe<{ gate: string }[]>(
                 `SELECT entity_feature_gate AS gate FROM public.${FIXTURE_TABLE} WHERE id = $1`,
                 [fixtureId],
               )
@@ -218,7 +218,7 @@ describe.skipIf(!runPostgresTests)(
           await client`UPDATE entities SET list_item_type = 'task' WHERE id = ${itemEntityId}`;
           expect(
             (
-              await client.unsafe(
+              await client.unsafe<{ gate: string }[]>(
                 `SELECT entity_feature_gate AS gate FROM public.${FIXTURE_TABLE} WHERE id = $1`,
                 [fixtureId],
               )
@@ -237,7 +237,7 @@ describe.skipIf(!runPostgresTests)(
                 set_config(${SETTING_WORKSPACE_IDS}, ${`{${workspaceId}}`}, true),
                 set_config(${SETTING_WORKSPACE_ACCESS_MODE}, ${WORKSPACE_ACCESS_MODE.explicit}, true),
                 set_config('app.enabled_features', ${JSON.stringify(features)}, true)`;
-              return await tx.unsafe(
+              return await tx.unsafe<{ id: string }[]>(
                 `SELECT id FROM public.${FIXTURE_TABLE} WHERE id = $1`,
                 [fixtureId],
               );
@@ -262,7 +262,7 @@ describe.skipIf(!runPostgresTests)(
             `ALTER TABLE public."${FIXTURE_TABLE}" ENABLE TRIGGER entity_feature_gate_write;`,
           ]);
           await applyStatements(client, repair);
-          const [state] = await client.unsafe(
+          const [state] = await client.unsafe<{ enabled: string }[]>(
             `SELECT tgenabled AS enabled FROM pg_trigger
               WHERE tgrelid = 'public.${FIXTURE_TABLE}'::regclass
                 AND tgname = 'entity_feature_gate_write'`,

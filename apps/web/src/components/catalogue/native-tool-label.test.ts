@@ -20,7 +20,9 @@ const otherLocales = readdirSync(LANGS_DIR)
   .filter((file) => file.endsWith(".json") && file !== "en.json")
   .map((file) => ({
     file,
-    messages: JSON.parse(readFileSync(path.join(LANGS_DIR, file), "utf-8")),
+    messages: JSON.parse(readFileSync(path.join(LANGS_DIR, file), "utf-8")) as {
+      catalogue: { toolDescriptions: Record<string, string | undefined> };
+    },
   }));
 
 const lastSegment = (key: string) => key.split(".").at(-1) ?? "";

@@ -1,4 +1,5 @@
 import { STSClient } from "@aws-sdk/client-sts";
+import type { FetchHttpHandler } from "@smithy/fetch-http-handler";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -31,7 +32,8 @@ type ProviderOptions = Parameters<
 >[0];
 type FetchExchange = NonNullable<ProviderOptions["fetchExchange"]>;
 type StsRequestHandler = STSClient["config"]["requestHandler"];
-type StsHttpRequest = Parameters<StsRequestHandler["handle"]>[0];
+// The STS config types its handler loosely; it receives an HttpRequest.
+type StsHttpRequest = Parameters<FetchHttpHandler["handle"]>[0];
 type StsHttpResponse = Awaited<
   ReturnType<StsRequestHandler["handle"]>
 >["response"];
@@ -149,7 +151,7 @@ const createHarness = ({
   ) => {
     stsClients += 1;
     const handler: StsRequestHandler = {
-      handle: async (request) => {
+      handle: async (request: StsHttpRequest) => {
         const body = requestBodyText(request.body);
         stsRequests.push({ region, request, body });
         const reply =
@@ -738,7 +740,7 @@ describe("managed OpenRouter credentials", () => {
       });
       expect(telemetry).not.toContain(JWT);
       expect(telemetry).not.toContain(ACCESS_TOKEN);
-      expect(lines.map((line) => JSON.parse(line))).toEqual(
+      expect(lines.map((line): unknown => JSON.parse(line))).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ OpenRouterTokenExchange: 1 }),
         ]),

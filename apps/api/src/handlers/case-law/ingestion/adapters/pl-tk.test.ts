@@ -1072,7 +1072,7 @@ describe("the fields a case page states", () => {
     const stated = plTkAdapter.sourceFields.listSourceFields({
       "case-page": page,
     });
-    if (!Array.isArray(stated)) {
+    if (stated instanceof Promise) {
       throw new TypeError("the inventory reads synchronously");
     }
     return stated.filter(

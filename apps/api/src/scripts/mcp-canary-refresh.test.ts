@@ -200,7 +200,10 @@ const createTransport = ({
         break;
       }
       case "/mcp": {
-        const rpc = JSON.parse(body);
+        const rpc = JSON.parse(body) as {
+          method: unknown;
+          params: { name: unknown };
+        };
         expect(headers.get("authorization")).toBe(
           `Bearer access-${String(rotation)}`,
         );

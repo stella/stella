@@ -869,7 +869,7 @@ if (!databaseUrl || !runPostgresTests) {
     new Proxy(tx, {
       get(target, key, receiver) {
         if (key !== "execute") {
-          return Reflect.get(target, key, receiver);
+          return Reflect.get(target, key, receiver) as unknown;
         }
         return async (query: SQLWrapper | string) => {
           const text = textOf(query);

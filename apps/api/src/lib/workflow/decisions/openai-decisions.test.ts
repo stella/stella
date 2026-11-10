@@ -149,7 +149,7 @@ describe("OpenAI Decisions boundary", () => {
           ),
         },
       }),
-    );
+    ) as { input: unknown; questions: unknown };
     expect(serialized.input).toBe(JSON.stringify(input));
     expect(serialized.questions).toEqual([
       {

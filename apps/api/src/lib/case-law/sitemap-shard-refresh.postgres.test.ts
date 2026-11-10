@@ -233,7 +233,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(
             await refused(
               role,
-              async (tx) =>
+              async (tx): Promise<unknown> =>
                 await tx`SELECT count(*) FROM case_law_sitemap_changes`,
             ),
           ).toMatch(/permission denied/u);
@@ -241,7 +241,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(
             await refused(
               role,
-              async (tx) =>
+              async (tx): Promise<unknown> =>
                 await tx`INSERT INTO case_law_sitemap_changes (country, year, month) VALUES (${COUNTRY}, '1905', '02')`,
             ),
           ).toMatch(/permission denied/u);
@@ -249,7 +249,8 @@ if (!databaseUrl || !runPostgresTests) {
           expect(
             await refused(
               role,
-              async (tx) => await tx`DELETE FROM case_law_sitemap_changes`,
+              async (tx): Promise<unknown> =>
+                await tx`DELETE FROM case_law_sitemap_changes`,
             ),
           ).toMatch(/permission denied/u);
         }
@@ -397,7 +398,7 @@ if (!databaseUrl || !runPostgresTests) {
                             }
                             return result;
                           }
-                        : Reflect.get(target, property, receiver),
+                        : (Reflect.get(target, property, receiver) as unknown),
                   }),
                 ),
             ),

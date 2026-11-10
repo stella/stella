@@ -17,7 +17,7 @@ describe("sitemap read failure responses", () => {
   });
 
   const loggedLines = (): unknown[] =>
-    stdout.mock.calls.map(([line]) => JSON.parse(String(line)));
+    stdout.mock.calls.map(([line]) => JSON.parse(String(line)) as unknown);
 
   test("a busy refusal answers 503 with Retry-After and logs one line", () => {
     const response = createSitemapReadFailureResponse(

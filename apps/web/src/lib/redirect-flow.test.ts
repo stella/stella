@@ -50,13 +50,19 @@ const queryClientFor = (account: Account) => {
 
 type RouteOptions = { beforeLoad?: unknown; validateSearch?: unknown };
 
+/** Narrows a route hook to a callable taking the router's context object. */
+const isRouteHook = (
+  value: unknown,
+): value is (args: Record<string, unknown>) => unknown =>
+  typeof value === "function";
+
 /** Runs a route's real `beforeLoad` and returns the redirect it throws, if any. */
 const runBeforeLoad = async (
   route: { options: RouteOptions },
   args: Record<string, unknown>,
 ) => {
   const beforeLoad = route.options.beforeLoad;
-  if (typeof beforeLoad !== "function") {
+  if (!isRouteHook(beforeLoad)) {
     throw new TypeError("route has no beforeLoad");
   }
   const outcome = await Promise.resolve()

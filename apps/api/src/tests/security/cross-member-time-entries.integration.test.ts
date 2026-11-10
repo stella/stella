@@ -296,8 +296,13 @@ type ConfirmCtx = Parameters<typeof confirmTimer.handler>[0];
 type AdminStopCtx = Parameters<typeof adminStopTimer.handler>[0];
 
 /** The failure status of a handler result, or null when it succeeded. */
-const statusOf = (result: unknown): number | null =>
-  result instanceof HttpStatusResponse ? result.code : null;
+const statusOf = (result: unknown): number | null => {
+  if (!(result instanceof HttpStatusResponse)) {
+    return null;
+  }
+  const status: number = result.code;
+  return status;
+};
 
 // ── Per-entry operations ───────────────────────────────
 

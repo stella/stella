@@ -48,7 +48,8 @@ const withStore = async (
   await client.connect();
   try {
     await run({
-      send: async (command, args) => await client.send(command, args),
+      send: async (command, args): Promise<unknown> =>
+        await client.send(command, args),
     });
   } finally {
     client.close();
@@ -167,7 +168,10 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             const identity = caller();
             let releaseAttempts = 0;
             const redis = {
-              send: async (command: string, args: string[]) => {
+              send: async (
+                command: string,
+                args: string[],
+              ): Promise<unknown> => {
                 if (args.at(0) === RELEASE_SCRIPT) {
                   releaseAttempts += 1;
                 }
@@ -256,7 +260,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             caller: identity,
             limit: 1,
             redis: {
-              send: async (command, args) => {
+              send: async (command, args): Promise<unknown> => {
                 if (args.at(0) === RELEASE_SCRIPT) {
                   releases += 1;
                 }
@@ -399,7 +403,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         let requestSettledValue = false;
         let bodySettledValue = false;
         const redis = {
-          send: async (command: string, args: string[]) => {
+          send: async (command: string, args: string[]): Promise<unknown> => {
             const script = args.at(0);
             if (script === ACQUIRE_SCRIPT) {
               const key = args.at(2);

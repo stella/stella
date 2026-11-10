@@ -103,6 +103,13 @@ const settings = {
 const clients: InstanceType<typeof QueryClient>[] = [];
 const spies: { mockRestore: () => void }[] = [];
 const requests: Request[] = [];
+/** The item-source create body; the assertions read these fields as-is. */
+type SourceRequestBody = {
+  sourceEntityId: unknown;
+  sourceEntityVersionId: unknown;
+  locator: unknown;
+  quote: unknown;
+};
 type MountActionOptions = {
   locale?: string;
   messages?: typeof english;
@@ -240,7 +247,7 @@ const answer = (status = 200) => {
       request.method === "POST" &&
       path === `/v1/lists/${workspaceId}/item-sources`
     ) {
-      const body = await request.clone().json();
+      const body = (await request.clone().json()) as SourceRequestBody;
       if (status !== 200) {
         return Response.json({ message: "Not found" }, { status });
       }
@@ -444,9 +451,9 @@ test("correcting a page validation error allows saving without reopening the for
   });
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
-  const body = await requests
+  const body = (await requests
     .find((request) => request.method === "POST")
-    ?.json();
+    ?.json()) as SourceRequestBody;
   expect(body.locator).toEqual({ type: "pdf-page", pageNumber: 1 });
 });
 test("choosing DOCX replaces PDF, clears its page, and accepts a quote at the limit", async () => {
@@ -468,9 +475,9 @@ test("choosing DOCX replaces PDF, clears its page, and accepts a quote at the li
   });
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
-  const body = await requests
+  const body = (await requests
     .find((request) => request.method === "POST")
-    ?.json();
+    ?.json()) as SourceRequestBody;
   expect(body.locator).toEqual({ type: "document" });
   expect(body.sourceEntityId).toBe(files.at(1)?.entityId);
   expect(body.quote).toHaveLength(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH);
@@ -482,9 +489,9 @@ test("an optional page and quote can both be omitted", async () => {
   fireEvent.click(mounted.view.getByText("Signed agreement"));
   await save(mounted);
   await waitFor(() => expect(mounted.created).toHaveLength(1));
-  const body = await requests
+  const body = (await requests
     .find((request) => request.method === "POST")
-    ?.json();
+    ?.json()) as SourceRequestBody;
   expect(body.locator).toEqual({ type: "document" });
   expect(body.quote).toBeNull();
 });

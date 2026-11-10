@@ -610,7 +610,7 @@ test("retains the explicitly requested query across browser sign-in and native f
     .click();
   await page.evaluate(() => {
     window.dispatchEvent(new Event("blur"));
-    const complete: unknown = Reflect.get(
+    const complete: (() => void) | undefined = Reflect.get(
       window,
       "__STELLA_COMPLETE_SIGN_IN__",
     );
@@ -644,7 +644,7 @@ test("refreshes the connection when the bridge stores a browser handoff", async 
     })
     .click();
   await page.evaluate(() => {
-    const complete: unknown = Reflect.get(
+    const complete: (() => void) | undefined = Reflect.get(
       window,
       "__STELLA_COMPLETE_SIGN_IN__",
     );
@@ -887,7 +887,7 @@ test("ignores an older response after a newer search completes", async ({
     page.getByRole("heading", { name: "Latest Company" }),
   ).toBeVisible();
   await page.evaluate(() => {
-    const resolve: unknown = Reflect.get(
+    const resolve: (() => void) | undefined = Reflect.get(
       window,
       "__STELLA_RESOLVE_FIRST_SEARCH__",
     );
@@ -1590,7 +1590,7 @@ for (const language of ["en", "ar"] as const) {
         if (typeof resolve !== "function") {
           throw new TypeError("Missing state resolver");
         }
-        resolve();
+        (resolve as () => void)();
       });
       await expect(
         welcome.getByRole("button", {

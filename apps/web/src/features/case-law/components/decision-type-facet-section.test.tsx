@@ -24,7 +24,9 @@ const LOCALES = readdirSync(LANGS_DIR)
 
 const catalog = async (locale: string): Promise<Record<string, unknown>> => {
   const loaded: unknown = (
-    await import(new URL(`${locale}.json`, LANGS_DIR).href)
+    (await import(new URL(`${locale}.json`, LANGS_DIR).href)) as {
+      default: unknown;
+    }
   ).default;
   return isRecord(loaded) ? loaded : {};
 };

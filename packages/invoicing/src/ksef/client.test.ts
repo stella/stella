@@ -138,6 +138,23 @@ const response = (
 const TOKEN_KEY_ID = "QIoAK/Yc3s27Z4t3SZY4Mhp8JNLH7Vl4N3lNlJAEig8=";
 const SESSION_KEY_ID = "35k6IVMTxUPZKQdg4Fbx36T5/v3aoJK5hIY7sS7mt3U=";
 
+/** The request fields the fake KSeF server reads; each request carries its own subset. */
+type FakeRequestJson = {
+  encryptedToken: string;
+  publicKeyId: unknown;
+  formCode: unknown;
+  encryption: {
+    encryptedSymmetricKey: string;
+    publicKeyId: unknown;
+    initializationVector: string;
+  };
+  encryptedInvoiceContent: string;
+  invoiceSize: unknown;
+  invoiceHash: unknown;
+  encryptedInvoiceSize: unknown;
+  encryptedInvoiceHash: unknown;
+};
+
 const createFake = () => {
   let aesKey: CryptoKey | undefined;
   let iv: Uint8Array | undefined;
@@ -154,7 +171,9 @@ const createFake = () => {
         authenticationToken: { token: "temporary", validUntil: validTo },
       });
     }
-    const json = body === undefined ? {} : JSON.parse(decoder.decode(body));
+    const json = (
+      body === undefined ? {} : JSON.parse(decoder.decode(body))
+    ) as FakeRequestJson;
     if (requestPath === "/security/public-key-certificates") {
       return response(200, [
         {

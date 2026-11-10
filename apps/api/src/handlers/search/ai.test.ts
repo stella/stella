@@ -468,7 +468,8 @@ const extractDataWorkspaceIds = (
     "dataWorkspaceIds" in value &&
     Array.isArray(value.dataWorkspaceIds)
   ) {
-    return value.dataWorkspaceIds;
+    const ids: SafeId<"workspace">[] = value.dataWorkspaceIds;
+    return ids;
   }
   return [];
 };

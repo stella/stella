@@ -57,29 +57,32 @@ describe.skipIf(!enabled)(
       await withFreshIndicatorDatabase(databaseUrl, async ({ client }) => {
         await client`CREATE TABLE public.fixture (id integer, payload text)`;
         await client.unsafe(POSTGRES_TEST_MAINTENANCE_SQL);
-        const configured =
-          await client`SELECT reloptions FROM pg_class WHERE oid = 'public.fixture'::regclass`;
-        expect(configured.at(0)?.["reloptions"]).toContain(
+        const configured = await client<
+          { reloptions: string[] | null }[]
+        >`SELECT reloptions FROM pg_class WHERE oid = 'public.fixture'::regclass`;
+        expect(configured.at(0)?.reloptions).toContain(
           "autovacuum_enabled=false",
         );
-        const toast =
-          await client`SELECT t.reloptions FROM pg_class c JOIN pg_class t ON t.oid = c.reltoastrelid WHERE c.oid = 'public.fixture'::regclass`;
-        expect(toast.at(0)?.["reloptions"]).toContain(
-          "autovacuum_enabled=false",
-        );
-        expect((await client`SHOW autovacuum`).at(0)?.["autovacuum"]).toBe(
-          "on",
-        );
+        const toast = await client<
+          { reloptions: string[] | null }[]
+        >`SELECT t.reloptions FROM pg_class c JOIN pg_class t ON t.oid = c.reltoastrelid WHERE c.oid = 'public.fixture'::regclass`;
+        expect(toast.at(0)?.reloptions).toContain("autovacuum_enabled=false");
+        expect(
+          (await client<{ autovacuum: string }[]>`SHOW autovacuum`).at(0)
+            ?.autovacuum,
+        ).toBe("on");
         await withFreshIndicatorDatabase(
           databaseUrl,
           async ({ client: fresh }) => {
             await fresh`CREATE TABLE public.fixture (id integer)`;
-            const defaults =
-              await fresh`SELECT reloptions FROM pg_class WHERE oid = 'public.fixture'::regclass`;
-            expect(defaults.at(0)?.["reloptions"]).toBeNull();
-            expect((await fresh`SHOW autovacuum`).at(0)?.["autovacuum"]).toBe(
-              "on",
-            );
+            const defaults = await fresh<
+              { reloptions: string[] | null }[]
+            >`SELECT reloptions FROM pg_class WHERE oid = 'public.fixture'::regclass`;
+            expect(defaults.at(0)?.reloptions).toBeNull();
+            expect(
+              (await fresh<{ autovacuum: string }[]>`SHOW autovacuum`).at(0)
+                ?.autovacuum,
+            ).toBe("on");
           },
         );
       });
@@ -91,9 +94,9 @@ describe.skipIf(!enabled)(
       }
       await withFreshIndicatorDatabase(databaseUrl, async ({ client }) => {
         await client`CREATE TABLE public.fixture (id integer)`;
-        const database = (await client`SELECT current_database() AS name`).at(
-          0,
-        )?.["name"];
+        const database = (
+          await client<{ name: string }[]>`SELECT current_database() AS name`
+        ).at(0)?.name;
         if (typeof database !== "string") {
           panic("Expected the current PostgreSQL database name");
         }
@@ -119,9 +122,9 @@ describe.skipIf(!enabled)(
           }
           const maintenancePid = maintenanceSession.pid;
           const holder = client.begin(async (tx) => {
-            const pid = (await tx`SELECT pg_backend_pid() AS pid`).at(0)?.[
-              "pid"
-            ];
+            const pid = (
+              await tx<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid;
             if (typeof pid !== "number") {
               panic("Expected the lock holder session pid");
             }
@@ -150,9 +153,10 @@ describe.skipIf(!enabled)(
             if (configuration.isErr()) {
               throw configuration.error;
             }
-            const configured =
-              await client`SELECT reloptions FROM pg_class WHERE oid = 'public.fixture'::regclass`;
-            expect(configured.at(0)?.["reloptions"]).toContain(
+            const configured = await client<
+              { reloptions: string[] | null }[]
+            >`SELECT reloptions FROM pg_class WHERE oid = 'public.fixture'::regclass`;
+            expect(configured.at(0)?.reloptions).toContain(
               "autovacuum_enabled=false",
             );
           } finally {
@@ -171,9 +175,9 @@ describe.skipIf(!enabled)(
       }
       await withFreshIndicatorDatabase(databaseUrl, async ({ client }) => {
         await client`CREATE TABLE public.fixture (id integer)`;
-        const database = (await client`SELECT current_database() AS name`).at(
-          0,
-        )?.["name"];
+        const database = (
+          await client<{ name: string }[]>`SELECT current_database() AS name`
+        ).at(0)?.name;
         if (typeof database !== "string") {
           panic("Expected the current PostgreSQL database name");
         }
@@ -193,12 +197,12 @@ describe.skipIf(!enabled)(
           const released = new Promise<void>((resolve) => {
             release = resolve;
           });
-          let holderPid = 0;
-          let waiterPid = 0;
+          let holderPid: number | undefined = 0;
+          let waiterPid: number | undefined = 0;
           const holder = client.begin(async (tx) => {
-            holderPid = (await tx`SELECT pg_backend_pid() AS pid`).at(0)?.[
-              "pid"
-            ];
+            holderPid = (
+              await tx<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid;
             await tx`LOCK TABLE public.fixture IN SHARE UPDATE EXCLUSIVE MODE`;
             ready();
             await released;
@@ -206,9 +210,9 @@ describe.skipIf(!enabled)(
           try {
             await Promise.race([acquired, holder]);
             const wait = client.begin(async (tx) => {
-              waiterPid = (await tx`SELECT pg_backend_pid() AS pid`).at(0)?.[
-                "pid"
-              ];
+              waiterPid = (
+                await tx<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`
+              ).at(0)?.pid;
               await tx`SET LOCAL lock_timeout = '500ms'`;
               await tx`LOCK TABLE public.fixture IN ACCESS EXCLUSIVE MODE`;
             });
@@ -221,8 +225,9 @@ describe.skipIf(!enabled)(
             // The final sample can be taken after the wait timed out, when the
             // waiter is still listed but no longer blocked; one sample taken
             // during the wait must show the waiter and its lock owner.
-            const samples: unknown[] = JSON.parse(report).samples.map(
-              (sample: string): unknown => JSON.parse(sample),
+            const parsedReport: { samples: string[] } = JSON.parse(report);
+            const samples: unknown[] = parsedReport.samples.map(
+              (sample) => JSON.parse(sample) as unknown,
             );
             expect(
               samples.some(

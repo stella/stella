@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import type { TransactionSQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { getColumns, getTableName } from "drizzle-orm";
+import type { Column } from "drizzle-orm";
 import fc from "fast-check";
 
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
@@ -92,7 +93,7 @@ const guards = [
   const table =
     tables.find((candidate) => getTableName(candidate) === tableName) ??
     panic(`unknown guard table ${tableName}`);
-  const columns = Object.values(getColumns(table));
+  const columns: Column[] = Object.values(getColumns(table));
   const names = (match[1] ?? panic("trigger has no columns")).split(", ");
   return {
     tableName,
@@ -279,11 +280,13 @@ if (!runPostgresTests || !databaseUrl) {
         tables.map(getTableName).toSorted(),
       );
       await withFixture(async (client) => {
-        const versions =
-          await client`SELECT current_setting('server_version_num')::integer AS version`;
+        const versions = await client<
+          { version: number }[]
+        >`SELECT current_setting('server_version_num')::integer AS version`;
         expect(versions.at(0)?.version).toBeGreaterThanOrEqual(180_000);
-        const triggers =
-          await client`SELECT count(*)::integer AS count FROM pg_trigger WHERE tgname LIKE '%_plain_text_guard' AND tgrelid IN (SELECT oid FROM pg_class WHERE relnamespace = current_schema()::regnamespace)`;
+        const triggers = await client<
+          { count: number }[]
+        >`SELECT count(*)::integer AS count FROM pg_trigger WHERE tgname LIKE '%_plain_text_guard' AND tgrelid IN (SELECT oid FROM pg_class WHERE relnamespace = current_schema()::regnamespace)`;
         expect(triggers.at(0)?.count).toBe(guards.length);
         for (const { tableName } of guards) {
           const rows = await client.unsafe(
@@ -357,7 +360,7 @@ if (!runPostgresTests || !databaseUrl) {
                   `UPDATE "${tableName}" SET "${name}" = $1 WHERE fixture_id = 1`,
                   [value],
                 );
-                const rows = await client.unsafe(
+                const rows = await client.unsafe<{ value: string }[]>(
                   `SELECT "${name}" AS value FROM "${tableName}" WHERE fixture_id = 1`,
                 );
                 expect(rows.at(0)?.value).toBe(value);
@@ -401,7 +404,7 @@ if (!runPostgresTests || !databaseUrl) {
               ],
             );
           }
-          const rows = await client.unsafe(
+          const rows = await client.unsafe<{ unrelated: number }[]>(
             `SELECT unrelated FROM "${tableName}" WHERE fixture_id = 1`,
           );
           expect(rows.at(0)?.unrelated).toBe(9);
@@ -483,7 +486,7 @@ if (!runPostgresTests || !databaseUrl) {
                   `INSERT INTO "${tableName}" (fixture_id, source_id, metadata) VALUES (2, $1::uuid, $2::text::jsonb)`,
                   [sourceId, JSON.stringify(projected)],
                 );
-                const rows = await client.unsafe(
+                const rows = await client.unsafe<{ metadata: unknown }[]>(
                   `SELECT metadata FROM "${tableName}" WHERE fixture_id = 2`,
                 );
                 expect(rows.at(0)?.metadata).toEqual(metadata);
@@ -556,7 +559,7 @@ if (!runPostgresTests || !databaseUrl) {
             `UPDATE "${tableName}" SET "${column.name}" = $1 WHERE fixture_id = 2`,
             [value],
           );
-          const rows = await client.unsafe(
+          const rows = await client.unsafe<{ value: string }[]>(
             `SELECT "${column.name}" AS value FROM "${tableName}" WHERE fixture_id = 2`,
           );
           expect(rows.at(0)?.value).toBe(value);
@@ -572,8 +575,9 @@ if (!runPostgresTests || !databaseUrl) {
       async () => {
         await withFixture(async (client) => {
           const assertParity = async (values: string[]) => {
-            const rows =
-              await client`SELECT value, plain_text_has_markup(value) AS guarded, value ~ ${TAG_LIKE_MARKUP_SOURCE} AS contract FROM jsonb_array_elements_text(${JSON.stringify(values)}::text::jsonb) AS input(value)`;
+            const rows = await client<
+              { value: string; guarded: boolean; contract: boolean }[]
+            >`SELECT value, plain_text_has_markup(value) AS guarded, value ~ ${TAG_LIKE_MARKUP_SOURCE} AS contract FROM jsonb_array_elements_text(${JSON.stringify(values)}::text::jsonb) AS input(value)`;
             expect(rows).toHaveLength(values.length);
             for (const row of rows) {
               expect(row.guarded).toBe(containsTagLikeMarkup(row.value));

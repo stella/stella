@@ -37,7 +37,8 @@ const withStore = async (
   await client.connect();
   try {
     await run({
-      send: async (command, args) => await client.send(command, args),
+      send: async (command, args): Promise<unknown> =>
+        await client.send(command, args),
     });
   } finally {
     client.close();
@@ -85,7 +86,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           caller: identity,
           limit: 1,
           redis: {
-            send: async (command, args) => {
+            send: async (command, args): Promise<unknown> => {
               const script = args.at(0);
               if (script === ACQUIRE_SCRIPT) {
                 const key = args.at(2);
@@ -355,7 +356,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         let leaseKey: string | undefined;
         let leaseId: string | undefined;
         const redis = {
-          send: async (command: string, args: string[]) => {
+          send: async (command: string, args: string[]): Promise<unknown> => {
             const script = args.at(0);
             if (script === undefined) {
               panic("Expected an admission script");
@@ -449,7 +450,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           caller: identity,
           limit: 1,
           redis: {
-            send: async (command, args) => {
+            send: async (command, args): Promise<unknown> => {
               if (args.at(0) === RENEW_SCRIPT) {
                 const key = args.at(2);
                 if (key === undefined) {
@@ -516,7 +517,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           limit: 1,
           leaseMs: 500,
           redis: {
-            send: async (command, args) => {
+            send: async (command, args): Promise<unknown> => {
               if (args.at(0) === ACQUIRE_SCRIPT) {
                 leaseKey = args.at(2);
                 leaseId = args.at(7);

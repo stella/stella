@@ -21,7 +21,9 @@ describe.skipIf(!enabled)("dedicated SQL counting with PostgreSQL", () => {
         async ({ db, connection }) => {
           // Backend identity and the authenticated-login posture query both ran.
           expect(counter.count).toBe(2);
-          const raw = connection.unsafe("SELECT 17::int AS value");
+          const raw = connection.unsafe<{ value: number }[]>(
+            "SELECT 17::int AS value",
+          );
           expect(counter.count).toBe(2);
           expect(raw.execute()).toBe(raw);
           expect(await raw).toEqual([{ value: 17 }]);

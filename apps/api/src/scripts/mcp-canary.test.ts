@@ -2394,7 +2394,7 @@ describe("staging credential journeys", () => {
         });
       }
       if (url.pathname === "/mcp") {
-        const rpc = JSON.parse(body);
+        const rpc = JSON.parse(body) as { method: unknown };
         switch (rpc.method) {
           case "initialize":
             return Response.json({
@@ -2447,7 +2447,13 @@ describe("staging credential journeys", () => {
       params: { name: "case_law_coverage", arguments: {} },
     });
     expect(
-      Object.keys(JSON.parse(coverage?.body ?? "{}").params.arguments),
+      Object.keys(
+        (
+          JSON.parse(coverage?.body ?? "{}") as {
+            params: { arguments: Record<string, unknown> };
+          }
+        ).params.arguments,
+      ),
     ).toEqual([]);
     expect(
       results

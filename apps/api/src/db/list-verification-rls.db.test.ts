@@ -221,13 +221,13 @@ describe.skipIf(!enabled)("list verification row security", () => {
               .delete(legalListVerificationRuns)
               .where(eq(legalListVerificationRuns.id, failureRun.id));
           }
-          expect(failureLines.map((line) => JSON.parse(line))).toEqual(
+          expect(failureLines.map((line): unknown => JSON.parse(line))).toEqual(
             [
               "extraction_failed",
               "grading_failed",
               "no_text",
               "access_revoked",
-            ].map((errorCode) =>
+            ].map((errorCode): unknown =>
               expect.objectContaining({
                 event: `list_verification_run.${errorCode}`,
                 errorCode,

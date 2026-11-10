@@ -1799,9 +1799,11 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
           description: "every claimant waits on the row lock",
           timeoutMs: 3000,
           read: async () =>
-            (await locker.unsafe(`SELECT ${expression} AS blocked`)).at(0)?.[
-              "blocked"
-            ] === true,
+            (
+              await locker.unsafe<{ blocked: unknown }[]>(
+                `SELECT ${expression} AS blocked`,
+              )
+            ).at(0)?.["blocked"] === true,
         });
         expect(counts).toBe(0);
       } finally {

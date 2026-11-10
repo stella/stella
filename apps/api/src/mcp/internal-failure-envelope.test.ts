@@ -417,7 +417,8 @@ describe("internalFailureResult preserves expected handler errors", () => {
         mapBoeError(cause),
         "mcp.result.failure",
       );
-      expect(JSON.parse(envelopeText(result)).error).toMatchObject({
+      const envelope: { error: unknown } = JSON.parse(envelopeText(result));
+      expect(envelope.error).toMatchObject({
         code: "upstream_unavailable",
         retryable: true,
       });
@@ -429,7 +430,10 @@ describe("internalFailureResult preserves expected handler errors", () => {
       ),
       "mcp.result.failure",
     );
-    expect(JSON.parse(envelopeText(rejected)).error).toMatchObject({
+    const rejectedEnvelope: { error: unknown } = JSON.parse(
+      envelopeText(rejected),
+    );
+    expect(rejectedEnvelope.error).toMatchObject({
       code: "validation_error",
       message: expect.stringContaining("Check the identifier and filters"),
     });

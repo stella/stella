@@ -116,7 +116,7 @@ describe("Docker container isolation", () => {
   test("creates containers with bounded compute and writable filesystems", async () => {
     let requestBody: unknown;
     globalThis.fetch = Object.assign(
-      mock(async (_url, init) => {
+      mock(async (_url, init?: RequestInit) => {
         requestBody = init?.body ? JSON.parse(String(init.body)) : undefined;
         return new Response(JSON.stringify({ Id: "container-1" }), {
           headers: { "Content-Type": "application/json" },

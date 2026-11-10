@@ -120,8 +120,13 @@ const call = async (
 };
 
 /** A refusal arrives as a status response carrying its code. */
-const statusOf = (result: unknown): number | null =>
-  result instanceof HttpStatusResponse ? result.code : null;
+const statusOf = (result: unknown): number | null => {
+  if (!(result instanceof HttpStatusResponse)) {
+    return null;
+  }
+  const response: HttpStatusResponse = result;
+  return response.code;
+};
 
 /** The yes/no column the product used to have, as the property model spells it. */
 const YES_NO_OPTIONS = [

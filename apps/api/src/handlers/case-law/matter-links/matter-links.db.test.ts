@@ -468,7 +468,7 @@ describe("pinning a selection into a matter", () => {
       outcome !== null &&
       "rejected" in outcome &&
       Array.isArray(outcome.rejected)
-        ? outcome.rejected
+        ? (outcome.rejected as { reason?: unknown }[])
         : [],
     );
     expect(refused).toHaveLength(2);

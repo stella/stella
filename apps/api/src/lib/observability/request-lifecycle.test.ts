@@ -131,7 +131,8 @@ const databaseFailover = createSafePublicHandler(config, async function* () {
   );
 });
 
-const driftedBody = (): { ok: string } => JSON.parse('{"unexpected":true}');
+const driftedBody = (): { ok: string } =>
+  JSON.parse('{"unexpected":true}') as { ok: string };
 
 /**
  * The request scope and receipt id, opened outside the completion stage as
@@ -393,7 +394,7 @@ const metricRecords = (
   metric: string,
 ): Record<string, unknown>[] =>
   lines
-    .map((line): Record<string, unknown> => JSON.parse(line))
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
     .filter((record) => metric in record);
 
 describe("the request lifecycle", () => {

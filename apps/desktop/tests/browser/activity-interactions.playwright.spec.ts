@@ -129,7 +129,7 @@ const releaseDraft = async (page: Page) => {
     }
     for (const release of held.splice(0)) {
       if (typeof release === "function") {
-        release();
+        (release as () => void)();
       }
     }
   }, RELEASE_DRAFT);
@@ -960,8 +960,8 @@ test("unresolved draft creation offers no deletion and retains its batch key", a
     if (typeof changed !== "function" || typeof reject !== "function") {
       throw new TypeError("Native recovery controls are missing");
     }
-    changed();
-    reject();
+    (changed as () => void)();
+    (reject as () => void)();
   });
   const retry = page.getByRole("button", {
     name: enMessages.activity.pendingRetry,
@@ -1135,7 +1135,7 @@ test("stored pending drafts stay immutable after a rejected retry until cancella
     if (typeof update !== "function") {
       throw new TypeError("Snapshot control is missing");
     }
-    update(next);
+    (update as (snapshot: typeof next) => void)(next);
   }, SNAPSHOT);
   await expect(retry).toHaveCount(0);
   await expect(accept).toBeEnabled();
@@ -1707,7 +1707,7 @@ test("an open erase dialog disappears safely when saved history becomes incompat
       if (typeof update !== "function") {
         throw new TypeError("Snapshot control is missing");
       }
-      update(next);
+      (update as (snapshot: typeof next) => void)(next);
     },
     { ...SNAPSHOT, deletionStatus: "incompatible" },
   );
