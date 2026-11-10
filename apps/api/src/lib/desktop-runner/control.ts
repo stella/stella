@@ -24,7 +24,6 @@ import { pairAppCall, recordAppCall } from "@/api/lib/desktop-runner/app-calls";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
 import {
   type FolderRestoreView,
-  readRestoredTurns,
   readTurnFolderRestore,
   type RequestedFolderRestore,
   requestFolderRestore,
@@ -720,16 +719,6 @@ export const createDesktopRunnerControl = ({
       await Result.tryPromise({
         try: async () =>
           await readTurnFolderRestore(db, { ...options, now: deps.now() }),
-        catch: toDatabaseError,
-      }),
-    /** The answers of the owner's turns in the thread whose files were undone. */
-    readRestoredTurns: async (
-      options: Parameters<typeof readRestoredTurns>[1],
-    ): Promise<
-      Result<Awaited<ReturnType<typeof readRestoredTurns>>, DatabaseError>
-    > =>
-      await Result.tryPromise({
-        try: async () => await readRestoredTurns(db, options),
         catch: toDatabaseError,
       }),
     /** Record how far a chat turn read the run; it only moves forward. */

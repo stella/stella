@@ -127,9 +127,15 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
+const NEWEST_TURN = {
+  id: toSafeId<"chatTurn">(TURN_ID),
+  assistantMessageId: toSafeId<"chatMessage">(answerMessage.id),
+};
+
 type TurnPage = {
   transcript?: ChatUIMessage[];
-  undoneTurns?: { assistantMessageId: string }[];
+  /** The page's newest local turn; `null` once the chat runs in the cloud. */
+  newestLocalTurn?: typeof NEWEST_TURN | null;
   isGenerating?: boolean;
 };
 
@@ -148,7 +154,11 @@ const renderTurn = (page: TurnPage = {}) => {
 
 const turnPage = (
   queryClient: InstanceType<typeof QueryClient>,
-  { transcript = [answerMessage], undoneTurns, isGenerating = false }: TurnPage,
+  {
+    transcript = [answerMessage],
+    newestLocalTurn = NEWEST_TURN,
+    isGenerating = false,
+  }: TurnPage,
 ) => (
   <ChatThreadTestRouter>
     <QueryClientProvider client={queryClient}>
@@ -178,16 +188,7 @@ const turnPage = (
                     approvalPendingMessageId={null}
                     isGenerating={isGenerating}
                     messages={transcript}
-                    newestLocalTurn={{
-                      id: toSafeId<"chatTurn">(TURN_ID),
-                      assistantMessageId: toSafeId<"chatMessage">(
-                        answerMessage.id,
-                      ),
-                    }}
-                    undoneTurns={undoneTurns?.map(({ assistantMessageId }) => ({
-                      assistantMessageId:
-                        toSafeId<"chatMessage">(assistantMessageId),
-                    }))}
+                    newestLocalTurn={newestLocalTurn}
                     onAskUserSubmit={() => {}}
                     onCreateDocumentResolve={() => {}}
                     onOpenCreatedDocument={() => {}}
@@ -339,21 +340,23 @@ test("an undo the computer refused shows the computer's reason and may be asked 
   expect(menuItems()).toContain(messages.chat.localFilesUndo.action);
 });
 
+/** An older answer the server marked: its turn's file changes were undone. */
+const undoneAnswer = {
+  id: "00000000-0000-4000-8000-000000000010",
+  role: "assistant",
+  parts: [{ type: "text", content: "I rewrote drafts/lease.md." }],
+  metadata: { localFilesUndone: { at: "2026-01-01T00:10:00.000Z" } },
+} satisfies ChatUIMessage;
+const laterQuestion = {
+  id: "00000000-0000-4000-8000-000000000011",
+  role: "user",
+  parts: [{ type: "text", content: "Now draft the notice." }],
+} satisfies ChatUIMessage;
+
 test("an undone turn keeps its marker after a newer turn, also when the page loads again", async () => {
-  const undoneAnswer = {
-    id: "00000000-0000-4000-8000-000000000010",
-    role: "assistant",
-    parts: [{ type: "text", content: "I rewrote drafts/lease.md." }],
-  } satisfies ChatUIMessage;
-  const question = {
-    id: "00000000-0000-4000-8000-000000000011",
-    role: "user",
-    parts: [{ type: "text", content: "Now draft the notice." }],
-  } satisfies ChatUIMessage;
   // The newer turn can be undone in its turn; the older one was undone.
   const { view } = renderTurn({
-    transcript: [undoneAnswer, question, answerMessage],
-    undoneTurns: [{ assistantMessageId: undoneAnswer.id }],
+    transcript: [undoneAnswer, laterQuestion, answerMessage],
   });
   await waitFor(() => {
     expect(row(view, undoneAnswer.id).textContent).toContain(
@@ -365,6 +368,21 @@ test("an undone turn keeps its marker after a newer turn, also when the page loa
   );
   await openActions(view);
   expect(menuItems()).toContain(messages.chat.localFilesUndo.action);
+});
+
+test("an undone turn keeps its marker after the chat moves to the cloud", async () => {
+  const { view } = renderTurn({
+    transcript: [undoneAnswer, laterQuestion, answerMessage],
+    newestLocalTurn: null,
+  });
+  await waitFor(() => {
+    expect(row(view, undoneAnswer.id).textContent).toContain(
+      messages.chat.localFilesUndo.restored,
+    );
+  });
+  // A cloud chat offers no new undo.
+  await openActions(view);
+  expect(menuItems()).not.toContain(messages.chat.localFilesUndo.action);
 });
 
 test("an accepted undo stays followed when the next read fails", async () => {

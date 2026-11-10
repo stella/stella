@@ -44,7 +44,6 @@ import {
 } from "@/api/lib/chat/run-target";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
@@ -411,7 +410,6 @@ const getMessages = createSafeRootHandler(
           activeSkill: null,
           activeTurnId: null,
           newestLocalTurn: null,
-          undoneTurns: [],
           attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
           forkProvenance: { type: "none" } as const,
           messages: [],
@@ -474,19 +472,6 @@ const getMessages = createSafeRootHandler(
       revisionNoteTokens,
     } = reads;
 
-    // The turns whose file changes on the member's computer were undone keep
-    // their marker after newer turns, and after the chat moves to the cloud:
-    // the restores are read whatever the chat runs on now.
-    const undoneTurns = yield* Result.await(
-      getDesktopRunnerControl().control.readRestoredTurns({
-        owner: {
-          userId: user.id,
-          organizationId: session.activeOrganizationId,
-        },
-        threadId,
-      }),
-    );
-
     // Estimated for every thread, empty ones included: with no messages and no
     // summary the estimate is just the cache-stable floor, so the meter is
     // honest from the first render instead of reading 0% until the first send.
@@ -532,8 +517,6 @@ const getMessages = createSafeRootHandler(
        * cloud thread.
        */
       newestLocalTurn: reads.newestLocalTurn,
-      /** The answers whose turn's file changes were undone, newest first. */
-      undoneTurns,
       attachedFiles,
       forkProvenance: resolveForkProvenance({
         forkedFromMessageId: thread.forkedFromMessageId,

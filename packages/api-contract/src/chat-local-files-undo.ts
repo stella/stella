@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "./api-date";
 import {
   DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS,
   type DesktopRunnerFolderRestoreRefusal,
@@ -92,4 +93,20 @@ export const chatLocalFilesUndoAnswerSchema = v.variant("status", [
 ]);
 export type ChatLocalFilesUndoAnswer = v.InferOutput<
   typeof chatLocalFilesUndoAnswerSchema
+>;
+
+/**
+ * The marker an answer carries once its turn's file changes were undone, as
+ * message metadata: written by the server in the same transaction that
+ * records the computer's answer, so it stays with the answer after newer
+ * turns, a reload or a move to the cloud. A client's metadata never sets it.
+ */
+export const CHAT_LOCAL_FILES_UNDONE_METADATA_KEY = "localFilesUndone";
+
+export const chatLocalFilesUndoneSchema = v.strictObject({
+  /** When the computer reported the files restored. */
+  at: apiDateTimeSchema,
+});
+export type ChatLocalFilesUndone = v.InferOutput<
+  typeof chatLocalFilesUndoneSchema
 >;

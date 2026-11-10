@@ -82,7 +82,6 @@ const savedThread = {
   activeSkill: builder,
   activeTurnId: null,
   newestLocalTurn: null,
-  undoneTurns: [],
   attachedFiles: { fileCount: 0, files: [] },
   context: {
     estimatedTokens: 0,

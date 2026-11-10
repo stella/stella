@@ -19,6 +19,7 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { settleFolderRestore } from "@/api/lib/desktop-runner/folder-restores";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -234,8 +235,12 @@ const readResponse = async (fixture: Fixture, messages: Messages) =>
     }),
   );
 
-/** The thread's only turn, its file changes undone on the member's computer. */
-const seedRestoredUndo = async (fixture: Fixture, messages: Messages) => {
+/**
+ * The thread's only turn, its file changes undone on the member's computer:
+ * a sent restore that the computer reports restored, through the same settle
+ * the gateway runs.
+ */
+const settleRestoredUndo = async (fixture: Fixture, messages: Messages) => {
   const [turn] = await fixture.db
     .select({ id: chatTurns.id })
     .from(chatTurns)
@@ -275,19 +280,34 @@ const seedRestoredUndo = async (fixture: Fixture, messages: Messages) => {
     leaseExpiresAt: settledAt,
     chatThreadId: messages.threadId,
   });
+  const restoreId = Bun.randomUUIDv7();
   await fixture.db.insert(desktopRunnerFolderRestores).values({
     ...owner,
-    id: Bun.randomUUIDv7(),
+    id: restoreId,
     chatThreadId: messages.threadId,
     chatTurnId: turn?.id ?? panic("the turn was not seeded"),
     runId,
     desktopId,
     deviceJkt,
-    state: "restored",
-    expiresAt: settledAt,
-    settledAt,
+    state: "sent",
+    expiresAt: new Date(settledAt.getTime() + 60_000),
   });
+  expect(
+    await settleFolderRestore(fixture.db, {
+      binding: { ...owner, desktopId, deviceJkt, keyId: `key-${desktopId}` },
+      restoreId,
+      outcome: "restored",
+      now: settledAt,
+    }),
+  ).toBe("settled");
 };
+
+const answerOf = (
+  response: Awaited<ReturnType<typeof readMessages>>,
+  messages: Messages,
+) =>
+  response.messages.find(({ id }) => id === messages.assistantMessageId) ??
+  panic("the answer was not read");
 
 const readMessages = async (fixture: Fixture, messages: Messages) => {
   const response = await readResponse(fixture, messages);
@@ -431,7 +451,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
-    test("an undone turn stays named as undone after the chat moves to the cloud", async () => {
+    test("an undone turn's answer keeps its marker after a reload and a move to the cloud", async () => {
       await withFixture(async (fixture) => {
         const messages = await seedMessages(fixture, fixture.workspaceId);
         await seedTurn({
@@ -451,11 +471,12 @@ if (!databaseUrl || !runPostgresTests) {
             },
           })
           .where(eq(chatThreads.id, messages.threadId));
-        await seedRestoredUndo(fixture, messages);
-        const undone = [{ assistantMessageId: messages.assistantMessageId }];
-        expect((await readMessages(fixture, messages)).undoneTurns).toEqual(
-          undone,
-        );
+        await settleRestoredUndo(fixture, messages);
+        const marker = { at: settledAt.toISOString() };
+        expect(
+          answerOf(await readMessages(fixture, messages), messages).metadata
+            ?.localFilesUndone,
+        ).toEqual(marker);
 
         await fixture.db
           .update(chatThreads)
@@ -464,7 +485,9 @@ if (!databaseUrl || !runPostgresTests) {
         const cloud = await readMessages(fixture, messages);
         // A cloud chat offers no new undo, but the old one keeps its marker.
         expect(cloud.newestLocalTurn).toBe(null);
-        expect(cloud.undoneTurns).toEqual(undone);
+        expect(answerOf(cloud, messages).metadata?.localFilesUndone).toEqual(
+          marker,
+        );
       });
     });
 

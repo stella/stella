@@ -784,7 +784,6 @@ export const ChatThreadPage = ({
                           streamdownComponents={streamdownComponents}
                           waitingForComputer={waitingForComputer}
                           newestLocalTurn={data.newestLocalTurn}
-                          undoneTurns={data.undoneTurns}
                           threadRef={threadRef}
                           userMessageEdit={userMessageEdit}
                           workspaceId={workspaceId}

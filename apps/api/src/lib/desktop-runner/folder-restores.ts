@@ -12,10 +12,12 @@ import {
   sql,
 } from "drizzle-orm";
 
-import type {
-  ChatLocalFilesUndoComputerRefusal,
-  ChatLocalFilesUndoRefusal,
-  ChatLocalFilesUndoState,
+import {
+  CHAT_LOCAL_FILES_UNDONE_METADATA_KEY,
+  type ChatLocalFilesUndoComputerRefusal,
+  type ChatLocalFilesUndone,
+  type ChatLocalFilesUndoRefusal,
+  type ChatLocalFilesUndoState,
 } from "@stll/api-contract/chat-local-files-undo";
 import {
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
@@ -24,6 +26,7 @@ import {
 } from "@stll/api-contract/desktop-runner";
 
 import {
+  chatMessages,
   chatTurns,
   desktopRunnerEvents,
   desktopRunnerFolderRestores,
@@ -235,36 +238,6 @@ export const readTurnFolderRestore = async (
     undoable: newest && run?.state === "finished" && run.tookCheckpoint,
     restore: restore === null ? null : viewOf(restore, options.now),
   };
-};
-
-/** The most undone turns one read of a thread names. */
-export const RESTORED_TURNS_LIMIT = 200;
-
-/**
- * The answers of the owner's turns in the thread whose file changes were
- * undone, newest first and at most `RESTORED_TURNS_LIMIT`: the chat marks
- * each of them, also after newer turns.
- */
-export const readRestoredTurns = async (
-  db: Pick<DesktopRunnerDb, "select">,
-  { owner, threadId }: ThreadOf,
-): Promise<{ assistantMessageId: SafeId<"chatMessage"> }[]> => {
-  const rows = await db
-    .select({ assistantMessageId: chatTurns.assistantMessageId })
-    .from(restores)
-    .innerJoin(chatTurns, eq(chatTurns.id, restores.chatTurnId))
-    .where(
-      and(
-        ownedBy(owner),
-        eq(restores.chatThreadId, threadId),
-        eq(restores.state, "restored"),
-      ),
-    )
-    .orderBy(desc(restores.createdAt), desc(restores.id))
-    .limit(RESTORED_TURNS_LIMIT);
-  return rows.flatMap(({ assistantMessageId }) =>
-    assistantMessageId === null ? [] : [{ assistantMessageId }],
-  );
 };
 
 export type RequestedFolderRestore =
@@ -601,7 +574,33 @@ export const settleFolderRestore = async (
       set: { reason: outcome === "restored" ? null : outcome, settledAt: now },
       recordTransitionAuditEvent: skipRestoreAudit,
     });
-    return settled.type === "transitioned" ? "settled" : "unknown";
+    if (settled.type !== "transitioned") {
+      return "unknown";
+    }
+    if (to === "restored") {
+      // The lasting marker rides on the turn's answer, in the same
+      // transaction: the page renders it from the message it already reads,
+      // after newer turns and a move to the cloud alike. Only the server
+      // writes this key; incoming client metadata never carries it.
+      const marker = {
+        [CHAT_LOCAL_FILES_UNDONE_METADATA_KEY]: {
+          at: now.toISOString(),
+        } satisfies ChatLocalFilesUndone,
+      };
+      // audit: skip - the computer's reported outcome, not a member's edit
+      await tx
+        .update(chatMessages)
+        .set({
+          content: sql`jsonb_set(${chatMessages.content}, '{metadata}', coalesce(${chatMessages.content} -> 'metadata', '{}'::jsonb) || ${JSON.stringify(marker)}::text::jsonb)`,
+        })
+        .where(
+          eq(
+            chatMessages.id,
+            sql`(select ${chatTurns.assistantMessageId} from ${chatTurns} join ${restores} on ${restores.chatTurnId} = ${chatTurns.id} where ${restores.id} = ${restoreId})`,
+          ),
+        );
+    }
+    return "settled";
   });
 
 type QueuedSessionsOptions = {
