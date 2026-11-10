@@ -5,6 +5,7 @@ import type {
   DecisionTextIncompleteReason,
   DecisionTextWithheldReason,
 } from "@stll/api-contract/case-law-text-field";
+import { declareFingerprintFields } from "@stll/errors";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -16,9 +17,13 @@ import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-sourc
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
-export class DecisionTextCompletionReadError extends TaggedError(
+class DecisionTextCompletionReadError extends TaggedError(
   "DecisionTextCompletionReadError",
-)<{ message: string; reason: "gate_failed"; cause: unknown }> {}
+)<{ message: string; reason: "gate_failed"; cause: unknown }> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const completionReadFailure = failureSink({
   event: "case_law.decision_text.completion_read_failed",
