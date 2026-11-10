@@ -2,7 +2,10 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import { OUTBOUND_ACTION_STATUSES } from "@stll/api-contract/outbound-action";
+import {
+  OUTBOUND_ACTION_STATUSES,
+  type OutboundActionStatus,
+} from "@stll/api-contract/outbound-action";
 import { createTestClock } from "@stll/test-kit";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -17,6 +20,31 @@ const databaseUrl = process.env["DATABASE_URL"];
 
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const clock = createTestClock();
+const settledAt = new Date(clock.now());
+
+/** The fields each status carries under outbound_actions_state_fields_check. */
+const STATE_FIELDS = {
+  pending: {},
+  sending: { confirmedAt: settledAt },
+  sent: {
+    confirmedAt: settledAt,
+    completedAt: settledAt,
+    providerMessageId: "provider-message",
+  },
+  failed: {
+    confirmedAt: settledAt,
+    completedAt: settledAt,
+    failureCode: "recipient_rejected",
+  },
+  discarded: { completedAt: settledAt },
+  expired: {},
+} as const satisfies Record<
+  OutboundActionStatus,
+  Partial<
+    Record<"confirmedAt" | "completedAt", Date> &
+      Record<"providerMessageId" | "failureCode", string>
+  >
+>;
 
 describe.skipIf(!runPostgres)("outbound action offboarding", () => {
   test("member removal clears pending outbound actions and retains every delivery outcome", async () => {
@@ -66,8 +94,11 @@ describe.skipIf(!runPostgres)("outbound action offboarding", () => {
           previewIv: Buffer.alloc(12),
           previewHash: "a".repeat(64),
           expiresAt: new Date("2099-01-01T00:00:00Z"),
-          providerMessageId: status === "sent" ? "provider-message" : null,
-          failureCode: status === "failed" ? "recipient_rejected" : null,
+          confirmedAt: null,
+          completedAt: null,
+          providerMessageId: null,
+          failureCode: null,
+          ...STATE_FIELDS[status],
         }));
         await db.insert(outboundActions).values(actions);
         await db.transaction(async (tx) => {

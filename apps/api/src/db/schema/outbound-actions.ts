@@ -7,6 +7,7 @@ import {
   type OutboundActionStatus,
 } from "@stll/api-contract/outbound-action";
 
+import { stateFieldsCheck } from "../state-fields";
 import { chatThreads } from "./chat";
 import {
   bytea,
@@ -88,6 +89,53 @@ export const outboundActions = p.pgTable(
       "outbound_actions_status_check",
       sql`${table.status} IN (${sql.join(OUTBOUND_ACTION_STATUS_SQL, sql`, `)})`,
     ),
+    // `sending` may carry the unknown-outcome code while it waits for the
+    // user; an expired action was never confirmed.
+    stateFieldsCheck({
+      name: "outbound_actions_state_fields_check",
+      state: table.status,
+      rules: {
+        pending: {
+          absent: [
+            table.confirmedAt,
+            table.completedAt,
+            table.providerMessageId,
+            table.failureCode,
+          ],
+        },
+        sending: {
+          required: [table.confirmedAt],
+          absent: [table.completedAt, table.providerMessageId],
+        },
+        sent: {
+          required: [
+            table.confirmedAt,
+            table.completedAt,
+            table.providerMessageId,
+          ],
+          absent: [table.failureCode],
+        },
+        failed: {
+          required: [table.confirmedAt, table.completedAt, table.failureCode],
+          absent: [table.providerMessageId],
+        },
+        discarded: {
+          required: [table.completedAt],
+          absent: [
+            table.confirmedAt,
+            table.providerMessageId,
+            table.failureCode,
+          ],
+        },
+        expired: {
+          absent: [
+            table.confirmedAt,
+            table.providerMessageId,
+            table.failureCode,
+          ],
+        },
+      },
+    }),
     p.check(
       "outbound_actions_preview_hash_check",
       sql`${table.previewHash} ~ '^[0-9a-f]{64}$'`,
