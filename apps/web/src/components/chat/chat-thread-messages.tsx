@@ -950,7 +950,11 @@ const LoadOlderSentinel = ({
 
 const USER_STREAMDOWN_COMPONENTS = {
   a: (props: ComponentProps<"a">) => (
-    <StreamdownMentionLink interactive={false} {...props} />
+    <StreamdownMentionLink
+      externalLinks="written"
+      interactive={false}
+      {...props}
+    />
   ),
 };
 

@@ -35,6 +35,7 @@ import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
+import { SOFT_LAW_TOOL_HANDLERS } from "@/api/mcp/soft-law-tools";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -112,6 +113,8 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   get_usage: BILLING_TOOL_HANDLERS.get_usage,
   search_legislation: LEGISLATION_TOOL_HANDLERS.search_legislation,
   read_statute: LEGISLATION_TOOL_HANDLERS.read_statute,
+  search_guidance: SOFT_LAW_TOOL_HANDLERS.search_guidance,
+  read_guidance: SOFT_LAW_TOOL_HANDLERS.read_guidance,
   read_statute_provisions: LEGISLATION_TOOL_HANDLERS.read_statute_provisions,
   read_provision_history: LEGISLATION_TOOL_HANDLERS.read_provision_history,
   search_boe_legislation: RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation,

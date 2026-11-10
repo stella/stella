@@ -826,10 +826,15 @@ const SearchResults = ({
   );
 };
 
-const LoadingResults = () => {
+const LoadingResults = ({ continuing }: { continuing: boolean }) => {
   const t = useTranslations();
   return (
     <div role="status" aria-label={t("loading")} className="space-y-4">
+      {continuing && (
+        <p className="text-muted-foreground text-sm">
+          {t("searchStillRunning")}
+        </p>
+      )}
       <Skeleton className="h-9 w-full" />
       {["first", "second", "third"].map((id) => (
         <div key={id} className="flex items-center gap-4 rounded-lg border p-4">
@@ -928,8 +933,9 @@ const ResultContent = ({
   );
   switch (result.status) {
     case "idle":
+      return <LoadingResults continuing={false} />;
     case "loading":
-      return <LoadingResults />;
+      return <LoadingResults continuing={result.phase === "continuing"} />;
     case "error":
       if (result.previous.status === "ready") {
         return (

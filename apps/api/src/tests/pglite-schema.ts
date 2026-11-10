@@ -60,6 +60,11 @@ const DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH = nodePath.join(
   "20260827120000_docx_suggestion_source_matters",
   "migration.sql",
 );
+const LIST_GENERATION_FACT_DETAILS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261109180000_list_generation_fact_details",
+  "migration.sql",
+);
 const AGENT_SKILL_REVISIONS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260827080000_agent_skill_revisions",
@@ -369,9 +374,12 @@ export const installPgliteWorkspaceAccessObjects = async (
   // check, so a table whose policies carry a further predicate in the schema
   // needs its own ALTER POLICY statements replayed afterwards. The column
   // itself already exists from the push, so only the policy statements run.
-  const policyStatements = readMigrationStatements(
+  const policyStatements = [
     DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH,
-  ).filter((statement) => executableSql(statement).startsWith("ALTER POLICY"));
+    LIST_GENERATION_FACT_DETAILS_MIGRATION_PATH,
+  ]
+    .flatMap(readMigrationStatements)
+    .filter((statement) => executableSql(statement).startsWith("ALTER POLICY"));
   for (const statement of policyStatements) {
     await db.execute(sql.raw(statement));
   }

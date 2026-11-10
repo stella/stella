@@ -802,6 +802,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-computed-key-record-assignment.fixture.ts", [
     "no-computed-key-record-assignment/no-computed-key-record-assignment",
   ]),
+  fixtureRuleOverride("exhaustive-union-map.fixture.ts", [
+    "exhaustive-union-map/exhaustive-union-map",
+  ]),
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
   ]),
@@ -2153,6 +2156,7 @@ const config = defineConfig({
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
     "./.oxlint-plugins/tooltip-provider-owner.ts",
+    "./.oxlint-plugins/copy-feedback-owner.ts",
     "./.oxlint-plugins/sql-client-owner.ts",
     "./.oxlint-plugins/no-direct-unsaved-work-guard.ts",
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
@@ -2287,6 +2291,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-unbounded-response-body.ts",
     "./.oxlint-plugins/no-computed-key-record-assignment.ts",
+    "./.oxlint-plugins/exhaustive-union-map.ts",
     "./.oxlint-plugins/no-dynamic-key-in-operator.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
@@ -3030,6 +3035,13 @@ const config = defineConfig({
       ],
       rules: {
         "tooltip-provider-owner/tooltip-provider-owner": "error",
+      },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/copy-feedback-owner.fixture.tsx"],
+      rules: {
+        "copy-feedback-owner/copy-feedback-owner": "error",
+        "copy-feedback-owner/no-raw-copy-listener": "error",
       },
     },
     {
@@ -4930,6 +4942,22 @@ const config = defineConfig({
       },
     },
     {
+      // A Copy control confirms through its owner: CopyButton for a fixed
+      // value, useSelectionCopy for selected words, which also confirms the
+      // reader's own Cmd+C. The sanctioned copy listeners and the feedback
+      // owner are listed in the rule; a test fires synthetic events.
+      files: [
+        ...PRODUCT_FRONTEND_FILES,
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/chat/src/**/*.{ts,tsx}",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "copy-feedback-owner/copy-feedback-owner": "error",
+        "copy-feedback-owner/no-raw-copy-listener": "error",
+      },
+    },
+    {
       // Sources the React Compiler compiles: the web and MCP app bundles
       // with the workspace packages they import, and the Expo app. The
       // compiler skips a `use*` function that calls no hook.
@@ -6635,6 +6663,22 @@ const config = defineConfig({
       rules: {
         "no-computed-key-record-assignment/no-computed-key-record-assignment":
           "error",
+      },
+    },
+    {
+      // A lookup table over a fixed set of keys is keyed by the union it
+      // covers, so a new member fails to compile at the map. The rule reads
+      // only the web and API apps; existing sites carry count ceilings in
+      // scripts/design-lint-baseline.json and are switched off here by
+      // `designLintBacklogOverrides` below.
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "exhaustive-union-map/exhaustive-union-map": "error",
       },
     },
     {

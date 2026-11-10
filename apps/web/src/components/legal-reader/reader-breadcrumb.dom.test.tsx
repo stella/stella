@@ -268,6 +268,9 @@ test("reader breadcrumb jumps ancestors and opens Contents at the current provis
   const current = screen.getByRole("button", { name: currentTitle });
   expect(current.getAttribute("aria-current")).toBe("location");
   expect(positioned.mock.contexts.includes(current)).toBe(true);
+  // Focus is what a browser scrolls to last: landing it on the first row
+  // would scroll the list back to its top after the reveal.
+  await waitFor(() => expect(document.activeElement).toBe(current));
   positioned.mockRestore();
   await act(async () => fireEvent.click(current));
   expect(jumps).toEqual(["heading-0", "heading-4"]);

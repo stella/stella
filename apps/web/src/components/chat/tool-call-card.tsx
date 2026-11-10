@@ -27,6 +27,10 @@ import {
   getChatToolTitleKey,
   isRunningToolPart,
 } from "@/components/chat/chat-ui-tools";
+import {
+  localRunToolSubtitleText,
+  localRunToolView,
+} from "@/components/chat/local-run-tool.logic";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
 import {
   advanceToolCallTiming,
@@ -483,13 +487,31 @@ const ToolCallCardComponent = ({
         isSkillResourceOutputToolName(name)),
     ),
   );
-  const label = catalogEntry?.brand ?? t(getChatToolTitleKey(name));
-  const subtitle = getToolSubtitle({
-    formatCharacterCount: (count) =>
-      t("chat.toolCall.characterCount", { count }),
-    part,
-    toolName: name,
+  // A step a coding agent took on the member's computer names what it was
+  // about: its command, file names, search or plan.
+  const localRunTool = localRunToolView({
+    name,
+    input: getToolInput(part),
+    output: part.output,
   });
+  const localRunTitleKey = localRunTool?.titleKey ?? null;
+  const label =
+    catalogEntry?.brand ??
+    (localRunTitleKey === null
+      ? t(getChatToolTitleKey(name))
+      : t(localRunTitleKey));
+  const subtitle =
+    localRunTool === null
+      ? getToolSubtitle({
+          formatCharacterCount: (count) =>
+            t("chat.toolCall.characterCount", { count }),
+          part,
+          toolName: name,
+        })
+      : localRunToolSubtitleText(localRunTool.subtitle, {
+          patternInPath: (values) => t("chat.toolCall.patternInPath", values),
+          commandExited: (values) => t("chat.toolCall.commandExited", values),
+        });
 
   const isLoading = isRunningToolPart(part);
   const [timing, setTiming] = useState(() =>

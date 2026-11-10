@@ -1089,7 +1089,9 @@ jobs:
       - name: Run deployed application journeys
         id: deployed-journeys
         if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
-        timeout-minutes: 20
+        # A journey may wait a scheduled job's full 30-minute run budget
+        # (SCHEDULED_JOB_MAX_RUNTIME_MS) before it judges the deployment.
+        timeout-minutes: 45
         uses: ./.github/actions/user-journeys
         with:
           project: deployed

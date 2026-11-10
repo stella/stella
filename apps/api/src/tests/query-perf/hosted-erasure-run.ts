@@ -22,7 +22,10 @@ import {
   type QueryPerfMetrics,
   sumMetrics,
 } from "./measurement";
-import type { CapturedStatement } from "./scheduled-run";
+import {
+  type CapturedStatement,
+  classifyMeasuredStatement,
+} from "./scheduled-run";
 import {
   applyPlannerSettings,
   QUERY_PERF_CONNECTION_SETTINGS,
@@ -142,22 +145,47 @@ const measureHostedErasureRun = async (
   if (statements.length === 0) {
     panic("Erasure measurement captured no SQL");
   }
-  const metrics: QueryPerfMetrics[] = [];
+  const measured: {
+    kind: "read" | "write";
+    metrics: QueryPerfMetrics;
+    writtenRows: number;
+  }[] = [];
   await rollbackMeasurement({
     database: db,
     run: async (tx) => {
       await applyPlannerSettings(tx);
       for (const statement of statements) {
         // db-await-in-loop: replay one run's captured statements in their original order, inside a rolled-back transaction.
-        metrics.push(
-          metricsFromPlan(
-            await explainOwnerStatement(tx, capturedStatementQuery(statement)),
-          ),
+        const plan = await explainOwnerStatement(
+          tx,
+          capturedStatementQuery(statement),
         );
+        measured.push({
+          ...classifyMeasuredStatement({
+            statement: statement.text,
+            plan: plan.Plan,
+          }),
+          metrics: metricsFromPlan(plan),
+        });
       }
     },
   });
-  return { metrics: sumMetrics(metrics), statements: statements.length };
+  const metricsOf = (kind?: "read" | "write") =>
+    sumMetrics(
+      measured
+        .filter((statement) => kind === undefined || statement.kind === kind)
+        .map(({ metrics }) => metrics),
+    );
+  return {
+    metrics: metricsOf(),
+    readMetrics: metricsOf("read"),
+    writeMetrics: metricsOf("write"),
+    writtenRows: measured.reduce(
+      (total, { writtenRows }) => total + writtenRows,
+      0,
+    ),
+    statements: statements.length,
+  };
 };
 
 /** Fixed 25-row work batch, with retained terminal history at two sizes. */

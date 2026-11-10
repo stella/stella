@@ -2,7 +2,14 @@ import type { ReadBudget } from "../read-budget-definition";
 
 export default {
   surface: "scheduled-job",
-  pages: 18_000,
+  reads: { pages: 18_000 },
+  combinedPagesPerRun: 18_000,
+  writes: {
+    pagesPerWrittenRow: 30,
+    ceilingPagesPerRun: 18_000,
+    reason:
+      "Thirty pages per changed row cover bounded shard, cursor and retirement writes; the run retains the existing 18,000-page envelope.",
+  },
   statementDeadlineMs: 30_000,
   runBudgetMs: 15 * 60 * 1000,
   reason:

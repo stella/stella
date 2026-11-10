@@ -1476,6 +1476,7 @@ const ReviewRunPanel = ({
       runId={run.id}
       saveAsPlaybookPending={saveAsPlaybook.isPending}
       suggestions={suggestions}
+      fixesWithheld={run.status === "completed" ? run.fixesWithheld : 0}
       tableRunNotice={resolveTableRunNotice({
         shownRun: run,
         runs: history.runs,
@@ -2770,6 +2771,8 @@ type ResultsViewProps = {
   freshness: ReviewRunFreshness;
   tableRunNotice: TableRunNotice;
   withheldSources: readonly ReviewRunWithheldSource[];
+  /** Fixes the run left unstaged because a reference matter was unavailable. */
+  fixesWithheld: number;
   history: ReviewRunHistoryView;
   /** Set while the worker is still committing findings; `null` once the run
    *  has settled. */
@@ -2830,6 +2833,7 @@ const ResultsView = ({
   freshness,
   tableRunNotice,
   withheldSources,
+  fixesWithheld,
   history,
   progress: runProgress,
   readOnly,
@@ -3064,6 +3068,12 @@ const ResultsView = ({
         onOpenRun={history.onSelect}
         onReviewAgain={onReviewAgain}
       />
+
+      {fixesWithheld > 0 && (
+        <p className="text-muted-foreground shrink-0 border-b px-3 py-1.5 text-xs">
+          {t("inspector.review.fixesWithheldNotice")}
+        </p>
+      )}
 
       {resultsBody}
     </div>

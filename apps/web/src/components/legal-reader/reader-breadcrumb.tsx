@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { panic } from "better-result";
@@ -60,12 +60,15 @@ type ReaderBreadcrumbProps = {
   onJump: (anchorId: string) => void;
 };
 
+/** The Contents row Contents marks as the current location, if shown. */
+const currentContentsRow = (node: ParentNode | null): HTMLElement | null =>
+  node?.querySelector<HTMLElement>("[data-contents-anchor][aria-current]") ??
+  null;
+
 // A stable callback ref: it runs when Contents opens, never again while it
 // stays open, so rows arriving later cannot move the list under the reader.
 const revealCurrentRow = (node: HTMLDivElement | null) => {
-  node
-    ?.querySelector<HTMLElement>("[data-contents-anchor][aria-current]")
-    ?.scrollIntoView({ block: "nearest" });
+  currentContentsRow(node)?.scrollIntoView({ block: "nearest" });
 };
 
 type ReaderContentsListProps = {
@@ -344,6 +347,7 @@ export const ReaderBreadcrumb = ({
   const { visible, hidden } = compactReaderPath(path);
   const [layout, setLayout] = useState<ReturnType<typeof fitReaderPath>>();
   const [contentsOpen, setContentsOpen] = useState(false);
+  const contentsPopupRef = useRef<HTMLDivElement>(null);
   const current = path.at(-1);
   const ancestors = visible.slice(0, -1);
   const fitOf = (index: number) => layout?.fits[index];
@@ -449,7 +453,16 @@ export const ReaderBreadcrumb = ({
         align="start"
         aria-label={t("statutes.outline")}
         className="w-80 max-w-[calc(100vw-2rem)]"
+        // Base UI would focus the first row, and that focus scrolls the list
+        // back to its top; open on the row being read instead. A touch keeps
+        // Base UI's focus on the popup, which scrolls nothing.
+        initialFocus={(interaction) =>
+          interaction === "touch"
+            ? contentsPopupRef.current
+            : (currentContentsRow(contentsPopupRef.current) ?? true)
+        }
         padding="sm"
+        ref={contentsPopupRef}
       >
         <ReaderContentsList
           activeAnchorId={activeAnchorId}

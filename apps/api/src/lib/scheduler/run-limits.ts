@@ -1,5 +1,7 @@
+import { SCHEDULED_JOB_MAX_RUNTIME_MS } from "@stll/api-contract/journey-prerequisites";
+
 /** How long a claimed job's lease lasts before the heartbeat must renew it. */
-export const SCHEDULER_LEASE_MS = 30 * 60_000;
+export const SCHEDULER_LEASE_MS = SCHEDULED_JOB_MAX_RUNTIME_MS;
 
 /**
  * The longest one task run may take before the runner aborts its signal: one

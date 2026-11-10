@@ -1,17 +1,4 @@
 import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
-/**
- * Template Studio chat — the general document chat engine (same
- * backend, composer, tool surface, and persistence as the DOCX file
- * overlay) mounted over the Studio's Folio editor.
- *
- * Differences from the file overlay:
- *   - context is `activeTemplate` (org-scoped template, no entity);
- *   - the model gets `suggest_template_fields` plus the general tools;
- *   - `suggest_changes` operations land as in-document
- *     AISuggestions (decorations + stepper + cards) instead of the
- *     inspector review panel. Accepting a `{{field}}` replacement also
- *     registers the field in the Studio session.
- */
 import type { RefObject } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
@@ -25,6 +12,20 @@ import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
 } from "@stll/api-contract/chat-docx-suggestions";
+/**
+ * Template Studio chat — the general document chat engine (same
+ * backend, composer, tool surface, and persistence as the DOCX file
+ * overlay) mounted over the Studio's Folio editor.
+ *
+ * Differences from the file overlay:
+ *   - context is `activeTemplate` (org-scoped template, no entity);
+ *   - the model gets `suggest_template_fields` plus the general tools;
+ *   - `suggest_changes` operations land as in-document
+ *     AISuggestions (decorations + stepper + cards) instead of the
+ *     inspector review panel. Accepting a `{{field}}` replacement also
+ *     registers the field in the Studio session.
+ */
+import { CHAT_CLOUD_RUN_TARGET } from "@stll/api-contract/chat-run-target";
 import type { HandlerExceptionScope } from "@stll/errors";
 import { executeFolioToolCall } from "@stll/folio-agents";
 import type {
@@ -1588,6 +1589,7 @@ const TemplateStudioChatInner = ({
             document: { kind: CHAT_SKILL_DOCUMENT.template },
             // Pinned like the transport's `getEditApplyMode`.
             editApplyMode: CHAT_EDIT_APPLY_MODE.manual,
+            runTarget: CHAT_CLOUD_RUN_TARGET,
             threadRef,
             webSearch: {
               available: data.webSearchAvailable,

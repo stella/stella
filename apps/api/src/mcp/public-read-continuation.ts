@@ -22,6 +22,7 @@ import {
   type ContinuationPhase,
   type ContinuationRunVerdict,
   type ContinuationStore,
+  type ContinuationWork,
   createPublicReadContinuation,
   type PublicReadContinuationLimits,
 } from "@/api/lib/legal-search/public-read-continuation";
@@ -99,12 +100,13 @@ const runningMessage = (
     ? `Nothing has failed, but the server is at capacity and this ${toolName} call is not running now. Call ${toolName} again after retryAfterMs with the same arguments plus continuation_token.`
     : `Nothing has failed. This ${toolName} call is still ${phase === "queued" ? "queued" : "running"} and the results are not complete. Call ${toolName} again after retryAfterMs with the same arguments plus continuation_token. Do not report the search as empty or finished.`;
 
-type ContinuableToolName = "search_case_law" | "search_legislation";
+type ContinuableToolName = "search_case_law" | "search_legislation" | "search";
 
 /** The tools whose calls answer through the continuation. */
 export const CONTINUABLE_PUBLIC_READ_TOOLS: ReadonlySet<string> = new Set([
   "search_case_law",
   "search_legislation",
+  "search",
 ] satisfies ContinuableToolName[]);
 
 const OVERLOAD_ERROR_CODES: ReadonlySet<string> = new Set([
@@ -311,7 +313,7 @@ type UnderFleetCallerSlotOptions<T> = {
  * waiting on it waits out a full pool instead of being refused; the run budget
  * ends the wait.
  */
-const underFleetCallerSlot = async <T>({
+export const underFleetCallerSlot = async <T>({
   context,
   signal,
   run,
@@ -332,6 +334,71 @@ const underFleetCallerSlot = async <T>({
     }
     await sleep(FLEET_SLOT_RETRY_MS);
   }
+};
+
+type ContinuedWorkOptions<TArgs, TData, P> = {
+  toolName: ContinuableToolName;
+  workId: string;
+  caller: string;
+  scope: string;
+  args: TArgs;
+  context: UnderFleetCallerSlotOptions<unknown>["context"];
+  execute: RunContinuablePublicReadOptions<TArgs, TData, P>["execute"];
+};
+
+const continuedWork = <TArgs, TData, P>({
+  toolName,
+  workId,
+  caller,
+  scope,
+  args,
+  context,
+  execute,
+}: ContinuedWorkOptions<TArgs, TData, P>): ContinuationWork<
+  TArgs,
+  InternalToolResult<TData>,
+  P
+> => {
+  const statementBudgetMs = PUBLIC_READ_STATEMENT_TIMEOUT_MS.search;
+  return {
+    workId,
+    caller,
+    scope,
+    args,
+    isOverload,
+    judge: judgeToolResponse,
+    // Out of the request's scopes: its public-read scope settles only after
+    // every read inside it, and its budget would end the run with the call.
+    run: async (runArgs, run) =>
+      await runOutsideQueryCounter(
+        async () =>
+          await runOutsidePublicReadScope(
+            async () =>
+              await runWithinRequestLatencyBudget(
+                {
+                  label: `${toolName}.continuation`,
+                  budgetMs: PUBLIC_READ_RUN_BUDGET_MS,
+                },
+                async () =>
+                  await runAsCorpusSearchCaller(caller, async () => {
+                    const read = await runWithPatientCorpusReads(
+                      async () =>
+                        await underFleetCallerSlot({
+                          context,
+                          signal: run.signal,
+                          run: async (signal) =>
+                            await runWithPublicReadScope(
+                              { budgetMs: statementBudgetMs, signal },
+                              async () => await execute(runArgs, run),
+                            ),
+                        }),
+                    );
+                    return read;
+                  }),
+              ),
+          ),
+      ),
+  };
 };
 
 export const runContinuablePublicRead = async <TArgs, TData, P>({
@@ -362,7 +429,6 @@ export const runContinuablePublicRead = async <TArgs, TData, P>({
     }
   }
   const caller = mcpPublicReadCallerKey(context);
-  const statementBudgetMs = PUBLIC_READ_STATEMENT_TIMEOUT_MS.search;
   const outcome = await continuation.attach({
     via,
     responseDeadlineMs: Math.min(
@@ -374,45 +440,15 @@ export const runContinuablePublicRead = async <TArgs, TData, P>({
           RESPONSE_RESERVE_MS,
       ),
     ),
-    work: {
+    work: continuedWork({
+      toolName,
       workId: continuationToken ?? callerWorkId,
       caller,
       scope,
       args: workArgs,
-      isOverload,
-      judge: judgeToolResponse,
-      // Out of the request's scopes: its public-read scope settles only after
-      // every read inside it, and its budget would end the run with the call.
-      run: async (runArgs, run) =>
-        await runOutsideQueryCounter(
-          async () =>
-            await runOutsidePublicReadScope(
-              async () =>
-                await runWithinRequestLatencyBudget(
-                  {
-                    label: `${toolName}.continuation`,
-                    budgetMs: PUBLIC_READ_RUN_BUDGET_MS,
-                  },
-                  async () =>
-                    await runAsCorpusSearchCaller(caller, async () => {
-                      const read = await runWithPatientCorpusReads(
-                        async () =>
-                          await underFleetCallerSlot({
-                            context,
-                            signal: run.signal,
-                            run: async (signal) =>
-                              await runWithPublicReadScope(
-                                { budgetMs: statementBudgetMs, signal },
-                                async () => await execute(runArgs, run),
-                              ),
-                          }),
-                      );
-                      return read;
-                    }),
-                ),
-            ),
-        ),
-    },
+      context,
+      execute,
+    }),
   });
   switch (outcome.status) {
     case "finished":
@@ -433,5 +469,87 @@ export const runContinuablePublicRead = async <TArgs, TData, P>({
     default:
       outcome satisfies never;
       return panic("Unhandled continuation outcome");
+  }
+};
+
+type WaitForPublicReadOptions<TArgs, TData> = {
+  toolName: ContinuableToolName;
+  continuation: ToolContinuation<TArgs, TData, null>;
+  args: TArgs;
+  context: RunContinuablePublicReadOptions<TArgs, TData, null>["context"];
+  waitMs: number;
+  execute: (args: TArgs) => Promise<InternalToolResult<TData>>;
+  now?: () => number;
+};
+
+export type WaitedPublicRead<TData> =
+  | { type: "finished"; result: InternalToolResult<TData> }
+  | { type: "still_running" };
+
+/**
+ * The same continued read for a tool whose result has no way to say "still
+ * running": it waits on the server, up to `waitMs`, and its caller decides
+ * what to answer if the read has not finished by then.
+ */
+export const waitForPublicRead = async <TArgs, TData>({
+  toolName,
+  continuation,
+  args,
+  context,
+  waitMs,
+  execute,
+  now = () => performance.now(),
+}: WaitForPublicReadOptions<TArgs, TData>): Promise<
+  WaitedPublicRead<TData>
+> => {
+  const scope = context.organizationId;
+  const work = continuedWork<TArgs, TData, null>({
+    toolName,
+    workId: continuationWorkId(toolName, scope, args),
+    caller: mcpPublicReadCallerKey(context),
+    scope,
+    args,
+    context,
+    execute: async (workArgs) => await execute(workArgs),
+  });
+  const waitLimitMs = Math.min(
+    context.testDependencies?.publicReadResponseDeadlineMs ?? waitMs,
+    Math.max(
+      0,
+      (remainingRequestBudgetMs() ?? Number.POSITIVE_INFINITY) -
+        RESPONSE_RESERVE_MS,
+    ),
+  );
+  const startedAt = now();
+  for (;;) {
+    const remainingMs = waitLimitMs - (now() - startedAt);
+    const outcome = await continuation.attach({
+      via: "call",
+      responseDeadlineMs: Math.max(0, remainingMs),
+      work,
+    });
+    switch (outcome.status) {
+      case "finished":
+        return { type: "finished", result: outcome.result };
+      case "exhausted":
+        return {
+          type: "finished",
+          result: publicReadUnfinishedResult(toolName),
+        };
+      case "failed":
+        return { type: "finished", result: failedReadResult(outcome.error) };
+      case "running": {
+        // Measured again: the attach above can spend all of the wait.
+        const leftMs = waitLimitMs - (now() - startedAt);
+        if (leftMs <= 0) {
+          return { type: "still_running" };
+        }
+        await sleep(Math.min(outcome.retryAfterMs, leftMs));
+        break;
+      }
+      default:
+        outcome satisfies never;
+        return panic("Unhandled continuation outcome");
+    }
   }
 };

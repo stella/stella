@@ -76,6 +76,25 @@ type ChatLinkProps = Omit<
   /** A tray chip whose label is the whole point (a decision's case number and
    *  date) keeps it up to the row's width instead of the compact 20ch cap. */
   fullLabel?: boolean | undefined;
+  /** What a link whose text is itself a URL shows: the bare host (a chip for
+   *  a model's cited URL) or the text as written (a URL a person typed, whose
+   *  path and query are what they meant). */
+  urlLabel?: "host" | "written" | undefined;
+};
+
+/**
+ * A link's visible label: its own text, unless that text is just a URL a
+ * model cited, which shows as the bare host.
+ */
+const linkLabel = (
+  children: ReactNode,
+  hostname: string,
+  urlLabel: "host" | "written",
+): ReactNode => {
+  const text = linkText(children).trim();
+  return text && (urlLabel === "written" || normalizeChatLink(text) === null)
+    ? children
+    : hostname.replace(/^www\./u, "");
 };
 
 /** A tray chip cuts its label short; an inline link runs with the prose. A
@@ -158,6 +177,7 @@ export const ChatLink = ({
   id,
   newTabLabel,
   title,
+  urlLabel = "host",
   ...anchorProps
 }: ChatLinkProps) => {
   const hint = newTabLabel ?? title;
@@ -208,11 +228,7 @@ export const ChatLink = ({
       </LinkHint>
     );
   }
-  const text = linkText(children).trim();
-  const label =
-    text && normalizeChatLink(text) === null
-      ? children
-      : target.hostname.replace(/^www\./u, "");
+  const label = linkLabel(children, target.hostname, urlLabel);
   let icon = <GlobeIcon aria-hidden="true" className="size-[1em]" />;
   const bundledIcon = BUNDLED_ICONS.get(target.hostname);
   if (iconSource) {
