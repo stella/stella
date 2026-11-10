@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { locateQuote } from "@stll/legal-ast/quote-locate";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { createTestState } from "@stll/test-state";
 
@@ -24,6 +25,7 @@ import {
   registerMockAI,
 } from "@/api/dev/register-mock-ai";
 import { env } from "@/api/env";
+import { factExtractionSchema } from "@/api/lib/lists/generation/fact-extract";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
@@ -193,6 +195,39 @@ describe("mockStructuredData", () => {
     expect(parsed).not.toHaveProperty("note");
     expect(parsed.required).toBe("mock");
   });
+
+  // The worker drops any fact whose quote is not in the block it names, so
+  // the local fixture must quote the blocks of the request it answers.
+  for (const provider of PROVIDERS) {
+    test(`answers fact extraction with quotes of the asked blocks (${provider})`, () => {
+      const blocks = new Map([
+        [
+          "b1",
+          "On 9 March 2021 the board approved the policy. It was later circulated.",
+        ],
+        ["b2", "The ward manager said the policy was final."],
+        ["b3", "Ok."],
+      ]);
+      const request = `Document blocks:\n${[...blocks]
+        .map(([id, text]) => `[${id}] ${text}`)
+        .join("\n")}\n\nList the facts in these blocks only: b1, b2, b3`;
+      const data = mockStructuredData(
+        structuredOutputSchemaFor(factExtractionSchema, provider),
+        [{ role: "user", content: [{ type: "text", content: request }] }],
+      );
+      const { facts } = v.parse(factExtractionSchema, data);
+      expect(
+        facts.map(({ blockId, quote, contestedMeaning }) => ({
+          blockId,
+          located: locateQuote(blocks.get(blockId) ?? "", quote) !== null,
+          held: contestedMeaning !== null,
+        })),
+      ).toEqual([
+        { blockId: "b1", located: true, held: false },
+        { blockId: "b2", located: true, held: true },
+      ]);
+    });
+  }
 
   test("keeps the curated templates/prefill fixture", () => {
     const data = mockStructuredData(

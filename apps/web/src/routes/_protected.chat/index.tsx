@@ -16,6 +16,7 @@ import {
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { CHAT_CLOUD_RUN_TARGET } from "@stll/api-contract/chat-run-target";
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -643,6 +644,8 @@ function ChatIndex() {
               skillChat={{
                 contextMatterIds,
                 document: null,
+                // A new chat's first send runs on stella.
+                runTarget: CHAT_CLOUD_RUN_TARGET,
                 threadRef,
                 webSearch:
                   chatDraftMeta === undefined

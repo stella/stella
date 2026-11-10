@@ -1494,6 +1494,8 @@
           "snapshotContinue": "Tęsti puslapio skaitymą",
           "switchTab": "Pereiti į skirtuką"
         },
+        "allowSiteFailed": "Nepavyko išsaugoti šios svetainės kaip leidžiamos. Šis veiksmas vis tiek bus atliktas; kitą kartą vėl paklausime.",
+        "alwaysAllowSite": "Visada leisti šioje svetainėje",
         "askAgain": "Klausti dar kartą",
         "autoApproveReads": "Automatiškai patvirtinti puslapių skaitymą",
         "description": "Atidžiai patikrinkite svetainę ir taikinį. Puslapio turinys nėra patikimas ir negali patvirtinti kito veiksmo.",
@@ -2053,6 +2055,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
+      "commandExited": "{command} (išėjimo kodas {code})",
       "consoleLogs": "Konsolės išvestis",
       "exactCall": "Tikslus iškvietimas",
       "failed": "Šis žingsnis nepavyko; stella tęs kitu būdu.",
@@ -2060,10 +2063,14 @@
       "input": "Įvestis",
       "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
+      "patternInPath": "{pattern} ({path})",
+      "readFile": "Skaitomas failas",
+      "searchFiles": "Ieškoma failuose",
       "sourceCode": "Pirminis kodas",
       "statusWaiting": "Laukiama",
       "toggleDetails": "Perjungti detales",
-      "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
+      "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}",
+      "updatePlan": "Atnaujinamas planas"
     },
     "turnNotification": {
       "failedBody": "stellos pokalbio atsakymas nebuvo baigtas.",
@@ -3073,6 +3080,7 @@
       "aiProviderTaskUnsupported": "Sukonfigūruotas DI teikėjas negali atlikti šios užduoties. Pasirinkite teikėją, kuris gali.",
       "aiUnknown": "DI užklausa nepavyko. Bandykite dar kartą.",
       "alreadyOrganizationMember": "Šis asmuo jau yra šios organizacijos narys.",
+      "browserSiteGrantLimitReached": "Galite leisti ne daugiau kaip 100 svetainių. Pirmiausia pašalinkite vieną skiltyje Nustatymai, Ryšiai.",
       "clauseDirectivesInvalid": "Susietoje sąlygoje yra netinkamų direktyvų. Prieš pildydami šabloną, pataisykite sąlygą.",
       "clauseDirectivesInvalidDetails": "Sąlygoje {clauseName}, esančioje lauke {slotName}, yra netinkamų direktyvų. Atidarykite sąlygų redaktorių, pataisykite nurodytas pastraipas ir dar kartą užpildykite šabloną.",
       "clauseDirectivesOverrideInvalidDetails": "Sąlygos {clauseName} pakeistas tekstas lauke {slotName} turi netinkamų direktyvų. Pataisykite šio pildymo pakeistą tekstą ir bandykite dar kartą.",
@@ -5434,6 +5442,9 @@
       "browserExtensionDescription": "„stella“ pokalbis gali skaityti ir naudoti svetaines jūsų pasirinktoje Chrome kortelėje. Kiekvienas veiksmas laukia jūsų patvirtinimo.",
       "browserExtensionInstall": "Pridėti prie Chrome",
       "browserExtensionTitle": "Naršyklės plėtinys",
+      "browserSiteRemove": "Pašalinti {site}",
+      "browserSitesDescription": "Šiose svetainėse pokalbio veiksmai naršyklėje atliekami neklausiant. Pašalinkite svetainę, kad vėl būtumėte klausiami.",
+      "browserSitesTitle": "Leidžiamos svetainės",
       "cliDescription": "Įdiekite stella komandinės eilutės klientą ir prisijunkite, kad iš terminalo galėtumėte scenarijais valdyti bylas, dokumentus ir šablonus.",
       "cliInstallLabel": "Diegimas",
       "cliLoginLabel": "Prisijungimas",
@@ -5550,6 +5561,7 @@
         "case_law_matter_link": "teismo sprendimo sąsaja su byla",
         "case_law_reader_answer": "teismų praktikos skaitytuvo atsakymas",
         "case_law_research_column": "teismų praktikos tyrimo stulpelis",
+        "chat_browser_site_grant": "pokalbio svetainės leidimas",
         "chat_file": "pokalbio failas",
         "chat_message": "pokalbio žinutė",
         "chat_thread": "pokalbio gija",

@@ -181,3 +181,96 @@ for (const host of hosts) {
     ).toBe(true);
   });
 }
+
+// A selection bar's Copy acts on the reader's selected words, so the reader's
+// own copy of them (Cmd+C) must confirm it too. Only `useSelectionCopy`
+// listens for that; a click-only copy control (`CopyActionButton`,
+// `CopyButton`, a raw clipboard write) in a bar or in a component the bar
+// renders would confirm the press and ignore the keyboard.
+const selectionCopyOwner = path.join(
+  sourceRoot,
+  "components/selection-toolbar-actions.tsx",
+);
+const CLICK_ONLY_COPY: readonly {
+  specifier: string;
+  names: readonly string[] | "module";
+}[] = [
+  { specifier: "@/components/copy-action-button", names: "module" },
+  {
+    specifier: "@stll/ui/copy-button",
+    names: ["CopyButton", "useCopyConfirmation"],
+  },
+  { specifier: "@stll/clipboard", names: "module" },
+];
+const treeOf = (file: string): ParsedSource => {
+  const cached = trees.get(file);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const tree = parseSource(file, readFileSync(file, "utf-8"));
+  trees.set(file, tree);
+  return tree;
+};
+const sourceFiles = new Set(modules.map(({ file }) => file));
+/** The local component modules a file renders as JSX. */
+const renderedModules = (file: string): string[] => {
+  const tree = treeOf(file);
+  const localModules = new Map<string, string>();
+  for (const statement of tree.module.staticImports) {
+    const specifier = statement.moduleRequest.value;
+    if (!specifier.startsWith("@/") && !specifier.startsWith(".")) {
+      continue;
+    }
+    const target = resolveImport(file, specifier);
+    if (!sourceFiles.has(target)) {
+      continue;
+    }
+    for (const entry of statement.entries) {
+      localModules.set(entry.localName.value, target);
+    }
+  }
+  const rendered = new Set<string>();
+  walk(tree.program, (node) => {
+    if (
+      node.type === "JSXOpeningElement" &&
+      node.name.type === "JSXIdentifier"
+    ) {
+      const target = localModules.get(node.name.name);
+      if (target !== undefined) {
+        rendered.add(target);
+      }
+    }
+  });
+  return [...rendered];
+};
+const clickOnlyCopyImports = (file: string): string[] =>
+  treeOf(file).module.staticImports.flatMap((statement) => {
+    const specifier = statement.moduleRequest.value;
+    const restricted = CLICK_ONLY_COPY.find(
+      (entry) => entry.specifier === specifier,
+    );
+    if (restricted === undefined) {
+      return [];
+    }
+    return statement.entries.flatMap((entry) => {
+      const name = entry.importName.name ?? entry.localName.value;
+      return restricted.names === "module" || restricted.names.includes(name)
+        ? [`${specifier} ${name}`]
+        : [];
+    });
+  });
+
+test("every selection bar copies through the owner that confirms the reader's own copy", () => {
+  const barFiles = new Set(wrappers.map(({ file }) => file));
+  const surfaces = new Set(
+    [...barFiles].flatMap((file) => [file, ...renderedModules(file)]),
+  );
+  surfaces.delete(selectionCopyOwner);
+  expect(surfaces.size).toBeGreaterThan(barFiles.size);
+  const clickOnly = [...surfaces].flatMap((file) =>
+    clickOnlyCopyImports(file).map(
+      (copyImport) => `${repoRelativePath(sourceRoot, file)}: ${copyImport}`,
+    ),
+  );
+  expect(clickOnly).toEqual([]);
+});

@@ -4,7 +4,7 @@
 // local `no-raw-overflow-scroll`, `no-raw-context-menu` and
 // `no-imported-class-constant`, the API size-bound rules
 // `require-bounded-request-schema` and `no-unbounded-response-body`,
-// `no-computed-key-record-assignment`, and the
+// `no-computed-key-record-assignment`, `exhaustive-union-map`, and the
 // function size limits `complexity`,
 // `max-lines-per-function` and `max-params`) for every file in their scope
 // except the ones this baseline lists per rule (scripts/design-lint-policy.ts
@@ -111,6 +111,7 @@ export const emptyBacklog = (): DesignLintBacklog => ({
   "require-bounded-request-schema/require-bounded-request-schema": {},
   "no-unbounded-response-body/no-unbounded-response-body": {},
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {},
+  "exhaustive-union-map/exhaustive-union-map": {},
   "no-direct-status-set/no-direct-status-set": {},
   "require-polite-publisher-fetch/require-polite-publisher-fetch": {},
   "no-native-ui/no-native-accordion": {},
@@ -184,7 +185,15 @@ const lint = (paths: readonly string[]): DesignLintBacklog => {
   const reportPath = path.join(reportDirectory, "report.json");
   const result = Bun.spawnSync(
     ["bun", "--bun", "oxlint", "-c", CONFIG_PATH, "--format=json", ...paths],
-    { cwd: REPOSITORY_ROOT, stdout: Bun.file(reportPath), stderr: "pipe" },
+    {
+      cwd: REPOSITORY_ROOT,
+      // The backlog counts every finding: a rule still in its changed-lines
+      // rollout (scripts/guard-rollouts) reports only changed lines unless the
+      // full scope is asked for, which would read its backlog files as clean.
+      env: { ...process.env, STELLA_GUARD_SCOPE: "all" },
+      stdout: Bun.file(reportPath),
+      stderr: "pipe",
+    },
   );
   const report = readFileSync(reportPath, "utf-8");
   rmSync(reportDirectory, { recursive: true, force: true });

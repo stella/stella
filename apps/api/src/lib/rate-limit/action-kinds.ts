@@ -90,6 +90,8 @@ export const ACTION_KINDS = {
   "bilingual.background": MODEL_BACKGROUND,
   "list-verification.start": MODEL_ACTION,
   "list-verification.background": MODEL_BACKGROUND,
+  "list-fact-extraction.start": MODEL_ACTION,
+  "list-fact-extraction.background": MODEL_BACKGROUND,
   "report-export.start": MODEL_ACTION,
   "report-export.background": MODEL_BACKGROUND,
   "mcp.services/call": {
@@ -132,6 +134,7 @@ export const ACTION_KIND_COUNTED_BY = {
   "document-translation.background": "document-translation.start",
   "bilingual.background": "bilingual.start",
   "list-verification.background": "list-verification.start",
+  "list-fact-extraction.background": "list-fact-extraction.start",
   "report-export.background": "report-export.start",
 } as const satisfies Record<ConcurrencyOnlyActionKind, PeriodActionKind>;
 

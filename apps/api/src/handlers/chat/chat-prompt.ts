@@ -72,7 +72,10 @@ import { corpusStorageMode } from "@/api/env-base";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import type { StatuteProvisionSelection } from "@/api/handlers/chat/active-statute-selection.logic";
-import { browserExtensionPolicy } from "@/api/handlers/chat/browser-extension-capability";
+import {
+  browserExtensionPolicy,
+  type TurnBrowserExtension,
+} from "@/api/handlers/chat/browser-extension-capability";
 import {
   CHAT_REVISION_CONTEXT_MAX_EDITS,
   readChatRevisionContextChanges,
@@ -183,7 +186,7 @@ export type {
 } from "@/api/lib/chat/chat-prompt-layers";
 
 export const browserExtensionPromptLine = (
-  extension: BrowserExtensionCapability,
+  extension: TurnBrowserExtension,
 ): string => browserExtensionPolicy(extension).promptLine;
 
 const TITLE_MAX_LENGTH = 80;
@@ -687,7 +690,7 @@ export const buildChatPromptCacheKey = (
 };
 
 type BuildChatSystemPromptProps = {
-  browserExtension?: BrowserExtensionCapability | undefined;
+  browserExtension?: TurnBrowserExtension | undefined;
   caseLawDb?: CaseLawPublicReadDb;
   featureAccessContext?: McpFeatureAccessContext | undefined;
   activeDecision: IncomingActiveDecision | undefined;

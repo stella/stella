@@ -1,5 +1,5 @@
 import { PDF, Standard14Font, StandardFonts } from "@libpdf/core";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { FolioAIBlock } from "@stll/folio-core/server";
 
@@ -21,7 +21,10 @@ import {
   canPrepareExtractedTextFile,
   isAISupportedFile,
 } from "@/api/lib/workflow/ai-file-support";
-import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
+import {
+  generateWorkflowData,
+  propertyOutput,
+} from "@/api/lib/workflow/ai-generate-batch";
 import {
   fieldContentFromValidated,
   isEmptyFieldContent,
@@ -388,18 +391,34 @@ export const generateBatch = async (
       generation.fit.type === "cut" ? "notFoundInCutDocument" : "notStated";
 
     for (const property of generation.properties) {
-      if (generation.refusedPropertyIds.has(property.id)) {
-        settlements.set(property.id, "refused");
-        continue;
-      }
-      const propertyResult = generation.output[property.id];
-      if (!propertyResult) {
-        settlements.set(property.id, noAnswer);
-        continue;
+      const output = propertyOutput(generation, property);
+      switch (output.type) {
+        case "returned":
+          break;
+        case "refused":
+          settlements.set(property.id, "refused");
+          continue;
+        case "not-asked":
+          settlements.set(property.id, noAnswer);
+          continue;
+        // A missing entry is a failed request, not a model saying the
+        // document is silent: settling it as "not stated" would grade the
+        // position as a missing clause.
+        case "omitted":
+          return Result.err(
+            new WorkflowIntegrationError({
+              message:
+                "Workflow AI generation returned no answer for a property",
+              cause: { propertyId: property.id },
+            }),
+          );
+        default:
+          output satisfies never;
+          return panic("Unhandled workflow property output");
       }
 
       const validated = yield* validateAIOutput({
-        aiResult: propertyResult,
+        aiResult: output.result,
         property,
       });
 

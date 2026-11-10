@@ -139,14 +139,15 @@ const publish = async (
 /**
  * Copies a run's attached files into its folder before the harness starts. A
  * chat's turns share the folder, so a file already there is left as it is: the
- * agent may have worked on it.
+ * agent may have worked on it. Answers the paths it copied.
  */
 export const copyAttachments = async (
   attachments: readonly DesktopRunnerAttachment[],
   workspaceDir: string,
   { fetch: fetcher, signal }: CopyOptions = {},
-): Promise<Result<void, AttachmentCopyFailed>> =>
+): Promise<Result<string[], AttachmentCopyFailed>> =>
   await Result.gen(async function* () {
+    const copiedPaths: string[] = [];
     const request =
       fetcher === undefined
         ? fetchWithTimeout
@@ -179,6 +180,7 @@ export const copyAttachments = async (
         });
         return Result.isError(removed) ? removed : copied;
       }
+      copiedPaths.push(attachment.path);
     }
-    return Result.ok();
+    return Result.ok(copiedPaths);
   });

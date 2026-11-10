@@ -18,11 +18,14 @@ use crate::runner_protocol::{
   RunTokenRefresh,
 };
 
-pub(crate) const SIDECAR_PROTOCOL: u32 = 3;
+pub(crate) const SIDECAR_PROTOCOL: u32 = 4;
 /// Largest line either side writes or accepts, in UTF-8 bytes.
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Runs one `hello` may resume or list.
 pub(crate) const MAX_HELD_RUNS: usize = 1000;
+/// Beside a run's folder, the sidecar's checkpoints live under the folder's
+/// name with this suffix; removing a folder removes them too.
+pub(crate) const CHECKPOINT_STORE_SUFFIX: &str = ".checkpoints";
 /// Hex characters of the holder's secret.
 pub(crate) const SECRET_HEX_LENGTH: usize = 64;
 
@@ -66,6 +69,14 @@ wire_values!(Rejection {
   Draining => "draining",
   AtCapacity => "at_capacity",
   OriginMismatch => "origin_mismatch",
+});
+
+wire_values!(RestoreOutcome {
+  Restored => "restored",
+  NoCheckpoint => "no_checkpoint",
+  NotNewest => "not_newest",
+  FolderBusy => "folder_busy",
+  Failed => "failed",
 });
 
 wire_values!(HolderMode {
@@ -212,6 +223,16 @@ pub(crate) struct SidecarRunStart {
   pub(crate) mcp: McpBinding,
 }
 
+/// Put a run's folder back as it was before the run, from the checkpoint the
+/// run took; answered by [`SidecarMessage::FolderRestored`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FolderRestore {
+  pub(crate) request_id: String,
+  pub(crate) workspace_dir: String,
+  pub(crate) run_id: String,
+}
+
 /// What the desktop writes to the holder.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -239,6 +260,8 @@ pub(crate) enum HostMessage {
   Resume(ResumePoint),
   #[serde(rename = "harness.process_granted")]
   HarnessProcessGranted(ProcessRef),
+  #[serde(rename = "folder.restore")]
+  FolderRestore(FolderRestore),
   #[serde(rename = "drain")]
   Drain,
   #[serde(rename = "shutdown")]
@@ -259,6 +282,7 @@ impl HostMessage {
     "ack",
     "resume",
     "harness.process_granted",
+    "folder.restore",
     "drain",
     "shutdown",
   ];
@@ -375,6 +399,14 @@ pub(crate) struct SidecarRunFinished {
   pub(crate) harness_session_id: Option<String>,
 }
 
+/// The answer to a folder restore; it names no file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FolderRestored {
+  pub(crate) request_id: String,
+  pub(crate) outcome: RestoreOutcome,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Rejected {
@@ -399,6 +431,8 @@ pub(crate) enum SidecarMessage {
   RunApprovalRequest(SidecarApprovalRequest),
   #[serde(rename = "run.finished")]
   RunFinished(SidecarRunFinished),
+  #[serde(rename = "folder.restored")]
+  FolderRestored(FolderRestored),
   #[serde(rename = "rejected")]
   Rejected(Rejected),
 }
@@ -412,6 +446,7 @@ impl SidecarMessage {
     "run.event",
     "run.approval_request",
     "run.finished",
+    "folder.restored",
     "rejected",
   ];
 }
@@ -497,6 +532,10 @@ mod tests {
         "holderModes",
         names(HolderMode::ALL.iter().map(|value| value.wire_name())),
       ),
+      (
+        "restoreOutcomes",
+        names(RestoreOutcome::ALL.iter().map(|value| value.wire_name())),
+      ),
     ];
     for (name, rust) in cases {
       assert_eq!(rust, listed(&fixtures, name), "{name}");
@@ -530,6 +569,10 @@ mod tests {
     assert_eq!(
       fixtures["vocabulary"]["maxHeldRuns"].as_u64(),
       u64::try_from(MAX_HELD_RUNS).ok()
+    );
+    assert_eq!(
+      fixtures["vocabulary"]["checkpointStoreSuffix"].as_str(),
+      Some(CHECKPOINT_STORE_SUFFIX)
     );
   }
 
