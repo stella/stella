@@ -4,8 +4,14 @@ import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference"
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
-import { decisionKeysToWrite } from "@/api/scripts/backfill-citation-keys-plan";
-import type { StoredDecisionKeys } from "@/api/scripts/backfill-citation-keys-plan";
+import {
+  citationKeysToReopen,
+  decisionKeysToWrite,
+} from "@/api/scripts/backfill-citation-keys-plan";
+import type {
+  DecisionKeyChange,
+  StoredDecisionKeys,
+} from "@/api/scripts/backfill-citation-keys-plan";
 
 const unkeyed = (
   storedReference: string,
@@ -80,5 +86,39 @@ describe("decisionKeysToWrite", () => {
         "missing",
       ).docketFamilyKey,
     ).toBeNull();
+  });
+});
+
+describe("citationKeysToReopen", () => {
+  const unchanged: DecisionKeyChange = {
+    key: "6 ads 21/2026",
+    stored: "6 ads 21/2026",
+    family: "6 ads 21/2026",
+    storedFamily: "6 ads 21/2026",
+  };
+
+  test("a row whose keys are unchanged reopens nothing", () => {
+    expect(citationKeysToReopen([unchanged])).toEqual([]);
+  });
+
+  test("filling a case-file key reopens the unchanged citation key", () => {
+    expect(
+      citationKeysToReopen([{ ...unchanged, storedFamily: null }]),
+    ).toEqual(["6 ads 21/2026"]);
+  });
+
+  test("clearing a case-file key reopens the unchanged citation key", () => {
+    expect(citationKeysToReopen([{ ...unchanged, family: null }])).toEqual([
+      "6 ads 21/2026",
+    ]);
+  });
+
+  test("a rewritten citation key reopens its old and new spelling once", () => {
+    expect(
+      citationKeysToReopen([
+        { ...unchanged, stored: "old" },
+        { ...unchanged, key: "old", stored: null },
+      ]),
+    ).toEqual(["6 ads 21/2026", "old"]);
   });
 });

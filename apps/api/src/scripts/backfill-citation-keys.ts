@@ -39,7 +39,12 @@ import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extrac
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
-import { decisionKeysToWrite } from "@/api/scripts/backfill-citation-keys-plan";
+import {
+  citationKeysToReopen,
+  decisionKeysToWrite,
+  rowKeysChange,
+} from "@/api/scripts/backfill-citation-keys-plan";
+import type { DecisionKeyChange } from "@/api/scripts/backfill-citation-keys-plan";
 import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 
 const plan = backfillEntrypoints["citation-keys"]({
@@ -56,13 +61,7 @@ await runScriptWithErrorOutput(async () => {
   type BackfillTotals = { seen: number; keyed: number };
 
   /** A batch row: the keys it should hold, and the ones it holds. */
-  type KeyedRow = {
-    id: string;
-    key: string | null;
-    stored: string | null;
-    family: string | null;
-    storedFamily: string | null;
-  };
+  type KeyedRow = DecisionKeyChange & { id: string };
 
   const storedText = (value: unknown): string | null =>
     typeof value === "string" ? value : null;
@@ -163,10 +162,7 @@ await runScriptWithErrorOutput(async () => {
                     return { cursor, done: true, value: { seen: 0, keyed: 0 } };
                   }
 
-                  const keyed = rows.filter(
-                    ({ family, key, stored, storedFamily }) =>
-                      key !== stored || family !== storedFamily,
-                  );
+                  const keyed = rows.filter(rowKeysChange);
                   if (keyed.length > 0) {
                     // Rekeying and reopening affected citations share the checkpoint transaction.
                     if (table === "case_law_decisions") {
@@ -185,17 +181,10 @@ await runScriptWithErrorOutput(async () => {
                     FROM v
                    WHERE t.id = v.id`,
                       );
-                      // A changed case-file key changes which candidate a
-                      // stated sheet can name (`SHEET_READING_SQL.stated`),
-                      // so citations under the decision's keys are reopened
-                      // whichever of its keys changed.
-                      await reopenCitationsForKeys(tx, [
-                        ...new Set(
-                          keyed.flatMap(({ key, stored }) =>
-                            [key, stored].filter((value) => value !== null),
-                          ),
-                        ),
-                      ]);
+                      await reopenCitationsForKeys(
+                        tx,
+                        citationKeysToReopen(rows),
+                      );
                     } else {
                       const values = sql.join(
                         keyed.map(

@@ -52,3 +52,40 @@ export const decisionKeysToWrite = (
         docketFamilyKey: derived.docketFamilyKey,
       };
 };
+
+/** A decision row's keys before (`stored`, `storedFamily`) and after the pass. */
+export type DecisionKeyChange = {
+  key: string | null;
+  stored: string | null;
+  family: string | null;
+  storedFamily: string | null;
+};
+
+/** Whether the pass rewrites either of a row's keys. */
+export const rowKeysChange = ({
+  family,
+  key,
+  stored,
+  storedFamily,
+}: DecisionKeyChange): boolean => key !== stored || family !== storedFamily;
+
+/**
+ * The citation keys whose candidates a batch of decision rewrites changed.
+ *
+ * A stated sheet names a candidate only while it holds a case-file key
+ * (`SHEET_READING_SQL.stated`), so filling or clearing that key alone, under
+ * an unchanged citation key, can change which decision a citation resolves
+ * to. Citations are matched by citation key, so a row whose either key
+ * changed reopens the citations under its old and new citation keys.
+ */
+export const citationKeysToReopen = (
+  rows: readonly DecisionKeyChange[],
+): string[] => [
+  ...new Set(
+    rows
+      .filter(rowKeysChange)
+      .flatMap(({ key, stored }) =>
+        [key, stored].filter((value) => value !== null),
+      ),
+  ),
+];
