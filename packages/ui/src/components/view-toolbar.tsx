@@ -5,9 +5,25 @@ import { cn } from "../lib/utils";
 import { Button } from "./button";
 
 /**
- * Shared view controls stay compact and scroll horizontally on small screens:
- * the row never grows past its container, so a control past the edge is
- * scrolled to rather than clipped.
+ * The one row that holds a view switcher and its toolbar. It never wraps: at
+ * any width the tabs and the controls share a single line, the tabs taking the
+ * free space and scrolling, the toolbar keeping its place at the end.
+ */
+export const ViewChromeBar = ({
+  className,
+  ...props
+}: ComponentProps<"div">) => (
+  <div
+    className={cn("flex min-w-0 flex-nowrap items-center border-b", className)}
+    {...props}
+  />
+);
+
+/**
+ * Shared view controls, placed at the end of a `ViewChromeBar`. They stay on
+ * one line and scroll horizontally once they outgrow two thirds of the row, so
+ * the tabs beside them always keep room to show and scroll, and a control past
+ * the edge is scrolled to rather than clipped.
  */
 export const ViewToolbarChrome = ({
   className,
@@ -15,7 +31,7 @@ export const ViewToolbarChrome = ({
 }: ComponentProps<"div">) => (
   <div
     className={cn(
-      "flex max-w-full min-w-0 shrink-0 [scrollbar-width:none] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden",
+      "ms-auto flex max-w-2/3 min-w-0 shrink-0 [scrollbar-width:none] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
       className,
     )}
     {...props}
