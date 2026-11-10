@@ -2541,3 +2541,77 @@ describe("anonymization output that lost its field structure", () => {
     );
   });
 });
+
+describe("a suspended browsing run's child", () => {
+  test("crosses the anonymized boundary like the thread it sits in", async () => {
+    const { prepareSuspendedBrowseRuns } =
+      await import("@/api/handlers/chat/browse-web-agent");
+    const childCall: ChatPart = {
+      arguments: JSON.stringify({ action: "snapshot" }),
+      id: "child-call",
+      input: { action: "snapshot" },
+      name: BROWSER_CONTROL_TOOL_NAME,
+      output: { title: `${STORED_PART_VALUE} profile` },
+      state: "complete",
+      type: "tool-call",
+    };
+    const messages: ChatMessage[] = [
+      {
+        id: "assistant-1",
+        parts: [
+          {
+            subagent: {
+              id: "browse-run",
+              interruptIds: ["approval-1"],
+              messages: [
+                {
+                  id: "child-1",
+                  parts: [
+                    { content: `Reading ${STORED_PART_VALUE}.`, type: "text" },
+                    childCall,
+                  ],
+                  role: "assistant",
+                },
+              ],
+              name: "browse_web",
+              parentToolCallId: "call-browse",
+              status: "suspended",
+            },
+            type: "subagent",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const prepared = await prepareSuspendedBrowseRuns({
+      boundary: createBoundary(),
+      messages,
+      workspaceIds: [],
+    });
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    // The planted value reaches the boundary's input ...
+    expect(JSON.stringify(messages)).toContain(STORED_PART_VALUE);
+    // ... and leaves only as its placeholder, in the child's history and in
+    // the part the SDK resumes from.
+    const sent = JSON.stringify([
+      [...prepared.value.runs.values()],
+      prepared.value.parts,
+    ]);
+    expect(sent).not.toContain(STORED_PART_VALUE);
+    expect(sent).toContain("[PERSON_1]");
+    expect(prepared.value.messageId).toBe("assistant-1");
+
+    // A raw boundary sends it unchanged.
+    const raw = await prepareSuspendedBrowseRuns({
+      boundary: createRawBoundary(),
+      messages,
+      workspaceIds: [],
+    });
+    expect(
+      JSON.stringify(Result.isOk(raw) ? [...raw.value.runs.values()] : null),
+    ).toContain(STORED_PART_VALUE);
+  });
+});

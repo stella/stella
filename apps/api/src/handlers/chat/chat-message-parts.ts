@@ -1119,9 +1119,19 @@ const cancelPendingToolCallPart = (
  */
 export const cancelPendingChatToolCalls = (
   message: PersistableChatMessage,
-): PersistableChatMessage => {
+): PersistableChatMessage => ({
+  ...message,
+  parts: cancelPendingToolCallParts(message.parts),
+});
+
+/** `parts` with every pending call closed, at every depth; see
+ *  `cancelPendingChatToolCalls`. */
+const cancelPendingToolCallParts = (parts: readonly ChatPart[]): ChatPart[] => {
   const results: ChatToolResultPart[] = [];
-  const parts = message.parts.map((part) => {
+  const closed = parts.map((part) => {
+    if (part.type === "subagent") {
+      return continueStoredChatPart(part, stopSubagentRun(part));
+    }
     if (part.type !== "tool-call") {
       return part;
     }
@@ -1131,8 +1141,65 @@ export const cancelPendingChatToolCalls = (
     }
     return continueStoredChatPart(part, call);
   });
-  return { ...message, parts: [...parts, ...results] };
+  return [...closed, ...results];
 };
+
+/** The run's handle as the SDK leaves a child it stopped. */
+const SUBAGENT_STOPPED_ERROR = { message: "Stopped" } as const;
+
+/**
+ * A sub-agent run of a terminated turn: its child's pending calls closed as a
+ * message's own are, and a run that could still continue (running, or
+ * suspended on an answer) stopped, as the SDK stops a child, so no control
+ * inside it stays answerable.
+ */
+const stopSubagentRun = (part: ChatSubagentPart): ChatSubagentPart => {
+  const { interruptIds: _interruptIds, ...handle } = part.subagent;
+  const messages = part.subagent.messages.map((message) => ({
+    ...message,
+    parts: cancelPendingToolCallParts(childPartsOf(message)),
+  }));
+  switch (part.subagent.status) {
+    case "running":
+    case "suspended":
+      return {
+        subagent: {
+          ...handle,
+          error: SUBAGENT_STOPPED_ERROR,
+          messages,
+          status: "error",
+        },
+        type: "subagent",
+      };
+    case "error":
+    case "finished":
+      return { subagent: { ...part.subagent, messages }, type: "subagent" };
+    default:
+      part.subagent.status satisfies never;
+      return panic(`Unhandled status: ${String(part.subagent.status)}`);
+  }
+};
+
+/**
+ * Every tool call of `parts` an answer can reach: their own, and those of
+ * each suspended sub-agent run inside them, at every depth. The SDK resumes
+ * only a suspended child, so a call inside a running, finished or failed one
+ * awaits nothing.
+ */
+export const answerableToolCalls = (
+  parts: readonly ChatPart[],
+): ChatToolCallPart[] =>
+  parts.flatMap((part) => {
+    if (part.type === "tool-call") {
+      return [part];
+    }
+    if (part.type === "subagent" && part.subagent.status === "suspended") {
+      return part.subagent.messages.flatMap((message) =>
+        answerableToolCalls(childPartsOf(message)),
+      );
+    }
+    return [];
+  });
 
 /** The tools whose calls in `message` await an approval. */
 export const getAwaitedApprovalToolNames = (
@@ -1147,10 +1214,8 @@ export const getAwaitedApprovalToolNames = (
     ),
   );
   return new Set(
-    message.parts.flatMap((part) =>
-      part.type === "tool-call" && awaitedCallIds.has(part.id)
-        ? [part.name]
-        : [],
+    answerableToolCalls(message.parts).flatMap((part) =>
+      awaitedCallIds.has(part.id) ? [part.name] : [],
     ),
   );
 };
@@ -1237,11 +1302,8 @@ export const getResumedUserInteraction = ({
     ),
   );
   let unchangedInteraction: AwaitingUserInteraction | null = null;
-  for (let index = message.parts.length - 1; index >= 0; index -= 1) {
-    const part = message.parts[index];
-    if (part?.type !== "tool-call") {
-      continue;
-    }
+  // Newest first, a suspended sub-agent's calls included where they sit.
+  for (const part of answerableToolCalls(message.parts).toReversed()) {
     const interaction = awaitedByToolCallId.get(part.id);
     if (interaction === undefined) {
       continue;

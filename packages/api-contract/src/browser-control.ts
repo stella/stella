@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 export const BROWSER_CONTROL_PROTOCOL_VERSION = 8 as const;
 export const BROWSER_CONTROL_TOOL_NAME = "use-browser" as const;
+export const BROWSE_WEB_TOOL_NAME = "browse_web" as const;
 
 /**
  * The hosted stella origins the store build bridges: every extension build
@@ -736,6 +737,34 @@ export const browserControlRetainedResultSchema = v.variant("status", [
 export type BrowserControlRetainedResult = v.InferOutput<
   typeof browserControlRetainedResultSchema
 >;
+
+/**
+ * The page a kept `use-browser` output read, whole or as its projection, as
+ * the extension reported it (never a URL the model wrote), or `null` for an
+ * output that read no page.
+ */
+export const browserControlResultPage = (
+  output: unknown,
+): { title: string; url: string } | null => {
+  const result = v.safeParse(browserControlRetainedResultSchema, output);
+  if (!result.success) {
+    return null;
+  }
+  switch (result.output.status) {
+    case "success":
+      return {
+        title: result.output.snapshot.title,
+        url: result.output.snapshot.url,
+      };
+    case "superseded":
+      return { title: result.output.page.title, url: result.output.page.url };
+    case "error":
+      return null;
+    default:
+      result.output satisfies never;
+      return panic("Unhandled browser control result");
+  }
+};
 
 /**
  * The projection of a result a later page read replaced, or `null` for one
