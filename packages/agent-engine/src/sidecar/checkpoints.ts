@@ -2180,7 +2180,11 @@ export const captureCheckpoint = async ({
   if (Result.isOk(taken)) {
     return { status: "taken" };
   }
-  log(`no checkpoint was taken: ${taken.error.message}`);
+  // A folder past a bound is expected and reported in the run's event; only
+  // a capture that failed is worth a line in the log.
+  if (taken.error.reason === "failed") {
+    log(`no checkpoint was taken: ${taken.error.message}`);
+  }
   return { status: "unavailable", reason: taken.error.reason };
 };
 
