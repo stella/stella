@@ -151,7 +151,11 @@
     "scanDocument": "Digitalizar um documento",
     "newTask": "Nova tarefa",
     "uploadDocument": "Carregar documento",
-    "uploadFailed": "Não foi possível enviar o documento. Tente novamente."
+    "uploadFailed": "Não foi possível enviar o documento. Tente novamente.",
+    "startTimer": "Iniciar cronômetro",
+    "pauseTimer": "Pausar cronômetro",
+    "resumeTimer": "Retomar cronômetro",
+    "timerRunning": "Cronômetro em andamento"
   },
   "entity": {
     "type": "Tipo",

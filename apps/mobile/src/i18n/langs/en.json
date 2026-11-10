@@ -151,7 +151,11 @@
     "scanDocument": "Scan a document",
     "newTask": "New task",
     "uploadDocument": "Upload document",
-    "uploadFailed": "The document could not be uploaded. Try again."
+    "uploadFailed": "The document could not be uploaded. Try again.",
+    "startTimer": "Start timer",
+    "pauseTimer": "Pause timer",
+    "resumeTimer": "Resume timer",
+    "timerRunning": "Timer running"
   },
   "entity": {
     "type": "Type",

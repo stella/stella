@@ -151,7 +151,11 @@
     "scanDocument": "Skenēt dokumentu",
     "newTask": "Jauns uzdevums",
     "uploadDocument": "Augšupielādēt dokumentu",
-    "uploadFailed": "Dokumentu neizdevās augšupielādēt. Mēģiniet vēlreiz."
+    "uploadFailed": "Dokumentu neizdevās augšupielādēt. Mēģiniet vēlreiz.",
+    "startTimer": "Sākt taimeri",
+    "pauseTimer": "Apturēt taimeri",
+    "resumeTimer": "Turpināt taimeri",
+    "timerRunning": "Taimeris darbojas"
   },
   "entity": {
     "type": "Veids",
