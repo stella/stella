@@ -17,17 +17,32 @@ export const aggregateLockSourceIncluded = (file: string) =>
     file,
   ) &&
   file !== ".oxlint-plugins/aggregate-lock-sites.ts";
+/**
+ * What a row-locking clause locks, as its site spells it: each relation is a
+ * table's SQL name or the source expression naming its Drizzle table.
+ * `unwritten` when the site does not spell the relation out (a SQL fragment
+ * completed elsewhere, a query held in a variable).
+ */
+type RowLockTarget =
+  { type: "relations"; relations: readonly string[] } | { type: "unwritten" };
 export type AggregateLockSite = {
   file: string;
   line: number;
   fingerprint: string;
   primitive: string;
+  /** Set exactly on row-locking clauses (FOR UPDATE, FOR SHARE and kin). */
+  rowLock?: RowLockTarget;
 };
 export type AggregateLockBaselineRow = {
   file: string;
   fingerprint: string;
   count: number;
   reason: string;
+  /**
+   * The role whose transactions take this row lock, when it is not the
+   * application role: a role in the privilege census, or `owner`.
+   */
+  holder?: string;
 };
 
 const maskSqlLiteralsAndComments = (text: string) =>
@@ -81,6 +96,203 @@ const sqlLocks = (text: string, context: "sql" | "unknown" = "unknown") => {
     return !/\bCREATE\s+POLICY\b/iu.test(masked.slice(start, match.index));
   });
 };
+const UNWRITTEN: RowLockTarget = { type: "unwritten" };
+const PLACEHOLDER = `\${expression}`;
+const SQL_RELATION = String.raw`(?:\$\{expression\}|(?:"?[A-Za-z_]\w*"?\.)?"?[A-Za-z_]\w*"?)`;
+const SQL_RELATION_END = String.raw`(?![\w"(.]|\s+\()`;
+// An alias is any word after a relation that is not the next clause's keyword.
+const SQL_ALIAS = String.raw`(?!(?:WHERE|JOIN|INNER|LEFT|RIGHT|FULL|CROSS|NATURAL|LATERAL|ON|USING|ORDER|GROUP|HAVING|WINDOW|LIMIT|OFFSET|FETCH|FOR|UNION|INTERSECT|EXCEPT|TABLESAMPLE|RETURNING)\b)[A-Za-z_]\w*`;
+// Comments and string literals blanked to the same length; quoted
+// identifiers stay, since they name relations.
+const blankSqlTrivia = (text: string) =>
+  text.replace(/--[^\n]*|\/\*[\s\S]*?\*\/|'(?:''|[^'])*'/gu, (part) =>
+    part.replace(/[^\n]/gu, " "),
+  );
+type SqlRowLockOptions = {
+  text: string;
+  clause: RegExpExecArray;
+  expressions: readonly string[];
+};
+/**
+ * The relations a SQL row-locking clause locks: its `OF` list, or else every
+ * relation its statement reads FROM or JOINs before it, subqueries included,
+ * since PostgreSQL locks those too. Over-reading a WHERE subquery's relation
+ * only makes the privilege check stricter.
+ */
+const sqlRowLock = ({
+  text,
+  clause,
+  expressions,
+}: SqlRowLockOptions): RowLockTarget => {
+  const clean = blankSqlTrivia(text);
+  const start = clean.lastIndexOf(";", clause.index) + 1;
+  const statementEnd = clean.indexOf(";", clause.index);
+  const before = clean.slice(start, clause.index);
+  const after = clean.slice(
+    clause.index + clause[0].length,
+    statementEnd === -1 ? clean.length : statementEnd,
+  );
+  const name = (token: string, offset: number) =>
+    token === PLACEHOLDER
+      ? expressions.at(clean.slice(0, offset).split(PLACEHOLDER).length - 1)
+      : token.replaceAll('"', "").replace(/^public\./iu, "");
+  const ctes = new Set(
+    [
+      ...before.matchAll(
+        /\b([A-Za-z_]\w*)\s+AS\s+(?:NOT\s+)?(?:MATERIALIZED\s+)?\(/giu,
+      ),
+    ].map((match) => match[1]?.toLowerCase()),
+  );
+  const aliases = new Map<string, string>();
+  const relations: string[] = [];
+  for (const match of before.matchAll(
+    new RegExp(
+      String.raw`\b(?:FROM|JOIN)\s+(?:ONLY\s+)?(${SQL_RELATION})${SQL_RELATION_END}(?:\s+(?:AS\s+)?(${SQL_ALIAS}))?`,
+      "giu",
+    ),
+  )) {
+    const token = match[1] ?? "";
+    const relation = name(token, start + match.index + match[0].indexOf(token));
+    if (relation === undefined) {
+      return UNWRITTEN;
+    }
+    const alias = match[2];
+    // A comma-separated FROM list names relations this reading skips.
+    if (/^\s*,/u.test(before.slice(match.index + match[0].length))) {
+      return UNWRITTEN;
+    }
+    if (ctes.has(relation.toLowerCase())) {
+      continue;
+    }
+    relations.push(relation);
+    if (alias !== undefined) {
+      aliases.set(alias.toLowerCase(), relation);
+    }
+  }
+  const of = new RegExp(
+    String.raw`^\s+OF\s+(${SQL_RELATION}(?:\s*,\s*${SQL_RELATION})*)`,
+    "iu",
+  ).exec(after);
+  if (of?.[1] !== undefined) {
+    const listStart = clause.index + clause[0].length + of[0].indexOf(of[1]);
+    const named: string[] = [];
+    for (const item of of[1].matchAll(new RegExp(SQL_RELATION, "gu"))) {
+      const relation = name(item[0], listStart + item.index);
+      if (relation === undefined) {
+        return UNWRITTEN;
+      }
+      named.push(aliases.get(relation.toLowerCase()) ?? relation);
+    }
+    return { type: "relations", relations: named };
+  }
+  return relations.length === 0 ? UNWRITTEN : { type: "relations", relations };
+};
+// Drizzle query-builder steps that add a relation to the FROM clause.
+const BUILDER_RELATION_METHODS: ReadonlySet<string> = new Set([
+  "from",
+  "innerJoin",
+  "leftJoin",
+  "rightJoin",
+  "fullJoin",
+  "crossJoin",
+  "innerJoinLateral",
+  "leftJoinLateral",
+  "crossJoinLateral",
+]);
+type BuilderRowLockOptions = {
+  call: Node;
+  textOf: (node: Node) => string;
+  /** Each name the file declares once with `const`, and its initializer. */
+  constants: ReadonlyMap<string, Node | null>;
+};
+/**
+ * The relations a Drizzle `.for(strength, { of })` locks: its `of`, or else
+ * every relation its builder chain reads, following a chain held in a
+ * `const` the file declares once.
+ */
+const builderRowLock = ({
+  call,
+  textOf,
+  constants,
+}: BuilderRowLockOptions): RowLockTarget => {
+  if (
+    call.type !== "CallExpression" ||
+    call.callee.type !== "MemberExpression"
+  ) {
+    return UNWRITTEN;
+  }
+  const config = call.arguments.at(1);
+  if (config?.type === "ObjectExpression") {
+    const of = config.properties.find(
+      (property) =>
+        property.type === "Property" &&
+        !property.computed &&
+        property.key.type === "Identifier" &&
+        property.key.name === "of",
+    );
+    if (of?.type === "Property") {
+      const values =
+        of.value.type === "ArrayExpression" ? of.value.elements : [of.value];
+      const relations: string[] = [];
+      for (const value of values) {
+        if (value === null || value.type === "SpreadElement") {
+          return UNWRITTEN;
+        }
+        relations.push(textOf(value));
+      }
+      return { type: "relations", relations };
+    }
+    if (
+      config.properties.some((property) => property.type === "SpreadElement")
+    ) {
+      return UNWRITTEN;
+    }
+  }
+  const relations: string[] = [];
+  // A const holding the chain, or a const arrow function returning it.
+  const follow = (node: Node): Node => {
+    if (node.type === "Identifier") {
+      return constants.get(node.name) ?? node;
+    }
+    if (node.type === "CallExpression" && node.callee.type === "Identifier") {
+      const builder = constants.get(node.callee.name);
+      if (
+        builder?.type === "ArrowFunctionExpression" &&
+        builder.body.type !== "BlockStatement"
+      ) {
+        return builder.body;
+      }
+    }
+    return node;
+  };
+  const visited = new Set<Node>();
+  let receiver: Node = follow(call.callee.object);
+  while (
+    receiver.type === "CallExpression" &&
+    receiver.callee.type === "MemberExpression" &&
+    !visited.has(receiver)
+  ) {
+    visited.add(receiver);
+    const method = memberName(receiver.callee);
+    if (method !== undefined && BUILDER_RELATION_METHODS.has(method)) {
+      const relation = receiver.arguments.at(0);
+      if (relation === undefined || relation.type === "SpreadElement") {
+        return UNWRITTEN;
+      }
+      relations.push(textOf(relation));
+    }
+    receiver = follow(receiver.callee.object);
+  }
+  return relations.length === 0
+    ? UNWRITTEN
+    : { type: "relations", relations: relations.toReversed() };
+};
+const ROW_LOCK_PRIMITIVES: ReadonlySet<string> = new Set([
+  "for update",
+  "for no key update",
+  "for share",
+  "for key share",
+]);
 const fingerprint = (primitive: string, text: string) =>
   sha256Hex(`${primitive}:${text.replace(/\s+/gu, " ").trim()}`);
 // The cooked text of a template without substitutions, like TypeScript's
@@ -119,6 +331,7 @@ type AddAggregateLockSiteOptions = {
   primitive: string;
   text: string;
   offset: number;
+  rowLock?: RowLockTarget;
 };
 type SqlFragmentContextOptions = {
   ancestors: readonly Node[];
@@ -173,19 +386,44 @@ export const aggregateLockSites = (
   source: string,
 ): AggregateLockSite[] => {
   const sites: AggregateLockSite[] = [];
-  const add = ({ primitive, text, offset }: AddAggregateLockSiteOptions) =>
+  const add = ({
+    primitive,
+    text,
+    offset,
+    rowLock,
+  }: AddAggregateLockSiteOptions) =>
     sites.push({
       file,
       primitive,
       fingerprint: fingerprint(primitive, text),
       line: source.slice(0, offset).split("\n").length,
+      ...(rowLock === undefined ? {} : { rowLock }),
     });
+  const sqlSite = (
+    match: RegExpExecArray,
+    lockedText: string,
+    expressions: readonly string[],
+  ) => {
+    const primitive = match[0].toLowerCase().replace(/\s+/gu, " ");
+    return {
+      primitive,
+      ...(ROW_LOCK_PRIMITIVES.has(primitive)
+        ? {
+            rowLock: sqlRowLock({
+              text: lockedText,
+              clause: match,
+              expressions,
+            }),
+          }
+        : {}),
+    };
+  };
   if (file.endsWith(".sql")) {
     for (const match of sqlLocks(source, "sql")) {
       const start = source.lastIndexOf(";", match.index) + 1;
       const end = source.indexOf(";", match.index);
       add({
-        primitive: match[0].toLowerCase().replace(/\s+/gu, " "),
+        ...sqlSite(match, source, []),
         text: source.slice(start, end === -1 ? source.length : end),
         offset: match.index,
       });
@@ -194,6 +432,25 @@ export const aggregateLockSites = (
   }
   const { program } = parseSource(file, source);
   const textOf = (node: Node) => source.slice(node.start, node.end);
+  // A name declared more than once maps to null: which declaration a use
+  // reads is a scoping question this syntax-only read does not answer.
+  const constants = new Map<string, Node | null>();
+  walk(program, (node) => {
+    if (node.type !== "VariableDeclaration") {
+      return undefined;
+    }
+    for (const declarator of node.declarations) {
+      if (declarator.id.type !== "Identifier") {
+        continue;
+      }
+      const { name } = declarator.id;
+      constants.set(
+        name,
+        node.kind === "const" && !constants.has(name) ? declarator.init : null,
+      );
+    }
+    return undefined;
+  });
   const addFragmentedSites = (
     node: Node,
     ancestors: readonly Node[],
@@ -210,13 +467,20 @@ export const aggregateLockSites = (
       if (complete.some((match) => match.index === fragment.index)) {
         continue;
       }
-      add({
-        primitive: fragment[0].toLowerCase().startsWith("for")
-          ? "fragmented-row-lock"
-          : "fragmented-advisory-lock",
-        text: textOf(node),
-        offset: node.start,
-      });
+      add(
+        fragment[0].toLowerCase().startsWith("for")
+          ? {
+              primitive: "fragmented-row-lock",
+              text: textOf(node),
+              offset: node.start,
+              rowLock: UNWRITTEN,
+            }
+          : {
+              primitive: "fragmented-advisory-lock",
+              text: textOf(node),
+              offset: node.start,
+            },
+      );
     }
   };
   walk(program, (node, ancestors) => {
@@ -235,6 +499,7 @@ export const aggregateLockSites = (
           primitive: "builder-for",
           text: textOf(node),
           offset: node.start,
+          rowLock: builderRowLock({ call: node, textOf, constants }),
         });
       }
       if (method === "transaction" && file.startsWith("apps/api/")) {
@@ -275,12 +540,14 @@ export const aggregateLockSites = (
     if (text === undefined) {
       return undefined;
     }
+    const expressions =
+      node.type === "TemplateLiteral" ? node.expressions.map(textOf) : [];
     for (const match of sqlLocks(
       text,
       isSqlFragmentContext({ ancestors, source, text }) ? "sql" : "unknown",
     )) {
       add({
-        primitive: match[0].toLowerCase().replace(/\s+/gu, " "),
+        ...sqlSite(match, text, expressions),
         text: textOf(node),
         offset: node.start,
       });
