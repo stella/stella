@@ -198,10 +198,9 @@ export const ActivitySuggestionCard = ({
   // screen it keeps them in view as it grows (a draft arrives, details
   // open); a card scrolled away is left there.
   useEffect(() => {
-    const element = card.current;
-    if (element === null) {
-      return;
-    }
+    // The effect runs after the card's section has mounted.
+    const element =
+      card.current ?? panic("Suggestion card mounted without its element");
     element.focus({ preventScroll: true });
     element.scrollIntoView({ block: "nearest" });
     const observer = new ResizeObserver(() => {
