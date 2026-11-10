@@ -151,7 +151,11 @@
     "scanDocument": "Skanni dokument",
     "newTask": "Uus ülesanne",
     "uploadDocument": "Laadi üles dokument",
-    "uploadFailed": "Dokumenti ei õnnestunud üles laadida. Proovige uuesti."
+    "uploadFailed": "Dokumenti ei õnnestunud üles laadida. Proovige uuesti.",
+    "startTimer": "Käivita taimer",
+    "pauseTimer": "Peata taimer",
+    "resumeTimer": "Jätka taimerit",
+    "timerRunning": "Taimer käib"
   },
   "entity": {
     "type": "Tüüp",
@@ -351,5 +355,13 @@
     "share": "Jaga",
     "cancel": "Loobu",
     "openFailed": "Linki ei õnnestunud avada."
+  },
+  "share": {
+    "title": "Lisa stellasse",
+    "start": "Alusta",
+    "uploading": "Üleslaadimine: {done}/{total}…",
+    "filesOnly": "Salvestatakse ainult failid; lingid ja tekst jäetakse välja.",
+    "unavailableTitle": "Pole midagi lisada",
+    "unavailable": "Seda jagatud sisu enam pole. Jagage see teisest rakendusest uuesti."
   }
 }

@@ -151,7 +151,11 @@
     "scanDocument": "Zeskanuj dokument",
     "newTask": "Nowe zadanie",
     "uploadDocument": "Prześlij dokument",
-    "uploadFailed": "Nie udało się przesłać dokumentu. Spróbuj ponownie."
+    "uploadFailed": "Nie udało się przesłać dokumentu. Spróbuj ponownie.",
+    "startTimer": "Uruchom licznik",
+    "pauseTimer": "Wstrzymaj licznik",
+    "resumeTimer": "Wznów licznik",
+    "timerRunning": "Licznik działa"
   },
   "entity": {
     "type": "Typ",
@@ -351,5 +355,13 @@
     "share": "Udostępnij",
     "cancel": "Anuluj",
     "openFailed": "Nie udało się otworzyć linku."
+  },
+  "share": {
+    "title": "Dodaj do stelli",
+    "start": "Rozpocznij",
+    "uploading": "Przesyłanie {done} z {total}…",
+    "filesOnly": "Zapisane zostaną tylko pliki; linki i tekst zostaną pominięte.",
+    "unavailableTitle": "Nie ma czego dodać",
+    "unavailable": "Ten udostępniony element już nie istnieje. Udostępnij go ponownie z innej aplikacji."
   }
 }

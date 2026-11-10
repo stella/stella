@@ -281,6 +281,8 @@ const installFixtureNetwork = () => {
     matterNumberingEnabled: true,
     practiceJurisdictions: [],
     promptCachingEnabled: true,
+    aiInstructions: "",
+    aiInstructionsMaxLength: 3000,
     managedAIResidency: "eu",
     memoryExtractionEnabled: false,
     localRunMaxApprovalMode: "full_auto",

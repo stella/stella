@@ -826,11 +826,17 @@ test("only Accept sends the edited billing fields and the suggestion becomes a d
   await installNativeBoundary({ page });
   const suggestions = page.locator(SUGGESTION_BLOCKS);
   await expect(suggestions).toHaveCount(1);
+  // The piece names its own range and minutes and the entry's total.
   await expect(suggestions).toHaveAttribute(
     "aria-label",
-    enMessages.activity.suggestionLabel
-      .replace("{matter}", "Example matter")
-      .replace("{hours}", "0.5"),
+    new RegExp(
+      `^${escapePattern(enMessages.activity.suggestionPieceLabel)
+        .replace("\\{matter\\}", "Example matter")
+        .replace("\\{range\\}", ".+")
+        .replace("\\{duration\\}", "30 min")
+        .replace("\\{hours\\}", "0\\.5")}$`,
+      "u",
+    ),
   );
   await openSuggestion(page, "Example matter");
   const card = suggestionCard(page, "Example matter");
@@ -2445,6 +2451,180 @@ test("hovering an Activity block lists its apps with time and title, then counts
   );
 });
 
+/** Chrome recorded today but never allowed to record its titles. */
+const CHROME = { identifier: "com.google.chrome", name: "Google Chrome" };
+const UNTITLED_CHROME_SNAPSHOT = {
+  ...SNAPSHOT,
+  captureDetails: true,
+  detailsAccess: "ready",
+  browserApps: [CHROME],
+  segments: [
+    {
+      // The segment keeps the bundle's own casing; the consent list does not.
+      appIdentifier: "com.google.Chrome",
+      appName: CHROME.name,
+      matterId: "matter-1",
+      start: "2026-10-07T09:00:00Z",
+      end: "2026-10-07T09:30:00Z",
+    },
+  ],
+} satisfies ActivityDaySnapshot;
+
+const RECORD_CHROME_TITLES = {
+  command: "activity_set_browser_title_capture",
+  args: { identifier: CHROME.identifier, name: CHROME.name, enabled: true },
+};
+
+test("an Activity block says a browser's titles are withheld and records them from now on", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: UNTITLED_CHROME_SNAPSHOT });
+  // Room above the block, so reaching the action needs no scroll that would
+  // carry the block away from the pointer.
+  await page.setViewportSize({ height: 640, width: 1100 });
+  const block = page.locator(ACTIVITY_BLOCKS).filter({ hasText: CHROME.name });
+  await block.hover();
+  const details = page.locator('[data-slot="popover-popup"]');
+  await expect(details).toContainText(
+    enMessages.activity.browserTitlesWithheld.replace(
+      "{browser}",
+      () => CHROME.name,
+    ),
+  );
+  await expect(details).toContainText(
+    enMessages.activity.earlierTimeStaysUntitled,
+  );
+  // The pointer travels from the block to the action as a hand would.
+  const action = details.getByRole("button", {
+    name: enMessages.activity.recordTitlesFromNow,
+  });
+  const box = await action.boundingBox();
+  if (box === null) {
+    throw new TypeError("The titles action is not laid out");
+  }
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, {
+    steps: 12,
+  });
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect
+    .poll(async () => tauriInvocations(page))
+    .toContainEqual(RECORD_CHROME_TITLES);
+  // The hover stays open and the action confirms in place.
+  await expect(details).toContainText(
+    enMessages.activity.browserTitlesRecordedFromNow.replace(
+      "{browser}",
+      () => CHROME.name,
+    ),
+  );
+  await expect(
+    details.getByRole("button", {
+      name: enMessages.activity.recordTitlesFromNow,
+    }),
+  ).toHaveCount(0);
+});
+
+test("an Activity block's titles action is reachable from the keyboard", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: UNTITLED_CHROME_SNAPSHOT });
+  const block = page.locator(ACTIVITY_BLOCKS).filter({ hasText: CHROME.name });
+  await block.focus();
+  await page.keyboard.press("Enter");
+  const action = page
+    .locator('[data-slot="popover-popup"]')
+    .getByRole("button", { name: enMessages.activity.recordTitlesFromNow });
+  // Opening from the keyboard moves focus to the action.
+  await expect(action).toBeFocused();
+  await page.keyboard.press("Enter");
+  expect(await tauriInvocations(page)).toContainEqual(RECORD_CHROME_TITLES);
+  // Escape closes it and hands focus back to the block.
+  await page.keyboard.press("Escape");
+  await expect(block).toBeFocused();
+});
+
+test("a block with titles from an allowed browser offers no action", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: { ...UNTITLED_CHROME_SNAPSHOT, browserTitleApps: [CHROME] },
+  });
+  const block = page.locator(ACTIVITY_BLOCKS).filter({ hasText: CHROME.name });
+  await expect(block).toHaveJSProperty("tagName", "ARTICLE");
+  await block.hover();
+  await expect(page.locator('[data-slot="tooltip-popup"]')).toBeVisible();
+  await expect(
+    page.getByText(enMessages.activity.earlierTimeStaysUntitled),
+  ).toHaveCount(0);
+});
+
+test("a suggestion card without titles says beside its description which browser withheld them", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: UNTITLED_CHROME_SNAPSHOT });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  // The reason is in view without opening a tab; the empty tab stays disabled.
+  await expect(
+    card.getByRole("tab", { name: enMessages.activity.evidenceTitles }),
+  ).toBeDisabled();
+  const reason = card.locator("[data-activity-titles-reason]");
+  await expect(reason).toBeVisible();
+  await expect(reason).toContainText(
+    enMessages.activity.browserTitlesWithheld.replace(
+      "{browser}",
+      () => CHROME.name,
+    ),
+  );
+  await reason
+    .getByRole("button", { name: enMessages.activity.recordTitlesFromNow })
+    .click();
+  expect(await tauriInvocations(page)).toContainEqual(RECORD_CHROME_TITLES);
+});
+
+test("the activity window says when Accessibility keeps titles out and opens its settings", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...UNTITLED_CHROME_SNAPSHOT,
+      detailsAccess: "accessibilityRequired",
+    },
+  });
+  const strip = page.getByRole("region", {
+    name: enMessages.activity.titlesNotRecorded,
+  });
+  await expect(strip).toContainText(
+    enMessages.activity.accessibilityAccessMissing,
+  );
+  await strip
+    .getByRole("button", {
+      name: enMessages.activity.openAccessibilitySettings,
+    })
+    .click();
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "activity_open_accessibility_settings",
+    args: {},
+  });
+  // Turning Chrome on would record nothing yet, so its block offers no action.
+  await page.locator(ACTIVITY_BLOCKS).filter({ hasText: CHROME.name }).hover();
+  await expect(page.locator('[data-slot="tooltip-popup"]')).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.recordTitlesFromNow }),
+  ).toHaveCount(0);
+});
+
+test("the Accessibility strip is absent once access is granted", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: UNTITLED_CHROME_SNAPSHOT });
+  await expect(
+    page.getByRole("region", { name: enMessages.activity.titlesNotRecorded }),
+  ).toHaveCount(0);
+});
+
 test("the settings app list reuses local app visuals and keeps a neutral fallback", async ({
   page,
 }) => {
@@ -2935,6 +3115,12 @@ test("a card asks for consent once, then drafts its description and shows the ea
   await installNativeBoundary({ page, snapshot: TRIAGE_SNAPSHOT });
   await openSuggestion(page, "Example matter");
   const card = suggestionCard(page, "Example matter");
+  // One line asks; what a draft sends is a click away.
+  await expect(card.getByText(enMessages.activity.aiDraftOffer)).toBeVisible();
+  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toBeHidden();
+  await card
+    .getByRole("button", { name: enMessages.activity.aiDraftWhatIsSent })
+    .click();
   await expect(
     card.getByText(enMessages.activity.aiDraftConsent),
   ).toBeVisible();
@@ -2988,6 +3174,63 @@ test("a card asks for consent once, then drafts its description and shows the ea
     0,
   );
   expect(await draftInvocations(page)).toHaveLength(2);
+});
+
+test("a long card keeps its actions in view in the activity window, its details scrolling inside", async ({
+  page,
+}) => {
+  await page.setViewportSize(DESKTOP_WINDOW_SIZES.activity);
+  // Late in the day, with a guided draft's notes and many titles: taller
+  // than the window.
+  const titles = Array.from(
+    { length: 10 },
+    (_, index) => `Lease schedule ${String(index + 1)}.docx`,
+  );
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...TRIAGE_SNAPSHOT,
+      segments: titles.map((windowTitle, index) => ({
+        appIdentifier: "com.example.editor",
+        appName: "Example Editor",
+        matterId: "matter-1",
+        windowTitle,
+        start: `2026-10-07T14:${String(index * 5).padStart(2, "0")}:00Z`,
+        end: `2026-10-07T14:${String(index * 5 + 4).padStart(2, "0")}:00Z`,
+      })),
+    },
+    drafting: { ...DRAFTING, mode: "guided", consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card.getByText("List each task separately.")).toBeAttached();
+  const body = card.locator(
+    '[data-activity-card-body] [data-slot="scroll-area-viewport"]',
+  );
+  // The fixture must outgrow the window, or nothing here is tested.
+  await expect
+    .poll(async () =>
+      body.evaluate((element) => element.scrollHeight > element.clientHeight),
+    )
+    .toBe(true);
+  const box = await card.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box?.y).toBeGreaterThanOrEqual(0);
+  expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(
+    DESKTOP_WINDOW_SIZES.activity.height,
+  );
+  for (const action of [
+    card.getByRole("button", { name: acceptName(enMessages) }),
+    card.getByRole("button", { name: rejectName(enMessages) }),
+    card.getByRole("switch", { name: enMessages.activity.entryBillable }),
+  ]) {
+    await expect(action).toBeInViewport({ ratio: 1 });
+  }
+  await expect(card).toBeFocused();
+  await pressCardShortcut(page, "Enter");
+  await expect
+    .poll(async () => batchRequests(await tauriInvocations(page)))
+    .toHaveLength(1);
 });
 
 test("an accepted drafted entry carries the drafted description", async ({

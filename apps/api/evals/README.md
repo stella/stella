@@ -92,6 +92,18 @@ the default provider chain (see `getTanStackTextModelById`).
   contract never states come back empty rather than as prose, and does a
   constraint position still read a number? Scored on `gpt-5.6-luna` and
   `gpt-6-sol`.
+- `e2e/playbook-journey.ts`: the same path end to end, through the HTTP API of a
+  running stack. It saves a playbook with a position per check kind, runs it
+  from the table and from the review panel on two fixture contracts (a long
+  clause, and a precedent in another matter as reference), and checks that
+  every run completes, progress counts every finding, no verdict is `missing`
+  or unfinished, tiers match the fixture, panel deviations carry a fix and the
+  table's verdict cells hold known tiers. Unlike the others it runs weekly in
+  CI (`.github/workflows/playbook-journey.yml`) on one model. It saves the
+  organization's own Anthropic key first, so the stack itself can stay on the
+  mock; locally, start the dev stack, seed the test user, then
+  `bun run eval:playbook-journey -- --model claude-sonnet-5-5` with
+  `ANTHROPIC_API_KEY` set.
 - `agent-orientation.ts`: given stella's MCP tool list or CLI skill, does a
   model pick the right tool or command and arguments for a natural-language
   task, scored without executing anything?

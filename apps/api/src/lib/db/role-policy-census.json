@@ -4831,6 +4831,26 @@
   },
   {
     "schema": "public",
+    "table": "desktop_runner_folder_restores",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "desktop_runner_folder_restores",
+    "policy": "desktop_runner_folder_restores_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runner_folder_restores'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runner_folder_restores'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "desktop_runner_runs",
     "policy": "auth_no_stella_access",
     "command": "ALL",

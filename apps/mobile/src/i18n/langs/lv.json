@@ -151,7 +151,11 @@
     "scanDocument": "Skenēt dokumentu",
     "newTask": "Jauns uzdevums",
     "uploadDocument": "Augšupielādēt dokumentu",
-    "uploadFailed": "Dokumentu neizdevās augšupielādēt. Mēģiniet vēlreiz."
+    "uploadFailed": "Dokumentu neizdevās augšupielādēt. Mēģiniet vēlreiz.",
+    "startTimer": "Sākt taimeri",
+    "pauseTimer": "Apturēt taimeri",
+    "resumeTimer": "Turpināt taimeri",
+    "timerRunning": "Taimeris darbojas"
   },
   "entity": {
     "type": "Veids",
@@ -351,5 +355,13 @@
     "share": "Kopīgot",
     "cancel": "Atcelt",
     "openFailed": "Saiti neizdevās atvērt."
+  },
+  "share": {
+    "title": "Pievienot stellai",
+    "start": "Sākt",
+    "uploading": "Augšupielādē {done} no {total}…",
+    "filesOnly": "Tiek saglabāti tikai faili; saites un teksts tiek izlaisti.",
+    "unavailableTitle": "Nav ko pievienot",
+    "unavailable": "Šī kopīgotā satura vairs nav. Kopīgojiet to vēlreiz no otras lietotnes."
   }
 }

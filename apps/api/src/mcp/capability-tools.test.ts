@@ -68,11 +68,6 @@ import {
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
 
-beforeEach(() => {
-  consumeRateLimitMock.mockReset();
-  loadOrgSettingsMock.mockClear();
-});
-
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
   orgAIConfigStatus: "ok" as const,
@@ -330,6 +325,8 @@ const callCapability = async (args: Record<string, unknown>) =>
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  consumeRateLimitMock.mockReset();
+  loadOrgSettingsMock.mockClear();
   analytics = installRecordingAnalytics();
   loadOrgSettingsMock.mockClear();
   consumeRateLimitMock.mockReset();

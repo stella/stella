@@ -4965,6 +4965,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Používa predvolené nastavenia"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} znakov",
+      "description": "Tieto pokyny platia pre všetky konverzácie s AI vo vašej organizácii a majú prednosť pred osobnými preferenciami. Zmeny sa prejavia od ďalšej správy. Použite ich pre pravidlá dodržiavania predpisov, nakladania s údajmi a formátovania.",
+      "title": "Pokyny organizácie",
+      "tooLong": "Pokyny môžu obsahovať najviac {maxLength} znakov."
+    },
     "creationEvaluationLimitReached": "Využili ste všetky {limit} skúšobné obdobia organizácií. Odstránením organizácie sa skúšobné obdobie neobnoví. Použite existujúcu organizáciu alebo kontaktujte podporu a dohodnite si platený prístup.",
     "creationInvalidName": "Zadajte platný názov organizácie (najviac {maxLength} znakov).",
     "creationNotAllowed": "Tento účet nemôže vytvárať organizácie.",

@@ -637,6 +637,28 @@ const withPrDepthCheckoutRef = (step: Step): Step => {
   }
   return { ...step, with: { ...inputs, ref: PR_DEPTH_CHECKOUT_REF } };
 };
+// A blobless checkout moved to the shared action that retries it: the same
+// inputs, with the filter now owned by the action. Any other change to the
+// checkout stays significant.
+const withSharedPartialCloneCheckout = (step: Step): Step => {
+  if (usesOf(step) !== "actions/checkout@<pinned>") {
+    return step;
+  }
+  const inputs = v.parse(
+    v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
+    step,
+  ).with;
+  if (inputs?.["filter"] !== "blob:none") {
+    return step;
+  }
+  return {
+    ...step,
+    uses: "stella/.github/actions/partial-clone-checkout@<pinned>",
+    with: Object.fromEntries(
+      Object.entries(inputs).filter(([key]) => key !== "filter"),
+    ),
+  };
+};
 const ownedInstallFlags = '["--frozen-lockfile","--ignore-scripts"]';
 const scopedInstallActions = new Set([
   "./.github/actions/ci-install",
@@ -1186,7 +1208,8 @@ const stepFieldsSchema = v.looseObject({
 });
 const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
-const baseSteps = legSteps(baseline, baselineIds).map((step) => {
+// Brings each recorded baseline step up to the current workflow shape.
+const currentBaselineStep = (step: ReturnType<typeof legSteps>[number]) => {
   const fields = stepFields(step);
   if (
     step.name === "Test remaining repository scripts" &&
@@ -1434,7 +1457,8 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
   });
   return Object.assign(step, { run: "bun run check:docs-sources" });
-});
+};
+const baseSteps = legSteps(baseline, baselineIds).map(currentBaselineStep);
 
 test("CI legs normalize only the complete canonical cancellation tail and its permission", () => {
   const guard = { name: "Guard", run: "bun check" };
@@ -1674,6 +1698,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     const originalSetup = setupSteps(originalSteps)
       .map(withTaskResultCacheSetup)
       .map(withPrDepthCheckoutRef)
+      .map(withSharedPartialCloneCheckout)
       .map((step) => withInstallCache(step, base))
       .map((step) => {
         if (

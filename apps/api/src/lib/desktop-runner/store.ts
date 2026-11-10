@@ -52,6 +52,12 @@ import {
   transitionLifecycleBatch,
 } from "@/api/lib/db/transitions";
 import { questionPauseOf } from "@/api/lib/desktop-runner/chunk";
+import {
+  carryFolderRestoreNotes,
+  hasPendingFolderRestore,
+  hasUnnotedFolderRestore,
+  markFolderRestoreNotesTold,
+} from "@/api/lib/desktop-runner/folder-restores";
 import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
 import {
   DESKTOP_RUNNER_LEASED_RUN_STATES,
@@ -632,6 +638,9 @@ export const recordRunAccepted = async (
       recordTransitionAuditEvent: skipRunAudit,
     });
     if (accepted.type === "transitioned") {
+      // The run's request reached the harness: any restore note it carried
+      // is told now, and no later run repeats it.
+      await markFolderRestoreNotesTold(tx, { runId, now });
       return { type: "applied" };
     }
     const run = await readBoundRun(tx, binding, runId);
@@ -1312,7 +1321,11 @@ type InsertRunOptions = {
   workspaceIds: readonly SafeId<"workspace">[];
   /** The chat turn that starts and reads the run, when one does. */
   chat?: ChatRunBinding | null;
-  payload: object;
+  /**
+   * The `run.start` as stored: `withNote` when a restore of the chat's folder
+   * was not told to an accepted run yet, chosen inside the admission.
+   */
+  payload: { plain: object; withNote: object };
   now: Date;
   leaseMs: number;
   seenSince: Date;
@@ -1332,7 +1345,9 @@ export type InsertedRun =
       report: DesktopRunnerHarnessReport | null;
     }
   | { type: "model_unavailable" }
-  | { type: "approvals_unavailable" };
+  | { type: "approvals_unavailable" }
+  /** The chat's folder is being restored on its computer. */
+  | { type: "folder_busy" };
 
 /**
  * Bind a new run to a connected runner and queue its `run.start`, both or
@@ -1346,6 +1361,13 @@ export const insertAssignedRun = async (
 ): Promise<InsertedRun> =>
   await withAggregateTransaction(db, async (tx) => {
     const { owner, runId, desktopId, harness, harnessVersion, now } = options;
+    // Serialized with the account's restore requests and settlements, so a
+    // restore is either pending here (refused below) or settled and noted.
+    await withAggregateLock({
+      aggregate: "desktopRunnerCapacity",
+      id: { organizationId: owner.organizationId, userId: owner.userId },
+      tx,
+    });
     const [target] = await tx
       .select({
         deviceJkt: runner.deviceJkt,
@@ -1381,6 +1403,25 @@ export const insertAssignedRun = async (
     if (!report.approvalModes.includes(options.approvals)) {
       return { type: "approvals_unavailable" };
     }
+    // A restore of the chat's folder that its computer may still act on: the
+    // run would work in files about to change. The computer refuses such a
+    // run too, for a restore asked while this one is stored.
+    const chat = options.chat ?? null;
+    if (
+      chat !== null &&
+      (await hasPendingFolderRestore(tx, {
+        owner,
+        threadId: chat.threadId,
+        desktopId,
+        deviceJkt: target.deviceJkt,
+        now,
+      }))
+    ) {
+      return { type: "folder_busy" };
+    }
+    const noted =
+      chat !== null &&
+      (await hasUnnotedFolderRestore(tx, { owner, threadId: chat.threadId }));
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
     await tx.insert(runs).values({
       runId,
@@ -1402,8 +1443,15 @@ export const insertAssignedRun = async (
       runId,
       kind: "run.start",
       commandKey: runId,
-      payload: options.payload,
+      payload: noted ? options.payload.withNote : options.payload.plain,
     });
+    if (noted) {
+      await carryFolderRestoreNotes(tx, {
+        owner,
+        threadId: chat.threadId,
+        runId,
+      });
+    }
     return {
       type: "assigned",
       holder: { sessionId: target.sessionId, instanceId: target.instanceId },

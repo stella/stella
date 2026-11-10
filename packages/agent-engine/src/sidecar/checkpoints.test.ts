@@ -45,11 +45,6 @@ const isWindows = process.platform === "win32";
 const isRoot = process.getuid?.() === 0;
 
 const roots: string[] = [];
-afterEach(() => {
-  for (const root of roots.splice(0)) {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
 
 /** A run's folder, with its sibling store, and a folder outside both. */
 const place = () => {
@@ -130,6 +125,9 @@ const logLine = (line: string) => {
   logged.push(line);
 };
 afterEach(() => {
+  for (const root of roots.splice(0)) {
+    rmSync(root, { recursive: true, force: true });
+  }
   expect(logged.splice(0)).toEqual([]);
 });
 
@@ -410,8 +408,12 @@ describe("a run folder's checkpoint", () => {
         "no_checkpoint",
       );
       expect((await restore(workspaceDir, second)).outcome).toBe("restored");
-      // Undone once: never restored again.
-      expect((await restore(workspaceDir, second)).outcome).toBe("not_newest");
+      // Asked again (an answer that was lost): the same answer, nothing moves.
+      write(workspaceDir, "a.txt", "changed since the undo");
+      expect((await restore(workspaceDir, second)).outcome).toBe("restored");
+      expect(readFileSync(path.join(workspaceDir, "a.txt"), "utf-8")).toBe(
+        "changed since the undo",
+      );
       expect((await restore(workspaceDir, first)).outcome).toBe("restored");
       expect(readFileSync(path.join(workspaceDir, "a.txt"), "utf-8")).toBe(
         "before the first turn",
@@ -426,7 +428,11 @@ describe("a run folder's checkpoint", () => {
       expect((await restore(workspaceDir, first)).outcome).toBe("restored");
       const { runId: next } = await capture(workspaceDir);
       write(workspaceDir, "a.txt", "three");
-      expect((await restore(workspaceDir, first)).outcome).toBe("not_newest");
+      // Undone already: answered again without touching the folder.
+      expect((await restore(workspaceDir, first)).outcome).toBe("restored");
+      expect(readFileSync(path.join(workspaceDir, "a.txt"), "utf-8")).toBe(
+        "three",
+      );
       expect((await restore(workspaceDir, next)).outcome).toBe("restored");
       expect(readFileSync(path.join(workspaceDir, "a.txt"), "utf-8")).toBe(
         "one",
@@ -781,8 +787,9 @@ describe("a run folder's checkpoint", () => {
       });
       expect(treeOf(workspaceDir)).toEqual(restored);
       expect(recoveries(workspaceDir)).toEqual([]);
-      // Undone once, and it stays undone.
-      expect((await restore(workspaceDir, runId)).outcome).toBe("not_newest");
+      // Undone once, and asking again moves nothing.
+      expect((await restore(workspaceDir, runId)).outcome).toBe("restored");
+      expect(treeOf(workspaceDir)).toEqual(restored);
     });
 
     test("a restore whose record could not be dropped keeps the restored folder", async () => {

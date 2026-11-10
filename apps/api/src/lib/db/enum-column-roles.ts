@@ -259,6 +259,9 @@ export const ENUM_COLUMN_ROLES = {
   desktop_runner_events: {
     type: ATTRIBUTE,
   },
+  desktop_runner_folder_restores: {
+    reason: ATTRIBUTE,
+  },
   desktop_runner_runs: {
     harness: ATTRIBUTE,
     outcome: ATTRIBUTE,
