@@ -795,14 +795,21 @@ const MOCK_FACT_STATEMENTS = [
   },
 ] as const;
 
-// Picks a statement from the block id, so each block keeps its fact across
-// runs and neighbouring blocks get different ones.
-const mockStatementFor = (blockId: string) => {
+// Picks a statement from the quoted passage, so a passage keeps its fact
+// across runs and different passages mostly get different ones.
+const mockStatementFor = (passage: string) => {
   let hash = 0;
-  for (const char of blockId) {
+  for (const char of passage) {
     hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % 9973;
   }
   return MOCK_FACT_STATEMENTS[hash % MOCK_FACT_STATEMENTS.length];
+};
+
+// A heading ("NEGOTIATION DRAFT v4") is mostly capitals; prose is not.
+const isMostlyLowercase = (text: string) => {
+  const letters = text.match(/\p{L}/gu)?.length ?? 0;
+  const lower = text.match(/\p{Ll}/gu)?.length ?? 0;
+  return letters > 0 && lower / letters > 0.5;
 };
 
 const mockExtractedFacts = (messages: readonly ModelMessage[]) => {
@@ -827,13 +834,13 @@ const mockExtractedFacts = (messages: readonly ModelMessage[]) => {
         .slice(0, MOCK_QUOTE_MAX);
       return sentence === undefined ||
         sentence.length < MOCK_QUOTE_MIN ||
-        sentence === sentence.toUpperCase()
+        !isMostlyLowercase(sentence)
         ? []
         : [{ blockId, sentence }];
     })
     .slice(0, MOCK_FACTS_PER_WINDOW)
     .map(({ blockId, sentence }, index) => {
-      const statement = mockStatementFor(blockId);
+      const statement = mockStatementFor(sentence);
       return {
         blockId,
         quote: sentence,
