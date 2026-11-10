@@ -980,6 +980,73 @@ const internalSortExpr = (
   }
 };
 
+/** One property's current cell on the row, projected through `value`. */
+const currentCellValue = (propertyId: string, value: SQL): SQL => sql`(
+  SELECT ${value}
+  FROM ${fields}
+  WHERE ${fields.workspaceId} = ${entities.workspaceId}
+    AND ${fields.entityVersionId} = ${entities.currentVersionId}
+    AND ${fields.propertyId} = ${propertyId}
+  LIMIT 1
+)`;
+
+type PropertySortValues = {
+  /** A money cell's currency code; NULL for every other content type. */
+  currency: SQL;
+  /** A money amount in minor units, an int, or numeric text in an int column. */
+  number: SQL;
+  /** The scalar the filters compare against. */
+  text: SQL;
+};
+
+/**
+ * What a property column orders by, in key order: currency, number, text.
+ * Every property sort reads them here, so the table window and the calendar
+ * cannot disagree on how a content type orders.
+ *
+ * Money is ordered within its currency, never across one. Minor units are not
+ * comparable between currencies (they do not even share a scale, JPY having
+ * none), so 100 JPY beside 100 CZK is a comparison with no answer, the same
+ * judgement the calculation reducer makes when it refuses to add them.
+ * Grouping by currency code first gives a total order that is meaningful
+ * inside each currency and merely deterministic between them.
+ *
+ * The number exists because `content->>'value'` is text, so a text ORDER BY
+ * sorts "10" before "9". The text key is the same projection the filters
+ * compare against; a second copy of that COALESCE is how sorting once came to
+ * know about fewer content types than filtering did.
+ */
+export const propertySortValues = (propertyId: string): PropertySortValues => {
+  const propertyIsInt = sql`EXISTS (
+    SELECT 1 FROM ${properties}
+    WHERE ${properties.workspaceId} = ${entities.workspaceId}
+      AND ${properties.id} = ${propertyId}
+      AND ${properties.content}->>'type' = 'int'
+    LIMIT 1
+  )`;
+  return {
+    currency: currentCellValue(
+      propertyId,
+      sql`CASE
+        WHEN ${fields.content}->>'type' = 'money'
+        THEN ${fields.content}->>'currency'
+        ELSE NULL
+      END`,
+    ),
+    number: currentCellValue(
+      propertyId,
+      sql`CASE
+        WHEN ${fields.content}->>'type' = 'money'
+        THEN ${numericTextExpr(sql`${fields.content}->>'amountCents'`)}
+        WHEN ${fields.content}->>'type' = 'int' OR ${propertyIsInt}
+        THEN ${numericFieldValueExpr(fields.content)}
+        ELSE NULL
+      END`,
+    ),
+    text: currentCellValue(propertyId, fieldValueExpr(fields.content)),
+  };
+};
+
 /**
  * Builds ORDER BY expressions from ViewSort[].
  *
@@ -1008,78 +1075,21 @@ export const buildSortExpressions = (
       continue;
     }
 
-    const propertyIsInt = sql`EXISTS (
-      SELECT 1 FROM ${properties}
-      WHERE ${properties.workspaceId} = ${entities.workspaceId}
-        AND ${properties.id} = ${sort.propertyId}
-        AND ${properties.content}->>'type' = 'int'
-      LIMIT 1
-    )`;
-
-    // Money is ordered within its currency, never across one. Minor units are
-    // not comparable between currencies — they do not even share a scale, JPY
-    // having none — so 100 JPY beside 100 CZK is a comparison with no answer,
-    // the same judgement the calculation reducer makes when it refuses to add
-    // them. Grouping by currency code first gives a total order that is
-    // meaningful inside each currency and merely deterministic between them.
-    const currencySortKey = sql`(
-      SELECT CASE
-        WHEN ${fields.content}->>'type' = 'money'
-        THEN ${fields.content}->>'currency'
-        ELSE NULL
-      END
-      FROM ${fields}
-      WHERE ${fields.workspaceId} = ${entities.workspaceId}
-        AND ${fields.entityVersionId} = ${entities.currentVersionId}
-        AND ${fields.propertyId} = ${sort.propertyId}
-      LIMIT 1
-    )`;
-
-    // Numeric sort key: `content->>'value'` is text, so a plain ORDER BY sorts
-    // "10" before "9". Use numeric mode for money amounts, for int fields, and
-    // for int properties with legacy text content, then break ties with the
-    // text key.
-    const numericSortKey = sql`(
-      SELECT CASE
-        WHEN ${fields.content}->>'type' = 'money'
-        THEN ${numericTextExpr(sql`${fields.content}->>'amountCents'`)}
-        WHEN ${fields.content}->>'type' = 'int' OR ${propertyIsInt}
-        THEN ${numericFieldValueExpr(fields.content)}
-        ELSE NULL
-      END
-      FROM ${fields}
-      WHERE ${fields.workspaceId} = ${entities.workspaceId}
-        AND ${fields.entityVersionId} = ${entities.currentVersionId}
-        AND ${fields.propertyId} = ${sort.propertyId}
-      LIMIT 1
-    )`;
-    // The same projection the filters compare against. It had been a second
-    // copy of the COALESCE, which is how sorting came to know about fewer
-    // content types than filtering did.
-    const textSortKey = sql`(
-      SELECT ${fieldValueExpr(fields.content)}
-      FROM ${fields}
-      WHERE ${fields.workspaceId} = ${entities.workspaceId}
-        AND ${fields.entityVersionId} = ${entities.currentVersionId}
-        AND ${fields.propertyId} = ${sort.propertyId}
-      LIMIT 1
-    )`;
+    const { currency, number, text } = propertySortValues(sort.propertyId);
 
     // Ahead of the amount, so a money column groups by currency; NULL for every
     // other content type, which leaves their ordering untouched.
     expressions.push(
       sort.desc
-        ? sql`${currencySortKey} DESC NULLS LAST`
-        : sql`${currencySortKey} ASC NULLS LAST`,
+        ? sql`${currency} DESC NULLS LAST`
+        : sql`${currency} ASC NULLS LAST`,
     );
     expressions.push(
       sort.desc
-        ? sql`${numericSortKey} DESC NULLS LAST`
-        : sql`${numericSortKey} ASC NULLS LAST`,
+        ? sql`${number} DESC NULLS LAST`
+        : sql`${number} ASC NULLS LAST`,
     );
-    expressions.push(
-      sort.desc ? sql`${textSortKey} DESC` : sql`${textSortKey} ASC`,
-    );
+    expressions.push(sort.desc ? sql`${text} DESC` : sql`${text} ASC`);
   }
 
   // Tie-breaker for stable ordering

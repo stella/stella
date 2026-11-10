@@ -295,6 +295,7 @@ export type {
   EntityFindScopeType,
   PropertyContentType,
 } from "./entity-find";
+export { PROPERTY_SORT_KINDS } from "./property-sort";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {
