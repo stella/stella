@@ -121,13 +121,13 @@ export type ActiveRunsState =
   | { readonly status: "failed"; readonly error: ApiError };
 
 /** A row of the chats list: the thread, its day, and its open run, if any. */
-export type InboxThread = {
+type InboxThread = {
   readonly thread: ChatThreadSummary;
   readonly day: ChatThreadSection["key"];
   readonly runState: ChatActiveRunState | undefined;
 };
 
-export type InboxSection = {
+type InboxSection = {
   readonly key: "needsYou" | "working" | ChatThreadSection["key"];
   readonly data: readonly InboxThread[];
 };
