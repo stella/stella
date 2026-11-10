@@ -20,7 +20,7 @@ export const _a = () => {
   switch (state) {
     case "needs-you":
       return <span className="font-bold">!</span>;
-    default:
+    case "working":
       return null;
   }
 };
