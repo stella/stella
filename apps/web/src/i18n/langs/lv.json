@@ -232,6 +232,14 @@
       "title": "Enkurfakti"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Enkurfakti ir pretrunā",
+        "conflictCount": "{count, plural, zero {# pretrunu} one {# pretruna} other {# pretrunas}}",
+        "gap": "<strong>Neviens enkurfakts neaptver šo apgalvojumu.</strong> Tas ir robs reģistrā, nevis vājš slēdziens: pašlaik nav nekā, pret ko to pārbaudīt.",
+        "notVerifiable": "<strong>Apgalvojumu nevar pārbaudīt.</strong> Šādu apgalvojumu nevarētu apstiprināt neviens dokuments: tā ir hipotētiska alternatīva, prognoze, nodoma paziņojums, juridisks secinājums vai pārāk neskaidrs apgalvojums. Tas tiek atlikts, nevis vērtēts.",
+        "supportCount": "{count, plural, zero {# pamatojumu} one {# pamatojums} other {# pamatojumi}}",
+        "verdictWithheld": "Slēdziens nav sniegts"
+      },
       "escalatedReview": "Nodots pierādījumu komandai: kamēr nav atrisināta pamatā esošā pretruna, šeit nav slēdziena, ko apstiprināt vai apstrīdēt.",
       "flagDispute": "Atzīmēt strīdu",
       "humanReview": "Cilvēka pārbaude",
@@ -267,17 +275,8 @@
       },
       "reopened": "Atvērts vēlreiz, gaida pārbaudi",
       "reopenedTooltip": "Pārbaudītājs to pārklasificēja par pārbaudāmu faktu; tiešā pārbaude pret reģistru vēl nav veikta.",
-      "score": {
-        "anchorFactsDisagree": "Enkurfakti ir pretrunā",
-        "conflictCount": "{count, plural, zero {# pretrunu} one {# pretruna} other {# pretrunas}}",
-        "noCoverage": "<strong>Reģistrā par to nav informācijas.</strong> Neviens datubāzes enkurfakts neattiecas uz šo apgalvojumu. Tas nav vājš vērtējums: pašlaik nav nekā, pret ko to pārbaudīt.",
-        "notVerifiable": "<strong>Apgalvojumu nevar pārbaudīt.</strong> Šādu apgalvojumu nevarētu apstiprināt neviens dokuments: tā ir hipotētiska alternatīva, prognoze, nodoma paziņojums, juridisks secinājums vai pārāk neskaidrs apgalvojums. Tas tiek atlikts, nevis vērtēts.",
-        "outOf100": "<strong>/ 100</strong> pamatojuma vērtējums",
-        "supportCount": "{count, plural, zero {# pamatojumu} one {# pamatojums} other {# pamatojumi}}",
-        "verdictWithheld": "Slēdziens nav sniegts"
-      },
       "sourceCount": "{count, plural, zero {# avotu} one {# avots} other {# avoti}}",
-      "whyScore": "Vērtējuma pamatojums: enkurfakti"
+      "whyVerdict": "Slēdziena pamatojums: enkurfakti"
     },
     "claimTypes": {
       "fact": {
@@ -331,6 +330,25 @@
       "count": "{count, plural, zero {# atbilstību} one {# atbilstība} other {# atbilstības}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Atrunas",
+      "recordSilent": {
+        "hint": "No reģistra nav sagaidāms, ka tas aptvers šo jautājumu, tāpēc seguma trūkums nav robs.",
+        "label": "Reģistrs klusē"
+      },
+      "restsOnHeld": {
+        "hint": "Fakts, uz kuru balstās šis slēdziens, tagad ir izslēgts no vērtējuma.",
+        "label": "Balstās uz izslēgtu faktu"
+      },
+      "scopeMismatch": {
+        "hint": "Citētais fakts attiecas uz citu periodu, personu loku, vietu vai mērījumu nekā apgalvojums.",
+        "label": "Cits tvērums"
+      },
+      "unsourcedOnly": {
+        "hint": "Nevienam faktam, uz kuru balstās šis slēdziens, vēl nav avota.",
+        "label": "Tikai bez avota"
+      }
+    },
     "review": {
       "disputed": "Apstrīdēts · {decidedAt}",
       "reviewed": "{origin, select, bulk {Pieņemts kā standarta} other {Pārskatīts}} · {decidedAt}",
@@ -376,7 +394,8 @@
       },
       "nocover": {
         "chip": "Nav seguma",
-        "label": "Neviens enkurfakts neattiecas uz šo apgalvojumu"
+        "label": "Neviens enkurfakts neattiecas uz šo apgalvojumu",
+        "silentChip": "Nav seguma · reģistrs klusē"
       },
       "notverifiable": {
         "chip": "Nepārbaudāms",

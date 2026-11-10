@@ -29,6 +29,10 @@ import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { ClaimDetailPanel } from "@/features/avt/claim-detail-panel";
+import {
+  isRecordSilent,
+  useQualifierAnnouncement,
+} from "@/features/avt/claim-qualifiers";
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import type { OriginalScrollTarget } from "@/features/avt/original-docx-view";
 import { isPdfClaimBoxDrawn } from "@/features/avt/original-pdf-claim-box";
@@ -692,8 +696,10 @@ const ClaimSpan = ({
   children,
 }: ClaimSpanProps) => {
   const t = useTranslations();
+  const announceQualifiers = useQualifierAnnouncement();
   const reviewStatus = claim.review?.status ?? null;
   const { mark, markTextClass } = STATE_COLOR[state];
+  const qualifierAnnouncement = announceQualifiers(claim);
   return (
     // The claim's look is the review text mark, drawn by the span; the plain
     // button only makes the run of evidence a control.
@@ -711,7 +717,9 @@ const ClaimSpan = ({
             ...mark,
             state: claimMarkState({ selected, highlight }),
           }),
-          markTextClass,
+          isRecordSilent(state, claim)
+            ? "text-muted-foreground"
+            : markTextClass,
           dim && "opacity-40",
         )}
       >
@@ -742,6 +750,7 @@ const ClaimSpan = ({
             contested: String(contested),
             reviewStatus: reviewStatus ?? "none",
           })}
+          {qualifierAnnouncement !== null && ` ${qualifierAnnouncement}`}
         </span>
       </span>
     </Button>

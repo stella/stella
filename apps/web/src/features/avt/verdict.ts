@@ -125,6 +125,9 @@ export const resolveClaimView = (
     type: "fact",
     framing: claim.framing,
     verdict: { state: "nocover", score: null, recordConflict: null },
+    // The server read the claim's qualifiers against the verdict it has
+    // until it is checked again, so they are kept unchanged.
+    qualifiers: claim.qualifiers,
     text: claim.text,
     anchor: claim.anchor,
     refs: [],

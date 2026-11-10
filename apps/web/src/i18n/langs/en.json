@@ -232,6 +232,14 @@
       "title": "Anchor facts"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Anchor facts disagree",
+        "conflictCount": "{count, plural, one {# conflict} other {# conflicts}}",
+        "gap": "<strong>No anchor fact covers this claim.</strong> This is a gap in the record, not a weak verdict: there is nothing to check the claim against yet.",
+        "notVerifiable": "<strong>Not a verifiable assertion.</strong> This is the kind of statement no document could ever settle: a counterfactual, a prediction, a statement of intent, a legal conclusion, or a claim too vague to check. Set aside rather than scored.",
+        "supportCount": "{count, plural, one {# support} other {# supports}}",
+        "verdictWithheld": "Verdict withheld"
+      },
       "escalatedReview": "Escalated to the evidence team; no verdict to confirm or dispute here until the underlying conflict is resolved.",
       "flagDispute": "Flag dispute",
       "humanReview": "Human review",
@@ -267,17 +275,8 @@
       },
       "reopened": "Re-opened, check pending",
       "reopenedTooltip": "A reviewer re-classified this as a checkable fact; a live record check is still pending.",
-      "score": {
-        "anchorFactsDisagree": "Anchor facts disagree",
-        "conflictCount": "{count, plural, one {# conflict} other {# conflicts}}",
-        "noCoverage": "<strong>The record is silent.</strong> No anchor fact in the database addresses this claim. This is distinct from a weak score: it means there is nothing to check it against yet.",
-        "notVerifiable": "<strong>Not a verifiable assertion.</strong> This is the kind of statement no document could ever settle: a counterfactual, a prediction, a statement of intent, a legal conclusion, or a claim too vague to check. Set aside rather than scored.",
-        "outOf100": "<strong>/ 100</strong> support score",
-        "supportCount": "{count, plural, one {# support} other {# supports}}",
-        "verdictWithheld": "Verdict withheld"
-      },
       "sourceCount": "{count, plural, one {# source} other {# sources}}",
-      "whyScore": "Why this score: anchor facts"
+      "whyVerdict": "Why this verdict: anchor facts"
     },
     "claimTypes": {
       "fact": {
@@ -331,6 +330,25 @@
       "count": "{count, plural, one {# match} other {# matches}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Caveats",
+      "recordSilent": {
+        "hint": "The record is not expected to speak to this point, so the missing coverage is not a gap.",
+        "label": "Record silent"
+      },
+      "restsOnHeld": {
+        "hint": "A fact this verdict rests on is now held out of scoring.",
+        "label": "Rests on a held fact"
+      },
+      "scopeMismatch": {
+        "hint": "A cited fact covers a different period, population, place or measure than the claim.",
+        "label": "Scope mismatch"
+      },
+      "unsourcedOnly": {
+        "hint": "No fact this verdict rests on has a source yet.",
+        "label": "Unsourced only"
+      }
+    },
     "review": {
       "disputed": "Disputed · {decidedAt}",
       "reviewed": "{origin, select, bulk {Accepted as routine} other {Reviewed}} · {decidedAt}",
@@ -376,7 +394,8 @@
       },
       "nocover": {
         "chip": "No coverage",
-        "label": "No anchor fact covers this claim"
+        "label": "No anchor fact covers this claim",
+        "silentChip": "No coverage · record silent"
       },
       "notverifiable": {
         "chip": "Not verifiable",

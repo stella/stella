@@ -232,6 +232,14 @@
       "title": "Referenčné fakty"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Referenčné fakty si odporujú",
+        "conflictCount": "{count, plural, one {# rozpor} few {# rozpory} many {# rozporov} other {# rozporu}}",
+        "gap": "<strong>Toto tvrdenie nepokrýva žiadny referenčný fakt.</strong> Ide o medzeru v záznamoch, nie o slabý záver: zatiaľ nie je s čím tvrdenie porovnať.",
+        "notVerifiable": "<strong>Nejde o overiteľné tvrdenie.</strong> Takéto tvrdenie nemožno rozhodnúť žiadnym dokumentom: ide napríklad o hypotetickú situáciu, predpoveď, vyhlásenie o úmysle, právny záver alebo príliš neurčité tvrdenie. Odkladá sa bez hodnotenia.",
+        "supportCount": "{count, plural, one {# podporný fakt} few {# podporné fakty} many {# podporných faktov} other {# podporného faktu}}",
+        "verdictWithheld": "Záver nevydaný"
+      },
       "escalatedReview": "Postúpené tímu pre dôkazy; kým sa nevyrieši súvisiaci rozpor, nemožno tu potvrdiť ani spochybniť žiadny záver.",
       "flagDispute": "Označiť spor",
       "humanReview": "Ľudská kontrola",
@@ -267,17 +275,8 @@
       },
       "reopened": "Znovu otvorené, čaká na kontrolu",
       "reopenedTooltip": "Kontrolujúca osoba preklasifikovala toto tvrdenie ako overiteľný fakt; porovnanie so živými záznamami zatiaľ neprebehlo.",
-      "score": {
-        "anchorFactsDisagree": "Referenčné fakty si odporujú",
-        "conflictCount": "{count, plural, one {# rozpor} few {# rozpory} many {# rozporov} other {# rozporu}}",
-        "noCoverage": "<strong>Záznamy o tom neobsahujú informácie.</strong> Žiadny referenčný fakt v databáze sa tohto tvrdenia netýka. Nejde o nízke hodnotenie: zatiaľ jednoducho nie je s čím tvrdenie porovnať.",
-        "notVerifiable": "<strong>Nejde o overiteľné tvrdenie.</strong> Takéto tvrdenie nemožno rozhodnúť žiadnym dokumentom: ide napríklad o hypotetickú situáciu, predpoveď, vyhlásenie o úmysle, právny záver alebo príliš neurčité tvrdenie. Odkladá sa bez hodnotenia.",
-        "outOf100": "<strong>/ 100</strong> miera podpory",
-        "supportCount": "{count, plural, one {# podporný fakt} few {# podporné fakty} many {# podporných faktov} other {# podporného faktu}}",
-        "verdictWithheld": "Záver nevydaný"
-      },
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdrojov} other {# zdroja}}",
-      "whyScore": "Odôvodnenie hodnotenia: referenčné fakty"
+      "whyVerdict": "Odôvodnenie záveru: referenčné fakty"
     },
     "claimTypes": {
       "fact": {
@@ -331,6 +330,25 @@
       "count": "{count, plural, one {# zhoda} few {# zhody} many {# zhôd} other {# zhody}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Výhrady",
+      "recordSilent": {
+        "hint": "Od záznamov sa k tejto otázke žiadny údaj neočakáva, chýbajúce pokrytie preto nie je medzerou.",
+        "label": "Záznamy mlčia"
+      },
+      "restsOnHeld": {
+        "hint": "Fakt, o ktorý sa záver opiera, je teraz vylúčený z hodnotenia.",
+        "label": "Opiera sa o vylúčený fakt"
+      },
+      "scopeMismatch": {
+        "hint": "Citovaný fakt sa týka iného obdobia, okruhu osôb, miesta alebo veličiny než tvrdenie.",
+        "label": "Iný rozsah"
+      },
+      "unsourcedOnly": {
+        "hint": "Žiadny fakt, o ktorý sa záver opiera, zatiaľ nemá zdroj.",
+        "label": "Len bez zdroja"
+      }
+    },
     "review": {
       "disputed": "Spochybnené · {decidedAt}",
       "reviewed": "{origin, select, bulk {Prijaté ako bežné} other {Skontrolované}} · {decidedAt}",
@@ -376,7 +394,8 @@
       },
       "nocover": {
         "chip": "Bez pokrytia",
-        "label": "Žiadny referenčný fakt nepokrýva toto tvrdenie"
+        "label": "Žiadny referenčný fakt nepokrýva toto tvrdenie",
+        "silentChip": "Bez pokrytia · záznamy mlčia"
       },
       "notverifiable": {
         "chip": "Neoveriteľné",

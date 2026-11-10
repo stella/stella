@@ -15,7 +15,10 @@ const config = {
     "Read one list verification: the document version it checked, the list " +
     "facts it checked against as they stood then, and every claim found in " +
     "the document with its verdict (state, and a 0-100 support score for " +
-    "supported, tension and contradicted), the facts it rests on, and the " +
+    "supported, tension and contradicted), its qualifiers (caveats that " +
+    "never change the verdict: the record is not expected to speak to the " +
+    "point, a cited fact has a different scope, every fact it rests on is " +
+    "unsourced, or it rests on a held fact), the facts it rests on, and the " +
     "claim's current review (null while nobody has acted on it).",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

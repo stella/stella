@@ -39,6 +39,7 @@ export const makeFact = (
 type MakeClaimArgs = {
   suffix: number;
   verdict: ClaimVerdict;
+  qualifiers?: VerificationClaim["qualifiers"];
   type?: VerificationClaim["type"];
   refs?: VerificationClaim["refs"];
   review?: ClaimReview | null;
@@ -48,6 +49,7 @@ type MakeClaimArgs = {
 export const makeClaim = ({
   suffix,
   verdict,
+  qualifiers = [],
   type = "fact",
   refs = [],
   review = null,
@@ -63,6 +65,7 @@ export const makeClaim = ({
   type,
   framing: "asserted",
   verdict,
+  qualifiers,
   text: `Claim ${String(suffix)}`,
   anchor,
   refs,

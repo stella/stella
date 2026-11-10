@@ -232,6 +232,14 @@
       "title": "Atraminiai faktai"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Atraminiai faktai prieštarauja vienas kitam",
+        "conflictCount": "{count, plural, one {# prieštaravimas} few {# prieštaravimai} many {# prieštaravimų} other {# prieštaravimo}}",
+        "gap": "<strong>Joks atraminis faktas neapima šio teiginio.</strong> Tai registro spraga, o ne silpna išvada: kol kas nėra su kuo jo palyginti.",
+        "notVerifiable": "<strong>Teiginio negalima patikrinti.</strong> Tokio teiginio negalėtų patvirtinti joks dokumentas: tai kontrafaktinis teiginys, prognozė, ketinimų pareiškimas, teisinė išvada arba pernelyg nekonkretus teiginys. Jis atidedamas, o ne vertinamas.",
+        "supportCount": "{count, plural, one {# pagrindimas} few {# pagrindimai} many {# pagrindimų} other {# pagrindimo}}",
+        "verdictWithheld": "Išvada nepateikta"
+      },
       "escalatedReview": "Perduota įrodymų grupei: kol neišspręstas pagrindinis prieštaravimas, čia nėra išvados, kurią būtų galima patvirtinti ar ginčyti.",
       "flagDispute": "Pažymėti ginčą",
       "humanReview": "Žmogaus peržiūra",
@@ -267,17 +275,8 @@
       },
       "reopened": "Atverta iš naujo, laukiama patikros",
       "reopenedTooltip": "Tikrintojas perklasifikavo tai kaip patikrinamą faktą; tiesioginė patikra pagal registrą dar neatlikta.",
-      "score": {
-        "anchorFactsDisagree": "Atraminiai faktai prieštarauja vienas kitam",
-        "conflictCount": "{count, plural, one {# prieštaravimas} few {# prieštaravimai} many {# prieštaravimų} other {# prieštaravimo}}",
-        "noCoverage": "<strong>Registre apie tai duomenų nėra.</strong> Joks duomenų bazės atraminis faktas nesusijęs su šiuo teiginiu. Tai ne tas pats, kas mažas balas: kol kas nėra su kuo jo palyginti.",
-        "notVerifiable": "<strong>Teiginio negalima patikrinti.</strong> Tokio teiginio negalėtų patvirtinti joks dokumentas: tai kontrafaktinis teiginys, prognozė, ketinimų pareiškimas, teisinė išvada arba pernelyg nekonkretus teiginys. Jis atidedamas, o ne vertinamas.",
-        "outOf100": "<strong>/ 100</strong> pagrįstumo balas",
-        "supportCount": "{count, plural, one {# pagrindimas} few {# pagrindimai} many {# pagrindimų} other {# pagrindimo}}",
-        "verdictWithheld": "Išvada nepateikta"
-      },
       "sourceCount": "{count, plural, one {# šaltinis} few {# šaltiniai} many {# šaltinių} other {# šaltinio}}",
-      "whyScore": "Balų pagrindimas: atraminiai faktai"
+      "whyVerdict": "Išvados pagrindimas: atraminiai faktai"
     },
     "claimTypes": {
       "fact": {
@@ -331,6 +330,25 @@
       "count": "{count, plural, one {# atitikmuo} few {# atitikmenys} many {# atitikmenų} other {# atitikmens}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Išlygos",
+      "recordSilent": {
+        "hint": "Nesitikima, kad registras apimtų šį klausimą, todėl aprėpties nebuvimas nėra spraga.",
+        "label": "Registras tyli"
+      },
+      "restsOnHeld": {
+        "hint": "Faktas, kuriuo grindžiama ši išvada, dabar neįtrauktas į vertinimą.",
+        "label": "Grindžiama neįtrauktu faktu"
+      },
+      "scopeMismatch": {
+        "hint": "Cituojamas faktas apima kitą laikotarpį, asmenų grupę, vietą ar matą nei teiginys.",
+        "label": "Kita apimtis"
+      },
+      "unsourcedOnly": {
+        "hint": "Nė vienas faktas, kuriuo grindžiama ši išvada, dar neturi šaltinio.",
+        "label": "Tik be šaltinio"
+      }
+    },
     "review": {
       "disputed": "Užginčyta · {decidedAt}",
       "reviewed": "{origin, select, bulk {Priimta kaip įprasta} other {Peržiūrėta}} · {decidedAt}",
@@ -376,7 +394,8 @@
       },
       "nocover": {
         "chip": "Nėra aprėpties",
-        "label": "Joks atraminis faktas nesusijęs su šiuo teiginiu"
+        "label": "Joks atraminis faktas nesusijęs su šiuo teiginiu",
+        "silentChip": "Nėra aprėpties · registras tyli"
       },
       "notverifiable": {
         "chip": "Nepatikrinama",

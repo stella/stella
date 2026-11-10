@@ -232,6 +232,14 @@
       "title": "Ankurfaktid"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Ankurfaktid on vastuolus",
+        "conflictCount": "{count, plural, one {# vastuolu} other {# vastuolu}}",
+        "gap": "<strong>Ükski ankurfakt seda väidet ei kata.</strong> See on lünk registris, mitte nõrk otsus: praegu pole väidet millegi põhjal kontrollida.",
+        "notVerifiable": "<strong>Väide pole kontrollitav.</strong> Ükski dokument ei saaks sellist väidet tõendada: see on vastandolukord, ennustus, kavatsusavaldus, õiguslik järeldus või kontrollimiseks liiga ebamäärane väide. Jätke see hindamise asemel kõrvale.",
+        "supportCount": "{count, plural, one {# toetav asjaolu} other {# toetavat asjaolu}}",
+        "verdictWithheld": "Otsus tegemata"
+      },
       "escalatedReview": "Edastatud tõendite töörühmale: siin pole otsust, mida kinnitada või vaidlustada, enne kui aluseks olev vastuolu on lahendatud.",
       "flagDispute": "Märgi vaidlus",
       "humanReview": "Inimkontroll",
@@ -267,17 +275,8 @@
       },
       "reopened": "Uuesti avatud, kontroll ootel",
       "reopenedTooltip": "Kontrollija liigitas selle uuesti kontrollitavaks faktiks; reaalajas registrikontroll on veel ootel.",
-      "score": {
-        "anchorFactsDisagree": "Ankurfaktid on vastuolus",
-        "conflictCount": "{count, plural, one {# vastuolu} other {# vastuolu}}",
-        "noCoverage": "<strong>Register selle kohta teavet ei sisalda.</strong> Ükski andmebaasi ankurfakt ei käsitle seda väidet. See erineb nõrgast hindest: praegu pole väidet millegi põhjal kontrollida.",
-        "notVerifiable": "<strong>Väide pole kontrollitav.</strong> Ükski dokument ei saaks sellist väidet tõendada: see on vastandolukord, ennustus, kavatsusavaldus, õiguslik järeldus või kontrollimiseks liiga ebamäärane väide. Jätke see hindamise asemel kõrvale.",
-        "outOf100": "<strong>/ 100</strong> toetuse hinne",
-        "supportCount": "{count, plural, one {# toetav asjaolu} other {# toetavat asjaolu}}",
-        "verdictWithheld": "Otsus tegemata"
-      },
       "sourceCount": "{count, plural, one {# allikas} other {# allikat}}",
-      "whyScore": "Hinde põhjendus: ankurfaktid"
+      "whyVerdict": "Otsuse põhjendus: ankurfaktid"
     },
     "claimTypes": {
       "fact": {
@@ -331,6 +330,25 @@
       "count": "{count, plural, one {# vaste} other {# vastet}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Reservatsioonid",
+      "recordSilent": {
+        "hint": "Registrilt ei eeldata selle küsimuse kohta teavet, seega puuduv katvus ei ole lünk.",
+        "label": "Register vaikib"
+      },
+      "restsOnHeld": {
+        "hint": "Fakt, millele see otsus tugineb, on nüüd hindamisest välja jäetud.",
+        "label": "Tugineb välja jäetud faktile"
+      },
+      "scopeMismatch": {
+        "hint": "Viidatud fakt käsitleb väitest erinevat ajavahemikku, rühma, kohta või mõõdikut.",
+        "label": "Erinev ulatus"
+      },
+      "unsourcedOnly": {
+        "hint": "Ühelgi faktil, millele see otsus tugineb, pole veel allikat.",
+        "label": "Ainult allikata"
+      }
+    },
     "review": {
       "disputed": "Vaidlustatud · {decidedAt}",
       "reviewed": "{origin, select, bulk {Tavapärasena kinnitatud} other {Kontrollitud}} · {decidedAt}",
@@ -376,7 +394,8 @@
       },
       "nocover": {
         "chip": "Katvus puudub",
-        "label": "Ükski ankurfakt ei käsitle seda väidet"
+        "label": "Ükski ankurfakt ei käsitle seda väidet",
+        "silentChip": "Katvus puudub · register vaikib"
       },
       "notverifiable": {
         "chip": "Kontrollimatu",

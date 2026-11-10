@@ -7,12 +7,15 @@
  */
 
 import { panic } from "better-result";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
   legalListClaimReviewEvents,
   legalListClaims,
+  legalListFactDetails,
+  legalListItems,
+  legalListItemSources,
   legalListVerificationBlocks,
   legalListVerificationRuns,
 } from "@/api/db/schema";
@@ -21,8 +24,14 @@ import type {
   ClaimState,
   ClaimVerdict,
   RecordConflict,
+  VerificationEvidence,
 } from "@/api/lib/lists/verification/contract";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
+import {
+  claimQualifiers,
+  restingFactIds,
+} from "@/api/lib/lists/verification/qualifiers";
+import type { FactStanding } from "@/api/lib/lists/verification/qualifiers";
 import type { ClaimReview } from "@/api/lib/lists/verification/review-fold";
 import {
   contestedFactIds,
@@ -189,6 +198,86 @@ export const readContestedFactIds = async (args: ReadVerificationRunArgs) => {
   return evidence === null ? null : contestedFactIds(evidence);
 };
 
+type ReadFactStandingsArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  evidence: VerificationEvidence;
+};
+
+/**
+ * How each fact a run pinned stands on its list now, for the qualifiers
+ * computed at read time. A fact taken off the list since keeps the standing
+ * the run pinned: included, with the sources the run read.
+ */
+const readFactStandings = async ({
+  tx,
+  workspaceId,
+  evidence,
+}: ReadFactStandingsArgs): Promise<
+  ReadonlyMap<SafeId<"entity">, FactStanding>
+> => {
+  const standings = new Map<SafeId<"entity">, FactStanding>(
+    evidence.facts.map((fact) => [
+      fact.factEntityId,
+      {
+        scoring: "included",
+        sourcing: fact.sources.length > 0 ? "sourced" : "unsourced",
+      },
+    ]),
+  );
+  const factIds = [...standings.keys()];
+  if (factIds.length === 0) {
+    return standings;
+  }
+  const onList = await tx
+    .select({
+      factEntityId: legalListItems.entityId,
+      scoring: legalListFactDetails.scoring,
+    })
+    .from(legalListItems)
+    .leftJoin(
+      legalListFactDetails,
+      eq(legalListFactDetails.itemEntityId, legalListItems.entityId),
+    )
+    .where(
+      and(
+        eq(legalListItems.workspaceId, workspaceId),
+        eq(legalListItems.listId, evidence.listId),
+        inArray(legalListItems.entityId, factIds),
+      ),
+    )
+    .limit(factIds.length);
+  if (onList.length === 0) {
+    return standings;
+  }
+  // A rejected source no longer says where a fact comes from, as when the
+  // run pinned its evidence.
+  const sourced = await tx
+    .select({ factEntityId: legalListItemSources.itemEntityId })
+    .from(legalListItemSources)
+    .where(
+      and(
+        eq(legalListItemSources.workspaceId, workspaceId),
+        inArray(
+          legalListItemSources.itemEntityId,
+          onList.map((fact) => fact.factEntityId),
+        ),
+        ne(legalListItemSources.verificationStatus, "rejected"),
+      ),
+    )
+    .groupBy(legalListItemSources.itemEntityId)
+    .limit(onList.length);
+  const sourcedIds = new Set(sourced.map((fact) => fact.factEntityId));
+  for (const { factEntityId, scoring } of onList) {
+    standings.set(factEntityId, {
+      // A fact nobody has described yet scores, as when a run pins it.
+      scoring: scoring ?? "included",
+      sourcing: sourcedIds.has(factEntityId) ? "sourced" : "unsourced",
+    });
+  }
+  return standings;
+};
+
 /** `null` when the workspace holds no such run. */
 export const readVerificationRun = async ({
   tx,
@@ -239,10 +328,14 @@ export const readVerificationRun = async ({
     .orderBy(asc(legalListVerificationBlocks.ordinal))
     .limit(VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX);
   const reviews = await readClaimReviews({ tx, workspaceId, runId });
-  const reviewOf = (claimId: SafeId<"legalListClaim">) => {
-    const record = reviews.get(claimId);
-    return record === undefined ? null : serializeClaimReview(record.review);
-  };
+  const standings = await readFactStandings({
+    tx,
+    workspaceId,
+    evidence: run.evidence,
+  });
+  const standingOf = (factEntityId: SafeId<"entity">) =>
+    standings.get(factEntityId) ??
+    panic("A claim rests on a fact its run did not pin");
 
   return {
     id: run.id,
@@ -259,17 +352,27 @@ export const readVerificationRun = async ({
     startedAt: run.startedAt?.toISOString() ?? null,
     finishedAt: run.finishedAt?.toISOString() ?? null,
     blocks,
-    claims: claims.map((claim) => ({
-      id: claim.id,
-      position: claim.position,
-      type: claim.type,
-      framing: claim.framing,
-      verdict: toClaimVerdict(claim),
-      text: claim.text,
-      anchor: claim.anchor,
-      refs: claim.refs,
-      review: reviewOf(claim.id),
-    })),
+    claims: claims.map((claim) => {
+      const verdict = toClaimVerdict(claim);
+      const review = reviews.get(claim.id)?.review ?? null;
+      return {
+        id: claim.id,
+        position: claim.position,
+        type: claim.type,
+        framing: claim.framing,
+        verdict,
+        qualifiers: claimQualifiers({
+          graded: claim.qualifiers,
+          resting: restingFactIds({ verdict, refs: claim.refs }, review).map(
+            standingOf,
+          ),
+        }),
+        text: claim.text,
+        anchor: claim.anchor,
+        refs: claim.refs,
+        review: review === null ? null : serializeClaimReview(review),
+      };
+    }),
   };
 };
 

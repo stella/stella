@@ -232,6 +232,14 @@
       "title": "Faits d’ancrage"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Les faits d’ancrage se contredisent",
+        "conflictCount": "{count, plural, one {# contradiction} other {# contradictions} many {# contradictions}}",
+        "gap": "<strong>Aucun fait d’ancrage ne couvre cette affirmation.</strong> C’est une lacune du dossier, pas un verdict faible : il n’y a encore rien pour la vérifier.",
+        "notVerifiable": "<strong>Pas une assertion vérifiable.</strong> C’est le genre de déclaration qu’aucun document ne pourra jamais trancher : un contrefactuel, une prédiction, une déclaration d’intention, une conclusion juridique ou une affirmation trop vague pour être vérifiée. Écartée plutôt que notée.",
+        "supportCount": "{count, plural, one {# soutien} other {# soutiens} many {# soutiens}}",
+        "verdictWithheld": "Verdict suspendu"
+      },
       "escalatedReview": "Transmis à l’équipe chargée des preuves ; aucun verdict à confirmer ou à contester ici tant que le conflit sous-jacent n’est pas résolu.",
       "flagDispute": "Signaler un désaccord",
       "humanReview": "Relecture humaine",
@@ -267,17 +275,8 @@
       },
       "reopened": "Rouverte, vérification en attente",
       "reopenedTooltip": "Un relecteur a requalifié cette affirmation en fait vérifiable ; une vérification en direct du dossier est encore en attente.",
-      "score": {
-        "anchorFactsDisagree": "Les faits d’ancrage se contredisent",
-        "conflictCount": "{count, plural, one {# contradiction} other {# contradictions} many {# contradictions}}",
-        "noCoverage": "<strong>Le dossier est muet.</strong> Aucun fait d’ancrage de la base ne traite de cette affirmation. Ce n’est pas un score faible : cela signifie qu’il n’y a encore rien pour la vérifier.",
-        "notVerifiable": "<strong>Pas une assertion vérifiable.</strong> C’est le genre de déclaration qu’aucun document ne pourra jamais trancher : un contrefactuel, une prédiction, une déclaration d’intention, une conclusion juridique ou une affirmation trop vague pour être vérifiée. Écartée plutôt que notée.",
-        "outOf100": "<strong>/ 100</strong> score de soutien",
-        "supportCount": "{count, plural, one {# soutien} other {# soutiens} many {# soutiens}}",
-        "verdictWithheld": "Verdict suspendu"
-      },
       "sourceCount": "{count, plural, one {# source} other {# sources} many {# sources}}",
-      "whyScore": "Pourquoi ce score : faits d’ancrage"
+      "whyVerdict": "Pourquoi ce verdict : faits d’ancrage"
     },
     "claimTypes": {
       "fact": {
@@ -331,6 +330,25 @@
       "count": "{count, plural, one {# correspondance} other {# correspondances} many {# correspondances}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Réserves",
+      "recordSilent": {
+        "hint": "Le dossier n’a pas vocation à traiter ce point : l’absence de couverture n’est donc pas une lacune.",
+        "label": "Dossier muet"
+      },
+      "restsOnHeld": {
+        "hint": "Un fait sur lequel repose ce verdict est désormais exclu de la notation.",
+        "label": "Repose sur un fait exclu"
+      },
+      "scopeMismatch": {
+        "hint": "Un fait cité porte sur une période, une population, un lieu ou une mesure autres que ceux de l’affirmation.",
+        "label": "Portée différente"
+      },
+      "unsourcedOnly": {
+        "hint": "Aucun fait sur lequel repose ce verdict n’a encore de source.",
+        "label": "Uniquement sans source"
+      }
+    },
     "review": {
       "disputed": "Désaccord signalé · {decidedAt}",
       "reviewed": "{origin, select, bulk {Acceptée de routine} other {Examinée}} · {decidedAt}",
@@ -376,7 +394,8 @@
       },
       "nocover": {
         "chip": "Sans couverture",
-        "label": "Aucun fait d’ancrage ne couvre cette affirmation"
+        "label": "Aucun fait d’ancrage ne couvre cette affirmation",
+        "silentChip": "Sans couverture · dossier muet"
       },
       "notverifiable": {
         "chip": "Non vérifiable",

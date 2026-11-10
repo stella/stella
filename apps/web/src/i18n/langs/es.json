@@ -232,6 +232,14 @@
       "title": "Hechos de referencia"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Los hechos de referencia discrepan",
+        "conflictCount": "{count, plural, one {# conflicto} other {# conflictos} many {# conflictos}}",
+        "gap": "<strong>Ningún hecho de referencia cubre esta afirmación.</strong> Es una laguna del registro, no un resultado débil: todavía no hay nada con lo que contrastarla.",
+        "notVerifiable": "<strong>No es una afirmación verificable.</strong> Ningún documento podría resolver este tipo de declaración: un contrafactual, una predicción, una declaración de intenciones, una conclusión jurídica o una afirmación demasiado imprecisa. Se reserva en lugar de puntuarse.",
+        "supportCount": "{count, plural, one {# respaldo} other {# respaldos} many {# respaldos}}",
+        "verdictWithheld": "Resultado retenido"
+      },
       "escalatedReview": "Remitido al equipo de pruebas: no hay un resultado que confirmar o impugnar hasta que se resuelva el conflicto subyacente.",
       "flagDispute": "Marcar discrepancia",
       "humanReview": "Revisión humana",
@@ -267,17 +275,8 @@
       },
       "reopened": "Reabierta, comprobación pendiente",
       "reopenedTooltip": "Un revisor la reclasificó como hecho comprobable; aún está pendiente la comprobación en vivo del registro.",
-      "score": {
-        "anchorFactsDisagree": "Los hechos de referencia discrepan",
-        "conflictCount": "{count, plural, one {# conflicto} other {# conflictos} many {# conflictos}}",
-        "noCoverage": "<strong>El registro no contiene información.</strong> Ningún hecho de referencia de la base de datos aborda esta afirmación. No equivale a una puntuación baja: todavía no hay nada con lo que contrastarla.",
-        "notVerifiable": "<strong>No es una afirmación verificable.</strong> Ningún documento podría resolver este tipo de declaración: un contrafactual, una predicción, una declaración de intenciones, una conclusión jurídica o una afirmación demasiado imprecisa. Se reserva en lugar de puntuarse.",
-        "outOf100": "<strong>/ 100</strong> puntuación de respaldo",
-        "supportCount": "{count, plural, one {# respaldo} other {# respaldos} many {# respaldos}}",
-        "verdictWithheld": "Resultado retenido"
-      },
       "sourceCount": "{count, plural, one {# fuente} other {# fuentes} many {# fuentes}}",
-      "whyScore": "Motivo de esta puntuación: hechos de referencia"
+      "whyVerdict": "Motivo de este resultado: hechos de referencia"
     },
     "claimTypes": {
       "fact": {
@@ -331,6 +330,25 @@
       "count": "{count, plural, one {# coincidencia} other {# coincidencias} many {# coincidencias}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Salvedades",
+      "recordSilent": {
+        "hint": "No se espera que el registro se pronuncie sobre este punto, por lo que la falta de cobertura no es una laguna.",
+        "label": "Registro silente"
+      },
+      "restsOnHeld": {
+        "hint": "Un hecho en el que se basa este resultado está ahora excluido de la puntuación.",
+        "label": "Se basa en un hecho excluido"
+      },
+      "scopeMismatch": {
+        "hint": "Un hecho citado se refiere a un período, población, lugar o medida distintos de los de la afirmación.",
+        "label": "Alcance distinto"
+      },
+      "unsourcedOnly": {
+        "hint": "Ningún hecho en el que se basa este resultado tiene todavía una fuente.",
+        "label": "Solo sin fuente"
+      }
+    },
     "review": {
       "disputed": "Impugnada · {decidedAt}",
       "reviewed": "{origin, select, bulk {Aceptada como rutinaria} other {Revisada}} · {decidedAt}",
@@ -376,7 +394,8 @@
       },
       "nocover": {
         "chip": "Sin cobertura",
-        "label": "Ningún hecho de referencia cubre esta afirmación"
+        "label": "Ningún hecho de referencia cubre esta afirmación",
+        "silentChip": "Sin cobertura · registro silente"
       },
       "notverifiable": {
         "chip": "No verificable",

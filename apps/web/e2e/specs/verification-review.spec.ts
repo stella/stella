@@ -118,6 +118,7 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
           governingStates: ["supported", "contradicted"],
         },
       },
+      qualifiers: [],
       text,
       anchor: { type: "docx-block", blockId: "b1", start: 0, end: text.length },
       refs: [],
@@ -338,6 +339,7 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
           score: state === "supported" ? 90 : 10,
           recordConflict: null,
         },
+        qualifiers: [],
         text,
         anchor: {
           type: "pdf-page",

@@ -232,6 +232,14 @@
       "title": "Fakty referencyjne"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Fakty referencyjne są sprzeczne",
+        "conflictCount": "{count, plural, one {# sprzeczność} few {# sprzeczności} many {# sprzeczności} other {# sprzeczności}}",
+        "gap": "<strong>Żaden fakt referencyjny nie obejmuje tego twierdzenia.</strong> To luka w rejestrze, a nie słabe rozstrzygnięcie: na razie nie ma z czym porównać twierdzenia.",
+        "notVerifiable": "<strong>Twierdzenie niemożliwe do zweryfikowania.</strong> Żaden dokument nie może rozstrzygnąć takiego twierdzenia: na przykład hipotezy, prognozy, deklaracji zamiaru, wniosku prawnego lub twierdzenia zbyt nieprecyzyjnego, by je sprawdzić. Zostaje odłożone bez oceny.",
+        "supportCount": "{count, plural, one {# potwierdzenie} few {# potwierdzenia} many {# potwierdzeń} other {# potwierdzenia}}",
+        "verdictWithheld": "Wstrzymano rozstrzygnięcie"
+      },
       "escalatedReview": "Przekazano zespołowi ds. dowodów; dopóki źródłowa sprzeczność nie zostanie rozstrzygnięta, nie ma tu rozstrzygnięcia do potwierdzenia ani zakwestionowania.",
       "flagDispute": "Oznacz spór",
       "humanReview": "Weryfikacja przez człowieka",
@@ -267,17 +275,8 @@
       },
       "reopened": "Otwarto ponownie, oczekuje na sprawdzenie",
       "reopenedTooltip": "Osoba weryfikująca przeklasyfikowała to twierdzenie jako możliwy do sprawdzenia fakt; porównanie z rzeczywistym rejestrem nadal oczekuje na wykonanie.",
-      "score": {
-        "anchorFactsDisagree": "Fakty referencyjne są sprzeczne",
-        "conflictCount": "{count, plural, one {# sprzeczność} few {# sprzeczności} many {# sprzeczności} other {# sprzeczności}}",
-        "noCoverage": "<strong>Rejestr nie zawiera informacji na ten temat.</strong> Żaden fakt referencyjny w bazie danych nie odnosi się do tego twierdzenia. Nie jest to słaba ocena: na razie po prostu nie ma z czym porównać twierdzenia.",
-        "notVerifiable": "<strong>Twierdzenie niemożliwe do zweryfikowania.</strong> Żaden dokument nie może rozstrzygnąć takiego twierdzenia: na przykład hipotezy, prognozy, deklaracji zamiaru, wniosku prawnego lub twierdzenia zbyt nieprecyzyjnego, by je sprawdzić. Zostaje odłożone bez oceny.",
-        "outOf100": "<strong>/ 100</strong> poziom potwierdzenia",
-        "supportCount": "{count, plural, one {# potwierdzenie} few {# potwierdzenia} many {# potwierdzeń} other {# potwierdzenia}}",
-        "verdictWithheld": "Wstrzymano rozstrzygnięcie"
-      },
       "sourceCount": "{count, plural, one {# źródło} few {# źródła} many {# źródeł} other {# źródła}}",
-      "whyScore": "Uzasadnienie oceny: fakty referencyjne"
+      "whyVerdict": "Uzasadnienie rozstrzygnięcia: fakty referencyjne"
     },
     "claimTypes": {
       "fact": {
@@ -331,6 +330,25 @@
       "count": "{count, plural, one {# trafienie} few {# trafienia} many {# trafień} other {# trafienia}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Zastrzeżenia",
+      "recordSilent": {
+        "hint": "Nie oczekuje się, że rejestr odniesie się do tej kwestii, więc brak pokrycia nie jest luką.",
+        "label": "Rejestr milczy"
+      },
+      "restsOnHeld": {
+        "hint": "Fakt, na którym opiera się to rozstrzygnięcie, jest teraz wykluczony z oceny.",
+        "label": "Opiera się na wykluczonym fakcie"
+      },
+      "scopeMismatch": {
+        "hint": "Przywołany fakt dotyczy innego okresu, grupy, miejsca lub miary niż twierdzenie.",
+        "label": "Inny zakres"
+      },
+      "unsourcedOnly": {
+        "hint": "Żaden fakt, na którym opiera się to rozstrzygnięcie, nie ma jeszcze źródła.",
+        "label": "Tylko bez źródła"
+      }
+    },
     "review": {
       "disputed": "Zakwestionowane · {decidedAt}",
       "reviewed": "{origin, select, bulk {Zaakceptowane jako rutynowe} other {Zweryfikowane}} · {decidedAt}",
@@ -376,7 +394,8 @@
       },
       "nocover": {
         "chip": "Brak pokrycia",
-        "label": "Żaden fakt referencyjny nie obejmuje tego twierdzenia"
+        "label": "Żaden fakt referencyjny nie obejmuje tego twierdzenia",
+        "silentChip": "Brak pokrycia · rejestr milczy"
       },
       "notverifiable": {
         "chip": "Nieweryfikowalne",

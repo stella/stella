@@ -26,6 +26,8 @@ import {
 } from "@/api/dev/register-mock-ai";
 import { env } from "@/api/env";
 import { factExtractionSchema } from "@/api/lib/lists/generation/fact-extract";
+import { extractionSchema as claimExtractionSchema } from "@/api/lib/lists/verification/claim-extract";
+import { gradingSchema as claimGradingSchema } from "@/api/lib/lists/verification/claim-grade";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
@@ -226,6 +228,67 @@ describe("mockStructuredData", () => {
         { blockId: "b1", located: true, held: false },
         { blockId: "b2", located: true, held: true },
       ]);
+    });
+  }
+
+  // A local verification run has to show every qualifier the grader can
+  // give, from claims quoted out of the document it was asked about.
+  for (const provider of PROVIDERS) {
+    test(`answers claim extraction and grading from the request (${provider})`, () => {
+      const blocks = new Map([
+        [
+          "b1",
+          "6. I was on annual leave for the whole of August 2021. I was abroad with my family.",
+        ],
+        [
+          "b2",
+          "7. Had it been raised at board level, I would have expected to see it minuted.",
+        ],
+        ["b3", "8. I signed the engagement letter on 14 June 2021."],
+      ]);
+      const extraction = mockStructuredData(
+        structuredOutputSchemaFor(claimExtractionSchema, provider),
+        [
+          {
+            role: "user",
+            content: `Document blocks:\n${[...blocks]
+              .map(([id, text]) => `[${id}] ${text}`)
+              .join("\n")}\n\nList the claims in these blocks only: b1, b2, b3`,
+          },
+        ],
+      );
+      const { claims } = v.parse(claimExtractionSchema, extraction);
+      expect(
+        claims.every(
+          ({ blockId, quote }) =>
+            locateQuote(blocks.get(blockId) ?? "", quote) !== null,
+        ),
+      ).toBe(true);
+
+      const request = [
+        "Facts:",
+        '- F1: Calendar "Annual leave" blocked across 2–20 August 2021.',
+        "- F2: Engagement letter signed by E. Whitfield on 14 June 2021.",
+        `Claims:\n${claims
+          .map(({ quote }, index) => `- C${String(index + 1)}: ${quote}`)
+          .join("\n")}`,
+      ].join("\n");
+      const grading = mockStructuredData(
+        structuredOutputSchemaFor(claimGradingSchema, provider),
+        [{ role: "user", content: request }],
+      );
+      const { grades } = v.parse(claimGradingSchema, grading);
+      expect(grades.map(({ claimId }) => claimId)).toEqual(
+        claims.map((_, index) => `C${String(index + 1)}`),
+      );
+      expect(
+        grades.flatMap(({ verdict, qualifiers }) =>
+          qualifiers.map(({ kind }) => `${verdict}:${kind}`),
+        ),
+      ).toEqual(["tension:scope-mismatch", "nocover:record-silent"]);
+      expect(
+        grades.find(({ verdict }) => verdict === "supported")?.refs,
+      ).toEqual([{ factId: "F2", rel: "supports" }]);
     });
   }
 

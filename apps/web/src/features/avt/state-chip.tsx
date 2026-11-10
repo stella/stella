@@ -60,7 +60,9 @@ type StateColor = {
    *  and line. */
   mark: { variant: TextMarkVariant; tone: TextMarkTone };
   /** Classes the marked words take besides the mark: the verdicts that say
-   *  nothing about the claim read muted. */
+   *  nothing about the claim read muted. Missing coverage is a gap to fill
+   *  and reads at full strength, unless the record is silent on the point
+   *  (`isRecordSilent`). */
   markTextClass: string;
 };
 
@@ -91,7 +93,7 @@ export const STATE_COLOR: Record<ClaimState, StateColor> = {
     tone: "neutral",
     textClass: "text-muted-foreground",
     mark: { variant: "dotted", tone: "muted" },
-    markTextClass: "text-muted-foreground",
+    markTextClass: "",
   },
   recordconflict: {
     icon: SplitIcon,
