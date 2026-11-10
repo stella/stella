@@ -71,8 +71,10 @@ import { ROOT_POOL_SENTINEL_MESSAGE } from "@/api/tests/test-database-environmen
 // delta, never per thread.
 //
 // Calibration: `measured` is what main measures, identical on the short and
-// the long thread, and a test holds it to today's measurement: a change that
-// moves a figure updates it here, so the recorded figures cannot drift. A budget is that measurement plus a small headroom
+// the long thread, and a test holds it to today's measurement
+// (`RECORDED_FIGURE_BANDS`): statement counts exactly, byte figures and
+// timing-dependent counts within a stated band, so a change that moves a
+// figure past its band updates it here. A budget is that measurement plus a small headroom
 // (`withHeadroom`): 10% of the statements, at least one, and 15% of the
 // bytes; a measurement that also depends on timing gets its stated
 // `TIMING_ALLOWANCE` instead. Byte figures hold for this fixture's messages (a text question, an
@@ -143,6 +145,47 @@ const CHAT_PATH_BUDGETS = {
 const TIMING_ALLOWANCE: Readonly<Record<string, number>> = {
   statementsPer100Deltas: 2,
 };
+
+/**
+ * How far today's measurement may sit from a recorded figure, either side.
+ * Statement counts are the same on every run, so they match exactly.
+ * Byte figures move by a few bytes between runs (two of them have differed
+ * by one), so they hold within 2%.
+ * A timing-dependent count holds within half to twice its record.
+ */
+const RECORDED_FIGURE_BANDS = {
+  bytes: { below: 0.98, above: 1.02 },
+  statements: { below: 1, above: 1 },
+  timing: { below: 0.5, above: 2 },
+} as const;
+
+/** `figure` is `path.name`; its band follows from the name. */
+const recordedFigureBand = (
+  figure: string,
+  recorded: number,
+): readonly [low: number, high: number] => {
+  const name = figure.slice(figure.indexOf(".") + 1);
+  const band = (() => {
+    if (TIMING_ALLOWANCE[name] !== undefined) {
+      return RECORDED_FIGURE_BANDS.timing;
+    }
+    if (/bytes/iu.test(name)) {
+      return RECORDED_FIGURE_BANDS.bytes;
+    }
+    return RECORDED_FIGURE_BANDS.statements;
+  })();
+  return [recorded * band.below, recorded * band.above];
+};
+
+/** Every figure of every path, keyed `path.name`. */
+const figuresByName = (
+  figures: Readonly<Record<string, Readonly<Record<string, number>>>>,
+): ReadonlyMap<string, number> =>
+  new Map(
+    Object.entries(figures).flatMap(([path, values]) =>
+      Object.entries(values).map(([name, value]) => [`${path}.${name}`, value]),
+    ),
+  );
 
 const withHeadroom = (name: string, value: number): number => {
   const allowance = TIMING_ALLOWANCE[name];
@@ -930,31 +973,27 @@ describe("chat path budgets", () => {
         number
       >;
     };
-    // A figure that also depends on timing varies run to run; its budget's
-    // allowance bounds it instead.
-    const exact = (
-      figures: Readonly<Record<string, Readonly<Record<string, number>>>>,
-    ) =>
+    const recordedFigures = figuresByName(
       Object.fromEntries(
-        Object.entries(figures).map(([path, values]) => [
+        Object.entries(CHAT_PATH_BUDGETS).map(([path, budget]) => [
           path,
-          Object.fromEntries(
-            Object.entries(values).filter(
-              ([name]) => TIMING_ALLOWANCE[name] === undefined,
-            ),
-          ),
+          budget.measured,
         ]),
-      );
-    const recordedFigures = Object.fromEntries(
-      Object.entries(CHAT_PATH_BUDGETS).map(([path, budget]) => [
-        path,
-        budget.measured,
-      ]),
+      ),
     );
+    const todayFigures = figuresByName(today);
+    const drifted = [...recordedFigures].flatMap(([figure, record]) => {
+      const value =
+        todayFigures.get(figure) ?? panic(`No measurement for ${figure}`);
+      const [low, high] = recordedFigureBand(figure, record);
+      return value >= low && value <= high
+        ? []
+        : [`${figure}: recorded ${record}, measured ${value}`];
+    });
     expect(
-      exact(today),
+      drifted,
       `update CHAT_PATH_BUDGETS to today's figures; ${report}`,
-    ).toEqual(exact(recordedFigures));
+    ).toEqual([]);
   });
 
   test("Stop costs a fixed number of statements", () => {
