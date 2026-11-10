@@ -9,6 +9,7 @@ import {
 import type { ConfigPlugin, ExportedConfig } from "expo/config-plugins";
 import { cpSync, existsSync, rmSync } from "node:fs";
 import path from "node:path";
+import type { XcodeProject } from "xcode";
 
 // The interface languages come from `@stll/locales` itself, so iOS is told
 // exactly the languages the app ships.
@@ -64,10 +65,33 @@ type ReleaseSigning = {
   teamId: string;
   /** The Live Activity extension's own profile; without it the release leaves the extension out. */
   widgetsProfileUuid?: string | undefined;
+  /**
+   * The share extension's own profile, granted the App Group; set only
+   * beside the widgets profile, whose regeneration gave the app the App
+   * Group. Without it the release leaves the share extension out.
+   */
+  shareProfileUuid?: string | undefined;
 };
 
 /** The target expo-widgets adds for the widget extension. */
 const WIDGETS_TARGET = "ExpoWidgetsTarget";
+
+/**
+ * The share extension's target, built from `share-extension/`: the system
+ * share sheet's way to hand files, links and text to the app. It copies them
+ * into a folder of the App Group's inbox and opens the app on the share
+ * route, which imports them and deletes the folder.
+ */
+const SHARE_TARGET = "StellaShare";
+
+/** The share extension's sources, copied into the native project at prebuild. */
+export const SHARE_EXTENSION_FOLDER = "share-extension";
+
+/** The App Group folder the extension writes each share into. */
+const SHARE_INBOX_FOLDER = "ShareInbox";
+
+/** The app route a share opens on: `src/app/share/[shareId].tsx`. */
+export const SHARE_ROUTE = "share";
 
 /**
  * Signs the app target, and only it, with the release profile. Passed to
@@ -76,7 +100,7 @@ const WIDGETS_TARGET = "ExpoWidgetsTarget";
  */
 const withReleaseSigning: ConfigPlugin<ReleaseSigning> = (
   config,
-  { profileUuid, teamId, widgetsProfileUuid },
+  { profileUuid, shareProfileUuid, teamId, widgetsProfileUuid },
 ) =>
   withXcodeProject(config, (mod) => {
     const project = mod.modResults;
@@ -109,8 +133,147 @@ const withReleaseSigning: ConfigPlugin<ReleaseSigning> = (
       );
       sign(widgets.buildConfigurationList, widgetsProfileUuid);
     }
+    if (shareProfileUuid !== undefined) {
+      // As above: the share target must be there to be signed.
+      const [, share] = IOSConfig.Target.findNativeTargetByName(
+        project,
+        SHARE_TARGET,
+      );
+      sign(share.buildConfigurationList, shareProfileUuid);
+    }
     return mod;
   });
+
+type ShareExtension = {
+  appGroup: string;
+  bundleIdentifier: string;
+  displayName: string;
+  scheme: string;
+};
+
+/**
+ * Adds the share extension: its sources copied into the native project, and
+ * a target that builds them, embedded in the app. What differs per build
+ * (App Group, scheme, name) reaches the extension's Info.plist and
+ * entitlements as build settings, so the sources are the same files in
+ * every build.
+ */
+const withShareExtension: ConfigPlugin<ShareExtension> = (config, share) =>
+  withXcodeProject(
+    withDangerousMod(config, [
+      "ios",
+      (mod) => {
+        copyShareExtension(mod.modRequest);
+        return mod;
+      },
+    ]),
+    (mod) => {
+      addShareTarget(mod.modResults, {
+        ...share,
+        buildNumber: mod.ios?.buildNumber ?? "1",
+        version: mod.version ?? APP_VERSION,
+      });
+      return mod;
+    },
+  );
+
+/** Copies the extension's sources into the native project, replacing any earlier copy. */
+export const copyShareExtension = ({
+  platformProjectRoot,
+  projectRoot,
+}: {
+  platformProjectRoot: string;
+  projectRoot: string;
+}) => {
+  const destination = path.join(platformProjectRoot, SHARE_TARGET);
+  rmSync(destination, { force: true, recursive: true });
+  cpSync(path.join(projectRoot, SHARE_EXTENSION_FOLDER), destination, {
+    recursive: true,
+  });
+};
+
+const SHARE_SOURCES = ["ShareViewController.swift"];
+const SHARE_INFO_PLIST = `${SHARE_TARGET}-Info.plist`;
+
+/** Adds the share target once; a project that has it is left as it is. */
+export const addShareTarget = (
+  project: XcodeProject,
+  {
+    appGroup,
+    buildNumber,
+    bundleIdentifier,
+    displayName,
+    scheme,
+    version,
+  }: ShareExtension & { buildNumber: string; version: string },
+) => {
+  if (
+    IOSConfig.Target.getNativeTargets(project).some(
+      ([, target]) =>
+        IOSConfig.XcodeUtils.unquote(target.name) === SHARE_TARGET,
+    )
+  ) {
+    return;
+  }
+  // The xcode package reuses a reference with the same file name, and Xcode
+  // refuses one file in two groups, so every name here is the target's own.
+  const group = project.addPbxGroup(
+    [...SHARE_SOURCES, SHARE_INFO_PLIST, `${SHARE_TARGET}.entitlements`],
+    SHARE_TARGET,
+    SHARE_TARGET,
+  );
+  project.addToPbxGroup(
+    group.uuid,
+    project.getFirstProject().firstProject.mainGroup,
+  );
+  // A project of one target lacks the sections a second target's
+  // dependency is written into.
+  const objects = project.hash.project.objects;
+  objects["PBXTargetDependency"] ??= {};
+  objects["PBXContainerItemProxy"] ??= {};
+  const target = project.addTarget(
+    SHARE_TARGET,
+    "app_extension",
+    SHARE_TARGET,
+    bundleIdentifier,
+  );
+  project.addBuildPhase(
+    SHARE_SOURCES,
+    "PBXSourcesBuildPhase",
+    "Sources",
+    target.uuid,
+  );
+  project.addBuildPhase([], "PBXResourcesBuildPhase", "Resources", target.uuid);
+  project.addBuildPhase(
+    [],
+    "PBXFrameworksBuildPhase",
+    "Frameworks",
+    target.uuid,
+  );
+  for (const [
+    ,
+    configuration,
+  ] of IOSConfig.XcodeUtils.getBuildConfigurationsForListId(
+    project,
+    target.pbxNativeTarget.buildConfigurationList,
+  )) {
+    Object.assign(configuration.buildSettings, {
+      CLANG_ENABLE_MODULES: "YES",
+      CODE_SIGN_ENTITLEMENTS: `"${SHARE_TARGET}/${SHARE_TARGET}.entitlements"`,
+      CURRENT_PROJECT_VERSION: `"${buildNumber}"`,
+      GENERATE_INFOPLIST_FILE: "NO",
+      INFOPLIST_FILE: `"${SHARE_TARGET}/${SHARE_INFO_PLIST}"`,
+      MARKETING_VERSION: `"${version}"`,
+      STELLA_APP_GROUP: `"${appGroup}"`,
+      STELLA_APP_NAME: `"${displayName}"`,
+      STELLA_APP_SCHEME: `"${scheme}"`,
+      STELLA_SHARE_INBOX: `"${SHARE_INBOX_FOLDER}"`,
+      STELLA_SHARE_ROUTE: `"${SHARE_ROUTE}"`,
+      SWIFT_VERSION: "5.0",
+      TARGETED_DEVICE_FAMILY: `"1,2"`,
+    });
+  }
+};
 
 /**
  * lucide's glyphs for the platform's own bars (the header's buttons, the tab
@@ -211,15 +374,25 @@ type AppConfigInputs = {
   pushNotifications: boolean;
   /** The native fingerprint (`scripts/fingerprint.ts`); updates target it. */
   runtimeVersion: string;
+  /**
+   * Whether the build carries the share extension, which needs the App
+   * Group in the app's profile and a profile of its own.
+   */
+  shareExtension: boolean;
   signingCertificatePresent: boolean;
   variant: Variant;
 };
+
+/** The App Group the app shares with its extensions. */
+const appGroupFor = (variant: Variant) =>
+  `group.${VARIANT_CONFIG[variant].identifier}`;
 
 const appConfigBase = ({
   buildNumber,
   liveActivities,
   pushNotifications,
   runtimeVersion,
+  shareExtension,
   signingCertificatePresent,
   variant,
 }: AppConfigInputs): ExpoConfig => ({
@@ -291,6 +464,14 @@ const appConfigBase = ({
       // ships for the device's language never load.
       CFBundleLocalizations: [...UI_LOCALES],
     },
+    // The share extension hands what was shared over in the App Group.
+    ...(shareExtension
+      ? {
+          entitlements: {
+            "com.apple.security.application-groups": [appGroupFor(variant)],
+          },
+        }
+      : {}),
   },
   android: {
     package: VARIANT_CONFIG[variant].identifier,
@@ -348,7 +529,7 @@ const appConfigBase = ({
             "expo-widgets",
             {
               bundleIdentifier: `${VARIANT_CONFIG[variant].identifier}.widgets`,
-              groupIdentifier: `group.${VARIANT_CONFIG[variant].identifier}`,
+              groupIdentifier: appGroupFor(variant),
               enablePushNotifications: pushNotifications,
             },
           ] satisfies [string, unknown],
@@ -359,29 +540,56 @@ const appConfigBase = ({
     typedRoutes: true,
     reactCompiler: true,
   },
-  extra: { liveActivities, pushNotifications, variant },
+  extra: {
+    liveActivities,
+    pushNotifications,
+    // Where the app reads what the share extension hands over; null in a
+    // build without the extension.
+    shareInbox: shareExtension
+      ? { appGroup: appGroupFor(variant), folder: SHARE_INBOX_FOLDER }
+      : null,
+    variant,
+  },
 });
 
 export const appConfigFor = ({
   signing,
   ...inputs
-}: Omit<AppConfigInputs, "liveActivities" | "pushNotifications"> & {
+}: Omit<
+  AppConfigInputs,
+  "liveActivities" | "pushNotifications" | "shareExtension"
+> & {
   signing?: ReleaseSigning | undefined;
 }): ExportedConfig => {
   // The widgets profile comes with the profiles regenerated for the App
   // Group and push capabilities, so it stands for both.
   const storeCapabilities =
     signing === undefined || signing.widgetsProfileUuid !== undefined;
+  // `readSigning` takes a share profile only beside the widgets profile.
+  const shareExtension =
+    signing === undefined || signing.shareProfileUuid !== undefined;
   const config = withBarGlyphs(
     appConfigBase({
       ...inputs,
       liveActivities: storeCapabilities,
       pushNotifications: storeCapabilities,
+      shareExtension,
     }),
   );
   // The native module is autolinked even when the extension is omitted.
   const bundled = withWidgetsBundle(config);
-  return signing === undefined ? bundled : withReleaseSigning(bundled, signing);
+  const signed =
+    signing === undefined ? bundled : withReleaseSigning(bundled, signing);
+  // Registered after the release signing, so its target exists by the time
+  // the signing's mod runs.
+  return shareExtension
+    ? withShareExtension(signed, {
+        appGroup: appGroupFor(inputs.variant),
+        bundleIdentifier: `${VARIANT_CONFIG[inputs.variant].identifier}.share`,
+        displayName: VARIANT_CONFIG[inputs.variant].name,
+        scheme: VARIANT_CONFIG[inputs.variant].scheme,
+      })
+    : signed;
 };
 
 /** `APP_VARIANT`: `development` (default), `preview` or `production`. */
@@ -405,20 +613,32 @@ const readBuildNumber = (value: string | undefined): number => {
 /**
  * `APPLE_TEAM_ID` and `MOBILE_PROFILE_UUID`: both or neither; with them,
  * `MOBILE_WIDGETS_PROFILE_UUID` when the release also signs the Live
- * Activity extension.
+ * Activity extension, and beside it `MOBILE_SHARE_PROFILE_UUID` when the
+ * release also signs the share extension.
  */
-const readSigning = (
-  teamId: string | undefined,
-  profileUuid: string | undefined,
-  widgetsProfileUuid: string | undefined,
-): ReleaseSigning | undefined => {
+const readSigning = ({
+  profileUuid,
+  shareProfileUuid,
+  teamId,
+  widgetsProfileUuid,
+}: {
+  profileUuid: string | undefined;
+  shareProfileUuid: string | undefined;
+  teamId: string | undefined;
+  widgetsProfileUuid: string | undefined;
+}): ReleaseSigning | undefined => {
+  if (shareProfileUuid !== undefined && widgetsProfileUuid === undefined) {
+    return panic(
+      "MOBILE_SHARE_PROFILE_UUID signs only beside MOBILE_WIDGETS_PROFILE_UUID",
+    );
+  }
   if (teamId === undefined && profileUuid === undefined) {
     return widgetsProfileUuid === undefined
       ? undefined
       : panic("MOBILE_WIDGETS_PROFILE_UUID signs only alongside a release");
   }
   return teamId !== undefined && profileUuid !== undefined
-    ? { profileUuid, teamId, widgetsProfileUuid }
+    ? { profileUuid, shareProfileUuid, teamId, widgetsProfileUuid }
     : panic("APPLE_TEAM_ID and MOBILE_PROFILE_UUID sign a release together");
 };
 
@@ -434,11 +654,12 @@ const appConfig = ({ projectRoot }: ConfigContext): ExpoConfig =>
     // The release workflows stamp the fingerprint. A build made without one
     // names no published runtime, so no update ever reaches it.
     runtimeVersion: readEnv("MOBILE_RUNTIME_VERSION") ?? "unpublished",
-    signing: readSigning(
-      readEnv("APPLE_TEAM_ID"),
-      readEnv("MOBILE_PROFILE_UUID"),
-      readEnv("MOBILE_WIDGETS_PROFILE_UUID"),
-    ),
+    signing: readSigning({
+      profileUuid: readEnv("MOBILE_PROFILE_UUID"),
+      shareProfileUuid: readEnv("MOBILE_SHARE_PROFILE_UUID"),
+      teamId: readEnv("APPLE_TEAM_ID"),
+      widgetsProfileUuid: readEnv("MOBILE_WIDGETS_PROFILE_UUID"),
+    }),
     signingCertificatePresent: existsSync(
       path.join(projectRoot, UPDATE_SIGNING_CERTIFICATE),
     ),

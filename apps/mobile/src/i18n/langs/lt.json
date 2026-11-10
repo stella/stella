@@ -351,5 +351,13 @@
     "share": "Bendrinti",
     "cancel": "Atšaukti",
     "openFailed": "Nepavyko atidaryti nuorodos."
+  },
+  "share": {
+    "title": "Pridėti į stellą",
+    "start": "Pradėti",
+    "uploading": "Įkeliama {done} iš {total}…",
+    "filesOnly": "Išsaugomi tik failai; nuorodos ir tekstas praleidžiami.",
+    "unavailableTitle": "Nėra ką pridėti",
+    "unavailable": "Šio bendrinimo nebėra. Pabendrinkite dar kartą iš kitos programos."
   }
 }

@@ -351,5 +351,13 @@
     "share": "Teilen",
     "cancel": "Abbrechen",
     "openFailed": "Der Link konnte nicht geöffnet werden."
+  },
+  "share": {
+    "title": "Zu stella hinzufügen",
+    "start": "Starten",
+    "uploading": "Wird hochgeladen: {done} von {total}…",
+    "filesOnly": "Nur die Dateien werden gespeichert; Links und Text entfallen.",
+    "unavailableTitle": "Nichts hinzuzufügen",
+    "unavailable": "Diese Freigabe ist nicht mehr vorhanden. Teilen Sie sie erneut aus der anderen App."
   }
 }

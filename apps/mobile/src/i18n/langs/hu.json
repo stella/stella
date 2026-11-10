@@ -351,5 +351,13 @@
     "share": "Megosztás",
     "cancel": "Mégse",
     "openFailed": "A hivatkozást nem sikerült megnyitni."
+  },
+  "share": {
+    "title": "Hozzáadás a stellához",
+    "start": "Indítás",
+    "uploading": "Feltöltés: {done}/{total}…",
+    "filesOnly": "Csak a fájlok kerülnek mentésre; a hivatkozások és a szöveg kimaradnak.",
+    "unavailableTitle": "Nincs mit hozzáadni",
+    "unavailable": "Ez a megosztás már nem érhető el. Ossza meg újra a másik alkalmazásból."
   }
 }
