@@ -1,11 +1,7 @@
 import { defineConfig } from "oxlint";
 import type { OxlintOverride } from "oxlint";
 
-import {
-  libraryIgnorePatterns,
-  libraryOverrides,
-  stellaLowercasePluginSpecifier,
-} from "@stll/oxlint-config";
+import { libraryIgnorePatterns, libraryOverrides } from "@stll/oxlint-config";
 
 import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-exceptions.json" with { type: "json" };
 import {
@@ -183,13 +179,15 @@ const colourExemptionOverrides = colourExemptions.map(({ files }) => ({
 }));
 
 // Only the rows that declare an enforcement kind reach the lint rule; the rest
-// document an owner that no rule can yet prove.
+// document an owner that no rule can yet prove. Each row passes only the
+// fields the rule reads: lint rule options must be plain JSON, and a row's
+// `summary` may be a function.
 const enforcedOwnershipEntries = OWNERSHIP.filter(
   (entry) =>
     entry.enforcement.kind !== "none" &&
     entry.enforcement.kind !== "custom-rule" &&
     entry.enforcement.kind !== "status-set",
-);
+).map(({ id, owner, enforcement }) => ({ id, owner, enforcement }));
 
 // Public route files may build handlers only from the factories whose context
 // is anonymous. The ban lists every other factory, so a new one is banned
@@ -1714,10 +1712,6 @@ const config = defineConfig({
     // callbacks (`t.rich({ link: (chunks) => <a/> })`) and IIFE-as-prop
     // element builders are idiomatic here and are not remounted components.
     "react/no-unstable-nested-components": ["error", { allowAsProps: true }],
-    // Off: the Result.gen handler generators (`async function*` with
-    // `yield* Result.await(...)`) have no meaningful user-facing yield type
-    // to document, and the codebase's JSDoc style uses bare tags.
-    "jsdoc/require-yields-type": "off",
 
     // Keep `import/no-cycle`: current web profiling puts it below 1% of rule
     // time. The Module Side Effects section in AGENTS.md documents the TDZ class
@@ -2067,7 +2061,8 @@ const config = defineConfig({
     { name: "gdp-ts", specifier: "./scripts/oxlint-presets/gdp-plugin.mjs" },
     "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
-    stellaLowercasePluginSpecifier,
+    // The package's plugins load through local re-exports; the modules say why.
+    "./scripts/oxlint-presets/stella-lowercase-plugin.mjs",
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/confine-online-ddl.ts",
@@ -2078,7 +2073,7 @@ const config = defineConfig({
     "@tanstack/eslint-plugin-router",
     "./.oxlint-plugins/drizzle.ts",
     "oxlint-tailwindcss",
-    "@stll/oxlint-config/no-raw-colors",
+    "./scripts/oxlint-presets/no-raw-colors-plugin.mjs",
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-native-ui.ts",
     "./.oxlint-plugins/plain-button-placement-only.ts",
@@ -2152,6 +2147,7 @@ const config = defineConfig({
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
     "./.oxlint-plugins/tooltip-provider-owner.ts",
+    "./.oxlint-plugins/copy-feedback-owner.ts",
     "./.oxlint-plugins/sql-client-owner.ts",
     "./.oxlint-plugins/no-direct-unsaved-work-guard.ts",
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
@@ -2983,6 +2979,13 @@ const config = defineConfig({
       ],
       rules: {
         "tooltip-provider-owner/tooltip-provider-owner": "error",
+      },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/copy-feedback-owner.fixture.tsx"],
+      rules: {
+        "copy-feedback-owner/copy-feedback-owner": "error",
+        "copy-feedback-owner/no-raw-copy-listener": "error",
       },
     },
     {
@@ -4880,6 +4883,22 @@ const config = defineConfig({
       excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
       rules: {
         "tooltip-provider-owner/tooltip-provider-owner": "error",
+      },
+    },
+    {
+      // A Copy control confirms through its owner: CopyButton for a fixed
+      // value, useSelectionCopy for selected words, which also confirms the
+      // reader's own Cmd+C. The sanctioned copy listeners and the feedback
+      // owner are listed in the rule; a test fires synthetic events.
+      files: [
+        ...PRODUCT_FRONTEND_FILES,
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/chat/src/**/*.{ts,tsx}",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "copy-feedback-owner/copy-feedback-owner": "error",
+        "copy-feedback-owner/no-raw-copy-listener": "error",
       },
     },
     {

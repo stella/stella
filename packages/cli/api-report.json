@@ -181,6 +181,7 @@
         "./capabilities/legislation.search.json",
         "./capabilities/lists.columns.create.json",
         "./capabilities/lists.create.json",
+        "./capabilities/lists.fact-extractions.create.json",
         "./capabilities/lists.generation-candidates.acceptance.create.json",
         "./capabilities/lists.generation-candidates.create.json",
         "./capabilities/lists.generation-candidates.list.json",

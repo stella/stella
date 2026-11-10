@@ -304,6 +304,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | --- | --- | --- | --- | --- |
 | `lists.columns.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists columns-create` |
 | `lists.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists create` |
+| `lists.fact-extractions.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists fact-extractions-create` |
 | `lists.generation-candidates.acceptance.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generation-candidates-acceptance-create` |
 | `lists.generation-candidates.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generation-candidates-create` |
 | `lists.generation-candidates.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generation-candidates-list` |

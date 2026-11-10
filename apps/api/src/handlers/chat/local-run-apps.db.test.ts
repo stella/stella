@@ -136,6 +136,7 @@ const storedTurn = async (
       model: "claude-test",
       runId,
       threadId: "desktop-thread",
+      workspaceDir: "/workspace",
       generateId: () => {
         generated += 1;
         return `generated-${String(generated)}`;

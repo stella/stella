@@ -1,4 +1,5 @@
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
+// parser-output-unchanged: a parsed text carries its validation source as paragraphs instead of markup holding the same text.
 /**
  * What a CourtListener text parser returns, and the bounds every parser of
  * one cluster shares.
@@ -95,10 +96,10 @@ export type ParsedOpinionText = {
   readonly units: readonly TextUnit[];
   readonly counts: TextCounts;
   /**
-   * The source as the content-retention check reads it: the same markup
-   * with only the declared removals taken out.
+   * The source text as the content-retention check reads it, by paragraph:
+   * the same text with only the declared removals taken out.
    */
-  readonly validationHtml: string;
+  readonly validationParagraphs: readonly string[];
 };
 
 export type FormatParse =

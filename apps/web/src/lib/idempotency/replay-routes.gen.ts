@@ -18,6 +18,7 @@ export const REPLAY_CAPABLE_ROUTES = [
   { method: "POST", path: "/v1/lists/:workspaceId/claim-reviews" },
   { method: "POST", path: "/v1/lists/:workspaceId/claim-reviews/bulk" },
   { method: "POST", path: "/v1/lists/:workspaceId/columns" },
+  { method: "POST", path: "/v1/lists/:workspaceId/fact-extractions" },
   { method: "POST", path: "/v1/lists/:workspaceId/generation-candidates" },
   {
     method: "POST",

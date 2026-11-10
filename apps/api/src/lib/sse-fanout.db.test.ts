@@ -419,7 +419,7 @@ const userStreams = ({
   Array.from({ length: count }, (_unused, index) =>
     subscribeUser({
       organizationId,
-      sessionId: sessionFor(userId, index),
+      holder: { id: sessionFor(userId, index), kind: "session" },
       signal,
       userId,
     }),

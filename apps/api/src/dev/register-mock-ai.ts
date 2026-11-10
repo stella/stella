@@ -626,9 +626,9 @@ export const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       usage: mockUsage,
     } satisfies AdapterYieldChunk;
   },
-  structuredOutput: async ({ outputSchema }) => {
+  structuredOutput: async ({ outputSchema, chatOptions }) => {
     await Promise.resolve();
-    const data = mockStructuredData(outputSchema);
+    const data = mockStructuredData(outputSchema, chatOptions.messages);
     return {
       data,
       rawText: JSON.stringify(data),
@@ -755,10 +755,68 @@ const TMPL_SUPPLY_PREFILL_FIXTURE: {
   },
 ];
 
+// lists.generation.extract-facts (apps/api/src/lib/lists/generation/
+// fact-extract.ts). The worker keeps only facts whose quote it can find in
+// the block the fact names, so a fixed answer would ground nothing in a real
+// document. This one answers from the request instead: the opening sentence
+// of each of the first three blocks it is asked about, the second held as
+// contested, so a local run shows included and held facts with sources.
+const MOCK_FACTS_PER_WINDOW = 3;
+const MOCK_FACT_MAX = 200;
+
+const mockExtractedFacts = (messages: readonly ModelMessage[]) => {
+  const request = getLatestUserText([...messages]);
+  const askedList = /List the facts in these blocks only: (?<ids>.+)$/mu.exec(
+    request,
+  )?.groups?.["ids"];
+  const asked = askedList === undefined ? [] : askedList.split(", ");
+  const blockText = new Map<string, string>();
+  for (const line of request.split("\n")) {
+    const block = /^\[(?<id>[^\]]+)\] (?<text>.+)$/u.exec(line)?.groups;
+    if (block?.["id"] !== undefined && block["text"] !== undefined) {
+      blockText.set(block["id"], block["text"]);
+    }
+  }
+  return asked
+    .flatMap((blockId) => {
+      const sentence = (blockText.get(blockId) ?? "")
+        .split(/(?<=[.!?])\s/u)
+        .at(0)
+        ?.trim()
+        .slice(0, MOCK_FACT_MAX);
+      return sentence === undefined || sentence.length < 12
+        ? []
+        : [{ blockId, sentence }];
+    })
+    .slice(0, MOCK_FACTS_PER_WINDOW)
+    .map(({ blockId, sentence }, index) => ({
+      blockId,
+      quote: sentence,
+      fact: sentence,
+      occurredOn: /\b(?:19|20)\d{2}\b/u.exec(sentence)?.[0] ?? null,
+      evidenceKind: index === 0 ? "document" : "testimony",
+      medium: index === 0 ? "Document" : "Statement",
+      confidence: index === 2 ? "medium" : "high",
+      contestedMeaning:
+        index === 1
+          ? "Mock: the passage could describe more than one event."
+          : null,
+    }));
+};
+
 export const mockStructuredData = (
   outputSchema: unknown,
+  messages: readonly ModelMessage[] = [],
 ): Record<string, unknown> => {
   const properties = jsonSchemaProperties(outputSchema);
+
+  // lists.generation.extract-facts — answered from the request (see above).
+  if (
+    "facts" in properties &&
+    JSON.stringify(properties["facts"]).includes("contestedMeaning")
+  ) {
+    return { facts: mockExtractedFacts(messages) };
+  }
 
   // playbook.verdict — tier-match. Return a plain "deviation" with no `matched`
   // so the object is valid regardless of whether the prompt listed fallbacks.

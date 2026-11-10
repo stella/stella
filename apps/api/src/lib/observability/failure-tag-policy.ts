@@ -227,6 +227,7 @@ export const TAGGED_FAILURE_REASON = {
   ExecutorSavepointError: "tagged_failure",
   ExportCorpusSliceArgumentsError: "tagged_failure",
   ExtractionWorkerError: "tagged_failure",
+  FactExtractionReconcileError: "tagged_failure",
   FeedbackIntakeRedisReplyError: "tagged_failure",
   FeedbackStoreError: "tagged_failure",
   FetchBoundaryError: "tagged_failure",

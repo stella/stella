@@ -688,6 +688,7 @@
         "@stll/api-contract": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/fetch": "workspace:*",
+        "@stll/portable-path": "workspace:*",
         "@stll/sha256": "workspace:*",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-codex": "catalog:",
@@ -896,7 +897,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.4.2",
+      "version": "0.4.3",
       "dependencies": {
         "@ag-ui/core": "1.0.3",
         "@stll/ai-catalog": "workspace:^",
@@ -945,7 +946,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "6.8.3",
+      "version": "6.9.0",
       "bin": {
         "stella": "./dist/cli.js",
       },

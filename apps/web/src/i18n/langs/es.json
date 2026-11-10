@@ -2055,6 +2055,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# carácter} many {# caracteres} other {# caracteres}}",
+      "commandExited": "{command} (código de salida {code})",
       "consoleLogs": "Salida de consola",
       "exactCall": "Llamada exacta",
       "failed": "Este paso falló; stella lo resolverá de otra manera.",
@@ -2062,10 +2063,14 @@
       "input": "Entrada",
       "interrupted": "Interrumpido antes de finalizar",
       "output": "Salida",
+      "patternInPath": "{pattern} en {path}",
+      "readFile": "Leyendo un archivo",
+      "searchFiles": "Buscando en archivos",
       "sourceCode": "Código fuente",
       "statusWaiting": "En espera",
       "toggleDetails": "Mostrar detalles",
-      "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron} many {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}"
+      "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron} many {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}",
+      "updatePlan": "Actualizando el plan"
     },
     "turnNotification": {
       "failedBody": "Una respuesta del chat en stella no terminó.",

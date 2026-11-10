@@ -1840,6 +1840,7 @@
         "$TURBO_ROOT$/packages/skills/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/parser-output-fixtures.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"

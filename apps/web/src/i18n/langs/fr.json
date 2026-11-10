@@ -2055,6 +2055,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# caractère} many {# caractères} other {# caractères}}",
+      "commandExited": "{command} (code de sortie {code})",
       "consoleLogs": "Sortie de la console",
       "exactCall": "Appel exact",
       "failed": "Cette étape a échoué ; stella va contourner le problème.",
@@ -2062,10 +2063,14 @@
       "input": "Entrée",
       "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
+      "patternInPath": "{pattern} dans {path}",
+      "readFile": "Lecture d’un fichier",
+      "searchFiles": "Recherche dans les fichiers",
       "sourceCode": "Code source",
       "statusWaiting": "En attente",
       "toggleDetails": "Afficher les détails",
-      "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis} many {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
+      "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis} many {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}",
+      "updatePlan": "Mise à jour du plan"
     },
     "turnNotification": {
       "failedBody": "Une réponse dans une conversation stella n’a pas abouti.",

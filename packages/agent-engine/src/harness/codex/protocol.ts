@@ -244,6 +244,12 @@ export const CODEX_NOTIFICATIONS = {
       modelContextWindow: v.nullish(v.number()),
     }),
   }),
+  /** The harness's working plan changed; only step titles are shown. */
+  "turn/plan/updated": v.object({
+    threadId: v.string(),
+    turnId: v.string(),
+    plan: v.array(v.object({ step: v.string() })),
+  }),
   "serverRequest/resolved": v.object({
     threadId: v.string(),
     requestId: RequestId,
@@ -261,6 +267,10 @@ export const CODEX_NOTIFICATIONS = {
   }),
 } as const;
 export type CodexNotificationMethod = keyof typeof CODEX_NOTIFICATIONS;
+
+export type CodexPlanUpdate = v.InferOutput<
+  (typeof CODEX_NOTIFICATIONS)["turn/plan/updated"]
+>;
 
 export type CodexRateLimits = v.InferOutput<
   (typeof CODEX_NOTIFICATIONS)["account/rateLimits/updated"]
