@@ -212,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "Acerca del registro de hechos de referencia",
+      "addFact": "Añadir un hecho",
+      "addFactPlaceholder": "Indique el hecho tal como lo muestran las pruebas",
       "addInterpretationNote": "Añadir nota de interpretación",
+      "busyLine": "Los hechos que acepte aparecerán aquí.",
+      "confidenceLevels": {
+        "high": "Confianza alta",
+        "low": "Confianza baja",
+        "medium": "Confianza media"
+      },
       "description": "Las pruebas sólidas (correos, mensajes, registros bancarios y hechos acordados) se extraen al registro de hechos de referencia con el que se contrastan las afirmaciones. Revise, edite o añada hechos manualmente.",
       "editInterpretationNote": "Editar nota de interpretación",
-      "empty": "Marque elementos de esta lista como hechos con los que contrastar los documentos.",
-      "extractionAndReview": "Extracción y revisión",
-      "factCount": "{count, plural, one {# hecho} other {# hechos} many {# hechos}}",
+      "emptyLine": "Extraiga hechos de los documentos del asunto o añada uno a mano.",
+      "emptyTitle": "Aún no hay hechos de referencia",
       "heldDescription": "Estas extracciones son <strong>realmente inciertas en cuanto a su significado</strong>: el contenido es provisional o no está confirmado, no es simplemente manuscrito. Se excluyen de la puntuación hasta que un revisor las confirme, edite o vuelva a escribir. Una fuente legible nunca se pone en espera solo por su formato.",
+      "heldFilter": "{count, plural, one {# pendiente de revisión} many {# pendientes de revisión} other {# pendientes de revisión}}",
       "heldForReview": "Pendiente de revisión",
+      "hideSources": "Ocultar fuentes",
       "holdOutOfScoring": "Excluir de la puntuación",
       "inScoring": "En la puntuación",
       "includeInScoring": "Incluir en la puntuación",
@@ -228,7 +238,7 @@
       "interpretiveConfidence": "Confianza interpretativa",
       "openList": "Abrir lista",
       "record": "Registro de hechos de referencia",
-      "setConfidence": "Establecer confianza",
+      "showSources": "Mostrar fuentes",
       "title": "Hechos de referencia"
     },
     "claimDetail": {
@@ -320,6 +330,37 @@
       "sizeConfirmTitle": "¿Verificar este documento?",
       "statusLoadFailed": "No se pudo cargar el estado de verificación de estos documentos.",
       "verifyAgain": "Volver a verificar"
+    },
+    "extraction": {
+      "busy": "Termine primero la extracción en curso y su revisión.",
+      "confirmStart": "{units, plural, one {Iniciar, # unidad} many {Iniciar, # unidades} other {Iniciar, # unidades}}",
+      "dialogDescription": "Usted acepta o rechaza cada hecho antes de que entre en el registro.",
+      "dialogTitle": "Extraer hechos de documentos",
+      "documentsChosen": "{count, plural, one {# elegido, hasta {max}} many {# elegidos, hasta {max}} other {# elegidos, hasta {max}}}",
+      "documentsLabel": "Documentos que leer",
+      "errors": {
+        "accessRevoked": "La extracción de hechos se detuvo porque el acceso no está disponible.",
+        "aiUnavailable": "No hay ningún modelo de IA disponible para leer los documentos. Revise la configuración de IA de la organización.",
+        "documentMissing": "Un documento elegido o la lista ya no existe. Recargue la página y vuelva a elegir.",
+        "enqueueFailed": "No se pudo iniciar la extracción de hechos. Inténtelo de nuevo.",
+        "extractionFailed": "No se pudieron extraer los hechos de estos documentos.",
+        "internal": "La extracción de hechos falló de forma inesperada.",
+        "noText": "No se pudo leer ningún texto de los documentos elegidos.",
+        "sourceUnavailable": "Un documento cambió o se eliminó después de iniciarse la extracción. Vuelva a elegir los documentos.",
+        "unsupportedFormat": "Solo se pueden leer hechos de archivos DOCX, PDF y archivos con una versión en PDF."
+      },
+      "extractFromDocuments": "Extraer de documentos",
+      "failedTitle": "La extracción de hechos falló",
+      "instructionLabel": "Qué buscar (opcional)",
+      "instructionPlaceholder": "Por ejemplo: pagos entre las partes y cuándo se hicieron",
+      "nothingFound": "No se encontraron hechos en los documentos elegidos.",
+      "proposedTitle": "Hechos propuestos",
+      "queued": "Esperando para empezar.",
+      "reviewed": "Aceptados {accepted} de {proposed, plural, one {# hecho propuesto} many {# hechos propuestos} other {# hechos propuestos}}.",
+      "runSize": "{available, plural, one {Esta ejecución usa unas {estimated} de su # unidad disponible.} many {Esta ejecución usa unas {estimated} de sus # unidades disponibles.} other {Esta ejecución usa unas {estimated} de sus # unidades disponibles.}}",
+      "running": "Leyendo los documentos. Los hechos propuestos aparecerán aquí para su revisión.",
+      "startFailed": "No se pudo iniciar la extracción de hechos",
+      "submit": "{count, plural, =0 {Extraer hechos} one {Extraer hechos de # documento} many {Extraer hechos de # documentos} other {Extraer hechos de # documentos}}"
     },
     "guidance": {
       "escalate": "Remitir",
@@ -4704,6 +4745,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Aceptando {done} de {total}…"
+    },
     "sources": {
       "add": "Añadir fuente",
       "documentRequired": "Selecciona un documento.",

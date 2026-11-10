@@ -212,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "À propos du dossier de faits d’ancrage",
+      "addFact": "Ajouter un fait",
+      "addFactPlaceholder": "Énoncez le fait tel que les preuves l’établissent",
       "addInterpretationNote": "Ajouter une note d’interprétation",
+      "busyLine": "Les faits que vous acceptez apparaissent ici.",
+      "confidenceLevels": {
+        "high": "Confiance élevée",
+        "low": "Confiance faible",
+        "medium": "Confiance moyenne"
+      },
       "description": "Preuves tangibles (courriels, messages, relevés bancaires, faits convenus) extraites dans le dossier de faits d’ancrage auquel les affirmations sont confrontées. Relisez, modifiez ou ajoutez des faits à la main.",
       "editInterpretationNote": "Modifier la note d’interprétation",
-      "empty": "Marquez des éléments de cette liste comme des faits auxquels confronter les documents.",
-      "extractionAndReview": "Extraction et relecture",
-      "factCount": "{count, plural, one {# fait} other {# faits} many {# faits}}",
+      "emptyLine": "Extrayez des faits des documents du dossier ou ajoutez-en un à la main.",
+      "emptyTitle": "Aucun fait d’ancrage pour l’instant",
       "heldDescription": "Le sens de ces extractions est <strong>réellement incertain</strong> : leur contenu est provisoire ou non confirmé, et pas simplement manuscrit. Elles sont exclues du scoring jusqu’à ce qu’un relecteur les confirme, les modifie ou les requalifie. Une source lisible n’est jamais mise en attente pour son seul support.",
+      "heldFilter": "{count, plural, one {# en attente de relecture} many {# en attente de relecture} other {# en attente de relecture}}",
       "heldForReview": "En attente de relecture",
+      "hideSources": "Masquer les sources",
       "holdOutOfScoring": "Exclure de la notation",
       "inScoring": "Pris en compte",
       "includeInScoring": "Inclure dans la notation",
@@ -228,7 +238,7 @@
       "interpretiveConfidence": "Confiance interprétative",
       "openList": "Ouvrir la liste",
       "record": "Dossier de faits d’ancrage",
-      "setConfidence": "Définir la confiance",
+      "showSources": "Afficher les sources",
       "title": "Faits d’ancrage"
     },
     "claimDetail": {
@@ -320,6 +330,37 @@
       "sizeConfirmTitle": "Vérifier ce document ?",
       "statusLoadFailed": "Impossible de charger l’état de vérification de ces documents.",
       "verifyAgain": "Vérifier à nouveau"
+    },
+    "extraction": {
+      "busy": "Terminez d’abord l’extraction en cours et sa relecture.",
+      "confirmStart": "{units, plural, one {Lancer, # unité} many {Lancer, # unités} other {Lancer, # unités}}",
+      "dialogDescription": "Vous acceptez ou refusez chaque fait avant qu’il n’entre dans le dossier.",
+      "dialogTitle": "Extraire des faits de documents",
+      "documentsChosen": "{count, plural, one {# choisi, jusqu’à {max}} many {# choisis, jusqu’à {max}} other {# choisis, jusqu’à {max}}}",
+      "documentsLabel": "Documents à lire",
+      "errors": {
+        "accessRevoked": "L’extraction des faits s’est arrêtée, car l’accès n’est pas disponible.",
+        "aiUnavailable": "Aucun modèle d’IA n’est disponible pour lire les documents. Vérifiez les paramètres d’IA de l’organisation.",
+        "documentMissing": "Un document choisi ou la liste n’existe plus. Rechargez la page et choisissez à nouveau.",
+        "enqueueFailed": "L’extraction des faits n’a pas pu être lancée. Réessayez.",
+        "extractionFailed": "Les faits de ces documents n’ont pas pu être extraits.",
+        "internal": "L’extraction des faits a échoué de manière inattendue.",
+        "noText": "Aucun texte n’a pu être lu dans les documents choisis.",
+        "sourceUnavailable": "Un document a été modifié ou supprimé après le début de l’extraction. Choisissez à nouveau les documents.",
+        "unsupportedFormat": "Seuls les fichiers DOCX, les PDF et les fichiers disposant d’une version PDF peuvent être lus pour en extraire des faits."
+      },
+      "extractFromDocuments": "Extraire des documents",
+      "failedTitle": "Échec de l’extraction des faits",
+      "instructionLabel": "Ce qu’il faut rechercher (facultatif)",
+      "instructionPlaceholder": "Par exemple : les paiements entre les parties et leurs dates",
+      "nothingFound": "Aucun fait n’a été trouvé dans les documents choisis.",
+      "proposedTitle": "Faits proposés",
+      "queued": "En attente de démarrage.",
+      "reviewed": "{accepted} sur {proposed, plural, one {# fait proposé} many {# faits proposés} other {# faits proposés}} acceptés.",
+      "runSize": "{available, plural, one {Cette exécution utilise environ {estimated} de votre # unité disponible.} many {Cette exécution utilise environ {estimated} de vos # unités disponibles.} other {Cette exécution utilise environ {estimated} de vos # unités disponibles.}}",
+      "running": "Lecture des documents. Les faits proposés apparaîtront ici pour relecture.",
+      "startFailed": "Impossible de lancer l’extraction des faits",
+      "submit": "{count, plural, =0 {Extraire des faits} one {Extraire des faits de # document} many {Extraire des faits de # documents} other {Extraire des faits de # documents}}"
     },
     "guidance": {
       "escalate": "Faire remonter",
@@ -4704,6 +4745,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Acceptation de {done} sur {total}…"
+    },
     "sources": {
       "add": "Ajouter une source",
       "documentRequired": "Sélectionnez un document.",

@@ -212,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "About the anchor-fact record",
+      "addFact": "Add a fact",
+      "addFactPlaceholder": "State the fact as the evidence shows it",
       "addInterpretationNote": "Add interpretation note",
+      "busyLine": "Facts you accept appear here.",
+      "confidenceLevels": {
+        "high": "High confidence",
+        "low": "Low confidence",
+        "medium": "Medium confidence"
+      },
       "description": "Hard evidence (emails, messages, bank records, agreed facts) extracted into the anchor-fact record that claims are checked against. Review, edit, or add facts by hand.",
       "editInterpretationNote": "Edit interpretation note",
-      "empty": "Mark items of this list as facts to check documents against them.",
-      "extractionAndReview": "Extraction & review",
-      "factCount": "{count, plural, one {# fact} other {# facts}}",
+      "emptyLine": "Extract facts from the matter's documents or add one by hand.",
+      "emptyTitle": "No anchor facts yet",
       "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong>: the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.",
+      "heldFilter": "{count, plural, one {# held for review} other {# held for review}}",
       "heldForReview": "Held for review",
+      "hideSources": "Hide sources",
       "holdOutOfScoring": "Hold out of scoring",
       "inScoring": "In scoring",
       "includeInScoring": "Include in scoring",
@@ -228,7 +238,7 @@
       "interpretiveConfidence": "Interpretive confidence",
       "openList": "Open list",
       "record": "Anchor-fact record",
-      "setConfidence": "Set confidence",
+      "showSources": "Show sources",
       "title": "Anchor facts"
     },
     "claimDetail": {
@@ -320,6 +330,37 @@
       "sizeConfirmTitle": "Verify this document?",
       "statusLoadFailed": "The verification status of these documents could not be loaded.",
       "verifyAgain": "Verify again"
+    },
+    "extraction": {
+      "busy": "Finish the current extraction and its review first.",
+      "confirmStart": "{units, plural, one {Start, # unit} other {Start, # units}}",
+      "dialogDescription": "You accept or decline each fact before it joins the record.",
+      "dialogTitle": "Extract facts from documents",
+      "documentsChosen": "{count, plural, one {# chosen, up to {max}} other {# chosen, up to {max}}}",
+      "documentsLabel": "Documents to read",
+      "errors": {
+        "accessRevoked": "The fact extraction stopped because access is unavailable.",
+        "aiUnavailable": "No AI model is available to read the documents. Check the organization's AI settings.",
+        "documentMissing": "A chosen document or the list no longer exists. Reload the page and choose again.",
+        "enqueueFailed": "The fact extraction could not be started. Try again.",
+        "extractionFailed": "The facts in these documents could not be extracted.",
+        "internal": "The fact extraction failed unexpectedly.",
+        "noText": "No text could be read from the chosen documents.",
+        "sourceUnavailable": "A document changed or was removed after the extraction started. Choose the documents again.",
+        "unsupportedFormat": "Only DOCX files, PDFs and files with a PDF rendition can be read for facts."
+      },
+      "extractFromDocuments": "Extract from documents",
+      "failedTitle": "Fact extraction failed",
+      "instructionLabel": "What to look for (optional)",
+      "instructionPlaceholder": "For example: payments between the parties and when they were made",
+      "nothingFound": "No facts were found in the chosen documents.",
+      "proposedTitle": "Proposed facts",
+      "queued": "Waiting to start.",
+      "reviewed": "{accepted} of {proposed, plural, one {# proposed fact} other {# proposed facts}} accepted.",
+      "runSize": "{available, plural, one {This run uses about {estimated} of your # available unit.} other {This run uses about {estimated} of your # available units.}}",
+      "running": "Reading the documents. Proposed facts will appear here for review.",
+      "startFailed": "Could not start the fact extraction",
+      "submit": "{count, plural, =0 {Extract facts} one {Extract facts from # document} other {Extract facts from # documents}}"
     },
     "guidance": {
       "escalate": "Escalate",
@@ -4704,6 +4745,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Accepting {done} of {total}…"
+    },
     "sources": {
       "add": "Add source",
       "documentRequired": "Choose a document.",

@@ -212,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "O rejestrze faktów referencyjnych",
+      "addFact": "Dodaj fakt",
+      "addFactPlaceholder": "Opisz fakt tak, jak wynika z dowodów",
       "addInterpretationNote": "Dodaj uwagę do interpretacji",
+      "busyLine": "Zaakceptowane fakty pojawią się tutaj.",
+      "confidenceLevels": {
+        "high": "Wysoka pewność",
+        "low": "Niska pewność",
+        "medium": "Średnia pewność"
+      },
       "description": "Bezpośrednie dowody (wiadomości e-mail, komunikaty, dokumentacja bankowa i fakty bezsporne) wyodrębnione do rejestru faktów referencyjnych, z którym porównywane są twierdzenia. Fakty można weryfikować, edytować lub dodawać ręcznie.",
       "editInterpretationNote": "Edytuj uwagę do interpretacji",
-      "empty": "Oznacz pozycje tej listy jako fakty, względem których będą weryfikowane dokumenty.",
-      "extractionAndReview": "Wyodrębnianie i weryfikacja",
-      "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktów} other {# faktu}}",
+      "emptyLine": "Wyodrębnij fakty z dokumentów sprawy lub dodaj fakt ręcznie.",
+      "emptyTitle": "Brak faktów referencyjnych",
       "heldDescription": "Znaczenie tych wyodrębnionych danych jest <strong>rzeczywiście niepewne</strong>: treść ma charakter wstępny lub niepotwierdzony, a nie tylko odręczny. Dane nie są uwzględniane w ocenie, dopóki osoba weryfikująca ich nie potwierdzi, nie poprawi lub nie przepisze. Czytelne źródło nigdy nie trafia do kolejki wyłącznie ze względu na swój nośnik.",
+      "heldFilter": "{count, plural, one {# wstrzymany do weryfikacji} few {# wstrzymane do weryfikacji} many {# wstrzymanych do weryfikacji} other {# wstrzymanego do weryfikacji}}",
       "heldForReview": "Wstrzymane do weryfikacji",
+      "hideSources": "Ukryj źródła",
       "holdOutOfScoring": "Wyklucz z oceny",
       "inScoring": "Uwzględnione w ocenie",
       "includeInScoring": "Uwzględnij w ocenie",
@@ -228,7 +238,7 @@
       "interpretiveConfidence": "Pewność interpretacji",
       "openList": "Otwórz listę",
       "record": "Rejestr faktów referencyjnych",
-      "setConfidence": "Ustaw pewność",
+      "showSources": "Pokaż źródła",
       "title": "Fakty referencyjne"
     },
     "claimDetail": {
@@ -320,6 +330,37 @@
       "sizeConfirmTitle": "Zweryfikować ten dokument?",
       "statusLoadFailed": "Nie udało się wczytać stanu weryfikacji tych dokumentów.",
       "verifyAgain": "Zweryfikuj ponownie"
+    },
+    "extraction": {
+      "busy": "Najpierw zakończ bieżące wyodrębnianie i jego weryfikację.",
+      "confirmStart": "{units, plural, one {Uruchom, # jednostka} few {Uruchom, # jednostki} many {Uruchom, # jednostek} other {Uruchom, # jednostki}}",
+      "dialogDescription": "Każdy fakt akceptujesz lub odrzucasz, zanim trafi do rejestru.",
+      "dialogTitle": "Wyodrębnij fakty z dokumentów",
+      "documentsChosen": "{count, plural, one {Wybrano #, maksymalnie {max}} few {Wybrano #, maksymalnie {max}} many {Wybrano #, maksymalnie {max}} other {Wybrano #, maksymalnie {max}}}",
+      "documentsLabel": "Dokumenty do przeczytania",
+      "errors": {
+        "accessRevoked": "Wyodrębnianie faktów zostało przerwane, ponieważ dostęp jest niedostępny.",
+        "aiUnavailable": "Brak dostępnego modelu AI do czytania dokumentów. Sprawdź ustawienia AI organizacji.",
+        "documentMissing": "Wybrany dokument lub lista już nie istnieje. Odśwież stronę i wybierz ponownie.",
+        "enqueueFailed": "Nie udało się rozpocząć wyodrębniania faktów. Spróbuj ponownie.",
+        "extractionFailed": "Nie udało się wyodrębnić faktów z tych dokumentów.",
+        "internal": "Wyodrębnianie faktów nieoczekiwanie się nie powiodło.",
+        "noText": "Nie udało się odczytać tekstu z wybranych dokumentów.",
+        "sourceUnavailable": "Dokument zmienił się lub został usunięty po rozpoczęciu wyodrębniania. Wybierz dokumenty ponownie.",
+        "unsupportedFormat": "Fakty można odczytać tylko z plików DOCX, PDF oraz plików z wersją PDF."
+      },
+      "extractFromDocuments": "Wyodrębnij z dokumentów",
+      "failedTitle": "Wyodrębnianie faktów nie powiodło się",
+      "instructionLabel": "Na co zwrócić uwagę (opcjonalnie)",
+      "instructionPlaceholder": "Na przykład: płatności między stronami i ich daty",
+      "nothingFound": "W wybranych dokumentach nie znaleziono żadnych faktów.",
+      "proposedTitle": "Proponowane fakty",
+      "queued": "Oczekuje na rozpoczęcie.",
+      "reviewed": "Zaakceptowano {accepted} z {proposed, plural, one {# proponowanego faktu} few {# proponowanych faktów} many {# proponowanych faktów} other {# proponowanego faktu}}.",
+      "runSize": "{available, plural, one {To uruchomienie zużyje około {estimated} z Twojej # dostępnej jednostki.} few {To uruchomienie zużyje około {estimated} z Twoich # dostępnych jednostek.} many {To uruchomienie zużyje około {estimated} z Twoich # dostępnych jednostek.} other {To uruchomienie zużyje około {estimated} z Twoich # dostępnej jednostki.}}",
+      "running": "Trwa czytanie dokumentów. Proponowane fakty pojawią się tutaj do weryfikacji.",
+      "startFailed": "Nie udało się rozpocząć wyodrębniania faktów",
+      "submit": "{count, plural, =0 {Wyodrębnij fakty} one {Wyodrębnij fakty z # dokumentu} few {Wyodrębnij fakty z # dokumentów} many {Wyodrębnij fakty z # dokumentów} other {Wyodrębnij fakty z # dokumentu}}"
     },
     "guidance": {
       "escalate": "Przekaż dalej",
@@ -4704,6 +4745,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Akceptowanie {done} z {total}…"
+    },
     "sources": {
       "add": "Dodaj źródło",
       "documentRequired": "Wybierz dokument.",

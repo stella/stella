@@ -212,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "A referenciatény-nyilvántartásról",
+      "addFact": "Tény hozzáadása",
+      "addFactPlaceholder": "Írja le a tényt úgy, ahogy a bizonyítékokból kitűnik",
       "addInterpretationNote": "Értelmezési megjegyzés hozzáadása",
+      "busyLine": "Az elfogadott tények itt jelennek meg.",
+      "confidenceLevels": {
+        "high": "Magas bizonyosság",
+        "low": "Alacsony bizonyosság",
+        "medium": "Közepes bizonyosság"
+      },
       "description": "Közvetlen bizonyítékok (e-mailek, üzenetek, banki nyilvántartások és nem vitatott tények) olyan referenciatény-nyilvántartásba rendezve, amelyhez az állításokat viszonyítjuk. A tények ellenőrizhetők, szerkeszthetők vagy kézzel hozzáadhatók.",
       "editInterpretationNote": "Értelmezési megjegyzés szerkesztése",
-      "empty": "Jelölje meg a lista elemeit tényként, amelyekhez az iratokat viszonyítja a rendszer.",
-      "extractionAndReview": "Kinyerés és ellenőrzés",
-      "factCount": "{count, plural, one {# tény} other {# tény}}",
+      "emptyLine": "Nyerjen ki tényeket az ügy irataiból, vagy adjon hozzá egyet kézzel.",
+      "emptyTitle": "Még nincsenek referenciatények",
       "heldDescription": "E kinyert adatok jelentése <strong>valóban bizonytalan</strong>: a tartalom előzetes vagy nincs megerősítve, nem pusztán kézzel írt. Addig nem számítanak bele az értékelésbe, amíg egy ellenőr meg nem erősíti, nem szerkeszti vagy újra nem gépeli őket. Olvasható forrás soha nem kerül várólistára pusztán az adathordozója miatt.",
+      "heldFilter": "{count, plural, one {# ellenőrzésre visszatartva} other {# ellenőrzésre visszatartva}}",
       "heldForReview": "Ellenőrzésre visszatartva",
+      "hideSources": "Források elrejtése",
       "holdOutOfScoring": "Kihagyás a pontozásból",
       "inScoring": "Pontozásban",
       "includeInScoring": "Bevonás a pontozásba",
@@ -228,7 +238,7 @@
       "interpretiveConfidence": "Értelmezési bizonyosság",
       "openList": "Lista megnyitása",
       "record": "Referenciatény-nyilvántartás",
-      "setConfidence": "Bizonyosság beállítása",
+      "showSources": "Források megjelenítése",
       "title": "Referenciatények"
     },
     "claimDetail": {
@@ -320,6 +330,37 @@
       "sizeConfirmTitle": "Ellenőrzi ezt az iratot?",
       "statusLoadFailed": "Nem sikerült betölteni ezen iratok ellenőrzési állapotát.",
       "verifyAgain": "Ismételt ellenőrzés"
+    },
+    "extraction": {
+      "busy": "Előbb fejezze be a folyamatban lévő kinyerést és annak ellenőrzését.",
+      "confirmStart": "{units, plural, one {Indítás, # egység} other {Indítás, # egység}}",
+      "dialogDescription": "Minden tényt elfogad vagy elutasít, mielőtt bekerül a nyilvántartásba.",
+      "dialogTitle": "Tények kinyerése iratokból",
+      "documentsChosen": "{count, plural, one {# kiválasztva, legfeljebb {max}} other {# kiválasztva, legfeljebb {max}}}",
+      "documentsLabel": "Elolvasandó iratok",
+      "errors": {
+        "accessRevoked": "A tények kinyerése leállt, mert a hozzáférés nem érhető el.",
+        "aiUnavailable": "Nem érhető el AI-modell az iratok olvasásához. Ellenőrizze a szervezet AI-beállításait.",
+        "documentMissing": "Egy kiválasztott irat vagy a lista már nem létezik. Töltse újra az oldalt, és válasszon újra.",
+        "enqueueFailed": "A tények kinyerését nem sikerült elindítani. Próbálja újra.",
+        "extractionFailed": "Ezekből az iratokból nem sikerült kinyerni a tényeket.",
+        "internal": "A tények kinyerése váratlanul meghiúsult.",
+        "noText": "A kiválasztott iratokból nem sikerült szöveget olvasni.",
+        "sourceUnavailable": "Egy irat megváltozott vagy törölték a kinyerés indítása után. Válassza ki újra az iratokat.",
+        "unsupportedFormat": "Tények csak DOCX-fájlokból, PDF-ekből és PDF-verzióval rendelkező fájlokból nyerhetők ki."
+      },
+      "extractFromDocuments": "Kinyerés iratokból",
+      "failedTitle": "A tények kinyerése sikertelen",
+      "instructionLabel": "Mire figyeljen (nem kötelező)",
+      "instructionPlaceholder": "Például: a felek közötti kifizetések és azok időpontja",
+      "nothingFound": "A kiválasztott iratokban nem található tény.",
+      "proposedTitle": "Javasolt tények",
+      "queued": "Indításra vár.",
+      "reviewed": "{proposed, plural, one {# javasolt tényből} other {# javasolt tényből}} {accepted} elfogadva.",
+      "runSize": "{available, plural, one {Ez a futtatás körülbelül {estimated} egységet használ fel az elérhető # egységből.} other {Ez a futtatás körülbelül {estimated} egységet használ fel az elérhető # egységből.}}",
+      "running": "Az iratok olvasása folyamatban. A javasolt tények itt jelennek meg ellenőrzésre.",
+      "startFailed": "A tények kinyerését nem sikerült elindítani",
+      "submit": "{count, plural, =0 {Tények kinyerése} one {Tények kinyerése # iratból} other {Tények kinyerése # iratból}}"
     },
     "guidance": {
       "escalate": "Továbbítás",
@@ -4704,6 +4745,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Elfogadás: {done} / {total}…"
+    },
     "sources": {
       "add": "Forrás hozzáadása",
       "documentRequired": "Válasszon egy dokumentumot.",

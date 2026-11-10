@@ -212,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "Ankurfaktide registrist",
+      "addFact": "Lisa fakt",
+      "addFactPlaceholder": "Sõnastage fakt nii, nagu see tõenditest nähtub",
       "addInterpretationNote": "Lisa tõlgendusmärkus",
+      "busyLine": "Teie heaks kiidetud faktid ilmuvad siia.",
+      "confidenceLevels": {
+        "high": "Kõrge kindlus",
+        "low": "Madal kindlus",
+        "medium": "Keskmine kindlus"
+      },
       "description": "Kindlad tõendid, nagu e-kirjad, sõnumid, pangadokumendid ja kokkulepitud asjaolud, mis on eraldatud ankurfaktide registrisse, mille põhjal väiteid kontrollitakse. Vaadake fakte üle, muutke neid või lisage käsitsi.",
       "editInterpretationNote": "Muuda tõlgendusmärkust",
-      "empty": "Märkige selle loendi üksused faktideks, mille alusel dokumente kontrollitakse.",
-      "extractionAndReview": "Eraldamine ja kontroll",
-      "factCount": "{count, plural, one {# fakt} other {# fakti}}",
+      "emptyLine": "Eraldage faktid toimiku dokumentidest või lisage üks käsitsi.",
+      "emptyTitle": "Ankurfakte veel pole",
       "heldDescription": "Nende väljavõtete <strong>tähendus on tõepoolest ebaselge</strong>: sisu on esialgne või kinnitamata, mitte lihtsalt käsitsi kirjutatud. Neid ei hinnata enne, kui kontrollija need kinnitab, muudab või uuesti sisestab. Loetavat allikat ei suunata kunagi kontrolli üksnes selle kandja tõttu.",
+      "heldFilter": "{count, plural, one {# kontrolli ootel} other {# kontrolli ootel}}",
       "heldForReview": "Kontrolli ootel",
+      "hideSources": "Peida allikad",
       "holdOutOfScoring": "Jäta hindamisest välja",
       "inScoring": "Hindamises",
       "includeInScoring": "Kaasa hindamisse",
@@ -228,7 +238,7 @@
       "interpretiveConfidence": "Tõlgenduse kindlus",
       "openList": "Ava loend",
       "record": "Ankurfaktide register",
-      "setConfidence": "Määra kindlus",
+      "showSources": "Näita allikaid",
       "title": "Ankurfaktid"
     },
     "claimDetail": {
@@ -320,6 +330,37 @@
       "sizeConfirmTitle": "Kas kontrollida seda dokumenti?",
       "statusLoadFailed": "Nende dokumentide kontrolli olekut ei õnnestunud laadida.",
       "verifyAgain": "Kontrolli uuesti"
+    },
+    "extraction": {
+      "busy": "Lõpetage esmalt käimasolev eraldamine ja selle kontroll.",
+      "confirmStart": "{units, plural, one {Käivita, # ühik} other {Käivita, # ühikut}}",
+      "dialogDescription": "Te nõustute iga faktiga või keeldute sellest enne, kui see registrisse lisatakse.",
+      "dialogTitle": "Eralda faktid dokumentidest",
+      "documentsChosen": "{count, plural, one {Valitud #, kuni {max}} other {Valitud #, kuni {max}}}",
+      "documentsLabel": "Loetavad dokumendid",
+      "errors": {
+        "accessRevoked": "Faktide eraldamine peatati, sest juurdepääs pole saadaval.",
+        "aiUnavailable": "Dokumentide lugemiseks pole ühtegi AI-mudelit saadaval. Kontrollige organisatsiooni AI seadeid.",
+        "documentMissing": "Valitud dokumenti või loendit enam pole. Laadige leht uuesti ja valige uuesti.",
+        "enqueueFailed": "Faktide eraldamist ei õnnestunud käivitada. Proovige uuesti.",
+        "extractionFailed": "Nendest dokumentidest ei õnnestunud fakte eraldada.",
+        "internal": "Faktide eraldamine ebaõnnestus ootamatult.",
+        "noText": "Valitud dokumentidest ei õnnestunud teksti lugeda.",
+        "sourceUnavailable": "Dokumenti muudeti või see eemaldati pärast eraldamise algust. Valige dokumendid uuesti.",
+        "unsupportedFormat": "Fakte saab lugeda ainult DOCX-failidest, PDF-idest ja PDF-versiooniga failidest."
+      },
+      "extractFromDocuments": "Eralda dokumentidest",
+      "failedTitle": "Faktide eraldamine ebaõnnestus",
+      "instructionLabel": "Mida otsida (valikuline)",
+      "instructionPlaceholder": "Näiteks: poolte vahelised maksed ja nende ajad",
+      "nothingFound": "Valitud dokumentidest ei leitud ühtegi fakti.",
+      "proposedTitle": "Pakutud faktid",
+      "queued": "Ootab käivitamist.",
+      "reviewed": "{proposed, plural, one {# pakutud faktist} other {# pakutud faktist}} on vastu võetud {accepted}.",
+      "runSize": "{available, plural, one {See käivitus kasutab umbes {estimated} teie # saadaolevast ühikust.} other {See käivitus kasutab umbes {estimated} teie # saadaolevast ühikust.}}",
+      "running": "Dokumente loetakse. Pakutud faktid ilmuvad siia kontrollimiseks.",
+      "startFailed": "Faktide eraldamist ei õnnestunud käivitada",
+      "submit": "{count, plural, =0 {Eralda faktid} one {Eralda faktid # dokumendist} other {Eralda faktid # dokumendist}}"
     },
     "guidance": {
       "escalate": "Edasta edasi",
@@ -4704,6 +4745,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Nõustumine: {done}/{total}…"
+    },
     "sources": {
       "add": "Lisa allikas",
       "documentRequired": "Vali dokument.",

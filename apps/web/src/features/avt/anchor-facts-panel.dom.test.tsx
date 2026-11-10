@@ -133,6 +133,12 @@ const mountFact = ({
         }
         if (
           request.method === "GET" &&
+          pathname === `/v1/lists/${workspaceId}/${listId}/generations`
+        ) {
+          return Response.json({ items: [], nextCursor: null, limit: 20 });
+        }
+        if (
+          request.method === "GET" &&
           pathname === "/v1/organization-settings"
         ) {
           return Response.json({
@@ -179,7 +185,9 @@ const factAction = async (name: string) => {
 
 const mountUndescribedFact = async () => {
   const requests = mountFact();
-  expect(screen.getByText(messages.avt.anchorFacts.inScoring)).toBeTruthy();
+  expect(
+    screen.getAllByText(messages.avt.anchorFacts.inScoring),
+  ).not.toHaveLength(0);
   const hold = await factAction(messages.avt.anchorFacts.holdOutOfScoring);
   expect(hold.getAttribute("aria-disabled")).not.toBe("true");
   expect(
@@ -290,7 +298,7 @@ for (const scenario of [
       messages.avt.anchorFacts.inScoring,
       messages.avt.anchorFacts.heldForReview,
     ]) {
-      expect(screen.queryByText(label) !== null).toBe(
+      expect(screen.queryAllByText(label).length > 0).toBe(
         label === scenario.status,
       );
     }
@@ -300,13 +308,9 @@ for (const scenario of [
     });
     expect(hold.getAttribute("aria-disabled")).toBe("true");
     expect(note.getAttribute("aria-disabled")).toBe("true");
-    expect(
-      screen
-        .getByRole("combobox", {
-          name: messages.avt.anchorFacts.interpretiveConfidence,
-        })
-        .hasAttribute("disabled"),
-    ).toBe(true);
+    for (const level of screen.getAllByRole("menuitemradio")) {
+      expect(level.getAttribute("aria-disabled")).toBe("true");
+    }
     expect(screen.getByText(scenario.reason)).toBeTruthy();
     fireEvent.click(hold);
     fireEvent.click(note);
@@ -323,21 +327,12 @@ test("Not stated clears an existing confidence while preserving scoring", async 
   const requests = mountFact({
     factDetails: { ...describedFact, scoring: "included" },
   });
-  await act(async () => {
-    fireEvent.mouseDown(
-      screen.getByRole("combobox", {
-        name: messages.avt.anchorFacts.interpretiveConfidence,
-      }),
-      { button: 0 },
-    );
-  });
-  const notStated = await screen.findByRole("option", {
+  await factAction(messages.avt.anchorFacts.holdOutOfScoring);
+  const notStated = screen.getByRole("menuitemradio", {
     name: messages.common.notStated,
   });
   await act(async () => {
-    fireEvent.pointerDown(notStated, { button: 0, pointerType: "mouse" });
-    fireEvent.pointerUp(notStated, { button: 0, pointerType: "mouse" });
-    fireEvent.click(notStated, { button: 0, detail: 1 });
+    fireEvent.click(notStated);
   });
   await waitFor(() => {
     expect(requests).toEqual([
@@ -377,20 +372,19 @@ test("an imported fact reads as reference, statement and one meta line", () => {
   expect(screen.queryByText(/9 Mar 2021 \(/u)).toBeNull();
 });
 
-test("a held fact shows its status and is included in one click", async () => {
+test("a held fact shows its status and is included from its actions", async () => {
   const requests = mountFact({
     factDetails: { ...describedFact, scoring: "held" },
   });
   expect(
     screen.getAllByText(messages.avt.anchorFacts.heldForReview),
   ).not.toHaveLength(0);
-  expect(screen.queryByText(messages.avt.anchorFacts.inScoring)).toBeNull();
+  expect(
+    screen.queryAllByText(messages.avt.anchorFacts.inScoring),
+  ).toHaveLength(0);
+  const include = await factAction(messages.avt.anchorFacts.includeInScoring);
   await act(async () => {
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: messages.avt.anchorFacts.includeInScoring,
-      }),
-    );
+    fireEvent.click(include);
   });
   await waitFor(() => {
     expect(requests).toEqual([

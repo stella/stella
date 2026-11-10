@@ -212,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "Sobre o registro de fatos-âncora",
+      "addFact": "Adicionar um fato",
+      "addFactPlaceholder": "Descreva o fato como as evidências o mostram",
       "addInterpretationNote": "Adicionar nota de interpretação",
+      "busyLine": "Os fatos que você aceitar aparecem aqui.",
+      "confidenceLevels": {
+        "high": "Confiança alta",
+        "low": "Confiança baixa",
+        "medium": "Confiança média"
+      },
       "description": "Evidências concretas (e-mails, mensagens, extratos bancários, fatos acordados) extraídas para o registro de fatos-âncora contra o qual as alegações são verificadas. Revise, edite ou adicione fatos manualmente.",
       "editInterpretationNote": "Editar nota de interpretação",
-      "empty": "Marque itens desta lista como fatos para verificar documentos em relação a eles.",
-      "extractionAndReview": "Extração e revisão",
-      "factCount": "{count, plural, one {# fato} other {# fatos} many {# fatos}}",
+      "emptyLine": "Extraia fatos dos documentos do caso ou adicione um manualmente.",
+      "emptyTitle": "Ainda não há fatos-âncora",
       "heldDescription": "Estas extrações são <strong>genuinamente incertas quanto ao significado</strong>: o conteúdo é provisório ou não confirmado, e não apenas escrito à mão. Elas ficam fora da pontuação até que um revisor as confirme, edite ou redigite. Uma fonte legível nunca é colocada em espera apenas por causa do seu meio.",
+      "heldFilter": "{count, plural, one {# em espera para revisão} many {# em espera para revisão} other {# em espera para revisão}}",
       "heldForReview": "Em espera para revisão",
+      "hideSources": "Ocultar fontes",
       "holdOutOfScoring": "Excluir da pontuação",
       "inScoring": "Na pontuação",
       "includeInScoring": "Incluir na pontuação",
@@ -228,7 +238,7 @@
       "interpretiveConfidence": "Confiança interpretativa",
       "openList": "Abrir lista",
       "record": "Registro de fatos-âncora",
-      "setConfidence": "Definir confiança",
+      "showSources": "Mostrar fontes",
       "title": "Fatos-âncora"
     },
     "claimDetail": {
@@ -320,6 +330,37 @@
       "sizeConfirmTitle": "Verificar este documento?",
       "statusLoadFailed": "Não foi possível carregar o status de verificação destes documentos.",
       "verifyAgain": "Verificar novamente"
+    },
+    "extraction": {
+      "busy": "Conclua primeiro a extração em andamento e a revisão dela.",
+      "confirmStart": "{units, plural, one {Iniciar, # unidade} many {Iniciar, # unidades} other {Iniciar, # unidades}}",
+      "dialogDescription": "Você aceita ou recusa cada fato antes que ele entre no registro.",
+      "dialogTitle": "Extrair fatos de documentos",
+      "documentsChosen": "{count, plural, one {# escolhido, até {max}} many {# escolhidos, até {max}} other {# escolhidos, até {max}}}",
+      "documentsLabel": "Documentos a ler",
+      "errors": {
+        "accessRevoked": "A extração de fatos parou porque o acesso não está disponível.",
+        "aiUnavailable": "Nenhum modelo de IA está disponível para ler os documentos. Verifique as configurações de IA da organização.",
+        "documentMissing": "Um documento escolhido ou a lista não existe mais. Recarregue a página e escolha novamente.",
+        "enqueueFailed": "Não foi possível iniciar a extração de fatos. Tente novamente.",
+        "extractionFailed": "Não foi possível extrair os fatos destes documentos.",
+        "internal": "A extração de fatos falhou inesperadamente.",
+        "noText": "Não foi possível ler texto dos documentos escolhidos.",
+        "sourceUnavailable": "Um documento foi alterado ou removido depois do início da extração. Escolha os documentos novamente.",
+        "unsupportedFormat": "Só é possível ler fatos de arquivos DOCX, PDFs e arquivos com uma versão em PDF."
+      },
+      "extractFromDocuments": "Extrair de documentos",
+      "failedTitle": "A extração de fatos falhou",
+      "instructionLabel": "O que procurar (opcional)",
+      "instructionPlaceholder": "Por exemplo: pagamentos entre as partes e quando foram feitos",
+      "nothingFound": "Nenhum fato foi encontrado nos documentos escolhidos.",
+      "proposedTitle": "Fatos propostos",
+      "queued": "Aguardando o início.",
+      "reviewed": "{accepted} de {proposed, plural, one {# fato proposto} many {# fatos propostos} other {# fatos propostos}} aceitos.",
+      "runSize": "{available, plural, one {Esta execução usa cerca de {estimated} da sua # unidade disponível.} many {Esta execução usa cerca de {estimated} das suas # unidades disponíveis.} other {Esta execução usa cerca de {estimated} das suas # unidades disponíveis.}}",
+      "running": "Lendo os documentos. Os fatos propostos aparecerão aqui para revisão.",
+      "startFailed": "Não foi possível iniciar a extração de fatos",
+      "submit": "{count, plural, =0 {Extrair fatos} one {Extrair fatos de # documento} many {Extrair fatos de # documentos} other {Extrair fatos de # documentos}}"
     },
     "guidance": {
       "escalate": "Escalar",
@@ -4704,6 +4745,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Aceitando {done} de {total}…"
+    },
     "sources": {
       "add": "Adicionar fonte",
       "documentRequired": "Selecione um documento.",

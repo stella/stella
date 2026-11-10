@@ -212,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "O souboru referenčních faktů",
+      "addFact": "Přidat fakt",
+      "addFactPlaceholder": "Uveďte fakt tak, jak vyplývá z důkazů",
       "addInterpretationNote": "Přidat poznámku k výkladu",
+      "busyLine": "Přijatá fakta se zobrazí zde.",
+      "confidenceLevels": {
+        "high": "Vysoká jistota",
+        "low": "Nízká jistota",
+        "medium": "Střední jistota"
+      },
       "description": "Přímé důkazy (e-maily, zprávy, bankovní záznamy, nesporné skutečnosti) zpracované do souboru referenčních faktů, s nimiž se porovnávají tvrzení. Fakta můžete kontrolovat, upravovat nebo ručně přidávat.",
       "editInterpretationNote": "Upravit poznámku k výkladu",
-      "empty": "Označte položky tohoto seznamu jako fakta, proti nimž se budou kontrolovat dokumenty.",
-      "extractionAndReview": "Extrakce a kontrola",
-      "factCount": "{count, plural, one {# fakt} few {# fakty} other {# faktů} many {# faktu}}",
+      "emptyLine": "Vytěžte fakta z dokumentů spisu, nebo nějaký přidejte ručně.",
+      "emptyTitle": "Zatím žádná referenční fakta",
       "heldDescription": "Význam těchto extrahovaných údajů je <strong>skutečně nejistý</strong>: jejich obsah je předběžný nebo nepotvrzený, nejde pouze o ručně psaný text. Do hodnocení se nezahrnou, dokud je kontrolující osoba nepotvrdí, neupraví nebo nepřepíše. Čitelný zdroj se nikdy nezařadí do fronty jen kvůli svému médiu.",
+      "heldFilter": "{count, plural, one {# pozastaven ke kontrole} few {# pozastavené ke kontrole} many {# pozastaveného ke kontrole} other {# pozastavených ke kontrole}}",
       "heldForReview": "Pozastaveno ke kontrole",
+      "hideSources": "Skrýt zdroje",
       "holdOutOfScoring": "Vyloučit z hodnocení",
       "inScoring": "Zahrnuto do hodnocení",
       "includeInScoring": "Zahrnout do hodnocení",
@@ -228,7 +238,7 @@
       "interpretiveConfidence": "Jistota výkladu",
       "openList": "Otevřít seznam",
       "record": "Soubor referenčních faktů",
-      "setConfidence": "Nastavit jistotu",
+      "showSources": "Zobrazit zdroje",
       "title": "Referenční fakta"
     },
     "claimDetail": {
@@ -320,6 +330,37 @@
       "sizeConfirmTitle": "Ověřit tento dokument?",
       "statusLoadFailed": "Stav ověření těchto dokumentů se nepodařilo načíst.",
       "verifyAgain": "Ověřit znovu"
+    },
+    "extraction": {
+      "busy": "Nejdřív dokončete probíhající vytěžování a jeho kontrolu.",
+      "confirmStart": "{units, plural, one {Spustit, # jednotka} few {Spustit, # jednotky} many {Spustit, # jednotky} other {Spustit, # jednotek}}",
+      "dialogDescription": "Každý fakt přijmete, nebo odmítnete, než se dostane do souboru.",
+      "dialogTitle": "Vytěžit fakta z dokumentů",
+      "documentsChosen": "{count, plural, one {Vybrán #, nejvýše {max}} few {Vybrány #, nejvýše {max}} many {Vybráno #, nejvýše {max}} other {Vybráno #, nejvýše {max}}}",
+      "documentsLabel": "Dokumenty ke čtení",
+      "errors": {
+        "accessRevoked": "Vytěžování faktů se zastavilo, protože přístup není k dispozici.",
+        "aiUnavailable": "Pro čtení dokumentů není k dispozici žádný model AI. Zkontrolujte nastavení AI organizace.",
+        "documentMissing": "Některý z vybraných dokumentů nebo seznam už neexistuje. Načtěte stránku znovu a vyberte znovu.",
+        "enqueueFailed": "Vytěžování faktů se nepodařilo spustit. Zkuste to znovu.",
+        "extractionFailed": "Fakta z těchto dokumentů se nepodařilo vytěžit.",
+        "internal": "Vytěžování faktů neočekávaně selhalo.",
+        "noText": "Z vybraných dokumentů se nepodařilo přečíst žádný text.",
+        "sourceUnavailable": "Některý dokument se po spuštění vytěžování změnil nebo byl odstraněn. Vyberte dokumenty znovu.",
+        "unsupportedFormat": "Fakta lze vytěžit pouze ze souborů DOCX, PDF a souborů s vygenerovanou verzí PDF."
+      },
+      "extractFromDocuments": "Vytěžit z dokumentů",
+      "failedTitle": "Vytěžování faktů se nezdařilo",
+      "instructionLabel": "Na co se zaměřit (nepovinné)",
+      "instructionPlaceholder": "Například: platby mezi stranami a kdy proběhly",
+      "nothingFound": "Ve vybraných dokumentech nebyla nalezena žádná fakta.",
+      "proposedTitle": "Navržená fakta",
+      "queued": "Čeká na spuštění.",
+      "reviewed": "Přijato {accepted} z {proposed, plural, one {# navrženého faktu} few {# navržených faktů} many {# navrženého faktu} other {# navržených faktů}}.",
+      "runSize": "{available, plural, one {Toto spuštění spotřebuje asi {estimated} z vaší # dostupné jednotky.} few {Toto spuštění spotřebuje asi {estimated} z vašich # dostupných jednotek.} many {Toto spuštění spotřebuje asi {estimated} z vašich # dostupné jednotky.} other {Toto spuštění spotřebuje asi {estimated} z vašich # dostupných jednotek.}}",
+      "running": "Dokumenty se čtou. Navržená fakta se tu objeví ke kontrole.",
+      "startFailed": "Vytěžování faktů se nepodařilo spustit",
+      "submit": "{count, plural, =0 {Vytěžit fakta} one {Vytěžit fakta z # dokumentu} few {Vytěžit fakta z # dokumentů} many {Vytěžit fakta z # dokumentu} other {Vytěžit fakta z # dokumentů}}"
     },
     "guidance": {
       "escalate": "Předat dál",
@@ -4704,6 +4745,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Přijímání {done} z {total}…"
+    },
     "sources": {
       "add": "Přidat zdroj",
       "documentRequired": "Vyberte dokument.",
