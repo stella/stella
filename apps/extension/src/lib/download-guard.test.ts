@@ -3,105 +3,19 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { sleep } from "@stll/concurrency/sleep";
 
 import {
-  downloadAction,
   downloadNoticeMessage,
-  downloadOwner,
   holdDownloadForJudgement,
   judgeDownload,
   loadDownloadScope,
+  noteNavigation,
   recordDownloadNotice,
   setDownloadScope,
   takeDownloadNotices,
 } from "./download-guard";
 
-const origins = {
-  contained: new Set([
-    "https://portal.example.com",
-    "https://files.example.net",
-  ]),
-  user: new Set(["https://files.example.org", "https://files.example.net"]),
-};
-const download = (url: string, referrer = "", finalUrl = url) => ({
-  finalUrl,
-  referrer,
-  url,
-});
-
-describe("download owner", () => {
-  test("a blob only the controlled page or its frames could save is contained", () => {
-    expect(
-      downloadOwner(download("blob:https://portal.example.com/7f0c"), origins),
-    ).toBe("contained");
-  });
-
-  test("a site open on both sides is ambiguous, not contained", () => {
-    // A cross-origin frame in the controlled tab, and the user's own tab.
-    expect(
-      downloadOwner(download("blob:https://files.example.net/51aa"), origins),
-    ).toBe("ambiguous");
-  });
-
-  test("a download traced only to the user's tabs is the user's", () => {
-    Object.defineProperty(globalThis, "chrome", {
-      configurable: true,
-      value: { runtime: { id: "stella-extension" } },
-    });
-    expect(
-      downloadOwner(
-        download(
-          "https://files.example.org/report.pdf",
-          "https://files.example.org/",
-        ),
-        origins,
-      ),
-    ).toBe("user");
-    expect(
-      downloadOwner(
-        {
-          ...download("data:text/plain;base64,AAAA"),
-          byExtensionId: "other-extension",
-        },
-        origins,
-      ),
-    ).toBe("user");
-  });
-
-  test("a download no open frame accounts for is unknown", () => {
-    Object.defineProperty(globalThis, "chrome", {
-      configurable: true,
-      value: { runtime: { id: "stella-extension" } },
-    });
-    for (const url of [
-      "data:text/plain;base64,AAAA",
-      "blob:null/1c2d",
-      "blob:https://gone.example.com/9e8f",
-    ]) {
-      expect(downloadOwner(download(url), origins)).toBe("unknown");
-      expect(
-        downloadOwner(
-          { ...download(url), byExtensionId: "stella-extension" },
-          origins,
-        ),
-      ).toBe("unknown");
-    }
-  });
-});
-
-describe("download action", () => {
-  test("stops only what the confined tabs alone could have started, and never deletes a file", () => {
-    expect(downloadAction("contained", "in_progress")).toBe("cancel");
-    expect(downloadAction("contained", "interrupted")).toBe("cancel");
-    expect(downloadAction("contained", "complete")).toBe("keep-and-flag");
-  });
-
-  test("lets through every download the user may have started", () => {
-    for (const owner of ["ambiguous", "unknown", "user"] as const) {
-      for (const state of ["in_progress", "interrupted", "complete"] as const) {
-        expect(downloadAction(owner, state)).toBe("allow");
-      }
-    }
-  });
-});
+/** The time every judgement here is made at. */
+const NOW = 1_794_300_000_000;
+const clock = { now: () => NOW };
 
 const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");
 
@@ -120,12 +34,15 @@ afterEach(() => {
 const installFakeChrome = ({
   failingTab,
   finishesBeforeCancel = false,
+  navigations = [],
   state = "in_progress",
   userSite = "https://files.example.org/",
 }: {
   failingTab?: number;
   /** The download completes in the moment the cancel takes to land. */
   finishesBeforeCancel?: boolean;
+  /** Navigations recorded so far, as `[tabId, url]`, a second ago. */
+  navigations?: readonly (readonly [number, string])[];
   state?: string;
   userSite?: string | null;
 } = {}) => {
@@ -141,6 +58,11 @@ const installFakeChrome = ({
       openedTabIds: [],
       userTabIds: [1],
     },
+    browserRecentNavigations: navigations.map(([tabId, url]) => ({
+      at: NOW - 1000,
+      tabId,
+      url,
+    })),
   };
   // The guard keeps its owners in module state for the whole process, and
   // test files share one: another file's containment change would otherwise
@@ -201,7 +123,7 @@ const installFakeChrome = ({
       },
     },
   });
-  return { events, releaseFrames };
+  return { events, releaseFrames, session };
 };
 
 /** A small file the controlled page saves; each test uses its own id. */
@@ -288,7 +210,7 @@ describe("a download of uncertain origin", () => {
     }
   });
 
-  test("a failed frame lookup traces nobody: the download goes through", async () => {
+  test("a failed frame lookup is no evidence: stopped while running, never deleted", async () => {
     for (const [state, id] of [
       ["in_progress", 47],
       ["complete", 48],
@@ -306,7 +228,10 @@ describe("a download of uncertain origin", () => {
         url: "blob:https://files.example.org/1a2b",
       });
 
-      expect(events).toEqual([]);
+      expect(events.filter((event) => event.startsWith("remove"))).toEqual([]);
+      expect(events.at(0)).toBe(
+        state === "complete" ? "badge:1" : `cancel:${id}`,
+      );
     }
   });
 
@@ -329,7 +254,7 @@ describe("a download of uncertain origin", () => {
     expect(events).toEqual([]);
   });
 
-  test("a download with no web origin traces nobody: it goes through", async () => {
+  test("a download with no web origin traces to nobody: it is stopped", async () => {
     const { events, releaseFrames } = installFakeChrome();
     await loadDownloadScope();
     releaseFrames();
@@ -345,7 +270,10 @@ describe("a download of uncertain origin", () => {
       url: "data:text/plain,notes",
     });
 
-    expect(events).toEqual([]);
+    expect(events.filter((event) => event.startsWith("cancel"))).toEqual([
+      "cancel:72",
+      "cancel:73",
+    ]);
   });
 
   test("a site open both in the controlled tab and the user's goes through", async () => {
@@ -373,68 +301,82 @@ describe("a download of uncertain origin", () => {
   });
 });
 
-describe("a file the user saves from a site that serves it from another host", () => {
-  // The user's tab is on drive.google.com; the file comes from
-  // drive.usercontent.google.com with the referrer stripped, while stella
-  // controls a tab elsewhere.
+describe("a file a navigation turned into", () => {
+  // The user's tab is on drive.google.com; a frame in it loads the file from
+  // drive.usercontent.google.com with no referrer, while stella controls a
+  // tab elsewhere.
   const fileUrl =
     "https://drive.usercontent.google.com/download?id=1a2b3c&export=download";
-
-  test("traces to no open frame, and goes through", () => {
-    Object.defineProperty(globalThis, "chrome", {
-      configurable: true,
-      value: { runtime: { id: "stella-extension" } },
-    });
-    const owner = downloadOwner(download(fileUrl), {
-      contained: new Set(["https://portal.example.com"]),
-      user: new Set(["https://drive.google.com"]),
-    });
-    expect(owner).toBe("unknown");
-    expect(downloadAction(owner, "in_progress")).toBe("allow");
+  const fileDownload = (id: number): chrome.downloads.DownloadItem => ({
+    ...savedByControlledPage(id),
+    finalUrl: fileUrl,
+    mime: "application/pdf",
+    url: fileUrl,
   });
 
-  test("still goes through when the controlled tab has a frame of that host too", () => {
-    Object.defineProperty(globalThis, "chrome", {
-      configurable: true,
-      value: { runtime: { id: "stella-extension" } },
-    });
-    const owner = downloadOwner(
-      download(fileUrl, "https://drive.google.com/"),
-      {
-        contained: new Set([
-          "https://portal.example.com",
-          "https://drive.usercontent.google.com",
-        ]),
-        user: new Set(["https://drive.google.com"]),
-      },
-    );
-    expect(owner).toBe("ambiguous");
-    expect(downloadAction(owner, "in_progress")).toBe("allow");
-  });
-
-  test("is neither cancelled nor noted while stella controls a tab", async () => {
+  test("traced to the user's tab, it is neither held back nor noted", async () => {
     const { events, releaseFrames } = installFakeChrome({
+      navigations: [[1, fileUrl]],
       userSite: "https://drive.google.com/drive/my-drive",
     });
     await loadDownloadScope();
     releaseFrames();
     const suggested = new Promise<void>((resolve) => {
       holdDownloadForJudgement(
-        {
-          ...savedByControlledPage(80),
-          finalUrl: fileUrl,
-          mime: "application/pdf",
-          url: fileUrl,
-        },
+        fileDownload(80),
         () => {
           events.push("suggest");
           resolve();
         },
+        clock,
       );
     });
     await suggested;
 
     expect(events).toEqual(["suggest"]);
+  });
+
+  test("traced to the controlled tab, it is stopped whatever the server sent", async () => {
+    const { events, releaseFrames } = installFakeChrome({
+      navigations: [[3, fileUrl]],
+      userSite: "https://drive.google.com/drive/my-drive",
+    });
+    await loadDownloadScope();
+    releaseFrames();
+    await judgeDownload(fileDownload(81), clock);
+
+    expect(events).toEqual(["cancel:81", "badge:1", "title:downloadStopped"]);
+  });
+
+  test("a navigation noted while stella controls a tab traces it", async () => {
+    const { events, releaseFrames } = installFakeChrome({
+      userSite: "https://drive.google.com/drive/my-drive",
+    });
+    await loadDownloadScope();
+    releaseFrames();
+    await noteNavigation({ tabId: 1, timeStamp: NOW - 1000, url: fileUrl });
+    await judgeDownload(fileDownload(83), clock);
+
+    expect(events).toEqual([]);
+  });
+
+  test("no navigation is recorded while stella controls no tab", async () => {
+    const { session } = installFakeChrome();
+    setDownloadScope({ contained: [], user: [] });
+    await noteNavigation({ tabId: 1, timeStamp: NOW - 1000, url: fileUrl });
+
+    expect(session["browserRecentNavigations"]).toEqual([]);
+  });
+
+  test("traced to no tab at all, it is stopped", async () => {
+    const { events, releaseFrames } = installFakeChrome({
+      userSite: "https://drive.google.com/drive/my-drive",
+    });
+    await loadDownloadScope();
+    releaseFrames();
+    await judgeDownload(fileDownload(82), clock);
+
+    expect(events.at(0)).toBe("cancel:82");
   });
 });
 

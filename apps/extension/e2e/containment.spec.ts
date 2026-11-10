@@ -461,10 +461,11 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     snapshot = successful(await send({ action: "snapshot" }));
     expect(snapshot.url).toBe(`${FIXTURE_ORIGIN}/containment.html`);
 
-    // A page saving a file from script (blob: URL, no network request) is
-    // cancelled before the file is written, and so is one a cross-origin
-    // frame inside the controlled tab saves: only the controlled tab has
-    // that origin open.
+    // A page saving a file from script (blob: and data: URLs, no network
+    // request) is cancelled before the file is written, and so is one a
+    // cross-origin frame inside the controlled tab saves: only the
+    // controlled tab has that origin open, and a `data:` URL saved from an
+    // https page carries no referrer to trace.
     const controlledPage = harness.context
       .pages()
       .find((candidate) => candidate.url() === snapshot.url);
@@ -472,6 +473,7 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
       throw new TypeError("Controlled tab not found");
     }
     await saveFromScript(controlledPage, "blob");
+    await saveFromScript(controlledPage, "data");
     await controlledPage
       .frameLocator("iframe[title='Tools frame']")
       .locator("body")
@@ -487,14 +489,17 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     await expect
       .poll(async () => await downloads(harness))
       .toEqual([
+        { saved: false, source: "data:" },
         { saved: true, source: harness.stellaOrigin },
         { saved: false, source: ELSEWHERE_ORIGIN },
         { saved: false, source: FIXTURE_ORIGIN },
       ]);
     // A file the user saves from their own tab goes through, even on a site
     // the controlled tab also has open: the user may have started it, and
-    // stopping it would leave them no way to get it. So does one traced to
-    // no open tab at all, such as a `data:` URL saved with no referrer.
+    // stopping it would leave them no way to get it. A `data:` URL the user
+    // saves from an https page carries no referrer, so nothing can tell it
+    // from one a confined page saved: it is stopped while stella controls a
+    // tab.
     const userSiteTab = await harness.context.newPage();
     await harness.stella.waitForTimeout(500);
     await userSiteTab.goto(`${ELSEWHERE_ORIGIN}/landing.html`);
@@ -503,7 +508,8 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     await expect
       .poll(async () => await downloads(harness))
       .toEqual([
-        { saved: true, source: "data:" },
+        { saved: false, source: "data:" },
+        { saved: false, source: "data:" },
         { saved: true, source: harness.stellaOrigin },
         { saved: false, source: ELSEWHERE_ORIGIN },
         { saved: true, source: ELSEWHERE_ORIGIN },
@@ -514,7 +520,7 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
       await harness.worker.evaluate(
         async () => await chrome.action.getBadgeText({}),
       ),
-    ).toBe("2");
+    ).toBe("4");
 
     // A document served without an attachment header that Chrome would
     // save instead of render leaves no file either. (The tab's rules block
@@ -531,6 +537,190 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
         return settled?.filter(({ source }) => source.endsWith("/file.bin"));
       })
       .toEqual([{ saved: false, source: `${FIXTURE_ORIGIN}/file.bin` }]);
+  } finally {
+    await harness.close();
+  }
+});
+
+/** Hosts for files a navigation turns into downloads. */
+const PAYLOAD_ORIGIN = "https://payload.stella-test.example";
+const USER_SITE_ORIGIN = "https://files.stella-test.example";
+const USER_FRAME_ORIGIN = "https://viewer.stella-test.example";
+const USER_CONTENT_ORIGIN = "https://content.stella-test.example";
+
+/** Bytes Chrome sniffs as binary, so a page response becomes a download. */
+const BINARY_BODY = Buffer.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 255, 254, 0]);
+
+/**
+ * Responses the tab's network rules let through but Chrome still saves:
+ * `text/plain` with a binary body, and no `Content-Type` at all. One more
+ * reaches the first through a server redirect. The user's site serves a
+ * page whose frame on another host loads a file from a third host, sent as
+ * an attachment with no referrer, as file viewers do.
+ */
+const routeNavigationDownloads = async ({ context }: Harness) => {
+  await context.route(`${PAYLOAD_ORIGIN}/**`, async (route) => {
+    const { pathname, search } = new URL(route.request().url());
+    if (pathname === "/redirect") {
+      await route.fulfill({
+        headers: { location: `${PAYLOAD_ORIGIN}/plain.bin?via=redirect` },
+        status: 302,
+      });
+      return;
+    }
+    await (pathname === "/untyped.bin"
+      ? route.fulfill({ body: BINARY_BODY })
+      : route.fulfill({
+          body: BINARY_BODY,
+          contentType: "text/plain",
+          headers: { "x-variant": search },
+        }));
+  });
+  await context.route(`${USER_SITE_ORIGIN}/**`, async (route) => {
+    await route.fulfill({
+      body: `<!doctype html><html><head><title>Files</title></head><body>
+<iframe src="${USER_FRAME_ORIGIN}/viewer.html" title="Viewer"></iframe>
+</body></html>`,
+      contentType: "text/html",
+    });
+  });
+  await context.route(`${USER_FRAME_ORIGIN}/**`, async (route) => {
+    await route.fulfill({
+      body: `<!doctype html><html><head><meta name="referrer" content="no-referrer"></head><body>Viewer</body></html>`,
+      contentType: "text/html",
+    });
+  });
+  await context.route(`${USER_CONTENT_ORIGIN}/**`, async (route) => {
+    await route.fulfill({
+      body: BINARY_BODY,
+      contentType: "application/pdf",
+      headers: { "content-disposition": 'attachment; filename="report.pdf"' },
+    });
+  });
+};
+
+/** Clicks a link to `url` that sends no referrer, from inside `scope`. */
+const followWithoutReferrer = async (
+  scope: Page | ReturnType<Page["frameLocator"]>,
+  url: string,
+  target: "_blank" | "_self" = "_self",
+) => {
+  await scope.locator("body").evaluate(
+    (body, { href, opens }) => {
+      const link = document.createElement("a");
+      link.href = href;
+      link.referrerPolicy = "no-referrer";
+      link.rel = "noopener noreferrer";
+      link.target = opens;
+      body.append(link);
+      link.click();
+    },
+    { href: url, opens: target },
+  );
+};
+
+/** Every settled download's address, final address and whether it was saved. */
+const downloadsByUrl = async ({ worker }: Harness) =>
+  await worker.evaluate(async () => {
+    const items = await chrome.downloads.search({});
+    if (items.some(({ state }) => state === "in_progress")) {
+      return null;
+    }
+    return items
+      .map(({ exists, finalUrl, state, url }) => ({
+        finalUrl,
+        saved: state === "complete" && exists,
+        url: url.startsWith("data:") ? "data:" : url,
+      }))
+      .toSorted((left, right) => left.url.localeCompare(right.url));
+  });
+
+test("downloads are traced to the tab that navigated to them", async () => {
+  // timeout: it launches Chrome with the extension and lets four downloads settle.
+  test.setTimeout(120_000);
+  const harness = await launchExtensionHarness();
+  await routeFixtures(harness);
+  await routeNavigationDownloads(harness);
+  try {
+    await harness.pair(CONTROLLER_ID);
+    const { send } = createCommandSender(harness.stella, CONTROLLER_ID);
+    const snapshot = await openContainmentPage(harness, send);
+    const controlledPage = harness.context
+      .pages()
+      .find((candidate) => candidate.url() === snapshot.url);
+    if (!controlledPage) {
+      throw new TypeError("Controlled tab not found");
+    }
+
+    // The controlled tab, a frame in it and a tab it opens each load a
+    // file the network rules let through, sending no referrer: each is
+    // traced to the confined tab that navigated and stopped.
+    await followWithoutReferrer(controlledPage, `${PAYLOAD_ORIGIN}/plain.bin`);
+    await followWithoutReferrer(
+      controlledPage.frameLocator("iframe[title='Tools frame']"),
+      `${PAYLOAD_ORIGIN}/untyped.bin`,
+    );
+    await followWithoutReferrer(
+      controlledPage,
+      `${PAYLOAD_ORIGIN}/redirect`,
+      "_blank",
+    );
+    await expect
+      .poll(async () => await downloadsByUrl(harness))
+      .toEqual([
+        {
+          finalUrl: `${PAYLOAD_ORIGIN}/plain.bin`,
+          saved: false,
+          url: `${PAYLOAD_ORIGIN}/plain.bin`,
+        },
+        // A server redirect keeps the address the navigation started at.
+        {
+          finalUrl: `${PAYLOAD_ORIGIN}/plain.bin?via=redirect`,
+          saved: false,
+          url: `${PAYLOAD_ORIGIN}/redirect`,
+        },
+        {
+          finalUrl: `${PAYLOAD_ORIGIN}/untyped.bin`,
+          saved: false,
+          url: `${PAYLOAD_ORIGIN}/untyped.bin`,
+        },
+      ]);
+    expect(
+      await harness.worker.evaluate(
+        async () => await chrome.action.getBadgeText({}),
+      ),
+    ).toBe("3");
+
+    // In the user's own tab, a frame on another host loads a file from a
+    // third host with no referrer: it is traced to the user's tab and saved,
+    // and nothing is noted.
+    const userTab = await harness.context.newPage();
+    // real-time: a new tab counts as the user's only once Chrome has had the
+    // moment it takes to report an opener, and none comes.
+    await harness.stella.waitForTimeout(1500);
+    await userTab.goto(`${USER_SITE_ORIGIN}/files.html`);
+    await followWithoutReferrer(
+      userTab.frameLocator("iframe[title='Viewer']"),
+      `${USER_CONTENT_ORIGIN}/download?id=1`,
+    );
+    await expect
+      .poll(async () =>
+        (await downloadsByUrl(harness))?.filter(({ url }) =>
+          url.startsWith(USER_CONTENT_ORIGIN),
+        ),
+      )
+      .toEqual([
+        {
+          finalUrl: `${USER_CONTENT_ORIGIN}/download?id=1`,
+          saved: true,
+          url: `${USER_CONTENT_ORIGIN}/download?id=1`,
+        },
+      ]);
+    expect(
+      await harness.worker.evaluate(
+        async () => await chrome.action.getBadgeText({}),
+      ),
+    ).toBe("3");
   } finally {
     await harness.close();
   }
