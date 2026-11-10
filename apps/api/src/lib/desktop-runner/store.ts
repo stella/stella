@@ -55,8 +55,8 @@ import { questionPauseOf } from "@/api/lib/desktop-runner/chunk";
 import {
   carryFolderRestoreNotes,
   hasPendingFolderRestore,
+  hasUnnotedFolderRestore,
   markFolderRestoreNotesTold,
-  readUnnotedFolderRestores,
 } from "@/api/lib/desktop-runner/folder-restores";
 import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
 import {
@@ -1417,13 +1417,9 @@ export const insertAssignedRun = async (
     ) {
       return { type: "folder_busy" };
     }
-    const unnoted =
-      chat === null
-        ? []
-        : await readUnnotedFolderRestores(tx, {
-            owner,
-            threadId: chat.threadId,
-          });
+    const noted =
+      chat !== null &&
+      (await hasUnnotedFolderRestore(tx, { owner, threadId: chat.threadId }));
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
     await tx.insert(runs).values({
       runId,
@@ -1445,14 +1441,12 @@ export const insertAssignedRun = async (
       runId,
       kind: "run.start",
       commandKey: runId,
-      payload:
-        unnoted.length === 0 ? options.payload.plain : options.payload.withNote,
+      payload: noted ? options.payload.withNote : options.payload.plain,
     });
-    if (chat !== null) {
+    if (noted) {
       await carryFolderRestoreNotes(tx, {
         owner,
         threadId: chat.threadId,
-        restoreIds: unnoted,
         runId,
       });
     }

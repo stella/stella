@@ -11,6 +11,11 @@ import {
   sql,
 } from "drizzle-orm";
 
+import type {
+  ChatLocalFilesUndoComputerRefusal,
+  ChatLocalFilesUndoRefusal,
+  ChatLocalFilesUndoState,
+} from "@stll/api-contract/chat-local-files-undo";
 import {
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
   type DesktopRunnerFolderRestoreOutcome,
@@ -34,11 +39,7 @@ import {
   transitionLifecycleBatch,
 } from "@/api/lib/db/transitions";
 import { DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
-import {
-  DESKTOP_RUNNER_OPEN_RUN_STATES,
-  type DesktopRunnerFolderRestoreRefusal,
-  type DesktopRunnerFolderRestoreState,
-} from "@/api/lib/desktop-runner/states";
+import { DESKTOP_RUNNER_OPEN_RUN_STATES } from "@/api/lib/desktop-runner/states";
 import type {
   DesktopRunnerDb,
   RunHolder,
@@ -61,20 +62,20 @@ const runs = desktopRunnerRuns;
 const runner = desktopRunners;
 const events = desktopRunnerEvents;
 
-// audit: skip - socket bookkeeping; the endpoint that asks for a restore audits it
+// Socket bookkeeping: the endpoint that asks for a restore audits it.
 const skipRestoreAudit = async () => await Promise.resolve();
 
 /** A restore as a member sees it; a queued one past its time reads `expired`. */
 export type FolderRestoreView = {
   readonly restoreId: string;
-  readonly state: DesktopRunnerFolderRestoreState;
-  readonly reason: DesktopRunnerFolderRestoreRefusal | null;
+  readonly state: ChatLocalFilesUndoState;
+  readonly reason: ChatLocalFilesUndoComputerRefusal | null;
 };
 
 type StoredRestore = {
   id: string;
-  state: DesktopRunnerFolderRestoreState;
-  reason: DesktopRunnerFolderRestoreRefusal | null;
+  state: ChatLocalFilesUndoState;
+  reason: ChatLocalFilesUndoComputerRefusal | null;
   expiresAt: Date;
 };
 
@@ -228,18 +229,8 @@ export const readTurnFolderRestore = async (
   };
 };
 
-/** Why a turn's undo was not queued. */
-export type FolderRestoreRefusal =
-  /** No such turn of the member in the thread. */
-  | "not_found"
-  /** A later turn exists: only the newest turn is undone. */
-  | "not_newest"
-  /** A turn or run of the thread is still going. */
-  | "thread_busy"
-  /** The turn's run did not finish after taking a checkpoint. */
-  | "no_checkpoint"
-  /** The run's computer is not connected. */
-  | "desktop_offline";
+/** Why a turn's undo was not queued: the endpoint's refusals, or no such turn. */
+export type FolderRestoreRefusal = "not_found" | ChatLocalFilesUndoRefusal;
 
 export type RequestedFolderRestore =
   /** Queued now; its computer's socket is rung. */
@@ -431,6 +422,8 @@ type ClaimOptions = {
   now: Date;
   /** Also those sent before and not answered: a new socket sends them again. */
   resendSent: boolean;
+  /** Restores one claim sends at most; the rest go with the next delivery. */
+  limit: number;
 };
 
 const ofComputer = (binding: RunnerBinding): SQL =>
@@ -441,9 +434,6 @@ const ofComputer = (binding: RunnerBinding): SQL =>
     eq(restores.deviceJkt, binding.deviceJkt),
   ) ?? panic("A computer's restores are named by its binding");
 
-/** Restores one claim sends at most; a computer holds one per chat at a time. */
-const MAX_RESTORES_PER_CLAIM = 100;
-
 /**
  * The restores this socket sends now: queued ones still in time, marked sent
  * before they go out, and on a new socket the sent ones not answered yet. A
@@ -452,7 +442,7 @@ const MAX_RESTORES_PER_CLAIM = 100;
  */
 export const claimFolderRestores = async (
   db: DesktopRunnerDb,
-  { binding, sessionId, now, resendSent }: ClaimOptions,
+  { binding, sessionId, now, resendSent, limit }: ClaimOptions,
 ): Promise<FolderRestoreToSend[]> =>
   await withAggregateTransaction(
     db,
@@ -474,21 +464,21 @@ export const claimFolderRestores = async (
         return [];
       }
       const stale = await tx
-        .select({ id: restores.id, expiresAt: restores.expiresAt })
+        .select({ id: restores.id })
         .from(restores)
         .where(
           and(ofComputer(binding), eq(restores.state, "queued"), lapsedAt(now)),
-        );
-      for (const row of stale) {
-        // Each keeps the time it lapsed at; a computer holds few.
-        // oxlint-disable-next-line no-await-in-loop
-        await transitionLifecycle({
+        )
+        .limit(limit);
+      if (stale.length > 0) {
+        // Expired as this socket found them; the next claim takes any more.
+        await transitionLifecycleBatch({
           tx,
           spec: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
-          id: row.id,
+          ids: stale.map(({ id }) => id),
           moves: { state: { from: ["queued"], to: "expired" } },
           guard: lapsedAt(now),
-          set: { settledAt: row.expiresAt },
+          set: { settledAt: now },
           recordTransitionAuditEvent: skipRestoreAudit,
         });
       }
@@ -509,7 +499,7 @@ export const claimFolderRestores = async (
           ),
         )
         .orderBy(restores.createdAt, restores.id)
-        .limit(MAX_RESTORES_PER_CLAIM);
+        .limit(limit);
       const queued = due
         .filter(({ state }) => state === "queued")
         .map(({ id }) => id);
@@ -622,46 +612,35 @@ export const hasPendingFolderRestore = async (
   return row !== undefined;
 };
 
-/** Restores of the thread a run tells about at most; older ones are told with them. */
-const MAX_NOTED_RESTORES = 20;
-
 /**
- * The thread's restores no accepted run was told about yet. A run that carried
- * the note but was refused or lost before the computer accepted it told
- * nobody, so the next run carries it again.
+ * Whether the thread's folder was restored and no accepted run was told yet.
+ * A run that carried the note but was refused or lost before the computer
+ * accepted it told nobody, so the next run carries it again.
  */
-export const readUnnotedFolderRestores = async (
+export const hasUnnotedFolderRestore = async (
   db: Pick<DesktopRunnerDb, "select">,
   { owner, threadId }: ThreadOf,
-): Promise<string[]> =>
-  (
-    await db
-      .select({ id: restores.id })
-      .from(restores)
-      .where(
-        and(
-          ownedBy(owner),
-          eq(restores.chatThreadId, threadId),
-          eq(restores.state, "restored"),
-          isNull(restores.notedAt),
-        ),
-      )
-      .limit(MAX_NOTED_RESTORES)
-  ).map(({ id }) => id);
+): Promise<boolean> => {
+  const [row] = await db
+    .select({ id: restores.id })
+    .from(restores)
+    .where(
+      and(
+        ownedBy(owner),
+        eq(restores.chatThreadId, threadId),
+        eq(restores.state, "restored"),
+        isNull(restores.notedAt),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+};
 
-/** Record that run `runId`'s request carries the note about these restores. */
+/** Record that run `runId`'s request carries the note about the thread's restores. */
 export const carryFolderRestoreNotes = async (
   db: Pick<DesktopRunnerDb, "update">,
-  {
-    owner,
-    threadId,
-    restoreIds,
-    runId,
-  }: ThreadOf & { restoreIds: readonly string[]; runId: string },
+  { owner, threadId, runId }: ThreadOf & { runId: string },
 ): Promise<void> => {
-  if (restoreIds.length === 0) {
-    return;
-  }
   // audit: skip - bookkeeping of the note a run's request carries
   await db
     .update(restores)
@@ -670,7 +649,6 @@ export const carryFolderRestoreNotes = async (
       and(
         ownedBy(owner),
         eq(restores.chatThreadId, threadId),
-        inArray(restores.id, restoreIds),
         eq(restores.state, "restored"),
         isNull(restores.notedAt),
       ),

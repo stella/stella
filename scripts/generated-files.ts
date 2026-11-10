@@ -300,6 +300,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/db/operator-activity/calendar.ts",
     "apps/api/src/lib/db/operator-activity/read.ts",
     "apps/api/src/lib/db/operator-registrations/read.ts",
+    "apps/api/src/lib/desktop-runner/folder-restores.ts",
     "apps/api/src/lib/desktop-runner/run-transitions.ts",
     "apps/api/src/lib/desktop-runner/states.ts",
     "apps/api/src/lib/desktop-runner/store.ts",

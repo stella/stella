@@ -413,6 +413,9 @@ const outgoing = async (
   };
 };
 
+/** Folder restores one delivery sends at most; the next delivery sends more. */
+const RESTORE_PAGE_SIZE = 100;
+
 /**
  * Send the computer's folder restores: those queued, and on a new socket
  * (`resendSent`) those sent before that it has not answered. Each is marked
@@ -425,6 +428,7 @@ const deliverRestores = async (state: SessionState, resendSent: boolean) => {
     sessionId: state.sessionId,
     now: state.context.now(),
     resendSent,
+    limit: RESTORE_PAGE_SIZE,
   });
   for (const { restoreId, folderId, runId } of due) {
     const sent = send(state, {
