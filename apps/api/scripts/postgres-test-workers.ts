@@ -242,7 +242,9 @@ export const runPostgresWorkers = async ({
     };
   },
   now = Date.now,
-  sleep = (milliseconds) => Bun.sleep(milliseconds),
+  sleep = async (milliseconds) => {
+    await Bun.sleep(milliseconds);
+  },
   log = console.log,
 }: RunPostgresWorkersOptions): Promise<number> => {
   const templateUrl = new URL(databaseUrl);

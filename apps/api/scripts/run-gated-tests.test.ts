@@ -226,7 +226,7 @@ test("template cloning refuses and names foreign connections", async () => {
         signalCode: null,
         kill: () => undefined,
       }),
-      sleep: () => Promise.resolve(),
+      sleep: async () => {},
     }),
   );
   expect(error).toBeInstanceOf(PostgresTemplateConnectionError);
