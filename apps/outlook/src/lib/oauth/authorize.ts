@@ -13,8 +13,8 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
-  OUTLOOK_REDIRECT_PATH,
   OUTLOOK_SCOPES,
+  outlookRedirectUri,
 } from "@stll/api-contract/outlook-client";
 
 import { SignInError } from "@/lib/oauth/errors";
@@ -85,7 +85,8 @@ export const readDialogStartTarget = ({
   readonly allowedOrigins: readonly string[];
   readonly location: string;
 }): string | null => {
-  const raw = URL.parse(location)?.searchParams.get(AUTHORIZE_PARAMETER);
+  const start = URL.parse(location);
+  const raw = start?.searchParams.get(AUTHORIZE_PARAMETER);
   const target = raw ? URL.parse(raw) : null;
   if (
     target === null ||
@@ -94,7 +95,9 @@ export const readDialogStartTarget = ({
     target.password !== "" ||
     target.searchParams.get("response_type") !== "code" ||
     target.searchParams.get("code_challenge_method") !== "S256" ||
-    !target.searchParams.get("redirect_uri")?.endsWith(OUTLOOK_REDIRECT_PATH)
+    // Only back to this task pane's own callback.
+    start === null ||
+    target.searchParams.get("redirect_uri") !== outlookRedirectUri(start.origin)
   ) {
     return null;
   }

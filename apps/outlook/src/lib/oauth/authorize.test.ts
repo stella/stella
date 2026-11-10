@@ -97,10 +97,16 @@ describe("authorization request", () => {
     elsewhere.host = "attacker.example";
     const plain = new URL(authorizeUrl);
     plain.searchParams.delete("code_challenge_method");
+    const foreignCallback = new URL(authorizeUrl);
+    foreignCallback.searchParams.set(
+      "redirect_uri",
+      "https://attacker.example/auth/callback.html",
+    );
 
     for (const target of [
       elsewhere.toString(),
       plain.toString(),
+      foreignCallback.toString(),
       "https://api.example.test/somewhere",
       "data:text/html,hello",
     ]) {
