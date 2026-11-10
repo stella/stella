@@ -1,3 +1,6 @@
+import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
+import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
+import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import createMessageExport from "@/api/handlers/chat/export/create";
 import forkThread from "@/api/handlers/chat/fork/create";
@@ -52,6 +55,11 @@ export const chatRoute = routes(
     "/tool-grants": { GET: listChatToolGrants, POST: createChatToolGrant },
     "/tool-grants/coverage": { GET: readChatToolGrantCoverage },
     "/tool-grants/:grantId": { DELETE: deleteChatToolGrant },
+    "/browser-site-grants": {
+      GET: listBrowserSiteGrants,
+      POST: createBrowserSiteGrant,
+    },
+    "/browser-site-grants/:grantId": { DELETE: deleteBrowserSiteGrant },
     "/workspaces/:workspaceId/file-thread": {
       POST: resolveFileThread,
       GET: readFileThread,

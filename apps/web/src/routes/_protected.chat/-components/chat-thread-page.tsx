@@ -902,6 +902,7 @@ export const ChatThreadPage = ({
                     skillChat={{
                       contextMatterIds: selectedContextMatterIds,
                       document: null,
+                      runTarget: threadRunTarget,
                       threadRef,
                       webSearch: {
                         available: data.webSearchAvailable,

@@ -346,6 +346,10 @@ describe("list verification access grants across MCP tools", () => {
   const resourceId = "a2222222-2222-4222-8222-222222222222";
   const params = { matterId };
   const inputs = {
+    "lists.fact-extractions.create": {
+      params,
+      body: { listId: resourceId, entityIds: [resourceId] },
+    },
     "lists.verifications.create": {
       params,
       body: {

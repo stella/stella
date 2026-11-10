@@ -1,0 +1,3 @@
+{
+  "create-policy": "Row policies for the corpus reader and the ingestion audit write on tables with no concurrent readers of these policies; catalog-only, under the 5s lock_timeout and 30s statement_timeout."
+}

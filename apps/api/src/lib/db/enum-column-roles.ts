@@ -398,9 +398,17 @@ export const ENUM_COLUMN_ROLES = {
     entity_feature_gate: ATTRIBUTE,
   },
   legal_list_generation_candidates: {
+    confidence: ATTRIBUTE,
     entity_feature_gate: ATTRIBUTE,
     item_type: ATTRIBUTE,
+    occurred_on_precision: ATTRIBUTE,
     priority: ATTRIBUTE,
+    scoring: ATTRIBUTE,
+  },
+  legal_list_generation_runs: {
+    error_code: ATTRIBUTE,
+    item_type: ATTRIBUTE,
+    producer: ATTRIBUTE,
   },
   legal_list_generation_sources: {
     entity_feature_gate: ATTRIBUTE,

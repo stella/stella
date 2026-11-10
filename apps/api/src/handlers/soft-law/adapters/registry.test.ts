@@ -19,6 +19,7 @@ test("unregistered authorities cannot enter the sync contract", () => {
   expectTypeOf<"de-bfdi">().toExtend<RegisteredSoftLawAuthority>();
   expectTypeOf<"sk-uoou">().toExtend<RegisteredSoftLawAuthority>();
   expectTypeOf<"cz-uoou">().toExtend<RegisteredSoftLawAuthority>();
+  expectTypeOf<"cz-suip">().toExtend<RegisteredSoftLawAuthority>();
 });
 
 test("every registered adapter belongs to its authority; pending kinds are refused", () => {

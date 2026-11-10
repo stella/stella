@@ -18,6 +18,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { resetLocalCaseLawConfigForTesting } from "@/api/lib/case-law/local-case-law-config";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
+import { QUERY_PERF_WRITING_FUNCTIONS } from "@/api/lib/db/read-budgets";
 import { READ_COMMITTED_BEGIN } from "@/api/lib/db/read-committed-unit";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
@@ -30,6 +31,7 @@ import {
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import { createLegislationExpressionIdBackfill } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { isRecord } from "@/api/lib/type-guards";
 import type {
   GatedTestClientScope,
   GatedTestDb,
@@ -51,12 +53,99 @@ import {
 } from "./settings";
 import { measureJobStatements } from "./statement-measurement";
 
-export type CapturedStatement = { text: string; params: readonly unknown[] };
+export type CapturedStatement = {
+  text: string;
+  params: readonly unknown[];
+  writtenRows?: number;
+};
 type MeasuredStatement = {
   actualRows: number;
+  kind: "read" | "write";
   metrics: QueryPerfMetrics;
   planViolations: PlanViolation[];
   statement: string;
+  writtenRows: number;
+};
+
+type PlanNode = Record<string, unknown>;
+
+const childPlans = (node: PlanNode): readonly PlanNode[] => {
+  const plans = node["Plans"];
+  return Array.isArray(plans)
+    ? plans.filter(
+        (plan): plan is PlanNode => typeof plan === "object" && plan !== null,
+      )
+    : [];
+};
+
+const modifyingNodes = (node: PlanNode): readonly PlanNode[] => [
+  ...(node["Node Type"] === "ModifyTable" ? [node] : []),
+  ...childPlans(node).flatMap(modifyingNodes),
+];
+
+const writtenRowsFromNode = (node: PlanNode) => {
+  if (node["Operation"] === "Insert" && "Conflict Resolution" in node) {
+    const inserted = node["Tuples Inserted"];
+    const conflicts = node["Conflicting Tuples"];
+    const filtered = node["Rows Removed by Conflict Filter"] ?? 0;
+    if (
+      typeof inserted !== "number" ||
+      typeof conflicts !== "number" ||
+      typeof filtered !== "number"
+    ) {
+      return panic("Conflict insert plan has no numeric row counters");
+    }
+    switch (node["Conflict Resolution"]) {
+      case "NOTHING":
+        return inserted;
+      case "UPDATE":
+        return inserted + conflicts - filtered;
+      default:
+        return panic("Conflict insert plan has an unknown resolution");
+    }
+  }
+  const input = childPlans(node).find(
+    (child) => child["Parent Relationship"] === "Outer",
+  );
+  const rows = input?.["Actual Rows"];
+  const loops = input?.["Actual Loops"] ?? 1;
+  return typeof rows === "number" && typeof loops === "number"
+    ? rows * loops
+    : panic("Row-changing plan has no numeric input row count");
+};
+
+const calledFunctions = (statement: string) =>
+  [...statement.matchAll(/\b([a-z_][a-z0-9_]*)\s*\(/giu)].map(
+    (match) => match.at(1)?.toLowerCase() ?? "",
+  );
+
+/** One classifier owns direct writes and SELECT-callable writing routines. */
+export const classifyMeasuredStatement = ({
+  statement,
+  plan,
+  nestedPlans = [],
+  observedWrittenRows,
+}: {
+  statement: string;
+  plan: PlanNode;
+  nestedPlans?: readonly PlanNode[];
+  observedWrittenRows?: number;
+}) => {
+  const changes = [plan, ...nestedPlans].flatMap(modifyingNodes);
+  const callsKnownWriter = calledFunctions(statement).some((name) =>
+    QUERY_PERF_WRITING_FUNCTIONS.has(name),
+  );
+  const kind =
+    changes.length > 0 || callsKnownWriter
+      ? ("write" as const)
+      : ("read" as const);
+  return {
+    kind,
+    writtenRows:
+      changes.length === 0 && kind === "write"
+        ? (observedWrittenRows ?? 0)
+        : changes.reduce((total, node) => total + writtenRowsFromNode(node), 0),
+  };
 };
 
 /** The statement's leading keyword, after comments and whitespace. */
@@ -241,11 +330,27 @@ const captureConnection = (
       }
     },
     unsafe: async (query: string, params: readonly unknown[] = []) => {
-      captured.push({ text: query, params });
+      const capturedStatement: CapturedStatement = { text: query, params };
+      captured.push(capturedStatement);
       const result: unknown = await transactionClient.unsafe(
         mapTransactionControl(query),
         [...params],
       );
+      if (
+        calledFunctions(query).some((name) =>
+          QUERY_PERF_WRITING_FUNCTIONS.has(name),
+        ) &&
+        Array.isArray(result)
+      ) {
+        const rows: readonly unknown[] = result;
+        const row = rows.at(0);
+        if (isRecord(row)) {
+          const value = Object.values(row).at(0);
+          if (typeof value === "number") {
+            capturedStatement.writtenRows = value;
+          }
+        }
+      }
       return result;
     },
   };
@@ -281,8 +386,16 @@ export const measureScheduledStatementsInOrder = async ({
         const normalized = statement.text
           .replaceAll(/\s+/gu, " ")
           .slice(0, 160);
+        const classification = classifyMeasuredStatement({
+          statement: statement.text,
+          plan: plan.Plan,
+          ...(statement.writtenRows === undefined
+            ? {}
+            : { observedWrittenRows: statement.writtenRows }),
+        });
         measured.push({
           actualRows,
+          ...classification,
           metrics: metricsFromPlan(plan),
           planViolations: analyzePlan({
             document: plan,
@@ -305,6 +418,32 @@ export const measureScheduledStatementsInOrder = async ({
       throw error;
     });
   return statements;
+};
+
+const summarizeScheduledRun = (
+  statements: readonly Omit<MeasuredStatement, "actualRows">[],
+) => {
+  const readMetrics = sumMetrics(
+    statements
+      .filter(({ kind }) => kind === "read")
+      .map(({ metrics }) => metrics),
+  );
+  const writeMetrics = sumMetrics(
+    statements
+      .filter(({ kind }) => kind === "write")
+      .map(({ metrics }) => metrics),
+  );
+  return {
+    metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
+    readMetrics,
+    writeMetrics,
+    writtenRows: statements.reduce(
+      (total, statement) => total + statement.writtenRows,
+      0,
+    ),
+    planViolations: statements.flatMap(({ planViolations }) => planViolations),
+    statements,
+  };
 };
 
 /**
@@ -432,11 +571,7 @@ const measureBackfillJobRun = async ({
     readBudgetId,
     captured,
   });
-  return {
-    metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
-    planViolations: statements.flatMap(({ planViolations }) => planViolations),
-    statements,
-  };
+  return summarizeScheduledRun(statements);
 };
 
 /** Lend fixture transactions through the aggregate savepoint owner. */
@@ -549,6 +684,7 @@ export const measureScheduledJobRun = async ({
   const statements = measured.statements.map(({ query, plan }) => {
     const statement = query.text.replaceAll(/\s+/gu, " ").slice(0, 160);
     return {
+      ...classifyMeasuredStatement({ statement: query.text, plan: plan.Plan }),
       metrics: metricsFromPlan(plan),
       planViolations: analyzePlan({
         document: plan,
@@ -560,9 +696,5 @@ export const measureScheduledJobRun = async ({
       statement,
     };
   });
-  return {
-    metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
-    planViolations: statements.flatMap(({ planViolations }) => planViolations),
-    statements,
-  };
+  return summarizeScheduledRun(statements);
 };

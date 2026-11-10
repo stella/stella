@@ -116,7 +116,14 @@ export const PdfSelectionToolbar = ({
   const [selected, setSelected] = useState<Selected | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
   const [style, setStyle] = useState<ReaderAnnotationStyle>("highlight");
-  const selectionCopy = useSelectionCopy();
+  // The bar copies the words selected in the PDF while it is showing.
+  const selectionCopy = useSelectionCopy({
+    ownsSelection: (selection, root) =>
+      barRef.current !== null &&
+      root.contains(selection.anchorNode) &&
+      root.contains(selection.focusNode),
+    rootRef,
+  });
   // The listeners below are installed once; the page list changes under them
   // as the document loads, so they read the latest one.
   const passageOf = useLatestCallback((range: Range, root: HTMLElement) =>
@@ -177,10 +184,7 @@ export const PdfSelectionToolbar = ({
         root.contains(selection.focusNode)
       );
     };
-    const onSelectionChange = () => {
-      selectionCopy.selectionChanged();
-      readSelection();
-    };
+    const onSelectionChange = () => readSelection();
     const onPointerDown = (event: PointerEvent) => {
       const pressed = event.target;
       if (pressed instanceof Node && isOnBar(pressed)) {
@@ -204,11 +208,6 @@ export const PdfSelectionToolbar = ({
         ownerDoc.getSelection()?.removeAllRanges();
       }
     };
-    const onCopy = () => {
-      if (barRef.current !== null && selectionInside()) {
-        selectionCopy.confirmNativeCopy();
-      }
-    };
     const onViewportChange = () => readSelection();
     const onScroll = (event: Event) => {
       if (scrollMovesSelection(event, [barRef.current, copyMenuRef.current])) {
@@ -216,7 +215,6 @@ export const PdfSelectionToolbar = ({
       }
     };
     ownerDoc.addEventListener("selectionchange", onSelectionChange);
-    ownerDoc.addEventListener("copy", onCopy);
     ownerDoc.addEventListener("keydown", onKeyDown);
     ownerDoc.addEventListener("pointerdown", onPointerDown);
     ownerDoc.addEventListener("pointercancel", onPointerCancel);
@@ -229,7 +227,6 @@ export const PdfSelectionToolbar = ({
       observer.disconnect();
       cancelAnimationFrame(frame);
       ownerDoc.removeEventListener("selectionchange", onSelectionChange);
-      ownerDoc.removeEventListener("copy", onCopy);
       ownerDoc.removeEventListener("keydown", onKeyDown);
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
       ownerDoc.removeEventListener("pointercancel", onPointerCancel);
