@@ -185,7 +185,9 @@ const factAction = async (name: string) => {
 
 const mountUndescribedFact = async () => {
   const requests = mountFact();
-  expect(screen.getByText(messages.avt.anchorFacts.inScoring)).toBeTruthy();
+  expect(
+    screen.getAllByText(messages.avt.anchorFacts.inScoring),
+  ).not.toHaveLength(0);
   const hold = await factAction(messages.avt.anchorFacts.holdOutOfScoring);
   expect(hold.getAttribute("aria-disabled")).not.toBe("true");
   expect(
@@ -296,7 +298,7 @@ for (const scenario of [
       messages.avt.anchorFacts.inScoring,
       messages.avt.anchorFacts.heldForReview,
     ]) {
-      expect(screen.queryByText(label) !== null).toBe(
+      expect(screen.queryAllByText(label).length > 0).toBe(
         label === scenario.status,
       );
     }
@@ -377,7 +379,9 @@ test("a held fact shows its status and is included from its actions", async () =
   expect(
     screen.getAllByText(messages.avt.anchorFacts.heldForReview),
   ).not.toHaveLength(0);
-  expect(screen.queryByText(messages.avt.anchorFacts.inScoring)).toBeNull();
+  expect(
+    screen.queryAllByText(messages.avt.anchorFacts.inScoring),
+  ).toHaveLength(0);
   const include = await factAction(messages.avt.anchorFacts.includeInScoring);
   await act(async () => {
     fireEvent.click(include);

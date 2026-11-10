@@ -367,7 +367,17 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
         {note !== null && (
           <ListItemDescription variant="paragraph">{note}</ListItemDescription>
         )}
-        <FactMeta fact={fact} workspaceId={workspaceId} />
+        <FactMeta
+          fact={fact}
+          status={
+            scoring === undefined ? null : (
+              <ListItemStatus tone={SCORING_STATUS[scoring].tone}>
+                {t(SCORING_STATUS[scoring].labelKey)}
+              </ListItemStatus>
+            )
+          }
+          workspaceId={workspaceId}
+        />
         {!canEdit && (
           <ListItemDescription>
             {t(
@@ -408,9 +418,11 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
       <ListItemActions>
         <SaveIndicator state={saveState} />
         {scoring !== undefined && (
-          <ListItemStatus tone={SCORING_STATUS[scoring].tone}>
-            {t(SCORING_STATUS[scoring].labelKey)}
-          </ListItemStatus>
+          <span className="hidden sm:contents">
+            <ListItemStatus tone={SCORING_STATUS[scoring].tone}>
+              {t(SCORING_STATUS[scoring].labelKey)}
+            </ListItemStatus>
+          </span>
         )}
         <Menu>
           <MenuTrigger
@@ -510,9 +522,12 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
 const FactMeta = ({
   workspaceId,
   fact,
+  status,
 }: {
   workspaceId: string;
   fact: ListItem;
+  /** Leads the line below `sm`, where the row has no room to trail it. */
+  status: React.ReactNode;
 }) => {
   const details = fact.factDetails;
   const parts: React.ReactElement[] = [];
@@ -552,11 +567,17 @@ const FactMeta = ({
       />,
     );
   }
-  if (parts.length === 0) {
+  if (parts.length === 0 && status === null) {
     return null;
   }
   return (
     <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
+      {status !== null && (
+        <span className="contents sm:hidden">
+          {status}
+          {parts.length > 0 && <span aria-hidden="true">·</span>}
+        </span>
+      )}
       {parts.map((part, index) => (
         <React.Fragment key={part.key}>
           {index > 0 && <span aria-hidden="true">·</span>}
