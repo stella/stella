@@ -4426,7 +4426,7 @@ describe("OpenAI-compatible MCP tools", () => {
       });
 
       test("answers cut short with a cursor that runs the same page again", async () => {
-        const { store } = createFakeContinuationStore();
+        const { store, hasAnyFinished } = createFakeContinuationStore();
         const gate = gatedSearch();
         const first = await compatSearch(compatContext(store, "short"), {
           query: "náhrada",
@@ -4440,6 +4440,11 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(page.nextCursor).not.toBeNull();
 
         gate.resolve(undefined);
+        // The cursor names the same work, so it collects the stored page
+        // instead of following a run on a clock that never moves.
+        await waitFor(() => (hasAnyFinished() ? true : undefined), {
+          description: "the cut-short search stores its page",
+        });
         const second = await compatSearch(compatContext(store, "never"), {
           query: "náhrada",
           cursor: page.nextCursor,
