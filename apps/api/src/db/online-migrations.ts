@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import { sleep } from "@stll/concurrency/sleep";
 
 import type { RequiredMigrationIndex } from "../lib/db/migration-history";
+import { isPgError, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
 import { BackfillHeldError } from "./backfill-runtime";
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
@@ -601,6 +602,29 @@ type OnlineRepairWalkOptions = {
   offset?: number;
 };
 
+/** How a repair attempt that threw stopped. */
+const REPAIR_STOP = {
+  /** The health verdict held the walk at a durable checkpoint. */
+  held: "held",
+  /**
+   * A statement gave up on its `lock_timeout`. Its transaction rolled back,
+   * so a walk with a durable checkpoint resumes there like a hold; a writer
+   * holding row locks longer than a batch may wait must not fail the deploy.
+   */
+  lockWaitLost: "lock_wait_lost",
+  failed: "failed",
+} as const;
+
+const classifyRepairStop = (error: unknown) => {
+  if (error instanceof BackfillHeldError) {
+    return REPAIR_STOP.held;
+  }
+  if (isPgError(error, PG_ERROR.LOCK_NOT_AVAILABLE)) {
+    return REPAIR_STOP.lockWaitLost;
+  }
+  return REPAIR_STOP.failed;
+};
+
 const processOnlineRepairAt = async ({
   connection,
   mode,
@@ -668,23 +692,34 @@ const processOnlineRepairAt = async ({
           catch: (cause: unknown) => cause,
         });
         await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
-        if (
-          Result.isError(attempt) &&
-          !(attempt.error instanceof BackfillHeldError)
-        ) {
-          throw attempt.error;
+        if (Result.isError(attempt)) {
+          const stop = classifyRepairStop(attempt.error);
+          if (stop === REPAIR_STOP.failed) {
+            throw attempt.error;
+          }
+          const after = await repair.readCompletion(connection);
+          if (after.type !== "pending") {
+            switch (stop) {
+              case REPAIR_STOP.held:
+                return panic(
+                  `Online repair ${repair.name}: hold has no durable pending checkpoint`,
+                );
+              // Nothing durable to resume yet, so the lost wait is the failure.
+              case REPAIR_STOP.lockWaitLost:
+                throw attempt.error;
+              default:
+                stop satisfies never;
+                return panic(`Online repair ${repair.name}: unexpected stop`);
+            }
+          }
+          return after;
         }
         // A deferred validation leaves its constraint NOT VALID, so the next
         // run reads the repair incomplete and calls it again.
-        if (Result.isOk(attempt) && attempt.value.type === "deferred") {
+        if (attempt.value.type === "deferred") {
           return attempt.value;
         }
         const after = await repair.readCompletion(connection);
-        if (Result.isError(attempt) && after.type !== "pending") {
-          return panic(
-            `Online repair ${repair.name}: hold has no durable pending checkpoint`,
-          );
-        }
         assertRepairDeployable(repair, after);
         return after;
       },

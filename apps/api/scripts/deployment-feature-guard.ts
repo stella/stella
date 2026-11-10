@@ -81,6 +81,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Authenticated account holders can create organizations on every deployment",
   ],
   [
+    "/v1/ai",
+    "The Outlook add-in's email summary and reply draft are available on every deployment and enforce their email-assist kill switch, model availability and usage admission",
+  ],
+  [
     "/v1/dictation/transcribe",
     "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
   ],
@@ -115,6 +119,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/chat/local-runners",
     "The chat computer list is mounted on every deployment and answers hidden unless the member's local-agents feature decision is enabled",
+  ],
+  [
+    "/v1/chat/threads/:threadId/turns/:turnId/local-files",
+    "Undoing a turn's file changes is mounted on every deployment; there is something to undo only once the member's local-agents feature let the turn's run start",
   ],
   [
     "/v1/chat/local-runs",

@@ -21,11 +21,6 @@ import {
 } from "@/api/tests/helpers/mock-root-db";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-beforeEach(() => {
-  noopAuditRecorder.mockClear();
-  upsertSearchDocumentMock.mockClear();
-});
-
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["SMTP_HOST"] ??= "localhost";
@@ -42,6 +37,8 @@ const searchGlobalMock = mock();
 const upsertSearchDocumentMock = mock(async () => undefined);
 
 beforeEach(() => {
+  noopAuditRecorder.mockClear();
+  upsertSearchDocumentMock.mockClear();
   searchGlobalMock.mockReset();
   upsertSearchDocumentMock.mockClear();
   clearRootDbMocks();

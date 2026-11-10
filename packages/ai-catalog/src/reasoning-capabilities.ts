@@ -547,6 +547,20 @@ export const MODEL_REASONING_CAPABILITIES = {
       },
     ],
   },
+  "claude-fable-5-2": {
+    support: "supported",
+    emittedFormats: ["anthropic-thinking-signature"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "adaptive",
+    replayCompatibility: [
+      {
+        provider: "anthropic",
+        model: "claude-fable-5-2",
+        format: "anthropic-thinking-signature",
+      },
+    ],
+  },
   "claude-fable-5-1": {
     support: "supported",
     emittedFormats: ["anthropic-thinking-signature"],

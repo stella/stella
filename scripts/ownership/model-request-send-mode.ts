@@ -5,6 +5,7 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
   "apps/api/src/handlers/legal-reader/answers/model.ts",
   "apps/api/src/handlers/ai-autocomplete/stream.ts",
+  "apps/api/src/handlers/ai/email-generation.ts",
   "apps/api/src/handlers/case-law/analysis/generate.ts",
   "apps/api/src/handlers/case-law/analysis/significance-run.ts",
   "apps/api/src/handlers/case-law/decisions/search-expand.ts",
