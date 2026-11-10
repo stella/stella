@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { loadSkill } from "@stll/skills";
+
 import { isRecord } from "@/api/lib/type-guards";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
@@ -9,6 +11,7 @@ import type { InternalToolResult } from "@/api/mcp/tool-types";
 import {
   answerMatterTool,
   BUILDER_SCENARIOS,
+  MAX_POSITIONS_PER_LATER_SAVE,
   scoreScenario,
 } from "./playbook-builder-scenarios";
 import type {
@@ -160,6 +163,11 @@ const contractsLaterRun = (): BuilderEvent[] => [
   ...readChosenMatter(2),
 ];
 
+const positionsNamed = (count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    issue: `Position ${String(index + 1)}`,
+  }));
+
 const score = (
   id: string,
   events: BuilderEvent[],
@@ -246,13 +254,36 @@ describe("contracts-later scoring", () => {
     ]);
   });
 
-  test("saving several positions in one call is a defect", () => {
+  test("the skill states the cap the eval scores", () => {
+    expect(loadSkill("playbook-builder").body).toContain(
+      `at most ${String(MAX_POSITIONS_PER_LATER_SAVE)} positions`,
+    );
+  });
+
+  test("a later save may group settled positions up to the cap", () => {
     const events = contractsLaterRun();
-    events[1] = event(1, "save_playbook", {
-      positions: [{ issue: "Liability cap" }, { issue: "Payment" }],
+    events[events.length - 1] = event(2, "save_playbook", {
+      positions: positionsNamed(MAX_POSITIONS_PER_LATER_SAVE),
+    });
+    expect(score("contracts-later", events)).toEqual([]);
+  });
+
+  test("a later save over the cap is a defect", () => {
+    const events = contractsLaterRun();
+    const count = MAX_POSITIONS_PER_LATER_SAVE + 1;
+    events[events.length - 1] = event(2, "save_playbook", {
+      positions: positionsNamed(count),
     });
     expect(score("contracts-later", events)).toEqual([
-      "saved 2 positions in one call",
+      `saved ${String(count)} positions in one call; the cap is ${String(MAX_POSITIONS_PER_LATER_SAVE)}`,
+    ]);
+  });
+
+  test("a first save of several positions is a defect", () => {
+    const events = contractsLaterRun();
+    events[1] = event(1, "save_playbook", { positions: positionsNamed(2) });
+    expect(score("contracts-later", events)).toEqual([
+      "first save carried 2 positions; the skill starts with one",
     ]);
   });
 });
