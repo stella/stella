@@ -701,6 +701,14 @@ export const legalListGenerationRuns = p.pgTable(
     p
       .index("legal_list_generation_runs_status_idx")
       .on(table.workspaceId, table.status, table.createdAt, table.id),
+    // The reconciler's keyset walk over unfinished runs stella produces;
+    // built online (indexes-legal-list-generation-runs-stella-active-idx).
+    p
+      .index("legal_list_generation_runs_stella_active_idx")
+      .on(table.createdAt, table.id)
+      .where(
+        sql`${table.producer} = 'stella' AND ${table.status} IN ('queued', 'running')`,
+      ),
     p.check(
       "legal_list_generation_runs_status_check",
       sql`${table.status} in (${sql.join(LEGAL_LIST_GENERATION_STATUS_SQL_VALUES, sql`, `)})`,

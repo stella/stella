@@ -670,6 +670,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/lists/:workspaceId/claim-reviews": "crud",
   "POST /v1/lists/:workspaceId/claim-reviews/bulk": "crud",
   "POST /v1/lists/:workspaceId/columns": "crud",
+  "POST /v1/lists/:workspaceId/fact-extractions": "crud",
   "POST /v1/lists/:workspaceId/generation-candidates": "crud",
   "POST /v1/lists/:workspaceId/generation-candidates/accept": "crud",
   "POST /v1/lists/:workspaceId/generation-candidates/reject": "crud",
