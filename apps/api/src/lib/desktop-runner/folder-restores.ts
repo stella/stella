@@ -237,6 +237,36 @@ export const readTurnFolderRestore = async (
   };
 };
 
+/** The most undone turns one read of a thread names. */
+export const RESTORED_TURNS_LIMIT = 200;
+
+/**
+ * The answers of the owner's turns in the thread whose file changes were
+ * undone, newest first and at most `RESTORED_TURNS_LIMIT`: the chat marks
+ * each of them, also after newer turns.
+ */
+export const readRestoredTurns = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, threadId }: ThreadOf,
+): Promise<{ assistantMessageId: SafeId<"chatMessage"> }[]> => {
+  const rows = await db
+    .select({ assistantMessageId: chatTurns.assistantMessageId })
+    .from(restores)
+    .innerJoin(chatTurns, eq(chatTurns.id, restores.chatTurnId))
+    .where(
+      and(
+        ownedBy(owner),
+        eq(restores.chatThreadId, threadId),
+        eq(restores.state, "restored"),
+      ),
+    )
+    .orderBy(desc(restores.createdAt), desc(restores.id))
+    .limit(RESTORED_TURNS_LIMIT);
+  return rows.flatMap(({ assistantMessageId }) =>
+    assistantMessageId === null ? [] : [{ assistantMessageId }],
+  );
+};
+
 export type RequestedFolderRestore =
   /** Queued now; its computer's socket is rung. */
   | { type: "queued"; restore: FolderRestoreView; holder: RunHolder }

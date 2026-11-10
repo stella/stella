@@ -115,7 +115,13 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const renderTurn = () => {
+const renderTurn = ({
+  transcript = [answerMessage],
+  undoneTurns,
+}: {
+  transcript?: ChatUIMessage[];
+  undoneTurns?: { assistantMessageId: string }[];
+} = {}) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -147,13 +153,19 @@ const renderTurn = () => {
                         reportedUnknownActivityTypes: new Set<string>(),
                       }}
                       approvalPendingMessageId={null}
-                      messages={[answerMessage]}
+                      messages={transcript}
                       newestLocalTurn={{
                         id: toSafeId<"chatTurn">(TURN_ID),
                         assistantMessageId: toSafeId<"chatMessage">(
                           answerMessage.id,
                         ),
                       }}
+                      undoneTurns={undoneTurns?.map(
+                        ({ assistantMessageId }) => ({
+                          assistantMessageId:
+                            toSafeId<"chatMessage">(assistantMessageId),
+                        }),
+                      )}
                       onAskUserSubmit={() => {}}
                       onCreateDocumentResolve={() => {}}
                       onOpenCreatedDocument={() => {}}
@@ -180,8 +192,10 @@ const renderTurn = () => {
   return { queryClient, view };
 };
 
-const row = (view: ReturnType<typeof render>) => {
-  const actions = view.container.querySelector("[data-chat-answer-actions]");
+const row = (view: ReturnType<typeof render>, messageId = answerMessage.id) => {
+  const actions = view.container.querySelector(
+    `[data-chat-message-id="${messageId}"] [data-chat-answer-actions]`,
+  );
   if (!(actions instanceof HTMLElement)) {
     throw new TypeError("Expected the answer's action row");
   }
@@ -301,6 +315,34 @@ test("an undo the computer refused shows the computer's reason and may be asked 
       messages.chat.localFilesUndo.computer.folderBusy,
     );
   });
+  await openActions(view);
+  expect(menuItems()).toContain(messages.chat.localFilesUndo.action);
+});
+
+test("an undone turn keeps its marker after a newer turn, also when the page loads again", async () => {
+  const undoneAnswer = {
+    id: "00000000-0000-4000-8000-000000000010",
+    role: "assistant",
+    parts: [{ type: "text", content: "I rewrote drafts/lease.md." }],
+  } satisfies ChatUIMessage;
+  const question = {
+    id: "00000000-0000-4000-8000-000000000011",
+    role: "user",
+    parts: [{ type: "text", content: "Now draft the notice." }],
+  } satisfies ChatUIMessage;
+  // The newer turn can be undone in its turn; the older one was undone.
+  const { view } = renderTurn({
+    transcript: [undoneAnswer, question, answerMessage],
+    undoneTurns: [{ assistantMessageId: undoneAnswer.id }],
+  });
+  await waitFor(() => {
+    expect(row(view, undoneAnswer.id).textContent).toContain(
+      messages.chat.localFilesUndo.restored,
+    );
+  });
+  expect(row(view).textContent).not.toContain(
+    messages.chat.localFilesUndo.restored,
+  );
   await openActions(view);
   expect(menuItems()).toContain(messages.chat.localFilesUndo.action);
 });

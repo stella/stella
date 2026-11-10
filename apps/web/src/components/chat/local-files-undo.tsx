@@ -56,9 +56,12 @@ const NO_TURN: LocalFilesUndoTurn = {
 export const useLocalFilesUndo = ({
   threadId,
   turnId,
+  undone,
 }: {
   threadId: string;
   turnId: string | null;
+  /** The page read this turn as undone: it keeps the marker regardless. */
+  undone: boolean;
 }): { actions: EntityAction[]; extras: ReactNode } => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -104,14 +107,25 @@ export const useLocalFilesUndo = ({
   });
 
   if (turn === null) {
-    return { actions: [], extras: null };
+    return {
+      actions: [],
+      extras: undone ? (
+        <LocalFilesUndoStatus status={{ type: "restored" }} />
+      ) : null,
+    };
   }
   const view = localFilesUndoView({
     // A read that failed or has not arrived offers nothing yet.
     read: readView.type === "items" ? readView.items : undefined,
     refusal: refusal?.turnId === turn.turnId ? refusal.reason : null,
   });
-  const actions: EntityAction[] = view.canUndo
+  // The page already read this turn as undone: the marker shows before the
+  // turn's own read arrives.
+  const shown: LocalFilesUndoView =
+    undone && view.status.type === "none"
+      ? { canUndo: false, status: { type: "restored" } }
+      : view;
+  const actions: EntityAction[] = shown.canUndo
     ? [
         {
           disabled: undo.isPending,
@@ -125,7 +139,7 @@ export const useLocalFilesUndo = ({
     actions,
     extras: (
       <>
-        <LocalFilesUndoStatus status={view.status} />
+        <LocalFilesUndoStatus status={shown.status} />
         <AlertDialog
           onOpenChange={(open) => {
             if (!undo.isPending) {

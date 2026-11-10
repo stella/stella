@@ -54,6 +54,8 @@ type ChatMessageActionsProps = {
    * that runs on the member's computer: its file changes may be undone.
    */
   localFilesUndoTurnId?: string | null | undefined;
+  /** This message's turn had its file changes undone: it keeps the marker. */
+  localFilesUndone?: boolean | undefined;
   message: PersistedChatMessage;
   threadRef: ChatThreadRef;
 };
@@ -96,6 +98,7 @@ const ChatMessageActions = ({
   contextMatterIds = NO_EXTRA_CONTEXT_MATTERS,
   exportArtifact,
   localFilesUndoTurnId = null,
+  localFilesUndone = false,
   message,
   threadRef,
 }: ChatMessageActionsProps) => {
@@ -103,6 +106,7 @@ const ChatMessageActions = ({
   const localFilesUndo = useLocalFilesUndo({
     threadId: threadRef.threadId,
     turnId: canFork ? localFilesUndoTurnId : null,
+    undone: localFilesUndone,
   });
   const navigate = useNavigate();
   const queryClient = useQueryClient();

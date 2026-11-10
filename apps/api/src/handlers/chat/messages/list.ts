@@ -44,6 +44,7 @@ import {
 } from "@/api/lib/chat/run-target";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
@@ -326,7 +327,12 @@ const getMessages = createSafeRootHandler(
         // its newest turn's file changes; the page names that turn.
         const newestLocalTurn =
           chatRunTargetOf(thread.chatLocalRunTarget).kind === "local"
-            ? await readNewestChatTurnOnTx({ tx, threadId, userId: user.id })
+            ? await readNewestChatTurnOnTx({
+                tx,
+                organizationId: session.activeOrganizationId,
+                threadId,
+                userId: user.id,
+              })
             : null;
 
         // Estimate the model context the next send would carry, mirroring the
@@ -405,6 +411,7 @@ const getMessages = createSafeRootHandler(
           activeSkill: null,
           activeTurnId: null,
           newestLocalTurn: null,
+          undoneTurns: [],
           attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
           forkProvenance: { type: "none" } as const,
           messages: [],
@@ -474,6 +481,20 @@ const getMessages = createSafeRootHandler(
     // path applies (provider availability and the thread's opt-in), and (unlike
     // template studio) the standalone read path never carries template-authoring
     // tools. The trigger denominator resolves the same model the next send uses.
+    // The turns whose file changes on the member's computer were undone keep
+    // their marker after newer turns; read only for a chat that runs there.
+    const undoneTurns =
+      reads.newestLocalTurn === null
+        ? []
+        : yield* Result.await(
+            getDesktopRunnerControl().control.readRestoredTurns({
+              owner: {
+                userId: user.id,
+                organizationId: session.activeOrganizationId,
+              },
+              threadId,
+            }),
+          );
     const persistedMessages = windowedMessages.map((message) =>
       chatMessageFromPersisted(message),
     );
@@ -512,6 +533,8 @@ const getMessages = createSafeRootHandler(
        * cloud thread.
        */
       newestLocalTurn: reads.newestLocalTurn,
+      /** The answers whose turn's file changes were undone, newest first. */
+      undoneTurns,
       attachedFiles,
       forkProvenance: resolveForkProvenance({
         forkedFromMessageId: thread.forkedFromMessageId,

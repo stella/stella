@@ -117,10 +117,15 @@ export type NewestLocalTurn = {
   assistantMessageId: SafeId<"chatMessage"> | null;
 };
 
+/** An answer whose turn's file changes on the member's computer were undone. */
+export type UndoneLocalTurn = { assistantMessageId: SafeId<"chatMessage"> };
+
 type ThreadFetch = {
   activeSkill: ActiveSkillChatContext | null;
   /** Absent for a cloud chat. */
   newestLocalTurn?: NewestLocalTurn | undefined;
+  /** Answers whose turn's file changes were undone; absent when none. */
+  undoneTurns?: readonly UndoneLocalTurn[] | undefined;
   /** The thread's turn not yet settled; null when every turn has settled. */
   activeTurnId: SafeId<"chatTurn"> | null;
   attachedFiles: ChatThreadAttachedFiles;
@@ -219,6 +224,7 @@ const fetchThreadMessages = async (
     ...(data.newestLocalTurn === null
       ? {}
       : { newestLocalTurn: data.newestLocalTurn }),
+    ...(data.undoneTurns.length === 0 ? {} : { undoneTurns: data.undoneTurns }),
     attachedFiles: data.attachedFiles,
     forkProvenance: data.forkProvenance,
     messages: deserializeChatMessages(data.messages),
@@ -488,6 +494,11 @@ export type ChatThreadFetched = {
    * file thread.
    */
   newestLocalTurn?: NewestLocalTurn | undefined;
+  /**
+   * The answers whose turn's file changes were undone, which keep their
+   * marker after newer turns; absent when none.
+   */
+  undoneTurns?: readonly UndoneLocalTurn[] | undefined;
   /**
    * The thread's turn not yet settled when this page was read, which the
    * composer's Stop cancels. Null when every turn has settled.

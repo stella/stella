@@ -41,6 +41,11 @@ export default {
         reason:
           "Asks the turn's computer to undo the turn's file changes and reads where that undo stands.",
       },
+      {
+        path: "apps/api/src/handlers/chat/messages/list.ts",
+        reason:
+          "Reads which turns of a chat that runs on the member's computer had their file changes undone, for the page's marker.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

@@ -6097,6 +6097,43 @@ describe("undoing a turn's file changes", () => {
       undo: { state: "queued" },
     });
     expect((await desktop.receive("folder.restore")).runId).toBe(runId);
+  test("an undone turn stays named as undone after newer turns, for its owner only", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
+    const undo = await accepted(threadId, turnId);
+    await desktop.receive("folder.restore");
+    desktop.send({
+      type: "folder.restored",
+      restoreId: undo.restoreId,
+      outcome: "restored",
+    });
+    await settled(threadId, turnId);
+    // A newer turn runs and finishes; the undone one is no longer the newest.
+    await finishedTurn(desktop, desktopId, { threadId });
+
+    const [answered] = await db
+      .select({ assistantMessageId: chatTurns.assistantMessageId })
+      .from(chatTurns)
+      .where(eq(chatTurns.id, turnId));
+    const restored = (
+      await control.readRestoredTurns({ owner, threadId })
+    ).unwrap();
+    expect(restored).toEqual([
+      {
+        assistantMessageId:
+          answered?.assistantMessageId ?? panic("the turn has no answer"),
+      },
+    ]);
+    // Another member of the organization reads none of it.
+    expect(
+      (
+        await control.readRestoredTurns({
+          owner: { organizationId: ids.orgA, userId: ids.userA2 },
+          threadId,
+        })
+      ).unwrap(),
+    ).toEqual([]);
     await desktop.close();
   });
 

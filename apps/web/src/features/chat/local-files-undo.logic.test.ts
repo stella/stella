@@ -10,6 +10,7 @@ import {
   localFilesUndoPollMs,
   type LocalFilesUndoRead,
   type LocalFilesUndoState,
+  type LocalFilesUndoView,
   localFilesUndoView,
 } from "@/features/chat/local-files-undo.logic";
 
@@ -45,7 +46,10 @@ describe("what the newest turn's row shows of its undo", () => {
   });
 
   test("a queued or sent undo is pending, and a restored one is a lasting marker", () => {
-    const pending = { canUndo: false, status: { type: "pending" } };
+    const pending: LocalFilesUndoView = {
+      canUndo: false,
+      status: { type: "pending" },
+    };
     expect(localFilesUndoView({ read: undo("queued"), refusal: null })).toEqual(
       pending,
     );

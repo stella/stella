@@ -162,7 +162,7 @@ import {
 } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
-import type { NewestLocalTurn } from "@/features/chat/queries";
+import type { NewestLocalTurn, UndoneLocalTurn } from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
@@ -356,6 +356,15 @@ const ActiveTurnStatus = memo(
   },
 );
 
+/** Whether `messageId` answered a turn whose file changes were undone. */
+const isUndoneAnswer = (
+  undoneTurns: readonly UndoneLocalTurn[] | undefined,
+  messageId: string,
+): boolean =>
+  undoneTurns?.some(
+    ({ assistantMessageId }) => assistantMessageId === messageId,
+  ) ?? false;
+
 /** The turn whose file changes `messageId` may undo: only the newest turn's answer. */
 const localFilesUndoTurnIdFor = (
   newestLocalTurn: NewestLocalTurn | null | undefined,
@@ -393,6 +402,7 @@ export const ChatThreadMessages = ({
   stickyUserMessages = false,
   waitingForComputer = false,
   newestLocalTurn,
+  undoneTurns,
   queuedMessages,
   queuedMessageActions,
   streamdownComponents,
@@ -472,6 +482,7 @@ export const ChatThreadMessages = ({
               newestLocalTurn,
               message.id,
             )}
+            localFilesUndone={isUndoneAnswer(undoneTurns, message.id)}
             message={message}
             threadRef={messageActionsThreadRef(message, threadRef)}
           >
@@ -1525,6 +1536,8 @@ type ChatThreadMessagesProps = {
    * message that answered it offers to undo its file changes.
    */
   newestLocalTurn?: NewestLocalTurn | null | undefined;
+  /** Answers whose turn's file changes were undone: each keeps its marker. */
+  undoneTurns?: readonly UndoneLocalTurn[] | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
   /**

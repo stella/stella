@@ -125,10 +125,12 @@ export type NewestChatTurn = {
  */
 export const readNewestChatTurnOnTx = async ({
   tx,
+  organizationId,
   threadId,
   userId,
 }: {
   tx: Transaction;
+  organizationId: SafeId<"organization">;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
 }): Promise<NewestChatTurn | null> => {
@@ -138,7 +140,15 @@ export const readNewestChatTurnOnTx = async ({
       assistantMessageId: chatTurns.assistantMessageId,
     })
     .from(chatTurns)
-    .where(and(eq(chatTurns.threadId, threadId), eq(chatTurns.userId, userId)))
+    // Leads with the member's turns of the thread, newest first
+    // (`chat_turns_org_user_thread_created_idx`), so one index row answers.
+    .where(
+      and(
+        eq(chatTurns.organizationId, organizationId),
+        eq(chatTurns.userId, userId),
+        eq(chatTurns.threadId, threadId),
+      ),
+    )
     .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
     .limit(1);
   return turn ?? null;
