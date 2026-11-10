@@ -9,7 +9,6 @@ import {
 import type { ConfigPlugin, ExportedConfig } from "expo/config-plugins";
 import { cpSync, existsSync, rmSync } from "node:fs";
 import path from "node:path";
-import type { XcodeProject } from "xcode";
 
 // The interface languages come from `@stll/locales` itself, so iOS is told
 // exactly the languages the app ships.
@@ -191,6 +190,9 @@ export const copyShareExtension = ({
     recursive: true,
   });
 };
+
+/** The project the Xcode mod hands over, as Expo's own helpers type it (`xcode.d.ts`). */
+type XcodeProject = Parameters<typeof IOSConfig.Target.getNativeTargets>[0];
 
 const SHARE_SOURCES = ["ShareViewController.swift"];
 const SHARE_INFO_PLIST = `${SHARE_TARGET}-Info.plist`;

@@ -149,7 +149,7 @@ export const parseShareManifest = (
 };
 
 /** Where a share can go: a matter keeps its files; a new chat takes everything. */
-export const SHARE_DESTINATIONS = ["matter", "chat"] as const;
+const SHARE_DESTINATIONS = ["matter", "chat"] as const;
 
 export type ShareDestination = (typeof SHARE_DESTINATIONS)[number];
 
