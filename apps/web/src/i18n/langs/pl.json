@@ -4965,6 +4965,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Używane są ustawienia domyślne"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} znaków",
+      "description": "Te instrukcje obowiązują we wszystkich rozmowach z AI w Twojej organizacji i mają pierwszeństwo przed osobistymi preferencjami. Zmiany obowiązują od następnej wiadomości. Używaj ich do określania zasad zgodności z przepisami, przetwarzania danych i formatowania.",
+      "title": "Instrukcje organizacji",
+      "tooLong": "Instrukcje mogą zawierać maksymalnie {maxLength} znaków."
+    },
     "creationEvaluationLimitReached": "Wykorzystano wszystkie {limit} okresy próbne organizacji. Usunięcie organizacji nie przywraca okresu próbnego. Użyj istniejącej organizacji lub skontaktuj się z pomocą techniczną, aby uzyskać płatny dostęp.",
     "creationInvalidName": "Wpisz prawidłową nazwę organizacji (maksymalnie {maxLength} znaków).",
     "creationNotAllowed": "To konto nie może tworzyć organizacji.",

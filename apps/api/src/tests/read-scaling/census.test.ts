@@ -44,6 +44,7 @@ import { organizationAuditExportScalingScenario } from "./organization-audit-exp
 import { organizationCreateScalingScenario } from "./organization-create";
 import { organizationSlugScalingScenario } from "./organization-slug";
 import { outboundActionScalingScenarios } from "./outbound-actions";
+import { outlookClientMetadataScalingScenario } from "./outlook-client-metadata";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -86,6 +87,7 @@ const measuredApiScenarios = [
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
   mobileClientMetadataScalingScenario,
+  outlookClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,

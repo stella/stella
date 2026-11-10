@@ -63,6 +63,7 @@ export const aggregateFences = () => {
       aggregate: "organizationDataBoxes",
       id: { organizationId },
     },
+    organizationSettings: { aggregate: "organizationSettings", id: organizationId, mode: "update" },
     organizationObjectIntent: {
       aggregate: "organizationObjectIntent",
       id: organizationId,

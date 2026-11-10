@@ -208,7 +208,7 @@ const EMPTY_TIERS: ResolvedTiers = {
 };
 
 /** Why a position whose grading failed needs a person. */
-const UNGRADED_RATIONALE =
+export const UNGRADED_RATIONALE =
   "Automated comparison against the standard could not be completed.";
 
 // A failed or absent compare must not silently pass: the finding is flagged

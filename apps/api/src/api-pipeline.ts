@@ -77,6 +77,9 @@ const allowedBrowserOrigins = (): (string | RegExp)[] => {
   if (env.EXTENSION_ORIGIN) {
     origins.push(env.EXTENSION_ORIGIN);
   }
+  if (env.OUTLOOK_ADDIN_ORIGIN) {
+    origins.push(env.OUTLOOK_ADDIN_ORIGIN);
+  }
   return origins;
 };
 

@@ -151,7 +151,11 @@
     "scanDocument": "Skanni dokument",
     "newTask": "Uus ülesanne",
     "uploadDocument": "Laadi üles dokument",
-    "uploadFailed": "Dokumenti ei õnnestunud üles laadida. Proovige uuesti."
+    "uploadFailed": "Dokumenti ei õnnestunud üles laadida. Proovige uuesti.",
+    "startTimer": "Käivita taimer",
+    "pauseTimer": "Peata taimer",
+    "resumeTimer": "Jätka taimerit",
+    "timerRunning": "Taimer käib"
   },
   "entity": {
     "type": "Tüüp",

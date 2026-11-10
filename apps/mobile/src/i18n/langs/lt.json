@@ -151,7 +151,11 @@
     "scanDocument": "Nuskenuoti dokumentą",
     "newTask": "Nauja užduotis",
     "uploadDocument": "Įkelti dokumentą",
-    "uploadFailed": "Dokumento įkelti nepavyko. Bandykite dar kartą."
+    "uploadFailed": "Dokumento įkelti nepavyko. Bandykite dar kartą.",
+    "startTimer": "Paleisti laikmatį",
+    "pauseTimer": "Pristabdyti laikmatį",
+    "resumeTimer": "Tęsti laikmatį",
+    "timerRunning": "Laikmatis veikia"
   },
   "entity": {
     "type": "Tipas",

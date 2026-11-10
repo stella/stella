@@ -113,6 +113,7 @@
     "./desktop-feature-access": "./src/desktop-feature-access.ts",
     "./desktop-handoff": "./src/desktop-handoff.ts",
     "./mobile-client": "./src/mobile-client.ts",
+    "./outlook-client": "./src/outlook-client.ts",
     "./mobile-push": "./src/mobile-push.ts",
     "./timer-activity": "./src/timer-activity.ts",
     "./timer-activity-messages": "./src/timer-activity-messages.ts",

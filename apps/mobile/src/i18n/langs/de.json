@@ -151,7 +151,11 @@
     "scanDocument": "Dokument scannen",
     "newTask": "Neue Aufgabe",
     "uploadDocument": "Dokument hochladen",
-    "uploadFailed": "Das Dokument konnte nicht hochgeladen werden. Versuchen Sie es erneut."
+    "uploadFailed": "Das Dokument konnte nicht hochgeladen werden. Versuchen Sie es erneut.",
+    "startTimer": "Timer starten",
+    "pauseTimer": "Timer pausieren",
+    "resumeTimer": "Timer fortsetzen",
+    "timerRunning": "Timer läuft"
   },
   "entity": {
     "type": "Typ",
