@@ -39,7 +39,7 @@ describe("a share's name", () => {
 
   test("no accepted name reaches outside its folder", () => {
     assertProperty(
-      "an accepted share id has no path separator or dot segment",
+      "no accepted name reaches outside its folder",
       fc.property(fc.string(), (value) => {
         if (isShareId(value)) {
           expect(value).not.toMatch(/[/\\]|\.\./u);
@@ -65,7 +65,7 @@ describe("the inbox sweep", () => {
 
   test("a share is deleted exactly once it is an hour old", () => {
     assertProperty(
-      "a share is stale exactly from SHARE_STALE_AFTER_MS on",
+      "a share is deleted exactly once it is an hour old",
       fc.property(
         fc.integer({ min: 0, max: 10 * SHARE_STALE_AFTER_MS }),
         (age) => {
@@ -138,7 +138,7 @@ describe("a share's manifest", () => {
 
   test("every file it accepts stays inside the share's folder", () => {
     assertProperty(
-      "a manifest's files resolve inside the share's folder",
+      "every file it accepts stays inside the share's folder",
       fc.property(fc.string(), (file) => {
         const result = parseShareManifest(
           manifest([{ type: "file", file, name: "x", mimeType: "text/plain" }]),
