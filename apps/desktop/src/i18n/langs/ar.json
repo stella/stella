@@ -508,6 +508,8 @@
     "evidenceTitles": "العناوين",
     "evidenceApps": "التطبيقات",
     "rangeEmpty": "لم يُسجَّل شيء في هذه الفترة.",
+    "rangeMostlyUnmatched": "معظم هذه الفترة لا ينتمي إلى أي ملف قانوني، لذا لم يُحدَّد ملف مسبقًا.",
+    "rangeSplitBetweenMatters": "لا يشغل أي ملف قانوني بمفرده معظم هذه الفترة، لذا لم يُحدَّد ملف مسبقًا.",
     "entryStart": "البداية",
     "entryEnd": "النهاية",
     "rangeEndBeforeStart": "اختر وقت انتهاء بعد وقت البدء.",

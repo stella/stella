@@ -2777,6 +2777,153 @@ for (const language of ["en", "ar"] as const) {
   });
 }
 
+/** An hour mostly spent on mail no matter claimed, ending on a matter's
+ * document. */
+const MINORITY_SNAPSHOT = {
+  ...SNAPSHOT,
+  captureDetails: true,
+  detailsAccess: "ready",
+  segments: [
+    {
+      appIdentifier: "com.example.mail",
+      appName: "Example Mail",
+      matterId: null,
+      windowTitle: "Training invite",
+      start: "2026-10-07T09:00:00Z",
+      end: "2026-10-07T09:42:00Z",
+    },
+    {
+      appIdentifier: "com.example.editor",
+      appName: "Example Editor",
+      matterId: "matter-1",
+      windowTitle: "Lease draft.docx",
+      start: "2026-10-07T09:42:00Z",
+      end: "2026-10-07T10:00:00Z",
+    },
+  ],
+} satisfies ActivityDaySnapshot;
+
+test("a range a matter holds only a minority of starts on no matter, non-billable and undescribed", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: MINORITY_SNAPSHOT });
+  const blocks = page.locator(ACTIVITY_BLOCKS);
+  await blocks
+    .first()
+    .evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const mail = await blocks.first().boundingBox();
+  const lease = await blocks.last().boundingBox();
+  const entries = await page
+    .locator('[data-column-id="entries"] [data-slot="day-calendar-surface"]')
+    .boundingBox();
+  if (!mail || !lease || !entries) {
+    throw new TypeError("The activity blocks and entries column need bounds");
+  }
+  // Across the whole hour: 42 minutes of mail, 18 of the lease draft.
+  const x = entries.x + entries.width / 2;
+  await page.mouse.move(x, mail.y + 3);
+  await page.mouse.down();
+  await page.mouse.move(x, lease.y + lease.height - 3, { steps: 6 });
+  await page.mouse.up();
+  const card = suggestionCard(page, enMessages.activity.newEntry);
+  await expect(card).toBeFocused();
+  await expect(
+    card.getByRole("switch", { name: enMessages.activity.entryBillable }),
+  ).not.toBeChecked();
+  await expect(card.getByText(enMessages.activity.chooseMatter)).toBeVisible();
+  await expect(
+    card.getByText(enMessages.activity.rangeMostlyUnmatched),
+  ).toBeVisible();
+  await expect(
+    card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
+  ).toHaveValue("");
+  // The evidence keeps both titles; the matter's row names it faintly.
+  await expect(card.getByText("Training invite")).toBeVisible();
+  await expect(
+    card.locator("[data-activity-evidence-matter]", {
+      hasText: "Example matter",
+    }),
+  ).toBeVisible();
+  await expect(
+    card.getByRole("button", { name: acceptName(enMessages) }),
+  ).toBeDisabled();
+  // Choosing the matter makes the time billable, as a matter's card starts.
+  await card
+    .getByRole("button", { name: enMessages.activity.chooseMatter })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Second matter/u })
+    .click();
+  const chosen = suggestionCard(page, "Second matter");
+  await expect(
+    chosen.getByRole("switch", { name: enMessages.activity.entryBillable }),
+  ).toBeChecked();
+  await expect(
+    chosen.getByText(enMessages.activity.rangeMostlyUnmatched),
+  ).toHaveCount(0);
+});
+
+test("a range a matter holds most of starts on it, described by that matter's titles only", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...MINORITY_SNAPSHOT,
+      // 42 minutes of the lease draft, then 18 of mail.
+      segments: [
+        {
+          appIdentifier: "com.example.editor",
+          appName: "Example Editor",
+          matterId: "matter-1",
+          windowTitle: "Lease draft.docx",
+          start: "2026-10-07T09:00:00Z",
+          end: "2026-10-07T09:42:00Z",
+        },
+        {
+          appIdentifier: "com.example.mail",
+          appName: "Example Mail",
+          matterId: null,
+          windowTitle: "Training invite",
+          start: "2026-10-07T09:42:00Z",
+          end: "2026-10-07T10:00:00Z",
+        },
+      ],
+    },
+  });
+  const surface = page.getByRole("slider", {
+    name: enMessages.activity.selectRange,
+  });
+  const blocks = page.locator(ACTIVITY_BLOCKS);
+  await blocks
+    .first()
+    .evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const first = await blocks.first().boundingBox();
+  const last = await blocks.last().boundingBox();
+  const entries = await surface.boundingBox();
+  if (!first || !last || !entries) {
+    throw new TypeError("The activity blocks and entries column need bounds");
+  }
+  // The lease's suggestion covers its own time in Time entries, so the drag
+  // starts in the mail's time and runs up.
+  const x = entries.x + entries.width / 2;
+  await page.mouse.move(x, last.y + last.height - 3);
+  await page.mouse.down();
+  await page.mouse.move(x, first.y + 3, { steps: 6 });
+  await page.mouse.up();
+  const card = suggestionCard(page, "Example matter");
+  await expect(card).toBeFocused();
+  await expect(
+    card.getByRole("switch", { name: enMessages.activity.entryBillable }),
+  ).toBeChecked();
+  const narrative = card.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await expect(narrative).toHaveValue(/Lease draft\.docx/u);
+  await expect(narrative).not.toHaveValue(/Training invite/u);
+});
+
 const draftInvocations = async (page: Page) =>
   (await tauriInvocations(page)).filter(
     ({ command }) => command === "billing_draft_create_confirmed",

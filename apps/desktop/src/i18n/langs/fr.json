@@ -508,6 +508,8 @@
     "evidenceTitles": "Titres",
     "evidenceApps": "Apps",
     "rangeEmpty": "Rien n’a été enregistré sur cette plage.",
+    "rangeMostlyUnmatched": "La majeure partie de cette plage ne relève d’aucun dossier, donc aucun n’est présélectionné.",
+    "rangeSplitBetweenMatters": "Aucun dossier ne couvre à lui seul la majeure partie de cette plage, donc aucun n’est présélectionné.",
     "entryStart": "Début",
     "entryEnd": "Fin",
     "rangeEndBeforeStart": "Choisissez une heure de fin après le début.",

@@ -508,6 +508,8 @@
     "evidenceTitles": "Nosaukumi",
     "evidenceApps": "Lietotnes",
     "rangeEmpty": "Šajā posmā nekas netika reģistrēts.",
+    "rangeMostlyUnmatched": "Lielākā šī posma daļa nepieder nevienai lietai, tāpēc neviena nav iepriekš atlasīta.",
+    "rangeSplitBetweenMatters": "Neviena lieta neaptver lielāko šī posma daļu, tāpēc neviena nav iepriekš atlasīta.",
     "entryStart": "Sākums",
     "entryEnd": "Beigas",
     "rangeEndBeforeStart": "Iestatiet beigu laiku pēc sākuma.",

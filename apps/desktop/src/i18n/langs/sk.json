@@ -508,6 +508,8 @@
     "evidenceTitles": "Názvy",
     "evidenceApps": "Aplikácie",
     "rangeEmpty": "V tomto úseku sa nič nezaznamenalo.",
+    "rangeMostlyUnmatched": "Väčšina úseku nepatrí k žiadnej veci, preto nie je predvyplnená.",
+    "rangeSplitBetweenMatters": "Žiadna vec nemá väčšinu úseku, preto nie je predvyplnená.",
     "entryStart": "Začiatok",
     "entryEnd": "Koniec",
     "rangeEndBeforeStart": "Nastavte koniec až po začiatku.",
