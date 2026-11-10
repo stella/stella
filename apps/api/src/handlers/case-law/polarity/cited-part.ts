@@ -15,6 +15,9 @@ const OPINION_KINDS = CITED_PARTS.filter(
   (part) => part !== CITED_PART.NOT_STATED,
 );
 
+/** Languages whose opinion vocabulary the classifier reads. */
+type CitedPartLanguage = "cs" | "sk" | "en";
+
 type OpinionKind = Exclude<CitedPart, "not-stated">;
 type OpinionRules = {
   cues: Record<OpinionKind, string>;
@@ -58,7 +61,7 @@ export const CITED_PART_RULES = {
     judge: `of\\s+(?:judge|justice)\\s+${JUDGE_NAME}\\s+`,
     possessive: "['’]s\\s+",
   },
-} as const satisfies Record<string, OpinionRules>;
+} as const satisfies Record<CitedPartLanguage, OpinionRules>;
 
 type CitedPartArgs = {
   contexts: readonly string[];

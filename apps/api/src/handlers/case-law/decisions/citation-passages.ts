@@ -531,6 +531,47 @@ const versionedPayloadBatch = <K extends DecisionPayloadColumn>({
   };
 };
 
+type EvidenceSectionGroupOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  versions: readonly PassageSourcePointer[];
+};
+
+/** Rows that render evidence windows need their section text in any case: one read per group. */
+const readEvidenceSectionGroup = async ({
+  caseLawDb,
+  versions,
+}: EvidenceSectionGroupOptions) => {
+  const read = await Result.tryPromise(
+    async (): Promise<Map<string, DecisionPayloadRead<"sections">>> =>
+      versions.length === 0
+        ? new Map()
+        : await caseLawDb(
+            async (tx) =>
+              await readDecisionVersionedPayloads({
+                tx,
+                versions,
+                column: "sections",
+              }),
+          ),
+  );
+  if (Result.isError(read)) {
+    observeFailure(read.error, {
+      sink: citationTextReadFailure,
+      ctx: { phase: "sections" },
+    });
+  }
+  return read;
+};
+
+const unavailableAttempt = (
+  pointers: readonly PassageSourcePointer[],
+): DecisionTextAttempt => ({
+  textByDecision: new Map(
+    pointers.map(({ id }) => [String(id), UNAVAILABLE_DECISION_TEXT]),
+  ),
+  refreshed: [],
+});
+
 const readDecisionTextAttempt = async ({
   readTombstones = readCorpusTombstones,
   caseLawDb,
@@ -547,12 +588,7 @@ const readDecisionTextAttempt = async ({
       sink: citationTextReadFailure,
       ctx: { phase: "admission" },
     });
-    return {
-      textByDecision: new Map(
-        pointers.map(({ id }) => [String(id), UNAVAILABLE_DECISION_TEXT]),
-      ),
-      refreshed: [],
-    };
+    return unavailableAttempt(pointers);
   }
   // Storage-backed AST hits never start the Postgres AST read.
   const payloadBatch = <K extends DecisionPayloadColumn>(
@@ -566,17 +602,22 @@ const readDecisionTextAttempt = async ({
   // Section text is read only where a page row renders evidence from it or
   // the section index misses its cache; each decision's sections are read once.
   const admitted = pointers.filter(({ id }) => before.value.allowed.has(id));
-  const readEvidenceSections = payloadBatch(
-    "sections",
-    admitted.filter(({ id }) => evidenceDecisionIds.has(id)),
-  );
+  const evidenceRead = await readEvidenceSectionGroup({
+    caseLawDb,
+    versions: admitted.filter(({ id }) => evidenceDecisionIds.has(id)),
+  });
+  if (Result.isError(evidenceRead)) {
+    return unavailableAttempt(pointers);
+  }
+  const readEvidenceSections = (pointer: PassageSourcePointer) =>
+    evidenceRead.value.get(pointer.id) ?? { kind: "version-changed" as const };
   const readIndexSections = payloadBatch(
     "sections",
     admitted.filter(({ id }) => !evidenceDecisionIds.has(id)),
   );
   const readSections = async (pointer: PassageSourcePointer) =>
     evidenceDecisionIds.has(pointer.id)
-      ? await readEvidenceSections(pointer)
+      ? readEvidenceSections(pointer)
       : await readIndexSections(pointer);
   const changed = new Set<SafeId<"caseLawDecision">>();
   const entries = await Promise.all(
@@ -627,7 +668,7 @@ const readDecisionTextAttempt = async ({
         });
         let evidenceSections: DecisionSection[] | null = null;
         if (evidenceDecisionIds.has(pointer.id)) {
-          const evidence = await readEvidenceSections(pointer);
+          const evidence = readEvidenceSections(pointer);
           if (evidence.kind === "version-changed") {
             onVersionChanged();
             return null;
