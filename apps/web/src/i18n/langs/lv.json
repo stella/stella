@@ -212,10 +212,12 @@
   },
   "avt": {
     "anchorFacts": {
+      "addFact": "Pievienot faktu",
+      "addFactPlaceholder": "Norādiet faktu tā, kā tas izriet no pierādījumiem",
       "addInterpretationNote": "Pievienot interpretācijas piezīmi",
       "description": "Droši pierādījumi, piemēram, e-pasta vēstules, ziņas, bankas ieraksti un saskaņoti fakti, kas iegūti enkurfaktu reģistram, ar kuru tiek pārbaudīti apgalvojumi. Pārskatiet, rediģējiet vai manuāli pievienojiet faktus.",
       "editInterpretationNote": "Rediģēt interpretācijas piezīmi",
-      "empty": "Atzīmējiet šī saraksta vienumus kā faktus, pret kuriem tiks pārbaudīti dokumenti.",
+      "emptyTitle": "Enkurfaktu vēl nav",
       "extractionAndReview": "Iegūšana un pārskatīšana",
       "factCount": "{count, plural, zero {# faktu} one {# fakts} other {# fakti}}",
       "heldDescription": "Šo izvilkumu <strong>nozīme patiešām ir neskaidra</strong>: saturs ir provizorisks vai neapstiprināts, nevis tikai rakstīts ar roku. Tie netiek vērtēti, kamēr pārbaudītājs tos neapstiprina, nerediģē vai neievada vēlreiz. Salasāms avots nekad netiek nosūtīts pārskatīšanai tikai tā nesēja dēļ.",
@@ -320,6 +322,36 @@
       "sizeConfirmTitle": "Vai pārbaudīt šo dokumentu?",
       "statusLoadFailed": "Neizdevās ielādēt šo dokumentu pārbaudes statusu.",
       "verifyAgain": "Pārbaudīt vēlreiz"
+    },
+    "extraction": {
+      "busy": "Vispirms pabeidziet notiekošo izgūšanu un tās pārskatīšanu.",
+      "dialogDescription": "Katrs ierosinātais fakts citē fragmentu, no kura tas nāk. Katru jūs pieņemat vai noraidāt, pirms tas nonāk reģistrā.",
+      "dialogTitle": "Izgūt faktus no dokumentiem",
+      "documentsChosen": "{count, plural, zero {Izvēlēti # no {max} dokumentiem} one {Izvēlēts # no {max} dokumentiem} other {Izvēlēti # no {max} dokumentiem}}",
+      "documentsLabel": "Lasāmie dokumenti",
+      "errors": {
+        "accessRevoked": "Faktu izgūšana tika apturēta, jo piekļuve nav pieejama.",
+        "aiUnavailable": "Dokumentu lasīšanai nav pieejams neviens AI modelis. Pārbaudiet organizācijas AI iestatījumus.",
+        "documentMissing": "Izvēlētais dokuments vai saraksts vairs nepastāv. Pārlādējiet lapu un izvēlieties vēlreiz.",
+        "enqueueFailed": "Neizdevās sākt faktu izgūšanu. Mēģiniet vēlreiz.",
+        "extractionFailed": "Faktus no šiem dokumentiem neizdevās izgūt.",
+        "internal": "Faktu izgūšana negaidīti neizdevās.",
+        "noText": "No izvēlētajiem dokumentiem neizdevās nolasīt tekstu.",
+        "sourceUnavailable": "Pēc izgūšanas sākuma dokuments tika mainīts vai noņemts. Izvēlieties dokumentus vēlreiz.",
+        "unsupportedFormat": "Faktus var nolasīt tikai no DOCX failiem, PDF failiem un failiem ar PDF versiju."
+      },
+      "extractFromDocuments": "Izgūt no dokumentiem",
+      "failedTitle": "Faktu izgūšana neizdevās",
+      "inProgressTitle": "Notiek faktu izgūšana",
+      "instructionLabel": "Ko meklēt (neobligāti)",
+      "instructionPlaceholder": "Piemēram: maksājumi starp pusēm un to datumi",
+      "nothingFound": "Izvēlētajos dokumentos netika atrasts neviens fakts.",
+      "queued": "Gaida sākšanu.",
+      "reviewTitle": "{count, plural, zero {# ierosinātu faktu pārskatīšanai} one {# ierosināts fakts pārskatīšanai} other {# ierosināti fakti pārskatīšanai}}",
+      "reviewed": "Pieņemti {accepted} no {proposed, plural, zero {# ierosinātajiem faktiem} one {# ierosinātā fakta} other {# ierosinātajiem faktiem}}.",
+      "running": "Notiek dokumentu lasīšana. Ierosinātie fakti šeit parādīsies pārskatīšanai.",
+      "startFailed": "Neizdevās sākt faktu izgūšanu",
+      "submit": "{count, plural, =0 {Izgūt faktus} zero {Izgūt faktus no # dokumentiem} one {Izgūt faktus no # dokumenta} other {Izgūt faktus no # dokumentiem}}"
     },
     "guidance": {
       "escalate": "Nodot tālāk",
@@ -4704,6 +4736,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Notiek pieņemšana: {done} no {total}…"
+    },
     "sources": {
       "add": "Pievienot avotu",
       "documentRequired": "Izvēlieties dokumentu.",

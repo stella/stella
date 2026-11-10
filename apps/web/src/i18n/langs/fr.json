@@ -212,10 +212,12 @@
   },
   "avt": {
     "anchorFacts": {
+      "addFact": "Ajouter un fait",
+      "addFactPlaceholder": "Énoncez le fait tel que les preuves l’établissent",
       "addInterpretationNote": "Ajouter une note d’interprétation",
       "description": "Preuves tangibles (courriels, messages, relevés bancaires, faits convenus) extraites dans le dossier de faits d’ancrage auquel les affirmations sont confrontées. Relisez, modifiez ou ajoutez des faits à la main.",
       "editInterpretationNote": "Modifier la note d’interprétation",
-      "empty": "Marquez des éléments de cette liste comme des faits auxquels confronter les documents.",
+      "emptyTitle": "Aucun fait d’ancrage pour l’instant",
       "extractionAndReview": "Extraction et relecture",
       "factCount": "{count, plural, one {# fait} other {# faits} many {# faits}}",
       "heldDescription": "Le sens de ces extractions est <strong>réellement incertain</strong> : leur contenu est provisoire ou non confirmé, et pas simplement manuscrit. Elles sont exclues du scoring jusqu’à ce qu’un relecteur les confirme, les modifie ou les requalifie. Une source lisible n’est jamais mise en attente pour son seul support.",
@@ -320,6 +322,36 @@
       "sizeConfirmTitle": "Vérifier ce document ?",
       "statusLoadFailed": "Impossible de charger l’état de vérification de ces documents.",
       "verifyAgain": "Vérifier à nouveau"
+    },
+    "extraction": {
+      "busy": "Terminez d’abord l’extraction en cours et sa relecture.",
+      "dialogDescription": "Chaque fait proposé cite le passage dont il provient. Vous acceptez ou refusez chacun avant qu’il n’entre dans le dossier.",
+      "dialogTitle": "Extraire des faits de documents",
+      "documentsChosen": "{count, plural, one {# document sur {max} choisi} other {# documents sur {max} choisis}}",
+      "documentsLabel": "Documents à lire",
+      "errors": {
+        "accessRevoked": "L’extraction des faits s’est arrêtée, car l’accès n’est pas disponible.",
+        "aiUnavailable": "Aucun modèle d’IA n’est disponible pour lire les documents. Vérifiez les paramètres d’IA de l’organisation.",
+        "documentMissing": "Un document choisi ou la liste n’existe plus. Rechargez la page et choisissez à nouveau.",
+        "enqueueFailed": "L’extraction des faits n’a pas pu être lancée. Réessayez.",
+        "extractionFailed": "Les faits de ces documents n’ont pas pu être extraits.",
+        "internal": "L’extraction des faits a échoué de manière inattendue.",
+        "noText": "Aucun texte n’a pu être lu dans les documents choisis.",
+        "sourceUnavailable": "Un document a été modifié ou supprimé après le début de l’extraction. Choisissez à nouveau les documents.",
+        "unsupportedFormat": "Seuls les fichiers DOCX, les PDF et les fichiers disposant d’une version PDF peuvent être lus pour en extraire des faits."
+      },
+      "extractFromDocuments": "Extraire des documents",
+      "failedTitle": "Échec de l’extraction des faits",
+      "inProgressTitle": "Extraction des faits",
+      "instructionLabel": "Ce qu’il faut rechercher (facultatif)",
+      "instructionPlaceholder": "Par exemple : les paiements entre les parties et leurs dates",
+      "nothingFound": "Aucun fait n’a été trouvé dans les documents choisis.",
+      "queued": "En attente de démarrage.",
+      "reviewTitle": "{count, plural, one {# fait proposé à relire} other {# faits proposés à relire}}",
+      "reviewed": "{accepted} sur {proposed, plural, one {# fait proposé} other {# faits proposés}} acceptés.",
+      "running": "Lecture des documents. Les faits proposés apparaîtront ici pour relecture.",
+      "startFailed": "Impossible de lancer l’extraction des faits",
+      "submit": "{count, plural, =0 {Extraire des faits} one {Extraire des faits de # document} other {Extraire des faits de # documents}}"
     },
     "guidance": {
       "escalate": "Faire remonter",
@@ -4704,6 +4736,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Acceptation de {done} sur {total}…"
+    },
     "sources": {
       "add": "Ajouter une source",
       "documentRequired": "Sélectionnez un document.",

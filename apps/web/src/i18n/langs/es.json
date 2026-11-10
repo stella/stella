@@ -212,10 +212,12 @@
   },
   "avt": {
     "anchorFacts": {
+      "addFact": "Añadir un hecho",
+      "addFactPlaceholder": "Indique el hecho tal como lo muestran las pruebas",
       "addInterpretationNote": "Añadir nota de interpretación",
       "description": "Las pruebas sólidas (correos, mensajes, registros bancarios y hechos acordados) se extraen al registro de hechos de referencia con el que se contrastan las afirmaciones. Revise, edite o añada hechos manualmente.",
       "editInterpretationNote": "Editar nota de interpretación",
-      "empty": "Marque elementos de esta lista como hechos con los que contrastar los documentos.",
+      "emptyTitle": "Aún no hay hechos de referencia",
       "extractionAndReview": "Extracción y revisión",
       "factCount": "{count, plural, one {# hecho} other {# hechos} many {# hechos}}",
       "heldDescription": "Estas extracciones son <strong>realmente inciertas en cuanto a su significado</strong>: el contenido es provisional o no está confirmado, no es simplemente manuscrito. Se excluyen de la puntuación hasta que un revisor las confirme, edite o vuelva a escribir. Una fuente legible nunca se pone en espera solo por su formato.",
@@ -320,6 +322,36 @@
       "sizeConfirmTitle": "¿Verificar este documento?",
       "statusLoadFailed": "No se pudo cargar el estado de verificación de estos documentos.",
       "verifyAgain": "Volver a verificar"
+    },
+    "extraction": {
+      "busy": "Termine primero la extracción en curso y su revisión.",
+      "dialogDescription": "Cada hecho propuesto cita el pasaje del que procede. Usted acepta o rechaza cada uno antes de que entre en el registro.",
+      "dialogTitle": "Extraer hechos de documentos",
+      "documentsChosen": "{count, plural, one {# de {max} documentos elegido} other {# de {max} documentos elegidos}}",
+      "documentsLabel": "Documentos que leer",
+      "errors": {
+        "accessRevoked": "La extracción de hechos se detuvo porque el acceso no está disponible.",
+        "aiUnavailable": "No hay ningún modelo de IA disponible para leer los documentos. Revise la configuración de IA de la organización.",
+        "documentMissing": "Un documento elegido o la lista ya no existe. Recargue la página y vuelva a elegir.",
+        "enqueueFailed": "No se pudo iniciar la extracción de hechos. Inténtelo de nuevo.",
+        "extractionFailed": "No se pudieron extraer los hechos de estos documentos.",
+        "internal": "La extracción de hechos falló de forma inesperada.",
+        "noText": "No se pudo leer ningún texto de los documentos elegidos.",
+        "sourceUnavailable": "Un documento cambió o se eliminó después de iniciarse la extracción. Vuelva a elegir los documentos.",
+        "unsupportedFormat": "Solo se pueden leer hechos de archivos DOCX, PDF y archivos con una versión en PDF."
+      },
+      "extractFromDocuments": "Extraer de documentos",
+      "failedTitle": "La extracción de hechos falló",
+      "inProgressTitle": "Extrayendo hechos",
+      "instructionLabel": "Qué buscar (opcional)",
+      "instructionPlaceholder": "Por ejemplo: pagos entre las partes y cuándo se hicieron",
+      "nothingFound": "No se encontraron hechos en los documentos elegidos.",
+      "queued": "Esperando para empezar.",
+      "reviewTitle": "{count, plural, one {# hecho propuesto por revisar} other {# hechos propuestos por revisar}}",
+      "reviewed": "Aceptados {accepted} de {proposed, plural, one {# hecho propuesto} other {# hechos propuestos}}.",
+      "running": "Leyendo los documentos. Los hechos propuestos aparecerán aquí para su revisión.",
+      "startFailed": "No se pudo iniciar la extracción de hechos",
+      "submit": "{count, plural, =0 {Extraer hechos} one {Extraer hechos de # documento} other {Extraer hechos de # documentos}}"
     },
     "guidance": {
       "escalate": "Remitir",
@@ -4704,6 +4736,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Aceptando {done} de {total}…"
+    },
     "sources": {
       "add": "Añadir fuente",
       "documentRequired": "Selecciona un documento.",

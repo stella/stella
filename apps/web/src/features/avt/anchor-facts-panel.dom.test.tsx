@@ -133,6 +133,12 @@ const mountFact = ({
         }
         if (
           request.method === "GET" &&
+          pathname === `/v1/lists/${workspaceId}/${listId}/generations`
+        ) {
+          return Response.json({ items: [], nextCursor: null, limit: 20 });
+        }
+        if (
+          request.method === "GET" &&
           pathname === "/v1/organization-settings"
         ) {
           return Response.json({

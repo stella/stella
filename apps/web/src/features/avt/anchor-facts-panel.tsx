@@ -14,6 +14,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
+  FileSearchIcon,
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
@@ -33,8 +34,15 @@ import { Textarea } from "@stll/ui/textarea";
 
 import { ListItemSources } from "@/components/workspaces/list-item-sources";
 import { ListSourceForm } from "@/components/workspaces/list-source-form";
+import { AddFactForm } from "@/features/avt/add-fact-form";
 import { FactDate } from "@/features/avt/fact-date";
 import { factItems, orderHeldFirst } from "@/features/avt/fact-details.logic";
+import {
+  ExtractFactsDialog,
+  FactExtractionProgress,
+  useFactExtractionPhase,
+} from "@/features/avt/fact-extraction";
+import { isExtractionBusy } from "@/features/avt/fact-extraction.logic";
 import { factLabel } from "@/features/avt/fact-label.logic";
 import { FactSource } from "@/features/avt/fact-source";
 import {
@@ -87,11 +95,30 @@ export const AnchorFactsPanel = ({
   const heldCount = facts.filter(
     (fact) => fact.factDetails?.scoring === "held",
   ).length;
+  const canCreate = usePermissions({ entity: ["create"] });
+  const canAddFact = canCreate && legalListsEnabled;
+  const phase = useFactExtractionPhase(workspaceId, listId);
+  const extractionBusy = isExtractionBusy(phase);
+  const [extractOpen, setExtractOpen] = React.useState(false);
+  const [addingFact, setAddingFact] = React.useState(false);
+  const [startedRunId, setStartedRunId] = React.useState<string | null>(null);
+  const empty = facts.length === 0;
+
+  const factActions = (
+    <FactActions
+      canAddFact={canAddFact}
+      canExtract={canCreate}
+      extractionBusy={extractionBusy}
+      onAddFact={() => setAddingFact(true)}
+      onExtract={() => setExtractOpen(true)}
+      prominent={empty}
+    />
+  );
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold">
             {t("avt.anchorFacts.extractionAndReview")}
           </h2>
@@ -99,22 +126,50 @@ export const AnchorFactsPanel = ({
             {t("avt.anchorFacts.description")}
           </p>
         </div>
-        {legalListsEnabled && (
-          <Button
-            render={
-              <Link
-                params={{ workspaceId }}
-                search={{ list: listId }}
-                to="/workspaces/$workspaceId/lists"
-              />
-            }
-            size="sm"
-            variant="outline"
-          >
-            {t("avt.anchorFacts.openList")}
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {!empty && factActions}
+          {legalListsEnabled && (
+            <Button
+              render={
+                <Link
+                  params={{ workspaceId }}
+                  search={{ list: listId }}
+                  to="/workspaces/$workspaceId/lists"
+                />
+              }
+              size="sm"
+              variant="outline"
+            >
+              {t("avt.anchorFacts.openList")}
+            </Button>
+          )}
+        </div>
       </div>
+
+      {addingFact && (
+        <AddFactForm
+          listId={listId}
+          onClose={() => setAddingFact(false)}
+          workspaceId={workspaceId}
+        />
+      )}
+
+      <FactExtractionProgress
+        canDecide={canCreate}
+        canExtract={canCreate}
+        listId={listId}
+        onExtract={() => setExtractOpen(true)}
+        phase={phase}
+        startedRunId={startedRunId}
+        workspaceId={workspaceId}
+      />
+      <ExtractFactsDialog
+        listId={listId}
+        onOpenChange={setExtractOpen}
+        onStarted={setStartedRunId}
+        open={extractOpen}
+        workspaceId={workspaceId}
+      />
 
       {heldCount > 0 && (
         <div className="bg-warning/10 border-warning/32 rounded-lg border p-3.5">
@@ -140,11 +195,17 @@ export const AnchorFactsPanel = ({
         </span>
       </div>
 
-      {facts.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          {t("avt.anchorFacts.empty")}
-        </p>
-      ) : (
+      {/* While a run is in progress or under review, its card above is the
+          way forward, so the empty record offers nothing more. */}
+      {empty && !extractionBusy && (
+        <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed p-4">
+          <p className="text-sm font-medium">
+            {t("avt.anchorFacts.emptyTitle")}
+          </p>
+          {factActions}
+        </div>
+      )}
+      {!empty && (
         <ul className="divide-y rounded-xl border">
           {facts.map((fact) => (
             <FactRow
@@ -166,6 +227,53 @@ export const AnchorFactsPanel = ({
           variant="outline"
         >
           {t("common.loadMore")}
+        </Button>
+      )}
+    </div>
+  );
+};
+
+type FactActionsProps = {
+  canExtract: boolean;
+  canAddFact: boolean;
+  extractionBusy: boolean;
+  /** The empty record leads with extraction; a full one keeps both quiet. */
+  prominent: boolean;
+  onExtract: () => void;
+  onAddFact: () => void;
+};
+
+/** The two ways facts reach the record, side by side and the same size. */
+const FactActions = ({
+  canExtract,
+  canAddFact,
+  extractionBusy,
+  prominent,
+  onExtract,
+  onAddFact,
+}: FactActionsProps) => {
+  const t = useTranslations();
+  if (!canExtract && !canAddFact) {
+    return null;
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {canExtract && (
+        <Button
+          disabled={extractionBusy}
+          onClick={onExtract}
+          size="sm"
+          tooltip={extractionBusy ? t("avt.extraction.busy") : undefined}
+          variant={prominent ? "default" : "outline"}
+        >
+          <FileSearchIcon />
+          {t("avt.extraction.extractFromDocuments")}
+        </Button>
+      )}
+      {canAddFact && (
+        <Button onClick={onAddFact} size="sm" variant="outline">
+          <PlusIcon />
+          {t("avt.anchorFacts.addFact")}
         </Button>
       )}
     </div>

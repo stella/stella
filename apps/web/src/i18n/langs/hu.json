@@ -212,10 +212,12 @@
   },
   "avt": {
     "anchorFacts": {
+      "addFact": "Tény hozzáadása",
+      "addFactPlaceholder": "Írja le a tényt úgy, ahogy a bizonyítékokból kitűnik",
       "addInterpretationNote": "Értelmezési megjegyzés hozzáadása",
       "description": "Közvetlen bizonyítékok (e-mailek, üzenetek, banki nyilvántartások és nem vitatott tények) olyan referenciatény-nyilvántartásba rendezve, amelyhez az állításokat viszonyítjuk. A tények ellenőrizhetők, szerkeszthetők vagy kézzel hozzáadhatók.",
       "editInterpretationNote": "Értelmezési megjegyzés szerkesztése",
-      "empty": "Jelölje meg a lista elemeit tényként, amelyekhez az iratokat viszonyítja a rendszer.",
+      "emptyTitle": "Még nincsenek referenciatények",
       "extractionAndReview": "Kinyerés és ellenőrzés",
       "factCount": "{count, plural, one {# tény} other {# tény}}",
       "heldDescription": "E kinyert adatok jelentése <strong>valóban bizonytalan</strong>: a tartalom előzetes vagy nincs megerősítve, nem pusztán kézzel írt. Addig nem számítanak bele az értékelésbe, amíg egy ellenőr meg nem erősíti, nem szerkeszti vagy újra nem gépeli őket. Olvasható forrás soha nem kerül várólistára pusztán az adathordozója miatt.",
@@ -320,6 +322,36 @@
       "sizeConfirmTitle": "Ellenőrzi ezt az iratot?",
       "statusLoadFailed": "Nem sikerült betölteni ezen iratok ellenőrzési állapotát.",
       "verifyAgain": "Ismételt ellenőrzés"
+    },
+    "extraction": {
+      "busy": "Előbb fejezze be a folyamatban lévő kinyerést és annak ellenőrzését.",
+      "dialogDescription": "Minden javasolt tény idézi azt a részt, amelyből származik. Mindegyiket elfogadja vagy elutasítja, mielőtt bekerül a nyilvántartásba.",
+      "dialogTitle": "Tények kinyerése iratokból",
+      "documentsChosen": "{count, plural, one {# / {max} irat kiválasztva} other {# / {max} irat kiválasztva}}",
+      "documentsLabel": "Elolvasandó iratok",
+      "errors": {
+        "accessRevoked": "A tények kinyerése leállt, mert a hozzáférés nem érhető el.",
+        "aiUnavailable": "Nem érhető el AI-modell az iratok olvasásához. Ellenőrizze a szervezet AI-beállításait.",
+        "documentMissing": "Egy kiválasztott irat vagy a lista már nem létezik. Töltse újra az oldalt, és válasszon újra.",
+        "enqueueFailed": "A tények kinyerését nem sikerült elindítani. Próbálja újra.",
+        "extractionFailed": "Ezekből az iratokból nem sikerült kinyerni a tényeket.",
+        "internal": "A tények kinyerése váratlanul meghiúsult.",
+        "noText": "A kiválasztott iratokból nem sikerült szöveget olvasni.",
+        "sourceUnavailable": "Egy irat megváltozott vagy törölték a kinyerés indítása után. Válassza ki újra az iratokat.",
+        "unsupportedFormat": "Tények csak DOCX-fájlokból, PDF-ekből és PDF-verzióval rendelkező fájlokból nyerhetők ki."
+      },
+      "extractFromDocuments": "Kinyerés iratokból",
+      "failedTitle": "A tények kinyerése sikertelen",
+      "inProgressTitle": "Tények kinyerése",
+      "instructionLabel": "Mire figyeljen (nem kötelező)",
+      "instructionPlaceholder": "Például: a felek közötti kifizetések és azok időpontja",
+      "nothingFound": "A kiválasztott iratokban nem található tény.",
+      "queued": "Indításra vár.",
+      "reviewTitle": "{count, plural, one {# javasolt tény ellenőrzésre vár} other {# javasolt tény ellenőrzésre vár}}",
+      "reviewed": "{proposed, plural, one {# javasolt tényből} other {# javasolt tényből}} {accepted} elfogadva.",
+      "running": "Az iratok olvasása folyamatban. A javasolt tények itt jelennek meg ellenőrzésre.",
+      "startFailed": "A tények kinyerését nem sikerült elindítani",
+      "submit": "{count, plural, =0 {Tények kinyerése} one {Tények kinyerése # iratból} other {Tények kinyerése # iratból}}"
     },
     "guidance": {
       "escalate": "Továbbítás",
@@ -4704,6 +4736,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Elfogadás: {done} / {total}…"
+    },
     "sources": {
       "add": "Forrás hozzáadása",
       "documentRequired": "Válasszon egy dokumentumot.",

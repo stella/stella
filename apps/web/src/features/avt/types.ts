@@ -64,6 +64,14 @@ true satisfies Exclude<
   ? true
   : never;
 
+export type GenerationRunSummary =
+  ListsRoutes[":listId"]["generations"]["get"]["response"][200]["items"][number];
+export type GenerationRunErrorCode = NonNullable<
+  GenerationRunSummary["errorCode"]
+>;
+export type FactExtractionBody =
+  ListsRoutes["fact-extractions"]["post"]["body"];
+
 export const FACT_CONFIDENCES = [
   "high",
   "medium",
@@ -177,3 +185,16 @@ export const RUN_ERROR_KEYS = {
   internal: "avt.runs.errors.internal",
   access_revoked: "avt.runs.errors.accessRevoked",
 } as const satisfies Record<VerificationErrorCode, TranslationKey>;
+
+/** Why a fact extraction failed, in words a reviewer can act on. */
+export const EXTRACTION_ERROR_KEYS = {
+  source_unavailable: "avt.extraction.errors.sourceUnavailable",
+  unsupported_format: "avt.extraction.errors.unsupportedFormat",
+  no_text: "avt.extraction.errors.noText",
+  ai_unavailable: "avt.extraction.errors.aiUnavailable",
+  extraction_failed: "avt.extraction.errors.extractionFailed",
+  enqueue_failed: "avt.extraction.errors.enqueueFailed",
+  access_revoked: "avt.extraction.errors.accessRevoked",
+  run_limit_reached: "errors.apiCodes.usageLimitExceeded",
+  internal: "avt.extraction.errors.internal",
+} as const satisfies Record<GenerationRunErrorCode, TranslationKey>;

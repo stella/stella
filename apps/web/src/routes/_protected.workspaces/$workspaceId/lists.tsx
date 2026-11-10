@@ -44,6 +44,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { FieldValue } from "@/components/workspaces/field-value";
+import { GenerationCandidatesReview } from "@/components/workspaces/generation-candidates-review";
 import { ListItemSources } from "@/components/workspaces/list-item-sources";
 import {
   isListItemType,
@@ -311,9 +312,6 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   const [sourceItemId, setSourceItemId] = useState("");
   const [selectedPropertyId, setSelectedPropertyId] = useState(NO_COLUMN_VALUE);
   const [creating, setCreating] = useState(false);
-  const [decidingCandidateId, setDecidingCandidateId] = useState<string | null>(
-    null,
-  );
 
   const createItem = async () => {
     const itemName = name.trim();
@@ -424,61 +422,6 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
       }),
       queryClient.invalidateQueries({
         queryKey: legalListKeys.items(workspaceId, listId),
-      }),
-    ]);
-  };
-
-  const decideCandidate = async (
-    candidateId: string,
-    decision: "accept" | "reject",
-  ) => {
-    if (!reviewRun || decidingCandidateId !== null) {
-      return;
-    }
-    setDecidingCandidateId(candidateId);
-    const endpoint = api.lists({
-      workspaceId: toSafeId<"workspace">(workspaceId),
-    })["generation-candidates"];
-    const input = {
-      listId: toSafeId<"legalList">(listId),
-      runId: toSafeId<"legalListGenerationRun">(reviewRun.id),
-      candidateId: toSafeId<"legalListGenerationCandidate">(candidateId),
-    };
-    const result = await Result.tryPromise(async () => {
-      const response =
-        decision === "accept"
-          ? await submit.run({
-              operation: `lists.generation-candidates.accept:${workspaceId}`,
-              body: input,
-              send: endpoint.accept.post,
-            })
-          : await submit.run({
-              operation: `lists.generation-candidates.reject:${workspaceId}`,
-              body: input,
-              send: endpoint.reject.post,
-            });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    });
-    setDecidingCandidateId(null);
-    if (result.isErr()) {
-      getAnalytics().captureError(result.error, {
-        fingerprintKey: "LegalListDetail.decideCandidate:failure",
-        scope: {
-          type: "handler",
-          handlerId: "LegalListDetail.decideCandidate:failure",
-        },
-      });
-      notifyUserError(result.error, t("errors.actionFailed"));
-      return;
-    }
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: legalListKeys.items(workspaceId, listId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: legalListKeys.generations(workspaceId, listId),
       }),
     ]);
   };
@@ -665,73 +608,18 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           </Button>
         </Form>
       </div>
-      {candidatesData &&
-        candidatesData.items.some(
-          (candidate) =>
-            candidate.status === "pending" || candidate.status === "accepting",
-        ) && (
-          <section className="bg-muted/30 border-b px-6 py-3">
-            <p className="text-muted-foreground mb-2 text-xs font-medium">
-              {reviewRun?.instruction}
-            </p>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {candidatesData.items
-                .filter(
-                  (candidate) =>
-                    candidate.status === "pending" ||
-                    candidate.status === "accepting",
-                )
-                .map((candidate) => (
-                  <article
-                    className="bg-background w-80 shrink-0 rounded-lg border p-3"
-                    key={candidate.id}
-                  >
-                    <h3 className="truncate text-sm font-medium">
-                      {candidate.name}
-                    </h3>
-                    {candidate.description && (
-                      <p className="text-muted-foreground mt-1 line-clamp-2 text-xs">
-                        {candidate.description}
-                      </p>
-                    )}
-                    <div className="mt-3 flex justify-end gap-1">
-                      <Button
-                        disabled={
-                          candidate.status === "accepting" ||
-                          decidingCandidateId !== null
-                        }
-                        onClick={() =>
-                          detached(
-                            decideCandidate(candidate.id, "reject"),
-                            "lists.decide-candidate",
-                          )
-                        }
-                        size="sm"
-                        variant="ghost"
-                      >
-                        {t("common.decline")}
-                      </Button>
-                      <Button
-                        disabled={
-                          candidate.status === "accepting" ||
-                          decidingCandidateId !== null
-                        }
-                        onClick={() =>
-                          detached(
-                            decideCandidate(candidate.id, "accept"),
-                            "lists.decide-candidate",
-                          )
-                        }
-                        size="sm"
-                      >
-                        {t("common.accept")}
-                      </Button>
-                    </div>
-                  </article>
-                ))}
-            </div>
-          </section>
-        )}
+      {reviewRun && candidatesData && (
+        <GenerationCandidatesReview
+          canDecide
+          candidates={candidatesData.items}
+          className="bg-muted/30 border-b px-6 py-3"
+          layout="strip"
+          listId={listId}
+          runId={reviewRun.id}
+          title={reviewRun.instruction}
+          workspaceId={workspaceId}
+        />
+      )}
       <div className="min-h-0 flex-1 overflow-auto">
         <Table inset="card" scroll="parent">
           <TableHeader sticky>

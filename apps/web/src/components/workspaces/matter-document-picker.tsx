@@ -23,6 +23,8 @@ type MatterDocumentPickerProps = {
   maxPicked?: number;
   disabled?: boolean;
   label?: string;
+  /** Height of the scrolling document list; short by default. */
+  listClassName?: string;
   onChange: (entityIds: string[]) => void;
 };
 
@@ -34,6 +36,7 @@ export const MatterDocumentPicker = ({
   maxPicked = 5,
   disabled = false,
   label,
+  listClassName = "h-36",
 }: MatterDocumentPickerProps) => {
   const t = useTranslations();
   const [search, setSearch] = useState("");
@@ -97,7 +100,7 @@ export const MatterDocumentPicker = ({
         onValueChange={setSearch}
       />
       <div className="rounded-lg border">
-        <ScrollArea className="h-36">
+        <ScrollArea className={listClassName}>
           <div className="flex flex-col gap-1 p-2">
             {documents.map((doc) => {
               const checked = pickedEntityIds.includes(doc.entityId);

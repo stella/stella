@@ -212,10 +212,12 @@
   },
   "avt": {
     "anchorFacts": {
+      "addFact": "Přidat fakt",
+      "addFactPlaceholder": "Uveďte fakt tak, jak vyplývá z důkazů",
       "addInterpretationNote": "Přidat poznámku k výkladu",
       "description": "Přímé důkazy (e-maily, zprávy, bankovní záznamy, nesporné skutečnosti) zpracované do souboru referenčních faktů, s nimiž se porovnávají tvrzení. Fakta můžete kontrolovat, upravovat nebo ručně přidávat.",
       "editInterpretationNote": "Upravit poznámku k výkladu",
-      "empty": "Označte položky tohoto seznamu jako fakta, proti nimž se budou kontrolovat dokumenty.",
+      "emptyTitle": "Zatím žádná referenční fakta",
       "extractionAndReview": "Extrakce a kontrola",
       "factCount": "{count, plural, one {# fakt} few {# fakty} other {# faktů} many {# faktu}}",
       "heldDescription": "Význam těchto extrahovaných údajů je <strong>skutečně nejistý</strong>: jejich obsah je předběžný nebo nepotvrzený, nejde pouze o ručně psaný text. Do hodnocení se nezahrnou, dokud je kontrolující osoba nepotvrdí, neupraví nebo nepřepíše. Čitelný zdroj se nikdy nezařadí do fronty jen kvůli svému médiu.",
@@ -320,6 +322,36 @@
       "sizeConfirmTitle": "Ověřit tento dokument?",
       "statusLoadFailed": "Stav ověření těchto dokumentů se nepodařilo načíst.",
       "verifyAgain": "Ověřit znovu"
+    },
+    "extraction": {
+      "busy": "Nejdřív dokončete probíhající vytěžování a jeho kontrolu.",
+      "dialogDescription": "Každý navržený fakt cituje pasáž, ze které pochází. Než se dostane do souboru faktů, každý přijmete, nebo odmítnete.",
+      "dialogTitle": "Vytěžit fakta z dokumentů",
+      "documentsChosen": "{count, plural, one {Vybrán # z {max} dokumentů} few {Vybrány # z {max} dokumentů} many {Vybráno # z {max} dokumentů} other {Vybráno # z {max} dokumentů}}",
+      "documentsLabel": "Dokumenty ke čtení",
+      "errors": {
+        "accessRevoked": "Vytěžování faktů se zastavilo, protože přístup není k dispozici.",
+        "aiUnavailable": "Pro čtení dokumentů není k dispozici žádný model AI. Zkontrolujte nastavení AI organizace.",
+        "documentMissing": "Některý z vybraných dokumentů nebo seznam už neexistuje. Načtěte stránku znovu a vyberte znovu.",
+        "enqueueFailed": "Vytěžování faktů se nepodařilo spustit. Zkuste to znovu.",
+        "extractionFailed": "Fakta z těchto dokumentů se nepodařilo vytěžit.",
+        "internal": "Vytěžování faktů neočekávaně selhalo.",
+        "noText": "Z vybraných dokumentů se nepodařilo přečíst žádný text.",
+        "sourceUnavailable": "Některý dokument se po spuštění vytěžování změnil nebo byl odstraněn. Vyberte dokumenty znovu.",
+        "unsupportedFormat": "Fakta lze vytěžit pouze ze souborů DOCX, PDF a souborů s vygenerovanou verzí PDF."
+      },
+      "extractFromDocuments": "Vytěžit z dokumentů",
+      "failedTitle": "Vytěžování faktů se nezdařilo",
+      "inProgressTitle": "Vytěžování faktů",
+      "instructionLabel": "Na co se zaměřit (nepovinné)",
+      "instructionPlaceholder": "Například: platby mezi stranami a kdy proběhly",
+      "nothingFound": "Ve vybraných dokumentech nebyla nalezena žádná fakta.",
+      "queued": "Čeká na spuštění.",
+      "reviewTitle": "{count, plural, one {# navržený fakt ke kontrole} few {# navržené fakty ke kontrole} many {# navrženého faktu ke kontrole} other {# navržených faktů ke kontrole}}",
+      "reviewed": "Přijato {accepted} z {proposed, plural, one {# navrženého faktu} few {# navržených faktů} many {# navrženého faktu} other {# navržených faktů}}.",
+      "running": "Dokumenty se čtou. Navržená fakta se tu objeví ke kontrole.",
+      "startFailed": "Vytěžování faktů se nepodařilo spustit",
+      "submit": "{count, plural, =0 {Vytěžit fakta} one {Vytěžit fakta z # dokumentu} few {Vytěžit fakta z # dokumentů} many {Vytěžit fakta z # dokumentu} other {Vytěžit fakta z # dokumentů}}"
     },
     "guidance": {
       "escalate": "Předat dál",
@@ -4704,6 +4736,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Přijímání {done} z {total}…"
+    },
     "sources": {
       "add": "Přidat zdroj",
       "documentRequired": "Vyberte dokument.",
