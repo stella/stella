@@ -175,6 +175,10 @@
       "types": "./src/spot-place.ts",
       "import": "./src/spot-place.ts"
     },
+    "./stable-block-anchors": {
+      "types": "./src/stable-block-anchors.ts",
+      "import": "./src/stable-block-anchors.ts"
+    },
     "./statute-anchor-scheme": {
       "types": "./src/statute-anchor-scheme.ts",
       "import": "./src/statute-anchor-scheme.ts"

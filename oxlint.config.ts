@@ -2369,6 +2369,7 @@ const config = defineConfig({
     "./.oxlint-plugins/confine-owner.ts",
     "./.oxlint-plugins/mcp-authorized-context-owner.ts",
     "./.oxlint-plugins/no-unanchored-footnotes.ts",
+    "./.oxlint-plugins/no-template-block-anchor.ts",
     "./.oxlint-plugins/no-parser-inline-flatten.ts",
     "./.oxlint-plugins/confine-aggregate-lock.ts",
     "./.oxlint-plugins/count-gated-completion.ts",
@@ -6728,6 +6729,20 @@ const config = defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts"],
       rules: {
         "no-unanchored-footnotes/no-unanchored-footnotes": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-template-block-anchor.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/**/__fixtures__/**",
+      ],
+      rules: {
+        "no-template-block-anchor/no-template-block-anchor": "error",
       },
     },
     {
