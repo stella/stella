@@ -1095,7 +1095,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "Read citations with citing passages: cited_by=citers; cites=citations. AND " +
+      "Read citations with citing passages. cited_by=citers; cites=citations. AND " +
       "filters: doctrine, polarity. polarity: unclassified=unread; " +
       "mixed=disagreeing mentions. doctrine filters reviewed distinguishes/limits, rejected if " +
       "unavailable. doctrine is null when doctrineAvailability=unavailable; " +
