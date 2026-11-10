@@ -336,6 +336,49 @@ describe("the maintenance cut checks the tag gates first", () => {
     });
   }
 
+  test("cuts past a VERSION that was merged but never tagged", async () => {
+    const root = releaseTree("1.2.4");
+    write(root, "docs/changelog/v1.2.4.md", "# Maintenance release\n");
+    write(
+      root,
+      "apps/landing/src/data/changelog-release-dates.json",
+      '{\n  "v1.2.3": "2026-02-01T00:00:00Z"\n}\n',
+    );
+
+    const run = await runCut(root, {}, [], { kind: "superseded" });
+
+    expect(run.error).toBeNull();
+    expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
+      "1.2.5\n",
+    );
+    expect(existsSync(nodePath.join(root, "docs/changelog/v1.2.5.md"))).toBe(
+      true,
+    );
+    expect(existsSync(nodePath.join(root, "docs/changelog/v1.2.4.md"))).toBe(
+      false,
+    );
+    expect(run.npmFinalTags).toEqual(["v1.2.3"]);
+    expect(run.npmArguments).toEqual(["--ref", "v1.2.3"]);
+  });
+
+  for (const previousRelease of [
+    PUBLISHED_PREVIOUS,
+    { kind: "unpromoted" },
+  ] satisfies PreviousRelease[]) {
+    test(`refuses a VERSION whose final tag landed after the fetch (${previousRelease.kind})`, async () => {
+      const root = releaseTree("1.2.4");
+      write(root, "docs/changelog/v1.2.4.md", "# Maintenance release\n");
+      const before = snapshot(root);
+
+      const run = await runCut(root, {}, [], previousRelease);
+
+      expect(run.error).toBeInstanceOf(MaintenanceReleaseError);
+      expect(String(run.error)).toContain("v1.2.4 gained a final tag");
+      expect(run.gatesRun).toEqual([]);
+      expect(snapshot(root)).toEqual(before);
+    });
+  }
+
   test("refuses when the previous final is promoted but its package is missing from npm", async () => {
     const root = releaseTree("1.2.3", "v1.2.3");
     const before = snapshot(root);

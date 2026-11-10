@@ -319,14 +319,14 @@ describe("window title evidence", () => {
         identifier: "ghostty",
         name: "Ghostty",
         details: [
-          { title: "stella", durationMs: 30_000 },
-          { title: "notes", durationMs: 10_000 },
+          { title: "stella", durationMs: 30_000, matter: null },
+          { title: "notes", durationMs: 10_000, matter: null },
         ],
       },
       {
         identifier: "chrome",
         name: "Google Chrome",
-        details: [{ title: "Merge queue", durationMs: 10_000 }],
+        details: [{ title: "Merge queue", durationMs: 10_000, matter: null }],
       },
     ]);
   });

@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# resolución lleva} other {# resoluciones llevan} many {# resoluciones llevan}} este número de asunto. Elija el tribunal.",
     "searchLabel": "Buscar jurisprudencia",
     "searchPlaceholder": "Número de asunto, ECLI o palabras, p. ej. 22 Cdo 2653/2012",
+    "searchStillSearching": "El servicio de búsqueda está ocupado. Seguimos buscando…",
     "searchUnavailable": {
       "description": "No se pudo acceder a la búsqueda de jurisprudencia. Tu consulta se conserva en la barra de direcciones; inténtalo de nuevo en un momento.",
       "title": "La búsqueda no está disponible temporalmente"
@@ -1493,6 +1494,8 @@
           "snapshotContinue": "Seguir leyendo la página",
           "switchTab": "Cambiar a la pestaña"
         },
+        "allowSiteFailed": "No se pudo guardar este sitio web como permitido. Esta acción se ejecuta igualmente; la próxima volverá a preguntar.",
+        "alwaysAllowSite": "Permitir siempre en este sitio web",
         "askAgain": "Volver a preguntar",
         "autoApproveReads": "Aprobar automáticamente la lectura de páginas",
         "description": "Comprueba con atención el sitio web y el destino. El contenido de la página no es de confianza y no puede aprobar otra acción.",
@@ -2052,6 +2055,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# carácter} many {# caracteres} other {# caracteres}}",
+      "commandExited": "{command} (código de salida {code})",
       "consoleLogs": "Salida de consola",
       "exactCall": "Llamada exacta",
       "failed": "Este paso falló; stella lo resolverá de otra manera.",
@@ -2059,10 +2063,14 @@
       "input": "Entrada",
       "interrupted": "Interrumpido antes de finalizar",
       "output": "Salida",
+      "patternInPath": "{pattern} en {path}",
+      "readFile": "Leyendo un archivo",
+      "searchFiles": "Buscando en archivos",
       "sourceCode": "Código fuente",
       "statusWaiting": "En espera",
       "toggleDetails": "Mostrar detalles",
-      "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron} many {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}"
+      "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron} many {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}",
+      "updatePlan": "Actualizando el plan"
     },
     "turnNotification": {
       "failedBody": "Una respuesta del chat en stella no terminó.",
@@ -3072,6 +3080,7 @@
       "aiProviderTaskUnsupported": "El proveedor de IA configurado no puede realizar esta tarea. Elige uno que sí pueda.",
       "aiUnknown": "La solicitud de IA ha fallado. Inténtalo de nuevo.",
       "alreadyOrganizationMember": "Esta persona ya es miembro de esta organización.",
+      "browserSiteGrantLimitReached": "Puede permitir como máximo 100 sitios web. Quite primero uno en Configuración, Conexiones.",
       "clauseDirectivesInvalid": "Una cláusula vinculada contiene directivas no válidas. Corrija la cláusula antes de rellenar la plantilla.",
       "clauseDirectivesInvalidDetails": "La cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Abra el editor de cláusulas, corrija los párrafos indicados y vuelva a rellenar la plantilla.",
       "clauseDirectivesOverrideInvalidDetails": "La sustitución de la cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Corrija la sustitución de este formulario antes de volver a rellenarlo.",
@@ -3107,6 +3116,7 @@
       "organizationMemberLimitReached": "Esta organización ha alcanzado su límite de miembros.",
       "providerKeyRejected": "El proveedor rechazó la clave de API.",
       "providerRateLimited": "Se alcanzó el límite de solicitudes del proveedor. Inténtalo de nuevo en breve.",
+      "skillSourceUnreachable": "No se pudo cargar la fuente de la habilidad. Comprueba que el enlace apunte a un repositorio público de GitHub o inténtalo de nuevo más tarde.",
       "thirdPartyBoundaryRefusal": "La solicitud intentó usar contenido fuera del contexto de espacio de trabajo permitido.",
       "usageLimitExceeded": "Se alcanzó el límite de uso.",
       "validationInvalid": "Un campo tiene un valor que no se puede guardar.",
@@ -4059,6 +4069,7 @@
       "failed": "La revisión del documento falló",
       "filterCoverage": "Cobertura",
       "filterDeviations": "Desviaciones",
+      "fixesWithheldNotice": "No se crearon cambios propuestos para esta revisión porque usó un documento de referencia de un asunto que no está disponible para la persona que la inició. Los resultados no se ven afectados.",
       "flag": "Señalar",
       "flaggedPositions": "{total, plural, one {{flagged, number} de # posición señalada} other {{flagged, number} de # posiciones señaladas} many {{flagged, number} de # posiciones señaladas}}",
       "fromChat": "Desde el chat",
@@ -5437,6 +5448,9 @@
       "browserExtensionDescription": "El chat de stella puede leer y usar sitios web en una pestaña de Chrome que elijas. Cada acción espera tu aprobación.",
       "browserExtensionInstall": "Añadir a Chrome",
       "browserExtensionTitle": "Extensión del navegador",
+      "browserSiteRemove": "Quitar {site}",
+      "browserSitesDescription": "Las acciones del chat en el navegador se ejecutan sin preguntar en estos sitios web. Quite un sitio para que se le vuelva a preguntar.",
+      "browserSitesTitle": "Sitios web permitidos",
       "cliDescription": "Instale el cliente de línea de comandos de stella e inicie sesión para automatizar asuntos, documentos y plantillas desde una terminal.",
       "cliInstallLabel": "Instalación",
       "cliLoginLabel": "Inicio de sesión",
@@ -5553,6 +5567,7 @@
         "case_law_matter_link": "vínculo entre jurisprudencia y asunto",
         "case_law_reader_answer": "respuesta del lector de jurisprudencia",
         "case_law_research_column": "columna de investigación jurisprudencial",
+        "chat_browser_site_grant": "aprobación de sitio web del chat",
         "chat_file": "archivo del chat",
         "chat_message": "mensaje del chat",
         "chat_thread": "conversación",

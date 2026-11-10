@@ -12,10 +12,12 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
+  legalListFactDetails,
   legalListGenerationCandidates,
   legalListGenerationCandidateSources,
   legalListGenerationRuns,
   legalListItems,
+  legalListItemSources,
   legalLists,
   workObligations,
   workspaces,
@@ -27,8 +29,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import type { CandidateFactDetailColumns } from "@/api/lib/lists/generation/candidate-fact-details";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
+import { memberSafeDb } from "@/api/tests/helpers/application-role-db";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -153,6 +157,7 @@ type SeedAcceptanceOptions = {
   itemType: ListItemType;
   ownership: SeededOwnership;
   sources: SeededSources;
+  factDetails?: Partial<CandidateFactDetailColumns>;
 };
 
 const seedSourceDocument = async (
@@ -187,6 +192,7 @@ const seedAcceptance = async ({
   itemType,
   ownership,
   sources,
+  factDetails = {},
 }: SeedAcceptanceOptions): Promise<SeededAcceptance> => {
   const organizationId = toSafeId<"organization">(`org_${Bun.randomUUIDv7()}`);
   const userId = toSafeId<"user">(`user_${Bun.randomUUIDv7()}`);
@@ -251,6 +257,7 @@ const seedAcceptance = async ({
       itemType,
       status: reservedEntityId ? "accepting" : "pending",
       reservedEntityId,
+      ...factDetails,
     });
 
     if (sources === "cited") {
@@ -340,6 +347,7 @@ const seedAcceptance = async ({
 const runAcceptance = async (
   accept: AcceptGenerationCandidate,
   seeded: SeededAcceptance,
+  safeDb: SafeDb = testSafeDb,
 ) =>
   await accept.handler(
     asTestRaw<AcceptGenerationCandidateCtx>({
@@ -358,7 +366,7 @@ const runAcceptance = async (
       ),
       route:
         "/v1/lists/:workspaceId/generation-candidates/accept" satisfies ApiRoutePath,
-      safeDb: testSafeDb,
+      safeDb,
       session: { activeOrganizationId: seeded.organizationId },
       user: { id: seeded.userId },
       workspaceId: seeded.workspaceId,
@@ -490,4 +498,171 @@ test("an accepted fact candidate gains no governed work", async () => {
     await workObligationOf(await acceptGovernedEntityId(seeded)),
   ).toBeUndefined();
   expect(await listItemCount(seeded)).toBe(1);
+});
+
+const factDetailsOf = async (entityId: SafeId<"entity">) =>
+  (
+    await testDb
+      .select({
+        occurredOn: legalListFactDetails.occurredOn,
+        occurredOnPrecision: legalListFactDetails.occurredOnPrecision,
+        evidenceKind: legalListFactDetails.evidenceKind,
+        medium: legalListFactDetails.medium,
+        confidence: legalListFactDetails.confidence,
+        interpretationNote: legalListFactDetails.interpretationNote,
+        scoring: legalListFactDetails.scoring,
+        updatedBy: legalListFactDetails.updatedBy,
+      })
+      .from(legalListFactDetails)
+      .where(eq(legalListFactDetails.itemEntityId, entityId))
+  ).at(0);
+
+// Verification leaves out only facts whose row says `held`, so a fact
+// accepted without a row would be relied on by absence, never by a decision.
+test("an accepted fact gets its proposed details, scored as included", async () => {
+  const seeded = await seedAcceptance({
+    itemType: LIST_ITEM_TYPE.FACT,
+    ownership: "created-here",
+    sources: "cited",
+    factDetails: {
+      occurredOn: "2021-07-01",
+      occurredOnPrecision: "month",
+      evidenceKind: "Document",
+      medium: "Board minutes",
+      confidence: "high",
+    },
+  });
+
+  const entityId = await acceptGovernedEntityId(seeded);
+
+  expect(await factDetailsOf(entityId)).toEqual({
+    occurredOn: "2021-07-01",
+    occurredOnPrecision: "month",
+    evidenceKind: "Document",
+    medium: "Board minutes",
+    confidence: "high",
+    interpretationNote: null,
+    scoring: "included",
+    updatedBy: seeded.userId,
+  });
+});
+
+test("an accepted fact the candidate holds stays held with its note", async () => {
+  const seeded = await seedAcceptance({
+    itemType: LIST_ITEM_TYPE.FACT,
+    ownership: "created-here",
+    sources: "cited",
+    factDetails: {
+      evidenceKind: "Testimony",
+      interpretationNote: "The witness may mean the second meeting.",
+      scoring: "held",
+    },
+  });
+
+  const entityId = await acceptGovernedEntityId(seeded);
+
+  expect(await factDetailsOf(entityId)).toMatchObject({
+    evidenceKind: "Testimony",
+    interpretationNote: "The witness may mean the second meeting.",
+    scoring: "held",
+  });
+});
+
+test("an accepted fact with no proposed details still gets an included row", async () => {
+  const seeded = await seedAcceptance({
+    itemType: LIST_ITEM_TYPE.FACT,
+    ownership: "created-here",
+    sources: "cited",
+  });
+
+  const entityId = await acceptGovernedEntityId(seeded);
+
+  expect(await factDetailsOf(entityId)).toMatchObject({
+    occurredOn: null,
+    confidence: null,
+    scoring: "included",
+  });
+});
+
+test("an accepted task gets no fact details", async () => {
+  const seeded = await seedAcceptance({
+    itemType: LIST_ITEM_TYPE.TASK,
+    ownership: "created-here",
+    sources: "cited",
+  });
+
+  expect(await factDetailsOf(await acceptGovernedEntityId(seeded))).toBe(
+    undefined,
+  );
+});
+
+// Verification reads every fact item without a held row as relied on, so the
+// row must commit with the item itself, not in the later finalizing step.
+test("an accepted fact's details commit with the item, before acceptance finalizes", async () => {
+  const seeded = await seedAcceptance({
+    itemType: LIST_ITEM_TYPE.FACT,
+    ownership: "created-here",
+    sources: "cited",
+    factDetails: { scoring: "held", interpretationNote: "Two readings." },
+  });
+  const { createAcceptGenerationCandidate } =
+    await import("@/api/handlers/lists/generation-candidates/acceptance/create");
+  const { createTaskEntityHandler } =
+    await import("@/api/lib/tasks/create-task-entity");
+  const seenAtCreation: unknown[] = [];
+  const accept = createAcceptGenerationCandidate({
+    async *createTaskEntityHandler(props) {
+      const created = yield* createTaskEntityHandler({
+        ...props,
+        features: { governedWorkflow: false, legalLists: true },
+      });
+      if (created.isOk()) {
+        seenAtCreation.push(await factDetailsOf(created.value.entityId));
+      }
+      return created;
+    },
+  });
+
+  await runAcceptance(accept, seeded);
+
+  expect(seenAtCreation).toEqual([
+    expect.objectContaining({
+      scoring: "held",
+      interpretationNote: "Two readings.",
+    }),
+  ]);
+});
+
+// The other tests run the handler as the database owner, which holds every
+// privilege. Production runs it on the application role, so this one does too:
+// every statement acceptance issues, its row locks included, must be one that
+// role may run.
+test("a member accepts a cited candidate on the application role", async () => {
+  const seeded = await seedAcceptance({
+    itemType: LIST_ITEM_TYPE.TASK,
+    ownership: "created-here",
+    sources: "cited",
+  });
+
+  const accepted = await runAcceptance(
+    acceptGenerationCandidate,
+    seeded,
+    memberSafeDb(testDb, {
+      organizationId: seeded.organizationId,
+      workspaceIds: [seeded.workspaceId],
+      userId: seeded.userId,
+    }),
+  );
+
+  expect(accepted).toEqual({ entityId: expect.any(String) });
+  expect(await candidateReservation(seeded)).toEqual({
+    reservedEntityId: null,
+    status: "accepted",
+  });
+  expect(
+    await testDb.$count(
+      legalListItemSources,
+      eq(legalListItemSources.workspaceId, seeded.workspaceId),
+    ),
+  ).toBe(2);
 });

@@ -65,6 +65,7 @@ test("the modules that resolve an index for a read are the pointer's and the dec
   expect(modulesMatching(/\breadServedCorpusIndexGenerationsTx\b/u)).toEqual([
     "lib/legal-search/corpus-index-group-enrollment-store.ts",
     "lib/observability/case-law-freshness-metrics.ts",
+    "lib/observability/corpus-index-split-census.ts",
   ]);
 });
 

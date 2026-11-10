@@ -5,7 +5,7 @@ import type { OnlineRepair } from "./online-migration-connection";
 
 export const ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINTS = [
   {
-    introducedBy: "20261109103100_organization_ai_instructions",
+    introducedBy: "20261110100000_organization_ai_instructions",
     tableName: "organization_settings",
     constraintName: "organization_settings_ai_instructions_length_check",
   },

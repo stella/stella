@@ -823,6 +823,7 @@ export const ChatTabPanel = ({
             skillChat={{
               contextMatterIds: tab.contextMatterIds,
               document: null,
+              runTarget,
               threadRef,
               webSearch: {
                 available: data.webSearchAvailable,

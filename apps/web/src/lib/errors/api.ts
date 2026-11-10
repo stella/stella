@@ -19,11 +19,13 @@ import {
   parseApiErrorValue,
   parseApiValidationIssues,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
+  SKILL_SOURCE_UNREACHABLE_CODE,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { BROWSER_SITE_GRANT_REFUSAL_CODE } from "@stll/api-contract/browser-site-grants";
 import {
   CHAT_LOCAL_RUN_REFUSAL,
   type ChatLocalRunRefusal,
@@ -114,6 +116,26 @@ export const shouldRetryAPIRequest = (
       error.status >= 500)
   );
 };
+
+const SERVICE_UNAVAILABLE_STATUS = 503;
+const DEFAULT_RETRY_BASE_MS = 1000;
+const DEFAULT_RETRY_MAX_MS = 30_000;
+/** The body field a refusal's `Retry-After` is carried in. */
+export const RETRY_AFTER_MS_DETAIL = "retryAfterMs";
+
+/** How long a 503 said to wait before asking again, when it said. */
+export const serviceBusyRetryAfterMs = (error: unknown): number | undefined => {
+  if (!APIError.is(error) || error.status !== SERVICE_UNAVAILABLE_STATUS) {
+    return undefined;
+  }
+  const value = error.details?.[RETRY_AFTER_MS_DETAIL];
+  return typeof value === "number" ? value : undefined;
+};
+
+/** TanStack's default backoff, unless the server named a delay. */
+export const apiRetryDelayMs = (attemptIndex: number, error: unknown): number =>
+  serviceBusyRetryAfterMs(error) ??
+  Math.min(DEFAULT_RETRY_BASE_MS * 2 ** attemptIndex, DEFAULT_RETRY_MAX_MS);
 
 export type ToAPIErrorProps = {
   status: number;
@@ -297,6 +319,8 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.organizationDataBoxLimitReached",
   [ORGANIZATION_DATA_BOX_REFUSAL_CODE.changedConcurrently]:
     "errors.apiCodes.organizationDataBoxesChanged",
+  [BROWSER_SITE_GRANT_REFUSAL_CODE.limitReached]:
+    "errors.apiCodes.browserSiteGrantLimitReached",
   [CHAT_MESSAGE_EMPTY_ERROR_CODE]: "chat.sendErrorMessageEmpty",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
@@ -337,6 +361,7 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.mcpAuthorizationApprovalRequired",
   provider_key_rejected: "errors.apiCodes.providerKeyRejected",
   provider_rate_limited: "errors.apiCodes.providerRateLimited",
+  [SKILL_SOURCE_UNREACHABLE_CODE]: "errors.apiCodes.skillSourceUnreachable",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
   usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",
   validation: STATUS_ERROR_KEYS.validation,

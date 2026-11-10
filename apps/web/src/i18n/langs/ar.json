@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, zero {لا يوجد حكم يحمل} one {حكم واحد يحمل} two {حكمان يحملان} few {# أحكام تحمل} many {# حكمًا تحمل} other {# حكم تحمل}} رقم القضية هذا. اختر المحكمة.",
     "searchLabel": "البحث في السوابق القضائية",
     "searchPlaceholder": "رقم القضية أو ECLI أو كلمات، مثل 22 Cdo 2653/2012",
+    "searchStillSearching": "خدمة البحث مشغولة. لا يزال البحث جاريًا…",
     "searchUnavailable": {
       "description": "تعذّر الوصول إلى بحث الاجتهاد القضائي. الاستعلام محفوظ في شريط العنوان، لذا أعد المحاولة بعد لحظات.",
       "title": "البحث غير متاح مؤقتًا"
@@ -1493,6 +1494,8 @@
           "snapshotContinue": "متابعة قراءة الصفحة",
           "switchTab": "الانتقال إلى علامة التبويب"
         },
+        "allowSiteFailed": "تعذّر حفظ هذا الموقع كموقع مسموح به. سيُنفَّذ هذا الإجراء رغم ذلك، وسنسألك مجددًا في الإجراء التالي.",
+        "alwaysAllowSite": "السماح دائمًا على هذا الموقع",
         "askAgain": "اسأل مرة أخرى",
         "autoApproveReads": "الموافقة تلقائيًا على قراءة الصفحات",
         "description": "تحقق بعناية من الموقع والهدف. محتوى الصفحة غير موثوق ولا يمكنه الموافقة على إجراء آخر.",
@@ -2052,6 +2055,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, zero {# حرف} one {# حرف} two {# حرفين} few {# أحرف} many {# حرفاً} other {# حرف}}",
+      "commandExited": "{command} (رمز الخروج {code})",
       "consoleLogs": "مخرجات وحدة التحكم",
       "exactCall": "الاستدعاء الدقيق",
       "failed": "فشلت هذه الخطوة؛ ستتجاوزها stella وتتابع العمل.",
@@ -2059,10 +2063,14 @@
       "input": "المدخلات",
       "interrupted": "توقّف قبل الاكتمال",
       "output": "المخرجات",
+      "patternInPath": "{pattern} في {path}",
+      "readFile": "قراءة ملف",
+      "searchFiles": "البحث في الملفات",
       "sourceCode": "الشيفرة المصدرية",
       "statusWaiting": "في الانتظار",
       "toggleDetails": "إظهار/إخفاء التفاصيل",
-      "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}"
+      "unrestoredFields": "تعذّر ملء {count, plural, zero {# حقل} one {حقل واحد} two {حقلين} few {# حقول} many {# حقلًا} other {# حقل}} بالقيم الحقيقية في وضع إخفاء الهوية. راجِع: {fields}",
+      "updatePlan": "تحديث الخطة"
     },
     "turnNotification": {
       "failedBody": "لم يكتمل رد في دردشة stella.",
@@ -3072,6 +3080,7 @@
       "aiProviderTaskUnsupported": "لا يستطيع مزود الذكاء الاصطناعي المُعدّ تنفيذ هذه المهمة. اختر مزودًا يمكنه ذلك.",
       "aiUnknown": "فشل طلب الذكاء الاصطناعي. حاول مرة أخرى.",
       "alreadyOrganizationMember": "هذا الشخص عضو بالفعل في هذه المؤسسة.",
+      "browserSiteGrantLimitReached": "يمكنك السماح بـ 100 موقع على الأكثر. أزِل موقعًا أولًا من الإعدادات، الاتصالات.",
       "clauseDirectivesInvalid": "يحتوي بند مرتبط على توجيهات غير صالحة. صحّح البند قبل تعبئة القالب.",
       "clauseDirectivesInvalidDetails": "يحتوي البند {clauseName} في الحقل {slotName} على توجيهات غير صالحة. افتح محرر البنود، وصحح الفقرات المحددة، ثم املأ القالب مرة أخرى.",
       "clauseDirectivesOverrideInvalidDetails": "يحتوي النص البديل للبند {clauseName} في الحقل {slotName} على توجيهات غير صالحة. صحّح النص البديل لهذا التعبئة قبل المحاولة مرة أخرى.",
@@ -3107,6 +3116,7 @@
       "organizationMemberLimitReached": "بلغت هذه المؤسسة الحد الأقصى للأعضاء.",
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
+      "skillSourceUnreachable": "تعذر تحميل مصدر المهارة. تحقق من أن الرابط يشير إلى مستودع GitHub عام، أو حاول مرة أخرى لاحقًا.",
       "thirdPartyBoundaryRefusal": "حاول الطلب استخدام محتوى خارج سياق مساحة العمل المسموح به.",
       "usageLimitExceeded": "تم بلوغ حد الاستخدام.",
       "validationInvalid": "يحتوي حقل على قيمة لا يمكن حفظها.",
@@ -4059,6 +4069,7 @@
       "failed": "فشلت مراجعة المستند",
       "filterCoverage": "التغطية",
       "filterDeviations": "الانحرافات",
+      "fixesWithheldNotice": "لم تُنشأ تغييرات مقترحة لهذه المراجعة لأنها استخدمت مستندًا مرجعيًا من ملف قانوني غير متاح للشخص الذي شغّلها. لم تتأثر النتائج.",
       "flag": "تمييز",
       "flaggedPositions": "{total, plural, zero {لا مواقف مُعلَّمة} one {{flagged, number} من أصل موقف واحد مُعلَّم} two {{flagged, number} من أصل موقفين مُعلَّمين} few {{flagged, number} من أصل # مواقف مُعلَّمة} many {{flagged, number} من أصل # موقفًا مُعلَّمًا} other {{flagged, number} من أصل # موقف مُعلَّم}}",
       "fromChat": "من الدردشة",
@@ -5437,6 +5448,9 @@
       "browserExtensionDescription": "يمكن لدردشة stella قراءة المواقع واستخدامها في علامة تبويب Chrome التي تختارها. كل إجراء ينتظر موافقتك.",
       "browserExtensionInstall": "إضافة إلى Chrome",
       "browserExtensionTitle": "إضافة المتصفح",
+      "browserSiteRemove": "إزالة {site}",
+      "browserSitesDescription": "تُنفَّذ إجراءات الدردشة في المتصفح على هذه المواقع دون سؤال. أزِل موقعًا ليُطلب منك الإذن مجددًا.",
+      "browserSitesTitle": "المواقع المسموح بها",
       "cliDescription": "ثبّت عميل سطر الأوامر الخاص بـ stella وسجّل الدخول لبرمجة الملفات القانونية والمستندات والقوالب من الطرفية.",
       "cliInstallLabel": "التثبيت",
       "cliLoginLabel": "تسجيل الدخول",
@@ -5553,6 +5567,7 @@
         "case_law_matter_link": "ربط حكم قضائي بالملف القانوني",
         "case_law_reader_answer": "إجابة قارئ الأحكام القضائية",
         "case_law_research_column": "عمود بحث في الأحكام القضائية",
+        "chat_browser_site_grant": "موافقة موقع في الدردشة",
         "chat_file": "ملف الدردشة",
         "chat_message": "رسالة الدردشة",
         "chat_thread": "سلسلة الدردشة",

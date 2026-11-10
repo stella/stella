@@ -1135,6 +1135,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "DELETE /v1/chat/browser-site-grants/:grantId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "DELETE /v1/chat/threads/:threadId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1671,6 +1675,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/chat/browser-site-grants",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/chat/improve-prompt",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2088,6 +2096,10 @@
     },
     {
       "id": "POST /v1/lists/:workspaceId/columns",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/fact-extractions",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
