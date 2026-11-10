@@ -29,6 +29,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 const routeServer = serveRoutesForTest(meRoute);
 afterAll(async () => {
   await routeServer.stop();
+  await releaseAgentAuthTestDb();
 });
 
 setDefaultTimeout(120_000);
@@ -37,10 +38,6 @@ let testDb: TestDatabase;
 
 beforeAll(async () => {
   testDb = await initAgentAuthTestDb();
-});
-
-afterAll(async () => {
-  await releaseAgentAuthTestDb();
 });
 
 const requestAccountRoute = async (browser: HumanBrowser) =>

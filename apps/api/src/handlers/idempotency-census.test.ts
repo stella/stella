@@ -320,6 +320,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  "POST /v1/ai/draft-email": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/ai/summarize": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/api-keys": {
     type: "non-replay",
     reason: "credential",
@@ -448,6 +456,11 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "POST /v1/chat/threads/:threadId/turns/:turnId/cancel": {
     type: "non-replay",
     reason: "stream",
+  },
+  // A repeat answers the turn's undo that is queued, sent or done.
+  "POST /v1/chat/threads/:threadId/turns/:turnId/local-files/undo": {
+    type: "non-replay",
+    reason: "current-state",
   },
   "POST /v1/chat/tool-grants": {
     type: "non-replay",

@@ -4965,6 +4965,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Standardeinstellungen aktiv"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} Zeichen",
+      "description": "Diese Anweisungen gelten für alle KI-Unterhaltungen in Ihrer Organisation und haben Vorrang vor persönlichen Präferenzen. Änderungen gelten ab der nächsten Nachricht. Nutzen Sie sie für Compliance-Regeln, Datenverarbeitung und Formatierungsstandards.",
+      "title": "Organisationsanweisungen",
+      "tooLong": "Die Anweisungen dürfen höchstens {maxLength} Zeichen enthalten."
+    },
     "creationEvaluationLimitReached": "Sie haben alle {limit} Testzeiträume für Organisationen genutzt. Durch das Löschen einer Organisation wird kein Testzeitraum wieder verfügbar. Nutzen Sie eine bestehende Organisation oder wenden Sie sich für einen kostenpflichtigen Zugang an den Support.",
     "creationInvalidName": "Geben Sie einen gültigen Organisationsnamen ein (höchstens {maxLength} Zeichen).",
     "creationNotAllowed": "Mit diesem Konto können keine Organisationen erstellt werden.",

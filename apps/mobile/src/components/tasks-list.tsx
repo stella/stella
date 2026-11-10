@@ -44,7 +44,12 @@ const TasksLoader = ({ source }: { source: AccessTokenSource }) => {
     <Suspense
       fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
     >
-      <LoadedTasks load={load} onReload={reload} refreshing={refreshing} />
+      <LoadedTasks
+        load={load}
+        onReload={reload}
+        refreshing={refreshing}
+        source={source}
+      />
     </Suspense>
   );
 };

@@ -151,7 +151,11 @@
     "scanDocument": "Scan a document",
     "newTask": "New task",
     "uploadDocument": "Upload document",
-    "uploadFailed": "The document could not be uploaded. Try again."
+    "uploadFailed": "The document could not be uploaded. Try again.",
+    "startTimer": "Start timer",
+    "pauseTimer": "Pause timer",
+    "resumeTimer": "Resume timer",
+    "timerRunning": "Timer running"
   },
   "entity": {
     "type": "Type",
@@ -351,5 +355,13 @@
     "share": "Share",
     "cancel": "Cancel",
     "openFailed": "The link could not be opened."
+  },
+  "share": {
+    "title": "Add to stella",
+    "start": "Start",
+    "uploading": "Uploading {done} of {total}…",
+    "filesOnly": "Only the files are saved; links and text are left out.",
+    "unavailableTitle": "Nothing to add",
+    "unavailable": "This share is no longer here. Share it again from the other app."
   }
 }

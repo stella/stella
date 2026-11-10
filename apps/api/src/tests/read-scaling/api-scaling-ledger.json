@@ -1599,6 +1599,14 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/ai/draft-email",
+      "reason": "Model-backed surface over a bounded request; it reads only organization AI settings and persists nothing beyond usage rows, awaiting the write harness for statements and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/ai/summarize",
+      "reason": "Model-backed surface over a bounded request; it reads only organization AI settings and persists nothing beyond usage rows, awaiting the write harness for statements and emitted response bytes."
+    },
+    {
       "id": "POST /v1/api-keys",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1744,6 +1752,10 @@
     },
     {
       "id": "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/turns/:turnId/local-files/undo",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {

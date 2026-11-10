@@ -151,7 +151,11 @@
     "scanDocument": "مسح مستند ضوئيًا",
     "newTask": "مهمة جديدة",
     "uploadDocument": "رفع مستند",
-    "uploadFailed": "تعذّر رفع المستند. حاول مرة أخرى."
+    "uploadFailed": "تعذّر رفع المستند. حاول مرة أخرى.",
+    "startTimer": "بدء المؤقت",
+    "pauseTimer": "إيقاف المؤقت مؤقتًا",
+    "resumeTimer": "استئناف المؤقت",
+    "timerRunning": "المؤقت يعمل"
   },
   "entity": {
     "type": "النوع",
@@ -351,5 +355,13 @@
     "share": "مشاركة",
     "cancel": "إلغاء",
     "openFailed": "تعذّر فتح الرابط."
+  },
+  "share": {
+    "title": "إضافة إلى stella",
+    "start": "ابدأ",
+    "uploading": "جارٍ رفع {done} من {total}…",
+    "filesOnly": "تُحفظ الملفات فقط، وتُستبعد الروابط والنص.",
+    "unavailableTitle": "لا شيء للإضافة",
+    "unavailable": "لم تعد هذه المشاركة متاحة. شاركها مرة أخرى من التطبيق الآخر."
   }
 }

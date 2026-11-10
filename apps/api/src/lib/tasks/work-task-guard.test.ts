@@ -29,7 +29,7 @@ const DIRECT_TASK_KIND = [
   /\$\{[^}\n]+\.kind\}\s*=\s*'task'/gu,
 ] as const;
 
-export const directTaskKindLines = (source: string): number[] => {
+const directTaskKindLines = (source: string): number[] => {
   const lines = new Set<number>();
   for (const pattern of DIRECT_TASK_KIND) {
     for (const match of source.matchAll(pattern)) {

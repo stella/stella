@@ -35,6 +35,7 @@ export const ThreadPane = ({ thread }: { thread: ThreadSelection }) => {
           <ChatThreadView
             fresh={thread.fresh === true}
             matterId={thread.matterId}
+            shareId={undefined}
             source={state.source}
             threadId={thread.threadId}
           />

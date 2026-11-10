@@ -41,13 +41,12 @@ jobs:
             /scripts/retry.sh
       - name: Check out merge-group history for the resolver
         if: github.event_name == 'merge_group'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: stella/.github/actions/partial-clone-checkout@c6d66dfa2a5ad1f96a21b819fe456fecdd3d6f6d
         timeout-minutes: 2
         with:
           ref: ${{ github.event.merge_group.head_sha }}
           path: .merge-group
           fetch-depth: 0
-          filter: blob:none
           persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: /.gitignore
