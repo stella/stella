@@ -5869,7 +5869,10 @@ describe("undoing a turn's file changes", () => {
     return { turnId, runId };
   };
 
-  const connected = async (protocol = DESKTOP_RUNNER_PROTOCOL.current) => {
+  /** A computer on `protocol`, the current one unless a test names an older. */
+  const connected = async (
+    protocol: number = DESKTOP_RUNNER_PROTOCOL.current,
+  ) => {
     const desktopId = Bun.randomUUIDv7();
     const desktop = await openDesktop(undoInstance, desktopId);
     await desktop.hello([], protocol);
