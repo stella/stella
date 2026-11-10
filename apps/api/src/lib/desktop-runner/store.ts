@@ -1412,6 +1412,8 @@ export const insertAssignedRun = async (
       (await hasPendingFolderRestore(tx, {
         owner,
         threadId: chat.threadId,
+        desktopId,
+        deviceJkt: target.deviceJkt,
         now,
       }))
     ) {

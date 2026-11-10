@@ -3,6 +3,7 @@ import {
   and,
   desc,
   eq,
+  gte,
   inArray,
   isNull,
   notInArray,
@@ -18,6 +19,7 @@ import type {
 } from "@stll/api-contract/chat-local-files-undo";
 import {
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
+  DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL,
   type DesktopRunnerFolderRestoreOutcome,
 } from "@stll/api-contract/desktop-runner";
 
@@ -223,8 +225,14 @@ export const readTurnFolderRestore = async (
   }
   const run = await readTurnRun(db, options);
   const restore = await readTurnRestore(db, options);
+  // As the undo itself decides: only the thread's newest turn is undone.
+  const newest = !(await readNewerTurn(db, {
+    owner: options.owner,
+    threadId: options.threadId,
+    turn,
+  }));
   return {
-    undoable: run?.state === "finished" && run.tookCheckpoint,
+    undoable: newest && run?.state === "finished" && run.tookCheckpoint,
     restore: restore === null ? null : viewOf(restore, options.now),
   };
 };
@@ -363,6 +371,7 @@ export const requestFolderRestore = async (
           deviceJkt: runner.deviceJkt,
           sessionId: runner.sessionId,
           instanceId: runner.instanceId,
+          protocol: runner.protocol,
         })
         .from(runner)
         .where(
@@ -380,6 +389,10 @@ export const requestFolderRestore = async (
         .limit(1);
       if (online === undefined) {
         return { type: "refused", reason: "desktop_offline" };
+      }
+      // A desktop app from before restores runs turns, but is never sent one.
+      if (online.protocol < DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL) {
+        return { type: "refused", reason: "desktop_update_required" };
       }
       // audit: skip - the endpoint that asks for the restore audits it
       await tx.insert(restores).values({
@@ -446,7 +459,7 @@ export const claimFolderRestores = async (
     db,
     async (tx): Promise<FolderRestoreToSend[]> => {
       const [current] = await tx
-        .select({ sessionId: runner.sessionId })
+        .select({ protocol: runner.protocol })
         .from(runner)
         .where(
           and(
@@ -458,7 +471,12 @@ export const claimFolderRestores = async (
           ),
         )
         .limit(1);
-      if (current === undefined) {
+      // Only the computer's current socket sends restores, and only one that
+      // speaks them; an older desktop keeps its restores until it updates.
+      if (
+        current === undefined ||
+        current.protocol < DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL
+      ) {
         return [];
       }
       const stale = await tx
@@ -578,6 +596,7 @@ export const readSessionsWithQueuedFolderRestores = async (
         and(
           eq(runner.instanceId, instanceId),
           eq(runner.connection, "connected"),
+          gte(runner.protocol, DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL),
           sql`exists (
             select 1 from ${restores}
             where ${restores.userId} = ${runner.userId}
@@ -592,19 +611,35 @@ export const readSessionsWithQueuedFolderRestores = async (
       .limit(limit)
   ).map(({ sessionId }) => sessionId);
 
+type PendingOnComputerOptions = ThreadOf & {
+  desktopId: string;
+  deviceJkt: string;
+  now: Date;
+};
+
 /**
- * Whether the thread has a restore its computer may still act on: no run
- * starts in the chat's folder meanwhile.
+ * Whether the thread has a restore that this computer may still act on: no
+ * run starts in the chat's folder there meanwhile. Only the computer a
+ * restore was sent to holds that folder, and it is sent the restore again on
+ * every new socket until it answers, so a sent restore keeps blocking runs
+ * there until then. A run on another computer works in that computer's own
+ * folder and is never blocked.
  */
 export const hasPendingFolderRestore = async (
   db: Pick<DesktopRunnerDb, "select">,
-  { owner, threadId, now }: ThreadOf & { now: Date },
+  { owner, threadId, desktopId, deviceJkt, now }: PendingOnComputerOptions,
 ): Promise<boolean> => {
   const [row] = await db
     .select({ id: restores.id })
     .from(restores)
     .where(
-      and(ownedBy(owner), eq(restores.chatThreadId, threadId), pending(now)),
+      and(
+        ownedBy(owner),
+        eq(restores.chatThreadId, threadId),
+        eq(restores.desktopId, desktopId),
+        eq(restores.deviceJkt, deviceJkt),
+        pending(now),
+      ),
     )
     .limit(1);
   return row !== undefined;

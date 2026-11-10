@@ -39,6 +39,7 @@ import {
   DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_FEATURE_ID,
+  DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL,
   DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   DESKTOP_RUNNER_OUTPUT_EVENT,
@@ -5868,10 +5869,10 @@ describe("undoing a turn's file changes", () => {
     return { turnId, runId };
   };
 
-  const connected = async () => {
+  const connected = async (protocol = DESKTOP_RUNNER_PROTOCOL.current) => {
     const desktopId = Bun.randomUUIDv7();
     const desktop = await openDesktop(undoInstance, desktopId);
-    await desktop.hello();
+    await desktop.hello([], protocol);
     return { desktopId, desktop };
   };
 
@@ -6147,6 +6148,65 @@ describe("undoing a turn's file changes", () => {
     await desktop.close();
   });
 
+  test("an undo still unanswered blocks runs only on its own computer", async () => {
+    const own = await connected();
+    const other = await connected();
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(own.desktop, own.desktopId, {
+      threadId,
+    });
+    const undo = await accepted(threadId, turnId);
+    // Sent and not answered: the computer may still be writing the folder.
+    expect((await own.desktop.receive("folder.restore")).restoreId).toBe(
+      undo.restoreId,
+    );
+    const next = await newTurn(threadId);
+    // Another computer works in its own folder: its run starts.
+    const elsewhere = (
+      await control.startRun({
+        ...startInput(other.desktopId),
+        chat: { threadId, turnId: next },
+      })
+    ).unwrap();
+    expect(elsewhere.type).toBe("assigned");
+    // The undo's own computer starts no run in the folder until it answers.
+    const here = (
+      await control.startRun({
+        ...startInput(own.desktopId),
+        chat: { threadId, turnId: next },
+      })
+    ).unwrap();
+    expect(here).toEqual({ type: "folder_busy" });
+    await own.desktop.close();
+    await other.desktop.close();
+  });
+
+  test("a desktop from before restores runs turns, is sent no restore, and its turns are not undone", async () => {
+    const { desktopId, desktop } = await connected(
+      DESKTOP_RUNNER_PROTOCOL.minimum,
+    );
+    expect(DESKTOP_RUNNER_PROTOCOL.minimum).toBeLessThan(
+      DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL,
+    );
+    const threadId = await newThread();
+    const { turnId } = await finishedTurn(desktop, desktopId, { threadId });
+    expect(await request(threadId, turnId)).toEqual({
+      type: "refused",
+      reason: "desktop_update_required",
+    });
+    await undoInstance.gateway.sweep();
+    expect(
+      desktop.received.filter(({ type }) => type === "folder.restore"),
+    ).toEqual([]);
+    expect(
+      await db
+        .select({ id: desktopRunnerFolderRestores.id })
+        .from(desktopRunnerFolderRestores)
+        .where(eq(desktopRunnerFolderRestores.chatTurnId, turnId)),
+    ).toEqual([]);
+    await desktop.close();
+  });
+
   test("only the member's newest finished turn with a checkpoint is undone, and only while its computer is online", async () => {
     const { desktopId, desktop } = await connected();
     const threadId = await newThread();
@@ -6159,6 +6219,8 @@ describe("undoing a turn's file changes", () => {
       type: "refused",
       reason: "not_newest",
     });
+    // Read as the undo decides: an older turn is not undoable.
+    expect((await read(threadId, older.turnId))?.undoable).toBe(false);
     expect(await request(threadId, plain.turnId)).toEqual({
       type: "refused",
       reason: "no_checkpoint",

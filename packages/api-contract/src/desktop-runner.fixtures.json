@@ -2,7 +2,7 @@
   "vocabulary": {
     "protocol": {
       "current": 2,
-      "minimum": 2
+      "minimum": 1
     },
     "maxFrameBytes": 4194304,
     "runLimits": {

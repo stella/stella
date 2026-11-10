@@ -408,10 +408,9 @@ describe("approval summaries", () => {
 describe("desktop runner frames", () => {
   const hello = firstHello();
 
-  test("accept every protocol from the minimum to the current one", () => {
-    expect(DESKTOP_RUNNER_PROTOCOL.minimum).toBeGreaterThanOrEqual(1);
-    expect(DESKTOP_RUNNER_PROTOCOL.minimum).toBeLessThanOrEqual(
-      DESKTOP_RUNNER_PROTOCOL.current,
+  test("accept the current protocol and the one before it", () => {
+    expect(Math.max(1, DESKTOP_RUNNER_PROTOCOL.current - 1)).toBe(
+      DESKTOP_RUNNER_PROTOCOL.minimum,
     );
     for (const protocol of [
       DESKTOP_RUNNER_PROTOCOL.minimum,

@@ -167,7 +167,8 @@ const undoConfig = {
     "computer: its folder goes back to how it was before the turn. Idempotent " +
     "per turn: asking again answers the undo that is queued, sent or done. " +
     "202 with the undo; 409 with a reason when the turn is not the newest, a " +
-    "turn still runs, there is nothing to undo, or the computer is offline; " +
+    "turn still runs, there is nothing to undo, the computer is offline, or " +
+    "its desktop app is too old to undo; " +
     "a turn you cannot see is a 404.",
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,

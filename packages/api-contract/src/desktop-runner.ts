@@ -34,7 +34,16 @@ import {
  * closed value plus rejected ones; the desktop's serde types round-trip the
  * same file, so either side drifting fails its tests.
  */
-export const DESKTOP_RUNNER_PROTOCOL = { current: 2, minimum: 2 } as const;
+export const DESKTOP_RUNNER_PROTOCOL = { current: 2, minimum: 1 } as const;
+
+/**
+ * The first protocol with `folder.restore` and `folder.restored`. A desktop
+ * on an older one still runs turns, is never sent a restore, and an undo of
+ * a turn it ran is refused as `desktop_update_required`. Once a desktop
+ * release that speaks this protocol is published, `minimum` rises to it and
+ * this boundary goes.
+ */
+export const DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL = 2;
 
 /** Largest frame either side sends or accepts, in UTF-8 bytes. */
 export const DESKTOP_RUNNER_MAX_FRAME_BYTES = 4 * 1024 * 1024;

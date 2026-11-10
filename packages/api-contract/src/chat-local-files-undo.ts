@@ -47,14 +47,15 @@ export type ChatLocalFilesUndoComputerRefusal =
 
 /**
  * Why the API refused to ask for an undo (409): a later turn exists, a turn
- * or run of the thread is still going, the turn's run saved no checkpoint, or
- * the run's computer is offline.
+ * or run of the thread is still going, the turn's run saved no checkpoint,
+ * the run's computer is offline, or it runs a desktop app too old to undo.
  */
 export const CHAT_LOCAL_FILES_UNDO_REFUSALS = [
   "not_newest",
   "thread_busy",
   "no_checkpoint",
   "desktop_offline",
+  "desktop_update_required",
 ] as const;
 export type ChatLocalFilesUndoRefusal =
   (typeof CHAT_LOCAL_FILES_UNDO_REFUSALS)[number];
