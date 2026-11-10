@@ -13,6 +13,7 @@ import {
 import { EMPTY_CLAIM_REVIEW } from "@/features/avt/claim-review.logic";
 import type { ClaimReview } from "@/features/avt/types";
 import {
+  confirmLabel,
   contestedFactIds,
   countClaims,
   dispositionGuidance,
@@ -158,6 +159,9 @@ describe("AVT triage", () => {
       guideKey: "avt.guidance.manualJudgement",
       askKey: "avt.disposition.restsOnHeld",
     });
+    // Confirming it is confirming a verdict, not a claim that is ready.
+    expect(confirmLabel("supported", "manual")).toBe("avt.confirm.verdict");
+    expect(confirmLabel("supported", "ready")).toBe("avt.confirm.supported");
     expect(
       dispositionGuidance(
         {

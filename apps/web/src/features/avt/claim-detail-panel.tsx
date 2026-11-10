@@ -283,7 +283,7 @@ export const ClaimDetailPanel = ({
             <div className="flex flex-wrap items-center gap-2">
               <DecisionStatus review={review} />
               <ReviewDecisionActions
-                acceptLabel={t(confirmLabel(state))}
+                acceptLabel={t(confirmLabel(state, guidance.tone))}
                 disabled={isEscalated || !canReview}
                 onAccept={() => setStatus("reviewed")}
                 onReject={() => setStatus("disputed")}

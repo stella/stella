@@ -260,7 +260,12 @@ const CONFIRM_LABEL_KEYS = {
   notverifiable: "avt.confirm.acknowledge",
 } as const satisfies Record<ClaimState, TranslationKey>;
 
-export const confirmLabel = (state: ClaimState) => CONFIRM_LABEL_KEYS[state];
+/** A verdict the reviewer has to weigh is confirmed as a verdict, never as
+ *  "ready", whatever its state. */
+const CONFIRM_VERDICT_KEY = "avt.confirm.verdict" satisfies TranslationKey;
+
+export const confirmLabel = (state: ClaimState, tone: DispositionTone) =>
+  tone === "manual" ? CONFIRM_VERDICT_KEY : CONFIRM_LABEL_KEYS[state];
 
 type ClaimCounts = {
   total: number;
