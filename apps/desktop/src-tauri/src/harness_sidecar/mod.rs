@@ -1167,6 +1167,7 @@ impl Supervisor {
     match self.open(&dir).await {
       Ok(opened) => {
         self.attach(dir.clone(), opened, LinkRole::Current);
+        self.resend_restores(&dir).await;
         return Some(dir);
       }
       Err(OpenError::Incompatible) => {
@@ -1195,6 +1196,7 @@ impl Supervisor {
             "harness holder started"
           );
           self.attach(dir.clone(), opened, LinkRole::Current);
+          self.resend_restores(&dir).await;
           return Some(dir);
         }
         Err(OpenError::Incompatible | OpenError::NoEndpoint) => return None,
@@ -1318,8 +1320,9 @@ impl Supervisor {
   }
 
   /// Ask a holder again for the restores it was sent before its connection
-  /// dropped. The holder answers one still running when it ends, and one it
-  /// finished as `restored`.
+  /// dropped or broke: on every new connection to it, whether a reconnect or
+  /// a later call that opens one. The holder answers one still running when it
+  /// ends, and one it finished as `restored`.
   async fn resend_restores(&mut self, dir: &Path) {
     let lines: Vec<HostLine> = self
       .restores
@@ -1405,6 +1408,8 @@ impl Supervisor {
         };
         tracing::error!(target: LOG_TARGET, kind, "harness holder broke the protocol");
         self.links.remove(&dir);
+        // Its restores stay pending: the holder may still be writing the
+        // folder, and the next connection to it asks for them again.
         self.fail_holder(&dir);
       }
       LinkEvent::Closed => self.lost(&dir, link).await,

@@ -685,6 +685,65 @@ fn a_restore_outlives_a_dropped_connection_and_is_asked_again_on_the_next() {
 }
 
 #[test]
+fn a_restore_outlives_a_link_that_broke_and_is_asked_again_on_the_next() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let restore = |request_id: &str| SidecarFolderRestore {
+      request_id: request_id.to_owned(),
+      workspace_dir: "/tmp/stand-in-folder".to_owned(),
+      run_id: uuid::Uuid::new_v4().to_string(),
+    };
+    let restoring = {
+      let sidecar = sidecar.clone();
+      let first = restore(REQUEST_ID);
+      tokio::spawn(async move { sidecar.restore_folder(first).await })
+    };
+    until("the holder got the restore", || {
+      fixture
+        .received()
+        .iter()
+        .any(|message| message["type"] == "folder.restore")
+    })
+    .await;
+    // The holder breaks the protocol: its runs fail and its link is dropped
+    // with no reconnect, but the restore it may still be writing stays.
+    let mut broken = sidecar.start_run(run_start("garbage")).unwrap();
+    assert_eq!(finish(&mut broken).await, vec![ended(RunOutcome::Failed)]);
+    // The next call that needs the holder connects again, and the connection
+    // asks for the pending restore again by the same request.
+    let later = {
+      let sidecar = sidecar.clone();
+      let next = restore("7a2d3e4f-5b6c-4d7e-8f90-a1b2c3d4e5f6");
+      tokio::spawn(async move { sidecar.restore_folder(next).await })
+    };
+    let answered = tokio::time::timeout(WAIT, restoring)
+      .await
+      .unwrap()
+      .unwrap();
+    assert_eq!(answered, Ok(RestoreOutcome::Restored));
+    sidecar.shutdown().await;
+    // The later restore was asked once and the stand-in never answers a first
+    // ask; stopping the supervisor ends it.
+    assert!(
+      tokio::time::timeout(WAIT, later)
+        .await
+        .unwrap()
+        .unwrap()
+        .is_err()
+    );
+  });
+  let asked: Vec<Value> = fixture
+    .received()
+    .into_iter()
+    .filter(|message| {
+      message["type"] == "folder.restore" && message["requestId"] == REQUEST_ID
+    })
+    .collect();
+  assert_eq!(asked.len(), 2);
+}
+
+#[test]
 fn a_new_version_drains_the_old_holder_and_removes_its_folder() {
   let fixture = Fixture::new();
   with_children(async {
