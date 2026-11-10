@@ -6097,6 +6097,9 @@ describe("undoing a turn's file changes", () => {
       undo: { state: "queued" },
     });
     expect((await desktop.receive("folder.restore")).runId).toBe(runId);
+    await desktop.close();
+  });
+
   test("an undone turn stays named as undone after newer turns, for its owner only", async () => {
     const { desktopId, desktop } = await connected();
     const threadId = await newThread();
