@@ -20,6 +20,7 @@ import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
 import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
+import { chatPinnedThreadsScalingScenario } from "./chat-threads";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
@@ -78,6 +79,7 @@ const measuredApiScenarios = [
   chatLocalRunnersScalingScenario,
   chatLocalFilesUndoScalingScenario,
   chatActiveRunsScalingScenario,
+  chatPinnedThreadsScalingScenario,
   browserSiteGrantsScalingScenario,
   chatMcpAppBundleScalingScenario,
   clientInvoicePrefillScalingScenario,

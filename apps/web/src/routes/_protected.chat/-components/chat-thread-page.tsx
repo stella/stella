@@ -76,6 +76,7 @@ import {
   resolveThreadActiveSkill,
   useThreadActiveSkill,
 } from "@/features/chat/thread-active-skill-store";
+import { useMarkChatThreadReadWhileOpen } from "@/features/chat/thread-reader-state";
 import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -326,6 +327,12 @@ export const ChatThreadPage = ({
     holdQueueForMessageEdit,
     messages,
     startUserMessageEdit,
+    threadRef,
+  });
+
+  useMarkChatThreadReadWhileOpen({
+    isGenerating,
+    threadExists: data.threadExists,
     threadRef,
   });
 

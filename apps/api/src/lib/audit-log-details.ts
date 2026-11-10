@@ -42,6 +42,7 @@ const CHAT_THREAD_SETTING_FIELDS = [
   "chatLocalRunTarget",
   "contextMatterIds",
   "dataWorkspaceIds",
+  "pinState",
   "titleChanged",
   "titleSource",
   "webSearchEnabled",

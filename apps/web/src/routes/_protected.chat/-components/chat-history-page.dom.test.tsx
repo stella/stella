@@ -78,6 +78,8 @@ const thread = (id: string, title: string, updatedAt: string): ThreadSlice => ({
   decision: null,
   id,
   origin: "original",
+  pinState: "unpinned",
+  readState: "read",
   title,
   updatedAt,
   usedAnonymization: false,
@@ -125,7 +127,17 @@ const fullServer = (): Server => ({
 });
 
 const listRequests: URL[] = [];
+/** The history's own reads of its unpinned list; the pinned list mirrors them. */
+const unpinnedListRequests = () =>
+  listRequests.filter((url) => url.searchParams.get("pinState") === "unpinned");
 const deleteRequests: URL[] = [];
+/** Each read or pin mark the page sent: thread, matter scope, body. */
+const markRequests: {
+  body: unknown;
+  kind: string;
+  threadId: string;
+  workspaceId: string | null;
+}[] = [];
 const unexpected: string[] = [];
 const clients: InstanceType<typeof QueryClient>[] = [];
 
@@ -141,6 +153,7 @@ type ServedThread = {
 const listPage = (server: Server, url: URL, pageSize: number): ThreadsPage => {
   const term = url.searchParams.get("search")?.toLowerCase() ?? "";
   const matterId = url.searchParams.get("workspaceId");
+  const pinState = url.searchParams.get("pinState");
   const all: ServedThread[] = [
     ...server.global.map((slice) => ({ slice, workspace: null })),
     ...server.workspaces.flatMap(({ threads, ...workspace }) =>
@@ -148,6 +161,7 @@ const listPage = (server: Server, url: URL, pageSize: number): ThreadsPage => {
     ),
   ]
     .filter(({ slice }) => slice.title.toLowerCase().includes(term))
+    .filter(({ slice }) => pinState === null || slice.pinState === pinState)
     .filter(
       ({ workspace }) =>
         matterId === null || workspace?.workspaceId === matterId,
@@ -182,7 +196,23 @@ const listPage = (server: Server, url: URL, pageSize: number): ThreadsPage => {
   };
 };
 
-/** Serves the history list and thread deletes. */
+const isPinBody = (
+  body: unknown,
+): body is { pinState: ThreadSlice["pinState"] } =>
+  typeof body === "object" &&
+  body !== null &&
+  "pinState" in body &&
+  (body.pinState === "pinned" || body.pinState === "unpinned");
+
+const isReadBody = (
+  body: unknown,
+): body is { readState: ThreadSlice["readState"] } =>
+  typeof body === "object" &&
+  body !== null &&
+  "readState" in body &&
+  (body.readState === "read" || body.readState === "unread");
+
+/** Serves the history list, thread deletes, and read and pin marks. */
 const serve = (
   server: Server,
   {
@@ -210,6 +240,32 @@ const serve = (
           );
         }
         return Response.json(listPage(server, url, pageSize));
+      }
+      const marked = /\/chat\/threads\/([^/]+)\/(read-state|pin-state)$/u.exec(
+        url.pathname,
+      );
+      if (marked !== null && request.method === "PATCH") {
+        const [, threadId = "", kind = ""] = marked;
+        const body: unknown = await request.json();
+        markRequests.push({
+          body,
+          kind,
+          threadId,
+          workspaceId: url.searchParams.get("workspaceId"),
+        });
+        const slices = [
+          ...server.global,
+          ...server.workspaces.flatMap((group) => group.threads),
+        ];
+        for (const slice of slices.filter(({ id }) => id === threadId)) {
+          if (kind === "pin-state" && isPinBody(body)) {
+            slice.pinState = body.pinState;
+          }
+          if (kind === "read-state" && isReadBody(body)) {
+            slice.readState = body.readState;
+          }
+        }
+        return Response.json(body);
       }
       const deleted = /\/chat\/threads\/([^/]+)$/u.exec(url.pathname);
       if (deleted !== null && request.method === "DELETE") {
@@ -240,6 +296,7 @@ afterEach(() => {
   globalThis.fetch = previousFetch;
   listRequests.length = 0;
   deleteRequests.length = 0;
+  markRequests.length = 0;
   unexpected.length = 0;
 });
 afterAll(async () => {
@@ -420,12 +477,12 @@ describe("chat history page", () => {
     });
 
     expect(searchChanges).toEqual([]);
-    expect(listRequests.map((url) => url.searchParams.get("search"))).toEqual([
-      null,
-    ]);
+    expect(
+      unpinnedListRequests().map((url) => url.searchParams.get("search")),
+    ).toEqual([null]);
     await testing.waitFor(() =>
       expect(
-        listRequests.map((url) => url.searchParams.get("search")),
+        unpinnedListRequests().map((url) => url.searchParams.get("search")),
       ).toContain("lease"),
     );
     expect(searchChanges).toEqual([{ q: "lease" }]);
@@ -463,13 +520,13 @@ describe("chat history page", () => {
     expect(
       ui.queryByRole("button", { name: messages.common.loadMore }),
     ).toBeNull();
-    // The page asks the server for that matter's chats; the only unfiltered
-    // read is the matter picker ranking its recent matters.
-    expect(
-      listRequests.filter(
-        (url) => url.searchParams.get("workspaceId") === MATTER_B.id,
-      ),
-    ).toHaveLength(1);
+    // The page asks the server for that matter's chats, pinned and the rest;
+    // the only unfiltered read is the matter picker ranking its recent matters.
+    const matterReads = listRequests
+      .filter((url) => url.searchParams.get("workspaceId") === MATTER_B.id)
+      .map((url) => url.searchParams.get("pinState"));
+    expect(matterReads).toHaveLength(2);
+    expect(new Set(matterReads)).toEqual(new Set(["pinned", "unpinned"]));
     expect(
       listRequests.filter(
         (url) =>
@@ -625,6 +682,93 @@ describe("chat history page", () => {
       ]),
     ).toEqual([[THIS_WEEK_IN_A.id, MATTER_A.id]]);
     expect(threadLink(ui, TODAY_GLOBAL.title)).toBeDefined();
+  });
+
+  test("pinned chats come first, under their own heading, and an unread one says so", async () => {
+    const server = fullServer();
+    const pinnedOlder: ThreadSlice = {
+      ...OLDER_IN_B,
+      pinState: "pinned",
+      readState: "unread",
+    };
+    server.workspaces = server.workspaces.map((group) =>
+      group.workspaceId === MATTER_B.id
+        ? { ...group, threads: [pinnedOlder] }
+        : group,
+    );
+    serve(server);
+    const { ui } = await openHistory();
+
+    await testing.waitFor(() =>
+      expect(groupTitles(ui)).toEqual([
+        messages.navigation.pinned,
+        messages.common.today,
+        messages.chat.history.previous7Days,
+      ]),
+    );
+    const pinnedSection =
+      ui.getAllByRole("heading", { level: 2 }).at(0)?.closest("section") ??
+      ui.container;
+    expect(
+      testing
+        .within(pinnedSection)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual([
+      expect.stringContaining(`${pinnedOlder.title}${messages.common.unread}`),
+    ]);
+    // A read chat carries no unread mark.
+    expect(threadLink(ui, TODAY_GLOBAL.title).textContent).not.toContain(
+      messages.common.unread,
+    );
+  });
+
+  test("a row's actions pin it and mark it unread in its own scope", async () => {
+    serve(fullServer());
+    const { ui } = await openHistory();
+    const rowOf = (title: string) =>
+      threadLink(ui, title).closest("li") ?? ui.container;
+    await testing.waitFor(() =>
+      expect(threadLink(ui, THIS_WEEK_IN_A.title)).toBeDefined(),
+    );
+
+    const choose = async (title: string, action: string) => {
+      await press(
+        testing
+          .within(rowOf(title))
+          .getByRole("button", { name: messages.common.actions }),
+      );
+      await press(
+        await testing.waitFor(() => ui.getByRole("menuitem", { name: action })),
+      );
+    };
+
+    await choose(THIS_WEEK_IN_A.title, messages.common.pin);
+    await testing.waitFor(() =>
+      expect(groupTitles(ui).at(0)).toBe(messages.navigation.pinned),
+    );
+    await choose(THIS_WEEK_IN_A.title, messages.common.markAsUnread);
+    await testing.waitFor(() =>
+      expect(threadLink(ui, THIS_WEEK_IN_A.title).textContent).toContain(
+        messages.common.unread,
+      ),
+    );
+
+    expect(markRequests).toEqual([
+      {
+        body: { pinState: "pinned" },
+        kind: "pin-state",
+        threadId: THIS_WEEK_IN_A.id,
+        workspaceId: MATTER_A.id,
+      },
+      {
+        body: { readState: "unread" },
+        kind: "read-state",
+        threadId: THIS_WEEK_IN_A.id,
+        workspaceId: MATTER_A.id,
+      },
+    ]);
+    expect(unexpected).toEqual([]);
   });
 
   test("each row is a link first, then its actions, in tab order", async () => {

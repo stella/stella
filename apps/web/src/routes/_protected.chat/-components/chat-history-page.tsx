@@ -11,6 +11,10 @@ import { getRouteApi, Link } from "@tanstack/react-router";
 import { useDebouncedCallback } from "use-debounce";
 import { useNow, useTimeZone, useTranslations } from "use-intl";
 
+import {
+  CHAT_THREAD_PIN_STATE,
+  CHAT_THREAD_READ_STATE,
+} from "@stll/api-contract/chat";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Temporal } from "@stll/time";
 import {
@@ -24,7 +28,16 @@ import {
 } from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { NewChatIcon, TrashIcon } from "@stll/ui/icons";
+import { EntityActions, EntityActionsButton } from "@stll/ui/entity-actions";
+import type { EntityAction } from "@stll/ui/entity-actions";
+import {
+  CheckCheckIcon,
+  MailIcon,
+  NewChatIcon,
+  PinIcon,
+  PinOffIcon,
+  TrashIcon,
+} from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import {
   List,
@@ -38,6 +51,7 @@ import {
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { SearchField } from "@stll/ui/search-field";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import {
   ChatThreadDecisionLabel,
@@ -63,6 +77,10 @@ import {
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
 import type { ChatHistoryItem } from "@/features/chat/queries";
+import {
+  useSetChatThreadPinState,
+  useSetChatThreadReadState,
+} from "@/features/chat/thread-reader-state";
 import { useFormatter, useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
@@ -114,9 +132,10 @@ type DeleteDialog =
   { type: "closed" } | { type: "confirm"; thread: ChatHistoryItem };
 
 /**
- * Every chat the reader has started, newest first, grouped by when it was
- * last active. Search (title, matter, pinned matters) and the matter filter
- * (chats that live in that matter) both run on the server, before paging.
+ * Every chat the reader has started: the ones they pinned first, then the
+ * rest newest first, grouped by when each was last active. Search (title,
+ * matter, pinned matters) and the matter filter (chats that live in that
+ * matter) both run on the server, before paging, on both lists.
  */
 export const ChatHistoryPage = ({
   search,
@@ -165,9 +184,22 @@ export const ChatHistoryPage = ({
     type: "closed",
   });
 
+  const pinnedThreadsQuery = useInfiniteQuery({
+    ...groupedChatThreadsOptions({
+      activeOrganizationId,
+      pinState: CHAT_THREAD_PIN_STATE.pinned,
+      search: search.q,
+      userId,
+      workspaceId: search.matter,
+    }),
+    placeholderData: keepPreviousData,
+  });
+  const pinnedThreadsView = queryView(pinnedThreadsQuery);
+  useQueryViewError(pinnedThreadsView, "ChatHistoryPage:query-pinned");
   const threadsQuery = useInfiniteQuery({
     ...groupedChatThreadsOptions({
       activeOrganizationId,
+      pinState: CHAT_THREAD_PIN_STATE.unpinned,
       search: search.q,
       userId,
       workspaceId: search.matter,
@@ -269,7 +301,13 @@ export const ChatHistoryPage = ({
         {threadsView.type !== "pending" && !matterUnavailable ? (
           <QueryViewFeedback view={threadsView} />
         ) : null}
-        {threadsView.type === "items" ? (
+        {/* Both lists fail alike under one filter; one error says so once. */}
+        {threadsView.type !== "pending" &&
+        threadsView.type !== "error" &&
+        !matterUnavailable ? (
+          <QueryViewFeedback view={pinnedThreadsView} />
+        ) : null}
+        {threadsView.type === "items" && pinnedThreadsView.type === "items" ? (
           <ChatHistoryResults
             hasFilter={hasChatHistoryFilter(search)}
             items={listChatHistoryItems(
@@ -277,7 +315,27 @@ export const ChatHistoryPage = ({
             )}
             onClearFilters={clearFilters}
             onDelete={(thread) => setDeleteDialog({ type: "confirm", thread })}
+            pinnedItems={listChatHistoryItems(
+              mergeGroupedChatThreadPages(pinnedThreadsView.items.pages),
+            )}
           />
+        ) : null}
+        {pinnedThreadsQuery.hasNextPage ? (
+          <Button
+            className="self-center"
+            disabled={pinnedThreadsQuery.isFetchingNextPage}
+            onClick={() => {
+              detached(
+                pinnedThreadsQuery.fetchNextPage(),
+                "chat-history.fetch-next-pinned-page",
+              );
+            }}
+            variant="ghost"
+          >
+            {pinnedThreadsQuery.isFetchingNextPage
+              ? t("common.loading")
+              : t("common.loadMore")}
+          </Button>
         ) : null}
         {threadsQuery.hasNextPage ? (
           <Button
@@ -328,6 +386,8 @@ type ChatHistoryResultsProps = {
   items: ChatHistoryItem[];
   onClearFilters: () => void;
   onDelete: (thread: ChatHistoryItem) => void;
+  /** The reader's pinned chats, listed above the rest. */
+  pinnedItems: ChatHistoryItem[];
 };
 
 function ChatHistoryResults({
@@ -335,12 +395,13 @@ function ChatHistoryResults({
   items,
   onClearFilters,
   onDelete,
+  pinnedItems,
 }: ChatHistoryResultsProps) {
   const t = useTranslations();
   const now = useNow();
   const timeZone = useTimeZone() ?? Temporal.Now.timeZoneId();
 
-  if (items.length === 0) {
+  if (items.length === 0 && pinnedItems.length === 0) {
     return hasFilter ? (
       <div className="text-muted-foreground flex flex-col items-start gap-2.5 px-1 text-sm">
         {t("common.noResults")}
@@ -366,6 +427,24 @@ function ChatHistoryResults({
   });
   return (
     <div className="flex flex-col gap-6">
+      {pinnedItems.length > 0 ? (
+        <ListGroup>
+          <ListGroupHeader>
+            <ListGroupHeading>
+              <ListGroupTitle>{t("navigation.pinned")}</ListGroupTitle>
+            </ListGroupHeading>
+          </ListGroupHeader>
+          <List>
+            {pinnedItems.map((thread) => (
+              <ChatHistoryRow
+                key={thread.id}
+                onDelete={() => onDelete(thread)}
+                thread={thread}
+              />
+            ))}
+          </List>
+        </ListGroup>
+      ) : null}
       {groups.map((group) => (
         <ListGroup key={group.period}>
           <ListGroupHeader>
@@ -396,11 +475,15 @@ type ChatHistoryRowProps = {
 /**
  * One chat: the title links to it, the line below names where it came from
  * and what it drew on, and the trailing date says when it was last active.
- * Rename and delete stay visible on narrow screens; where there is room they
- * take the date's place on hover or focus.
+ * A dot and a stronger title mark an answer the reader has not seen yet.
+ * Rename, the actions menu and delete stay visible on narrow screens; where
+ * there is room they take the date's place on hover or focus. Right-click
+ * opens the same actions.
  */
 function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
   const t = useTranslations();
+  const setReadState = useSetChatThreadReadState();
+  const setPinState = useSetChatThreadPinState();
   const format = useFormatter();
   const relativeTime = useRelativeTime();
   const openChatThreadDecision = useOpenChatThreadDecision();
@@ -422,94 +505,162 @@ function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
   );
   const revealClass =
     "md:hidden md:group-focus-within:inline-flex md:group-hover:inline-flex";
+  const unread = thread.readState === CHAT_THREAD_READ_STATE.unread;
+  const pinned = thread.pinState === CHAT_THREAD_PIN_STATE.pinned;
+  const actions: EntityAction[] = [
+    pinned
+      ? {
+          icon: <PinOffIcon />,
+          label: t("common.unpin"),
+          onClick: () =>
+            setPinState.mutate({
+              pinState: CHAT_THREAD_PIN_STATE.unpinned,
+              threadRef,
+            }),
+        }
+      : {
+          icon: <PinIcon />,
+          label: t("common.pin"),
+          onClick: () =>
+            setPinState.mutate({
+              pinState: CHAT_THREAD_PIN_STATE.pinned,
+              threadRef,
+            }),
+        },
+    unread
+      ? {
+          icon: <CheckCheckIcon />,
+          label: t("common.markAsRead"),
+          onClick: () =>
+            setReadState.mutate({
+              readState: CHAT_THREAD_READ_STATE.read,
+              threadRef,
+            }),
+        }
+      : {
+          icon: <MailIcon />,
+          label: t("common.markAsUnread"),
+          onClick: () =>
+            setReadState.mutate({
+              readState: CHAT_THREAD_READ_STATE.unread,
+              threadRef,
+            }),
+        },
+    {
+      icon: <TrashIcon />,
+      label: t("chat.deleteThread"),
+      onClick: onDelete,
+      separatorBefore: true,
+      variant: "destructive",
+    },
+  ];
 
   return (
-    <ListItem className="group">
-      <ChatTitleRename
-        editClassName="min-w-0 flex-1 gap-0.5 text-sm font-medium"
-        editDescription={contextLine}
-        hasMessages
-        ownsRenameCommand={false}
-        renderView={({
-          displayTitle,
-          isSuggesting,
-          startEditingWithSuggestion,
-        }) => (
-          <>
-            <Tooltip
-              content={
-                hasContext ? (
-                  <ThreadContextTooltip context={thread.context} />
-                ) : null
-              }
-              render={
-                <Link
-                  className="focus-visible:ring-ring flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden rounded-md text-start outline-none focus-visible:ring-2"
-                  onClick={(event) => {
-                    openChatThreadDecision(event, thread);
-                  }}
-                  {...(threadRef.scope === "global"
-                    ? {
-                        to: "/chat/$threadId",
-                        params: { threadId: threadRef.threadId },
-                      }
-                    : {
-                        to: "/chat/workspaces/$workspaceId/$threadId",
-                        params: {
-                          threadId: threadRef.threadId,
-                          workspaceId: threadRef.workspaceId,
-                        },
-                      })}
-                />
-              }
-            >
-              <BidiText
-                as="span"
-                className="text-foreground truncate text-sm font-medium"
+    <EntityActions actions={actions} label={t("common.actions")}>
+      <ListItem className="group">
+        <ChatTitleRename
+          editClassName="min-w-0 flex-1 gap-0.5 text-sm font-medium"
+          editDescription={contextLine}
+          hasMessages
+          ownsRenameCommand={false}
+          renderView={({
+            displayTitle,
+            isSuggesting,
+            startEditingWithSuggestion,
+          }) => (
+            <>
+              <Tooltip
+                content={
+                  hasContext ? (
+                    <ThreadContextTooltip context={thread.context} />
+                  ) : null
+                }
+                render={
+                  <Link
+                    className="focus-visible:ring-ring flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden rounded-md text-start outline-none focus-visible:ring-2"
+                    onClick={(event) => {
+                      openChatThreadDecision(event, thread);
+                    }}
+                    {...(threadRef.scope === "global"
+                      ? {
+                          to: "/chat/$threadId",
+                          params: { threadId: threadRef.threadId },
+                        }
+                      : {
+                          to: "/chat/workspaces/$workspaceId/$threadId",
+                          params: {
+                            threadId: threadRef.threadId,
+                            workspaceId: threadRef.workspaceId,
+                          },
+                        })}
+                  />
+                }
               >
-                {displayTitle}
-              </BidiText>
-              {contextLine}
-            </Tooltip>
-            <Tooltip
-              content={format.dateTime(
-                updatedAt,
-                MEDIUM_DATE_SHORT_TIME_FORMAT,
-              )}
-              render={
-                <time
-                  className="text-muted-foreground shrink-0 text-xs tabular-nums md:group-focus-within:hidden md:group-hover:hidden"
-                  dateTime={updatedAt.toISOString()}
-                />
-              }
-            >
-              {relativeTime(updatedAt)}
-            </Tooltip>
-            <ChatTitleSuggestButton
-              className={revealClass}
-              hasMessages
-              isPending={isSuggesting}
-              onTrigger={startEditingWithSuggestion}
-              usedAnonymization={thread.usedAnonymization}
-            />
-          </>
-        )}
-        threadRef={threadRef}
-        title={committedTitle}
-        usedAnonymization={thread.usedAnonymization}
-      />
-      <ListItemActions>
-        <Button
-          aria-label={t("chat.deleteThread")}
-          className={revealClass}
-          onClick={onDelete}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <TrashIcon />
-        </Button>
-      </ListItemActions>
-    </ListItem>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  {unread ? (
+                    <span
+                      aria-hidden="true"
+                      className="bg-info size-2 shrink-0 rounded-full"
+                    />
+                  ) : null}
+                  <BidiText
+                    as="span"
+                    className={cn(
+                      "text-foreground truncate text-sm",
+                      unread ? "font-semibold" : "font-medium",
+                    )}
+                  >
+                    {displayTitle}
+                  </BidiText>
+                  {unread ? (
+                    <span className="sr-only">{t("common.unread")}</span>
+                  ) : null}
+                </span>
+                {contextLine}
+              </Tooltip>
+              <Tooltip
+                content={format.dateTime(
+                  updatedAt,
+                  MEDIUM_DATE_SHORT_TIME_FORMAT,
+                )}
+                render={
+                  <time
+                    className="text-muted-foreground shrink-0 text-xs tabular-nums md:group-focus-within:hidden md:group-hover:hidden"
+                    dateTime={updatedAt.toISOString()}
+                  />
+                }
+              >
+                {relativeTime(updatedAt)}
+              </Tooltip>
+              <ChatTitleSuggestButton
+                className={revealClass}
+                hasMessages
+                isPending={isSuggesting}
+                onTrigger={startEditingWithSuggestion}
+                usedAnonymization={thread.usedAnonymization}
+              />
+            </>
+          )}
+          threadRef={threadRef}
+          title={committedTitle}
+          usedAnonymization={thread.usedAnonymization}
+        />
+        <ListItemActions>
+          <span className={revealClass}>
+            <EntityActionsButton />
+          </span>
+          <Button
+            aria-label={t("chat.deleteThread")}
+            className={revealClass}
+            onClick={onDelete}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <TrashIcon />
+          </Button>
+        </ListItemActions>
+      </ListItem>
+    </EntityActions>
   );
 }
 

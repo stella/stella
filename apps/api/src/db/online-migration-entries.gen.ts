@@ -77,6 +77,7 @@ export { default as indexes_chat_run_log_entries_text_boundary_id_idx } from "./
 export { default as indexes_chat_run_log_entries_text_open_idx } from "./online-migration-entries/indexes-chat-run-log-entries-text-open-idx";
 export { default as indexes_chat_run_log_entries_text_start_idx } from "./online-migration-entries/indexes-chat-run-log-entries-text-start-idx";
 export { default as indexes_chat_thread_compactions_memory_unmined_org_idx } from "./online-migration-entries/indexes-chat-thread-compactions-memory-unmined-org-idx";
+export { default as indexes_chat_threads_org_user_pinned_idx } from "./online-migration-entries/indexes-chat-threads-org-user-pinned-idx";
 export { default as indexes_chat_turns_org_run_id_uidx } from "./online-migration-entries/indexes-chat-turns-org-run-id-uidx";
 export { default as indexes_chat_turns_org_user_active_idx } from "./online-migration-entries/indexes-chat-turns-org-user-active-idx";
 export { default as indexes_client_invoice_unique_indexes } from "./online-migration-entries/indexes-client-invoice-unique-indexes";

@@ -459,6 +459,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "PATCH /v1/case/research/columns/:columnId": "crud",
   "PATCH /v1/chat/threads/:threadId": "crud",
   "PATCH /v1/chat/threads/:threadId/model": "crud",
+  "PATCH /v1/chat/threads/:threadId/pin-state": "crud",
+  "PATCH /v1/chat/threads/:threadId/read-state": "crud",
   "PATCH /v1/chat/threads/:threadId/title": "crud",
   "PATCH /v1/document-types/:documentTypeId": "crud",
   "PATCH /v1/docx-suggestions/:workspaceId/entity/:entityId/reject-pending":

@@ -35,6 +35,8 @@
         "./capabilities/chat.older-messages.list.json",
         "./capabilities/chat.threads.delete.json",
         "./capabilities/chat.threads.list.json",
+        "./capabilities/chat.threads.pin-state.update.json",
+        "./capabilities/chat.threads.read-state.update.json",
         "./capabilities/chat.threads.rename.json",
         "./capabilities/chat.threads.update.json",
         "./capabilities/clauses.categories.create.json",

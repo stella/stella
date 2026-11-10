@@ -247,6 +247,13 @@ const serveSavedBuilder = ({ aiAvailable = true } = {}) => {
       if (pathname.endsWith("/chat/skill-availability")) {
         return Response.json({ unavailable: [] });
       }
+      // The open chat keeps itself read.
+      if (
+        pathname.endsWith(`/chat/threads/${threadRef.threadId}/read-state`) &&
+        request.method === "PATCH"
+      ) {
+        return Response.json({ readState: "read" });
+      }
       if (pathname.startsWith("/api/auth/")) {
         return Response.json(null);
       }

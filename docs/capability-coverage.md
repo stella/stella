@@ -73,6 +73,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `chat.older-messages.list` | read | stella:chat | — | generic invoke → `stella capability chat older-messages-list` |
 | `chat.threads.delete` | write, destructive | stella:chat | — | generic invoke → `stella capability chat threads-delete` |
 | `chat.threads.list` | read | stella:chat | — | generic invoke → `stella capability chat threads-list` |
+| `chat.threads.pin-state.update` | write | stella:chat | — | generic invoke → `stella capability chat threads-pin-state-update` |
+| `chat.threads.read-state.update` | write | stella:chat | — | generic invoke → `stella capability chat threads-read-state-update` |
 | `chat.threads.rename` | write | stella:chat | — | generic invoke → `stella capability chat threads-rename` |
 | `chat.threads.update` | write | stella:chat | — | generic invoke → `stella capability chat threads-update` |
 

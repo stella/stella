@@ -1,12 +1,16 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
 import {
   CHAT_THREAD_ORIGIN,
+  CHAT_THREAD_PIN_STATE,
+  CHAT_THREAD_READ_STATE,
   type ChatThreadOrigin,
+  type ChatThreadPinState,
+  type ChatThreadReadState,
 } from "@stll/api-contract/chat";
 import { numberFromString } from "@stll/api-contract/http-input";
 import { classifyFailure } from "@stll/errors";
@@ -14,6 +18,7 @@ import { classifyFailure } from "@stll/errors";
 import {
   chatMessages,
   chatThreads,
+  chatTurns,
   workspaces as workspacesTable,
 } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
@@ -34,6 +39,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
 import type { PublicDecisionBadge } from "@/api/lib/case-law/decision-badges";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import {
   paginationCursorSchema,
   resourceIdSchema,
@@ -43,6 +49,7 @@ import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 /** The matters a thread's pinned or embedded matter ids name, for search. */
@@ -64,6 +71,8 @@ type ChatThreadListItem = {
   decision: ChatThreadDecision | null;
   id: string;
   origin: ChatThreadOrigin;
+  pinState: ChatThreadPinState;
+  readState: ChatThreadReadState;
   title: string;
   createdAt: Date;
   updatedAt: Date;
@@ -115,7 +124,10 @@ const config = {
     "threads belonging to a matter that is being deleted, are left out. " +
     "Each thread carries a bounded preview of its context: the matters and " +
     "files it drew on, with their total counts, and the case-law decision " +
-    "the chat is about, if any. search matches the thread " +
+    "the chat is about, if any, whether you have read its latest answer " +
+    "(readState) and whether you pinned it (pinState). pinState keeps only " +
+    "your pinned or only your unpinned threads, so a list can show the " +
+    "pinned ones first. search matches the thread " +
     "title, the matter it lives in, or a matter pinned to it; matterId " +
     "keeps only the threads that live in that matter (not global threads " +
     "that merely pinned it) and is not found when you cannot open the " +
@@ -135,6 +147,7 @@ const config = {
       v.pipe(v.string(), v.maxLength(LIMITS.searchQueryMaxLength)),
     ),
     workspaceId: v.optional(resourceIdSchema("workspace")),
+    pinState: v.optional(v.picklist(Object.values(CHAT_THREAD_PIN_STATE))),
     limit: v.optional(
       numberFromString(
         v.pipe(
@@ -148,10 +161,60 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
+/** Turn statuses that leave an answer for the reader to read. */
+const ANSWERED_TURN_STATUSES = [
+  "completed",
+  "failed",
+] as const satisfies readonly ChatTurnStatus[];
+
+/**
+ * The thread's latest answer, by one backward step through
+ * chat_turns_org_user_thread_created_idx per row; a later turn stopped or
+ * interrupted before answering leaves it in place.
+ */
+const LATEST_ANSWER = new QueryBuilder()
+  .select({ settledAt: chatTurns.settledAt })
+  .from(chatTurns)
+  .where(
+    and(
+      eq(chatTurns.organizationId, chatThreads.organizationId),
+      eq(chatTurns.userId, chatThreads.userId),
+      eq(chatTurns.threadId, chatThreads.id),
+      sql`${chatTurns.status} IN (${sql.join(
+        ANSWERED_TURN_STATUSES.map((status) => sql`${status}`),
+        sql`, `,
+      )})`,
+    ),
+  )
+  .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+  .limit(1)
+  .as("latest_answer");
+
+/** Whether the reader has an answer to read; null last_read_at is an explicit "mark unread". */
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both operands are columns compared in the database at their stored precision; no JS Date takes part
+const UNREAD = sql<boolean>`coalesce(${chatThreads.lastReadAt} IS NULL OR ${LATEST_ANSWER.settledAt} > ${chatThreads.lastReadAt}, false)`;
+
+const readerStatesOf = ({
+  pinnedAt,
+  unread,
+}: {
+  pinnedAt: Date | null;
+  unread: boolean;
+}): Pick<ChatThreadListItem, "pinState" | "readState"> => ({
+  pinState:
+    pinnedAt === null
+      ? CHAT_THREAD_PIN_STATE.unpinned
+      : CHAT_THREAD_PIN_STATE.pinned,
+  readState: unread
+    ? CHAT_THREAD_READ_STATE.unread
+    : CHAT_THREAD_READ_STATE.read,
+});
+
 const THREAD_LIST_PROJECTION = {
   createdAt: chatThreads.createdAt,
   forkedFromMessageId: chatThreads.forkedFromMessageId,
   id: chatThreads.id,
+  pinnedAt: chatThreads.pinnedAt,
   subjectDecisionId: chatThreads.subjectDecisionId,
   title: chatThreads.title,
   titleSource: chatThreads.titleSource,
@@ -215,6 +278,13 @@ export const createGetThreads = ({
       if (scope.scope === "workspace") {
         conditions.push(eq(chatThreads.workspaceId, scope.workspaceId));
       }
+      if (query.pinState !== undefined) {
+        conditions.push(
+          query.pinState === CHAT_THREAD_PIN_STATE.pinned
+            ? isNotNull(chatThreads.pinnedAt)
+            : isNull(chatThreads.pinnedAt),
+        );
+      }
       const search = query.search?.trim();
       const searchPattern = search ? `%${escapeLike(search)}%` : null;
       // Membership-mode RLS filters workspace-scoped threads and verifies every
@@ -271,12 +341,13 @@ export const createGetThreads = ({
           }
 
           let listQuery = tx
-            .select(THREAD_LIST_PROJECTION)
+            .select({ ...THREAD_LIST_PROJECTION, unread: UNREAD })
             .from(chatThreads)
             .leftJoin(
               workspacesTable,
               eq(workspacesTable.id, chatThreads.workspaceId),
             )
+            .leftJoinLateral(LATEST_ANSWER, sql`true`)
             .$dynamic();
           if (contextMatterMatch !== null) {
             listQuery = listQuery.leftJoinLateral(
@@ -338,34 +409,29 @@ export const createGetThreads = ({
             : CHAT_THREAD_ORIGIN.fork;
         const context = contexts.get(thread.id) ?? EMPTY_CHAT_THREAD_CONTEXT;
         const decision = decisionOf(thread.subjectDecisionId);
+        const item = {
+          context,
+          decision,
+          id: thread.id,
+          origin,
+          ...readerStatesOf(thread),
+          title: withdrawal.thread(thread).title,
+          createdAt: thread.createdAt,
+          updatedAt: thread.updatedAt,
+          usedAnonymization: thread.usedAnonymization,
+        };
+        const slice = item satisfies AssertNoExtraFields<
+          typeof item,
+          ChatThreadListItem
+        >;
         if (thread.workspaceId === null) {
-          global.push({
-            context,
-            decision,
-            id: thread.id,
-            origin,
-            title: withdrawal.thread(thread).title,
-            createdAt: thread.createdAt,
-            updatedAt: thread.updatedAt,
-            usedAnonymization: thread.usedAnonymization,
-          });
+          global.push(slice);
           continue;
         }
 
         if (thread.workspaceName === null) {
           continue;
         }
-
-        const slice = {
-          context,
-          decision,
-          id: thread.id,
-          origin,
-          title: withdrawal.thread(thread).title,
-          createdAt: thread.createdAt,
-          updatedAt: thread.updatedAt,
-          usedAnonymization: thread.usedAnonymization,
-        };
 
         const existingGroup = groupedWorkspaceThreads.get(thread.workspaceId);
         if (existingGroup) {
