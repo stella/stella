@@ -1,6 +1,6 @@
 {
   "route": "/settings/account/connections",
-  "reason": "Prefetch MCP connectors so pending authorization reviews render with the connection list; load professional-use acceptance before protected route data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1); the sidebar shows each matter's working and waiting chats, read once per page from one bounded list",
+  "reason": "Prefetch MCP connectors so pending authorization reviews render with the connection list; load professional-use acceptance before protected route data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1); the sidebar shows each matter's working and waiting chats, read once per page from one bounded list. The list of websites chat may act on without asking loads with the page (one bounded list of the member's own website approvals)",
   "budget": {
     "depth": 6,
     "requests": [
@@ -9,6 +9,7 @@
       "GET /api/auth/organization/list",
       "GET /health",
       "GET /v1/catalogue",
+      "GET /v1/chat/browser-site-grants",
       "GET /v1/chat/runs/active",
       "GET /v1/chat/threads",
       "GET /v1/mcp/connections",
@@ -31,6 +32,7 @@
       "GET /api/auth/organization/list": 1,
       "GET /health": 1,
       "GET /v1/catalogue": 1,
+      "GET /v1/chat/browser-site-grants": 1,
       "GET /v1/chat/runs/active": 1,
       "GET /v1/chat/threads": 1,
       "GET /v1/mcp/connections": 1,
@@ -53,6 +55,7 @@
       "GET /api/auth/organization/list": 6,
       "GET /health": 0,
       "GET /v1/catalogue": 7,
+      "GET /v1/chat/browser-site-grants": 5,
       "GET /v1/chat/threads": 6,
       "GET /v1/mcp/connections": 5,
       "GET /v1/mcp/connectors": 7,
@@ -74,6 +77,7 @@
       "GET /api/auth/organization/list": 1024,
       "GET /health": 1024,
       "GET /v1/catalogue": 77824,
+      "GET /v1/chat/browser-site-grants": 1024,
       "GET /v1/chat/threads": 4096,
       "GET /v1/mcp/connections": 1024,
       "GET /v1/mcp/connectors": 6144,

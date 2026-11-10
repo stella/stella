@@ -1494,6 +1494,8 @@
           "snapshotContinue": "Pokračovať v čítaní stránky",
           "switchTab": "Prepnúť na kartu"
         },
+        "allowSiteFailed": "Web sa nepodarilo uložiť ako povolený. Táto akcia prebehne; pri ďalšej sa znova opýtame.",
+        "alwaysAllowSite": "Vždy povoliť na tomto webe",
         "askAgain": "Znova sa pýtať",
         "autoApproveReads": "Automaticky schvaľovať čítanie stránok",
         "description": "Dôkladne skontrolujte web a cieľ. Obsah stránky nie je dôveryhodný a nemôže schváliť ďalšiu akciu.",
@@ -2053,6 +2055,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znakov} many {# znaku}}",
+      "commandExited": "{command} (návratový kód {code})",
       "consoleLogs": "Výstup konzoly",
       "exactCall": "Presné volanie",
       "failed": "Tento krok zlyhal; stella si poradí inak.",
@@ -2060,10 +2063,14 @@
       "input": "Vstup",
       "interrupted": "Prerušené pred dokončením",
       "output": "Výstup",
+      "patternInPath": "{pattern} v {path}",
+      "readFile": "Čítanie súboru",
+      "searchFiles": "Vyhľadávanie v súboroch",
       "sourceCode": "Zdrojový kód",
       "statusWaiting": "Čaká",
       "toggleDetails": "Prepnúť podrobnosti",
-      "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}"
+      "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}",
+      "updatePlan": "Aktualizácia plánu"
     },
     "turnNotification": {
       "failedBody": "Odpoveď v chate stelly sa nedokončila.",
@@ -3073,6 +3080,7 @@
       "aiProviderTaskUnsupported": "Nastavený poskytovateľ AI túto úlohu nedokáže vykonať. Vyberte poskytovateľa, ktorý ju dokáže vykonať.",
       "aiUnknown": "Požiadavka AI zlyhala. Skúste to znova.",
       "alreadyOrganizationMember": "Táto osoba už je členom tejto organizácie.",
+      "browserSiteGrantLimitReached": "Povoliť možno najviac 100 webov. Najprv niektorý odoberte v Nastaveniach, v časti Pripojenia.",
       "clauseDirectivesInvalid": "Prepojené ustanovenie obsahuje neplatné direktívy. Pred vyplnením vzoru ustanovenie opravte.",
       "clauseDirectivesInvalidDetails": "Ustanovenie {clauseName} na pozícii {slotName} obsahuje neplatné direktívy. Otvorte editor ustanovenia, opravte uvedené odseky a znova vyplňte vzor.",
       "clauseDirectivesOverrideInvalidDetails": "Prepísané ustanovenie {clauseName} na pozícii {slotName} obsahuje neplatné direktívy. Pred ďalším vyplnením opravte prepísané znenie v tomto vyplnení.",
@@ -5434,6 +5442,9 @@
       "browserExtensionDescription": "Chat v stelle môže čítať weby a pracovať s nimi na karte Chromu, ktorú zvolíte. Každá akcia čaká na vaše schválenie.",
       "browserExtensionInstall": "Pridať do Chromu",
       "browserExtensionTitle": "Rozšírenie prehliadača",
+      "browserSiteRemove": "Odobrať {site}",
+      "browserSitesDescription": "Akcie chatu v prehliadači na týchto weboch prebiehajú bez pýtania. Po odobratí webu sa budeme znova pýtať.",
+      "browserSitesTitle": "Povolené weby",
       "cliDescription": "Nainštalujte si príkazový riadok stella a prihláste sa, aby ste mohli z terminálu skriptovať spisy, dokumenty a vzory.",
       "cliInstallLabel": "Inštalácia",
       "cliLoginLabel": "Prihlásenie",
@@ -5550,6 +5561,7 @@
         "case_law_matter_link": "prepojenie judikátu so spisom",
         "case_law_reader_answer": "odpoveď čítačky judikatúry",
         "case_law_research_column": "stĺpec rešerše judikatúry",
+        "chat_browser_site_grant": "schválenie webu v chate",
         "chat_file": "súbor v konverzácii",
         "chat_message": "správa v konverzácii",
         "chat_thread": "konverzácia",

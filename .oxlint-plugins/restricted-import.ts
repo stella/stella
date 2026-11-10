@@ -503,6 +503,37 @@ const RESTRICTED_IMPORT_RULES = {
       ],
     },
   ],
+  // A copy control confirms through one of two owners: `CopyButton` for a
+  // fixed value, `useSelectionCopy` for selected words (which also confirms
+  // the reader's own copy). The Copy and Copied swap and its timer stay
+  // inside them. See ./copy-feedback-owner.ts.
+  "copy-feedback-owner": [
+    {
+      messageId: "copyFeedbackOwner",
+      message:
+        "Render a Copy control through its owner, not with `{{name}}`: " +
+        "CopyActionButton (@/components/copy-action-button) for a fixed " +
+        "value, or SelectionCopyMenu / SelectionCopyButton with " +
+        "useSelectionCopy (@/components/selection-toolbar-actions) for " +
+        "selected words, which also confirms the reader's own Cmd+C.",
+      modules: [
+        "@stll/ui/copy-button",
+        "packages/ui/src/components/copy-button",
+        "@stll/ui",
+        "packages/ui/src/index",
+      ],
+      restriction: {
+        type: "exports",
+        names: new Set(["CopyFeedback", "useCopiedFeedback"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [
+        "apps/web/src/components/selection-toolbar-actions.tsx",
+        // The package's public barrel re-exports every component.
+        "packages/ui/src/index.ts",
+      ],
+    },
+  ],
 } as const satisfies Record<string, readonly RestrictedImportEntry[]>;
 
 export type RestrictedImportRuleName = keyof typeof RESTRICTED_IMPORT_RULES;

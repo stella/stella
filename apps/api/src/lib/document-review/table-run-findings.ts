@@ -33,6 +33,7 @@ import type {
   WriteReviewFindingBatchResult,
 } from "@/api/lib/document-review/finding-write";
 import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
+import { UNGRADED_VERDICT } from "@/api/lib/document-review/review-grade";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewRunErrorCode } from "@/api/lib/document-review/run-contract";
@@ -42,7 +43,10 @@ import {
   reportFinalizedReviewRun,
 } from "@/api/lib/document-review/run-finalize";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
-import type { GradedVerdict } from "@/api/lib/workflow/verdict-engine";
+import type {
+  GradedVerdict,
+  UngradedVerdict,
+} from "@/api/lib/workflow/verdict-engine";
 
 export type RecordTableRunVerdictsArgs = {
   scopedDb: ScopedDb;
@@ -51,9 +55,13 @@ export type RecordTableRunVerdictsArgs = {
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   graded: readonly GradedVerdict[];
+  /** Positions the model declined or could not grade. Each one becomes the
+   *  finding the review worker writes for it, flagged for a person, and the
+   *  rest of the review stands. */
+  ungraded: readonly UngradedVerdict[];
   /** Verdicts this batch decided nothing about: a gate that no longer matches,
-   *  or a grading call that failed. Either one means the run's promised finding
-   *  set can never be completed. */
+   *  or an ASK whose extraction never finished. Either one means the run's
+   *  promised finding set can never be completed. */
   unresolvedPropertyIds: readonly SafeId<"property">[];
 };
 
@@ -159,6 +167,12 @@ export const recordTableRunDocumentRead = async ({
   });
 };
 
+/** What one finding row records about its position. */
+type Judgment = Pick<
+  ReviewFinding,
+  "verdict" | "rationale" | "matchedRef" | "extracted"
+> & { propertyId: SafeId<"property"> };
+
 type RecordedBatch =
   | Exclude<RecordTableRunVerdictsResult, { type: "written" }>
   | {
@@ -175,9 +189,14 @@ export const recordTableRunVerdicts = async ({
   entityId,
   entityVersionId,
   graded,
+  ungraded,
   unresolvedPropertyIds,
 }: RecordTableRunVerdictsArgs): Promise<RecordTableRunVerdictsResult> => {
-  if (graded.length === 0 && unresolvedPropertyIds.length === 0) {
+  if (
+    graded.length === 0 &&
+    ungraded.length === 0 &&
+    unresolvedPropertyIds.length === 0
+  ) {
     return { type: "no-run" };
   }
 
@@ -210,6 +229,7 @@ export const recordTableRunVerdicts = async ({
     // cell to the topic it answers.
     const propertyIds = [
       ...graded.map((verdict) => verdict.propertyId),
+      ...ungraded.map((verdict) => verdict.propertyId),
       ...unresolvedPropertyIds,
     ];
     const sourceIdByPropertyId = await loadPlaybookSourceIds(tx, {
@@ -237,7 +257,19 @@ export const recordTableRunVerdicts = async ({
     }
 
     const rows: DocumentReviewFindingRow[] = [];
-    for (const verdict of graded) {
+    const judgments: Judgment[] = [
+      ...graded,
+      // The judgment the review worker records for a position it could not
+      // grade: a deviation a person must look at, with the reason it carries,
+      // never a verdict about the document.
+      ...ungraded.map(({ propertyId, extracted }): Judgment => ({
+        propertyId,
+        verdict: UNGRADED_VERDICT.verdict,
+        rationale: UNGRADED_VERDICT.rationale,
+        extracted,
+      })),
+    ];
+    for (const verdict of judgments) {
       const sourceId = sourceIdByPropertyId.get(verdict.propertyId);
       if (sourceId === undefined || sourceId === null) {
         continue;
