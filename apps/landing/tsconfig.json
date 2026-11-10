@@ -22,6 +22,10 @@
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
     "erasableSyntaxOnly": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    // As in base.json: resolve a package's own imports from its workspace
+    // link, so `@astrojs/sitemap`'s `astro` types resolve in an isolated
+    // install instead of becoming error types.
+    "preserveSymlinks": true
   }
 }
