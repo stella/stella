@@ -30,7 +30,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
-import { lintCommand as repositoryLintCommand } from "./lint";
+import { lintCommand as repositoryLintCommand } from "./lint-command";
 
 export const RECEIVER_TYPED_AUTOFIX_RULES = [
   // `x.match(y)` -> `y.test(x)`: assumes `x` is a string (wrong for `Bun.Glob#match`).

@@ -59,7 +59,7 @@ import configuredBudgets from "./code-quality-task-budgets.json" with { type: "j
 import {
   lintCommand as repositoryLintCommand,
   parseLintArguments,
-} from "./lint";
+} from "./lint-command";
 import { isChangedLintPath } from "./lint-paths";
 import { rootScriptLintPaths } from "./root-script-lint";
 
@@ -2221,7 +2221,7 @@ test("the CLI stops after failure, reports it, and propagates its exit code", ()
     "code-quality-task-budgets.json",
     "generated-files.ts",
     "ledger-membership.ts",
-    "lint.ts",
+    "lint-command.ts",
     "lint-paths.ts",
     "oxlint-config-scopes.ts",
     "oxlint-module-closure.ts",

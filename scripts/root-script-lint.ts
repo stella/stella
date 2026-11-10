@@ -1,4 +1,4 @@
-import { lintCommand } from "./lint";
+import { lintCommand } from "./lint-command";
 import { isChangedLintPath } from "./lint-paths";
 
 export const isRootScriptLintPath = (file: string): boolean =>

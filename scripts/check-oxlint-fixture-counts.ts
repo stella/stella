@@ -40,7 +40,7 @@ import path from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 
 import { repositoryRules } from "./check-oxlint-rule-coverage.ts";
-import { lintCommand } from "./lint.ts";
+import { lintCommand } from "./lint-command.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const PLUGIN_DIRECTORY = ".oxlint-plugins";

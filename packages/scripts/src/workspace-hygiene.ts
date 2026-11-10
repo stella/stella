@@ -963,7 +963,7 @@ const findBunCommandFiles = (rootDir: string) => [
 // so a change of linter is an edit to that one file. A package script names
 // only what it lints: `cd ../.. && bun scripts/lint.ts <paths>` for `lint`,
 // with `--fix` for `lint:fix`.
-export const LINT_ENTRY_COMMAND = "bun scripts/lint.ts";
+const LINT_ENTRY_COMMAND = "bun scripts/lint.ts";
 // The linter as a command word: bare, through `bunx`/`bun --bun`, or by its
 // path under node_modules. `oxlint.config.ts`, `@stll/oxlint-config` and
 // `.oxlint-plugins` are not commands.
@@ -973,7 +973,7 @@ const LINT_SCRIPT_FORMS = [
   { name: "lint:fix", entry: `${LINT_ENTRY_COMMAND} --fix` },
 ] as const;
 
-export const validateLintScripts = (
+const validateLintScripts = (
   packagePath: string,
   packageJson: Record<string, unknown> | null,
 ): WorkspaceIssue[] => {

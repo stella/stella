@@ -6,7 +6,7 @@ import {
   lintCommand,
   type LintInvocation,
   parseLintArguments,
-} from "./lint";
+} from "./lint-command";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 

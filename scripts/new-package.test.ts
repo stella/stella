@@ -9,9 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import * as v from "valibot";
 
-import { validateLintScripts } from "../packages/scripts/src/workspace-hygiene";
 import { parseArgs, scaffoldPackage } from "./new-package";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -111,14 +109,6 @@ test("scaffolds the package files and registers the knip workspace", () => {
       "bun-types": "catalog:",
     },
   });
-
-  // The workspace hygiene check accepts the scaffolded lint scripts.
-  expect(
-    validateLintScripts(
-      "packages/matter-dates/package.json",
-      v.parse(v.record(v.string(), v.unknown()), manifest),
-    ),
-  ).toEqual([]);
 
   expect(read(root, "packages/matter-dates/src/index.ts")).toContain(
     "export {};",

@@ -28,7 +28,7 @@ import {
 import { RUST_TEST_DISCOVERY_INPUTS } from "./check-rust-test-determinism";
 import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
-import { lintCommand } from "./lint";
+import { lintCommand } from "./lint-command";
 import { isChangedLintPath } from "./lint-paths";
 import { matches } from "./oxlint-config-scopes";
 import { lintModuleClosure } from "./oxlint-module-closure";
@@ -158,12 +158,16 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
   "$TURBO_ROOT$/scripts/test-timing-ledger.json",
 ] as const;
-// scripts/lint.ts starts every lint run, so a change to it can change what
-// any workspace lint reports.
-export const LINT_ENTRY_INPUT = "$TURBO_ROOT$/scripts/lint.ts";
+// scripts/lint.ts starts every lint run with the command
+// scripts/lint-command.ts builds, so a change to either can change what any
+// workspace lint reports.
+export const LINT_ENTRY_INPUTS = [
+  "$TURBO_ROOT$/scripts/lint.ts",
+  "$TURBO_ROOT$/scripts/lint-command.ts",
+] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
-  LINT_ENTRY_INPUT,
+  ...LINT_ENTRY_INPUTS,
   "$TURBO_ROOT$/tsconfig.tooling.json",
 ] as const;
 export const PLUGIN_FIXTURE_INPUTS = [
@@ -178,7 +182,7 @@ export const PLUGIN_FIXTURE_INPUTS = [
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
-  LINT_ENTRY_INPUT,
+  ...LINT_ENTRY_INPUTS,
   "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
   "$TURBO_ROOT$/scripts/oxlint-safe-fixers.test.ts",
   "$TURBO_ROOT$/scripts/oxlint-additional-guards.test.ts",
@@ -206,7 +210,7 @@ export const ROOT_SCRIPT_LINT_INPUTS = [
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
-  LINT_ENTRY_INPUT,
+  ...LINT_ENTRY_INPUTS,
   "$TURBO_ROOT$/scripts/lint-root-scripts.sh",
   "$TURBO_ROOT$/scripts/lint-root-scripts.ts",
   "$TURBO_ROOT$/scripts/root-script-lint.ts",

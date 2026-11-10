@@ -13,7 +13,7 @@ import { $ } from "bun";
 import { existsSync } from "node:fs";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
-import { lintCommand } from "./lint";
+import { lintCommand } from "./lint-command";
 import { isChangedLintPath } from "./lint-paths";
 
 const mergeBase = (

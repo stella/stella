@@ -23,7 +23,7 @@ import { repoRelativePath } from "@stll/portable-path";
 import oxlintConfig from "../oxlint.config.ts";
 import { TAILWIND_CLASS_CACHE } from "../packages/scripts/src/generated-files";
 import { hasPreparedGeneratedDirectory } from "../packages/scripts/src/prepared-generated-sources";
-import { lintCommand } from "./lint.ts";
+import { lintCommand } from "./lint-command.ts";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const generatedCache = path.join(

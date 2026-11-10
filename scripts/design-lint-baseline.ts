@@ -45,7 +45,7 @@ import {
   type DesignLintBacklog,
   type DesignLintBacklogRule,
 } from "./design-lint-policy.ts";
-import { LINT_CONFIGS, lintCommand } from "./lint.ts";
+import { LINT_CONFIGS, lintCommand } from "./lint-command.ts";
 
 const BASELINE_PATH = BASELINE_PATHS.designLint;
 const CONFIG_PATH = LINT_CONFIGS.design;

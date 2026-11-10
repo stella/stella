@@ -42,7 +42,7 @@ import {
   type GuardRollout,
   guardRolloutSource,
 } from "./guard-rollout-policy.ts";
-import { lintCommand } from "./lint.ts";
+import { lintCommand } from "./lint-command.ts";
 import { assertOfflineCheckPreload } from "./offline-check-startup";
 import { parseLedger } from "./suppression-waivers";
 
