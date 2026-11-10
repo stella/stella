@@ -196,10 +196,11 @@ export const ChatHistoryPage = ({
   });
   const pinnedThreadsView = queryView(pinnedThreadsQuery);
   useQueryViewError(pinnedThreadsView, "ChatHistoryPage:query-pinned");
+  // Every chat, the list the sidebar already holds; pinned ones are dropped
+  // from it below, since the pinned list above shows them all.
   const threadsQuery = useInfiniteQuery({
     ...groupedChatThreadsOptions({
       activeOrganizationId,
-      pinState: CHAT_THREAD_PIN_STATE.unpinned,
       search: search.q,
       userId,
       workspaceId: search.matter,
@@ -312,6 +313,8 @@ export const ChatHistoryPage = ({
             hasFilter={hasChatHistoryFilter(search)}
             items={listChatHistoryItems(
               mergeGroupedChatThreadPages(threadsView.items.pages),
+            ).filter(
+              (thread) => thread.pinState === CHAT_THREAD_PIN_STATE.unpinned,
             )}
             onClearFilters={clearFilters}
             onDelete={(thread) => setDeleteDialog({ type: "confirm", thread })}

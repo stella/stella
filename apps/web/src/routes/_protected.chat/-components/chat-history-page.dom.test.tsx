@@ -110,26 +110,27 @@ type Server = {
   }[];
 };
 
+// Fresh slices per server: marks the page sends rewrite them in place.
 const fullServer = (): Server => ({
-  global: [TODAY_GLOBAL],
+  global: [{ ...TODAY_GLOBAL }],
   workspaces: [
     {
       workspaceId: MATTER_A.id,
       workspaceName: MATTER_A.name,
-      threads: [THIS_WEEK_IN_A],
+      threads: [{ ...THIS_WEEK_IN_A }],
     },
     {
       workspaceId: MATTER_B.id,
       workspaceName: MATTER_B.name,
-      threads: [OLDER_IN_B],
+      threads: [{ ...OLDER_IN_B }],
     },
   ],
 });
 
 const listRequests: URL[] = [];
-/** The history's own reads of its unpinned list; the pinned list mirrors them. */
+/** The history's reads of every chat; its pinned list mirrors them. */
 const unpinnedListRequests = () =>
-  listRequests.filter((url) => url.searchParams.get("pinState") === "unpinned");
+  listRequests.filter((url) => url.searchParams.get("pinState") !== "pinned");
 const deleteRequests: URL[] = [];
 /** Each read or pin mark the page sent: thread, matter scope, body. */
 const markRequests: {
@@ -520,13 +521,13 @@ describe("chat history page", () => {
     expect(
       ui.queryByRole("button", { name: messages.common.loadMore }),
     ).toBeNull();
-    // The page asks the server for that matter's chats, pinned and the rest;
+    // The page asks the server for that matter's chats, all and pinned;
     // the only unfiltered read is the matter picker ranking its recent matters.
     const matterReads = listRequests
       .filter((url) => url.searchParams.get("workspaceId") === MATTER_B.id)
       .map((url) => url.searchParams.get("pinState"));
     expect(matterReads).toHaveLength(2);
-    expect(new Set(matterReads)).toEqual(new Set(["pinned", "unpinned"]));
+    expect(new Set(matterReads)).toEqual(new Set([null, "pinned"]));
     expect(
       listRequests.filter(
         (url) =>

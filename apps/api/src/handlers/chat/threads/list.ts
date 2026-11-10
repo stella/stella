@@ -190,9 +190,12 @@ const LATEST_ANSWER = new QueryBuilder()
   .limit(1)
   .as("latest_answer");
 
-/** Whether the reader has an answer to read; null last_read_at is an explicit "mark unread". */
-// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both operands are columns compared in the database at their stored precision; no JS Date takes part
-const UNREAD = sql<boolean>`coalesce(${chatThreads.lastReadAt} IS NULL OR ${LATEST_ANSWER.settledAt} > ${chatThreads.lastReadAt}, false)`;
+/**
+ * Whether the reader has an answer to read; null last_read_at is an explicit
+ * "mark unread". Both sides are columns compared in the database at their
+ * stored precision.
+ */
+const UNREAD = sql<boolean>`coalesce(${chatThreads.lastReadAt} IS NULL OR ${LATEST_ANSWER.settledAt} > ${chatThreads.lastReadAt}::timestamptz, false)`;
 
 const readerStatesOf = ({
   pinnedAt,
