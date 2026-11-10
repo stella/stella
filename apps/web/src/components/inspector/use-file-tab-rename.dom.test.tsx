@@ -29,11 +29,6 @@ import { userStorageKey } from "@/lib/account/user-scoped-storage";
 
 import type { InspectorTabsStore } from "./inspector-store-types";
 
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
-
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
 
@@ -195,6 +190,8 @@ const failure = (index: number) =>
     );
 
 afterEach(async () => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   await act(async () => cleanup());
   requests.length = 0;
   useInspectorTabsStore.setState({

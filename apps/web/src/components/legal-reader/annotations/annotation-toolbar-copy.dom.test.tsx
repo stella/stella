@@ -8,11 +8,6 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
-
 GlobalRegistrator.register({ url: "https://app.example.test/law" });
 const testEnvironment = createWebTestEnvironment({ file: import.meta.path });
 testEnvironment.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
@@ -54,6 +49,8 @@ Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
 });
 
 afterEach(async () => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   document.getSelection()?.removeAllRanges();
   await act(async () => cleanup());
 });
