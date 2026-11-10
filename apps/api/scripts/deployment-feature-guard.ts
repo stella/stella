@@ -81,6 +81,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Authenticated account holders can create organizations on every deployment",
   ],
   [
+    "/v1/ai",
+    "The Outlook add-in's email summary and reply draft are available on every deployment and enforce their email-assist kill switch, model availability and usage admission",
+  ],
+  [
     "/v1/dictation/transcribe",
     "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
   ],

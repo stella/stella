@@ -320,6 +320,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  "POST /v1/ai/draft-email": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/ai/summarize": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/api-keys": {
     type: "non-replay",
     reason: "credential",

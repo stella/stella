@@ -166,6 +166,8 @@ describe("period identity coverage", () => {
       "lib/rate-limit/queued-action-admission.ts",
     ]);
     expect(declarations.toSorted()).toEqual([
+      "handlers/ai/draft-email.ts",
+      "handlers/ai/summarize.ts",
       "handlers/bilingual-translations/create-run.ts",
       "handlers/bilingual-translations/prepare.ts",
       "handlers/case-law/decisions/search-expand.ts",

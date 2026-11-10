@@ -38,6 +38,7 @@
     "./record-projection": "./src/record-projection.ts",
     "./record-schema": "./src/record-schema.ts",
     "./transcription": "./src/transcription.ts",
+    "./outlook-ai": "./src/outlook-ai.ts",
     "./http-input": "./src/http-input.ts",
     "./mcp-capability-executors": "./src/mcp-capability-executors.ts",
     "./mcp-tool-name": "./src/mcp-tool-name.ts",
