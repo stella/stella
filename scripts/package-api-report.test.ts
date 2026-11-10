@@ -703,14 +703,16 @@ const permutations = <T>(drawn: T[]) =>
 const { drawnType } = fc.letrec<{ drawnType: DrawnType }>((tie) => ({
   drawnType: fc.oneof(
     { depthSize: "small", withCrossShrink: true },
-    fc.constantFrom(...LEAF_TYPES).map((text) => ({ type: "leaf", text })),
+    fc
+      .constantFrom(...LEAF_TYPES)
+      .map((text): DrawnType => ({ type: "leaf", text })),
     fc
       .tuple(fc.constantFrom(...WRAPPERS), tie("drawnType"))
-      .map(([wrap, inner]) => ({ type: "wrap", wrap, inner })),
+      .map(([wrap, inner]): DrawnType => ({ type: "wrap", wrap, inner })),
     fc
       .array(tie("drawnType"), { minLength: 2, maxLength: 4 })
       .chain(permutations)
-      .map((orders) => ({ type: "union", ...orders })),
+      .map((orders): DrawnType => ({ type: "union", ...orders })),
     fc
       .uniqueArray(
         fc.record({
@@ -720,7 +722,7 @@ const { drawnType } = fc.letrec<{ drawnType: DrawnType }>((tie) => ({
         { minLength: 2, maxLength: 4, selector: ({ name }) => name },
       )
       .chain(permutations)
-      .map((orders) => ({ type: "object", ...orders })),
+      .map((orders): DrawnType => ({ type: "object", ...orders })),
   ),
 }));
 
