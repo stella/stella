@@ -184,6 +184,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "/v1/mcp/oauth/mobile-client-metadata.json",
     "The mobile app's client identity is published by every deployment it can sign in to",
   ],
+  [
+    "/v1/mcp/oauth/outlook-client-metadata.json",
+    "The Outlook add-in's client identity is published by every deployment that configures its task-pane origin; others answer 404",
+  ],
   ["/favicon.ico", "The API host's icon is served by every deployment"],
   [
     "/v1/mobile/updates",

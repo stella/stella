@@ -17,6 +17,7 @@ import { type SQL, sql } from "drizzle-orm";
 
 import { apiOAuthResourceUrl } from "@stll/api-contract/api-oauth-resource";
 import { mobileClientMetadataUrl } from "@stll/api-contract/mobile-client";
+import { outlookClientMetadataUrl } from "@stll/api-contract/outlook-client";
 
 export type OwnNativeClientResourceLink = {
   readonly clientId: string;
@@ -29,12 +30,13 @@ export type OwnNativeClientResourceLink = {
  */
 export const ownNativeClientResourceLinks = (
   origin: string,
-): readonly OwnNativeClientResourceLink[] => {
-  const mobileClientId = mobileClientMetadataUrl(origin);
-  return mobileClientId === undefined
-    ? []
-    : [{ clientId: mobileClientId, resourceId: apiOAuthResourceUrl(origin) }];
-};
+): readonly OwnNativeClientResourceLink[] =>
+  [mobileClientMetadataUrl(origin), outlookClientMetadataUrl(origin)].flatMap(
+    (clientId) =>
+      clientId === undefined
+        ? []
+        : [{ clientId, resourceId: apiOAuthResourceUrl(origin) }],
+  );
 
 /** The extra resources a client registration receives because it is one of stella's own apps. */
 export const ownNativeClientResources = (
