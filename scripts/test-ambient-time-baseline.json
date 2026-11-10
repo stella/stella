@@ -2289,11 +2289,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/mcp/tools.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/scripts/better-auth-migration-audit.db.test.ts": {
     "count": 2,
     "owner": "api",

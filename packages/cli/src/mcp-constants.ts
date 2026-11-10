@@ -116,6 +116,8 @@ const MCP_ERROR_CODE_EXIT_MAP = {
   upstream_unavailable: EXIT_CODES.server,
   public_read_timeout: EXIT_CODES.server,
   search_index_unavailable: EXIT_CODES.server,
+  continuation_expired: EXIT_CODES.server,
+  public_read_unfinished: EXIT_CODES.server,
   unknown_tool: EXIT_CODES.server,
   internal_error: EXIT_CODES.server,
 } as const satisfies Record<McpErrorCode, ExitCode>;

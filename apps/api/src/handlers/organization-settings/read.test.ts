@@ -65,6 +65,7 @@ describe("projectOrganizationSettingsRow", () => {
         promptCachingEnabled: true,
         managedAIResidency: "us",
         memoryExtractionEnabled: false,
+        localRunMaxApprovalMode: "full_auto",
         timeMinimumUnitMinutes: 6,
         timeEditWindowDays: 90,
         timeLockedThroughMonth: null,

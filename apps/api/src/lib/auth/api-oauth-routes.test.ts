@@ -27,6 +27,8 @@ const handlerConfigOf = (module: unknown, exportName: string) => {
     accountAccess: isRecord(config) ? config["accountAccess"] : undefined,
     access: isRecord(config) ? config["access"] : undefined,
     mcp: isRecord(config) ? config["mcp"] : undefined,
+    /** A plumbing endpoint's caller kind (`lib/endpoints.ts`). */
+    routeAccess: isRecord(endpoint) ? endpoint["access"] : undefined,
   };
 };
 
@@ -61,6 +63,15 @@ describe("the routes an API access token opens", () => {
       const capability = catalog.get(
         deriveCapabilityId({ file: handler, exportName }),
       );
+      if (uncataloged === "plumbing") {
+        // A plumbing endpoint has no capability and no handler config to be
+        // internal by. Only a member endpoint qualifies, so the token meets
+        // the same member access a browser session does.
+        expect(capability).toBeUndefined();
+        expect(endpoint.mcp).toBeUndefined();
+        expect(endpoint.routeAccess).toBe("member");
+        return;
+      }
       if (uncataloged !== undefined) {
         // An uncataloged handler has no capability to carry a scope; it
         // must be internal for exactly the reason its entry gives.

@@ -7,10 +7,12 @@ import {
 
 import {
   BROWSER_EXTENSION_CAPABILITY,
+  BROWSER_EXTENSION_LOCAL_RUN,
   BROWSER_EXTENSION_PROTOCOL_MISMATCH,
   browserExtensionPolicy,
   composeBrowserExtensionPromptLine,
 } from "./browser-extension-capability";
+import { resolveTurnBrowserExtension } from "./chat-schema";
 
 const ASKED_FOR_A_WEBSITE =
   "Only if the user asks you to open, visit, read or operate a website, or to do something in their browser, tell them, in their language, ";
@@ -102,6 +104,7 @@ describe("browser extension capability policy", () => {
       [
         ...Object.values(BROWSER_EXTENSION_STATUS),
         BROWSER_EXTENSION_PROTOCOL_MISMATCH,
+        BROWSER_EXTENSION_LOCAL_RUN,
       ].toSorted(),
     );
 
@@ -147,6 +150,28 @@ describe("browser extension capability policy", () => {
       }
     },
   );
+
+  test("a turn on the member's computer never offers the browser, whatever the tab reports", () => {
+    const connected = {
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: BROWSER_EXTENSION_STATUS.connected,
+    };
+    // The same report offers the browser to a turn that runs on stella.
+    expect(
+      browserExtensionPolicy(
+        resolveTurnBrowserExtension({
+          reported: connected,
+          runsLocally: false,
+        }),
+      ).toolOffered,
+    ).toBe(true);
+    const policy = browserExtensionPolicy(
+      resolveTurnBrowserExtension({ reported: connected, runsLocally: true }),
+    );
+    expect(policy.toolOffered).toBe(false);
+    expect(policy.promptLine).not.toContain("Browser tools are available");
+    expect(policy.promptLine).toContain("runs on the user's computer");
+  });
 
   test("the connected row keeps its availability line", () => {
     expect(

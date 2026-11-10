@@ -12,8 +12,10 @@
  *    judgment standing.
  */
 
+import { panic } from "better-result";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   describe,
   expect,
@@ -25,6 +27,7 @@ import { and, count, eq, inArray } from "drizzle-orm";
 import type { PlaybookRunProjection } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentReviewFindings,
   documentReviewRuns,
@@ -42,6 +45,7 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import { recordTableRunDocumentRead } from "@/api/lib/document-review/table-run-findings";
 import {
   deletePlaybookColumns,
   deletePlaybookPositionColumns,
@@ -49,7 +53,7 @@ import {
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { memberScopedDb } from "@/api/tests/helpers/application-role-db";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -63,6 +67,15 @@ let testDb: TestDatabase;
 let ids: TestIds;
 
 const seededRunIds: SafeId<"documentReviewRun">[] = [];
+
+/** Runs the code under test as the member, on the application role. */
+const asMember = async <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> =>
+  await memberScopedDb(testDb, {
+    organizationId: ids.orgA,
+    workspaceIds: [ids.wsA1],
+    userId: ids.userA1,
+  })(fn);
+
 // Tracked by kind, because that is what taking them down again requires: a
 // verdict column's dependency edge restricts deleting the ASK column it reads.
 const seededAskIds: SafeId<"property">[] = [];
@@ -141,6 +154,7 @@ const pinnedPlaybook = (
   definitionSnapshot: {
     name: "Termination review",
     positions: { version: 3, items: [gradedPosition] },
+    scope: null,
   },
 });
 
@@ -230,15 +244,18 @@ const seedMaterializedColumns = async (
 };
 
 const openTableRuns = async (definitionId: SafeId<"playbookDefinition">) => {
-  const result = await createPlaybookTableRuns({
-    tx: asTestRaw<Transaction>(testDb),
-    workspaceId: ids.wsA1,
-    organizationId: ids.orgA,
-    userId: ids.userA1,
-    playbook: pinnedPlaybook(definitionId),
-    docTypeGate: null,
-    projection: "none",
-  });
+  const result = await asMember(
+    async (tx) =>
+      await createPlaybookTableRuns({
+        tx,
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        playbook: pinnedPlaybook(definitionId),
+        docTypeGate: null,
+        projection: "none",
+      }),
+  );
   for (const run of result.runs) {
     seededRunIds.push(run.runId);
   }
@@ -283,12 +300,15 @@ const removeColumns = async (
   verdictIds: readonly SafeId<"property">[],
   askIds: readonly SafeId<"property">[],
 ): Promise<void> => {
-  await deletePlaybookColumns({
-    tx: asTestRaw<Transaction>(testDb),
-    workspaceId: ids.wsA1,
-    verdictIds,
-    askIds,
-  });
+  await asMember(
+    async (tx) =>
+      await deletePlaybookColumns({
+        tx,
+        workspaceId: ids.wsA1,
+        verdictIds,
+        askIds,
+      }),
+  );
 };
 
 const clearRuns = async (): Promise<void> => {
@@ -370,15 +390,19 @@ describe("opening runs for a files table", () => {
     });
 
     const openedFileFieldIds = async (projection: PlaybookRunProjection) => {
-      const { runs } = await createPlaybookTableRuns({
-        tx: asTestRaw<Transaction>(testDb),
-        workspaceId: ids.wsA1,
-        organizationId: ids.orgA,
-        userId: ids.userA1,
-        playbook: pinnedPlaybook(await seedPlaybookDefinition()),
-        docTypeGate: null,
-        projection,
-      });
+      const playbook = pinnedPlaybook(await seedPlaybookDefinition());
+      const { runs } = await asMember(
+        async (tx) =>
+          await createPlaybookTableRuns({
+            tx,
+            workspaceId: ids.wsA1,
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+            playbook,
+            docTypeGate: null,
+            projection,
+          }),
+      );
       seededRunIds.push(...runs.map(({ runId }) => runId));
       const rows = await testDb
         .select({ fileFieldId: documentReviewRuns.fileFieldId })
@@ -448,15 +472,18 @@ describe("opening runs for a files table", () => {
     expect(await propertyCount()).toBe(before);
 
     // A document already under review is left alone rather than reviewed twice.
-    const second = await createPlaybookTableRuns({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      organizationId: ids.orgA,
-      userId: ids.userA1,
-      playbook: pinnedPlaybook(definitionId),
-      docTypeGate: null,
-      projection: "none",
-    });
+    const second = await asMember(
+      async (tx) =>
+        await createPlaybookTableRuns({
+          tx,
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          playbook: pinnedPlaybook(definitionId),
+          docTypeGate: null,
+          projection: "none",
+        }),
+    );
     expect(second.runs).toEqual([]);
     expect(second.skippedActiveCount).toBe(1);
 
@@ -478,21 +505,25 @@ describe("opening runs for a files table", () => {
       .where(eq(documentReviewRuns.id, firstRunId));
     await seedFinding(firstRunId);
 
-    const finalized = await finalizeReviewRun({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      runId: firstRunId,
-      entityId: ids.entityA1,
-      fileFieldId: ids.fileFieldA1,
-      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
-      expectedFindingCount: 1,
-    });
+    const finalized = await asMember(
+      async (tx) =>
+        await finalizeReviewRun({
+          tx,
+          workspaceId: ids.wsA1,
+          runId: firstRunId,
+          entityId: ids.entityA1,
+          fileFieldId: ids.fileFieldA1,
+          executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+          expectedFindingCount: 1,
+        }),
+    );
     expect(finalized).toEqual({
       type: "completed",
       committed: 1,
       carried: 0,
       staged: 0,
       skippedForPendingLimit: 0,
+      skippedForUnreadableReference: 0,
     });
 
     const decidedAt = new Date();
@@ -516,21 +547,25 @@ describe("opening runs for a files table", () => {
       .where(eq(documentReviewRuns.id, secondRunId));
     await seedFinding(secondRunId);
 
-    const refinalized = await finalizeReviewRun({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      runId: secondRunId,
-      entityId: ids.entityA1,
-      fileFieldId: ids.fileFieldA1,
-      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
-      expectedFindingCount: 1,
-    });
+    const refinalized = await asMember(
+      async (tx) =>
+        await finalizeReviewRun({
+          tx,
+          workspaceId: ids.wsA1,
+          runId: secondRunId,
+          entityId: ids.entityA1,
+          fileFieldId: ids.fileFieldA1,
+          executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+          expectedFindingCount: 1,
+        }),
+    );
     expect(refinalized).toEqual({
       type: "completed",
       committed: 1,
       carried: 1,
       staged: 0,
       skippedForPendingLimit: 0,
+      skippedForUnreadableReference: 0,
     });
 
     const carried = await testDb
@@ -546,16 +581,140 @@ describe("opening runs for a files table", () => {
   });
 });
 
+describe("telling a table run how its document was read", () => {
+  const scopedDb: ScopedDb = asMember;
+  const source = (charactersWithheld: number) => ({
+    fileFieldId: ids.fileFieldA1,
+    passagesCut: 1,
+    charactersWithheld,
+    charactersTotal: 1000,
+  });
+  const openRun = async () => {
+    const definitionId = await seedPlaybookDefinition();
+    const { askId } = await seedMaterializedColumns(definitionId);
+    const opened = await openTableRuns(definitionId);
+    const runId = opened.runs.at(0)?.runId ?? panic("No run was opened");
+    await testDb
+      .update(documentReviewRuns)
+      .set({
+        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+        status: "running",
+      })
+      .where(eq(documentReviewRuns.id, runId));
+    const read = async () =>
+      (
+        await testDb
+          .select({
+            status: documentReviewRuns.status,
+            errorCode: documentReviewRuns.errorCode,
+            withheldSources: documentReviewRuns.withheldSources,
+          })
+          .from(documentReviewRuns)
+          .where(eq(documentReviewRuns.id, runId))
+      ).at(0);
+    const [pinned] = await testDb
+      .select({ entityVersionId: documentReviewRuns.entityVersionId })
+      .from(documentReviewRuns)
+      .where(eq(documentReviewRuns.id, runId));
+    const batch: BatchRead = {
+      entityVersionId: pinned?.entityVersionId ?? panic("No pinned version"),
+      propertyIds: [askId],
+    };
+    return { read, batch };
+  };
+  type BatchRead = Pick<
+    Parameters<typeof recordTableRunDocumentRead>[0],
+    "entityVersionId" | "propertyIds"
+  >;
+  const report = async (
+    batch: BatchRead,
+    read: Parameters<typeof recordTableRunDocumentRead>[0]["read"],
+  ) =>
+    await recordTableRunDocumentRead({
+      scopedDb,
+      workspaceId: ids.wsA1,
+      entityId: ids.entityA1,
+      ...batch,
+      read,
+    });
+
+  afterEach(clearRuns);
+
+  test("a later batch repeats a file's record instead of adding to it", async () => {
+    const { read, batch } = await openRun();
+
+    await report(batch, { type: "cut", withheld: [source(100)] });
+    await report(batch, { type: "cut", withheld: [source(200)] });
+
+    expect(await read()).toMatchObject({
+      withheldSources: [source(200)],
+    });
+  });
+
+  test("a document too large fails the run with its own code", async () => {
+    const { read, batch } = await openRun();
+
+    await report(batch, { type: "tooLarge" });
+
+    expect(await read()).toMatchObject({
+      status: "failed",
+      errorCode: "document_too_large",
+    });
+  });
+
+  test("a batch for a column outside the run leaves the run alone", async () => {
+    const { read, batch } = await openRun();
+
+    await report(
+      { ...batch, propertyIds: [toSafeId<"property">(Bun.randomUUIDv7())] },
+      { type: "tooLarge" },
+    );
+
+    expect(await read()).toMatchObject({ status: "running", errorCode: null });
+  });
+
+  test("a batch that read another version leaves the run alone", async () => {
+    const { read, batch } = await openRun();
+
+    await report(
+      {
+        ...batch,
+        entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
+      },
+      { type: "tooLarge" },
+    );
+
+    expect(await read()).toMatchObject({ status: "running", errorCode: null });
+  });
+
+  test("a cut records only the file the run reviews", async () => {
+    const { read, batch } = await openRun();
+    const otherFile = {
+      ...source(900),
+      fileFieldId: Bun.randomUUIDv7(),
+    };
+
+    await report(batch, { type: "cut", withheld: [otherFile, source(100)] });
+    expect(await read()).toMatchObject({ withheldSources: [source(100)] });
+
+    await report(batch, { type: "cut", withheld: [otherFile] });
+    expect(await read()).toMatchObject({ withheldSources: [source(100)] });
+  });
+});
+
 describe("deleting what a review was measured against", () => {
   test("deleting one visible playbook result removes its ASK and verdict rows", async () => {
     const definitionId = await seedPlaybookDefinition();
     const { askId, verdictId } = await seedMaterializedColumns(definitionId);
 
-    await deletePlaybookPositionColumns({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      playbookSourceId: POSITION_ID,
-    });
+    await asMember(
+      async (tx) =>
+        await deletePlaybookPositionColumns({
+          tx,
+          workspaceId: ids.wsA1,
+          playbookSourceId: POSITION_ID,
+        }),
+    );
 
     const remaining = await testDb
       .select({ id: properties.id })

@@ -1,5 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
+
 import {
   cancelPendingChatToolCalls,
   continueStoredChatPart,
@@ -129,15 +131,11 @@ const SETTLED_TOOL_CALL_STATE = {
   "input-streaming": false,
 } as const satisfies Record<ToolCallState, boolean>;
 
-const isDeniedCall = (part: SettlementPart): boolean =>
-  part.type === "tool-call" &&
-  "approval" in part &&
-  part.approval.approved === false;
-
 /** A call is settled once its result or error is stored, or its approval was
- *  denied. */
+ *  declined (a thread stored before declined calls settled as errors keeps
+ *  them `approval-responded`). */
 const isSettledToolCall = (part: SettlementToolCall): boolean =>
-  SETTLED_TOOL_CALL_STATE[part.state] || isDeniedCall(part);
+  SETTLED_TOOL_CALL_STATE[part.state] || isDeclinedChatToolCall(part);
 
 export type UnsettledToolCall = {
   state: ToolCallState;
