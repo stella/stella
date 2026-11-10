@@ -758,76 +758,121 @@ const TMPL_SUPPLY_PREFILL_FIXTURE: {
 // lists.generation.extract-facts (apps/api/src/lib/lists/generation/
 // fact-extract.ts). The worker keeps only facts whose quote it can find in
 // the block the fact names, so a fixed answer would ground nothing in a real
-// document. This one quotes the opening sentence of the first prose blocks
-// it is asked about (headings are skipped) and states a fact in the words a
-// reviewer would write, with a date, so a local run reads like a real one.
-// The second fact of each window is held as contested, so a run shows
-// included and held facts with sources.
+// document. This one quotes the opening sentence of the prose blocks it is
+// asked about and states the fact that sentence supports, in a reviewer's
+// words, with the date the sentence gives. A sentence no rule recognises
+// proposes nothing, so a fact never cites a passage about something else.
+// A person's account is held as contested, so a run shows included and held
+// facts with sources.
 const MOCK_FACTS_PER_WINDOW = 3;
 const MOCK_QUOTE_MAX = 200;
 // A heading or a label is not a passage a fact can rest on.
 const MOCK_QUOTE_MIN = 40;
 
-const MOCK_FACT_STATEMENTS = [
-  {
-    fact: "On 3 March 2026 the supplier gave 30 days' notice of termination.",
-    occurredOn: "2026-03-03",
-  },
-  {
-    fact: "The buyer paid the first instalment of EUR 250,000 on 14 January 2026.",
-    occurredOn: "2026-01-14",
-  },
-  {
-    fact: "The board approved the share acquisition at its meeting on 9 February 2026.",
-    occurredOn: "2026-02-09",
-  },
-  {
-    fact: "On 20 April 2026 the seller disclosed two pending employment claims.",
-    occurredOn: "2026-04-20",
-  },
-  {
-    fact: "The valuation report of 12 May 2026 put the equity value at EUR 18 million.",
-    occurredOn: "2026-05-12",
-  },
-  {
-    fact: "The parties agreed in July 2026 that deliveries would start in September.",
-    occurredOn: "2026-07",
-  },
-  {
-    fact: "On 2 June 2026 the buyer asked for the escrow to run for 18 months.",
-    occurredOn: "2026-06-02",
-  },
-  {
-    fact: "The supplier confirmed on 15 May 2026 that its liability is capped at the fees paid.",
-    occurredOn: "2026-05-15",
-  },
-  {
-    fact: "The insurer issued the product liability certificate on 28 April 2026.",
-    occurredOn: "2026-04-28",
-  },
-  {
-    fact: "The customer withheld the March 2026 invoice pending a quality audit.",
-    occurredOn: "2026-03",
-  },
-  {
-    fact: "The seller's counsel sent the disclosure letter on 18 February 2026.",
-    occurredOn: "2026-02-18",
-  },
-  {
-    fact: "Both parties signed the supply agreement on 1 July 2026.",
-    occurredOn: "2026-07-01",
-  },
-] as const;
+const MONTHS = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
 
-// Picks a statement from the quoted passage, so a passage keeps its fact
-// across runs and different passages mostly get different ones.
-const mockStatementFor = (passage: string) => {
-  let hash = 0;
-  for (const char of passage) {
-    hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % 9973;
+/** The first date a sentence states, as YYYY-MM-DD or YYYY, else null. */
+const mockDateIn = (sentence: string) => {
+  const day =
+    /\b(?<day>\d{1,2}) (?<month>[A-Z][a-z]+) (?<year>(?:19|20)\d{2})\b/u.exec(
+      sentence,
+    )?.groups;
+  const month = MONTHS.indexOf(day?.["month"]?.toLowerCase() ?? "");
+  if (day?.["day"] !== undefined && day["year"] !== undefined && month !== -1) {
+    return `${day["year"]}-${String(month + 1).padStart(2, "0")}-${day["day"].padStart(2, "0")}`;
   }
-  return MOCK_FACT_STATEMENTS[hash % MOCK_FACT_STATEMENTS.length];
+  return /\b(?:19|20)\d{2}\b/u.exec(sentence)?.[0] ?? null;
 };
+
+type MockFactRule = {
+  matches: RegExp;
+  fact: string;
+  kind: "document" | "testimony";
+  medium: string;
+};
+
+// Checked in order; the first rule a sentence matches states its fact.
+const MOCK_FACT_RULES: readonly MockFactRule[] = [
+  {
+    matches: /\b(?:said|says|told|recalls?|stated)\b/iu,
+    fact: "A witness describes the decision as settled.",
+    kind: "testimony",
+    medium: "Witness statement",
+  },
+  {
+    matches: /\bboard\b.*\bapprov/iu,
+    fact: "The board approved the decision.",
+    kind: "document",
+    medium: "Board minutes",
+  },
+  {
+    matches: /\bentered into\b/iu,
+    fact: "The parties concluded the agreement.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bterminat/iu,
+    fact: "Either party may end the agreement on written notice.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\binsurance\b/iu,
+    fact: "The supplier must keep product liability insurance in place.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bliabilit.*\b(?:exceed|cap)/iu,
+    fact: "The supplier's total liability is capped at the annual fees.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\b(?:excludes or limits|death or personal injury)\b/iu,
+    fact: "Liability for death, personal injury and fraud is not limited.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\b(?:pay|paid|payment|invoice|price)\b/iu,
+    fact: "The agreement sets when and how payment falls due.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bdeliver/iu,
+    fact: "The supplier delivers on the agreed schedule.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bconfidential/iu,
+    fact: "The parties must keep the terms confidential.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bgoverned by\b/iu,
+    fact: "The agreement names the law that governs it.",
+    kind: "document",
+    medium: "Contract",
+  },
+];
 
 // A heading ("NEGOTIATION DRAFT v4") is mostly capitals; prose is not.
 const isMostlyLowercase = (text: string) => {
@@ -856,29 +901,32 @@ const mockExtractedFacts = (messages: readonly ModelMessage[]) => {
         .at(0)
         ?.trim()
         .slice(0, MOCK_QUOTE_MAX);
-      return sentence === undefined ||
+      if (
+        sentence === undefined ||
         sentence.length < MOCK_QUOTE_MIN ||
         !isMostlyLowercase(sentence)
-        ? []
-        : [{ blockId, sentence }];
+      ) {
+        return [];
+      }
+      const rule = MOCK_FACT_RULES.find(({ matches }) =>
+        matches.test(sentence),
+      );
+      return rule === undefined ? [] : [{ blockId, sentence, rule }];
     })
     .slice(0, MOCK_FACTS_PER_WINDOW)
-    .map(({ blockId, sentence }, index) => {
-      const statement = mockStatementFor(sentence);
-      return {
-        blockId,
-        quote: sentence,
-        fact: statement?.fact ?? sentence,
-        occurredOn: statement?.occurredOn ?? null,
-        evidenceKind: index === 1 ? "testimony" : "document",
-        medium: index === 1 ? "Witness statement" : "Contract",
-        confidence: index === 2 ? "medium" : "high",
-        contestedMeaning:
-          index === 1
-            ? "The passage could describe more than one notice."
-            : null,
-      };
-    });
+    .map(({ blockId, sentence, rule }) => ({
+      blockId,
+      quote: sentence,
+      fact: rule.fact,
+      occurredOn: mockDateIn(sentence),
+      evidenceKind: rule.kind,
+      medium: rule.medium,
+      confidence: rule.kind === "testimony" ? "medium" : "high",
+      contestedMeaning:
+        rule.kind === "testimony"
+          ? "An account of what was said, not a record of the decision."
+          : null,
+    }));
 };
 
 export const mockStructuredData = (

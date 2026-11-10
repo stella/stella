@@ -207,26 +207,43 @@ describe("mockStructuredData", () => {
         ],
         ["b2", "The ward manager said the policy was final."],
         ["b3", "Ok."],
+        // Prose no rule recognises: proposing a fact here would cite a
+        // passage that does not support it.
+        ["b4", "The schedule below lists the addresses of both parties."],
       ]);
       const request = `Document blocks:\n${[...blocks]
         .map(([id, text]) => `[${id}] ${text}`)
-        .join("\n")}\n\nList the facts in these blocks only: b1, b2, b3`;
+        .join("\n")}\n\nList the facts in these blocks only: b1, b2, b3, b4`;
       const data = mockStructuredData(
         structuredOutputSchemaFor(factExtractionSchema, provider),
         [{ role: "user", content: [{ type: "text", content: request }] }],
       );
       const { facts } = v.parse(factExtractionSchema, data);
       expect(
-        facts.map(({ blockId, quote, fact, contestedMeaning }) => ({
+        facts.map(({ blockId, quote, fact, occurredOn, contestedMeaning }) => ({
           blockId,
           located: locateQuote(blocks.get(blockId) ?? "", quote) !== null,
           // A fact restates the passage; it is not the passage again.
           restated: fact !== quote,
+          // The date comes from the passage the fact cites, or is absent.
+          occurredOn,
           held: contestedMeaning !== null,
         })),
       ).toEqual([
-        { blockId: "b1", located: true, restated: true, held: false },
-        { blockId: "b2", located: true, restated: true, held: true },
+        {
+          blockId: "b1",
+          located: true,
+          restated: true,
+          occurredOn: "2021-03-09",
+          held: false,
+        },
+        {
+          blockId: "b2",
+          located: true,
+          restated: true,
+          occurredOn: null,
+          held: true,
+        },
       ]);
     });
   }
