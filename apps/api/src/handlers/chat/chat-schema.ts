@@ -33,6 +33,7 @@ import {
 import {
   isBrowserResolvedChatToolCall,
   isChatPastedTextPart,
+  isDeclinedChatToolCall,
   isHarnessChatToolCall,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
@@ -48,6 +49,10 @@ import {
   validateChatFileParts,
   validateStoredFileRefs,
 } from "@/api/handlers/chat/attachment-validation";
+import {
+  BROWSER_EXTENSION_LOCAL_RUN,
+  type TurnBrowserExtension,
+} from "@/api/handlers/chat/browser-extension-capability";
 import {
   chatMessageFromPersisted,
   continueStoredChatPart,
@@ -231,6 +236,21 @@ export const resolveBrowserExtensionCapability = (
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     status: BROWSER_EXTENSION_STATUS.unsupportedDevice,
   };
+
+/**
+ * The browser a turn can reach. A turn that runs on the member's computer
+ * cannot reach the extension the web tab reports, whatever its state.
+ */
+export const resolveTurnBrowserExtension = ({
+  reported,
+  runsLocally,
+}: {
+  reported: v.InferOutput<typeof browserExtensionSchema> | undefined;
+  runsLocally: boolean;
+}): TurnBrowserExtension =>
+  runsLocally
+    ? BROWSER_EXTENSION_LOCAL_RUN
+    : resolveBrowserExtensionCapability(reported);
 
 export const activeSkillSchema = activeContextSchema({
   // A built-in skill has no row: `skillName` alone names it.
@@ -2001,11 +2021,7 @@ const validateToolCallErrorOutput = (
   }
   // Denial is an approval decision, not a failed server execution. The SDK
   // preserves its decision payload on the call and the paired result.
-  if (
-    "approval" in part &&
-    part.approval.approved === false &&
-    isDeniedToolOutput(output)
-  ) {
+  if (isDeclinedChatToolCall(part) && isDeniedToolOutput(output)) {
     return Result.ok({ type: "denied", output });
   }
   if (
@@ -2153,8 +2169,7 @@ const validateToolErrorResult = (
   const content = contentResult.value;
   if (
     part.outcome === "denied" &&
-    "approval" in toolCall.part &&
-    toolCall.part.approval.approved === false &&
+    isDeclinedChatToolCall(toolCall.part) &&
     isDeniedToolOutput(content) &&
     part.error === undefined
   ) {

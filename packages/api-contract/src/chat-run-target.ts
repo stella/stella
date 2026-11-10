@@ -7,6 +7,7 @@ import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   DESKTOP_RUNNER_HARNESS_STATE,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
   desktopRunnerQuestionAnswersSchema,
   desktopRunnerQuestionIdSchema,
@@ -56,6 +57,49 @@ export const chatLocalRunTargetSchema = v.strictObject({
 });
 export type ChatLocalRunTarget = v.InferOutput<typeof chatLocalRunTargetSchema>;
 
+/**
+ * The most an organization lets a local run do without asking. Until an
+ * administrator lowers it every mode is allowed, so a new setting changes
+ * nothing for an organization that never chose one.
+ */
+export const CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS =
+  "full_auto" satisfies DesktopRunnerApprovalMode;
+
+/**
+ * Whether `mode` asks at least as much as `ceiling` allows. The modes are
+ * ordered by how much a run does on its own, `ask < auto < full_auto`, which
+ * is the order `DESKTOP_RUNNER_APPROVAL_MODES` lists them in.
+ */
+export const isApprovalModeWithin = (
+  mode: DesktopRunnerApprovalMode,
+  ceiling: DesktopRunnerApprovalMode,
+): boolean =>
+  DESKTOP_RUNNER_APPROVAL_MODES.indexOf(mode) <=
+  DESKTOP_RUNNER_APPROVAL_MODES.indexOf(ceiling);
+
+/**
+ * The mode a turn runs in under `ceiling`: its own when the ceiling allows
+ * it, otherwise the highest mode the ceiling allows among `offered` (the
+ * modes the computer can run the harness in, when known), and Ask, which
+ * every harness supports, when none is.
+ */
+export const approvalModeWithin = ({
+  mode,
+  ceiling,
+  offered,
+}: {
+  mode: DesktopRunnerApprovalMode;
+  ceiling: DesktopRunnerApprovalMode;
+  offered?: readonly DesktopRunnerApprovalMode[] | undefined;
+}): DesktopRunnerApprovalMode =>
+  isApprovalModeWithin(mode, ceiling)
+    ? mode
+    : (DESKTOP_RUNNER_APPROVAL_MODES.findLast(
+        (candidate) =>
+          isApprovalModeWithin(candidate, ceiling) &&
+          (offered === undefined || offered.includes(candidate)),
+      ) ?? DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE);
+
 export const chatRunTargetSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal(CHAT_RUN_TARGET_KIND.cloud) }),
   chatLocalRunTargetSchema,
@@ -81,6 +125,8 @@ export const CHAT_LOCAL_RUN_REFUSAL = {
   modelUnavailable: "local_run_model_unavailable",
   /** The computer cannot run the harness in the chosen approval mode. */
   approvalsUnavailable: "local_run_approvals_unavailable",
+  /** The organization does not let a run go that far without asking. */
+  approvalsAboveLimit: "local_run_approvals_above_limit",
   /** The turn does not fit what one run may carry. */
   tooLarge: "local_run_too_large",
   /** A turn cannot both run in the agent sandbox and on a computer. */
@@ -106,10 +152,15 @@ export type ChatLocalRunnerReadiness = {
 /**
  * What the composer may offer for local runs. `hidden` when the member cannot
  * run chat turns on a computer at all; the composer then shows no option.
+ * `maxApprovals` is the most the organization lets a run do without asking.
  */
 export type ChatLocalRunReadiness =
   | { status: "hidden" }
-  | { status: "enabled"; runners: ChatLocalRunnerReadiness[] };
+  | {
+      status: "enabled";
+      runners: ChatLocalRunnerReadiness[];
+      maxApprovals: DesktopRunnerApprovalMode;
+    };
 
 export const CHAT_LOCAL_HARNESS_STATE = DESKTOP_RUNNER_HARNESS_STATE;
 

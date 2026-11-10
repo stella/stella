@@ -284,7 +284,10 @@ export class Holder {
   private command(peer: Peer, line: string) {
     const parsed = parseSidecarHostLine(line);
     if (parsed.type === "rejected") {
-      this.write(peer, this.rejection(parsed.reason, parsed.messageType));
+      this.write(
+        peer,
+        this.rejection(parsed.reason, parsed.messageType, parsed.runId ?? null),
+      );
       return;
     }
     const message = parsed.message;
@@ -351,6 +354,7 @@ export class Holder {
       case "run.interrupt":
       case "run.cancel":
       case "run.token":
+      case "folder.restore":
         this.host.handle(message);
         return;
       default:

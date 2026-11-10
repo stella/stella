@@ -1,5 +1,6 @@
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks; page-chrome text normalization uses the shared normalizeUnicode owner with the same NFC form.
+// parser-output-unchanged: validation reads the source paragraphs directly, as the markup built from them parsed to.
 /**
  * CourtListener's HTML columns: `html_with_citations` where it holds HTML,
  * `html_lawbox`, `html_columbia`, `html_anon_2020`, `html`, and the
@@ -24,7 +25,7 @@ import {
 } from "@stll/html/nodes";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
+import { validationParagraphs } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { isExcludedHtmlTag } from "../shared-inlines";
 import {
@@ -724,9 +725,7 @@ const parseHtml =
           unknownConstructs,
           noteSpanDefects: spanDefects,
         },
-        validationHtml: buildValidationHtml(
-          source.paragraphs.map((paragraph) => Bun.escapeHTML(paragraph)),
-        ),
+        validationParagraphs: validationParagraphs(source.paragraphs),
       },
     };
   };

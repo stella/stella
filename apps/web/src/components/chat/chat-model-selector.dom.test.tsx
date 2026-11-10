@@ -64,6 +64,7 @@ const READINESS: ChatLocalRunReadiness = {
       ],
     },
   ],
+  maxApprovals: "full_auto",
 };
 
 const CLOUD_MODEL = {

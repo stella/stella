@@ -310,6 +310,7 @@ const installNativeBoundary = async ({
         claude_code_auth_get_status: () => null,
         // No install status either, read the same as the refusal with local agents off.
         harness_get_status: () => null,
+        local_skill_folders_get: () => null,
         activity_delete_all: (args) => {
           if (
             args["recovery"] === "discardUnreadable" &&
@@ -386,6 +387,34 @@ const installNativeBoundary = async ({
             appNameOnlyApps.push({ identifier, name });
           }
           activitySnapshot = { ...activitySnapshot, appNameOnlyApps };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_exclude_app: (args) => {
+          const identifier = args["identifier"];
+          const name = args["name"];
+          if (typeof identifier !== "string" || typeof name !== "string") {
+            throw new TypeError("App identity is missing");
+          }
+          activitySnapshot = {
+            ...activitySnapshot,
+            excludedApps: [
+              ...activitySnapshot.excludedApps.filter(
+                (app) => app.identifier !== identifier,
+              ),
+              { identifier, name },
+            ],
+          };
+          emitActivityChanged();
+          return undefined;
+        },
+        activity_remove_app_exclusion: (args) => {
+          activitySnapshot = {
+            ...activitySnapshot,
+            excludedApps: activitySnapshot.excludedApps.filter(
+              (app) => app.identifier !== args["identifier"],
+            ),
+          };
           emitActivityChanged();
           return undefined;
         },
@@ -634,7 +663,7 @@ const installNativeBoundary = async ({
       snapshot.persistence === "deletionOnly"
         ? deletionOnlyNotice
         : page.getByRole("heading", {
-            name: messages.activity.byApp,
+            name: messages.activity.captureModesTitle,
             exact: true,
           }),
     ).toBeVisible();
@@ -703,6 +732,23 @@ const openSuggestion = async (page: Page, matter: string) => {
   await expect(suggestionCard(page, matter)).toBeFocused();
 };
 
+type CaptureModeLabel =
+  "captureModeAppOnly" | "captureModeNothing" | "captureModeTitles";
+
+/** One choice in an app's row of the Settings list, by its words. */
+const captureMode = (
+  page: Page,
+  app: string,
+  label: CaptureModeLabel,
+  messages: Messages = enMessages,
+) =>
+  page
+    .getByRole("group", {
+      name: messages.activity.captureModeLabel.replace("{name}", () => app),
+      exact: true,
+    })
+    .getByRole("button", { name: messages.activity[label], exact: true });
+
 const batchRequests = (calls: TauriInvocation[]) =>
   calls.flatMap(({ args, command }) =>
     command === "time_entry_submit_batch_confirmed" ? [args["request"]] : [],
@@ -733,9 +779,7 @@ for (const history of ["keep", "delete"] as const) {
     page,
   }) => {
     await installNativeBoundary({ page, view: "settings" });
-    await page
-      .getByRole("button", { name: "Stop recording Example Editor" })
-      .click();
+    await captureMode(page, "Example Editor", "captureModeNothing").click();
     await expect(page.getByRole("dialog")).toBeVisible();
     expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({ command: "activity_exclude_app" }),
@@ -764,11 +808,13 @@ test("canceling exclusion leaves recording and history unchanged", async ({
   page,
 }) => {
   await installNativeBoundary({ page, view: "settings" });
-  await page
-    .getByRole("button", { name: "Stop recording Example Editor" })
-    .click();
+  await captureMode(page, "Example Editor", "captureModeNothing").click();
   await page.getByRole("button", { name: enMessages.activity.cancel }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
+  // Details are off in this fixture, so the editor records its name only.
+  await expect(
+    captureMode(page, "Example Editor", "captureModeAppOnly"),
+  ).toHaveAttribute("aria-pressed", "true");
   expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_exclude_app" }),
   );
@@ -1008,12 +1054,15 @@ test("pending drafts protect every deletion in the activity settings", async ({
     enMessages.activity.deleteDay,
     enMessages.activity.deleteAll,
     enMessages.activity.deleteOtherAccountHistory,
-    enMessages.activity.excludeApp.replace("{name}", "Example Editor"),
   ]) {
     await expect(
       page.getByRole("button", { name, exact: true }),
     ).toBeDisabled();
   }
+  // "Nothing" can offer to delete an app's history, so it is protected too.
+  await expect(
+    captureMode(page, "Example Editor", "captureModeNothing"),
+  ).toBeDisabled();
   await expect(
     page.getByText(enMessages.activity.pendingActivityProtected, {
       exact: true,
@@ -1184,7 +1233,10 @@ test("the Activity tab is absent while the activity feature is off", async ({
     page.getByRole("tab", { name: enMessages.activity.title, exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: enMessages.activity.byApp, exact: true }),
+    page.getByRole("heading", {
+      name: enMessages.activity.captureModesTitle,
+      exact: true,
+    }),
   ).toHaveCount(0);
   expect(await tauriInvocations(page)).toContainEqual({
     command: "is_activity_enabled",
@@ -1931,7 +1983,7 @@ test("accessibility hint opens system settings only after a user request", async
   });
 });
 
-test("per-app detail controls keep time recording and allow details to be restored", async ({
+test("per-app modes keep time recording and allow window titles to be restored", async ({
   page,
 }) => {
   await installNativeBoundary({
@@ -1943,14 +1995,11 @@ test("per-app detail controls keep time recording and allow details to be restor
       detailsAccess: "ready",
     },
   });
-  await page
-    .getByRole("button", { name: "Record app name only for Example Editor" })
-    .click();
-  await expect(
-    page
-      .getByRole("button", { name: "Record details for Example Editor" })
-      .first(),
-  ).toBeVisible();
+  const titles = captureMode(page, "Example Editor", "captureModeTitles");
+  const appOnly = captureMode(page, "Example Editor", "captureModeAppOnly");
+  await expect(titles).toHaveAttribute("aria-pressed", "true");
+  await appOnly.click();
+  await expect(appOnly).toHaveAttribute("aria-pressed", "true");
   expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_app_detail_capture",
     args: {
@@ -1962,15 +2011,8 @@ test("per-app detail controls keep time recording and allow details to be restor
   expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_exclude_app" }),
   );
-  await page
-    .getByRole("button", { name: "Record details for Example Editor" })
-    .first()
-    .click();
-  await expect(
-    page.getByRole("button", {
-      name: "Record app name only for Example Editor",
-    }),
-  ).toBeVisible();
+  await titles.click();
+  await expect(titles).toHaveAttribute("aria-pressed", "true");
   expect(await tauriInvocations(page)).toContainEqual({
     command: "activity_set_app_detail_capture",
     args: {
@@ -1981,13 +2023,76 @@ test("per-app detail controls keep time recording and allow details to be restor
   });
 });
 
-test("browser title capture is a separate unticked opt-in and can be turned off", async ({
+const NATIVE_BROWSER = {
+  identifier: "native-classified.browser",
+  name: "Native Browser",
+};
+
+/** A day with one browser the native side classified, used for an hour. */
+const BROWSER_DAY = {
+  ...SNAPSHOT,
+  captureDetails: true,
+  detailsAccess: "ready",
+  browserApps: [NATIVE_BROWSER],
+  segments: [
+    ...SNAPSHOT.segments,
+    {
+      appIdentifier: NATIVE_BROWSER.identifier,
+      appName: NATIVE_BROWSER.name,
+      start: "2026-10-07T09:30:00Z",
+      end: "2026-10-07T10:30:00Z",
+    },
+  ],
+} satisfies ActivityDaySnapshot;
+
+test("a browser records its app name until titles are chosen for it in settings", async ({
   page,
 }) => {
-  const browser = {
-    identifier: "native-classified.browser",
-    name: "Native Browser",
-  };
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    snapshot: BROWSER_DAY,
+  });
+  const titles = captureMode(page, NATIVE_BROWSER.name, "captureModeTitles");
+  const appOnly = captureMode(page, NATIVE_BROWSER.name, "captureModeAppOnly");
+  await expect(appOnly).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByText(enMessages.activity.browserPrivacyNote, { exact: true }),
+  ).toBeVisible();
+  expect(await tauriInvocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_set_browser_title_capture" }),
+  );
+  await titles.click();
+  await expect(titles).toHaveAttribute("aria-pressed", "true");
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "activity_set_browser_title_capture",
+    args: { ...NATIVE_BROWSER, enabled: true },
+  });
+  await appOnly.click();
+  await expect(appOnly).toHaveAttribute("aria-pressed", "true");
+  const changes = (await tauriInvocations(page)).filter(({ command }) =>
+    [
+      "activity_set_browser_title_capture",
+      "activity_set_app_detail_capture",
+    ].includes(command),
+  );
+  // Titles stop first; the name-only choice keeps the browser decided.
+  expect(changes.slice(-2)).toEqual([
+    {
+      command: "activity_set_browser_title_capture",
+      args: { ...NATIVE_BROWSER, enabled: false },
+    },
+    {
+      command: "activity_set_app_detail_capture",
+      args: { ...NATIVE_BROWSER, mode: "appNameOnly" },
+    },
+  ]);
+});
+
+test("an excluded app is recorded again only after its new mode is saved", async ({
+  page,
+}) => {
+  const music = { identifier: "com.example.music", name: "Example Music" };
   await installNativeBoundary({
     page,
     view: "settings",
@@ -1995,68 +2100,160 @@ test("browser title capture is a separate unticked opt-in and can be turned off"
       ...SNAPSHOT,
       captureDetails: true,
       detailsAccess: "ready",
-      browserApps: [browser],
+      excludedApps: [music],
     },
   });
-  const browserTitles = page.getByRole("checkbox", {
-    name: "Record window titles in Native Browser",
-  });
-  await expect(browserTitles).not.toBeChecked();
+  const appOnly = captureMode(page, music.name, "captureModeAppOnly");
   await expect(
-    page.getByText(enMessages.activity.browserPrivacyNote, { exact: true }),
-  ).toBeVisible();
-  expect(await tauriInvocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "activity_set_browser_title_capture" }),
+    captureMode(page, music.name, "captureModeNothing"),
+  ).toHaveAttribute("aria-pressed", "true");
+  await appOnly.click();
+  await expect(appOnly).toHaveAttribute("aria-pressed", "true");
+  const changes = (await tauriInvocations(page)).filter(({ command }) =>
+    [
+      "activity_set_app_detail_capture",
+      "activity_remove_app_exclusion",
+    ].includes(command),
   );
-  await browserTitles.check();
-  await expect(browserTitles).toBeChecked();
-  expect(await tauriInvocations(page)).toContainEqual({
-    command: "activity_set_browser_title_capture",
-    args: { identifier: browser.identifier, name: browser.name, enabled: true },
-  });
-  await browserTitles.uncheck();
-  await expect(browserTitles).not.toBeChecked();
-  expect(await tauriInvocations(page)).toContainEqual({
-    command: "activity_set_browser_title_capture",
-    args: {
-      identifier: browser.identifier,
-      name: browser.name,
-      enabled: false,
+  expect(changes).toEqual([
+    {
+      command: "activity_set_app_detail_capture",
+      args: { ...music, mode: "appNameOnly" },
     },
-  });
+    {
+      command: "activity_remove_app_exclusion",
+      args: { identifier: music.identifier },
+    },
+  ]);
 });
 
-for (const prerequisite of ["globalOff", "appNameOnly"] as const) {
-  test(`browser title capture requires detail recording (${prerequisite})`, async ({
+test("with details off the modes say why window titles are unavailable", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    snapshot: {
+      ...BROWSER_DAY,
+      captureDetails: false,
+      detailsAccess: "disabled",
+      browserTitleApps: [NATIVE_BROWSER],
+    },
+  });
+  for (const app of ["Example Editor", NATIVE_BROWSER.name]) {
+    const titles = captureMode(page, app, "captureModeTitles");
+    await expect(titles).toBeDisabled();
+    await expect(titles).toHaveAttribute("aria-pressed", "false");
+    await expect(captureMode(page, app, "captureModeAppOnly")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(
+      page.getByRole("group", {
+        name: enMessages.activity.captureModeLabel.replace("{name}", () => app),
+      }),
+    ).toHaveAccessibleDescription(enMessages.activity.captureModesDetailsOff);
+  }
+  await expect(
+    page.getByText(enMessages.activity.captureModesDetailsOff, { exact: true }),
+  ).toBeVisible();
+  expect(await tauriInvocations(page)).not.toContainEqual(
+    expect.objectContaining({
+      command: "activity_set_browser_title_capture",
+    }),
+  );
+});
+
+const browserQuestion = (page: Page) =>
+  page.getByRole("region", {
+    name: enMessages.activity.browserQuestionTitle.replace(
+      "<bdi>{browser}</bdi>",
+      () => NATIVE_BROWSER.name,
+    ),
+    exact: true,
+  });
+
+for (const [answer, expected] of [
+  [
+    "browserQuestionRecordTitles",
+    {
+      command: "activity_set_browser_title_capture",
+      args: { ...NATIVE_BROWSER, enabled: true },
+    },
+  ],
+  [
+    "browserQuestionAppNameOnly",
+    {
+      command: "activity_set_app_detail_capture",
+      args: { ...NATIVE_BROWSER, mode: "appNameOnly" },
+    },
+  ],
+] as const) {
+  test(`answering the browser question with ${answer} saves that choice and hides it`, async ({
     page,
   }) => {
-    const browser = {
-      identifier: "native-classified.browser",
-      name: "Native Browser",
-    };
-    await installNativeBoundary({
-      page,
-      view: "settings",
-      snapshot: {
-        ...SNAPSHOT,
-        captureDetails: prerequisite !== "globalOff",
-        detailsAccess: prerequisite === "globalOff" ? "disabled" : "ready",
-        browserApps: [browser],
-        appNameOnlyApps: prerequisite === "appNameOnly" ? [browser] : [],
-      },
-    });
-    await expect(
-      page.getByRole("checkbox", {
-        name: "Record window titles in Native Browser",
-      }),
-    ).toBeDisabled();
+    await installNativeBoundary({ page, snapshot: BROWSER_DAY });
+    const question = browserQuestion(page);
+    await expect(question).toBeVisible();
     expect(await tauriInvocations(page)).not.toContainEqual(
       expect.objectContaining({
         command: "activity_set_browser_title_capture",
       }),
     );
+    const button = question.getByRole("button", {
+      name: enMessages.activity[answer],
+      exact: true,
+    });
+    await button.focus();
+    await page.keyboard.press("Enter");
+    await expect(question).toHaveCount(0);
+    await expect(page.getByRole("status")).toContainText(NATIVE_BROWSER.name);
+    await expect(page.getByRole("status")).toBeFocused();
+    const changes = (await tauriInvocations(page)).filter(({ command }) =>
+      [
+        "activity_set_browser_title_capture",
+        "activity_set_app_detail_capture",
+        "activity_remove_app_exclusion",
+      ].includes(command),
+    );
+    expect(changes).toEqual([expected]);
   });
 }
+
+test("the browser question can be put off without a choice", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page, snapshot: BROWSER_DAY });
+  const question = browserQuestion(page);
+  await question
+    .getByRole("button", {
+      name: enMessages.activity.browserQuestionLater,
+      exact: true,
+    })
+    .click();
+  await expect(question).toHaveCount(0);
+  const commands = (await tauriInvocations(page)).map(({ command }) => command);
+  expect(commands).not.toContain("activity_set_browser_title_capture");
+  expect(commands).not.toContain("activity_set_app_detail_capture");
+});
+
+test("the browser question waits for detail recording", async ({ page }) => {
+  await installNativeBoundary({
+    page,
+    snapshot: { ...BROWSER_DAY, captureDetails: false },
+  });
+  await expect(page.locator("[data-activity-browser-question]")).toHaveCount(0);
+  await page.evaluate((next) => {
+    const setSnapshot: unknown = Reflect.get(
+      window,
+      "__STELLA_TEST_SET_SNAPSHOT__",
+    );
+    if (typeof setSnapshot === "function") {
+      setSnapshot(next);
+    }
+  }, BROWSER_DAY);
+  await expect(browserQuestion(page)).toBeVisible();
+});
 
 test("document names render locally without publishing full paths", async ({
   page,
@@ -2257,9 +2454,10 @@ test("the settings app list reuses local app visuals and keeps a neutral fallbac
     view: "settings",
     snapshot: VISUALS_SNAPSHOT,
   });
-  const totals = page
-    .getByRole("heading", { name: enMessages.activity.byApp, exact: true })
-    .locator("..");
+  const totals = page.getByRole("region", {
+    name: enMessages.activity.captureModesTitle,
+    exact: true,
+  });
   const editor = totals
     .getByRole("listitem")
     .filter({ hasText: "Example Editor" });
@@ -2267,9 +2465,7 @@ test("the settings app list reuses local app visuals and keeps a neutral fallbac
   const fallback = totals.getByRole("listitem").filter({ hasText: "Preview" });
   await expect(fallback.locator("img")).toHaveCount(0);
   await expect(fallback.locator("svg").first()).toBeVisible();
-  await page
-    .getByRole("button", { name: "Stop recording Example Editor" })
-    .click();
+  await captureMode(page, "Example Editor", "captureModeNothing").click();
   await expect(
     page.getByRole("dialog").getByRole("heading").locator("img"),
   ).toHaveAttribute("src", iconDataUrl);

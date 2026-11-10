@@ -171,6 +171,9 @@ export const projectCaseLawSearchResponse = (
         },
   total: response.total,
   relaxedHitCount: response.relaxedHitCount,
+  ...(response.relaxedTopUp === undefined
+    ? {}
+    : { relaxedTopUp: response.relaxedTopUp }),
   nextCursor: nullableText(
     response.nextCursor,
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,

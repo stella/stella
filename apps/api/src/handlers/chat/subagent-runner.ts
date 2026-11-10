@@ -240,7 +240,10 @@ export const runSubagent = async (
     },
     sessionId: options.metering.sessionId,
     traceId: options.metering.traceId,
-  });
+    // Bound to the resolved model: a parent may run a subagent on another
+    // model than the task's default, and metering must rate the model that
+    // served the run.
+  }).forModel(model);
 
   const boundaryTools = prepareToolsForThirdParty({
     boundary: options.thirdPartyBoundary,

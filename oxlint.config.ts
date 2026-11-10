@@ -1,11 +1,7 @@
 import { defineConfig } from "oxlint";
 import type { OxlintOverride } from "oxlint";
 
-import {
-  libraryIgnorePatterns,
-  libraryOverrides,
-  stellaLowercasePluginSpecifier,
-} from "@stll/oxlint-config";
+import { libraryIgnorePatterns, libraryOverrides } from "@stll/oxlint-config";
 
 import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-exceptions.json" with { type: "json" };
 import {
@@ -183,13 +179,15 @@ const colourExemptionOverrides = colourExemptions.map(({ files }) => ({
 }));
 
 // Only the rows that declare an enforcement kind reach the lint rule; the rest
-// document an owner that no rule can yet prove.
+// document an owner that no rule can yet prove. Each row passes only the
+// fields the rule reads: lint rule options must be plain JSON, and a row's
+// `summary` may be a function.
 const enforcedOwnershipEntries = OWNERSHIP.filter(
   (entry) =>
     entry.enforcement.kind !== "none" &&
     entry.enforcement.kind !== "custom-rule" &&
     entry.enforcement.kind !== "status-set",
-);
+).map(({ id, owner, enforcement }) => ({ id, owner, enforcement }));
 
 // Public route files may build handlers only from the factories whose context
 // is anonymous. The ban lists every other factory, so a new one is banned
@@ -798,6 +796,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-computed-key-record-assignment.fixture.ts", [
     "no-computed-key-record-assignment/no-computed-key-record-assignment",
+  ]),
+  fixtureRuleOverride("exhaustive-union-map.fixture.ts", [
+    "exhaustive-union-map/exhaustive-union-map",
   ]),
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
@@ -1711,10 +1712,6 @@ const config = defineConfig({
     // callbacks (`t.rich({ link: (chunks) => <a/> })`) and IIFE-as-prop
     // element builders are idiomatic here and are not remounted components.
     "react/no-unstable-nested-components": ["error", { allowAsProps: true }],
-    // Off: the Result.gen handler generators (`async function*` with
-    // `yield* Result.await(...)`) have no meaningful user-facing yield type
-    // to document, and the codebase's JSDoc style uses bare tags.
-    "jsdoc/require-yields-type": "off",
 
     // Keep `import/no-cycle`: current web profiling puts it below 1% of rule
     // time. The Module Side Effects section in AGENTS.md documents the TDZ class
@@ -2064,7 +2061,8 @@ const config = defineConfig({
     { name: "gdp-ts", specifier: "./scripts/oxlint-presets/gdp-plugin.mjs" },
     "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
-    stellaLowercasePluginSpecifier,
+    // The package's plugins load through local re-exports; the modules say why.
+    "./scripts/oxlint-presets/stella-lowercase-plugin.mjs",
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/confine-online-ddl.ts",
@@ -2075,7 +2073,7 @@ const config = defineConfig({
     "@tanstack/eslint-plugin-router",
     "./.oxlint-plugins/drizzle.ts",
     "oxlint-tailwindcss",
-    "@stll/oxlint-config/no-raw-colors",
+    "./scripts/oxlint-presets/no-raw-colors-plugin.mjs",
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-native-ui.ts",
     "./.oxlint-plugins/plain-button-placement-only.ts",
@@ -2149,6 +2147,7 @@ const config = defineConfig({
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
     "./.oxlint-plugins/tooltip-provider-owner.ts",
+    "./.oxlint-plugins/copy-feedback-owner.ts",
     "./.oxlint-plugins/sql-client-owner.ts",
     "./.oxlint-plugins/no-direct-unsaved-work-guard.ts",
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
@@ -2283,6 +2282,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-unbounded-response-body.ts",
     "./.oxlint-plugins/no-computed-key-record-assignment.ts",
+    "./.oxlint-plugins/exhaustive-union-map.ts",
     "./.oxlint-plugins/no-dynamic-key-in-operator.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
@@ -2341,6 +2341,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-adhoc-email-fold.ts",
     "./.oxlint-plugins/no-local-letter-spacing.ts",
+    "./.oxlint-plugins/no-local-paragraph-label.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
@@ -2981,6 +2982,13 @@ const config = defineConfig({
       },
     },
     {
+      files: [".oxlint-plugins/__fixtures__/copy-feedback-owner.fixture.tsx"],
+      rules: {
+        "copy-feedback-owner/copy-feedback-owner": "error",
+        "copy-feedback-owner/no-raw-copy-listener": "error",
+      },
+    },
+    {
       // Exercise no-direct-unsaved-work-guard against its regression fixture;
       // the rule is otherwise scoped to apps/web/src.
       files: [
@@ -3528,6 +3536,31 @@ const config = defineConfig({
       ],
       rules: {
         "no-local-letter-spacing/no-local-letter-spacing": "error",
+      },
+    },
+    {
+      // Printed paragraph labels (`12.`, `[12]`, `5.5.`, `a)`) are read by one
+      // grammar, packages/legal-ast/src/printed-paragraph-labels.ts, which
+      // also decides where a label opens a paragraph. Tests may match labels
+      // to assert what a parser produced.
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        "packages/legal-ast/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-local-paragraph-label.fixture.ts",
+      ],
+      // Austrian, British, EU and Hungarian parsers print labels the grammar
+      // does not read (it covers Czech, Slovak and Polish decisions).
+      excludeFiles: [
+        "packages/legal-ast/src/printed-paragraph-labels.ts",
+        "apps/api/src/handlers/case-law/ingestion/parsers/at-*.ts",
+        "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj*.ts",
+        "apps/api/src/handlers/case-law/ingestion/parsers/hu-bhgy*.ts",
+        "apps/api/src/handlers/case-law/ingestion/parsers/uk-fcl*.ts",
+        "**/*.test.ts",
+      ],
+      rules: {
+        "no-local-paragraph-label/no-local-paragraph-label": "error",
       },
     },
     {
@@ -4850,6 +4883,22 @@ const config = defineConfig({
       excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
       rules: {
         "tooltip-provider-owner/tooltip-provider-owner": "error",
+      },
+    },
+    {
+      // A Copy control confirms through its owner: CopyButton for a fixed
+      // value, useSelectionCopy for selected words, which also confirms the
+      // reader's own Cmd+C. The sanctioned copy listeners and the feedback
+      // owner are listed in the rule; a test fires synthetic events.
+      files: [
+        ...PRODUCT_FRONTEND_FILES,
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/chat/src/**/*.{ts,tsx}",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "copy-feedback-owner/copy-feedback-owner": "error",
+        "copy-feedback-owner/no-raw-copy-listener": "error",
       },
     },
     {
@@ -6558,6 +6607,22 @@ const config = defineConfig({
       rules: {
         "no-computed-key-record-assignment/no-computed-key-record-assignment":
           "error",
+      },
+    },
+    {
+      // A lookup table over a fixed set of keys is keyed by the union it
+      // covers, so a new member fails to compile at the map. The rule reads
+      // only the web and API apps; existing sites carry count ceilings in
+      // scripts/design-lint-baseline.json and are switched off here by
+      // `designLintBacklogOverrides` below.
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "exhaustive-union-map/exhaustive-union-map": "error",
       },
     },
     {

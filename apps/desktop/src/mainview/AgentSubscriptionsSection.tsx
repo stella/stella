@@ -241,7 +241,7 @@ const readHarnessStatus = async () => invoke<unknown>("harness_get_status");
  * change and whenever `refresh` is called. `null` while unread, refused
  * (the local agents feature is off) or malformed.
  */
-const useNativeStatus = <T,>({
+export const useNativeStatus = <T,>({
   read,
   event,
   isStatus,

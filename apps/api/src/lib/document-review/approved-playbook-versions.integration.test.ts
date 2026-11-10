@@ -19,10 +19,11 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  documentTypes,
   playbookDefinitions,
   playbookDefinitionVersions,
 } from "@/api/db/schema";
@@ -35,8 +36,11 @@ import {
 import { resolvePlaybookPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import type { PlaybookDefinitionForPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
-import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import type {
+  PlaybookPositions,
+  PlaybookScope,
+} from "@/api/lib/workflow/playbook-positions";
+import { membershipScopedDb } from "@/api/tests/helpers/application-role-db";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -48,6 +52,13 @@ setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 let ids: TestIds;
+
+/** Reads as a member of the organization, on the application role. */
+const asMember = async <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> =>
+  await membershipScopedDb(testDb, {
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  })(fn);
 
 const seededDefinitionIds: SafeId<"playbookDefinition">[] = [];
 
@@ -109,6 +120,7 @@ const violationText = (error: unknown): string => {
 const seedDefinition = async (
   name: string,
   positions: PlaybookPositions,
+  scope: PlaybookScope | null = null,
 ): Promise<PlaybookDefinitionForPin> => {
   const id = toSafeId<"playbookDefinition">(Bun.randomUUIDv7());
   seededDefinitionIds.push(id);
@@ -117,8 +129,9 @@ const seedDefinition = async (
     organizationId: ids.orgA,
     name,
     positions,
+    scope,
   });
-  return { id, name, positions };
+  return { id, name, positions, scope };
 };
 
 /** An approval snapshot, written exactly as `approve.ts` writes one. */
@@ -127,11 +140,13 @@ const insertApproval = async ({
   version,
   name,
   positions,
+  scope = null,
 }: {
   definitionId: SafeId<"playbookDefinition">;
   version: number;
   name: string;
   positions: PlaybookPositions;
+  scope?: PlaybookScope | null;
 }): Promise<SafeId<"playbookDefinitionVersion">> => {
   const id = toSafeId<"playbookDefinitionVersion">(Bun.randomUUIDv7());
   await testDb.insert(playbookDefinitionVersions).values({
@@ -142,6 +157,7 @@ const insertApproval = async ({
     source: PLAYBOOK_VERSION_SOURCE.APPROVAL,
     name,
     positions,
+    scope,
     createdBy: ids.userA1,
   });
   return id;
@@ -232,20 +248,25 @@ describe("resolving the pin a run is measured against", () => {
       positions: positionsSaying("Someone else's standard"),
     });
 
-    const tx = asTestRaw<Transaction>(testDb);
     // What the single run reads.
-    const single = await loadLatestApprovedVersion({
-      tx,
-      organizationId: ids.orgA,
-      playbookDefinitionId: edited.id,
-    });
+    const single = await asMember(
+      async (tx) =>
+        await loadLatestApprovedVersion({
+          tx,
+          organizationId: ids.orgA,
+          playbookDefinitionId: edited.id,
+        }),
+    );
     // What the auto-run and the classification trigger read, for the whole
     // applicable set at once.
-    const batch = await loadLatestApprovedVersions({
-      tx,
-      organizationId: ids.orgA,
-      playbookDefinitionIds: [edited.id, other.id],
-    });
+    const batch = await asMember(
+      async (tx) =>
+        await loadLatestApprovedVersions({
+          tx,
+          organizationId: ids.orgA,
+          playbookDefinitionIds: [edited.id, other.id],
+        }),
+    );
 
     if (single === null) {
       throw new Error("The edited playbook must resolve an approved version");
@@ -272,6 +293,7 @@ describe("resolving the pin a run is measured against", () => {
       definitionSnapshot: {
         name: "Approved name",
         positions: positionsSaying("As approved"),
+        scope: null,
       },
     });
     // And a batch resolves each playbook's own pin, never a neighbour's.
@@ -284,17 +306,22 @@ describe("resolving the pin a run is measured against", () => {
       positionsSaying("Still being written"),
     );
 
-    const tx = asTestRaw<Transaction>(testDb);
-    const single = await loadLatestApprovedVersion({
-      tx,
-      organizationId: ids.orgA,
-      playbookDefinitionId: draft.id,
-    });
-    const batch = await loadLatestApprovedVersions({
-      tx,
-      organizationId: ids.orgA,
-      playbookDefinitionIds: [draft.id],
-    });
+    const single = await asMember(
+      async (tx) =>
+        await loadLatestApprovedVersion({
+          tx,
+          organizationId: ids.orgA,
+          playbookDefinitionId: draft.id,
+        }),
+    );
+    const batch = await asMember(
+      async (tx) =>
+        await loadLatestApprovedVersions({
+          tx,
+          organizationId: ids.orgA,
+          playbookDefinitionIds: [draft.id],
+        }),
+    );
 
     expect(single).toBeNull();
     expect(batch.get(draft.id)).toBeUndefined();
@@ -307,7 +334,73 @@ describe("resolving the pin a run is measured against", () => {
       definitionSnapshot: {
         name: "Never approved",
         positions: positionsSaying("Still being written"),
+        scope: null,
       },
+    });
+  });
+
+  test("a run pins the approved scope after the live scope is edited", async () => {
+    // The issue's reproduction, end to end through the stored rows:
+    // approve scoped to NDA, edit the scope to Lease without re-approval,
+    // then start a run. The run must use the approved scope.
+    await testDb.insert(documentTypes).values([
+      {
+        id: toSafeId<"documentType">(Bun.randomUUIDv7()),
+        organizationId: ids.orgA,
+        key: "nda",
+        label: "NDA",
+      },
+      {
+        id: toSafeId<"documentType">(Bun.randomUUIDv7()),
+        organizationId: ids.orgA,
+        key: "lease",
+        label: "Lease",
+      },
+    ]);
+    const approvedScope = { documentTypeKey: "nda" };
+    const definition = await seedDefinition(
+      "NDA review",
+      positionsSaying("As approved"),
+      approvedScope,
+    );
+    await insertApproval({
+      definitionId: definition.id,
+      version: 1,
+      name: "NDA review",
+      positions: positionsSaying("As approved"),
+      scope: approvedScope,
+    });
+    // The edit after approval: the live definition now targets leases and
+    // is a draft again, but no new approval exists.
+    await testDb
+      .update(playbookDefinitions)
+      .set({ scope: { documentTypeKey: "lease" }, status: "draft" })
+      .where(eq(playbookDefinitions.id, definition.id));
+
+    const latest = await asMember(
+      async (tx) =>
+        await loadLatestApprovedVersion({
+          tx,
+          organizationId: ids.orgA,
+          playbookDefinitionId: definition.id,
+        }),
+    );
+    if (latest === null) {
+      throw new Error("The edited playbook must resolve an approved version");
+    }
+    expect(latest.scope).toEqual(approvedScope);
+
+    const pin = resolvePlaybookPin({
+      definition: {
+        ...definition,
+        scope: { documentTypeKey: "lease" },
+      },
+      latestApprovedVersion: latest,
+    });
+    expect(pin.definitionSnapshot).toEqual({
+      name: "NDA review",
+      positions: positionsSaying("As approved"),
+      scope: approvedScope,
     });
   });
 });

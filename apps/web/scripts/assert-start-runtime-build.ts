@@ -98,6 +98,13 @@ const RUNTIME_ASSET_CONTRACTS = [
     label: "Aho-Corasick search WASM",
     pattern: "dist/client/assets/aho-corasick.wasm32-wasi-????????.wasm",
   },
+  {
+    expectedCount: 1,
+    // Loaded instead of the threaded build on pages without cross-origin
+    // isolation (Safari, the desktop webview).
+    label: "Aho-Corasick single-thread search WASM",
+    pattern: "dist/client/assets/aho-corasick.single-thread-????????.wasm",
+  },
   ...Object.values(DEPENDENCY_WASI_WORKERS).map(({ assetStem, label }) => ({
     expectedCount: 1,
     label,
@@ -114,6 +121,13 @@ const RUNTIME_ASSET_CONTRACTS = [
     expectedCount: 1,
     label: "RegexSet search WASM",
     pattern: "dist/client/assets/regex-set.wasm32-wasi-????????.wasm",
+  },
+  {
+    expectedCount: 1,
+    // Loaded instead of the threaded build on pages without cross-origin
+    // isolation (Safari, the desktop webview).
+    label: "RegexSet single-thread search WASM",
+    pattern: "dist/client/assets/regex-set.single-thread-????????.wasm",
   },
   {
     expectedCount: 1,

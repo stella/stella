@@ -352,6 +352,93 @@ describe("parseNsDecisionHtml", () => {
   });
 
   describe("closing and signature", () => {
+    test("the judge signs above a copy's certification however many lines it takes", () => {
+      const html = `<html><body>
+        <table id="box-table-a"><tbody>
+          <tr><td>Soud:</td><td>Nejvyšší soud</td></tr>
+        </tbody></table>
+        <div align="center"><b>USNESENÍ</b></div>
+        <p>Nejvyšší soud rozhodl v senátě složeném z předsedy JUDr. Jana Nováka takto:</p>
+        <p>Dovolání se odmítá.</p>
+        <div align="center"><b>Odůvodnění:</b></div>
+        <p>Dovolání není přípustné.</p>
+        <p>V Brně dne 2. února 2001</p>
+        <p>JUDr. Jan Novák</p>
+        <p>předseda senátu</p>
+        <p>Za správnost vyhotovení:</p>
+        <p>Ivana Svobodová</p>
+        <p>V Brně dne 5. února 2001</p>
+      </body></html>`;
+      const { documentAst } = parseNsDecisionHtml(baseInput(html));
+
+      expect(
+        findAllByRole(documentAst.blocks, "signature").map(
+          (block) => block.plainText,
+        ),
+      ).toEqual(["JUDr. Jan Novák", "předseda senátu"]);
+      expect(findByRole(documentAst.blocks, "closing")?.plainText).toBe(
+        "V Brně dne 2. února 2001",
+      );
+      // The certification's own date closes nothing of the decision.
+      expect(findAllByRole(documentAst.blocks, "closing")).toHaveLength(1);
+    });
+
+    test("a certification printed in one long paragraph still ends the signatures", () => {
+      const html = `<html><body>
+        <table id="box-table-a"><tbody>
+          <tr><td>Soud:</td><td>Nejvyšší soud</td></tr>
+        </tbody></table>
+        <div align="center"><b>USNESENÍ</b></div>
+        <p>Nejvyšší soud rozhodl v senátě složeném z předsedy JUDr. Jana Nováka takto:</p>
+        <p>Dovolání se odmítá.</p>
+        <div align="center"><b>Odůvodnění:</b></div>
+        <p>Dovolání není přípustné.</p>
+        <p>V Brně dne 2. února 2001</p>
+        <p>JUDr. Jan Novák</p>
+        <p>předseda senátu</p>
+        <p>Za správnost vyhotovení: Ivana Svobodová, vedoucí kanceláře senátu, dne 5. února 2001</p>
+      </body></html>`;
+      const { documentAst } = parseNsDecisionHtml(baseInput(html));
+
+      expect(
+        findAllByRole(documentAst.blocks, "signature").map(
+          (block) => block.plainText,
+        ),
+      ).toEqual(["JUDr. Jan Novák", "předseda senátu"]);
+    });
+
+    test("numbered reasons that end on takto: are not a recital", () => {
+      const html = `<html><body>
+        <table id="box-table-a"><tbody>
+          <tr><td>Soud:</td><td>Nejvyšší soud</td></tr>
+        </tbody></table>
+        <div align="center"><b>USNESENÍ</b></div>
+        <p>1. Odvolací soud rozhodl o odvolání žalobce.</p>
+        <p>2. Soud prvního stupně ve věci rozhodl takto:</p>
+        <p>Žaloba se zamítá.</p>
+      </body></html>`;
+      const { documentAst } = parseNsDecisionHtml(baseInput(html));
+
+      expect(documentAst.blocks.length).toBeGreaterThan(0);
+      expect(findAllByRole(documentAst.blocks, "intro")).toEqual([]);
+    });
+
+    test("a takto: with no head matter before it introduces nothing", () => {
+      const html = `<html><body>
+        <table id="box-table-a"><tbody>
+          <tr><td>Soud:</td><td>Nejvyšší soud</td></tr>
+        </tbody></table>
+        <p>Odvolací soud uvedl, že soud prvního stupně rozhodl takto:</p>
+        <p>Žaloba se zamítá.</p>
+        <div align="center"><b>Odůvodnění:</b></div>
+        <p>Dovolání není přípustné.</p>
+      </body></html>`;
+      const { documentAst } = parseNsDecisionHtml(baseInput(html));
+
+      expect(documentAst.blocks.length).toBeGreaterThan(0);
+      expect(findAllByRole(documentAst.blocks, "intro")).toEqual([]);
+    });
+
     test("detects closing formula", () => {
       const input = baseInput(minimalPrintHtml);
       const { documentAst } = parseNsDecisionHtml(input);

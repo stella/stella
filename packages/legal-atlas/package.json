@@ -103,6 +103,10 @@
       "types": "./src/provision-version-grammar.ts",
       "import": "./src/provision-version-grammar.ts"
     },
+    "./printed-date": {
+      "types": "./src/printed-date.ts",
+      "import": "./src/printed-date.ts"
+    },
     "./us-code-citations": {
       "types": "./src/us-code-citations.ts",
       "import": "./src/us-code-citations.ts"

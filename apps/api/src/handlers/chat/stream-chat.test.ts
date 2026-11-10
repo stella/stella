@@ -5945,6 +5945,14 @@ describe("chat stream refs", () => {
       activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
       content: { part: { type: "citation", secret: "future-private-value" } },
     };
+    const stored = {
+      createdAt: "2026-01-01T00:00:00Z",
+      edited: false,
+      id: messageId,
+      parts: [marker],
+      revision: 0,
+      role: "assistant" as const,
+    };
     const sourceSnapshot = buildWireSnapshot([
       { id: messageId, role: "assistant", parts: [] },
     ]);
@@ -5952,33 +5960,18 @@ describe("chat stream refs", () => {
       transformClientVisibleStream({
         source: streamChunks([sourceSnapshot]),
         storedHistory: {
-          loadServed: async () =>
-            Result.ok(
-              new Map([
-                [
-                  messageId,
-                  {
-                    createdAt: "2026-01-01T00:00:00Z",
-                    edited: false,
-                    id: messageId,
-                    parts: [marker],
-                    revision: 0,
-                    role: "assistant" as const,
-                  },
-                ],
-              ]),
-            ),
-          rewrittenOnAcceptance: [],
+          loadServed: async () => Result.ok(new Map([[messageId, stored]])),
+          // Acceptance rewrote the message, so the stream opens with it as
+          // stored and every later snapshot carries it the same way.
+          rewrittenOnAcceptance: [stored],
         },
       }),
     );
     expect(JSON.stringify(chunks)).not.toContain("future-private-value");
-    const firstChunk = chunks.at(0);
-    expect(firstChunk?.type).toBe(EventType.MESSAGES_SNAPSHOT);
-    if (firstChunk?.type !== EventType.MESSAGES_SNAPSHOT) {
-      return;
-    }
-    expect(firstChunk.messages).toMatchObject([
+    const snapshots = chunks.flatMap((chunk) =>
+      chunk.type === EventType.MESSAGES_SNAPSHOT ? [chunk.messages] : [],
+    );
+    const asStored = [
       {
         id: messageId,
         parts: [
@@ -5989,7 +5982,8 @@ describe("chat stream refs", () => {
           },
         ],
       },
-    ]);
+    ];
+    expect(snapshots).toMatchObject([asStored, asStored]);
   });
 
   test("reports a failed served-history read as a terminal stream error", async () => {

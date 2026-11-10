@@ -299,7 +299,7 @@ const ChatTitleRenameSession = ({
 
   return (
     <Button
-      className="group/plain -mx-1 flex min-w-0"
+      className="group/plain -mx-1 flex min-w-6"
       onClick={startEditing}
       tooltip={t("chat.renameThread")}
       variant="plain"

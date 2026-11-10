@@ -278,6 +278,9 @@ const SubmissionFeedback = ({
 
 type ActivityDayCalendarProps = {
   header: ReactNode;
+  /** A question or note that belongs under the header, such as the
+   * browser question; nothing when absent. */
+  notice?: ReactNode;
   snapshot: ActivityDaySnapshot;
   preferences: ActivityCalendarPreferences;
   onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
@@ -287,6 +290,7 @@ type ActivityDayCalendarProps = {
 
 export const ActivityDayCalendar = ({
   header,
+  notice,
   snapshot,
   preferences,
   onPreferencesChange,
@@ -525,6 +529,7 @@ export const ActivityDayCalendar = ({
           }
         />
       </div>
+      {notice}
       {candidates.type === "failed" ? (
         <div
           role="alert"

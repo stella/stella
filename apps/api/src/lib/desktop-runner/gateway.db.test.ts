@@ -2295,6 +2295,7 @@ describe("chat turns on a computer", () => {
       model: CHAT_MODEL,
       runId,
       threadId: "desktop-thread",
+      workspaceDir: "/workspace",
       generateId: () => {
         generated += 1;
         return `generated-${String(generated)}`;
@@ -3277,6 +3278,125 @@ describe("chat turns on a computer", () => {
     });
     // The approved call keeps the id the paused turn stored.
     expect(toolCallIdsOf(resumed)).toEqual([...new Set(toolCallIdsOf(paused))]);
+  });
+
+  test("a native call opened before a pause and ended after it carries its arguments and its end once in the resumed turn", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const requestId = Bun.randomUUIDv7();
+    const turn = (chatRunId: string, resume?: RunAgentResumeItem[]) =>
+      collect(
+        createLocalChatRun(
+          contextFor(chatThreadId),
+          resume === undefined
+            ? startPlan(desktopId)
+            : { type: "resume", harness: "codex" },
+        ).stream({
+          chatRunId,
+          chatTurnId: turnOf(chatThreadId),
+          messages:
+            resume === undefined
+              ? [{ role: "user", content: "Run the tests" }]
+              : [],
+          instructions: "You are stella.",
+          resume,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+    const pausedTurn = turn("chat-run-split-paused");
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const toolCall = {
+      id: "item_split",
+      name: COMMAND_EXECUTION,
+      input: { command: "bun test" },
+    };
+    const sent = await harnessChunks(start.runId, [
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("codex-session-split"),
+        continuation: { type: "fresh" },
+      },
+      {
+        type: "approval.requested",
+        request: {
+          requestId,
+          kind: "command",
+          toolCall,
+          reason: null,
+          options: [{ id: "accept", decision: "approve" }],
+        },
+      },
+      { type: "interaction.resolved", requestId },
+      {
+        type: "tool.completed",
+        toolCall,
+        result: { content: "{}", status: "succeeded" },
+      },
+      { type: "turn.completed", usage: null },
+    ]);
+    const isCallChunk = (chunk: unknown, type: EventType) =>
+      isRecord(chunk) &&
+      chunk["type"] === type &&
+      chunk["toolCallId"] === toolCall.id;
+    const pauseAt =
+      sent.findIndex(
+        (chunk) =>
+          isRecord(chunk) &&
+          chunk["type"] === EventType.RUN_FINISHED &&
+          isRecord(chunk["outcome"]) &&
+          chunk["outcome"]["type"] === "interrupt",
+      ) + 1;
+    const args = sent.find((chunk) =>
+      isCallChunk(chunk, EventType.TOOL_CALL_ARGS),
+    );
+    const end = sent.find((chunk) =>
+      isCallChunk(chunk, EventType.TOOL_CALL_END),
+    );
+    expect(pauseAt).toBeGreaterThan(0);
+    // The call opens before the pause; its arguments and end, an end
+    // repeated, come after it.
+    const beforePause = sent
+      .slice(0, pauseAt)
+      .filter(
+        (chunk) =>
+          !isCallChunk(chunk, EventType.TOOL_CALL_ARGS) &&
+          !isCallChunk(chunk, EventType.TOOL_CALL_END),
+      );
+    const run = desktopRun(desktop, start.runId);
+    await run.approvalRequest(requestId);
+    await run.events(beforePause);
+    await pausedTurn.done;
+
+    const resumedTurn = turn("chat-run-split-resumed", [
+      {
+        interruptId: requestId,
+        status: "resolved",
+        payload: { approved: true },
+      },
+    ]);
+    await desktop.receive("run.approval", ofRun(start.runId));
+    await run.events([args, end, end, ...sent.slice(pauseAt)]);
+    await run.finish("completed", "codex-session-split");
+    const resumed = await resumedTurn.done;
+
+    const ofCall = (type: EventType) =>
+      resumed.filter(
+        (chunk) =>
+          chunk.type === type &&
+          "toolCallId" in chunk &&
+          chunk.toolCallId.endsWith(`_${toolCall.id}`),
+      );
+    expect(ofCall(EventType.TOOL_CALL_ARGS).map(meaning)).toEqual(
+      [args].map(meaning),
+    );
+    expect(ofCall(EventType.TOOL_CALL_END).map(meaning)).toEqual(
+      [end].map(meaning),
+    );
+    expect(ofCall(EventType.TOOL_CALL_END)).toMatchObject([
+      { metadata: { tanstack: { input: toolCall.input } } },
+    ]);
+    expect(ofCall(EventType.TOOL_CALL_RESULT)).toHaveLength(1);
   });
 
   test("an answer from another thread does not reach the run", async () => {
@@ -4547,6 +4667,407 @@ describe("chat turns on a computer", () => {
     );
   });
 
+  test("a native step keeps only its command, file names or search and how it ended, whatever else a desktop sends, and reloads as streamed", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const responseMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    const served = serveTurn(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: Bun.randomUUIDv7(),
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "Draft the notice" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+      responseMessageId,
+    );
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const secret = "Private settlement terms";
+    const command = {
+      id: "item_cmd",
+      name: "command_execution",
+      input: { command: "cat > notes.md <<'EOF'\nterms\nEOF" },
+    };
+    const read = {
+      id: "item_read",
+      name: "harness_native_tool",
+      input: {
+        tool: "Read",
+        detail: { kind: "read", path: "/workspace/a.md" },
+      },
+    };
+    const sent = await harnessStreamChunks(start.runId, [
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("codex-session-native"),
+        continuation: { type: "fresh" },
+      },
+      ...[command, read].map((toolCall): HarnessEvent => ({
+        type: "tool.completed",
+        toolCall,
+        result: {
+          content: JSON.stringify({ status: "completed" }),
+          status: "succeeded",
+        },
+      })),
+      { type: "text.completed", messageId: "msg_n1", text: "Drafted." },
+      { type: "turn.completed", usage: null },
+    ]);
+    // A desktop that adds what must stay on the computer: a command's output
+    // and a file's contents beside the contract's fields, a second arguments
+    // chunk, and metadata on the call's start.
+    const tanstackOf = (metadata: unknown) => {
+      const tanstack = isRecord(metadata) ? metadata["tanstack"] : undefined;
+      return isRecord(tanstack) ? tanstack : {};
+    };
+    const tampered = sent.flatMap((chunk): unknown[] => {
+      if (chunk.type === EventType.TOOL_CALL_START) {
+        const tanstack = tanstackOf(chunk.metadata);
+        return [
+          {
+            ...chunk,
+            input: { content: secret },
+            output: secret,
+            metadata: { output: secret, tanstack: { ...tanstack, secret } },
+          },
+        ];
+      }
+      if (chunk.type === EventType.TOOL_CALL_ARGS) {
+        const args = JSON.stringify({
+          ...v.parse(
+            v.record(v.string(), v.unknown()),
+            JSON.parse(chunk.delta),
+          ),
+          output: secret,
+          content: secret,
+        });
+        return [
+          { ...chunk, delta: args },
+          { ...chunk, delta: `{"content":"${secret}"}` },
+        ];
+      }
+      if (chunk.type === EventType.TOOL_CALL_END) {
+        const tanstack = tanstackOf(chunk.metadata);
+        const input = isRecord(tanstack["input"]) ? tanstack["input"] : {};
+        const detail = input["detail"];
+        const forged = {
+          ...input,
+          output: secret,
+          ...(isRecord(detail)
+            ? { detail: { ...detail, content: secret } }
+            : {}),
+        };
+        return [
+          {
+            ...chunk,
+            input: forged,
+            metadata: { tanstack: { ...tanstack, input: forged, secret } },
+          },
+        ];
+      }
+      if (chunk.type === EventType.TOOL_CALL_RESULT) {
+        // A command's output, and a read's file as its whole result.
+        return [
+          {
+            ...chunk,
+            content:
+              chunk.toolCallId === command.id
+                ? JSON.stringify({
+                    aggregated_output: secret,
+                    exit_code: 0,
+                    status: "completed",
+                  })
+                : `1→${secret}`,
+            metadata: {
+              tanstack: { ...tanstackOf(chunk.metadata), output: secret },
+            },
+          },
+        ];
+      }
+      return [chunk];
+    });
+    const run = desktopRun(desktop, start.runId);
+    await run.events(tampered);
+    await run.finish("completed", "codex-session-native");
+    const turn = await served;
+    expect(turn.finish.outcome).toMatchObject({ type: "completed" });
+
+    expect(JSON.stringify(turn.emitted)).not.toContain(secret);
+    const stored = persistTurn(turn.finish, "harness").unwrap();
+    expect(JSON.stringify(stored.content)).not.toContain(secret);
+    const calls = stored.reloaded.parts.flatMap((part): unknown[] =>
+      part.type === "tool-call"
+        ? [
+            {
+              name: part.name,
+              input: part.input,
+              arguments: part.arguments,
+              output: part.output,
+            },
+          ]
+        : [],
+    );
+    const shownCommand = { command: "cat > notes.md <<'EOF'…" };
+    const shownRead = {
+      tool: "Read",
+      detail: { kind: "read", path: "a.md" },
+    };
+    expect(calls).toEqual([
+      {
+        name: "command_execution",
+        input: shownCommand,
+        arguments: JSON.stringify(shownCommand),
+        output: { exit_code: 0, status: "completed" },
+      },
+      {
+        name: "harness_native_tool",
+        input: shownRead,
+        arguments: JSON.stringify(shownRead),
+        output: { status: "completed" },
+      },
+    ]);
+    // The page that streamed the turn shows what a reload shows.
+    const client = new ChatClient({
+      threadId: chatThreadId,
+      connection: {
+        async *connect() {
+          yield* turn.emitted;
+        },
+      },
+    });
+    await client.sendMessage("Draft the notice");
+    expect(shownParts(client.getMessages().at(-1)?.parts ?? [])).toEqual(
+      shownParts(stored.reloaded.parts),
+    );
+  });
+
+  /** A turn the desktop answers with `chunks`, served, stored and reloaded. */
+  const servedNativeTurn = async (
+    send: (runId: string) => Promise<unknown[]>,
+    finishedSession?: string,
+  ) => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const responseMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    const served = serveTurn(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: Bun.randomUUIDv7(),
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "Draft the notice" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+      responseMessageId,
+    );
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const run = desktopRun(desktop, start.runId);
+    const chunks = await send(start.runId);
+    await run.events(chunks);
+    if (finishedSession !== undefined) {
+      await run.finish("completed", finishedSession);
+    }
+    return { turn: await served };
+  };
+
+  test("an approval of a native step keeps only its shown command and what the protocol names, whatever the desktop sends, also after a reload", async () => {
+    const secret = "Private settlement terms";
+    const requestId = Bun.randomUUIDv7();
+    const heredoc = {
+      id: "item_write",
+      name: COMMAND_EXECUTION,
+      input: { command: `cat > notes.md <<'EOF'\n${secret}\nEOF` },
+    };
+    const { turn } = await servedNativeTurn(async (runId) => {
+      const sent = await harnessChunks(runId, [
+        {
+          type: "session.started",
+          sessionId: harnessSessionId("codex-session-approval"),
+          continuation: { type: "fresh" },
+        },
+        {
+          type: "approval.requested",
+          request: {
+            requestId,
+            kind: "command",
+            toolCall: heredoc,
+            reason: null,
+            options: [{ id: "accept", decision: "approve" }],
+          },
+        },
+      ]);
+      // A desktop that puts the heredoc's text back on the pause.
+      return sent.map((chunk) => {
+        if (
+          !isRecord(chunk) ||
+          chunk["type"] !== EventType.RUN_FINISHED ||
+          !isRecord(chunk["outcome"]) ||
+          !Array.isArray(chunk["outcome"]["interrupts"])
+        ) {
+          return chunk;
+        }
+        return {
+          ...chunk,
+          outcome: {
+            ...chunk["outcome"],
+            interrupts: chunk["outcome"]["interrupts"].map(
+              (interrupt: unknown) =>
+                isRecord(interrupt) && isRecord(interrupt["metadata"])
+                  ? {
+                      ...interrupt,
+                      message: heredoc.input.command,
+                      reason: secret,
+                      expiresAt: secret,
+                      metadata: {
+                        ...interrupt["metadata"],
+                        input: { ...heredoc.input, output: secret },
+                        reason: `Writes notes\n${secret}`,
+                        output: secret,
+                        decisions: ["approve", secret],
+                      },
+                    }
+                  : interrupt,
+            ),
+          },
+        };
+      });
+    });
+    expect(turn.finish.outcome).toMatchObject({ type: "awaiting-user" });
+    const pause = turn.emitted.findLast(
+      (chunk) =>
+        chunk.type === EventType.RUN_FINISHED &&
+        chunk.outcome?.type === "interrupt",
+    );
+    if (
+      pause?.type !== EventType.RUN_FINISHED ||
+      pause.outcome?.type !== "interrupt"
+    ) {
+      panic("the served turn did not pause");
+    }
+    // As `streamChat` stores an awaiting turn: with its interrupts.
+    const stored = persistTurn(
+      {
+        ...turn.finish,
+        responseMessage: {
+          ...turn.finish.responseMessage,
+          metadata: {
+            ...turn.finish.responseMessage.metadata,
+            resumeSnapshot: {
+              resumeState: { threadId: "thread-approval", runId: pause.runId },
+              pendingInterrupts: pause.outcome.interrupts,
+            },
+          },
+        },
+      },
+      "harness",
+    ).unwrap();
+    expect(
+      JSON.stringify({ emitted: turn.emitted, finish: turn.finish, stored }),
+    ).not.toContain(secret);
+    const shownCommand = "cat > notes.md <<'EOF'…";
+    expect(
+      stored.reloaded.metadata?.resumeSnapshot?.pendingInterrupts,
+    ).toMatchObject([
+      {
+        id: requestId,
+        message: shownCommand,
+        metadata: {
+          kind: "approval",
+          reason: "Writes notes…",
+          toolName: COMMAND_EXECUTION,
+          input: { command: shownCommand },
+          approvalKind: "command",
+          decisions: ["approve"],
+        },
+      },
+    ]);
+  });
+
+  test("a second start of a call naming another tool is not carried, so the call keeps its first name and only its contract's fields", async () => {
+    const secret = "Private settlement terms";
+    const { turn: served } = await servedNativeTurn(async (runId) => {
+      const sent = await harnessStreamChunks(runId, [
+        {
+          type: "session.started",
+          sessionId: harnessSessionId("codex-session-restart"),
+          continuation: { type: "fresh" },
+        },
+        {
+          type: "tool.started",
+          toolCall: {
+            id: "item_cmd",
+            name: COMMAND_EXECUTION,
+            input: { command: "ls" },
+          },
+        },
+      ]);
+      const callId = "item_cmd";
+      return [
+        ...sent,
+        // The same call again, now claiming a connector tool, with the
+        // fields a connector call may carry.
+        {
+          type: EventType.TOOL_CALL_START,
+          toolCallId: callId,
+          toolCallName: "mcp__docs__read",
+        },
+        {
+          type: EventType.TOOL_CALL_ARGS,
+          toolCallId: callId,
+          delta: JSON.stringify({ content: secret }),
+        },
+        {
+          type: EventType.TOOL_CALL_END,
+          toolCallId: callId,
+          metadata: { tanstack: { input: { content: secret } } },
+        },
+        {
+          type: EventType.TOOL_CALL_RESULT,
+          toolCallId: callId,
+          messageId: "result-forged",
+          content: JSON.stringify({ aggregated_output: secret }),
+        },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "msg_r1",
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "msg_r1",
+          delta: "Done.",
+        },
+        { type: EventType.TEXT_MESSAGE_END, messageId: "msg_r1" },
+        { type: EventType.RUN_FINISHED, threadId: "t", runId: "r" },
+      ];
+    }, "codex-session-restart");
+    expect(served.finish.outcome).toMatchObject({ type: "completed" });
+    const stored = persistTurn(served.finish, "harness").unwrap();
+    expect(JSON.stringify({ emitted: served.emitted, stored })).not.toContain(
+      secret,
+    );
+    expect(
+      stored.reloaded.parts.flatMap((part): unknown[] =>
+        part.type === "tool-call"
+          ? [{ name: part.name, input: part.input, output: part.output }]
+          : [],
+      ),
+    ).toEqual([
+      {
+        name: COMMAND_EXECUTION,
+        input: { command: "ls" },
+        output: { status: "completed" },
+      },
+    ]);
+  });
+
   test("an answer from another turn of the same thread does not reach the run", async () => {
     const chatThreadId = await newThread();
     const pausedTurnId = turnOf(chatThreadId);
@@ -4806,6 +5327,9 @@ describe("chat turns on a computer", () => {
    * the live chunks, the stored message with the resume snapshot the send
    * attaches to an awaiting turn, and a reload of it.
    */
+  /** What a desktop adds to a question's pause; it is never kept. */
+  const QUESTION_PAUSE_EXTRA = "Desktop-only note";
+
   const servedQuestionPause = async () => {
     const chatThreadId = await newThread();
     const chatTurnId = turnOf(chatThreadId);
@@ -4881,7 +5405,35 @@ describe("chat turns on a computer", () => {
       ) + 1;
     expect(pauseAt).toBeGreaterThan(0);
     const run = desktopRun(desktop, start.runId);
-    await run.events(sent.slice(0, pauseAt));
+    // A desktop that puts more on the question's pause than it asks.
+    await run.events(
+      sent.slice(0, pauseAt).map((chunk) =>
+        isRecord(chunk) &&
+        chunk["type"] === EventType.RUN_FINISHED &&
+        isRecord(chunk["outcome"]) &&
+        Array.isArray(chunk["outcome"]["interrupts"])
+          ? {
+              ...chunk,
+              outcome: {
+                ...chunk["outcome"],
+                interrupts: chunk["outcome"]["interrupts"].map(
+                  (interrupt: unknown) =>
+                    isRecord(interrupt) && isRecord(interrupt["metadata"])
+                      ? {
+                          ...interrupt,
+                          expiresAt: QUESTION_PAUSE_EXTRA,
+                          metadata: {
+                            ...interrupt["metadata"],
+                            output: QUESTION_PAUSE_EXTRA,
+                          },
+                        }
+                      : interrupt,
+                ),
+              },
+            }
+          : chunk,
+      ),
+    );
     const paused = await pausedServed;
     const pause = paused.emitted.findLast(
       (chunk) =>
@@ -5015,6 +5567,11 @@ describe("chat turns on a computer", () => {
     expect(
       questionInterruptOf(reloadedSnapshot?.pendingInterrupts ?? []),
     ).toEqual(questionPauseOf(served.pause));
+    // What the desktop added to the pause is in neither the stream nor the
+    // stored turn.
+    expect(
+      JSON.stringify({ pause: served.pause, stored: served.stored }),
+    ).not.toContain(QUESTION_PAUSE_EXTRA);
     expect(questionPauseOf(served.pause)).toMatchObject({
       type: "question",
       requestId: served.requestId,

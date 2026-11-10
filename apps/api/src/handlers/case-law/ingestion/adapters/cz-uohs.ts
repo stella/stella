@@ -5,8 +5,28 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
+import {
+  CZ_JUDGE_NAME_RE,
+  czechAuthorityHeadRoles,
+  isCzechAuthorityDecisionTitle,
+  isCzechAuthoritySignatureLine,
+  isCzechInstructionHeading,
+  isCzechReasonsHeading,
+} from "@stll/legal-ast/czech-document-roles";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DocumentAst,
+  HeadingLevel,
+  Inline,
+  ParagraphRole,
+} from "@stll/legal-ast/document-ast";
+import { CZ_PROFILE } from "@stll/legal-atlas/cz-provision-citation-profile";
+import {
+  printedDateOf,
+  printedDatePattern,
+} from "@stll/legal-atlas/printed-date";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -173,22 +193,50 @@ const readListingText = async (
   );
 };
 
+/**
+ * The proceeding's file number as the office prints it, "ÚOHS-R0003/2018/HS".
+ * Older export rows state only the file's serial ("R0003") and carry the
+ * whole number at the head of the reference number
+ * ("R0003/2018/HS-31751/310/MHf"). A serial alone repeats every year, so it
+ * never stands for the file: two proceedings would share one identity.
+ */
+export const czUohsFileNumber = (
+  record: Pick<CzUohsRecord, "spisová_značka" | "číslo_jednací">,
+): string => {
+  const stated = record.spisová_značka.replace(/^ÚOHS-/u, "");
+  const reference = record.číslo_jednací.replace(/^ÚOHS-/u, "");
+  if (/\/\d{4}(?:\/|$)/u.test(stated) || !reference.startsWith(`${stated}/`)) {
+    return `ÚOHS-${stated}`;
+  }
+  // After the serial the reference states the year and, when the file has
+  // one, its section letters; whatever follows (the decision's own number,
+  // set off by a hyphen, a space or nothing) belongs to the decision.
+  const head = FILE_NUMBER_TAIL.exec(reference.slice(stated.length))?.[0];
+  return `ÚOHS-${stated}${head ?? ""}`;
+};
+
+/** `/2018/HS` in `R0003/2018/HS-31751/…`, `/2014/VZ` in `S817/2014/VZ 26112/…`. */
+const FILE_NUMBER_TAIL = /^\/\d{4}(?:\/\p{Lu}+)?/u;
+
+/**
+ * The decision's citable identifiers: the file number, then the reference
+ * number of this one decision. Both are lookup keys, never display text; the
+ * displayed docket is `czUohsFileNumber`.
+ */
 export const czUohsDecisionIdentifiers = (
   record: Pick<CzUohsRecord, "spisová_značka" | "číslo_jednací">,
 ) => {
-  const identifier = (value: string) => {
-    const prefixed = `ÚOHS-${value.replace(/^ÚOHS-/u, "")}`;
-    return {
+  const identifier = (printed: string) =>
+    ({
       type: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
       value: normalizeDecisionIdentifierValue(
         DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
-        prefixed,
+        printed,
       ),
-    } as const;
-  };
+    }) as const;
   return [
-    identifier(record.spisová_značka),
-    identifier(record.číslo_jednací),
+    identifier(czUohsFileNumber(record)),
+    identifier(`ÚOHS-${record.číslo_jednací.replace(/^ÚOHS-/u, "")}`),
   ] as const;
 };
 
@@ -241,6 +289,100 @@ type CzUohsDocumentInput = {
  * The decision as a document: one paragraph block per printed paragraph, with
  * the office's own "N." numbering moved into the block by the shared reader.
  */
+/**
+ * The Office's document identifier printed as a barcode and its caption at
+ * the head of the first page (`*UOHSX00BKPME*`): the filing system's, not
+ * the decision's words.
+ */
+const DOCUMENT_BARCODE_RE = /^\*?UOHSX[0-9A-Z]{7}\*?$/u;
+
+/**
+ * Roles by the decision's own parts: the head matter and the operative part
+ * through the Czech grammar of an authority's decision, the barcode as
+ * apparatus, and the signature under the office the decision is signed
+ * under, with the name printed above it. A decision printing no lead-in or
+ * no reasons heading keeps the operative part up to its first numbered
+ * paragraph of reasons.
+ */
+const czUohsParagraphRoles = (
+  texts: readonly string[],
+): (ParagraphRole | undefined)[] => {
+  const head = czechAuthorityHeadRoles(texts);
+  const numberedReasoningStart = texts.findIndex((text) =>
+    /^1\.\s+\p{Lu}/u.test(text),
+  );
+  return texts.map((text, index): ParagraphRole | undefined => {
+    if (DOCUMENT_BARCODE_RE.test(text)) {
+      return "apparatus";
+    }
+    if (head !== undefined) {
+      const role = head[index];
+      if (role !== undefined) {
+        return role;
+      }
+    } else if (
+      numberedReasoningStart !== -1 &&
+      index < numberedReasoningStart
+    ) {
+      return "holding";
+    }
+    const next = texts[index + 1];
+    return isCzechAuthoritySignatureLine(text) ||
+      (next !== undefined &&
+        isCzechAuthoritySignatureLine(next) &&
+        CZ_JUDGE_NAME_RE.test(text) &&
+        text.length < 80)
+      ? "signature"
+      : undefined;
+  });
+};
+
+type CzUohsHeading = {
+  level: HeadingLevel;
+  role?: "decision-title" | "section-heading";
+};
+
+/**
+ * The decision's own headings: its title in the head matter, the reasons
+ * and instruction headings, and the reasons' Roman section titles between
+ * the two. Each
+ * keeps the anchor its paragraph had, so a heading only changes the type.
+ */
+const czUohsHeadings = (
+  texts: readonly string[],
+  roles: readonly (ParagraphRole | undefined)[],
+): (CzUohsHeading | undefined)[] => {
+  let reasoned = false;
+  let titled = false;
+  return texts.map((text, index): CzUohsHeading | undefined => {
+    if (isCzechReasonsHeading(text)) {
+      reasoned = true;
+      return { level: 2, role: "section-heading" };
+    }
+    if (isCzechInstructionHeading(text)) {
+      // The instruction closes the reasons: what follows is the signature
+      // and the distribution, never a section of the reasons.
+      reasoned = false;
+      titled = true;
+      return { level: 2, role: "section-heading" };
+    }
+    if (
+      !titled &&
+      !reasoned &&
+      roles[index] === "intro" &&
+      isCzechAuthorityDecisionTitle(text)
+    ) {
+      titled = true;
+      return { level: 1, role: "decision-title" };
+    }
+    const section =
+      reasoned && roles[index] !== "signature"
+        ? caseLawSectionHeading(text)
+        : null;
+    return section === null ? undefined : { level: section.level };
+  });
+};
+
 export const czUohsDocumentAst = ({
   paragraphs,
   notes,
@@ -259,19 +401,36 @@ export const czUohsDocumentAst = ({
       .map(({ text }) => text)
       .join("")
       .trim();
-  const numberedReasoningStart = paragraphs.findIndex((runs) =>
-    /^1\.\s+\p{Lu}/u.test(textOf(runs)),
-  );
-  const blocks: Block[] = paragraphs.map((runs, index) => ({
-    id: `b${index + 1}`,
-    anchorId: `p-${index + 1}`,
-    type: "paragraph",
-    ...(numberedReasoningStart !== -1 && index < numberedReasoningStart
-      ? { role: "holding" as const }
-      : {}),
-    inlines: pdfRunInlines(runs),
-    plainText: textOf(runs),
-  }));
+  const texts = paragraphs.map(textOf);
+  const roles = czUohsParagraphRoles(texts);
+  const headings = czUohsHeadings(texts, roles);
+  const blocks: Block[] = paragraphs.map((runs, index): Block => {
+    const id = `b${index + 1}`;
+    const anchorId = `p-${index + 1}`;
+    const inlines: Inline[] = pdfRunInlines(runs);
+    const plainText = texts[index] ?? "";
+    const heading = headings[index];
+    if (heading !== undefined) {
+      return {
+        id,
+        anchorId,
+        type: "heading",
+        level: heading.level,
+        ...(heading.role === undefined ? {} : { role: heading.role }),
+        inlines,
+        plainText,
+      };
+    }
+    const role = roles[index];
+    return {
+      id,
+      anchorId,
+      type: "paragraph",
+      ...(role === undefined ? {} : { role }),
+      inlines,
+      plainText,
+    };
+  });
   for (const { label, noteId, runs } of notes) {
     const plainText = textOf(runs);
     blocks.push({
@@ -334,40 +493,78 @@ export const parseCzUohsDocumentPdf = async (
     notes: read.notes,
     court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
     decisionDate: czUohsLetterheadDate(read.text),
-    decisionType: undefined,
+    decisionType: czUohsPrintedDecisionType(read.text),
     documentUrl: undefined,
   });
 };
 
 /**
  * The letterhead of every ÚOHS decision states its issue date beside the
- * place: "Datum, místo  12. 10. 2026, Brno". Body dates ("dne 5. 8. 2026")
- * never carry the place, so only the labelled letterhead value is read, and
- * only from the head of the text.
+ * place, in one of the layouts the office has used: labelled ("Datum, místo
+ * 12. 10. 2026, Brno"), or after a labelled reference ("Č. j.:
+ * ÚOHS-R0003/2018/HS-31751/310/MHf   Brno 1. listopadu 2018", "Číslo
+ * jednací: ÚOHS-37007/2024/163 Brno 1. 10. 2024", "Spisová značka:
+ * ÚOHS-S0876/2023/KS Brno 8. 1. 2024 Číslo jednací: …"). Body dates ("dne
+ * 5. 8. 2026", "sp. zn. ÚOHS-… ze dne …") carry neither the label nor the
+ * place, so only these shapes are read, and only from the head.
  */
 const LETTERHEAD_SPAN = 1500;
-// The value must follow its own label: a date elsewhere in the head is not it.
-const LETTERHEAD_DATE =
-  /Datum,\s*místo\s+(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4}),\s*Brno/u;
+const PRINTED_DATE = printedDatePattern(CZ_PROFILE.versionGrammar.monthNames);
+// Each value must follow its own label: a date elsewhere in the head is not it.
+const LETTERHEAD_DATES = [
+  new RegExp(`Datum,\\s*místo\\s+${PRINTED_DATE},\\s*Brno`, "u"),
+  new RegExp(
+    `(?:Č\\.\\s?j\\.|Číslo jednací|Spisová značka):?\\s*ÚOHS-[^\\s]+\\s*Brno:?\\s*${PRINTED_DATE}`,
+    "u",
+  ),
+] as const;
+
+/**
+ * The decision's own title line in the letterhead ("ROZHODNUTÍ", "USNESENÍ",
+ * "PŘÍKAZ"), as its type in Czech; undefined when the head prints none.
+ */
+const PRINTED_DECISION_TYPES: ReadonlySet<string> = new Set([
+  "ROZHODNUTÍ",
+  "USNESENÍ",
+  "PŘÍKAZ",
+]);
+
+export const czUohsPrintedDecisionType = (text: string): string | undefined =>
+  text
+    .slice(0, LETTERHEAD_SPAN)
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => PRINTED_DECISION_TYPES.has(line.toLocaleUpperCase("cs")))
+    ?.toLocaleLowerCase("cs");
+
+/**
+ * What the decision's own text states about it. The date comes from the
+ * letterhead, so a text without one is a source that publishes none; the
+ * type is the printed title, since the export names it only by a code-list
+ * address (which stays in metadata). An unread document says neither.
+ */
+const czUohsPrintedFacts = (
+  fulltext: string | undefined,
+): { decisionDate: string | undefined; decisionType: string | undefined } =>
+  fulltext === undefined
+    ? { decisionDate: undefined, decisionType: undefined }
+    : {
+        decisionDate: czUohsLetterheadDate(fulltext),
+        decisionType: czUohsPrintedDecisionType(fulltext),
+      };
 
 /** Where a ÚOHS decision date was read from; the export states none. */
 export const CZ_UOHS_DECISION_DATE_SOURCE = "document";
 
 export const czUohsLetterheadDate = (text: string): string | undefined => {
-  const match = LETTERHEAD_DATE.exec(text.slice(0, LETTERHEAD_SPAN));
-  if (match === null) {
-    return undefined;
+  const head = text.slice(0, LETTERHEAD_SPAN);
+  for (const pattern of LETTERHEAD_DATES) {
+    const match = pattern.exec(head);
+    if (match !== null) {
+      return printedDateOf(match.groups, CZ_PROFILE.versionGrammar.monthNames);
+    }
   }
-  const [, day, month, year] = match;
-  const date = Result.try({
-    try: () =>
-      Temporal.PlainDate.from(
-        { year: Number(year), month: Number(month), day: Number(day) },
-        { overflow: "reject" },
-      ).toString(),
-    catch: String,
-  });
-  return Result.isOk(date) ? date.value : undefined;
+  return undefined;
 };
 
 /**
@@ -387,6 +584,18 @@ const decisionDateMetadata = (
   }
   return { decisionDateAvailability: { status: "not-published-by-source" } };
 };
+
+/**
+ * The export names the type only by a code-list address, so a decision whose
+ * text prints no title states its type in no words; the absence is typed.
+ */
+const decisionTypeMetadata = (
+  decisionType: string | undefined,
+  documentRead: boolean,
+) =>
+  decisionType !== undefined || !documentRead
+    ? {}
+    : { decisionTypeAvailability: { status: "not-published-by-source" } };
 
 type CzUohsDocumentRead =
   | { type: "publisher"; signal: AbortSignal | undefined }
@@ -538,12 +747,10 @@ const assembleCzUohsDecision = async ({
   // first listed file only when none of them yielded text.
   const decisionDocumentUrl = canonical?.url ?? primaryDocumentUrl;
   const identifiers = czUohsDecisionIdentifiers(record);
-  // The date comes from the decision's own text; a text without a letterhead
-  // date is a source that publishes none. An unread document says neither.
-  const decisionDate =
-    fulltext === undefined ? undefined : czUohsLetterheadDate(fulltext);
+  const caseNumber = czUohsFileNumber(record);
+  const { decisionDate, decisionType } = czUohsPrintedFacts(fulltext);
   return plainTextIngestionResult({
-    caseNumber: identifiers[0].value,
+    caseNumber,
     caseNumberType: "case-number",
     identifiers,
     sourceDocumentId: record.iri,
@@ -551,9 +758,7 @@ const assembleCzUohsDecision = async ({
     country: "CZE",
     language: "cs",
     ...(decisionDate === undefined ? {} : { decisionDate }),
-    ...(record.typ_rozhodnutí.at(0) === undefined
-      ? {}
-      : { decisionType: record.typ_rozhodnutí[0] }),
+    ...(decisionType === undefined ? {} : { decisionType }),
     ...(fulltext === undefined ? {} : { fulltext }),
     ...(fulltext === undefined && documentReadOutcome !== undefined
       ? { isListingOnly: true }
@@ -577,6 +782,7 @@ const assembleCzUohsDecision = async ({
       // An authority decision carries no ECLI, and the export states none.
       ecliAvailability: { status: "not_published" },
       ...decisionDateMetadata(decisionDate, fulltext !== undefined),
+      ...decisionTypeMetadata(decisionType, fulltext !== undefined),
       legalForceDate: record.datum_právní_moci ?? null,
       proceedingTypes: record.typ_řízení,
       decisionTypes: record.typ_rozhodnutí,
@@ -603,10 +809,10 @@ const assembleCzUohsDecision = async ({
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS],
     documentAst: decisionDocumentAst(canonical, {
-      caseNumber: identifiers[0].value,
+      caseNumber,
       court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
       decisionDate,
-      decisionType: record.typ_rozhodnutí.at(0),
+      decisionType,
       sourceUrl: record.iri,
     }),
     sourceRaw,
