@@ -276,12 +276,14 @@ jobs:
     timeout-minutes: 5
     permissions: {}
     steps:
-      - name: Mint changelog App token
+      # The changelog app grants contents only. The provenance app already
+      # arms repository bot pull requests, so it queues this one too.
+      - name: Mint merge token
         id: app-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
-          client-id: ${{ secrets.CHANGELOG_APP_ID }}
-          private-key: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.PROVENANCE_APP_ID }}
+          private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-contents: write

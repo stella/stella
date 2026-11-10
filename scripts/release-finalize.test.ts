@@ -200,8 +200,8 @@ test("release landing waits for finalization and uses trusted tooling with a sep
     uses?.startsWith("actions/create-github-app-token@"),
   )?.with;
   expect(token).toMatchObject({
-    "client-id": `\${{ secrets.CHANGELOG_APP_ID }}`,
-    "private-key": `\${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}`,
+    "app-id": `\${{ secrets.PROVENANCE_APP_ID }}`,
+    "private-key": `\${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}`,
     owner: `\${{ github.repository_owner }}`,
     repositories: `\${{ github.event.repository.name }}`,
     "permission-contents": "write",

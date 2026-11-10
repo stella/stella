@@ -64,4 +64,5 @@ if jq -e '.[0].autoMergeRequest != null' <<<"$open" >/dev/null; then
   echo "Release PR #$number at $sha already has auto-merge enabled."
   exit 0
 fi
-bash "$gh_retry_script" pr merge "$number" --repo "$repo" --auto --match-head-commit "$sha"
+# gh-retry.sh hands pr subcommands straight to gh, so call it directly.
+gh pr merge "$number" --repo "$repo" --auto --match-head-commit "$sha"

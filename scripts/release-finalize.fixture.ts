@@ -256,6 +256,14 @@ exec "${realGit}" "$@"
 `,
       { mode: 0o755 },
     );
+    // The landing script calls gh directly for pr subcommands.
+    writeFileSync(
+      path.join(bin, "gh"),
+      `#!/usr/bin/env bash
+exec bash "$TEST_ROOT/gh.sh" "$@"
+`,
+      { mode: 0o755 },
+    );
     mkdirSync(path.join(root, "scripts"));
     // The workflow runs trusted tooling from scripts/.
     for (const source of [
@@ -291,6 +299,7 @@ exec "${realGit}" "$@"
       result.exitCode === 0 && stepOutput.startsWith("final_tag=")
         ? execute(root, ["bash", "land-release-pr.sh", "stella/stella", sha], {
             ...process.env,
+            PATH: `${bin}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
             GH_TOKEN: "fixture-landing-token",
             TEST_ROOT: root,
             GH_RETRY_SCRIPT: path.join(root, "gh.sh"),
