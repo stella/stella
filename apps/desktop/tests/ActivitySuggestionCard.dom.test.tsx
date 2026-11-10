@@ -85,6 +85,7 @@ const SelectedRangeCard = ({
       structure={null}
       suggestion={suggestion}
       timeLabel=""
+      titlesNotice={null}
       times={{
         date: DATE,
         onRangeChange: setRange,

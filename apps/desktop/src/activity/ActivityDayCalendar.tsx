@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Separator } from "@stll/ui/separator";
 
 import {
   activityBlocks,
@@ -52,7 +53,15 @@ import type {
   SuggestionSummary,
 } from "./activity-calendar-logic";
 import { calendarDate, timedSegments } from "./activity-logic";
-import type { ActivityDaySnapshot } from "./activity-types";
+import type {
+  ActivityAppExclusion,
+  ActivityDaySnapshot,
+} from "./activity-types";
+import {
+  BrowserTitlesNotice,
+  OpenAccessibilitySettingsButton,
+} from "./ActivityCaptureDetails";
+import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivitySuggestionCard } from "./ActivitySuggestionCard";
 import type {
@@ -71,9 +80,12 @@ import type {
   BillingDraftSettings,
   BillingDraftSettingsControl,
 } from "./billing-draft-settings";
+import type { CaptureModeCommand } from "./capture-modes";
 import { EVIDENCE_DETAIL_LIMIT, matchDay } from "./day-review-logic";
 import type { MatchedSegment } from "./day-review-logic";
 import { SuggestionPieceLabel } from "./SuggestionPieceLabel";
+import { explainedBrowsers, missingTitlesReason } from "./title-capture-logic";
+import type { ExplainedBrowser } from "./title-capture-logic";
 import { useDurationLabel, useMinutesLabel } from "./use-duration-label";
 
 const ACTIVITY_COLUMN_ID = "activity";
@@ -112,15 +124,17 @@ export type ActivityCalendarPreferences = {
 };
 
 /** An Activity block's hover: its range, then each app with its time and the
- * title it spent longest on. */
+ * title it spent longest on, then why a browser in it recorded no titles. */
 const ActivityBlockDetails = ({
   details,
   range,
   sourceAppVisuals,
+  titlesNotice,
 }: {
   details: ReturnType<typeof blockDetails>;
   range: string;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+  titlesNotice: ReactElement | null;
 }) => {
   const t = useTranslations("activity");
   const durationLabel = useDurationLabel();
@@ -155,6 +169,12 @@ const ActivityBlockDetails = ({
           {t("moreApps", { count: details.hiddenCount })}
         </p>
       ) : null}
+      {titlesNotice === null ? null : (
+        <>
+          <Separator />
+          {titlesNotice}
+        </>
+      )}
     </div>
   );
 };
@@ -280,15 +300,24 @@ const SubmissionFeedback = ({
   );
 };
 
+/** Sends a capture-settings command, as the Settings window does. */
+export type CaptureCommandRunner = (
+  command: CaptureDetailsCommand | CaptureModeCommand["command"],
+  args?: Record<string, unknown>,
+  onSuccess?: () => void,
+  onFailure?: () => void,
+) => void;
+
 type ActivityDayCalendarProps = {
   header: ReactNode;
-  /** A question or note that belongs under the header, such as the
+  /** Shown under the header row: why titles are not recorded, or the
    * browser question; nothing when absent. */
   notice?: ReactNode;
   snapshot: ActivityDaySnapshot;
   preferences: ActivityCalendarPreferences;
   onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
   onCopy: (text: string, onSettled: (copied: boolean) => void) => void;
+  onCaptureCommand: CaptureCommandRunner;
   onReviewStatusChange: (status: ActivityReviewStatus) => void;
 };
 
@@ -299,6 +328,7 @@ export const ActivityDayCalendar = ({
   preferences,
   onPreferencesChange,
   onCopy,
+  onCaptureCommand,
   onReviewStatusChange,
 }: ActivityDayCalendarProps) => {
   const t = useTranslations("activity");
@@ -315,6 +345,7 @@ export const ActivityDayCalendar = ({
   });
   const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set());
   const [openCard, setOpenCard] = useState<OpenCard>({ type: "closed" });
+  const titlesNotices = useTitlesNotices(snapshot, onCaptureCommand);
 
   const timeZone = Temporal.Now.timeZoneId();
   const nowMs = Temporal.Now.instant().epochMilliseconds;
@@ -464,6 +495,7 @@ export const ActivityDayCalendar = ({
     narrativeFor: (suggestion) => narratives.editFor(suggestion).narrative,
     onActivate: (suggestion) =>
       open({ id: suggestion.id, type: "suggestion" }, suggestion),
+    titlesNoticeFor: titlesNotices.forApps,
   });
 
   const card =
@@ -482,6 +514,7 @@ export const ActivityDayCalendar = ({
         editable={editable}
         timeLabel={summaryLabel(suggestionSummary(openSuggestion))}
         sourceAppVisuals={snapshot.sourceAppVisuals}
+        titlesNotice={titlesNotices.forSuggestion(openSuggestion)}
         assist={narratives.view(openSuggestion)}
         earlierEntries={narratives.earlierEntries(openSuggestion)}
         flags={narratives.flags(openSuggestion)}
@@ -677,6 +710,9 @@ type CalendarColumnsOptions = {
   suggestions: readonly ActivitySuggestion[];
   narrativeFor: (suggestion: ActivitySuggestion) => string;
   onActivate: (suggestion: ActivitySuggestion) => void;
+  /** Why browsers among these apps recorded no titles, with the action that
+   * records them; `null` when there is nothing to explain. */
+  titlesNoticeFor: (identifiers: readonly string[]) => ReactElement | null;
 };
 
 /** The Activity column (recorded time) and the Time entries column (created
@@ -690,6 +726,7 @@ function useCalendarColumns({
   suggestions,
   narrativeFor,
   onActivate,
+  titlesNoticeFor,
 }: CalendarColumnsOptions): DayCalendarColumn[] {
   const t = useTranslations("activity");
   const format = useFormatter();
@@ -710,11 +747,15 @@ function useCalendarColumns({
   const activity = activityBlocks(segments, granularity).map(
     (block): DayCalendarBlock => {
       const range = formatRange(block.startMs, block.endMs);
-      const tooltip = (
+      const titlesNotice = titlesNoticeFor(
+        block.apps.map(({ identifier }) => identifier),
+      );
+      const details = (
         <ActivityBlockDetails
           details={blockDetails(block.sources, titleOf)}
           range={range}
           sourceAppVisuals={sourceAppVisuals}
+          titlesNotice={titlesNotice}
         />
       );
       const apps = format.list(
@@ -777,7 +818,11 @@ function useCalendarColumns({
           </span>
         ),
         tone: activityTone(block),
-        tooltip,
+        // The notice holds an action, so the hover must stay reachable.
+        tooltip: {
+          content: details,
+          type: titlesNotice === null ? "text" : "actions",
+        },
       };
     },
   );
@@ -888,6 +933,78 @@ const matterTitles = (suggestion: ActivitySuggestion, matterId: string) =>
       .slice(0, EVIDENCE_DETAIL_LIMIT)
       .map(({ title }) => title),
   );
+
+/** Why time recorded no titles, with the action that changes it: for an
+ * Activity block's apps, and for a suggestion's empty Titles tab. Browsers
+ * turned on from here keep their confirmation while the day is open. */
+const useTitlesNotices = (
+  snapshot: ActivityDaySnapshot,
+  onCaptureCommand: CaptureCommandRunner,
+) => {
+  const t = useTranslations("activity");
+  const { record, turnedOn } = useBrowserTitleRequests(onCaptureCommand);
+  const browsersNotice = (browsers: readonly ExplainedBrowser[]) =>
+    browsers.length === 0 ? null : (
+      <BrowserTitlesNotice browsers={browsers} onRecord={record} />
+    );
+  const forSuggestion = (suggestion: ActivitySuggestion) => {
+    const reason = missingTitlesReason(
+      snapshot,
+      suggestion.apps.map(({ identifier }) => identifier),
+      turnedOn,
+    );
+    switch (reason.type) {
+      case "none":
+        return null;
+      case "accessibilityRequired":
+        return (
+          <div className="flex flex-col items-start gap-1.5">
+            <p>{t("titlesNeedAccessibility")}</p>
+            <OpenAccessibilitySettingsButton
+              onCommand={onCaptureCommand}
+              variant="outline"
+            />
+          </div>
+        );
+      case "browsers":
+        return browsersNotice(reason.browsers);
+      default:
+        reason satisfies never;
+        return panic("Unhandled missing titles reason");
+    }
+  };
+  return {
+    forApps: (identifiers: readonly string[]) =>
+      browsersNotice(explainedBrowsers(snapshot, identifiers, turnedOn)),
+    forSuggestion,
+  };
+};
+
+/** Browsers turned on from this window while the day is open. A repeated
+ * press while one request is in flight sends nothing. */
+const useBrowserTitleRequests = (onCaptureCommand: CaptureCommandRunner) => {
+  const pending = useRef(new Set<string>());
+  const [turnedOn, setTurnedOn] = useState<ReadonlySet<string>>(new Set());
+  const settle = (identifier: string) => pending.current.delete(identifier);
+  const record = ({ identifier, name }: ActivityAppExclusion) => {
+    if (pending.current.has(identifier)) {
+      return;
+    }
+    pending.current.add(identifier);
+    onCaptureCommand(
+      "activity_set_browser_title_capture",
+      { identifier, name, enabled: true },
+      () => {
+        settle(identifier);
+        setTurnedOn((current) => new Set([...current, identifier]));
+      },
+      () => {
+        settle(identifier);
+      },
+    );
+  };
+  return { record, turnedOn };
+};
 
 type SuggestionDraftsOptions = {
   drafting: BillingDraftSettingsControl;

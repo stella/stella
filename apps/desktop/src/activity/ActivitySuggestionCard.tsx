@@ -110,6 +110,9 @@ type ActivitySuggestionCardProps = {
   editable: boolean;
   timeLabel: string;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+  /** Why no window titles were recorded, with the action that changes it;
+   * `null` when no action would. */
+  titlesNotice: React.ReactElement | null;
   assist: DraftAssistView;
   /** The user's earlier entries the current draft followed. */
   earlierEntries: CardDraft["earlierEntries"];
@@ -171,6 +174,7 @@ export const ActivitySuggestionCard = ({
   editable,
   timeLabel,
   sourceAppVisuals,
+  titlesNotice,
   assist,
   earlierEntries,
   flags,
@@ -354,6 +358,13 @@ export const ActivitySuggestionCard = ({
               card.current?.focus();
             }}
           />
+          {titlesNotice !== null && titleRows(suggestion).length === 0 ? (
+            // The description falls back to app names without titles; say
+            // why next to it, where the gap shows.
+            <div className="text-xs" data-activity-titles-reason="">
+              {titlesNotice}
+            </div>
+          ) : null}
           <Textarea
             aria-label={t("entryNarrative")}
             className="min-h-16 shrink-0 resize-none"
