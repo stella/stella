@@ -29,8 +29,10 @@ import {
   FAKE_CLAUDE_CONTEXT_WINDOW,
   FAKE_CLAUDE_VERSION,
   FAKE_ESCAPE_COMMAND,
+  FAKE_LONG_COMMAND,
   FAKE_MCP_CALL,
   FAKE_PERMISSION_SUGGESTION,
+  FAKE_PRIVATE_TEXT,
   FAKE_RESUMED_SESSION_ID,
   FAKE_SANDBOX_HOST,
   FAKE_SANDBOX_REFUSAL,
@@ -187,6 +189,12 @@ const transcript: ModelMessage[] = [
   { role: "user", content: "Search both." },
 ];
 
+/** An image and a PDF, as the sidecar reads them from the run's folder. */
+const INPUT_FILES: HarnessTurnInput["inputFiles"] = [
+  { type: "image", mediaType: "image/png", base64: "iVBORw0K" },
+  { type: "pdf", base64: "JVBERi0x" },
+];
+
 const turnInput = (
   workspaceDir: string,
   overrides: Partial<HarnessTurnInput> = {},
@@ -203,6 +211,7 @@ const turnInput = (
     token: MCP_TOKEN,
   },
   transcript,
+  inputFiles: [],
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
   skillFolders: [],
@@ -259,6 +268,7 @@ const storedMessages = async (
     model: "test-model",
     runId: "run-1",
     threadId: "stella-thread-1",
+    workspaceDir: "/workspace",
     generateId: () => `id-${String((next += 1))}`,
     now: () => 0,
   })) {
@@ -426,11 +436,9 @@ describe("Claude Code adapter over stream-json stdio", () => {
           name: "command_execution",
           input: { command: "ls" },
         },
+        // The command's output stays on the computer.
         result: {
-          content: JSON.stringify({
-            aggregated_output: "notes.md\n",
-            status: "completed",
-          }),
+          content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
         },
       },
@@ -482,7 +490,10 @@ describe("Claude Code adapter over stream-json stdio", () => {
       },
       {
         name: "harness_native_tool",
-        input: { tool: "Read" },
+        input: {
+          tool: "Read",
+          detail: { kind: "read", path: "/workspace/notes.md" },
+        },
         status: "succeeded",
       },
       {
@@ -517,6 +528,107 @@ describe("Claude Code adapter over stream-json stdio", () => {
       expect(stored).not.toContain(native);
     }
     expect(terminal(events)).toEqual({ type: "turn.completed", usage: null });
+  });
+
+  test("a built-in tool's call shows its command, file names, search or plan, and never the text it carries", async () => {
+    const { events } = await run("native_tools");
+    const stored = await storedMessages(events, "claude-code");
+    const calls = stored
+      .flatMap(({ parts }) => parts)
+      .flatMap((part) =>
+        part.type === "tool-call"
+          ? [{ name: part.name, input: part.input }]
+          : [],
+      );
+    expect(calls).toEqual([
+      // A heredoc shows the line that runs it, never the lines it writes.
+      {
+        name: "command_execution",
+        input: { command: "cat > notes.md <<'EOF'…" },
+      },
+      {
+        name: "command_execution",
+        input: { command: `${FAKE_LONG_COMMAND.slice(0, 299)}…` },
+      },
+      // Inside the run's folder a file is named relative to it.
+      {
+        name: "file_change",
+        input: { changes: [{ path: "drafts/lease.md", kind: "update" }] },
+      },
+      {
+        name: "file_change",
+        input: { changes: [{ path: "drafts/lease.md", kind: "update" }] },
+      },
+      {
+        name: "file_change",
+        input: { changes: [{ path: "/elsewhere/out.md", kind: "update" }] },
+      },
+      {
+        name: "file_change",
+        input: { changes: [{ path: "analysis.ipynb", kind: "update" }] },
+      },
+      {
+        name: "harness_native_tool",
+        input: {
+          tool: "Read",
+          detail: { kind: "read", path: "drafts/lease.md" },
+        },
+      },
+      {
+        name: "harness_native_tool",
+        input: {
+          tool: "Grep",
+          detail: { kind: "search", pattern: "termination", path: "drafts" },
+        },
+      },
+      {
+        name: "harness_native_tool",
+        input: { tool: "Glob", detail: { kind: "search", pattern: "**/*.md" } },
+      },
+      { name: "harness_web_search", input: { query: "civil code lease" } },
+      {
+        name: "harness_native_tool",
+        input: {
+          tool: "WebFetch",
+          detail: { kind: "fetch", url: "https://example.test/civil-code" },
+        },
+      },
+      {
+        name: "harness_native_tool",
+        input: {
+          tool: "TodoWrite",
+          detail: {
+            kind: "plan",
+            items: ["Read the lease", "Draft the notice"],
+          },
+        },
+      },
+      // Any other tool shows its name only.
+      { name: "harness_native_tool", input: { tool: "Task" } },
+    ]);
+    // Nothing a call carried beyond those fields is stored, in its input or
+    // its raw arguments.
+    const callText = JSON.stringify(
+      stored
+        .flatMap(({ parts }) => parts)
+        .filter((part) => part.type === "tool-call"),
+    );
+    for (const text of Object.values(FAKE_PRIVATE_TEXT)) {
+      expect(callText).not.toContain(text);
+    }
+    expect(callText).not.toContain("y".repeat(300));
+    // A result says how the step ended, never what the tool returned.
+    const storedText = JSON.stringify(stored);
+    for (const returned of [
+      "1→lease",
+      "lease.md: termination",
+      "A page.",
+      "Applied 1 edit.",
+      "Web search results",
+    ]) {
+      expect(storedText).not.toContain(returned);
+    }
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
   });
 
   test("approvals offer the native decisions and reply with the chosen one", async () => {
@@ -781,6 +893,42 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
+  test("the turn's images and PDFs open its user message as blocks the CLI accepts", async () => {
+    const { events, received } = await run("stella_tools", {
+      overrides: { inputFiles: INPUT_FILES },
+    });
+    // The fake ends with code 96 on content the Messages API would refuse.
+    expect(terminal(events)?.type).toBe("turn.completed");
+    expect(
+      received()
+        .filter(({ type }) => type === "user")
+        .map(({ message }) => message),
+    ).toEqual([
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: "image/png",
+              data: "iVBORw0K",
+            },
+          },
+          {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: "JVBERi0x",
+            },
+          },
+          { type: "text", text: expect.stringContaining("Search both.") },
+        ],
+      },
+    ]);
+  });
+
   test("a resumed session gets only the new message", async () => {
     const { events, startups, received } = await run("resume_ok", {
       overrides: {
@@ -928,7 +1076,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
           inputModalities: ["text"],
         },
       ],
-      capabilities: ["approvals", "interrupt", "resume"],
+      capabilities: ["approvals", "interrupt", "resume", "image_input"],
       approvalModes: ["ask", "auto", "full_auto"],
       // The exhausted model-specific window does not count.
       usageLimit: { resetsAt: "2099-10-28T14:00:00Z" },
@@ -1461,7 +1609,10 @@ describe("Claude Code skill folders", () => {
     expect(toolCompletions(events)).toEqual([
       expect.objectContaining({
         toolCall: expect.objectContaining({
-          input: { tool: "Read" },
+          input: {
+            tool: "Read",
+            detail: { kind: "read", path: `<skill:${skill.name}>/SKILL.md` },
+          },
         }),
         result: {
           content: JSON.stringify({ status: "completed" }),
@@ -1479,11 +1630,9 @@ describe("Claude Code skill folders", () => {
       }),
       expect.objectContaining({
         toolCall: expect.objectContaining({ input: { command: "ls" } }),
+        // The command's output stays on the computer.
         result: {
-          content: JSON.stringify({
-            aggregated_output: "notes.md\n",
-            status: "completed",
-          }),
+          content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
         },
       }),

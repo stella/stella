@@ -52,6 +52,10 @@ import {
   stripInlineSuffix,
 } from "@stll/legal-ast/inline-line";
 import {
+  COURT_PARAGRAPH_OPENING_RE,
+  NUMBERED_LINE_RE,
+} from "@stll/legal-ast/printed-paragraph-labels";
+import {
   isSkDecisionTitle,
   isSkHoldingMarker,
   isSkInstructionMarker,
@@ -926,22 +930,37 @@ const joinRange = (
   return joined;
 };
 
-/** A line opening with a number that numbers it: `4.`, `28.1.`. */
-const NUMBERED_LINE = /^\d{1,3}(?:\.\d{1,3})*\.\s/u;
+/**
+ * Whether a paragraph's last parenthesis is still open (`(rozsudok … vo veci
+ * Banif Plus Bank Zrt proti Csaba Csipai a spol.`): what follows belongs
+ * inside it, whatever the full stop of an abbreviation before it says.
+ */
+const opensUnclosedBracket = (text: string): boolean => {
+  let depth = 0;
+  for (const char of text) {
+    if (char === "(") {
+      depth += 1;
+    } else if (char === ")" && depth > 0) {
+      depth -= 1;
+    }
+  }
+  return depth > 0;
+};
 
 /**
  * Whether a paragraph open at the foot of a page goes on at the top of the
  * next one: the page broke a sentence (the next page opens with a lowercase
  * word, or with a number that numbers nothing, as in `zákona č.` /
- * `480/2002 Z. z.`), or the paragraph stopped where no sentence stops and
- * the next page opens neither a numbered paragraph nor a part of the
- * decision.
+ * `480/2002 Z. z.`), a parenthesis the page left open goes on, or the
+ * paragraph stopped where no sentence stops and the next page opens neither
+ * a numbered paragraph nor a part of the decision.
  */
 const continuesOnNextPage = (open: string, next: string): boolean =>
   /^\p{Ll}/u.test(next) ||
-  (/^\d/u.test(next) && !NUMBERED_LINE.test(next)) ||
+  (opensUnclosedBracket(open) && !NUMBERED_LINE_RE.test(next)) ||
+  (/^\d/u.test(next) && !NUMBERED_LINE_RE.test(next)) ||
   (!/[.!?:;][“”"»)]*$/u.test(open) &&
-    !NUMBERED_LINE.test(next) &&
+    !NUMBERED_LINE_RE.test(next) &&
     openingNumberOf(next) === undefined &&
     !OUTLINE_HEADING_RE.test(next) &&
     !endsReasoningPart(next));
@@ -1468,12 +1487,9 @@ const courtRepeatsAfterList = (
   return false;
 };
 
-/** A line opening with a court paragraph number and a capitalised word. */
-const COURT_PARAGRAPH_OPENING = /^(?<number>\d{1,3})\.\s+\p{Lu}/u;
-
 /** The court paragraph number each line opens with, if any. */
 const openingNumberOf = (text: string): number | undefined => {
-  const raw = COURT_PARAGRAPH_OPENING.exec(text)?.groups?.["number"];
+  const raw = COURT_PARAGRAPH_OPENING_RE.exec(text)?.groups?.["number"];
   return raw === undefined ? undefined : Number(raw);
 };
 

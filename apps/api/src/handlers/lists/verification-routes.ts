@@ -1,3 +1,4 @@
+import createFactExtraction from "@/api/handlers/lists/fact-extractions/create";
 import updateFactDetails from "@/api/handlers/lists/items/fact-details/update";
 import verifyItemSource from "@/api/handlers/lists/items/sources/verification/update";
 import createSampleCase from "@/api/handlers/lists/sample-case/create";
@@ -30,6 +31,7 @@ export const createListVerificationRoutes = (
         DELETE: deleteClaimComment,
       },
       "/sample-case": { POST: createSampleCase },
+      "/fact-extractions": { POST: createFactExtraction },
       "/verifications": {
         GET: readVerifications,
         POST: createVerification,

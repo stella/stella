@@ -15,7 +15,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OxlintConfig } from "oxlint";
-import { cacheArtifactPaths } from "oxlint-tailwindcss";
+import {
+  cacheArtifactPaths,
+  writeDeclarationAnswers,
+} from "oxlint-tailwindcss";
 import * as v from "valibot";
 
 import oxlintConfig from "../oxlint.config.ts";
@@ -27,6 +30,7 @@ import {
 import {
   checkCache,
   mergeCache,
+  parseCollectedClasses,
   snapshotProblems,
   tailwindEntryPoints,
   tailwindFailureMessages,
@@ -233,10 +237,12 @@ const lintFixture = async ({
   cache,
   source,
   readOnly = true,
+  collect,
 }: {
   cache: string;
   source: string;
   readOnly?: boolean;
+  collect?: string;
 }) => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "stella-tailwind-cache-test-"),
@@ -274,6 +280,9 @@ const lintFixture = async ({
           ...process.env,
           OXLINT_TAILWINDCSS_CACHE_DIR: cache,
           OXLINT_TAILWINDCSS_CACHE_READ_ONLY: readOnly ? "1" : "0",
+          // Empty turns collection off, so a plain pass reports a missing
+          // answer even when this process inherited a collect file.
+          OXLINT_TAILWINDCSS_CACHE_COLLECT: collect ?? "",
         },
         stdout: "pipe",
         stderr: "pipe",
@@ -791,9 +800,53 @@ test("read-only branches reject worker fallback", async () => {
   expect(patch).toContain(
     "if (CACHE_READ_ONLY) throw this.remember(cssPath, readOnlyCacheError",
   );
-  expect(patch).toContain(
-    "if (CACHE_READ_ONLY) throw readOnlyCacheError(`missing declaration answer",
-  );
+  // A read-only pass collects a missing declaration answer when asked to and
+  // otherwise fails, in both builds: oxlint loads the plugin through its
+  // require entry, and the generator imports the ES module.
+  const collectOrFail =
+    '+\t\tif (CACHE_COLLECT_FILE !== "") return collectDeclarationQuestions(cssPath, pending);\n+\t\tthrow readOnlyCacheError(`missing declaration answer';
+  expect(patch.split(collectOrFail).length - 1).toBe(2);
+});
+
+// Generation stalled only in the one lint pass that started Tailwind workers
+// and blocked oxlint's JavaScript thread on them. Its lint passes now run
+// read-only, write down what they cannot answer, and the answers are computed
+// in the generator's own thread.
+test("a generation lint pass starts no worker and writes down the classes it cannot answer", async () => {
+  const cache = await mkdtemp(path.join(tmpdir(), "stella-tailwind-collect-"));
+  try {
+    const stylesheet = path.join(repositoryRoot, "apps/web/src/styles/app.css");
+    const snapshot = path.basename(cacheArtifactPaths(stylesheet).json);
+    await cp(path.join(generatedCache, snapshot), path.join(cache, snapshot));
+    const collect = path.join(cache, "collected.jsonl");
+    const source =
+      'export const A = () => <div className="flex w-[13px] mt-[7px]" />;\n';
+    const collecting = await lintFixture({ cache, source, collect });
+    expect(collecting.stderr).not.toContain("Worker");
+    expect(
+      tailwindFailureMessages(
+        collecting.diagnostics.map(({ message }) => message),
+      ),
+    ).toEqual([]);
+    const missing = parseCollectedClasses(await readFile(collect, "utf-8"));
+    expect([...missing.keys()]).toEqual([stylesheet]);
+    expect(missing.get(stylesheet)).toEqual(
+      expect.arrayContaining(["mt-[7px]", "w-[13px]"]),
+    );
+    await writeDeclarationAnswers(
+      stylesheet,
+      missing.get(stylesheet) ?? [],
+      cache,
+    );
+    const answered = await lintFixture({ cache, source });
+    expect(
+      tailwindFailureMessages(
+        answered.diagnostics.map(({ message }) => message),
+      ),
+    ).toEqual([]);
+  } finally {
+    await rm(cache, { recursive: true, force: true });
+  }
 });
 
 test.each([

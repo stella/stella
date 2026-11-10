@@ -68,6 +68,46 @@ describe("the excerpt a citation travels with", () => {
     expect(passage?.truncated).toBe(true);
   });
 
+  test("cuts to a smaller allowance around the citation", () => {
+    const citationText = "21 Cdo 500/2019";
+    const filler = "x".repeat(LIMITS.caseLawCitationPassageChars);
+    const passage = citationPassageIn({
+      ast: astOf([
+        { anchorId: "p4", text: `${filler} ${citationText} ${filler}` },
+      ]),
+      citationText,
+      maxChars: LIMITS.caseLawCitationCompactPassageChars,
+    });
+
+    expect(passage?.text.length).toBe(
+      LIMITS.caseLawCitationCompactPassageChars,
+    );
+    expect(passage?.text).toContain(citationText);
+    expect(passage?.truncated).toBe(true);
+  });
+
+  test("has no passage when the paragraph does not satisfy the filter", () => {
+    const citationText = "21 Cdo 500/2019";
+    const ast = astOf([
+      { anchorId: "p4", text: `Soud odkázal na ${citationText}.` },
+    ]);
+
+    expect(
+      citationPassageIn({
+        ast,
+        citationText,
+        paragraphMatches: () => false,
+      }),
+    ).toBeNull();
+    expect(
+      citationPassageIn({
+        ast,
+        citationText,
+        paragraphMatches: (paragraph) => paragraph.includes("odkázal"),
+      })?.anchorId,
+    ).toBe("p4");
+  });
+
   test("keeps a citation at the very end of a long paragraph", () => {
     const citationText = "21 Cdo 500/2019";
     const passage = citationPassageIn({

@@ -5,6 +5,11 @@ import {
   CHAT_SKILL_DOCUMENT,
   type ChatSkillContextNeed,
 } from "@stll/api-contract";
+import { BROWSER_EXTENSION_STATUS } from "@stll/api-contract/browser-control";
+import {
+  CHAT_CLOUD_RUN_TARGET,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 
 import { buildChatSlashItems } from "@/components/chat-editor-slash-items";
 import { CHAT_EDIT_APPLY_MODE } from "@/lib/chat-edit-mode";
@@ -13,6 +18,7 @@ import { toSafeId } from "@/lib/safe-id";
 
 import {
   CHAT_SKILL_NEED_MESSAGE_KEY,
+  chatCanUseBrowser,
   chatSkillAvailabilityKey,
   chatSkillAvailabilityQuery,
   chatSkillMenuAvailability,
@@ -71,6 +77,7 @@ const chatWith = (
   webSearch: ComposerSkillChatContext["webSearch"],
 ): ComposerSkillChatContext => ({
   document: null,
+  runTarget: CHAT_CLOUD_RUN_TARGET,
   threadRef: GLOBAL_THREAD,
   webSearch,
 });
@@ -107,6 +114,7 @@ describe("the composer asks about the chat it is in", () => {
             kind: CHAT_SKILL_DOCUMENT.file,
           },
           editApplyMode: CHAT_EDIT_APPLY_MODE.manual,
+          runTarget: CHAT_CLOUD_RUN_TARGET,
           threadRef: MATTER_THREAD,
           webSearch: { available: true, enabled: false },
         },
@@ -313,6 +321,7 @@ describe("the file overlay's document, as its send carries it", () => {
     const withSwitch: ComposerSkillChatContext = {
       document: { kind: CHAT_SKILL_DOCUMENT.draft },
       onReviewEdits: () => undefined,
+      runTarget: CHAT_CLOUD_RUN_TARGET,
       threadRef: GLOBAL_THREAD,
       webSearch: { available: false, enabled: false },
     };
@@ -339,5 +348,50 @@ describe("the file overlay's document, as its send carries it", () => {
         skillId: EDIT_SKILL,
       }),
     ).toMatchObject({ fixable: false });
+  });
+});
+
+describe("chatCanUseBrowser", () => {
+  const LOCAL: ChatRunTarget = {
+    kind: "local",
+    harness: "claude-code",
+    model: "sonnet",
+    approvals: "ask",
+  };
+
+  test("a chat on stella can use a connected extension and nothing else", () => {
+    for (const extensionStatus of Object.values(BROWSER_EXTENSION_STATUS)) {
+      expect(
+        chatCanUseBrowser({
+          extensionStatus,
+          runTarget: CHAT_CLOUD_RUN_TARGET,
+        }),
+      ).toBe(extensionStatus === BROWSER_EXTENSION_STATUS.connected);
+    }
+  });
+
+  test("a chat on the member's computer never can, even with the extension connected", () => {
+    for (const extensionStatus of Object.values(BROWSER_EXTENSION_STATUS)) {
+      expect(chatCanUseBrowser({ extensionStatus, runTarget: LOCAL })).toBe(
+        false,
+      );
+    }
+  });
+
+  test("the skill menu asks for a local chat as one without the browser", () => {
+    const local = {
+      ...chatWith({ available: true, enabled: false }),
+      runTarget: LOCAL,
+    };
+    expect(
+      chatSkillAvailabilityQuery({
+        anonymized: false,
+        browserExtension: chatCanUseBrowser({
+          extensionStatus: BROWSER_EXTENSION_STATUS.connected,
+          runTarget: local.runTarget,
+        }),
+        chat: local,
+      })?.browserExtension,
+    ).toBe(false);
   });
 });

@@ -42,13 +42,13 @@ import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatLocalRunQuestionContext } from "@/components/chat/chat-local-run-question-context";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
-import { effectiveRunTarget } from "@/components/chat/chat-run-target-menu.logic";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
+import { useEffectiveRunTarget } from "@/components/chat/use-effective-run-target";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { RenderStormRegion } from "@/components/render-storm-canary";
@@ -203,9 +203,11 @@ export const ChatThreadPage = ({
   // The skill is known only after the read above, and the cache key never
   // depends on it, so this context addresses the same entry the page reads.
   // Read at send time, so a turn carries the target the menu shows then.
-  const getRunTarget = useLatestCallback(() =>
-    effectiveRunTarget(data.runTarget),
+  const threadRunTarget = useEffectiveRunTarget(
+    activeOrganizationId,
+    data.runTarget,
   );
+  const getRunTarget = useLatestCallback(() => threadRunTarget);
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
@@ -418,7 +420,7 @@ export const ChatThreadPage = ({
   // The thread keeps where its turns run beside its model, so a reload shows
   // the same choice; the model stays as it is.
   const runTargetChoice = {
-    selected: effectiveRunTarget(data.runTarget),
+    selected: threadRunTarget,
     select: (runTarget: ChatRunTarget) =>
       modelSelection.selectModel({
         model: data.model,
@@ -681,7 +683,12 @@ export const ChatThreadPage = ({
               <Tooltip
                 content={t("inspector.moveToSide")}
                 render={
-                  <Button onClick={moveToSide} size="icon-sm" variant="ghost">
+                  <Button
+                    className="hidden md:inline-flex"
+                    onClick={moveToSide}
+                    size="icon-sm"
+                    variant="ghost"
+                  >
                     <Minimize2Icon className="size-4" />
                   </Button>
                 }
@@ -895,6 +902,7 @@ export const ChatThreadPage = ({
                     skillChat={{
                       contextMatterIds: selectedContextMatterIds,
                       document: null,
+                      runTarget: threadRunTarget,
                       threadRef,
                       webSearch: {
                         available: data.webSearchAvailable,
@@ -1039,9 +1047,9 @@ const NewChatButton = ({
   // /chat/new (or workspace-scoped) redirect helper.
   if (!hasMessages) {
     return (
-      <Button disabled size="sm" variant="ghost">
+      <Button disabled size="sm" tooltip={t("chat.newChat")} variant="ghost">
         <NewChatIcon />
-        {t("chat.newChat")}
+        <span className="sr-only md:not-sr-only">{t("chat.newChat")}</span>
       </Button>
     );
   }
@@ -1053,7 +1061,7 @@ const NewChatButton = ({
         to="/chat/workspaces/$workspaceId/new"
       >
         <NewChatIcon />
-        {t("chat.newChat")}
+        <span className="sr-only md:not-sr-only">{t("chat.newChat")}</span>
       </Link>
     );
   }
@@ -1063,7 +1071,7 @@ const NewChatButton = ({
       to="/chat/new"
     >
       <NewChatIcon />
-      {t("chat.newChat")}
+      <span className="sr-only md:not-sr-only">{t("chat.newChat")}</span>
     </Link>
   );
 };

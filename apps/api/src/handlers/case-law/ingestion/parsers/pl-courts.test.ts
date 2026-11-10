@@ -2,7 +2,10 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { load } from "@stll/html";
 import { isTag } from "@stll/html/nodes";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import {
+  hasInlineChildren,
+  headMatterPrecedesBody,
+} from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import {
@@ -1063,10 +1066,179 @@ describe("an authority's ruling points on their legal basis", () => {
       "intro URZĘDU OCHRONY KONKU",
       "intro Gdańsk, dnia 16 lute",
       "intro RGD-2.610.3.2026.AG",
-      "intro DECYZJA RGD - 1/2026",
       "holding I. Na podstawie art.",
       "holding II. Na podstawie art",
       "argumentation [1] Prezes Urzędu ws",
     ]);
+    // The docket the decision is printed under is its title, once.
+    expect(
+      documentAst.blocks.flatMap((block) =>
+        block.type === "heading" && block.role === "decision-title"
+          ? [block.plainText]
+          : [],
+      ),
+    ).toEqual(["DECYZJA RGD - 1/2026"]);
+  });
+});
+
+describe("navigation, subheadings and stray marks in an authority's PDF", () => {
+  // The layouts of DOZIK-5/2024 and RGD-1/2026 (Prezes UOKiK), as the PDF
+  // reader hands them on: a lone mark above the letterhead, a printed table
+  // of contents, and subheadings set as short bold lines.
+  const html = [
+    "<p>-</p>",
+    "<p>DECYZJA nr DOZIK-5/2024</p>",
+    "<p>I. Na podstawie art. 26 ust. 1 ustawy o ochronie konkurencji i konsumentów uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie spółki.</p>",
+    "<p>UZASADNIENIE</p>",
+    "<p>Prezes Urzędu ustalił następujący stan faktyczny .......................................... 9</p>",
+    "<p>1. Sprzedawca Amazon EU SARL ................................................ 9</p>",
+    "<p>2. Proces zakupowy ........................................ 10 2.1. Katalog produktów ................. 11</p>",
+    "<p>[1] Prezes Urzędu wszczął postępowanie.</p>",
+    "<p><b>Platforma i jej uczestnicy</b></p>",
+    "<p>[2] Spółka prowadziła platformę.</p>",
+    "<p><b>2.1. Katalog produktów</b></p>",
+    "<p><b>Elite Pack 149,00 USD 99,99 USD</b></p>",
+    "<p><b>Sąd zważył, co następuje:</b></p>",
+  ].join("");
+  const read = (boldSubheadings: boolean) =>
+    parsePlDecisionContent(
+      baseInput(html, {
+        decisionType: "decyzja",
+        court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        boldSubheadings,
+      }),
+    ).documentAst.blocks.map(
+      (block) =>
+        `${block.type === "heading" ? "heading" : (roleOfBlock(block) ?? "-")} ${block.plainText.slice(0, 26)}`,
+    );
+  const ast = (boldSubheadings: boolean) =>
+    parsePlDecisionContent(
+      baseInput(html, {
+        decisionType: "decyzja",
+        court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        boldSubheadings,
+      }),
+    ).documentAst;
+
+  test("the contents after the ruling are a publisher's note, the subheadings headings, the lone mark no text", () => {
+    expect(read(true)).toEqual([
+      "- -",
+      "heading DECYZJA nr DOZIK-5/2024",
+      "holding I. Na podstawie art. 26 us",
+      "heading UZASADNIENIE",
+      "publisher-note Prezes Urzędu ustalił nast",
+      "publisher-note 1. Sprzedawca Amazon EU SA",
+      "publisher-note 2. Proces zakupowy .......",
+      "argumentation [1] Prezes Urzędu wszczął ",
+      "heading Platforma i jej uczestnicy",
+      "argumentation [2] Spółka prowadziła plat",
+      "heading 2.1. Katalog produktów",
+      "argumentation Elite Pack 149,00 USD 99,9",
+      "argumentation Sąd zważył, co następuje:",
+    ]);
+  });
+
+  test("the contents keep head matter ahead of the body", () => {
+    expect(headMatterPrecedesBody(ast(true).blocks)).toBe(true);
+  });
+
+  test("contents printed before the body are apparatus", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>Spis treści ............................................ 2</p><p>WYROK</p><p>1. oddala powództwo.</p>",
+      ),
+    );
+    const contents = documentAst.blocks.find((block) =>
+      block.plainText.startsWith("Spis treści"),
+    );
+    expect(contents === undefined ? undefined : roleOfBlock(contents)).toBe(
+      "apparatus",
+    );
+    expect(headMatterPrecedesBody(documentAst.blocks)).toBe(true);
+  });
+
+  test("a publisher's markup keeps its bold lines as paragraphs", () => {
+    const blocks = read(false);
+    expect(blocks).toContain("argumentation Platforma i jej uczestnicy");
+    expect(blocks).toContain("argumentation 2.1. Katalog produktów");
+  });
+});
+
+describe("head matter a layout sets as headings", () => {
+  test("a date and the bench set as headings are head matter, before or after the title, and open no ruling", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<h2>Oddala, dnia 1 marca 2020 r.</h2><p>WYROK</p><h3>Przewodniczący: Ewa Sikorska</h3><h3>Prokurator: zarzuty wobec oskarżonego</h3><p>orzeka:</p><p>1. oddala apelację,</p>",
+      ),
+    );
+
+    expect(
+      documentAst.blocks.map(
+        (block) =>
+          `${block.type} ${"role" in block ? (block.role ?? "-") : "-"} ${block.plainText}`,
+      ),
+    ).toEqual([
+      "paragraph intro Oddala, dnia 1 marca 2020 r.",
+      "heading decision-title WYROK",
+      "paragraph intro Przewodniczący: Ewa Sikorska",
+      "heading section-heading Prokurator: zarzuty wobec oskarżonego",
+      "heading section-heading orzeka:",
+      "paragraph holding 1. oddala apelację,",
+    ]);
+  });
+});
+
+describe("an authority's reasons led in by its office", () => {
+  test("a sentence opening on the office and ending on a colon is the reasons, not a signature", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<p>DECYZJA nr DOZIK-5/2024</p><p>I. Na podstawie art. 26 ust. 1 ustawy uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie spółki.</p><p>UZASADNIENIE</p><p>Prezes Urzędu ustalił następujący stan faktyczny:</p><p>Spółka prowadzi sprzedaż w serwisie internetowym.</p><p>Prezes Urzędu Ochrony Konkurencji i Konsumentów</p>",
+        {
+          decisionType: "decyzja",
+          court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        },
+      ),
+    );
+    const roleOf = (text: string) =>
+      documentAst.blocks.find((block) => block.plainText === text);
+
+    expect(
+      roleOf("Prezes Urzędu ustalił następujący stan faktyczny:"),
+    ).toMatchObject({
+      type: "paragraph",
+      role: "argumentation",
+    });
+    expect(
+      roleOf("Prezes Urzędu Ochrony Konkurencji i Konsumentów"),
+    ).toMatchObject({
+      type: "paragraph",
+      role: "signature",
+    });
+  });
+});
+
+describe("an authority's numbered title and its ruling", () => {
+  test("a date printed between the numbered title and the first point leaves the point the ruling", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        [
+          "<p>DECYZJA</p>",
+          "<p>DECYZJA NR RBG - 11/2018</p>",
+          "<p>Bydgoszcz, dnia 27 sierpnia 2018 r.</p>",
+          "<p>I. Na podstawie art. 27 ust. 1 i 2 ustawy o ochronie konkurencji i konsumentów</p>",
+          "<p>- w imieniu Prezesa Urzędu – uznaje się za praktykę naruszającą zbiorowe interesy konsumentów działanie banku.</p>",
+        ].join(""),
+        {
+          decisionType: "decyzja",
+          court: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+        },
+      ),
+    );
+
+    expect(
+      documentAst.blocks.find(
+        (block) => block.type === "paragraph" && block.role === "holding",
+      )?.plainText,
+    ).toStartWith("I. Na podstawie art. 27");
   });
 });

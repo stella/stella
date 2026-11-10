@@ -7,6 +7,7 @@ import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
 import { AIConfigCard } from "@/routes/_protected.settings/organization/-components/organization/ai-config-card";
 import { BillingDraftsCard } from "@/routes/_protected.settings/organization/-components/organization/billing-drafts-card";
+import { LocalRunApprovalCeilingCard } from "@/routes/_protected.settings/organization/-components/organization/local-run-approval-ceiling-card";
 
 export const Route = createFileRoute("/_protected/settings/organization/ai")({
   staticData: {
@@ -33,6 +34,7 @@ function AIConfigPage() {
   return (
     <>
       <AIConfigCard />
+      <LocalRunApprovalCeilingCard />
       {timeBillingEnabled && <BillingDraftsCard />}
     </>
   );
