@@ -43,7 +43,7 @@ const ProductShowcase = () => (
                 }}
                 aria-hidden="true"
               />
-              <Illustration />
+              {Illustration ? <Illustration /> : null}
               <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-black/4 transition-opacity duration-300 group-hover:opacity-70 dark:ring-white/6" />
               <div className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                 <div className="absolute inset-x-6 top-0 h-24 rounded-full bg-[linear-gradient(180deg,color-mix(in_srgb,var(--color-white)_36%,transparent),transparent)] blur-2xl dark:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--color-white)_12%,transparent),transparent)]" />

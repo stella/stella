@@ -84,7 +84,7 @@ const persistLandingLocaleChoice = (event: MouseEvent) => {
   const link = event.target.closest<HTMLElement>(
     "[data-landing-locale-choice]",
   );
-  const locale = link?.dataset.landingLocaleChoice;
+  const locale = link?.dataset["landingLocaleChoice"];
   if (locale !== undefined) {
     window.localStorage.setItem(LANDING_LOCALE_PREFERENCE_KEY, locale);
   }
@@ -109,7 +109,8 @@ export const initializeLandingLocale = () => {
     isPreferenceListenerRegistered = true;
   }
 
-  const currentLocale = document.documentElement.dataset.landingCurrentLocale;
+  const currentLocale =
+    document.documentElement.dataset["landingCurrentLocale"];
   if (currentLocale === undefined) {
     return;
   }

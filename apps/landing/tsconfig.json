@@ -5,6 +5,23 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "react",
-    "types": ["bun-types"]
+    "types": ["bun-types"],
+    // The checks packages/typescript-config/base.json adds on top of
+    // `strict`, which is all Astro's strict preset turns on. `checkJs` is
+    // left off: `astro check` would type-check every `<script is:inline>`
+    // block as plain JavaScript, where `define:vars` injects names the
+    // checker cannot see and DOM globals carry no annotations.
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "erasableSyntaxOnly": true,
+    "noUncheckedSideEffectImports": true
   }
 }
