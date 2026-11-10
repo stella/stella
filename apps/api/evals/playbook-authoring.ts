@@ -100,6 +100,7 @@ import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 
 import { runEvalModelTurn } from "./lib/model-turn";
+import { resolveModelTargets } from "./lib/org-model-targets";
 import {
   PLAYBOOK_STEP_NAMES,
   scorePlaybookRun,
@@ -1584,23 +1585,21 @@ const renderContractReport = (runs: readonly EvalRun[]): string => {
   return lines.join("\n");
 };
 
+// The eval sends customer-class data, which the instance credential may not
+// carry, so each model runs on the `.env` key as an organization's own key.
 const resolveModels = async (modelIds: readonly string[]) => {
   const { resolveTanStackTextModel } =
     await import("@/api/lib/tanstack-ai-generate");
-  const { hasTanStackInstanceProvider } =
-    await import("@/api/lib/tanstack-ai-models");
-  if (!hasTanStackInstanceProvider()) {
-    return panic(
-      "No instance AI provider is configured; set a provider key in .env",
-    );
-  }
   return await Promise.all(
-    modelIds.map(async (id) => ({
-      id,
+    resolveModelTargets(modelIds).map(async (target) => ({
+      id: target.id,
       model: await resolveTanStackTextModel({
         userId: null,
-        modelId: id,
-        orgAIConfig: null,
+        modelId: target.id,
+        orgAIConfig:
+          target.type === "resolved"
+            ? target.orgAIConfig
+            : panic(`${target.id}: ${target.message}`),
         dataClass: "customer",
         managedAIResidency: "eu",
         task: "short-text",
