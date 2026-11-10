@@ -33,6 +33,11 @@ import {
   desktopRunnerRuns,
   desktopRunners,
 } from "@/api/db/schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
 import {
@@ -587,8 +592,7 @@ export const settleFolderRestore = async (
           at: now.toISOString(),
         } satisfies ChatLocalFilesUndone,
       };
-      // audit: skip - the computer's reported outcome, not a member's edit
-      await tx
+      const marked = await tx
         .update(chatMessages)
         .set({
           content: sql`jsonb_set(${chatMessages.content}, '{metadata}', coalesce(${chatMessages.content} -> 'metadata', '{}'::jsonb) || ${JSON.stringify(marker)}::text::jsonb)`,
@@ -598,7 +602,39 @@ export const settleFolderRestore = async (
             chatMessages.id,
             sql`(select ${chatTurns.assistantMessageId} from ${chatTurns} join ${restores} on ${restores.chatTurnId} = ${chatTurns.id} where ${restores.id} = ${restoreId})`,
           ),
-        );
+        )
+        .returning({
+          id: chatMessages.id,
+          workspaceId: chatMessages.workspaceId,
+        });
+      // The computer, not the member, changed the answer: the desktop
+      // runner records it on the member's behalf.
+      const recordAuditEvent = createBackgroundAuditRecorder({
+        execution: {
+          performer: {
+            type: "service",
+            id: "desktop-runner",
+            name: "Desktop runner",
+          },
+          trigger: {
+            type: "system",
+            source: "folder_restore",
+            sourceId: restoreId,
+          },
+        },
+        organizationId: binding.organizationId,
+        userId: binding.userId,
+        workspaceId: null,
+      });
+      for (const { id, workspaceId } of marked) {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+          resourceId: id,
+          workspaceId,
+          metadata: { reason: "local_files_undone", undoId: restoreId },
+        });
+      }
     }
     return "settled";
   });

@@ -18,7 +18,7 @@ import {
 import { Button } from "@stll/ui/button";
 import type { EntityAction } from "@stll/ui/entity-actions";
 import { CheckIcon, Undo2Icon } from "@stll/ui/icons";
-import { Loader } from "@stll/ui/loader";
+import { StatusMark } from "@stll/ui/status-mark";
 
 import {
   localFilesUndoOptions,
@@ -222,7 +222,9 @@ const LocalFilesUndoStatus = ({
           className="text-muted-foreground flex items-center gap-1.5 text-xs"
           role="status"
         >
-          <Loader label={t("chat.localFilesUndo.pending")} size="sm" />
+          {/* A settled mark beside the text: the undo waits on the computer,
+              and the turn status owner is the chat's only live indicator. */}
+          <StatusMark status="pending" />
           {t("chat.localFilesUndo.pending")}
         </span>
       );

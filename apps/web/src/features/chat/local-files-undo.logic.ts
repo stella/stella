@@ -119,7 +119,6 @@ const settledView = ({
   }
 };
 
-/** Whether the computer may still answer: the read is followed until not. */
 /** States the computer may still answer: counted, and not yet settled. */
 const SETTLED_STATES: ReadonlySet<ChatLocalFilesUndoState> = new Set(
   CHAT_LOCAL_FILES_UNDO_SETTLED_STATES,
@@ -130,7 +129,8 @@ const PENDING_STATES: ReadonlySet<ChatLocalFilesUndoState> = new Set(
   ),
 );
 
-export const localFilesUndoSettling = (
+/** Whether the computer may still answer: the read is followed until not. */
+const localFilesUndoSettling = (
   read: ChatLocalFilesUndoRead | undefined,
 ): boolean => {
   const state = read?.undo?.state;
