@@ -7,6 +7,7 @@ import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 
 import { useHeaderSearch } from "@/components/header-search";
 import { LoadedChats } from "@/components/loaded-chats";
+import { useActiveChatRuns } from "@/components/use-active-chat-runs";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -17,14 +18,17 @@ import { useAppColors } from "@/theme";
 
 /**
  * Loads the signed-in person's recent threads once, again on every pull to
- * refresh, and again once typing pauses in the header's search field. A new
- * conversation starts from the header's button, as t3code's does.
+ * refresh, and again once typing pauses in the header's search field, with
+ * their unfinished runs beside them, so chats waiting on the person and
+ * chats working head the list. A new conversation starts from the header's
+ * button, as t3code's does.
  */
 export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
   const colors = useAppColors();
   const { settledQuery } = useHeaderSearch();
   const searched = settledQuery.slice(0, SEARCH_QUERY_MAX_LENGTH);
   const { end } = useSession();
+  const activeRuns = useActiveChatRuns(source);
   const loadThreads = async (
     search: string,
   ): Promise<Load<ChatThreadsPage>> => {
@@ -46,6 +50,7 @@ export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
   }
 
   const reload = () => {
+    activeRuns.reread();
     startRefresh(() => {
       setRequest({ load: loadThreads(searched), search: searched });
     });
@@ -58,7 +63,9 @@ export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
       <LoadedChats
         load={request.load}
         onReload={reload}
+        onRetryRuns={activeRuns.reread}
         refreshing={refreshing}
+        runs={activeRuns.runs}
         search={request.search}
         source={source}
       />

@@ -2,7 +2,9 @@ import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import type { ChatActiveRunState } from "@stll/api-contract/chat";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { RunStateMark } from "@stll/ui/run-state-mark";
 import { Text } from "@stll/ui/text";
 
 import { useLayout, useSelection } from "@/components/selection";
@@ -13,22 +15,26 @@ import type {
 
 /**
  * One thread: its title, then the matter it belongs to. Today's and
- * yesterday's threads show the time, older ones the date, since the section
- * heading already says which day. Tapping it opens the thread, beside the
- * list where the window has two columns, which marks it as the one open.
+ * yesterday's threads show the time, older ones the date. A thread with an
+ * unfinished run shows its mark before the time; the section it heads names
+ * the state. Tapping it opens the thread, beside the list where the window
+ * has two columns, which marks it as the one open.
  */
 export const ChatThreadRow = ({
-  section,
+  day,
+  runState,
   thread,
 }: {
-  section: ChatThreadSection["key"];
+  /** The day heading the thread's last activity falls under. */
+  day: ChatThreadSection["key"];
+  runState: ChatActiveRunState | undefined;
   thread: ChatThreadSummary;
 }) => {
   const format = useFormatter();
   const t = useTranslations("chat");
   const updatedAt = new Date(thread.updatedAt);
   const when =
-    section === "today" || section === "yesterday"
+    day === "today" || day === "yesterday"
       ? format.dateTime(updatedAt, { hour: "numeric", minute: "2-digit" })
       : format.dateTime(updatedAt, { day: "numeric", month: "short" });
   const title = thread.title.trim() === "" ? t("untitled") : thread.title;
@@ -69,7 +75,10 @@ export const ChatThreadRow = ({
             {title}
           </Text>
         </View>
-        <Text variant="caption">{when}</Text>
+        <View className="flex-row items-center gap-1.5">
+          {runState === undefined ? null : <RunStateMark state={runState} />}
+          <Text variant="caption">{when}</Text>
+        </View>
       </View>
       {thread.matterName === undefined ||
       thread.matterId === undefined ? null : (

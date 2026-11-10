@@ -15,6 +15,7 @@
     "noMatchesDescription": "Ningún título de chat ni asunto contiene «{search}».",
     "search": "Buscar chats",
     "loadFailed": "No se pudieron cargar sus conversaciones.",
+    "runsLoadFailed": "No se pudo comprobar qué conversaciones esperan su respuesta.",
     "retry": "Reintentar",
     "untitled": "Conversación sin título",
     "loadMoreFailed": "Cargar más",
@@ -25,6 +26,8 @@
     "greeting": "¿En qué le gustaría trabajar?",
     "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "sections": {
+      "needsYou": "Esperan su respuesta",
+      "working": "En curso",
       "today": "Hoy",
       "yesterday": "Ayer",
       "week": "Últimos 7 días",

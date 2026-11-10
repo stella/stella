@@ -1,0 +1,198 @@
+import { Result } from "better-result";
+import * as v from "valibot";
+
+import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
+import type { ChatActiveRunState } from "@stll/api-contract/chat";
+
+import type { Fetch } from "@/connection/http";
+import type { AccessTokenSource } from "@/connection/session";
+import { requestApi } from "@/state/api-request";
+import type { ApiError } from "@/state/api-request";
+import { sectionThreads, threadDay } from "@/state/chat-threads";
+import type {
+  ChatThreadSection,
+  ChatThreadSummary,
+} from "@/state/chat-threads";
+
+/** The person's unfinished chat runs, waiting on them first; the app's chat scope opens it. */
+const ACTIVE_RUNS_PATH = "/v1/chat/runs/active";
+const ACTIVE_RUNS_PAGE_SIZE = 100;
+
+const RUN_STATES: readonly string[] = Object.values(CHAT_ACTIVE_RUN_STATE);
+
+const isRunState = (state: string): state is ChatActiveRunState =>
+  RUN_STATES.includes(state);
+
+const runSchema = v.object({
+  threadId: v.pipe(v.string(), v.minLength(1)),
+  threadTitle: v.string(),
+  workspaceId: v.nullable(v.pipe(v.string(), v.minLength(1))),
+  // Read as text: a state a newer server adds is one this build cannot
+  // draw, so its run is left out rather than failing the whole read.
+  state: v.string(),
+  since: v.pipe(v.string(), v.isoTimestamp()),
+});
+
+const runsPageSchema = v.object({
+  items: v.array(runSchema),
+  nextCursor: v.nullable(v.string()),
+});
+
+/** One unfinished run: the thread it belongs to and where it stands. */
+export type ActiveChatRun = {
+  readonly threadId: string;
+  readonly threadTitle: string;
+  readonly matterId: string | undefined;
+  readonly state: ChatActiveRunState;
+  /** When the run entered its state. */
+  readonly since: string;
+};
+
+/** The runs this build can draw, in the order the server lists them. */
+export const knownRuns = (
+  items: readonly v.InferOutput<typeof runSchema>[],
+): ActiveChatRun[] =>
+  items.flatMap(({ since, state, threadId, threadTitle, workspaceId }) =>
+    isRunState(state)
+      ? [
+          {
+            matterId: workspaceId ?? undefined,
+            since,
+            state,
+            threadId,
+            threadTitle,
+          },
+        ]
+      : [],
+  );
+
+type ListActiveChatRunsArgs = {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+};
+
+type RunsPage = v.InferOutput<typeof runsPageSchema>;
+
+const readRunsPage = async ({
+  cursor,
+  fetch,
+  source,
+}: ListActiveChatRunsArgs & {
+  readonly cursor: string | null;
+}): Promise<Result<RunsPage, ApiError>> =>
+  await requestApi({
+    fetch,
+    path: `${ACTIVE_RUNS_PATH}?limit=${ACTIVE_RUNS_PAGE_SIZE}${
+      cursor === null ? "" : `&cursor=${encodeURIComponent(cursor)}`
+    }`,
+    schema: runsPageSchema,
+    source,
+  });
+
+/**
+ * Every page of the person's unfinished runs. The server lists waiting runs
+ * first, so stopping at one page could hide the working ones.
+ */
+export const listActiveChatRuns = async ({
+  fetch,
+  source,
+}: ListActiveChatRunsArgs): Promise<Result<ActiveChatRun[], ApiError>> =>
+  await Result.gen(async function* () {
+    const runs: ActiveChatRun[] = [];
+    let cursor: string | null = null;
+    do {
+      // Typed: the loop reads `cursor` from the page it fetched.
+      const page: RunsPage = yield* Result.await(
+        readRunsPage({ cursor, fetch, source }),
+      );
+      runs.push(...knownRuns(page.items));
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+    return Result.ok(runs);
+  });
+
+/**
+ * What the list knows about the person's unfinished runs: still asking,
+ * read (possibly none), or not read, which is never shown as "none".
+ */
+export type ActiveRunsState =
+  | { readonly status: "loading" }
+  | { readonly status: "loaded"; readonly runs: readonly ActiveChatRun[] }
+  | { readonly status: "failed"; readonly error: ApiError };
+
+/** A row of the chats list: the thread, its day, and its open run, if any. */
+export type InboxThread = {
+  readonly thread: ChatThreadSummary;
+  readonly day: ChatThreadSection["key"];
+  readonly runState: ChatActiveRunState | undefined;
+};
+
+export type InboxSection = {
+  readonly key: "needsYou" | "working" | ChatThreadSection["key"];
+  readonly data: readonly InboxThread[];
+};
+
+/**
+ * The chats list as an inbox: chats waiting on the person, then chats
+ * working, then the rest under their day headings. A searched list lifts
+ * only threads the search found; an unsearched one lifts every open run,
+ * even one older than the threads loaded so far.
+ */
+export const inboxSections = ({
+  now,
+  runs,
+  searching,
+  threads,
+  timeZone,
+}: {
+  readonly now: number;
+  readonly runs: readonly ActiveChatRun[];
+  readonly searching: boolean;
+  readonly threads: readonly ChatThreadSummary[];
+  readonly timeZone: string;
+}): InboxSection[] => {
+  const loaded = new Map(threads.map((thread) => [thread.id, thread]));
+  const matterNames = new Map(
+    threads.flatMap(({ matterId, matterName }) =>
+      matterId === undefined || matterName === undefined
+        ? []
+        : [[matterId, matterName] as const],
+    ),
+  );
+  const row = (thread: ChatThreadSummary, runState?: ChatActiveRunState) => ({
+    day: threadDay({ now, timeZone, updatedAt: thread.updatedAt }),
+    runState,
+    thread,
+  });
+  const lifted = new Map<string, InboxThread>();
+  for (const run of runs) {
+    const known = loaded.get(run.threadId);
+    if (lifted.has(run.threadId) || (searching && known === undefined)) {
+      continue;
+    }
+    const thread = known ?? {
+      id: run.threadId,
+      title: run.threadTitle,
+      updatedAt: run.since,
+      matterId: run.matterId,
+      matterName:
+        run.matterId === undefined ? undefined : matterNames.get(run.matterId),
+    };
+    lifted.set(run.threadId, row(thread, run.state));
+  }
+  const inState = (state: ChatActiveRunState) =>
+    [...lifted.values()].filter(({ runState }) => runState === state);
+  const open = [
+    { key: "needsYou", data: inState(CHAT_ACTIVE_RUN_STATE.needsYou) },
+    { key: "working", data: inState(CHAT_ACTIVE_RUN_STATE.working) },
+  ] as const satisfies readonly InboxSection[];
+  const rest = sectionThreads(
+    threads.filter((thread) => !lifted.has(thread.id)),
+    now,
+    timeZone,
+  ).map(({ data, key }) => ({
+    key,
+    data: data.map((thread) => row(thread)),
+  }));
+  return [...open.filter(({ data }) => data.length > 0), ...rest];
+};

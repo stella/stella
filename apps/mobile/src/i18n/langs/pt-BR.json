@@ -15,6 +15,7 @@
     "noMatchesDescription": "Nenhum título de conversa ou caso contém “{search}”.",
     "search": "Pesquisar conversas",
     "loadFailed": "Não foi possível carregar suas conversas.",
+    "runsLoadFailed": "Não foi possível verificar quais conversas aguardam você.",
     "retry": "Tentar novamente",
     "untitled": "Conversa sem título",
     "loadMoreFailed": "Carregar mais",
@@ -25,6 +26,8 @@
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "sections": {
+      "needsYou": "Aguardando você",
+      "working": "Em andamento",
       "today": "Hoje",
       "yesterday": "Ontem",
       "week": "Últimos 7 dias",

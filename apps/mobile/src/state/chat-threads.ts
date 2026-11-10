@@ -137,6 +137,31 @@ const calendarDay = (
   timeZone: string,
 ): Temporal.PlainDate => instant.toZonedDateTimeISO(timeZone).toPlainDate();
 
+/** Which day heading an instant falls under, by the calendar in `timeZone`. */
+export const threadDay = ({
+  now,
+  timeZone,
+  updatedAt,
+}: {
+  readonly now: number;
+  readonly timeZone: string;
+  readonly updatedAt: string;
+}): ChatThreadSection["key"] => {
+  const today = calendarDay(
+    Temporal.Instant.fromEpochMilliseconds(now),
+    timeZone,
+  );
+  const day = calendarDay(Temporal.Instant.from(updatedAt), timeZone);
+  const daysAgo = day.until(today, { largestUnit: "day" }).days;
+  if (daysAgo <= 0) {
+    return "today";
+  }
+  if (daysAgo === 1) {
+    return "yesterday";
+  }
+  return daysAgo <= 7 ? "week" : "earlier";
+};
+
 /**
  * Threads under Today, Yesterday, Previous 7 days and Earlier, by the
  * calendar in `timeZone`. Empty sections are left out; order within a
@@ -147,26 +172,13 @@ export const sectionThreads = (
   now: number,
   timeZone: string,
 ): ChatThreadSection[] => {
-  const today = calendarDay(
-    Temporal.Instant.fromEpochMilliseconds(now),
-    timeZone,
-  );
-  const keyOf = (thread: ChatThreadSummary): ChatThreadSection["key"] => {
-    const day = calendarDay(Temporal.Instant.from(thread.updatedAt), timeZone);
-    const daysAgo = day.until(today, { largestUnit: "day" }).days;
-    if (daysAgo <= 0) {
-      return "today";
-    }
-    if (daysAgo === 1) {
-      return "yesterday";
-    }
-    return daysAgo <= 7 ? "week" : "earlier";
-  };
   const buckets = new Map<ChatThreadSection["key"], ChatThreadSummary[]>(
     SECTION_ORDER.map((key) => [key, []]),
   );
   for (const thread of threads) {
-    buckets.get(keyOf(thread))?.push(thread);
+    buckets
+      .get(threadDay({ now, timeZone, updatedAt: thread.updatedAt }))
+      ?.push(thread);
   }
   return SECTION_ORDER.flatMap((key) => {
     const data = buckets.get(key) ?? [];

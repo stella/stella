@@ -15,6 +15,7 @@
     "noMatchesDescription": "Aucun titre de conversation ni dossier ne contient « {search} ».",
     "search": "Rechercher des conversations",
     "loadFailed": "Vos conversations n’ont pas pu être chargées.",
+    "runsLoadFailed": "Impossible de vérifier quelles conversations attendent votre réponse.",
     "retry": "Réessayer",
     "untitled": "Conversation sans titre",
     "loadMoreFailed": "Charger plus",
@@ -25,6 +26,8 @@
     "greeting": "Sur quoi souhaitez-vous travailler ?",
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "sections": {
+      "needsYou": "En attente de votre réponse",
+      "working": "En cours",
       "today": "Aujourd’hui",
       "yesterday": "Hier",
       "week": "7 derniers jours",

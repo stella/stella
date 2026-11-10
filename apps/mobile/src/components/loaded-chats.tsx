@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import { RefreshControl, SectionList, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import { ChatThreadRow } from "@/components/chat-thread-row";
@@ -14,11 +15,9 @@ import type { PagingState } from "@/components/retry-button";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError, Load } from "@/state/api-request";
-import {
-  appendThreadsPage,
-  listChatThreads,
-  sectionThreads,
-} from "@/state/chat-threads";
+import { inboxSections } from "@/state/chat-runs";
+import type { ActiveRunsState } from "@/state/chat-runs";
+import { appendThreadsPage, listChatThreads } from "@/state/chat-threads";
 import type { ChatThreadsPage } from "@/state/chat-threads";
 import { useAppColors } from "@/theme";
 
@@ -26,13 +25,18 @@ import { useAppColors } from "@/theme";
 export const LoadedChats = ({
   load,
   onReload,
+  onRetryRuns,
   refreshing,
+  runs,
   search,
   source,
 }: {
   load: Promise<Load<ChatThreadsPage>>;
   onReload: () => void;
+  onRetryRuns: () => void;
   refreshing: boolean;
+  /** The person's unfinished runs, which lift their chats to the top. */
+  runs: ActiveRunsState;
   /** The text this load's threads match; later pages ask for it too. */
   search: string;
   source: AccessTokenSource;
@@ -52,7 +56,9 @@ export const LoadedChats = ({
       key={loadedAt}
       loadedAt={loadedAt}
       onReload={onReload}
+      onRetryRuns={onRetryRuns}
       refreshing={refreshing}
+      runs={runs}
       search={search}
       source={source}
     />
@@ -64,7 +70,9 @@ const ThreadTimeline = ({
   firstPage,
   loadedAt,
   onReload,
+  onRetryRuns,
   refreshing,
+  runs,
   search,
   source,
 }: {
@@ -72,7 +80,9 @@ const ThreadTimeline = ({
   firstPage: ChatThreadsPage | undefined;
   loadedAt: number;
   onReload: () => void;
+  onRetryRuns: () => void;
   refreshing: boolean;
+  runs: ActiveRunsState;
   search: string;
   source: AccessTokenSource;
 }) => {
@@ -103,14 +113,22 @@ const ThreadTimeline = ({
     setMore("failed");
   };
 
+  const sections = inboxSections({
+    now: loadedAt,
+    runs: runs.status === "loaded" ? runs.runs : [],
+    searching: search.trim() !== "",
+    threads,
+    timeZone,
+  });
+
   return (
     <SectionList
-      {...emptyListProps(threads.length === 0)}
+      {...emptyListProps(sections.length === 0)}
       // The header is the platform's translucent bar; the list scrolls under it.
       contentInsetAdjustmentBehavior="automatic"
       // A chat found by a search opens on the first tap, the keyboard up.
       keyboardShouldPersistTaps="handled"
-      keyExtractor={(thread) => thread.id}
+      keyExtractor={({ thread }) => thread.id}
       ListEmptyComponent={
         failure === undefined ? (
           <NoThreads search={search.trim()} />
@@ -122,6 +140,11 @@ const ThreadTimeline = ({
             title={t("loadFailed")}
           />
         )
+      }
+      ListHeaderComponent={
+        runs.status === "failed" && failure === undefined ? (
+          <RunsFailedNotice onRetry={onRetryRuns} />
+        ) : undefined
       }
       ListFooterComponent={
         <PagingFooter
@@ -143,17 +166,35 @@ const ThreadTimeline = ({
           tintColor={colors.muted}
         />
       }
-      renderItem={({ item, section }) => (
-        <ChatThreadRow section={section.key} thread={item} />
+      renderItem={({ item: { day, runState, thread } }) => (
+        <ChatThreadRow day={day} runState={runState} thread={thread} />
       )}
       renderSectionHeader={({ section }) => (
         <View className="pt-4 pb-1">
           <Text variant="section">{t(`sections.${section.key}`)}</Text>
         </View>
       )}
-      sections={sectionThreads(threads, loadedAt, timeZone)}
+      sections={sections}
       stickySectionHeadersEnabled={false}
     />
+  );
+};
+
+/**
+ * The runs could not be read, so the list cannot say which chats wait on
+ * the person; it says so rather than looking as if none do.
+ */
+const RunsFailedNotice = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations("chat");
+  return (
+    <View className="flex-row items-center gap-3 pt-3">
+      <View className="flex-1">
+        <Text variant="caption">{t("runsLoadFailed")}</Text>
+      </View>
+      <Button onPress={onRetry} size="sm" variant="outline">
+        {t("retry")}
+      </Button>
+    </View>
   );
 };
 

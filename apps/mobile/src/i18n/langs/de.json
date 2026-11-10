@@ -15,6 +15,7 @@
     "noMatchesDescription": "Kein Chattitel und keine Akte enthält „{search}“.",
     "search": "Chats durchsuchen",
     "loadFailed": "Ihre Unterhaltungen konnten nicht geladen werden.",
+    "runsLoadFailed": "Es konnte nicht geprüft werden, welche Unterhaltungen auf Sie warten.",
     "retry": "Erneut versuchen",
     "untitled": "Unbenannte Unterhaltung",
     "loadMoreFailed": "Mehr laden",
@@ -25,6 +26,8 @@
     "greeting": "Woran möchten Sie arbeiten?",
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "sections": {
+      "needsYou": "Wartet auf Sie",
+      "working": "In Arbeit",
       "today": "Heute",
       "yesterday": "Gestern",
       "week": "Letzte 7 Tage",
