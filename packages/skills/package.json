@@ -36,8 +36,8 @@
     "generate": "bun scripts/generate-manifests.ts",
     "test": "bun scripts/generate-manifests.ts --check && bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/skills",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/skills"
+    "lint": "cd ../.. && bun scripts/lint.ts packages/skills",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/skills"
   },
   "dependencies": {
     "@stll/portable-path": "workspace:*",

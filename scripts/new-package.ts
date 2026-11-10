@@ -112,8 +112,8 @@ const packageJsonTemplate = ({
         clean: "git clean -xdf .cache .turbo node_modules",
         test: "bun test src",
         typecheck: "bun check --no-pretty --all --project=tsconfig.json",
-        lint: `cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/${name}`,
-        "lint:fix": `cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/${name}`,
+        lint: `cd ../.. && bun scripts/lint.ts packages/${name}`,
+        "lint:fix": `cd ../.. && bun scripts/lint.ts --fix packages/${name}`,
       },
       devDependencies: {
         "@stll/typescript-config": "workspace:*",

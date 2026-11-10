@@ -694,9 +694,6 @@ describe("warm screening", () => {
       },
     ];
     realistic = buildScreeningIndex(commonLists);
-  });
-
-  beforeAll(() => {
     legacy = buildLegacyScreeningIndex(commonLists);
   });
 

@@ -39,12 +39,14 @@ import {
   caseLawResearchAnswers,
   caseLawResearchColumns,
   caseLawSources,
+  chatBrowserSiteGrants,
   chatMessageRevisions,
   chatMessages,
   chatThreads,
   chatToolGrants,
   chatTurns,
   desktopPresence,
+  desktopRunnerFolderRestores,
   desktopTimeEntryBatches,
   documentTranslationRuns,
   entities,
@@ -78,6 +80,9 @@ import { env } from "@/api/env";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
+import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
+import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
+import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import exportChatMessage from "@/api/handlers/chat/export/create";
@@ -120,6 +125,10 @@ import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
+import {
+  createReadLocalFilesUndo,
+  createUndoLocalFiles,
+} from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import createClientInvoice from "@/api/handlers/client-invoices/create";
@@ -210,6 +219,9 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_REQUEST_USER_AGENT } from "@/api/lib/business-registries/desktop/request-contract";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createDesktopRunnerControl } from "@/api/lib/desktop-runner/control";
+import { createLocalDoorbell } from "@/api/lib/desktop-runner/doorbell";
+import type { DesktopRunnerDb } from "@/api/lib/desktop-runner/store";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
@@ -598,6 +610,14 @@ const chatToolGrantConversationB = toSafeId<"chatToolGrant">(
 const chatToolGrantDeleteB = toSafeId<"chatToolGrant">(
   "22222222-2222-4222-8222-222222222299",
 );
+// Website approvals of user A1 in organization B: one listed, one the delete
+// case removes.
+const browserSiteGrantB = toSafeId<"chatBrowserSiteGrant">(
+  "22222222-2222-4222-8222-222222222311",
+);
+const browserSiteGrantDeleteB = toSafeId<"chatBrowserSiteGrant">(
+  "22222222-2222-4222-8222-222222222312",
+);
 const chatThreadTitleB = "Chat thread B";
 const chatRenameFromA = "Renamed from organization A";
 /** Thread B's stored model, so a foreign "auto" selection is observable. */
@@ -724,6 +744,16 @@ const chatToolGrantExists = async (grantId: SafeId<"chatToolGrant">) =>
       .where(eq(chatToolGrants.id, grantId))
   ).length > 0;
 
+const browserSiteGrantExists = async (
+  grantId: SafeId<"chatBrowserSiteGrant">,
+) =>
+  (
+    await testDb
+      .select({ id: chatBrowserSiteGrants.id })
+      .from(chatBrowserSiteGrants)
+      .where(eq(chatBrowserSiteGrants.id, grantId))
+  ).length > 0;
+
 const countChatMessages = async (threadId: SafeId<"chatThread">) =>
   (
     await testDb
@@ -749,6 +779,21 @@ const countCzechPresetRates = async (organizationId: SafeId<"organization">) =>
         ),
       )
   ).length;
+
+/** The undo handlers on the test database, as the runner control reads it. */
+const undoControl = () =>
+  createDesktopRunnerControl({
+    db: asTestRaw<DesktopRunnerDb>(testDb),
+    doorbell: createLocalDoorbell(),
+  });
+const readLocalFilesUndo = createReadLocalFilesUndo({ control: undoControl });
+const undoLocalFiles = createUndoLocalFiles({ control: undoControl });
+
+const folderRestoresOfTurn = async (turnId: SafeId<"chatTurn">) =>
+  await testDb
+    .select({ id: desktopRunnerFolderRestores.id })
+    .from(desktopRunnerFolderRestores)
+    .where(eq(desktopRunnerFolderRestores.chatTurnId, turnId));
 
 const readChatTurnRow = async (turnId: SafeId<"chatTurn">) =>
   (
@@ -2636,6 +2681,59 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expect(result).toEqual({ deleted: true }),
   },
   {
+    // The same person's website approvals in another firm stay with that firm.
+    name: "browser site grant list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listBrowserSiteGrants, workspaceA, {}),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listBrowserSiteGrants, sameUserWorkspaceB, {}),
+    expectDenied: (result) =>
+      expect(chatToolGrantIds(result)).not.toContain(browserSiteGrantB),
+    expectPositive: (result) =>
+      expect(chatToolGrantIds(result)).toContain(browserSiteGrantB),
+  },
+  {
+    // A website allowed in one firm never answers the same person's browser
+    // cards in another: the grant is stored for the session's organization.
+    name: "browser site grant create",
+    runAAgainstB: async ({ sameUserWorkspaceB, workspaceA }) => {
+      await runHandler(createBrowserSiteGrant, workspaceA, {
+        body: { url: "https://allowed-in-a.example/page" },
+      });
+      return await runHandler(listBrowserSiteGrants, sameUserWorkspaceB, {});
+    },
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      await runHandler(createBrowserSiteGrant, sameUserWorkspaceB, {
+        body: { url: "https://allowed-in-b.example/page" },
+      });
+      return await runHandler(listBrowserSiteGrants, sameUserWorkspaceB, {});
+    },
+    expectDenied: (result) =>
+      expect(JSON.stringify(result)).not.toContain(
+        "https://allowed-in-a.example",
+      ),
+    expectPositive: (result) =>
+      expect(JSON.stringify(result)).toContain("https://allowed-in-b.example"),
+  },
+  {
+    name: "browser site grant delete",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(deleteBrowserSiteGrant, workspaceA, {
+        params: { grantId: browserSiteGrantDeleteB },
+      }),
+      exists: await browserSiteGrantExists(browserSiteGrantDeleteB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(deleteBrowserSiteGrant, sameUserWorkspaceB, {
+        params: { grantId: browserSiteGrantDeleteB },
+      }),
+    expectDenied: (result) => {
+      expect(recordField(result, "response")).toEqual({ deleted: false });
+      expect(recordField(result, "exists")).toBe(true);
+    },
+    expectPositive: (result) => expect(result).toEqual({ deleted: true }),
+  },
+  {
     name: "chat thread rename",
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(renameChatThread, workspaceA, {
@@ -2832,6 +2930,40 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) =>
       expect(result).toMatchObject({
         turn: { id: chatTurnB, status: "cancelled" },
+      }),
+  },
+  {
+    // Runs after the cancel case: the turn ended without a run, so it has
+    // nothing to undo, which its own member is told.
+    name: "chat turn local files undo",
+    runAAgainstB: async ({ workspaceA }) => {
+      const params = { threadId: chatTurnThreadB, turnId: chatTurnB };
+      return {
+        read: await runHandler(readLocalFilesUndo, workspaceA, { params }),
+        undo: await runHandler(undoLocalFiles, workspaceA, { params }),
+        queued: await folderRestoresOfTurn(chatTurnB),
+      };
+    },
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const params = { threadId: chatTurnThreadB, turnId: chatTurnB };
+      return {
+        read: await runHandler(readLocalFilesUndo, sameUserWorkspaceB, {
+          params,
+        }),
+        undo: await runHandler(undoLocalFiles, sameUserWorkspaceB, {
+          params,
+        }),
+      };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "read"))).toBe(404);
+      expect(getStatusCode(recordField(result, "undo"))).toBe(404);
+      expect(recordField(result, "queued")).toEqual([]);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        read: { undoable: false, undo: null },
+        undo: { status: "refused", undo: null, reason: "no_checkpoint" },
       }),
   },
   {
@@ -3663,10 +3795,20 @@ testState.beforeAll(async () => {
       toolName: "fetch_url",
     },
   ]);
-});
-
-afterAll(async () => {
-  await releaseTestDb();
+  await testDb.insert(chatBrowserSiteGrants).values([
+    {
+      id: browserSiteGrantB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      origin: "https://example.com",
+    },
+    {
+      id: browserSiteGrantDeleteB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      origin: "https://example.org",
+    },
+  ]);
 });
 
 describe("cross-tenant handler isolation", () => {
@@ -4217,6 +4359,7 @@ const desktopServer = (): TestServer => {
 let desktopRoutes: TestServer | undefined;
 
 afterAll(async () => {
+  await releaseTestDb();
   await desktopRoutes?.stop();
 });
 

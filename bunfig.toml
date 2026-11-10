@@ -186,3 +186,58 @@ stylesheet = "node_modules/tailwindcss/theme.css"
 # tests concurrently lets .oxlint-plugins/__tests__/lint-single-rule.ts lint
 # every waiting case of one rule configuration in a single oxlint run.
 concurrentTestGlob = "**/.oxlint-plugins/__tests__/*.test.ts"
+
+# Test-file rules for `bun lint`, which applies this section on top of
+# oxlint.config.ts. Stable `bun test` and `bun install` ignore it, and oxlint
+# cannot run these checks: its jest and vitest rules skip every file that
+# imports from bun:test, which every test here does.
+# Not enabled: no-disabled-tests (database suites skip on purpose without a
+# database), the no-conditional-* rules, the prefer-* style rules, and
+# expect-expect (many tests still assert through helpers it cannot see).
+[[lint.overrides]]
+files = ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**/*.{ts,tsx}"]
+# Lint-rule fixtures break these rules on purpose.
+excludeFiles = [".oxlint-plugins/__fixtures__/**"]
+
+[lint.overrides.rules]
+"bun:test/no-commented-out-tests" = "error"
+"bun:test/no-done-callback" = "error"
+"bun:test/no-duplicate-hooks" = "error"
+"bun:test/no-export" = "error"
+"bun:test/no-focused-tests" = "error"
+"bun:test/no-identical-title" = "error"
+"bun:test/no-standalone-expect" = ["error", { additionalTestBlockFunctions = [
+  # Hooks may assert on their setup and teardown.
+  "beforeAll",
+  "beforeEach",
+  "afterAll",
+  "afterEach",
+  # Platform-gated aliases of test.
+  "posixTest",
+  "posixTest.each",
+  "windowsTest",
+  "windowsTest.each",
+] }]
+"bun:test/no-test-prefixes" = "error"
+"bun:test/no-test-return-statement" = "error"
+"bun:test/no-unneeded-async-expect-function" = "error"
+"bun:test/require-to-throw-message" = "error"
+"bun:test/valid-describe-callback" = "error"
+"bun:test/valid-expect" = "error"
+"bun:test/valid-expect-in-promise" = "error"
+# TypeScript already requires a test title to be a string, so titles built
+# from variables and expressions are allowed.
+"bun:test/valid-title" = ["error", { ignoreTypeOfTestName = true }]
+
+# A file-level declaration that scripts/ci-package-scope.ts reads, not a
+# shared helper.
+[[lint.overrides]]
+files = [
+  "scripts/cli-runtime-pack.test.ts",
+  "scripts/download-run-artifact.test.ts",
+  "scripts/flake-gate.test.ts",
+  "scripts/generated-conflicts.test.ts",
+  "scripts/precommit-i18n.test.ts",
+  "scripts/release-health.test.ts",
+]
+rules = { "bun:test/no-export" = "off" }

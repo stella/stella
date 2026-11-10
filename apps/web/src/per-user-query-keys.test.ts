@@ -12,6 +12,7 @@ import { documentAnnotationKeys } from "@/components/pdf/annotations/document-an
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { claimCommentKeys } from "@/features/avt/claim-comments-query";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
+import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
@@ -360,6 +361,17 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "chat/tool-grants/coverage.ts": { kind: "not-per-user", reason: READ_FRESH },
+  "chat/browser-site-grants/list.ts": {
+    kind: "keyed",
+    calls: ['api.chat["browser-site-grants"].get'],
+    files: ["features/chat/browser-control/browser-site-grants.ts"],
+    keys: () => [
+      browserSiteGrantsOptions({
+        activeOrganizationId: ORG,
+        userId: USER,
+      }).queryKey,
+    ],
+  },
   "chat/skill-availability/list.ts": {
     kind: "keyed",
     calls: ['api.chat["skill-availability"].get'],

@@ -113,6 +113,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   },
   // A stored approval grant: the caller's own standing tool-approval policy.
   chatToolGrant: { type: "non_resource", reason: "policy" },
+  // A stored browser site approval: the caller's own standing policy.
+  chatBrowserSiteGrant: { type: "non_resource", reason: "policy" },
   fileChatThread: { type: "non_resource", reason: "association" },
   templateChatThread: { type: "non_resource", reason: "association" },
   templateDeletionCleanupRequest: { type: "non_resource", reason: "job" },

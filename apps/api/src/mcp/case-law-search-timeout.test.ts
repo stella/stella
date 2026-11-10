@@ -13,7 +13,10 @@ import {
   resetFailureObservationsForTesting,
 } from "@/api/lib/observability/failure-shadow";
 import { createCaseLawContinuation } from "@/api/mcp/stella-tools";
-import { caseLawSearchTimeoutResult } from "@/api/mcp/tool-utils";
+import {
+  caseLawSearchTimeoutResult,
+  searchRefusalResult,
+} from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { createFakeContinuationStore } from "@/api/tests/helpers/fake-continuation-store";
@@ -142,6 +145,38 @@ test.each([
         },
       },
     ]);
+  } finally {
+    resetFailureObservationsForTesting();
+    logs.restore();
+    analytics.restore();
+  }
+});
+
+test.each([
+  { path: "the case-law time budget", read: caseLawSearchTimeoutResult },
+  { path: "a public read", read: searchRefusalResult },
+])("$path advises one identical repeat before narrowing", ({ read }) => {
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  resetFailureObservationsForTesting();
+  try {
+    const result = read(
+      new HttpStatusResponse(503, {
+        code: PUBLIC_READ_TIMEOUT_CODE,
+        message: "Public read timed out. Please try again.",
+      }),
+    );
+    if (result?.error.type !== "structured") {
+      throw new Error("Expected a structured error");
+    }
+    expect(result.error.retryable).toBe(true);
+    const hint = result.error.hint ?? "";
+    const timesOutAgain = hint.indexOf("If it times out again");
+    expect(hint.indexOf("Repeat the identical")).toBe(0);
+    expect(timesOutAgain).toBeGreaterThan(0);
+    expect(hint.slice(0, timesOutAgain)).not.toMatch(/narrow|fewer/iu);
+    expect(hint.slice(timesOutAgain)).toMatch(/narrow/iu);
+    expect(hint).not.toMatch(/succeed|will work/iu);
   } finally {
     resetFailureObservationsForTesting();
     logs.restore();

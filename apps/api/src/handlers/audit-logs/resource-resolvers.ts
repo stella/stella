@@ -222,6 +222,11 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
+  // The website it allows travels in the entry's metadata (`browserOrigin`).
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
   [AUDIT_RESOURCE_TYPE.CLAUSE]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",

@@ -21,12 +21,14 @@ import { abortTransaction } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   billingDraftUserSettings,
+  chatBrowserSiteGrants,
   chatToolGrants,
   contacts,
   correspondence,
   desktopEditHandoffs,
   desktopEditSessions,
   desktopPresence,
+  desktopRunnerFolderRestores,
   desktopRunnerRuns,
   desktopRunners,
   entities,
@@ -1519,7 +1521,7 @@ type ClearMemberScopedDataOptions = Pick<
 
 /**
  * The member's desktop runners, on the owner connection the runner tables
- * admit; their runs, queued commands and events cascade, and an open runner
+ * admit; their runs, queued commands, events and folder restores cascade, and an open runner
  * socket closes on its next heartbeat.
  */
 const clearMemberDesktopRunners = async ({
@@ -1642,6 +1644,14 @@ const clearMemberConnectorAuthorization = async ({
       and(
         eq(chatToolGrants.organizationId, organizationId),
         eq(chatToolGrants.userId, userId),
+      ),
+    );
+  await tx
+    .delete(chatBrowserSiteGrants)
+    .where(
+      and(
+        eq(chatBrowserSiteGrants.organizationId, organizationId),
+        eq(chatBrowserSiteGrants.userId, userId),
       ),
     );
   await tx
@@ -1878,10 +1888,12 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [member.userId, "cleared"],
   [desktopPresence.userId, "cleared"],
   [timerActivityDevices.userId, "cleared"],
-  // Removal deletes the member's runners; their runs, queued commands and
-  // events cascade, and an open runner socket closes on its next heartbeat.
+  // Removal deletes the member's runners; their runs, queued commands,
+  // events and folder restores cascade, and an open runner socket closes on
+  // its next heartbeat.
   [desktopRunners.userId, "cleared"],
   [desktopRunnerRuns.userId, "cleared"],
+  [desktopRunnerFolderRestores.userId, "cleared"],
   [searchHistoryEntries.userId, "cleared"],
   [searchHistoryOwners.userId, "cleared"],
   [searchHistoryTombstones.userId, "cleared"],
@@ -1902,6 +1914,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [sharepointConnections.userId, "cleared"],
   [sharepointOAuthState.userId, "cleared"],
   [chatToolGrants.userId, "cleared"],
+  [chatBrowserSiteGrants.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],
   // Revoked by `removeOrganizationMemberWithAuthArtifacts`.

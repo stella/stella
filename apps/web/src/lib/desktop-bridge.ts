@@ -17,6 +17,7 @@ import { env } from "@/env";
 import type {
   DesktopLinkApproval,
   DesktopLinkOutcome,
+  DesktopLinkResult,
 } from "@/features/desktop/desktop-connection-store.logic";
 import {
   DESKTOP_HANDOFF_POLL_INTERVAL_MS,
@@ -548,7 +549,7 @@ export const linkDesktopAccount = async ({
   apiBaseUrl,
   approval,
   onDesktopOpening,
-}: LinkDesktopAccountOptions) => {
+}: LinkDesktopAccountOptions): Promise<DesktopLinkResult> => {
   captureDesktopAccountLink();
   const attempt = accountAttempt;
   if (attempt?.type === "update-required") {

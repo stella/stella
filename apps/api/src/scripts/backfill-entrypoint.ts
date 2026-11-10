@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { CitationKeyScope } from "./backfill-citation-keys-plan";
 import { readRepairArguments } from "./repair-flags";
 
 type ParserOptions = {
@@ -63,7 +64,9 @@ export const backfillEntrypoints = {
     if (unsupported.length > 0) {
       panic(`Unsupported argument: ${unsupported.join(" ")}`);
     }
-    const scope = args.includes("--recanonicalize") ? "stale" : "missing";
+    const scope: CitationKeyScope = args.includes("--recanonicalize")
+      ? "stale"
+      : "missing";
     return withRuntime({
       name: `citation-keys:${scope}`,
       tableName: "case_law_decisions",
