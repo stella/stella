@@ -4965,6 +4965,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Alapértelmezett beállítások használatban"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} karakter",
+      "description": "Ezek az utasítások a szervezet minden AI-beszélgetésére vonatkoznak, és elsőbbséget élveznek a személyes beállításokkal szemben. A módosítások a következő üzenettől érvényesek. Használja őket a megfelelőségi szabályok, az adatkezelés és a formázási előírások meghatározására.",
+      "title": "Szervezeti utasítások",
+      "tooLong": "Az utasítások legfeljebb {maxLength} karaktert tartalmazhatnak."
+    },
     "creationEvaluationLimitReached": "Már mind a {limit} szervezeti próbaidőszakot felhasználta. Egy szervezet törlése nem tesz újra elérhetővé próbaidőszakot. Használjon meglévő szervezetet, vagy forduljon az ügyfélszolgálathoz fizetős hozzáférésért.",
     "creationInvalidName": "Adjon meg egy érvényes szervezetnevet (legfeljebb {maxLength} karakter).",
     "creationNotAllowed": "Ezzel a fiókkal nem hozhatók létre szervezetek.",

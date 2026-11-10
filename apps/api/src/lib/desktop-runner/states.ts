@@ -82,6 +82,7 @@ export const DESKTOP_RUNNER_STORED_REJECT_REASONS = [
   "at_capacity",
   "run_too_large",
   "unknown_run",
+  "folder_busy",
 ] as const;
 true satisfies Same<
   (typeof DESKTOP_RUNNER_STORED_REJECT_REASONS)[number],
@@ -104,7 +105,12 @@ true satisfies Same<
   (typeof DESKTOP_RUNNER_COMMAND_KINDS)[number],
   Exclude<
     DesktopRunnerServerMessage["type"],
-    "welcome" | "upgrade_required" | "reconnect" | "run.token" | "ack"
+    | "welcome"
+    | "upgrade_required"
+    | "reconnect"
+    | "run.token"
+    | "ack"
+    | "folder.restore"
   >
 >;
 export type DesktopRunnerCommandKind =

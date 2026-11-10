@@ -151,7 +151,11 @@
     "scanDocument": "Zeskanuj dokument",
     "newTask": "Nowe zadanie",
     "uploadDocument": "Prześlij dokument",
-    "uploadFailed": "Nie udało się przesłać dokumentu. Spróbuj ponownie."
+    "uploadFailed": "Nie udało się przesłać dokumentu. Spróbuj ponownie.",
+    "startTimer": "Uruchom licznik",
+    "pauseTimer": "Wstrzymaj licznik",
+    "resumeTimer": "Wznów licznik",
+    "timerRunning": "Licznik działa"
   },
   "entity": {
     "type": "Typ",

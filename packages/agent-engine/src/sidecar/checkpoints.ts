@@ -1864,6 +1864,11 @@ const restoreHeld = async (
   if (target === undefined) {
     return { outcome: "no_checkpoint", detail: null };
   }
+  // Asked again after it was done (an answer that never arrived): the folder
+  // is not touched, and the answer is the same.
+  if (target.undone) {
+    return { outcome: "restored", detail: null };
+  }
   const newest = manifests.findLast(({ undone }) => !undone);
   if (newest?.runId !== runId) {
     return { outcome: "not_newest", detail: null };

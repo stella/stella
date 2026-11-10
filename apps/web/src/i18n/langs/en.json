@@ -4965,6 +4965,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Using defaults"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} characters",
+      "description": "These instructions apply to every AI conversation in your organization and take priority over personal preferences. Changes apply from the next message. Use them for compliance rules, data handling, and formatting standards.",
+      "title": "Organization instructions",
+      "tooLong": "Instructions must be at most {maxLength} characters."
+    },
     "creationEvaluationLimitReached": "You have used all {limit} organization evaluation periods. Deleting an organization does not restore one. Use an existing organization or contact support for paid access.",
     "creationInvalidName": "Enter a valid organization name (up to {maxLength} characters).",
     "creationNotAllowed": "This account cannot create organizations.",

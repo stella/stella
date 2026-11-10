@@ -14,6 +14,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import {
   type ChangedFileScopeDetectors,
   computeChangedFileScope,
@@ -226,8 +227,7 @@ const evaluateExpression = (expression: string, context: object) =>
 const checkoutRefs = Object.values(ciContract.jobs).flatMap((job) =>
   (job.steps ?? []).filter(
     (step) =>
-      step.uses?.startsWith("actions/checkout@") &&
-      step.with?.["ref"] !== undefined,
+      isRepositoryCheckoutAction(step.uses) && step.with?.["ref"] !== undefined,
   ),
 );
 const marketingCheckout = (job: string) => {
