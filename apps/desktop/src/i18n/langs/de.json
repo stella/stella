@@ -498,7 +498,6 @@
     "mixedActivity": "Schneller Wechsel",
     "mixedActivityLabel": "Schneller Wechsel zwischen {apps}, {range}",
     "moreApps": "+{count} weitere",
-    "suggestionPiece": "{matter} · {range} · {duration}",
     "suggestionPieceLabel": "Vorgeschlagener Eintrag: {matter}, {range}, {duration}, insgesamt {hours} Std.",
     "suggestionRange": "{range} · {duration} · {hours} Std.",
     "suggestionPieces": "{count, plural, one {# Abschnitt} other {# Abschnitte}} · {duration} · {hours} Std.",

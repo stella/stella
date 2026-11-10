@@ -613,7 +613,9 @@ const DayCalendarBlockView = ({
   } satisfies CSSProperties;
   const oneLine = blockSize < TWO_LINE_BLOCK_MIN_PX;
   const className = cn(
-    "text-foreground flex h-full w-full min-w-0 overflow-hidden rounded-md px-2.5 text-start text-xs",
+    // A size container: the block's width is set by its placement, never by
+    // its content, so a label can adapt to it with a container query.
+    "text-foreground @container flex h-full w-full min-w-0 overflow-hidden rounded-md px-2.5 text-start text-xs",
     oneLine ? "flex-row items-center gap-2" : "flex-col gap-0.5 py-1",
     BLOCK_KIND_CLASSES[block.kind],
     block.kind === "entry" && ENTRY_STATE_CLASSES[block.state],

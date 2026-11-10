@@ -498,7 +498,6 @@
     "mixedActivity": "Gyors váltogatás",
     "mixedActivityLabel": "Gyors váltogatás: {apps}, {range}",
     "moreApps": "+{count} további",
-    "suggestionPiece": "{matter} · {range} · {duration}",
     "suggestionPieceLabel": "Javasolt bejegyzés: {matter}, {range}, {duration}, összesen {hours} ó",
     "suggestionRange": "{range} · {duration} · {hours} ó",
     "suggestionPieces": "{count, plural, one {# szakasz} other {# szakasz}} · {duration} · {hours} ó",

@@ -498,7 +498,6 @@
     "mixedActivity": "Ātra pārslēgšanās",
     "mixedActivityLabel": "Ātra pārslēgšanās: {apps}, {range}",
     "moreApps": "+{count} vēl",
-    "suggestionPiece": "{matter} · {range} · {duration}",
     "suggestionPieceLabel": "Ieteiktais ieraksts: {matter}, {range}, {duration}, kopā {hours} st.",
     "suggestionRange": "{range} · {duration} · {hours} st.",
     "suggestionPieces": "{count, plural, zero {# posmu} one {# posms} other {# posmi}} · {duration} · {hours} st.",

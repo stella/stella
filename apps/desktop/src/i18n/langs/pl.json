@@ -498,7 +498,6 @@
     "mixedActivity": "Szybkie przełączanie",
     "mixedActivityLabel": "Szybkie przełączanie: {apps}, {range}",
     "moreApps": "+{count} więcej",
-    "suggestionPiece": "{matter} · {range} · {duration}",
     "suggestionPieceLabel": "Proponowany wpis: {matter}, {range}, {duration}, łącznie {hours} godz.",
     "suggestionRange": "{range} · {duration} · {hours} godz.",
     "suggestionPieces": "{count, plural, one {# odcinek} few {# odcinki} many {# odcinków} other {# odcinka}} · {duration} · {hours} godz.",

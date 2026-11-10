@@ -498,7 +498,6 @@
     "mixedActivity": "تنقل سريع",
     "mixedActivityLabel": "تنقل سريع بين {apps}، {range}",
     "moreApps": "+{count} أخرى",
-    "suggestionPiece": "{matter} · {range} · {duration}",
     "suggestionPieceLabel": "قيد مقترح: {matter}، {range}، {duration}، المجموع {hours} س",
     "suggestionRange": "{range} · {duration} · {hours} س",
     "suggestionPieces": "{count, plural, zero {# فترات} one {فترة واحدة} two {فترتان} few {# فترات} many {# فترة} other {# فترة}} · {duration} · {hours} س",

@@ -498,7 +498,6 @@
     "mixedActivity": "Quick switching",
     "mixedActivityLabel": "Quick switching between {apps}, {range}",
     "moreApps": "+{count} more",
-    "suggestionPiece": "{matter} · {range} · {duration}",
     "suggestionPieceLabel": "Suggested entry: {matter}, {range}, {duration}, {hours} h in total",
     "suggestionRange": "{range} · {duration} · {hours} h",
     "suggestionPieces": "{count, plural, one {# session} other {# sessions}} · {duration} · {hours} h",

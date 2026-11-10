@@ -498,7 +498,6 @@
     "mixedActivity": "Kiire vahetamine",
     "mixedActivityLabel": "Kiire vahetamine: {apps}, {range}",
     "moreApps": "+{count} veel",
-    "suggestionPiece": "{matter} · {range} · {duration}",
     "suggestionPieceLabel": "Soovitatud kanne: {matter}, {range}, {duration}, kokku {hours} h",
     "suggestionRange": "{range} · {duration} · {hours} h",
     "suggestionPieces": "{count, plural, one {# lõik} other {# lõiku}} · {duration} · {hours} h",

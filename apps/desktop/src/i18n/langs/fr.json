@@ -498,7 +498,6 @@
     "mixedActivity": "Changements rapides",
     "mixedActivityLabel": "Changements rapides entre {apps}, {range}",
     "moreApps": "+{count} de plus",
-    "suggestionPiece": "{matter} · {range} · {duration}",
     "suggestionPieceLabel": "Saisie suggérée : {matter}, {range}, {duration}, {hours} h au total",
     "suggestionRange": "{range} · {duration} · {hours} h",
     "suggestionPieces": "{count, plural, one {# plage} other {# plages}} · {duration} · {hours} h",

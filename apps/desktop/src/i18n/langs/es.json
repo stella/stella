@@ -498,7 +498,6 @@
     "mixedActivity": "Cambios rápidos",
     "mixedActivityLabel": "Cambios rápidos entre {apps}, {range}",
     "moreApps": "+{count} más",
-    "suggestionPiece": "{matter} · {range} · {duration}",
     "suggestionPieceLabel": "Registro sugerido: {matter}, {range}, {duration}, {hours} h en total",
     "suggestionRange": "{range} · {duration} · {hours} h",
     "suggestionPieces": "{count, plural, one {# tramo} other {# tramos}} · {duration} · {hours} h",

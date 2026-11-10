@@ -498,7 +498,6 @@
     "mixedActivity": "Troca rápida",
     "mixedActivityLabel": "Troca rápida entre {apps}, {range}",
     "moreApps": "+{count} a mais",
-    "suggestionPiece": "{matter} · {range} · {duration}",
     "suggestionPieceLabel": "Lançamento sugerido: {matter}, {range}, {duration}, {hours} h no total",
     "suggestionRange": "{range} · {duration} · {hours} h",
     "suggestionPieces": "{count, plural, one {# trecho} other {# trechos}} · {duration} · {hours} h",

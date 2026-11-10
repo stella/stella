@@ -498,7 +498,6 @@
     "mixedActivity": "Greitas perjungimas",
     "mixedActivityLabel": "Greitas perjungimas: {apps}, {range}",
     "moreApps": "+{count} daugiau",
-    "suggestionPiece": "{matter} · {range} · {duration}",
     "suggestionPieceLabel": "Siūlomas įrašas: {matter}, {range}, {duration}, iš viso {hours} val.",
     "suggestionRange": "{range} · {duration} · {hours} val.",
     "suggestionPieces": "{count, plural, one {# atkarpa} few {# atkarpos} many {# atkarpos} other {# atkarpų}} · {duration} · {hours} val.",

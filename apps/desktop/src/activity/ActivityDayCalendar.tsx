@@ -73,6 +73,7 @@ import type {
 } from "./billing-draft-settings";
 import { EVIDENCE_DETAIL_LIMIT, matchDay } from "./day-review-logic";
 import type { MatchedSegment } from "./day-review-logic";
+import { SuggestionPieceLabel } from "./SuggestionPieceLabel";
 import { useDurationLabel, useMinutesLabel } from "./use-duration-label";
 
 const ACTIVITY_COLUMN_ID = "activity";
@@ -825,7 +826,11 @@ function useCalendarColumns({
         startMs: piece.startMs,
         state: "suggestion",
         title: (
-          <bdi>{t("suggestionPiece", { duration, matter: name, range })}</bdi>
+          <SuggestionPieceLabel
+            duration={duration}
+            matter={name}
+            range={range}
+          />
         ),
         tone: matterTone(suggestion.matter),
       });
