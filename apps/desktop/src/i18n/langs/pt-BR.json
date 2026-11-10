@@ -501,6 +501,8 @@
     "evidenceTitles": "Títulos",
     "evidenceApps": "Apps",
     "rangeEmpty": "Nada foi registrado neste intervalo.",
+    "rangeMostlyUnmatched": "A maior parte deste intervalo não pertence a nenhum caso, por isso nenhum foi pré-selecionado.",
+    "rangeSplitBetweenMatters": "Nenhum caso ocupa sozinho a maior parte deste intervalo, por isso nenhum foi pré-selecionado.",
     "entryStart": "Início",
     "entryEnd": "Fim",
     "rangeEndBeforeStart": "Defina um horário de término depois do início.",

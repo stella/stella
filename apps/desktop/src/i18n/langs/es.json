@@ -501,6 +501,8 @@
     "evidenceTitles": "Títulos",
     "evidenceApps": "Aplicaciones",
     "rangeEmpty": "No se registró nada en este intervalo.",
+    "rangeMostlyUnmatched": "La mayor parte de este intervalo no pertenece a ningún asunto, por eso no hay ninguno preseleccionado.",
+    "rangeSplitBetweenMatters": "Ningún asunto ocupa por sí solo la mayor parte de este intervalo, por eso no hay ninguno preseleccionado.",
     "entryStart": "Inicio",
     "entryEnd": "Fin",
     "rangeEndBeforeStart": "Elija una hora de fin posterior al inicio.",

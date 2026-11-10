@@ -501,6 +501,8 @@
     "evidenceTitles": "Titel",
     "evidenceApps": "Apps",
     "rangeEmpty": "In diesem Zeitraum wurde nichts erfasst.",
+    "rangeMostlyUnmatched": "Der Großteil dieses Zeitraums gehört zu keiner Akte, daher ist keine vorausgewählt.",
+    "rangeSplitBetweenMatters": "Keine einzelne Akte umfasst den Großteil dieses Zeitraums, daher ist keine vorausgewählt.",
     "entryStart": "Beginn",
     "entryEnd": "Ende",
     "rangeEndBeforeStart": "Wählen Sie ein Ende nach dem Beginn.",

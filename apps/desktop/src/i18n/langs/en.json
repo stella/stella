@@ -501,6 +501,8 @@
     "evidenceTitles": "Titles",
     "evidenceApps": "Apps",
     "rangeEmpty": "Nothing was recorded in this range.",
+    "rangeMostlyUnmatched": "Most of this range belongs to no matter, so none is preselected.",
+    "rangeSplitBetweenMatters": "No single matter holds most of this range, so none is preselected.",
     "entryStart": "Start",
     "entryEnd": "End",
     "rangeEndBeforeStart": "Set an end time after the start.",

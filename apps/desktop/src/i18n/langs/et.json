@@ -501,6 +501,8 @@
     "evidenceTitles": "Pealkirjad",
     "evidenceApps": "Rakendused",
     "rangeEmpty": "Selles vahemikus ei salvestatud midagi.",
+    "rangeMostlyUnmatched": "Suurem osa sellest vahemikust ei kuulu ühegi toimiku juurde, seega pole ühtegi eelvalitud.",
+    "rangeSplitBetweenMatters": "Ükski toimik ei hõlma üksi suuremat osa sellest vahemikust, seega pole ühtegi eelvalitud.",
     "entryStart": "Algus",
     "entryEnd": "Lõpp",
     "rangeEndBeforeStart": "Valige lõpuaeg pärast algust.",

@@ -501,6 +501,8 @@
     "evidenceTitles": "Tytuły",
     "evidenceApps": "Aplikacje",
     "rangeEmpty": "W tym przedziale nic nie zapisano.",
+    "rangeMostlyUnmatched": "Większość tego przedziału nie należy do żadnej sprawy, więc żadna nie jest wstępnie wybrana.",
+    "rangeSplitBetweenMatters": "Żadna sprawa nie obejmuje większości tego przedziału, więc żadna nie jest wstępnie wybrana.",
     "entryStart": "Początek",
     "entryEnd": "Koniec",
     "rangeEndBeforeStart": "Ustaw koniec później niż początek.",
