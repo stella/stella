@@ -1,5 +1,8 @@
 import { caseLawSources } from "@/api/db/schema";
-import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
+import {
+  derivedAiCaseLawSourceFor,
+  redistributableCaseLawSourceFor,
+} from "@/api/lib/case-law/redistribution-sql";
 
 export {
   redistributableCaseLawSourceFor,
@@ -7,5 +10,9 @@ export {
 } from "@/api/lib/case-law/redistribution-sql";
 
 export const redistributableCaseLawSource = redistributableCaseLawSourceFor(
+  caseLawSources.descriptor,
+);
+
+export const derivedAiCaseLawSource = derivedAiCaseLawSourceFor(
   caseLawSources.descriptor,
 );

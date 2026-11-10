@@ -33,7 +33,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { readPublicCaseLawSearchText } from "@/api/lib/case-law/search-sql";
+import { readCaseLawSearchTextForAi } from "@/api/lib/case-law/search-sql";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
@@ -1187,11 +1187,12 @@ const loadSearchHitContent = async ({
     // corpus-aware path before any database goes canonical.
     //
     // The hit was gated when it was found; the text is read under the same
-    // published and redistributable gate, so a decision withdrawn since then
-    // contributes nothing.
+    // published and redistributable gate plus the source's derived-AI
+    // permission, so a decision withdrawn since then, or one whose source
+    // forbids AI use, contributes nothing and is left out of the contexts.
     const searchableText = await scopedDb(
       async (tx) =>
-        await readPublicCaseLawSearchText(
+        await readCaseLawSearchTextForAi(
           tx,
           brandPersistedCaseLawDecisionId(hit.decisionId),
         ),

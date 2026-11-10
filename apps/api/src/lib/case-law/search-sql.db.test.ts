@@ -10,22 +10,24 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { readPublicCaseLawSearchText } from "@/api/lib/case-law/search-sql";
+import { readCaseLawSearchTextForAi } from "@/api/lib/case-law/search-sql";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
+const displayOnlySourceId = createSafeId<"caseLawSource">();
 const liveDecisionId = createSafeId<"caseLawDecision">();
 const withdrawnDecisionId = createSafeId<"caseLawDecision">();
 const closedSourceDecisionId = createSafeId<"caseLawDecision">();
+const displayOnlyDecisionId = createSafeId<"caseLawDecision">();
 
 let client: PGlite;
 let db: ReturnType<typeof drizzle>;
 
 const readText = async (decisionId: typeof liveDecisionId) =>
-  await readPublicCaseLawSearchText(asTestRaw<Transaction>(db), decisionId);
+  await readCaseLawSearchTextForAi(asTestRaw<Transaction>(db), decisionId);
 
 // timeout: embedded PostgreSQL builds the complete migration schema for this test.
 beforeAll(async () => {
@@ -44,6 +46,17 @@ beforeAll(async () => {
       id: closedSourceId,
       name: "closed",
     }),
+    caseLawSourceRow({
+      adapterKey: "display-only",
+      descriptor: {
+        allowsDerivedAi: false,
+        allowsRedistribution: true,
+        attribution: null,
+        license: "permitted-redistribution",
+      },
+      id: displayOnlySourceId,
+      name: "display-only",
+    }),
   ]);
   const decisions = [
     { id: liveDecisionId, sourceId: openSourceId, caseNumber: "1 A 1/2026" },
@@ -56,6 +69,11 @@ beforeAll(async () => {
       id: closedSourceDecisionId,
       sourceId: closedSourceId,
       caseNumber: "3 A 3/2026",
+    },
+    {
+      id: displayOnlyDecisionId,
+      sourceId: displayOnlySourceId,
+      caseNumber: "4 A 4/2026",
     },
   ];
   await db.insert(caseLawDecisions).values(
@@ -98,6 +116,10 @@ test("a withdrawn decision contributes no text to a search summary", async () =>
 
 test("a decision from a non-redistributable source contributes no text", async () => {
   expect(await readText(closedSourceDecisionId)).toBeNull();
+});
+
+test("a decision from a redistributable source that forbids derived AI contributes no text", async () => {
+  expect(await readText(displayOnlyDecisionId)).toBeNull();
 });
 
 test("a decision without a projection row yields no text", async () => {

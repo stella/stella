@@ -7,6 +7,16 @@ export const redistributableCaseLawSourceFor = (descriptor: SQLWrapper) => sql`(
 )`;
 
 /**
+ * Whether a source's text may be fed to a model. A separate permission from
+ * redistribution: a source may allow showing its wording but not AI use.
+ * null descriptor = legacy public-record source, as above.
+ */
+export const derivedAiCaseLawSourceFor = (descriptor: SQLWrapper) => sql`(
+  ${descriptor} IS NULL
+  OR (${descriptor} ->> 'allowsDerivedAi') = 'true'
+)`;
+
+/**
  * The same predicate as raw SQL for sites that join `case_law_sources`
  * under an alias. `alias` must be a code constant.
  */
