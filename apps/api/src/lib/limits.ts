@@ -280,6 +280,10 @@ export const LIMITS = {
   mcpPageSizeMin: 1,
   /** Shortest value a required MCP text or list input takes: not empty. */
   mcpNonEmptyMin: 1,
+  softLawAuthorityMaxLength: 64,
+  softLawJurisdictionMinLength: 2,
+  softLawJurisdictionMaxLength: 3,
+  isoDateLength: 10,
   /** Characters of a language code an MCP filter takes (`cs`, `pt-BR`). */
   mcpLanguageCodeMaxChars: 8,
   /** Characters of an ISO calendar date an MCP filter takes (YYYY-MM-DD). */
@@ -315,6 +319,13 @@ export const LIMITS = {
    *  interval of the sweep that ends every stream whose session or other
    *  credential no longer holds. */
   sseCredentialRecheckMs: 15_000,
+  /** Event streams one session may hold open on one workspace or user feed
+   *  per process. Opening another closes that session's oldest, so a client
+   *  that reconnects keeps its newest stream. */
+  sseStreamsPerSession: 32,
+  /** Event streams one desktop edit session may hold open per process; one
+   *  editor reads them, so a reconnect replaces the oldest. */
+  desktopEditSessionStreams: 8,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
   /** OOXML numbering levels are zero-based and bounded to nine levels. */
@@ -441,14 +452,21 @@ export const LIMITS = {
    * Conservative until the engine's term-set cost is measured at scale; a
    * provision cited more widely is checked candidate by candidate instead.
    */
-  caseLawProvisionIdSetMax: 5000,
+  caseLawProvisionIdSetMax: 2000,
   /**
    * Physical citation links one provision scope read examines before it
    * calls the provision broad. Larger than the id-set bound, so links of other
    * countries, levels or unpublished decisions do not make a narrow citing
-   * set broad, and still a fixed read.
+   * set broad, and small because the walk runs on every provision-filtered
+   * search, before any of the work that search is for.
    */
-  caseLawProvisionScopeLinkScanMax: 20_000,
+  caseLawProvisionScopeLinkScanMax: 4000,
+  /**
+   * Each statement of a provision scope read. Past it the provision is read
+   * as broad, which the candidate-by-candidate path answers correctly, so a
+   * cold index costs the request this much rather than its whole budget.
+   */
+  caseLawProvisionScopeStatementBudgetMs: 1500,
   /** Physical citation rows examined by one correlated provision probe. */
   caseLawProvisionLinkProbeMax: 128,
   /**
@@ -637,6 +655,10 @@ export const LIMITS = {
   caseLawAgentCitationPageSizeDefault: 20,
   /** Citing paragraph sent with a citation, centred on the citation itself. */
   caseLawCitationPassageChars: 1200,
+  /** The same passage in a compact citation read: a cue, not a quotation. */
+  caseLawCitationCompactPassageChars: 240,
+  /** Length of the words a citation read filters its citing paragraphs by. */
+  caseLawCitationPassageQueryChars: 256,
   /** Decision ASTs fetched at once while resolving one page of passages. */
   caseLawCitationPassageConcurrency: 6,
   /**
@@ -665,11 +687,20 @@ export const LIMITS = {
    * token itself is shorter; the bound leaves room to change it.
    */
   caseLawDecisionTextVersionMaxLength: 24,
+  /** Characters of one docket register, such as "Cdo". */
+  caseLawDocketRegisterMaxChars: 16,
+  /** Registers one search may list. */
+  caseLawDocketRegistersFilterMax: 8,
+  /** Bounds of the senate number a docket opens with. */
+  caseLawSenateMin: 1,
+  caseLawSenateMax: 999,
   /**
    * Characters of one case reference. A docket, an ECLI or a reporter
    * citation; anything longer is prose and belongs in a text search.
    */
   caseLawIdentifierMaxLength: 256,
+  /** Characters of the cursor a `query` read issues. */
+  caseLawDecisionQueryCursorMaxLength: 128,
   /**
    * Decisions listed when a reference names more than one. Past a handful the
    * reference names a list of decisions rather than a decision, and the

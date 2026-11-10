@@ -65,6 +65,10 @@ export const MCP_ERROR_CODES = [
    * same call once the index is back succeeds.
    */
   "search_index_unavailable",
+  /** A continuation_token is unknown or expired; repeat the original call. */
+  "continuation_expired",
+  /** A continued read ran out of attempts without an answer; nothing returned. */
+  "public_read_unfinished",
   /** No tool with the given name is exposed on this surface. */
   "unknown_tool",
   /** An unexpected server-side failure; details are not leaked to the caller. */

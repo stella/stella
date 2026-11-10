@@ -33,6 +33,7 @@ import { panic } from "better-result";
 // parser-output-unchanged: imports the document AST from its package owner
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { Inline } from "@stll/legal-ast/document-ast";
+import { AUTHORITY_PARAGRAPH_NUMBER_RE } from "@stll/legal-ast/printed-paragraph-labels";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import {
@@ -41,7 +42,7 @@ import {
   opensBlockParagraph,
   POINT_MARKERS,
   type PointMarkers,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-printed-lines";
+} from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import {
   buildFontStyleRanges,
   normalizeSpanText,
@@ -435,11 +436,9 @@ const rightEdgeOf = (lines: readonly ExtractedLine[]): number | undefined => {
   return edge;
 };
 
-/** The number an authority sets before each paragraph: `(12)`, `[12]`. */
-const PARAGRAPH_NUMBER = /^(?:\(\d{1,3}\)|\[\d{1,3}\])\s/u;
 const NUMBERED_PARAGRAPH_MARKERS: PointMarkers = {
   ...POINT_MARKERS,
-  paragraphNumber: PARAGRAPH_NUMBER,
+  paragraphNumber: AUTHORITY_PARAGRAPH_NUMBER_RE,
 };
 
 /** Read one page's lines, keeping blanks and the indent decision. */

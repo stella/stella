@@ -463,14 +463,7 @@ export const ChatThreadMessages = ({
             threadRef={messageActionsThreadRef(message, threadRef)}
           >
             <MessageContent
-              className={cn(
-                message.parts.some(
-                  (part) =>
-                    part.type === "ui-resource" &&
-                    uiResourceRenderer(part.resource.mimeType) ===
-                      "generated-visual",
-                ) && "w-full",
-              )}
+              className={cn(showsFullWidthResource(message) && "w-full")}
             >
               <MessageBodyRender
                 render={() => {
@@ -956,7 +949,11 @@ const LoadOlderSentinel = ({
 
 const USER_STREAMDOWN_COMPONENTS = {
   a: (props: ComponentProps<"a">) => (
-    <StreamdownMentionLink interactive={false} {...props} />
+    <StreamdownMentionLink
+      externalLinks="written"
+      interactive={false}
+      {...props}
+    />
   ),
 };
 
@@ -1010,6 +1007,17 @@ const normalizeUserMessageTextForDisplay = (text: string) => {
 
   return result;
 };
+
+/** Rendered apps that lay out across the whole message column. */
+const FULL_WIDTH_RENDERERS: ReadonlySet<ReturnType<typeof uiResourceRenderer>> =
+  new Set(["generated-visual", "stella-app"]);
+
+const showsFullWidthResource = (message: ChatUIMessage) =>
+  message.parts.some(
+    (part) =>
+      part.type === "ui-resource" &&
+      FULL_WIDTH_RENDERERS.has(uiResourceRenderer(part.resource.mimeType)),
+  );
 
 const IMAGE_MEDIA_TYPES = Object.freeze([
   "image/png",

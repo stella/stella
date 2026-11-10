@@ -51,6 +51,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "DELETE /v1/chat/browser-site-grants/:grantId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/clause-categories/:categoryId": {
     type: "non-replay",
     reason: "current-state",
@@ -316,6 +320,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  "POST /v1/ai/draft-email": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/ai/summarize": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/api-keys": {
     type: "non-replay",
     reason: "credential",
@@ -425,6 +437,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  "POST /v1/chat/threads/:threadId/mcp-apps/:toolCallId/call": {
+    type: "non-replay",
+    reason: "read",
+  },
   "POST /v1/chat/threads/:threadId/secrets/:toolCallId": {
     type: "non-replay",
     reason: "credential",
@@ -445,6 +461,7 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
+  "POST /v1/chat/browser-site-grants": { type: "replay" },
   "POST /v1/clause-categories/:categoryId": {
     type: "non-replay",
     reason: "current-state",
@@ -654,6 +671,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "POST /v1/organization-settings/deepl": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/local-runs": {
     type: "non-replay",
     reason: "current-state",
   },

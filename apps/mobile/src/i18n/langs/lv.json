@@ -242,7 +242,6 @@
     "headnote": "Kopsavilkums",
     "textUnavailable": "Šim nolēmumam teksts nav pieejams",
     "openSource": "Atvērt sākotnējo avotu",
-    "openFailed": "Saiti neizdevās atvērt.",
     "loadFailed": "Tiesu praksi neizdevās ielādēt.",
     "share": "Kopīgot"
   },
@@ -346,5 +345,19 @@
   "pane": {
     "showList": "Rādīt sarakstu",
     "hideList": "Paslēpt sarakstu"
+  },
+  "link": {
+    "open": "Atvērt",
+    "share": "Kopīgot",
+    "cancel": "Atcelt",
+    "openFailed": "Saiti neizdevās atvērt."
+  },
+  "share": {
+    "title": "Pievienot stellai",
+    "start": "Sākt",
+    "uploading": "Augšupielādē {done} no {total}…",
+    "filesOnly": "Tiek saglabāti tikai faili; saites un teksts tiek izlaisti.",
+    "unavailableTitle": "Nav ko pievienot",
+    "unavailable": "Šī kopīgotā satura vairs nav. Kopīgojiet to vēlreiz no otras lietotnes."
   }
 }

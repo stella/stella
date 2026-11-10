@@ -559,6 +559,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "owner/repo that filed feedback is posted to as an issue. Requires FEEDBACK_GITHUB_TOKEN; unset disables GitHub delivery.",
   FEEDBACK_GITHUB_TOKEN:
     "Token used to file feedback issues in FEEDBACK_GITHUB_REPO. Needs issue-write scope only; unset disables GitHub delivery.",
+  SKILL_IMPORT_GITHUB_TOKEN:
+    "GitHub token for skill sources a person links. Grant public repositories read-only and no other access; never reuse GITHUB_TOKEN. Unset sends these requests without a token.",
   FRONTEND_URL:
     "Web app origin used for absolute transactional-email links, document verification links, and trusted redirects.",
   APPLE_AUTH_CLIENT_ID:
@@ -918,6 +920,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEEDBACK_GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
   FRONTEND_URL: ENV_CREDENTIAL_KIND.notCredential,
   GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  SKILL_IMPORT_GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_CH: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_EU: ENV_CREDENTIAL_KIND.credential,
   APPLE_AUTH_CLIENT_ID: ENV_CREDENTIAL_KIND.notCredential,
@@ -1489,6 +1492,8 @@ export const TOOLING_ENV_KEYS = new Set([
 
   // Dated guard-rollout healing requests full scope before removing the temporary scope.
   "STELLA_GUARD_SCOPE",
+  // scripts/lint.ts prints the linter command instead of running it.
+  "STELLA_LINT_DRY_RUN",
   // Release-only secret: the short-lived federated Chrome Web Store access token.
   "CHROME_WEB_STORE_ACCESS_TOKEN",
   // The mobile app's Expo config reads its variant and signing from the build.
@@ -1497,11 +1502,14 @@ export const TOOLING_ENV_KEYS = new Set([
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
+  "MOBILE_SHARE_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
   // The fake harness CLIs log how they started and what they receive to the
   // file their tests name; the fake Codex app server also logs its CODEX_HOME.
   "FAKE_HARNESS_LOG",
   "CODEX_HOME",
+  // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
+  "FAKE_SKILL_PATH",
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
   "STAND_IN_DIR",
@@ -1596,6 +1604,9 @@ export const TOOLING_ENV_KEYS = new Set([
   // The release resolve job exports the network retry helper's path, staged
   // from the workflow's own revision, for its git fetches.
   "NETWORK_RETRY_SCRIPT",
+  // The promote names the repository whose deployment names the deploy
+  // contract check reads (scripts/check-deploy-env-contract.ts).
+  "DEPLOY_ENV_CONTRACT_INFRA_REPOSITORY",
   // The release rehearsal workflow provides its deployment-repository target.
   "STAGING_DEPLOY_REPOSITORY",
   // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):
@@ -1721,6 +1732,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_MAIN_REF",
   "JOURNEY_MCP_URL",
   "JOURNEY_NPM_REGISTRY_URL",
+  "JOURNEY_PROBE_RUN_SECONDS",
+  "JOURNEY_PROBE_SLOT",
+  "JOURNEY_PROBE_TIMEOUT_SECONDS",
   "JOURNEY_REGISTRY_TIMEOUT_MS",
   "JOURNEY_RELEASES_API_URL",
   "JOURNEY_RETRY_PAUSE_SECONDS",
@@ -1746,6 +1760,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MCP_CANARY_ENVIRONMENT",
   "MCP_CANARY_FRONTEND_URL",
   "MCP_CANARY_MODE",
+  "MCP_CANARY_RELEASE_LOAD",
   "MCP_CANARY_REQUIRE_CREDENTIALS",
   "MCP_CANARY_THIRD_PARTY_FETCHES",
   "MCP_CANARY_TOKEN",
@@ -1868,6 +1883,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
   // Private loopback endpoint passed to the isolated corpus-suite preload.
+  "STELLA_COLD_SEARCH_CONTAINER",
+  "STELLA_COLD_SEARCH_DROP_PAGE_CACHE",
+  "STELLA_COLD_SEARCH_MODE",
   "STELLA_CORPUS_ENGINE_TEST_ENDPOINT",
   "STELLA_DESKTOP_DOWNLOAD_BASE_URL",
   "STELLA_DESKTOP_NOW_EPOCH",

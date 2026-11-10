@@ -22,6 +22,7 @@ import {
   reviewDecisionProgress,
   reviewHistoryPresentation,
   reviewSkeletonCardCount,
+  withheldTextShare,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   ReviewRunHistoryEntry,
@@ -367,6 +368,7 @@ const cachedRun = (
     status: "completed",
     executor: "worker",
     errorCode: null,
+    withheldSources: [],
     entityId: toSafeId<"entity">("0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb0"),
     fileFieldId: toSafeId<"field">("0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb1"),
     entityVersionId: REVIEWED_VERSION_ID,
@@ -379,6 +381,7 @@ const cachedRun = (
         definitionSnapshot: {
           name: "Positions confirmed for this review",
           positions: { version: 3, items: [referencePosition()] },
+          scope: null,
         },
       },
       perspective: { type: "party", role: "Buyer", name: null },
@@ -401,6 +404,7 @@ const cachedRun = (
     ],
     total: findings.length,
     completed: findings.length,
+    fixesWithheld: 0,
     pipelineVersion: 2,
     createdAt: "2026-08-12T08:00:00.000Z",
     startedAt: "2026-08-12T08:00:01.000Z",
@@ -821,5 +825,20 @@ describe("the table-run notice", () => {
     expect(
       noticeFor([listedRun()], { ...COMPLETED_TABLE_RUN, executor: "worker" }),
     ).toEqual({ type: "none" });
+  });
+});
+
+describe("withheldTextShare", () => {
+  test("is null when a run read everything", () => {
+    expect(withheldTextShare([])).toBeNull();
+  });
+
+  test("weighs sources by their size", () => {
+    expect(
+      withheldTextShare([
+        { charactersWithheld: 10, charactersTotal: 100 },
+        { charactersWithheld: 30, charactersTotal: 100 },
+      ]),
+    ).toBe(0.2);
   });
 });

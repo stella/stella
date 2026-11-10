@@ -31,6 +31,18 @@
       }
     },
     {
+      "id": "anthropic/claude-fable-5.2",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-fable-5.2:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "anthropic/claude-fable-5:batch",
       "reasoning": {
         "default_effort": "high"
@@ -211,6 +223,12 @@
       }
     },
     {
+      "id": "deepseek/deepseek-v4.1-flash-1017:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "deepseek/deepseek-v4.1-flash:batch",
       "reasoning": {
         "default_effort": "high"
@@ -385,21 +403,9 @@
       }
     },
     {
-      "id": "inception/mercury-2",
+      "id": "meta/muse-ember",
       "reasoning": {
-        "default_effort": "medium"
-      }
-    },
-    {
-      "id": "inception/mercury-2.5",
-      "reasoning": {
-        "default_effort": "medium"
-      }
-    },
-    {
-      "id": "inception/mercury-3",
-      "reasoning": {
-        "default_effort": "medium"
+        "default_effort": "max"
       }
     },
     {
@@ -512,6 +518,12 @@
     },
     {
       "id": "nex-agi/nex-n2.5-pro",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "nex-agi/nex-n2.6",
       "reasoning": {
         "default_effort": "high"
       }
@@ -985,6 +997,12 @@
       }
     },
     {
+      "id": "qwen/qwen3.8-max-0902:batch",
+      "reasoning": {
+        "default_effort": "xhigh"
+      }
+    },
+    {
       "id": "qwen/qwen3.8-max-prime",
       "reasoning": {
         "default_effort": "xhigh"
@@ -1018,12 +1036,6 @@
       "id": "sakana/sakana-namazu",
       "reasoning": {
         "default_effort": "high"
-      }
-    },
-    {
-      "id": "stealth/crouton-alpha",
-      "reasoning": {
-        "default_effort": "max"
       }
     },
     {
@@ -1064,6 +1076,12 @@
     },
     {
       "id": "thinkingmachines/inkling",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "thinkingmachines/inkling-2-small:free",
       "reasoning": {
         "default_effort": "high"
       }
@@ -1142,6 +1160,12 @@
     },
     {
       "id": "z-ai/glm-5.2",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.2:batch",
       "reasoning": {
         "default_effort": "high"
       }

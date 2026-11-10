@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
+  CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
   CHAT_LOCAL_RUN_REFUSAL,
   type ChatRunTarget,
   chatRunTargetSchema,
@@ -15,7 +16,10 @@ import {
 } from "@stll/api-contract/desktop-runner";
 
 import { approvalDecisionOf } from "@/api/handlers/chat/local-run-chunks";
-import { resolveChatLocalRun } from "@/api/handlers/chat/local-run-plan";
+import {
+  resolveChatLocalRun,
+  type ResolveChatLocalRunOptions,
+} from "@/api/handlers/chat/local-run-plan";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   chatRunTargetOf,
@@ -27,7 +31,7 @@ import type {
   PickedDesktop,
 } from "@/api/lib/desktop-runner/control";
 import { createLocalRunBell } from "@/api/lib/desktop-runner/doorbell";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
@@ -115,6 +119,8 @@ const resolve = async ({
   granted = true,
   agentSandboxRequested = false,
   resumesPausedRun = false,
+  readApprovalCeiling = async () =>
+    await Promise.resolve(Result.ok(CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS)),
 }: {
   /** The send's target; a local one unless the case says otherwise. */
   runTarget?: ChatRunTarget | "none";
@@ -122,6 +128,7 @@ const resolve = async ({
   granted?: boolean;
   agentSandboxRequested?: boolean;
   resumesPausedRun?: boolean;
+  readApprovalCeiling?: ResolveChatLocalRunOptions["readApprovalCeiling"];
 } = {}) => {
   const { control, picks } = pickingControl(picked);
   const resolved = await resolveChatLocalRun({
@@ -133,6 +140,7 @@ const resolve = async ({
     organizationId: ORGANIZATION_ID,
     chatThreadId: THREAD_ID,
     workspaceIds: [],
+    readApprovalCeiling,
     runtime: { control, runBell: createLocalRunBell() },
   });
   return { resolved, picks };
@@ -145,7 +153,7 @@ const refusalCodeOf = (
     return null;
   }
   expect(HandlerError.is(resolved.error)).toBe(true);
-  return resolved.error.code;
+  return HandlerError.is(resolved.error) ? resolved.error.code : null;
 };
 
 describe("routing a chat turn to the member's computer", () => {
@@ -222,12 +230,32 @@ describe("routing a chat turn to the member's computer", () => {
     ]);
   });
 
-  test("a resumed turn answers its paused run wherever it is, without picking a computer", async () => {
+  test("a resumed turn answers its paused run wherever it is, without picking a computer or rereading the ceiling", async () => {
+    let ceilingReads = 0;
     const { resolved, picks } = await resolve({
       resumesPausedRun: true,
       picked: { type: "no_computer" },
+      runTarget: { ...LOCAL, approvals: "full_auto" },
+      readApprovalCeiling: async () => {
+        ceilingReads += 1;
+        return await Promise.resolve(Result.ok("ask"));
+      },
     });
     expect(resolved.isOk() && resolved.value?.harness).toBe("codex");
+    expect(picks).toEqual([]);
+    expect(ceilingReads).toBe(0);
+  });
+
+  test("a ceiling that cannot be read fails the send before any computer is picked", async () => {
+    const failure = new DatabaseError({
+      message: "settings unavailable",
+      cause: undefined,
+    });
+    const { resolved, picks } = await resolve({
+      readApprovalCeiling: async () =>
+        await Promise.resolve(Result.err(failure)),
+    });
+    expect(resolved.isErr() && resolved.error).toBe(failure);
     expect(picks).toEqual([]);
   });
 });

@@ -242,7 +242,6 @@
     "headnote": "Santrauka",
     "textUnavailable": "Šiam sprendimui teksto nėra",
     "openSource": "Atverti pirminį šaltinį",
-    "openFailed": "Nepavyko atidaryti nuorodos.",
     "loadFailed": "Nepavyko įkelti teismų praktikos.",
     "share": "Bendrinti"
   },
@@ -346,5 +345,19 @@
   "pane": {
     "showList": "Rodyti sąrašą",
     "hideList": "Slėpti sąrašą"
+  },
+  "link": {
+    "open": "Atidaryti",
+    "share": "Bendrinti",
+    "cancel": "Atšaukti",
+    "openFailed": "Nepavyko atidaryti nuorodos."
+  },
+  "share": {
+    "title": "Pridėti į stellą",
+    "start": "Pradėti",
+    "uploading": "Įkeliama {done} iš {total}…",
+    "filesOnly": "Išsaugomi tik failai; nuorodos ir tekstas praleidžiami.",
+    "unavailableTitle": "Nėra ką pridėti",
+    "unavailable": "Šio bendrinimo nebėra. Pabendrinkite dar kartą iš kitos programos."
   }
 }

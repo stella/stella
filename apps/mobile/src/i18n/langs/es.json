@@ -242,7 +242,6 @@
     "headnote": "Sumario",
     "textUnavailable": "No hay texto disponible para esta resolución",
     "openSource": "Abrir fuente original",
-    "openFailed": "No se pudo abrir el enlace.",
     "loadFailed": "No se pudo cargar la jurisprudencia.",
     "share": "Compartir"
   },
@@ -346,5 +345,19 @@
   "pane": {
     "showList": "Mostrar la lista",
     "hideList": "Ocultar la lista"
+  },
+  "link": {
+    "open": "Abrir",
+    "share": "Compartir",
+    "cancel": "Cancelar",
+    "openFailed": "No se pudo abrir el enlace."
+  },
+  "share": {
+    "title": "Añadir a stella",
+    "start": "Empezar",
+    "uploading": "Subiendo {done} de {total}…",
+    "filesOnly": "Solo se guardan los archivos; los enlaces y el texto se omiten.",
+    "unavailableTitle": "Nada que añadir",
+    "unavailable": "Este contenido compartido ya no está disponible. Vuelva a compartirlo desde la otra aplicación."
   }
 }

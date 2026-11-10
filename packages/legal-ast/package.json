@@ -111,6 +111,10 @@
       "types": "./src/closed-quotation-paragraphs.ts",
       "import": "./src/closed-quotation-paragraphs.ts"
     },
+    "./contents-entry": {
+      "types": "./src/contents-entry.ts",
+      "import": "./src/contents-entry.ts"
+    },
     "./court-paragraph-numbers": {
       "types": "./src/court-paragraph-numbers.ts",
       "import": "./src/court-paragraph-numbers.ts"
@@ -126,6 +130,18 @@
     "./line-wrap": {
       "types": "./src/line-wrap.ts",
       "import": "./src/line-wrap.ts"
+    },
+    "./printed-paragraph-labels": {
+      "types": "./src/printed-paragraph-labels.ts",
+      "import": "./src/printed-paragraph-labels.ts"
+    },
+    "./polish-document-roles": {
+      "types": "./src/polish-document-roles.ts",
+      "import": "./src/polish-document-roles.ts"
+    },
+    "./decision-role-grammar": {
+      "types": "./src/decision-role-grammar.ts",
+      "import": "./src/decision-role-grammar.ts"
     },
     "./provision-preview": {
       "types": "./src/provision-preview.ts",
@@ -189,8 +205,8 @@
     "test": "bun test src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/legal-ast",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-ast"
+    "lint": "cd ../.. && bun scripts/lint.ts packages/legal-ast",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/legal-ast"
   },
   "dependencies": {
     "@stll/agent-input": "workspace:*",

@@ -27,6 +27,16 @@ export const SOCIAL_LINK_HINT_PATH = "/social-link-hint";
 const isSocialLinkHintRequest = (requestUrl: URL | string): boolean =>
   new URL(requestUrl).pathname === `/api/auth${SOCIAL_LINK_HINT_PATH}`;
 
+const PASSWORD_SIGN_IN_PATH = "/api/auth/sign-in/email";
+
+// The password sign-in form shows its own message for refused credentials.
+const isPasswordSignInRefusal = (
+  error: AuthErrorValue,
+  requestUrl: URL | string,
+): boolean =>
+  error.code === "INVALID_EMAIL_OR_PASSWORD" &&
+  new URL(requestUrl).pathname === PASSWORD_SIGN_IN_PATH;
+
 // A refused code, a session that has ended and a code with a message of its own
 // each have an outcome in the web client. Any other server-declared auth code is
 // unexpected and must not disappear into the SDK's console-only error handling.
@@ -40,7 +50,8 @@ export const reportUnhandledAuthClientError = (
     isAuthClientErrorCode(error.code) ||
     isTypedCodeRefusal(error) ||
     isSessionRefusal(error) ||
-    isSocialLinkHintRequest(requestUrl)
+    isSocialLinkHintRequest(requestUrl) ||
+    isPasswordSignInRefusal(error, requestUrl)
   ) {
     return;
   }

@@ -1,6 +1,6 @@
 {
   "name": "@stll/html",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "String-only HTML parsing with Cheerio traversal",
   "keywords": [
     "cheerio",
@@ -41,8 +41,8 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/html",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/html",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/html",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/html",
     "prepack": "bun run build"
   },
   "devDependencies": {
@@ -54,7 +54,7 @@
   "dependencies": {
     "better-result": "catalog:",
     "cheerio": "^1.2.0",
-    "domhandler": "^6.0.1",
+    "domhandler": "^5.0.3",
     "parse5": "catalog:",
     "parse5-htmlparser2-tree-adapter": "catalog:"
   }

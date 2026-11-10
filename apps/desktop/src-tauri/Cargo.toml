@@ -87,6 +87,7 @@ tauri = { version = "2", features = [
 tauri-plugin-autostart = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-deep-link = "2"
+tauri-plugin-dialog = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
@@ -152,7 +153,7 @@ zeroize = "1"
 zip = { version = "9.0.0", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "=1.1.4", features = ["fs", "process"] }
+rustix = { version = "=1.1.6", features = ["fs", "process"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus-secret-service-keyring-store = { version = "1", features = [

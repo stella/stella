@@ -242,7 +242,6 @@
     "headnote": "Právní věta",
     "textUnavailable": "K tomuto rozhodnutí není k dispozici text",
     "openSource": "Otevřít originál",
-    "openFailed": "Odkaz se nepodařilo otevřít.",
     "loadFailed": "Judikaturu se nepodařilo načíst.",
     "share": "Sdílet"
   },
@@ -346,5 +345,19 @@
   "pane": {
     "showList": "Zobrazit seznam",
     "hideList": "Skrýt seznam"
+  },
+  "link": {
+    "open": "Otevřít",
+    "share": "Sdílet",
+    "cancel": "Zrušit",
+    "openFailed": "Odkaz se nepodařilo otevřít."
+  },
+  "share": {
+    "title": "Přidat do stelly",
+    "start": "Začít",
+    "uploading": "Nahrávám {done} z {total}…",
+    "filesOnly": "Uloží se jen soubory; odkazy a text se vynechají.",
+    "unavailableTitle": "Není co přidat",
+    "unavailable": "Tato sdílená položka už tu není. Sdílejte ji znovu z druhé aplikace."
   }
 }

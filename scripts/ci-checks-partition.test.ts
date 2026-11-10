@@ -1186,7 +1186,8 @@ const stepFieldsSchema = v.looseObject({
 });
 const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
-const baseSteps = legSteps(baseline, baselineIds).map((step) => {
+// Brings each recorded baseline step up to the current workflow shape.
+const currentBaselineStep = (step: ReturnType<typeof legSteps>[number]) => {
   const fields = stepFields(step);
   if (
     step.name === "Bridge-version guard" &&
@@ -1424,7 +1425,8 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
   });
   return Object.assign(step, { run: "bun run check:docs-sources" });
-});
+};
+const baseSteps = legSteps(baseline, baselineIds).map(currentBaselineStep);
 
 test("CI legs normalize only the complete canonical cancellation tail and its permission", () => {
   const guard = { name: "Guard", run: "bun check" };

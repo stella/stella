@@ -242,7 +242,6 @@
     "headnote": "Headnote",
     "textUnavailable": "No text is available for this decision",
     "openSource": "Open original source",
-    "openFailed": "The link could not be opened.",
     "loadFailed": "Case law could not be loaded.",
     "share": "Share"
   },
@@ -346,5 +345,19 @@
   "pane": {
     "showList": "Show the list",
     "hideList": "Hide the list"
+  },
+  "link": {
+    "open": "Open",
+    "share": "Share",
+    "cancel": "Cancel",
+    "openFailed": "The link could not be opened."
+  },
+  "share": {
+    "title": "Add to stella",
+    "start": "Start",
+    "uploading": "Uploading {done} of {total}…",
+    "filesOnly": "Only the files are saved; links and text are left out.",
+    "unavailableTitle": "Nothing to add",
+    "unavailable": "This share is no longer here. Share it again from the other app."
   }
 }

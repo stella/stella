@@ -30,16 +30,6 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createCopyToWorkspace } from "./copy";
 
-beforeEach(() => {
-  enqueueDocumentProcessingRunMock.mockClear();
-  enqueueEntitySearchRepairsMock.mockClear();
-  enqueueImageThumbnailOrMarkFailedMock.mockClear();
-  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
-  flushEntitySearchRepairsMock.mockClear();
-  requestNativeExtractionRunsMock.mockClear();
-  syncWorkspaceSearchActivityMock.mockClear();
-});
-
 // Every copy is a real server-side copy inside a real store, so the keys the
 // copy wrote and the keys a rollback returned are read back from it.
 const fileBytes = new TextEncoder().encode("file content");
@@ -215,6 +205,13 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+  syncWorkspaceSearchActivityMock.mockClear();
   analytics = installRecordingAnalytics();
   fake = startFakeS3();
   seedSourceObject(sourceFileId, sourceFileMimeType);
@@ -1363,6 +1360,13 @@ describe("copy-to-workspace", () => {
       },
       $count: async () => 0,
       select: (selection: unknown) => {
+        // The cell companions a move carries: none in this source.
+        if (
+          isRecord(selection) &&
+          ("metadata" in selection || "fileFieldIds" in selection)
+        ) {
+          return { from: () => ({ where: async () => [] }) };
+        }
         if (
           isRecord(selection) &&
           ("entityId" in selection || "entityVersionId" in selection)
@@ -1402,11 +1406,10 @@ describe("copy-to-workspace", () => {
             },
           };
         }
-        selectCallCount += 1;
-
         return {
-          from: (table: unknown) =>
-            table === entityVersions
+          from: (table: unknown) => {
+            selectCallCount += 1;
+            return table === entityVersions
               ? {
                   // The code carry reads the source rows FOR UPDATE.
                   where: () => ({
@@ -1430,7 +1433,8 @@ describe("copy-to-workspace", () => {
                     }
                     throw new Error("unexpected lookup");
                   },
-                },
+                };
+          },
         };
       },
       insert: (table: unknown) => ({

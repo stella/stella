@@ -22,6 +22,7 @@ import {
   deletePendingUploads,
   deletePersonalAiMemories,
   deletePersonalBillingRates,
+  deletePersonalRecords,
   deletePersonalWorkspaceViewTemplatesAndAgentSkills,
   deletePushDevices,
   deleteSearchHistory,
@@ -354,6 +355,7 @@ export const verifyAndDeleteUser = async (
           await deletePersonalBillingRates(tx, currentUserId);
           await deleteSearchHistory(tx, currentUserId);
           await deletePushDevices(tx, currentUserId);
+          await deletePersonalRecords(tx, currentUserId);
 
           await recordAccountDeletionRequest({
             tx,

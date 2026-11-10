@@ -242,7 +242,6 @@
     "headnote": "Teza",
     "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
     "openSource": "Otwórz źródło oryginalne",
-    "openFailed": "Nie udało się otworzyć linku.",
     "loadFailed": "Nie udało się wczytać orzecznictwa.",
     "share": "Udostępnij"
   },
@@ -346,5 +345,19 @@
   "pane": {
     "showList": "Pokaż listę",
     "hideList": "Ukryj listę"
+  },
+  "link": {
+    "open": "Otwórz",
+    "share": "Udostępnij",
+    "cancel": "Anuluj",
+    "openFailed": "Nie udało się otworzyć linku."
+  },
+  "share": {
+    "title": "Dodaj do stelli",
+    "start": "Rozpocznij",
+    "uploading": "Przesyłanie {done} z {total}…",
+    "filesOnly": "Zapisane zostaną tylko pliki; linki i tekst zostaną pominięte.",
+    "unavailableTitle": "Nie ma czego dodać",
+    "unavailable": "Ten udostępniony element już nie istnieje. Udostępnij go ponownie z innej aplikacji."
   }
 }

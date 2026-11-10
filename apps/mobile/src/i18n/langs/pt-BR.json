@@ -242,7 +242,6 @@
     "headnote": "Ementa",
     "textUnavailable": "Não há texto disponível para esta decisão",
     "openSource": "Abrir fonte original",
-    "openFailed": "Não foi possível abrir o link.",
     "loadFailed": "Não foi possível carregar a jurisprudência.",
     "share": "Compartilhar"
   },
@@ -346,5 +345,19 @@
   "pane": {
     "showList": "Mostrar a lista",
     "hideList": "Ocultar a lista"
+  },
+  "link": {
+    "open": "Abrir",
+    "share": "Compartilhar",
+    "cancel": "Cancelar",
+    "openFailed": "Não foi possível abrir o link."
+  },
+  "share": {
+    "title": "Adicionar ao stella",
+    "start": "Começar",
+    "uploading": "Enviando {done} de {total}…",
+    "filesOnly": "Somente os arquivos são salvos; links e texto ficam de fora.",
+    "unavailableTitle": "Nada para adicionar",
+    "unavailable": "Este compartilhamento não está mais disponível. Compartilhe de novo pelo outro aplicativo."
   }
 }

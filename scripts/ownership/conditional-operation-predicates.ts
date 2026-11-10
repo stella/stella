@@ -14,6 +14,7 @@ export default {
     "apps/api/src/handlers/document-reviews/prepare-proposal.ts",
     "apps/api/src/handlers/document-translations/runs/create.ts",
     "apps/api/src/handlers/flows/runs/start.ts",
+    "apps/api/src/handlers/lists/fact-extractions/create.ts",
     "apps/api/src/handlers/lists/verifications/create.ts",
     "apps/api/src/handlers/reports/report-export-queue.ts",
     "apps/api/src/handlers/templates/condition-decisions/get.ts",

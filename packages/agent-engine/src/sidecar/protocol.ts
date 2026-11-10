@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import { CHAT_LOCAL_RUN_TOOL_LIMITS } from "@stll/api-contract/chat-local-run-tool";
 import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
@@ -48,11 +49,14 @@ import {
  *   `rejected` message naming why.
  * - Run ids, approval request ids, decisions, outcomes and policies use the
  *   desktop runner protocol's vocabulary, so the host relays them unchanged.
+ * - `folder.restore` puts a run's folder back as its checkpoint saved it
+ *   (`checkpoints.ts`) and is answered by one `folder.restored`. It is not a
+ *   run message: it is not numbered and goes to the current connection only.
  *
  * `protocol.fixtures.json` holds valid and rejected examples of every message;
  * the desktop's serde types round-trip the same file.
  */
-export const SIDECAR_PROTOCOL = 3;
+export const SIDECAR_PROTOCOL = 4;
 
 /**
  * Largest line either side writes or accepts, in UTF-8 bytes. A `run.start`
@@ -72,6 +76,7 @@ export const SIDECAR_HOST_MESSAGE = {
   ack: "ack",
   resume: "resume",
   harnessProcessGranted: "harness.process_granted",
+  folderRestore: "folder.restore",
   drain: "drain",
   shutdown: "shutdown",
 } as const;
@@ -83,6 +88,7 @@ export const SIDECAR_MESSAGE = {
   runEvent: "run.event",
   runApprovalRequest: "run.approval_request",
   runFinished: "run.finished",
+  folderRestored: "folder.restored",
   rejected: "rejected",
 } as const;
 
@@ -109,9 +115,30 @@ export const SIDECAR_PROBE_FAILURES = [
   "unsupported",
 ] as const;
 
+/**
+ * How a folder restore ended: done, no checkpoint for the run, a newer
+ * checkpoint not undone yet, a run using the folder, or a failure that left
+ * the folder as it was before the restore.
+ */
+export const SIDECAR_RESTORE_OUTCOMES = [
+  "restored",
+  "no_checkpoint",
+  "not_newest",
+  "folder_busy",
+  "failed",
+] as const;
+export type SidecarRestoreOutcome = (typeof SIDECAR_RESTORE_OUTCOMES)[number];
+
 /** Whether a holder takes new runs or only finishes the ones it holds. */
 export const SIDECAR_HOLDER_MODES = ["serving", "draining"] as const;
 export type SidecarHolderMode = (typeof SIDECAR_HOLDER_MODES)[number];
+
+/**
+ * Beside a run's folder, the sidecar keeps its checkpoints under the folder's
+ * name with this suffix (`checkpoints.ts`); the desktop removes them with the
+ * folder.
+ */
+export const SIDECAR_CHECKPOINT_STORE_SUFFIX = ".checkpoints";
 
 /** Runs one `hello` may resume or list. */
 export const SIDECAR_MAX_HELD_RUNS = 1000;
@@ -122,6 +149,8 @@ const SIDECAR_SECRET_HEX_LENGTH = 64;
 const MAX_MESSAGE_TYPE_LENGTH = 64;
 const MAX_MODELS = 100;
 const MAX_RUN_MESSAGES = 1000;
+const MAX_RUN_SKILL_FOLDERS = 32;
+const MAX_RUN_TOOL_DIRECTORIES = 8;
 const MAX_LAUNCH_ENTRIES = 32;
 /** Process ids are unsigned 32-bit on every platform the desktop runs on. */
 const MAX_PID = 4_294_967_295;
@@ -294,6 +323,24 @@ export const sidecarHostMessageSchema = v.variant("type", [
       v.array(desktopRunnerAttachmentSchema),
       v.maxLength(MAX_RUN_ATTACHMENTS),
     ),
+    /**
+     * The skill folders the member listed on this computer. The desktop adds
+     * them to a run the API started, and never tells the API about them.
+     */
+    skillFolders: v.pipe(
+      v.array(
+        v.object({
+          name: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+          path: absolutePathSchema,
+        }),
+      ),
+      v.maxLength(MAX_RUN_SKILL_FOLDERS),
+    ),
+    /** Directories of managed tools, put first on the harness's `PATH`. */
+    toolPath: v.pipe(
+      v.array(absolutePathSchema),
+      v.maxLength(MAX_RUN_TOOL_DIRECTORIES),
+    ),
     /** The native session to resume; `null` starts fresh. */
     harnessSessionId: v.nullable(
       v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
@@ -361,6 +408,16 @@ export const sidecarHostMessageSchema = v.variant("type", [
     type: v.literal(SIDECAR_HOST_MESSAGE.harnessProcessGranted),
     id: requestIdSchema,
   }),
+  /**
+   * Put the run's folder back as it was before the run, from the checkpoint
+   * the run took. Refused while any run uses the folder.
+   */
+  v.object({
+    type: v.literal(SIDECAR_HOST_MESSAGE.folderRestore),
+    requestId: requestIdSchema,
+    workspaceDir: absolutePathSchema,
+    runId: runIdSchema,
+  }),
   /** Take no new runs; exit once every held run is finished and acked. */
   v.object({ type: v.literal(SIDECAR_HOST_MESSAGE.drain) }),
   /** Stop every run and exit. */
@@ -371,6 +428,10 @@ export type SidecarHostHello = Extract<SidecarHostMessage, { type: "hello" }>;
 export type SidecarRunStart = Extract<
   SidecarHostMessage,
   { type: "run.start" }
+>;
+export type SidecarFolderRestore = Extract<
+  SidecarHostMessage,
+  { type: "folder.restore" }
 >;
 
 const probeOutcomeSchema = v.variant("type", [
@@ -461,7 +522,12 @@ export const sidecarMessageSchema = v.variant("type", [
     seq: seqSchema,
     requestId: requestIdSchema,
     kind: v.picklist(DESKTOP_RUNNER_APPROVAL_KINDS),
-    summary: v.pipe(v.string(), v.minLength(1), v.maxLength(4000)),
+    /** `chatLocalRunApprovalMessage`, as the runner protocol bounds it. */
+    summary: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(CHAT_LOCAL_RUN_TOOL_LIMITS.approval),
+    ),
   }),
   /** The run's last message; every accepted `run.start` ends with one. */
   v.object({
@@ -472,6 +538,12 @@ export const sidecarMessageSchema = v.variant("type", [
     harnessSessionId: v.nullable(
       v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
     ),
+  }),
+  /** The answer to `folder.restore`; it names no file. */
+  v.object({
+    type: v.literal(SIDECAR_MESSAGE.folderRestored),
+    requestId: requestIdSchema,
+    outcome: v.picklist(SIDECAR_RESTORE_OUTCOMES),
   }),
   v.object({
     type: v.literal(SIDECAR_MESSAGE.rejected),
@@ -505,6 +577,8 @@ export type SidecarHostLine =
         "too_large" | "not_json" | "unknown_type" | "invalid"
       >;
       messageType: string | null;
+      /** The run a known message was for, when it named one validly. */
+      runId?: string | null;
     };
 
 const HOST_MESSAGE_TYPES: ReadonlySet<string> = new Set(
@@ -544,9 +618,17 @@ export const parseSidecarHostLine = (line: string): SidecarHostLine => {
     return { type: "rejected", reason: "unknown_type", messageType };
   }
   const parsed = v.safeParse(sidecarHostMessageSchema, json.value);
-  return parsed.success
-    ? { type: "message", message: parsed.output }
-    : { type: "rejected", reason: "invalid", messageType };
+  if (parsed.success) {
+    return { type: "message", message: parsed.output };
+  }
+  // The run the line was for, so the host can end it instead of waiting.
+  const run = v.safeParse(v.object({ runId: runIdSchema }), json.value);
+  return {
+    type: "rejected",
+    reason: "invalid",
+    messageType,
+    runId: run.success ? run.output.runId : null,
+  };
 };
 
 /**

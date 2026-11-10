@@ -7,11 +7,18 @@ import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
+  renameSync,
   rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -22,8 +29,10 @@ import {
   FAKE_CLAUDE_CONTEXT_WINDOW,
   FAKE_CLAUDE_VERSION,
   FAKE_ESCAPE_COMMAND,
+  FAKE_LONG_COMMAND,
   FAKE_MCP_CALL,
   FAKE_PERMISSION_SUGGESTION,
+  FAKE_PRIVATE_TEXT,
   FAKE_RESUMED_SESSION_ID,
   FAKE_SANDBOX_HOST,
   FAKE_SANDBOX_REFUSAL,
@@ -95,6 +104,7 @@ const LogEntrySchema = v.looseObject({
     v.object({
       args: v.array(v.string()),
       cwd: v.string(),
+      path: v.optional(v.string()),
       env: v.record(v.string(), v.string()),
     }),
   ),
@@ -105,7 +115,12 @@ const harnessFor = (
   {
     platform = "darwin",
     requestTimeoutMs = 10_000,
-  }: { platform?: NodeJS.Platform; requestTimeoutMs?: number } = {},
+    environment = {},
+  }: {
+    platform?: NodeJS.Platform;
+    requestTimeoutMs?: number;
+    environment?: Readonly<Record<string, string>>;
+  } = {},
 ) => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-claude-adapter-"));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
@@ -119,6 +134,7 @@ const harnessFor = (
     claudeConfigDir,
     environment: {
       ...STRAY_ENVIRONMENT,
+      ...environment,
       FAKE_HARNESS_LOG: logPath,
       PATH: process.env["PATH"] ?? "",
     },
@@ -173,6 +189,12 @@ const transcript: ModelMessage[] = [
   { role: "user", content: "Search both." },
 ];
 
+/** An image and a PDF, as the sidecar reads them from the run's folder. */
+const INPUT_FILES: HarnessTurnInput["inputFiles"] = [
+  { type: "image", mediaType: "image/png", base64: "iVBORw0K" },
+  { type: "pdf", base64: "JVBERi0x" },
+];
+
 const turnInput = (
   workspaceDir: string,
   overrides: Partial<HarnessTurnInput> = {},
@@ -189,8 +211,11 @@ const turnInput = (
     token: MCP_TOKEN,
   },
   transcript,
+  inputFiles: [],
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
+  skillFolders: [],
+  toolPath: [],
   ...overrides,
 });
 
@@ -243,6 +268,7 @@ const storedMessages = async (
     model: "test-model",
     runId: "run-1",
     threadId: "stella-thread-1",
+    workspaceDir: "/workspace",
     generateId: () => `id-${String((next += 1))}`,
     now: () => 0,
   })) {
@@ -410,11 +436,9 @@ describe("Claude Code adapter over stream-json stdio", () => {
           name: "command_execution",
           input: { command: "ls" },
         },
+        // The command's output stays on the computer.
         result: {
-          content: JSON.stringify({
-            aggregated_output: "notes.md\n",
-            status: "completed",
-          }),
+          content: JSON.stringify({ status: "completed" }),
           status: "succeeded",
         },
       },
@@ -466,7 +490,10 @@ describe("Claude Code adapter over stream-json stdio", () => {
       },
       {
         name: "harness_native_tool",
-        input: { tool: "Read" },
+        input: {
+          tool: "Read",
+          detail: { kind: "read", path: "/workspace/notes.md" },
+        },
         status: "succeeded",
       },
       {
@@ -501,6 +528,107 @@ describe("Claude Code adapter over stream-json stdio", () => {
       expect(stored).not.toContain(native);
     }
     expect(terminal(events)).toEqual({ type: "turn.completed", usage: null });
+  });
+
+  test("a built-in tool's call shows its command, file names, search or plan, and never the text it carries", async () => {
+    const { events } = await run("native_tools");
+    const stored = await storedMessages(events, "claude-code");
+    const calls = stored
+      .flatMap(({ parts }) => parts)
+      .flatMap((part) =>
+        part.type === "tool-call"
+          ? [{ name: part.name, input: part.input }]
+          : [],
+      );
+    expect(calls).toEqual([
+      // A heredoc shows the line that runs it, never the lines it writes.
+      {
+        name: "command_execution",
+        input: { command: "cat > notes.md <<'EOF'…" },
+      },
+      {
+        name: "command_execution",
+        input: { command: `${FAKE_LONG_COMMAND.slice(0, 299)}…` },
+      },
+      // Inside the run's folder a file is named relative to it.
+      {
+        name: "file_change",
+        input: { changes: [{ path: "drafts/lease.md", kind: "update" }] },
+      },
+      {
+        name: "file_change",
+        input: { changes: [{ path: "drafts/lease.md", kind: "update" }] },
+      },
+      {
+        name: "file_change",
+        input: { changes: [{ path: "/elsewhere/out.md", kind: "update" }] },
+      },
+      {
+        name: "file_change",
+        input: { changes: [{ path: "analysis.ipynb", kind: "update" }] },
+      },
+      {
+        name: "harness_native_tool",
+        input: {
+          tool: "Read",
+          detail: { kind: "read", path: "drafts/lease.md" },
+        },
+      },
+      {
+        name: "harness_native_tool",
+        input: {
+          tool: "Grep",
+          detail: { kind: "search", pattern: "termination", path: "drafts" },
+        },
+      },
+      {
+        name: "harness_native_tool",
+        input: { tool: "Glob", detail: { kind: "search", pattern: "**/*.md" } },
+      },
+      { name: "harness_web_search", input: { query: "civil code lease" } },
+      {
+        name: "harness_native_tool",
+        input: {
+          tool: "WebFetch",
+          detail: { kind: "fetch", url: "https://example.test/civil-code" },
+        },
+      },
+      {
+        name: "harness_native_tool",
+        input: {
+          tool: "TodoWrite",
+          detail: {
+            kind: "plan",
+            items: ["Read the lease", "Draft the notice"],
+          },
+        },
+      },
+      // Any other tool shows its name only.
+      { name: "harness_native_tool", input: { tool: "Task" } },
+    ]);
+    // Nothing a call carried beyond those fields is stored, in its input or
+    // its raw arguments.
+    const callText = JSON.stringify(
+      stored
+        .flatMap(({ parts }) => parts)
+        .filter((part) => part.type === "tool-call"),
+    );
+    for (const text of Object.values(FAKE_PRIVATE_TEXT)) {
+      expect(callText).not.toContain(text);
+    }
+    expect(callText).not.toContain("y".repeat(300));
+    // A result says how the step ended, never what the tool returned.
+    const storedText = JSON.stringify(stored);
+    for (const returned of [
+      "1→lease",
+      "lease.md: termination",
+      "A page.",
+      "Applied 1 edit.",
+      "Web search results",
+    ]) {
+      expect(storedText).not.toContain(returned);
+    }
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
   });
 
   test("approvals offer the native decisions and reply with the chosen one", async () => {
@@ -765,6 +893,42 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
+  test("the turn's images and PDFs open its user message as blocks the CLI accepts", async () => {
+    const { events, received } = await run("stella_tools", {
+      overrides: { inputFiles: INPUT_FILES },
+    });
+    // The fake ends with code 96 on content the Messages API would refuse.
+    expect(terminal(events)?.type).toBe("turn.completed");
+    expect(
+      received()
+        .filter(({ type }) => type === "user")
+        .map(({ message }) => message),
+    ).toEqual([
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: "image/png",
+              data: "iVBORw0K",
+            },
+          },
+          {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: "JVBERi0x",
+            },
+          },
+          { type: "text", text: expect.stringContaining("Search both.") },
+        ],
+      },
+    ]);
+  });
+
   test("a resumed session gets only the new message", async () => {
     const { events, startups, received } = await run("resume_ok", {
       overrides: {
@@ -912,7 +1076,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
           inputModalities: ["text"],
         },
       ],
-      capabilities: ["approvals", "interrupt", "resume"],
+      capabilities: ["approvals", "interrupt", "resume", "image_input"],
       approvalModes: ["ask", "auto", "full_auto"],
       // The exhausted model-specific window does not count.
       usageLimit: { resetsAt: "2099-10-28T14:00:00Z" },
@@ -1154,5 +1318,369 @@ describe("Claude Code approval modes", () => {
       );
       expect(existsSync(unsandboxed.logPath)).toBe(false);
     }
+  });
+});
+
+describe("Claude Code managed tools", () => {
+  const toolDir = path.join(tmpdir(), "stella-managed-bun", "bin");
+
+  test("a managed tool comes first on the CLI's PATH and the inherited PATH stays", async () => {
+    const { startups } = await run("tool_calls", {
+      overrides: { toolPath: [toolDir] },
+    });
+    expect(startups()[0]?.path).toBe(
+      `${toolDir}${path.delimiter}${process.env["PATH"] ?? ""}`,
+    );
+  });
+
+  test("without a managed tool the inherited PATH is untouched", async () => {
+    const { startups } = await run("tool_calls");
+    expect(startups()[0]?.path).toBe(process.env["PATH"]);
+  });
+});
+
+describe("Claude Code skill folders", () => {
+  const valueOf = (args: readonly string[], flag: string) =>
+    args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined;
+
+  /** A real skill folder, outside the harness's own directories. */
+  const skillFolder = (name: string) => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-skill-folder-"));
+    cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+    const folder = path.join(root, name);
+    mkdirSync(path.join(folder, "scripts"), { recursive: true });
+    writeFileSync(
+      path.join(folder, "SKILL.md"),
+      `---\nname: ${name}\ndescription: An invented skill.\n---\nBody.\n`,
+    );
+    writeFileSync(path.join(folder, "scripts", "run.ts"), "export {};\n");
+    return { name, path: folder };
+  };
+
+  const contentsOf = (folder: string) =>
+    readdirSync(folder, { recursive: true, encoding: "utf-8" }).toSorted();
+
+  /** The CLI's arguments for a turn, and its plugin as the CLI finds it. */
+  const startedWith = async (
+    skillFolders: HarnessTurnInput["skillFolders"],
+    approvals: HarnessTurnInput["policy"]["approvals"] = "ask",
+  ) => {
+    const harness = harnessFor("tool_calls");
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, {
+        skillFolders,
+        policy: { network: "open", fs: "workspace", approvals },
+      }),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const turn = started.value;
+    const finished = async () => {
+      for await (const _event of turn.events) {
+        // Drained: the turn ends after its terminal event.
+      }
+      await turn.dispose();
+    };
+    return {
+      ...harness,
+      args: harness.startups()[0]?.args ?? [],
+      finished,
+    };
+  };
+
+  test("a listed folder loads through a plugin stella owns, with the harness's isolation kept", async () => {
+    const skill = skillFolder("fixture-skill");
+    const before = contentsOf(skill.path);
+    const { args, claudeConfigDir, finished } = await startedWith([skill]);
+
+    const plugin = valueOf(args, "--plugin-dir") ?? "";
+    expect(path.dirname(path.dirname(plugin))).toBe(claudeConfigDir);
+    const link = path.join(plugin, "skills", skill.name);
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(link)).toBe(skill.path);
+    expect(
+      JSON.parse(
+        readFileSync(
+          path.join(plugin, ".claude-plugin", "plugin.json"),
+          "utf-8",
+        ),
+      ),
+    ).toEqual({ name: "local-skills" });
+
+    // The harness's isolation is untouched by a skill, and the folder is not
+    // made a working directory, which `acceptEdits` would then write to.
+    expect(valueOf(args, "--setting-sources")).toBe("");
+    expect(args).toContain("--strict-mcp-config");
+    expect(args).not.toContain("--add-dir");
+
+    await finished();
+    expect(existsSync(plugin)).toBe(false);
+    expect(contentsOf(skill.path)).toEqual(before);
+  });
+
+  test("a turn without skill folders has no plugin and no extra settings", async () => {
+    const { args, claudeConfigDir, finished } = await startedWith([]);
+    expect(args).not.toContain("--plugin-dir");
+    expect(args).not.toContain("--settings");
+    expect(existsSync(path.join(claudeConfigDir, "stella-skill-plugins"))).toBe(
+      false,
+    );
+    await finished();
+  });
+
+  test("a folder that vanished, holds no SKILL.md or is a link is left out and the turn still runs", async () => {
+    const good = skillFolder("good-skill");
+    const vanished = skillFolder("vanished-skill");
+    rmSync(vanished.path, { recursive: true });
+    const empty = skillFolder("empty-skill");
+    rmSync(path.join(empty.path, "SKILL.md"));
+    const target = skillFolder("linked-skill");
+    const linkedFolder = {
+      name: "linked-folder",
+      path: `${target.path}-link`,
+    };
+    symlinkSync(target.path, linkedFolder.path);
+    cleanups.push(() => rmSync(linkedFolder.path, { force: true }));
+    const linkedFile = skillFolder("linked-file");
+    rmSync(path.join(linkedFile.path, "SKILL.md"));
+    symlinkSync(
+      path.join(target.path, "SKILL.md"),
+      path.join(linkedFile.path, "SKILL.md"),
+    );
+
+    const { args, finished } = await startedWith([
+      vanished,
+      empty,
+      linkedFolder,
+      linkedFile,
+      good,
+    ]);
+    const plugin = valueOf(args, "--plugin-dir") ?? "";
+    expect(readdirSync(path.join(plugin, "skills"))).toEqual([good.name]);
+    await finished();
+  });
+
+  test("a skill renamed since the desktop listed it, or whose header never closes, is left out", async () => {
+    const good = skillFolder("good-skill");
+    const renamed = skillFolder("listed-skill");
+    writeFileSync(
+      path.join(renamed.path, "SKILL.md"),
+      "---\nname: another-skill\n---\nBody.\n",
+    );
+    const unclosed = skillFolder("unclosed-skill");
+    writeFileSync(
+      path.join(unclosed.path, "SKILL.md"),
+      "---\nname: unclosed-skill\nBody.\n",
+    );
+    const { args, finished } = await startedWith([renamed, unclosed, good]);
+    const plugin = valueOf(args, "--plugin-dir") ?? "";
+    expect(readdirSync(path.join(plugin, "skills"))).toEqual([good.name]);
+    await finished();
+  });
+
+  test("when no folder is usable the turn runs without a plugin", async () => {
+    const vanished = skillFolder("vanished-skill");
+    rmSync(vanished.path, { recursive: true });
+    const { args, finished } = await startedWith([vanished]);
+    expect(args).not.toContain("--plugin-dir");
+    expect(args).not.toContain("--settings");
+    await finished();
+  });
+
+  test("a name that would leave the plugin's folder, or repeats one, is not linked", async () => {
+    const skill = skillFolder("fixture-skill");
+    const other = skillFolder("other-skill");
+    const { args, finished } = await startedWith([
+      { name: "../escape", path: other.path },
+      skill,
+      { name: skill.name, path: other.path },
+    ]);
+    const plugin = valueOf(args, "--plugin-dir") ?? "";
+    expect(readdirSync(path.join(plugin, "skills"))).toEqual([skill.name]);
+    expect(readlinkSync(path.join(plugin, "skills", skill.name))).toBe(
+      skill.path,
+    );
+    await finished();
+  });
+
+  test.each(["ask", "auto"] as const)(
+    "in %s the folder reads without asking and never takes an edit",
+    async (approvals) => {
+      const skill = skillFolder("fixture-skill");
+      const { args, finished } = await startedWith([skill], approvals);
+      const plugin = valueOf(args, "--plugin-dir") ?? "";
+      expect(JSON.parse(valueOf(args, "--settings") ?? "null")).toEqual({
+        permissions: {
+          allow: [`Read(/${plugin}/**)`, `Read(/${skill.path}/**)`],
+          deny: [`Edit(/${plugin}/**)`, `Edit(/${skill.path}/**)`],
+        },
+      });
+      await finished();
+    },
+  );
+
+  test("in full auto the sandbox keeps writes to the cache and refuses the folder", async () => {
+    const skill = skillFolder("fixture-skill");
+    const { args, finished } = await startedWith([skill], "full_auto");
+    const plugin = valueOf(args, "--plugin-dir") ?? "";
+    expect(JSON.parse(valueOf(args, "--settings") ?? "null")).toEqual({
+      sandbox: {
+        enabled: true,
+        failIfUnavailable: true,
+        autoAllowBashIfSandboxed: true,
+        allowUnsandboxedCommands: true,
+        filesystem: { allowWrite: [CACHE_DIR], denyWrite: [skill.path] },
+      },
+      permissions: {
+        allow: [`Read(/${plugin}/**)`, `Read(/${skill.path}/**)`],
+        deny: [`Edit(/${plugin}/**)`, `Edit(/${skill.path}/**)`],
+      },
+    });
+    await finished();
+  });
+
+  test("rules name a path's special characters literally", async () => {
+    const skill = skillFolder("fixture-skill");
+    const odd = `${skill.path} (copy) [1]`;
+    renameSync(skill.path, odd);
+    cleanups.push(() => rmSync(odd, { recursive: true, force: true }));
+    const { args, finished } = await startedWith([
+      { name: skill.name, path: odd },
+    ]);
+    const rules = JSON.parse(valueOf(args, "--settings") ?? "null").permissions;
+    expect(rules.allow[1]).toEndWith(String.raw` \(copy\) \[1\]/**)`);
+    await finished();
+  });
+
+  test("a document folder's own settings and skills are never asked for", async () => {
+    const harness = harnessFor("tool_calls");
+    const planted = path.join(
+      harness.workspaceDir,
+      ".claude",
+      "skills",
+      "planted",
+    );
+    mkdirSync(planted, { recursive: true });
+    writeFileSync(
+      path.join(planted, "SKILL.md"),
+      "---\nname: planted\ndescription: x\n---\nx\n",
+    );
+    writeFileSync(
+      path.join(harness.workspaceDir, ".claude", "settings.json"),
+      '{"permissions":{"allow":["Bash(*)"]}}',
+    );
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const args = harness.startups()[0]?.args ?? [];
+    expect(valueOf(args, "--setting-sources")).toBe("");
+    expect(args).toContain("--strict-mcp-config");
+    expect(args).not.toContain("--plugin-dir");
+    expect(JSON.stringify(args)).not.toContain(harness.workspaceDir);
+    for await (const _event of started.value.events) {
+      // Drained.
+    }
+    await started.value.dispose();
+  });
+
+  test("a read and a command on a skill reach stella by name and status, an unrelated call unchanged", async () => {
+    const skill = skillFolder("fixture-skill");
+    const harness = harnessFor("reads_skill", {
+      environment: { FAKE_SKILL_PATH: skill.path },
+    });
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, { skillFolders: [skill] }),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of started.value.events) {
+      events.push(event);
+    }
+    await started.value.dispose();
+
+    expect(JSON.stringify(events)).not.toContain(skill.path);
+    expect(JSON.stringify(events)).not.toContain("Licensed");
+    expect(toolCompletions(events)).toEqual([
+      expect.objectContaining({
+        toolCall: expect.objectContaining({
+          input: {
+            tool: "Read",
+            detail: { kind: "read", path: `<skill:${skill.name}>/SKILL.md` },
+          },
+        }),
+        result: {
+          content: JSON.stringify({ status: "completed" }),
+          status: "succeeded",
+        },
+      }),
+      expect.objectContaining({
+        toolCall: expect.objectContaining({
+          input: { command: `bun <skill:${skill.name}>/scripts/run.ts` },
+        }),
+        result: {
+          content: JSON.stringify({ status: "completed" }),
+          status: "succeeded",
+        },
+      }),
+      expect.objectContaining({
+        toolCall: expect.objectContaining({ input: { command: "ls" } }),
+        // The command's output stays on the computer.
+        result: {
+          content: JSON.stringify({ status: "completed" }),
+          status: "succeeded",
+        },
+      }),
+    ]);
+  });
+
+  test("a turn whose plugin cannot be written does not start the CLI", async () => {
+    const skill = skillFolder("fixture-skill");
+    const harness = harnessFor("tool_calls");
+    writeFileSync(
+      path.join(harness.claudeConfigDir, "stella-skill-plugins"),
+      "in the way",
+    );
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, { skillFolders: [skill] }),
+    );
+    expect(Result.isError(started) && started.error.reason).toBe(
+      "start_rejected",
+    );
+    expect(existsSync(harness.logPath)).toBe(false);
+  });
+
+  test("a plugin a dead holder left behind is removed without touching the folder it links to", async () => {
+    const skill = skillFolder("fixture-skill");
+    const left = skillFolder("left-skill");
+    const before = contentsOf(left.path);
+    const harness = harnessFor("tool_calls");
+    const stale = path.join(
+      harness.claudeConfigDir,
+      "stella-skill-plugins",
+      "left-behind",
+    );
+    mkdirSync(path.join(stale, "skills"), { recursive: true });
+    symlinkSync(left.path, path.join(stale, "skills", left.name));
+    const longAgo = new Date(0);
+    utimesSync(stale, longAgo, longAgo);
+
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, { skillFolders: [skill] }),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    expect(existsSync(stale)).toBe(false);
+    expect(contentsOf(left.path)).toEqual(before);
+    for await (const _event of started.value.events) {
+      // Drained.
+    }
+    await started.value.dispose();
   });
 });

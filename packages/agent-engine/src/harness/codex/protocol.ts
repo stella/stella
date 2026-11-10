@@ -57,6 +57,26 @@ export const ThreadResponseSchema = v.object({
   thread: v.object({ id: v.string() }),
 });
 
+/** The skills the app server found per working directory. */
+export const SkillsListResponseSchema = v.object({
+  data: v.array(
+    v.object({
+      /** The working directory this entry lists skills for. */
+      cwd: v.string(),
+      /** Skills discovery could not read, so it could not list them either. */
+      errors: v.array(v.unknown()),
+      skills: v.array(
+        v.object({
+          /** The `SKILL.md`, as `skills.config` names it. */
+          path: v.string(),
+          /** `system` is one Codex installs with itself. */
+          scope: v.string(),
+        }),
+      ),
+    }),
+  ),
+});
+
 const TurnStatusSchema = v.picklist([
   "completed",
   "interrupted",
@@ -224,6 +244,12 @@ export const CODEX_NOTIFICATIONS = {
       modelContextWindow: v.nullish(v.number()),
     }),
   }),
+  /** The harness's working plan changed; only step titles are shown. */
+  "turn/plan/updated": v.object({
+    threadId: v.string(),
+    turnId: v.string(),
+    plan: v.array(v.object({ step: v.string() })),
+  }),
   "serverRequest/resolved": v.object({
     threadId: v.string(),
     requestId: RequestId,
@@ -241,6 +267,10 @@ export const CODEX_NOTIFICATIONS = {
   }),
 } as const;
 export type CodexNotificationMethod = keyof typeof CODEX_NOTIFICATIONS;
+
+export type CodexPlanUpdate = v.InferOutput<
+  (typeof CODEX_NOTIFICATIONS)["turn/plan/updated"]
+>;
 
 export type CodexRateLimits = v.InferOutput<
   (typeof CODEX_NOTIFICATIONS)["account/rateLimits/updated"]

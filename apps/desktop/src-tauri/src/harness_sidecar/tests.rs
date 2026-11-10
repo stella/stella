@@ -199,6 +199,8 @@ fn run_start(model: &str) -> SidecarRunStart {
         .clone(),
     ],
     attachments: Vec::new(),
+    skill_folders: Vec::new(),
+    tool_path: Vec::new(),
     harness_session_id: None,
     policy: RunPolicy {
       network: NetworkPolicy::Open,
@@ -687,6 +689,38 @@ fn a_holder_that_dies_fails_its_runs_and_the_next_run_starts_a_new_one() {
     sidecar.shutdown().await;
   });
   assert_eq!(fixture.starts(), 2, "a new holder was started");
+}
+
+#[test]
+fn a_run_start_the_holder_finds_invalid_fails_that_run_and_no_other() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut running = sidecar.start_run(run_start("wait")).unwrap();
+    let _first = next(&mut running).await;
+    let mut refused = sidecar.start_run(run_start("refuse-invalid")).unwrap();
+    assert_eq!(finish(&mut refused).await, vec![ended(RunOutcome::Failed)]);
+    let mut after = sidecar.start_run(run_start("gpt-test")).unwrap();
+    assert!(matches!(
+      finish(&mut after).await.last(),
+      Some(SidecarRunOutput::Finished {
+        outcome: RunOutcome::Completed,
+        ..
+      })
+    ));
+    sidecar.shutdown().await;
+  });
+}
+
+#[test]
+fn a_run_start_the_holder_refuses_without_naming_it_still_ends_the_run() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut refused = sidecar.start_run(run_start("refuse-unnamed")).unwrap();
+    assert_eq!(finish(&mut refused).await, vec![ended(RunOutcome::Failed)]);
+    sidecar.shutdown().await;
+  });
 }
 
 #[test]
@@ -1456,6 +1490,16 @@ mod stand_in {
     match message["type"].as_str().unwrap_or_default() {
       "run.start" => {
         let model = message["model"].as_str().unwrap_or_default().to_owned();
+        if matches!(model.as_str(), "refuse-invalid" | "refuse-unnamed") {
+          let rejected = json!({
+            "type": "rejected",
+            "reason": "invalid",
+            "messageType": "run.start",
+            "runId": (model == "refuse-invalid").then_some(run_id.as_str()),
+          });
+          write(held, &format!("{rejected}\n")).await;
+          return;
+        }
         held.runs.insert(
           run_id.clone(),
           StandInRun {

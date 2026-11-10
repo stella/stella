@@ -473,9 +473,10 @@
       },
       {
         "id": "b25",
-        "anchorId": "p-25",
-        "type": "paragraph",
-        "role": "argumentation",
+        "anchorId": "h-25",
+        "type": "heading",
+        "level": 2,
+        "role": "section-heading",
         "inlines": [
           {
             "type": "text",
@@ -500,9 +501,10 @@
       },
       {
         "id": "b27",
-        "anchorId": "p-27",
-        "type": "paragraph",
-        "role": "argumentation",
+        "anchorId": "h-27",
+        "type": "heading",
+        "level": 2,
+        "role": "section-heading",
         "inlines": [
           {
             "type": "text",
@@ -659,9 +661,10 @@
       },
       {
         "id": "b39",
-        "anchorId": "p-39",
-        "type": "paragraph",
-        "role": "argumentation",
+        "anchorId": "h-39",
+        "type": "heading",
+        "level": 2,
+        "role": "section-heading",
         "inlines": [
           {
             "type": "text",
@@ -1182,5 +1185,5 @@
       }
     ]
   },
-  "parserVersion": 26
+  "parserVersion": 29
 }
