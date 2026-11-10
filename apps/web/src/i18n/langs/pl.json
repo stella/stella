@@ -1733,7 +1733,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# czat czeka na Ciebie} few {# czaty czekają na Ciebie} many {# czatów czeka na Ciebie} other {# czatu czeka na Ciebie}}",
-      "working": "{count, plural, one {# czat pracuje} few {# czaty pracują} many {# czatów pracuje} other {# czatu pracuje}}"
+      "waitsOn": {
+        "approval": "Czeka na Twoją zgodę",
+        "askUser": "Zadaje Ci pytanie",
+        "clientTool": "Będzie kontynuowany po otwarciu tego czatu",
+        "harnessQuestion": "Agent na Twoim komputerze ma pytanie"
+      },
+      "working": "{count, plural, one {# czat pracuje} few {# czaty pracują} many {# czatów pracuje} other {# czatu pracuje}}",
+      "workingNow": "W toku"
     },
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mcpReconnect": {

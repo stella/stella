@@ -1733,7 +1733,14 @@
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# csevegés vár Önre} other {# csevegés vár Önre}}",
-      "working": "{count, plural, one {# csevegés fut} other {# csevegés fut}}"
+      "waitsOn": {
+        "approval": "Az Ön jóváhagyására vár",
+        "askUser": "Kérdést tesz fel Önnek",
+        "clientTool": "Folytatódik, amikor megnyitja ezt a csevegést",
+        "harnessQuestion": "Az Ön számítógépén futó ügynöknek kérdése van"
+      },
+      "working": "{count, plural, one {# csevegés fut} other {# csevegés fut}}",
+      "workingNow": "Folyamatban"
     },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mcpReconnect": {

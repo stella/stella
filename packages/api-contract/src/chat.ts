@@ -221,15 +221,34 @@ export const CHAT_ACTIVE_RUN_STATE = {
 export type ChatActiveRunState =
   (typeof CHAT_ACTIVE_RUN_STATE)[keyof typeof CHAT_ACTIVE_RUN_STATE];
 
+/**
+ * What a turn that `needs-you` waits on: an answer to the assistant's
+ * question, an approval, a step the app runs itself once the chat is open
+ * again, or a question from a harness on the member's computer.
+ */
+export const CHAT_TURN_INTERACTION_TYPES = [
+  "ask-user",
+  "approval",
+  "client-tool",
+  "harness-question",
+] as const;
+export type ChatTurnInteractionType =
+  (typeof CHAT_TURN_INTERACTION_TYPES)[number];
+
 /** One unfinished chat run of the caller, as the active-runs read lists it. */
 export type ChatActiveRun = {
   threadId: string;
   threadTitle: string;
   workspaceId: string | null;
-  state: ChatActiveRunState;
   /** ISO instant the run entered its current state. */
   since: string;
-};
+} & (
+  | { state: typeof CHAT_ACTIVE_RUN_STATE.working }
+  | {
+      state: typeof CHAT_ACTIVE_RUN_STATE.needsYou;
+      interaction: ChatTurnInteractionType;
+    }
+);
 
 export const CHAT_TOOL_SCOPE = {
   suggestTemplateFields: "suggest-template-fields",

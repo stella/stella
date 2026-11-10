@@ -7,6 +7,7 @@ import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
 import type {
   ChatActiveRun,
   ChatActiveRunState,
+  ChatTurnInteractionType,
 } from "@stll/api-contract/chat";
 import { numberFromString } from "@stll/api-contract/http-input";
 
@@ -38,17 +39,37 @@ import { brandPersistedChatThreadId } from "@/api/lib/safe-id-boundaries";
 /** The one active status that waits on the member rather than the model. */
 const WAITING_ON_MEMBER_STATUS = "awaiting-user" satisfies ChatTurnStatus;
 
+type ActiveRunState =
+  | { state: typeof CHAT_ACTIVE_RUN_STATE.working }
+  | {
+      state: typeof CHAT_ACTIVE_RUN_STATE.needsYou;
+      interaction: ChatTurnInteractionType;
+    };
+
 /**
- * The state a turn's status shows the member. Only active turns are read; a
- * settled one reaching this is a broken query, not a state to guess.
+ * The state a turn's status shows the member, with what a waiting turn waits
+ * on. Only active turns are read; a settled one reaching this is a broken
+ * query, not a state to guess. The table's state check stores an interaction
+ * with every waiting turn.
  */
-const activeRunStateOf = (status: ChatTurnStatus): ChatActiveRunState => {
+const activeRunStateOf = ({
+  interactionType,
+  status,
+}: {
+  interactionType: ChatTurnInteractionType | null;
+  status: ChatTurnStatus;
+}): ActiveRunState => {
   switch (status) {
     case "accepted":
     case "running":
-      return CHAT_ACTIVE_RUN_STATE.working;
+      return { state: CHAT_ACTIVE_RUN_STATE.working };
     case "awaiting-user":
-      return CHAT_ACTIVE_RUN_STATE.needsYou;
+      return interactionType === null
+        ? panic("A waiting chat turn has no interaction")
+        : {
+            state: CHAT_ACTIVE_RUN_STATE.needsYou,
+            interaction: interactionType,
+          };
     case "completed":
     case "failed":
     case "cancelled":
@@ -198,6 +219,7 @@ export const createListActiveChatRuns = ({
         safeDb((tx) =>
           tx
             .select({
+              interactionType: chatTurns.interactionType,
               since: runSince,
               sinceCursor: pgTimestampCursorValue(runSince).as("since_cursor"),
               status: chatTurns.status,
@@ -218,7 +240,7 @@ export const createListActiveChatRuns = ({
 
       const runs = rows.map((row) => ({
         ...row,
-        state: activeRunStateOf(row.status),
+        ...activeRunStateOf(row),
       }));
       const page = createCursorPage({
         rows: runs,
@@ -236,14 +258,35 @@ export const createListActiveChatRuns = ({
       return Result.ok({
         ...page,
         items: page.items.map((run): ChatActiveRun => {
-          const item = {
+          const base = {
             threadId: brandPersistedChatThreadId(run.threadId),
             threadTitle: withdrawal.thread(run).title,
             workspaceId: run.workspaceId,
-            state: run.state,
             since: run.since.toISOString(),
           };
-          return item satisfies AssertNoExtraFields<typeof item, ChatActiveRun>;
+          switch (run.state) {
+            case CHAT_ACTIVE_RUN_STATE.working: {
+              const item = { ...base, state: run.state };
+              return item satisfies AssertNoExtraFields<
+                typeof item,
+                Extract<ChatActiveRun, { state: typeof run.state }>
+              >;
+            }
+            case CHAT_ACTIVE_RUN_STATE.needsYou: {
+              const item = {
+                ...base,
+                state: run.state,
+                interaction: run.interaction,
+              };
+              return item satisfies AssertNoExtraFields<
+                typeof item,
+                Extract<ChatActiveRun, { state: typeof run.state }>
+              >;
+            }
+            default:
+              run satisfies never;
+              return panic("Unhandled active chat run state");
+          }
         }),
       } satisfies Page<ChatActiveRun>);
     },
