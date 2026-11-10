@@ -31,6 +31,7 @@ import {
   SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT,
 } from "@/api/lib/search/preview-passages";
 import {
+  buildSearchCandidateTsQuery,
   buildSearchPreviewLocatorTsQuery,
   buildSearchTsQuery,
   getSearchPreviewLocatorCandidates,
@@ -279,7 +280,7 @@ const chatPreviewTitleOnlyMatch = (tsQuery: SQL | null): SQL =>
         (
           to_tsvector(
             'simple',
-            unaccent(arabic_normalize(coalesce(cst.title, '')))
+            unaccent(arabic_normalize(coalesce(t.title, '')))
           ) @@ ${tsQuery}
           AND NOT EXISTS (
             SELECT 1
@@ -455,10 +456,17 @@ export const buildSearchPreviewQuery = ({
           ${previewTextFilter(sql`clsd.tsv`, tsQuery)}
         LIMIT 1
       `;
-    case "chat":
+    case "chat": {
+      // Search admits chat hits on positive terms before projecting withdrawn
+      // text away, so a negated term in a masked title cannot hide a hit here.
+      const candidateTsQuery = query.trim()
+        ? buildSearchCandidateTsQuery(query)
+        : null;
+      // The title is read from the thread row with its provenance, never from
+      // the index document, which can trail a rename.
       return sql`
         SELECT
-          cst.title,
+          t.title,
           t.subject_decision_id AS "subjectDecisionId",
           t.title_source AS "titleSource",
           t.generation_provenance,
@@ -469,7 +477,7 @@ export const buildSearchPreviewQuery = ({
         WHERE cst.thread_id = ${resultId}
           AND cst.preview_generation =
             ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
-          ${previewTextFilter(sql`cst.tsv`, tsQuery)}
+          ${previewTextFilter(sql`cst.tsv`, candidateTsQuery)}
           AND ${chatThreadScopeSql({
             userId,
             organizationId,
@@ -478,6 +486,7 @@ export const buildSearchPreviewQuery = ({
           })}
         LIMIT 1
       `;
+    }
     case "document":
     case "folder":
     case "task":
@@ -578,14 +587,17 @@ export const readSearchPreview = async (
       ...provenance.value,
       messages: row.messages,
     });
-    if (titleMarker !== null) {
-      return Result.ok({ type: "plain-text", content: titleMarker });
-    }
-
-    if (row.isTitleOnlyMatch === true && typeof row.title === "string") {
-      const title = row.title.trim();
-      if (title) {
-        return Result.ok({ type: "plain-text", content: title });
+    // A withdrawn title replaces only the title: message matches keep their
+    // message-level projection.
+    if (row.isTitleOnlyMatch === true) {
+      if (titleMarker !== null) {
+        return Result.ok({ type: "plain-text", content: titleMarker });
+      }
+      if (typeof row.title === "string") {
+        const title = row.title.trim();
+        if (title) {
+          return Result.ok({ type: "plain-text", content: title });
+        }
       }
     }
 

@@ -637,6 +637,44 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
         return;
       }
       expect<string | undefined>(preview.content).toBe(exportSource?.title);
+      const previewFor = async (queryText: string) =>
+        (
+          await readSearchPreview(
+            {
+              organizationId,
+              userId,
+              accessibleWorkspaceIds: [],
+              resultId: threadId,
+              type: "chat",
+              query: queryText,
+            },
+            scopedDb,
+          )
+        ).unwrap();
+      // A message match keeps its message preview beside a withdrawn title,
+      // and every hit search returns has a preview.
+      for (const queryText of ["bronze", "bronze -pilotquartz"]) {
+        const messagePreview = await previewFor(queryText);
+        expect(messagePreview).toMatchObject({
+          type: "chat-messages",
+          messages: expect.arrayContaining([
+            {
+              id: userMessageId,
+              role: "user",
+              content: "Authored bronze question",
+            },
+          ]),
+        });
+        expect(JSON.stringify(messagePreview)).not.toContain(row.title);
+      }
+      // A rename whose index refresh has not run yet cannot bring the old
+      // generated title back through the stale index document.
+      await db
+        .update(chatThreads)
+        .set({ title: "Authored replacement", titleSource: "user" })
+        .where(eq(chatThreads.id, threadId));
+      const renamedPreview = await previewFor("pilotquartz");
+      expect(JSON.stringify(renamedPreview)).not.toContain(row.title);
     },
   );
 
