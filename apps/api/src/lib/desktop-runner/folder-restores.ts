@@ -56,6 +56,7 @@ import type {
   RunnerBinding,
   RunOwner,
 } from "@/api/lib/desktop-runner/store";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Folder restores: a member's request to put a chat's folder back as the
@@ -592,7 +593,8 @@ export const settleFolderRestore = async (
           at: now.toISOString(),
         } satisfies ChatLocalFilesUndone,
       };
-      const marked = await tx
+      // At most one row: the turn's answer.
+      const [answer] = await tx
         .update(chatMessages)
         .set({
           content: sql`jsonb_set(${chatMessages.content}, '{metadata}', coalesce(${chatMessages.content} -> 'metadata', '{}'::jsonb) || ${JSON.stringify(marker)}::text::jsonb)`,
@@ -607,6 +609,14 @@ export const settleFolderRestore = async (
           id: chatMessages.id,
           workspaceId: chatMessages.workspaceId,
         });
+      if (answer === undefined) {
+        // A turn stopped before it answered keeps no answer to mark; the
+        // restore still settles, and the folder is back as it was.
+        logger.info("desktop_runner.folder_restore.no_answer_to_mark", {
+          "desktop_runner.restore_id": restoreId,
+        });
+        return "settled";
+      }
       // The computer, not the member, changed the answer: the desktop
       // runner records it on the member's behalf.
       const recordAuditEvent = createBackgroundAuditRecorder({
@@ -626,15 +636,13 @@ export const settleFolderRestore = async (
         userId: binding.userId,
         workspaceId: null,
       });
-      for (const { id, workspaceId } of marked) {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
-          resourceId: id,
-          workspaceId,
-          metadata: { reason: "local_files_undone", undoId: restoreId },
-        });
-      }
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+        resourceId: answer.id,
+        workspaceId: answer.workspaceId,
+        metadata: { reason: "local_files_undone", undoId: restoreId },
+      });
     }
     return "settled";
   });
