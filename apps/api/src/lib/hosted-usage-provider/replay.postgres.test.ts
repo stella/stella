@@ -232,7 +232,7 @@ const createEntitlementInsertBarrier = () => {
           }
           return new Proxy(target.insert, {
             apply(call, thisArg, args) {
-              const builder = Reflect.apply(call, thisArg, args) as object;
+              const builder: object = Reflect.apply(call, thisArg, args);
               return args.at(0) === usageEntitlements
                 ? pauseInsert(builder)
                 : builder;

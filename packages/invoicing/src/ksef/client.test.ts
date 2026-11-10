@@ -171,9 +171,8 @@ const createFake = () => {
         authenticationToken: { token: "temporary", validUntil: validTo },
       });
     }
-    const json = (
-      body === undefined ? {} : JSON.parse(decoder.decode(body))
-    ) as FakeRequestJson;
+    const json: FakeRequestJson =
+      body === undefined ? {} : JSON.parse(decoder.decode(body));
     if (requestPath === "/security/public-key-certificates") {
       return response(200, [
         {

@@ -128,20 +128,20 @@ const harnessFor = (
       .split("\n")
       .filter((line) => line !== "")
       .flatMap((line) => {
-        const entry = JSON.parse(line) as { received?: ReceivedMessage };
+        const entry: { received?: ReceivedMessage } = JSON.parse(line);
         return entry.received === undefined ? [] : [entry.received];
       });
-  const startup = () =>
-    (
-      JSON.parse(readFileSync(logPath, "utf-8").split("\n")[0] ?? "{}") as {
-        startup: {
-          codexHome?: unknown;
-          cwd?: unknown;
-          packageCache?: unknown;
-          path?: unknown;
-        };
-      }
-    ).startup;
+  const startup = () => {
+    const first: {
+      startup: {
+        codexHome?: unknown;
+        cwd?: unknown;
+        packageCache?: unknown;
+        path?: unknown;
+      };
+    } = JSON.parse(readFileSync(logPath, "utf-8").split("\n")[0] ?? "{}");
+    return first.startup;
+  };
   return { adapter, codexHome, workspaceDir, logPath, received, startup };
 };
 

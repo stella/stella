@@ -123,13 +123,13 @@ const heldDrafts = async (page: Page) =>
 const releaseDraft = async (page: Page) => {
   await expect.poll(async () => heldDrafts(page)).toBeGreaterThan(0);
   await page.evaluate((key) => {
-    const held: unknown = Reflect.get(window, key);
+    const held: (() => void)[] | undefined = Reflect.get(window, key);
     if (!Array.isArray(held)) {
       throw new TypeError("No drafting request is held");
     }
     for (const release of held.splice(0)) {
       if (typeof release === "function") {
-        (release as () => void)();
+        release();
       }
     }
   }, RELEASE_DRAFT);
@@ -955,13 +955,19 @@ test("unresolved draft creation offers no deletion and retains its batch key", a
     page.getByRole("button", { name: enMessages.activity.previousDay }),
   ).toBeDisabled();
   await page.evaluate(() => {
-    const changed = Reflect.get(window, "__STELLA_TEST_ACTIVITY_CHANGED__");
-    const reject = Reflect.get(window, "__STELLA_TEST_REJECT_BATCH__");
+    const changed: (() => void) | undefined = Reflect.get(
+      window,
+      "__STELLA_TEST_ACTIVITY_CHANGED__",
+    );
+    const reject: (() => void) | undefined = Reflect.get(
+      window,
+      "__STELLA_TEST_REJECT_BATCH__",
+    );
     if (typeof changed !== "function" || typeof reject !== "function") {
       throw new TypeError("Native recovery controls are missing");
     }
-    (changed as () => void)();
-    (reject as () => void)();
+    changed();
+    reject();
   });
   const retry = page.getByRole("button", {
     name: enMessages.activity.pendingRetry,
@@ -1131,11 +1137,14 @@ test("stored pending drafts stay immutable after a rejected retry until cancella
   const accept = page.getByRole("button", { name: acceptName(enMessages) });
   await expect(accept).toBeDisabled();
   await page.evaluate((next) => {
-    const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+    const update: ((snapshot: typeof next) => void) | undefined = Reflect.get(
+      window,
+      "__STELLA_TEST_SET_SNAPSHOT__",
+    );
     if (typeof update !== "function") {
       throw new TypeError("Snapshot control is missing");
     }
-    (update as (snapshot: typeof next) => void)(next);
+    update(next);
   }, SNAPSHOT);
   await expect(retry).toHaveCount(0);
   await expect(accept).toBeEnabled();
@@ -1703,11 +1712,14 @@ test("an open erase dialog disappears safely when saved history becomes incompat
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.evaluate(
     (next) => {
-      const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+      const update: ((snapshot: typeof next) => void) | undefined = Reflect.get(
+        window,
+        "__STELLA_TEST_SET_SNAPSHOT__",
+      );
       if (typeof update !== "function") {
         throw new TypeError("Snapshot control is missing");
       }
-      (update as (snapshot: typeof next) => void)(next);
+      update(next);
     },
     { ...SNAPSHOT, deletionStatus: "incompatible" },
   );

@@ -204,9 +204,10 @@ test("an oversized act without an AST commits all text passages after the last p
   const accepted: Record<string, unknown>[][] = [];
   const result = await runCycle(async (_indexId, ndjson) => {
     accepted.push(
-      ndjson
-        .split("\n")
-        .map((line) => JSON.parse(line) as Record<string, unknown>),
+      ndjson.split("\n").map((line) => {
+        const doc: Record<string, unknown> = JSON.parse(line);
+        return doc;
+      }),
     );
     const intent = await db
       .select({ status: corpusIndexProjectionIntents.status })
@@ -303,9 +304,10 @@ test("a later part failure leaves the whole revision pending cleanup", async () 
       );
     }
     accepted.push(
-      ...ndjson
-        .split("\n")
-        .map((line) => JSON.parse(line) as Record<string, unknown>),
+      ...ndjson.split("\n").map((line) => {
+        const doc: Record<string, unknown> = JSON.parse(line);
+        return doc;
+      }),
     );
     await Bun.sleep(10);
     return Result.ok();

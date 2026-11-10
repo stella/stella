@@ -710,9 +710,9 @@ describe("CLI legal citation projection", () => {
             writers: search.writers,
             allActive: false,
           });
-          const result = JSON.parse(search.out.join("")) as {
-            results: unknown[];
-          };
+          const result: { results: unknown[] } = JSON.parse(
+            search.out.join(""),
+          );
           expect(format === "json" ? result.results.at(0) : result).toEqual(
             subject,
           );

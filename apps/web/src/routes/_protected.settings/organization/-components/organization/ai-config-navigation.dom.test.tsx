@@ -602,9 +602,8 @@ test("Advanced shows catalog defaults, saves only explicit overrides and resets 
   expect(JSON.parse(write?.body ?? "null")).toMatchObject({
     overrideModels: { chat: { provider: "google", modelId: overrideId } },
   });
-  expect(
-    (JSON.parse(write?.body ?? "null") as SettingsWrite).overrideModels,
-  ).toEqual({
+  const written: SettingsWrite = JSON.parse(write?.body ?? "null");
+  expect(written.overrideModels).toEqual({
     chat: { provider: "google", modelId: overrideId },
   });
   fireEvent.click(advanced);
@@ -935,9 +934,8 @@ test("replacing the first saved key preserves provider order and every default r
       { provider: "anthropic" },
     ],
   });
-  expect(
-    (JSON.parse(write?.body ?? "null") as SettingsWrite).overrideModels,
-  ).toBeNull();
+  const written: SettingsWrite = JSON.parse(write?.body ?? "null");
+  expect(written.overrideModels).toBeNull();
   expect(hasUnsavedWork()).toBe(false);
 });
 

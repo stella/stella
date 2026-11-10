@@ -195,10 +195,10 @@ describe("JSON and CSV Export/Import Integration", () => {
       });
 
       const jsonText = await response.text();
-      const payload = JSON.parse(jsonText) as {
+      const payload: {
         version: unknown;
         clauses: [{ title: unknown }];
-      };
+      } = JSON.parse(jsonText);
       expect(payload.version).toBe(1);
       expect(payload.clauses[0].title).toBe("Test Export Clause JSON");
     }

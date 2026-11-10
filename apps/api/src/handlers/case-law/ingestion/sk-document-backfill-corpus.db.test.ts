@@ -118,12 +118,18 @@ const packPrefix = (jurisdiction: string) =>
   `legal-corpus/packs/jurisdiction=${jurisdiction}/`;
 
 /** The key of a pack that carries this jurisdiction's members. */
-const packKeyUnder = (jurisdiction: string) =>
-  expect.stringContaining(packPrefix(jurisdiction)) as string;
+const packKeyUnder = (jurisdiction: string): string => {
+  const matcher: string = expect.stringContaining(packPrefix(jurisdiction));
+  return matcher;
+};
 
 /** Every stored pointer addresses a member of such a pack. */
-const packedUnder = (jurisdiction: string) =>
-  expect.stringContaining(`pack:${packPrefix(jurisdiction)}`) as string;
+const packedUnder = (jurisdiction: string): string => {
+  const matcher: string = expect.stringContaining(
+    `pack:${packPrefix(jurisdiction)}`,
+  );
+  return matcher;
+};
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("sk-courts document backfill — corpus storage", () => {

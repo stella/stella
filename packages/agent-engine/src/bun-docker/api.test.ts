@@ -117,7 +117,8 @@ describe("Docker container isolation", () => {
     let requestBody: unknown;
     globalThis.fetch = Object.assign(
       mock(async (_url, init?: RequestInit) => {
-        requestBody = init?.body ? JSON.parse(String(init.body)) : undefined;
+        requestBody =
+          typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
         return new Response(JSON.stringify({ Id: "container-1" }), {
           headers: { "Content-Type": "application/json" },
           status: 201,

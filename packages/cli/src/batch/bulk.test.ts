@@ -49,7 +49,8 @@ test("ID chunks never exceed the endpoint schema ceiling and preserve context an
           throw new TypeError("Expected chunk IDs");
         }
         expect(body.ids.length).toBeLessThanOrEqual(200);
-        return body.ids as unknown[];
+        const chunkIds: unknown[] = body.ids;
+        return chunkIds;
       }),
     ).toEqual(ids);
   }

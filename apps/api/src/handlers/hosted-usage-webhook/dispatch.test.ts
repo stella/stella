@@ -322,7 +322,7 @@ const missFirstEntitlementLookup = (tx: Transaction) => {
             missed = true;
             return Promise.resolve([]);
           }
-          const result = Reflect.apply(value, target, args);
+          const result: unknown = Reflect.apply(value, target, args);
           return typeof result === "object" && result !== null
             ? wrapQuery(result, entitlementQuery)
             : result;
@@ -336,7 +336,7 @@ const missFirstEntitlementLookup = (tx: Transaction) => {
         return value;
       }
       return (...args: unknown[]) => {
-        const result = Reflect.apply(value, target, args);
+        const result: unknown = Reflect.apply(value, target, args);
         return property === "select" &&
           typeof result === "object" &&
           result !== null

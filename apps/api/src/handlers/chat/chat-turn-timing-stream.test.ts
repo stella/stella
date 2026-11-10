@@ -221,13 +221,11 @@ describe("active timing through the real SDK message processor", () => {
         const encodedEvent = JSON.stringify(chunk);
         capture.processor.processChunk(JSON.parse(encodedEvent));
         if (
-          capture.processor
-            .getMessages()
-            .some(
-              ({ metadata }) =>
-                (metadata?.["turnTiming"] as { status?: unknown } | undefined)
-                  ?.status === "running",
-            )
+          capture.processor.getMessages().some(({ metadata }) => {
+            const turnTiming: { status?: unknown } | undefined =
+              metadata?.["turnTiming"];
+            return turnTiming?.status === "running";
+          })
         ) {
           sawRunning = true;
         }

@@ -751,13 +751,13 @@ const directCaller: Caller = {
 
 /** An asymmetric matcher standing in for each settled decision row. */
 const settledRows = (count: number) =>
-  Array.from(
-    { length: count },
-    () =>
+  Array.from({ length: count }, () => {
+    const row: Awaited<ReturnType<typeof decisionRows>>[number] =
       expect.objectContaining({
         corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-      }) as Awaited<ReturnType<typeof decisionRows>>[number],
-  );
+      });
+    return row;
+  });
 
 describe.each([crawlCaller, directCaller])("$name", (caller) => {
   test("settles every record, and applying them again is a fixed point", async () => {

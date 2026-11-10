@@ -85,9 +85,10 @@ describe("splitIngestRequests", () => {
     expect(requests.length).toBeGreaterThan(2);
     for (const { entries, ndjson } of requests) {
       expect(utf8Bytes(ndjson)).toBeLessThanOrEqual(500);
-      const ndjsonDocs = ndjson
-        .split("\n")
-        .map((line) => JSON.parse(line) as Record<string, unknown>);
+      const ndjsonDocs = ndjson.split("\n").map((line) => {
+        const doc: Record<string, unknown> = JSON.parse(line);
+        return doc;
+      });
       expect(entries.flatMap(({ docs }) => docs)).toEqual(ndjsonDocs);
       expect(entries.map(({ row }) => row.id)).toContain(
         String(ndjsonDocs[0]?.["document_id"]),

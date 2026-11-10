@@ -1586,11 +1586,14 @@ for (const language of ["en", "ar"] as const) {
         )
         .toBe(1);
       await page.evaluate(() => {
-        const resolve = Reflect.get(window, "__STELLA_RESOLVE_FIRST_STATE__");
+        const resolve: (() => void) | undefined = Reflect.get(
+          window,
+          "__STELLA_RESOLVE_FIRST_STATE__",
+        );
         if (typeof resolve !== "function") {
           throw new TypeError("Missing state resolver");
         }
-        (resolve as () => void)();
+        resolve();
       });
       await expect(
         welcome.getByRole("button", {

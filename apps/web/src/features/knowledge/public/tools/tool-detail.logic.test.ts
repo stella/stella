@@ -50,7 +50,7 @@ describe("tool-detail.logic", () => {
       authType: "oauth",
       oauthRequestedScopes: ["repo", "read:org"],
     });
-    const parsed = JSON.parse(snippet) as GhSnippet;
+    const parsed: GhSnippet = JSON.parse(snippet);
     expect(parsed.mcpServers.gh.auth).toEqual({
       type: "oauth",
       scopes: ["repo", "read:org"],
@@ -63,7 +63,8 @@ describe("tool-detail.logic", () => {
       url: "https://mcp.example.com",
       authType: "oauth",
     });
-    expect((JSON.parse(snippet) as GhSnippet).mcpServers.gh.auth).toEqual({
+    const parsed: GhSnippet = JSON.parse(snippet);
+    expect(parsed.mcpServers.gh.auth).toEqual({
       type: "oauth",
     });
   });
@@ -74,7 +75,8 @@ describe("tool-detail.logic", () => {
       url: "https://mcp.example.com",
       authType: "bearer",
     });
-    expect((JSON.parse(snippet) as GhSnippet).mcpServers.gh.auth).toEqual({
+    const parsed: GhSnippet = JSON.parse(snippet);
+    expect(parsed.mcpServers.gh.auth).toEqual({
       type: "bearer",
     });
     expect(snippet).not.toMatch(/token|secret|key/iu);

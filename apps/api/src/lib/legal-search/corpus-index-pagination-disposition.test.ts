@@ -64,13 +64,13 @@ const stubHits = (
         _input: Parameters<typeof fetch>[0],
         init?: Parameters<typeof fetch>[1],
       ) => {
-        const body = JSON.parse(v.parse(v.string(), init?.body)) as {
+        const body: {
           snippet_fields?: unknown;
           from?: number;
           size: number;
           start_offset: number;
           max_hits: number;
-        };
+        } = JSON.parse(v.parse(v.string(), init?.body));
         if (body.snippet_fields !== undefined) {
           return Response.json({
             num_hits: highlightHits.length,

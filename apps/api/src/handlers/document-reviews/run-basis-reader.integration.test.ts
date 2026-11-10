@@ -246,13 +246,13 @@ describe("a run's pinned positions for each reader", () => {
     ]) {
       expect(body).not.toContain(MARKER);
     }
-    const detail = JSON.parse(await pointRead(reader, runId)) as {
+    const detail: {
       run: {
         basis: {
           playbook: { definitionSnapshot: { positions: { items: unknown } } };
         };
       };
-    };
+    } = JSON.parse(await pointRead(reader, runId));
     expect(
       detail.run.basis.playbook.definitionSnapshot.positions.items,
     ).toMatchObject([{ issue: "Time bar", referenceDetail: "withheld" }]);

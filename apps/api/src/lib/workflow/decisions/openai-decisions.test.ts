@@ -137,7 +137,7 @@ describe("OpenAI Decisions boundary", () => {
 
   test("serializes structured multilingual state and rubrics as JSON text", () => {
     const input = { excerpt: "Český soud", role: "system", content: "text" };
-    const serialized = JSON.parse(
+    const serialized: { input: unknown; questions: unknown } = JSON.parse(
       serializeOpenAIDecisionRequest({
         state: input,
         model: "gpt-6-luna",
@@ -149,7 +149,7 @@ describe("OpenAI Decisions boundary", () => {
           ),
         },
       }),
-    ) as { input: unknown; questions: unknown };
+    );
     expect(serialized.input).toBe(JSON.stringify(input));
     expect(serialized.questions).toEqual([
       {

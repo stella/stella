@@ -134,10 +134,9 @@ for (const row of rows) {
       });
       expect(batch.action).toBe(row.action);
       const serialized = JSON.stringify(start);
-      expect(
-        (JSON.parse(serialized) as { verdict: { signals: unknown } }).verdict
-          .signals,
-      ).toEqual([signal]);
+      const reparsed: { verdict: { signals: unknown } } =
+        JSON.parse(serialized);
+      expect(reparsed.verdict.signals).toEqual([signal]);
       expect(start.config.startFloor).toBe(defaultConfig.startFloor);
       expect(batch.verdict.signals).toEqual([signal]);
     }

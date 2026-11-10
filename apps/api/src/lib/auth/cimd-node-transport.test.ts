@@ -151,9 +151,10 @@ const probe = async (options: ProbeOptions): Promise<ProbeResult> => {
       .split("\n")
       .filter((line) => line.startsWith(PROBE_RESULT_PREFIX));
     expect(results, stdout).toHaveLength(1);
-    return JSON.parse(
+    const probeResult: ProbeResult = JSON.parse(
       results.join("").slice(PROBE_RESULT_PREFIX.length),
-    ) as ProbeResult;
+    );
+    return probeResult;
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

@@ -25,12 +25,13 @@ for (const [locale, { dialog: strings }] of Object.entries({ en, ar })) {
         arg: null,
         handlers: () => ({
           fit_static_dialog: () => null,
-          self_host_connect_dialog_respond: (args) =>
-            (
-              Reflect.get(window, "recordResponse") as (
-                response: unknown,
-              ) => unknown
-            )(args),
+          self_host_connect_dialog_respond: (args) => {
+            const recordResponse: (response: unknown) => unknown = Reflect.get(
+              window,
+              "recordResponse",
+            );
+            return recordResponse(args);
+          },
         }),
       });
       await page.route("**/handoff-dialog-test", async (route) => {

@@ -119,7 +119,10 @@ const fakeEntries = (fakeLog: string): Record<string, unknown>[] =>
     ? readFileSync(fakeLog, "utf-8")
         .split("\n")
         .filter((line) => line !== "")
-        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .map((line) => {
+          const entry: Record<string, unknown> = JSON.parse(line);
+          return entry;
+        })
     : [];
 
 const place = (): Place => {
@@ -141,9 +144,9 @@ const place = (): Place => {
             .split("\n")
             .filter((line) => line !== "")
             .flatMap((line) => {
-              const entry = JSON.parse(line) as {
+              const entry: {
                 received?: ReturnType<Place["received"]>[number];
-              };
+              } = JSON.parse(line);
               return entry.received === undefined ? [] : [entry.received];
             })
         : [],

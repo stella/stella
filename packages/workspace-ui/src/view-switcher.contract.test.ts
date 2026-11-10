@@ -3,12 +3,10 @@ import { expect, test } from "bun:test";
 const source = await Bun.file(
   new URL("view-switcher.tsx", import.meta.url),
 ).text();
-const manifest = (await Bun.file(
-  new URL("../package.json", import.meta.url),
-).json()) as {
+const manifest: {
   peerDependencies: Record<string, string>;
   devDependencies: Record<string, string>;
-};
+} = await Bun.file(new URL("../package.json", import.meta.url)).json();
 const atlaskitPeerDependencies = Object.fromEntries(
   Object.entries(manifest.peerDependencies).filter(([name]) =>
     name.startsWith("@atlaskit/"),

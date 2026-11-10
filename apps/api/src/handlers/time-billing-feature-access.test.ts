@@ -348,9 +348,9 @@ describe("time billing admission census", () => {
         if (!/createSafe(?:Root)?Handler\(/u.test(source)) {
           continue;
         }
-        const module = (await import(`${absolute}/${filename}`)) as {
-          default?: unknown;
-        };
+        const module: { default?: unknown } = await import(
+          `${absolute}/${filename}`
+        );
         expect(
           isRecord(module.default) && isRecord(module.default["config"]),
         ).toBe(true);
