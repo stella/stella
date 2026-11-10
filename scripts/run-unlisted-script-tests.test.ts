@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -20,14 +21,15 @@ import {
   decodeTraceString,
   gitInvocation,
   parseScriptTestArguments,
+  planScriptTestRun,
   prepareStrace,
   SCAN_PRELOAD_PATH,
   scanInputDeclaration,
+  SCRIPT_TEST_MODES,
   SCRIPT_TEST_TRACE_FILTER,
   SCRIPT_TEST_TRACE_SYSCALLS,
   selectAffectedScriptTests,
   selectScriptTests,
-  testsToTrace,
   tracedAllowance,
   uncoveredScans,
   undeclaredTracedFiles,
@@ -152,13 +154,13 @@ describe("parseScriptTestArguments", () => {
       type: "valid",
       timeout: undefined,
       depth: false,
-      verifyDeclarations: false,
+      mode: SCRIPT_TEST_MODES.affected,
     });
     expect(parseScriptTestArguments(["--timeout", "35000"])).toEqual({
       type: "valid",
       timeout: 35_000,
       depth: false,
-      verifyDeclarations: false,
+      mode: SCRIPT_TEST_MODES.affected,
     });
   });
 
@@ -169,7 +171,7 @@ describe("parseScriptTestArguments", () => {
       type: "valid",
       timeout: 120_000,
       depth: true,
-      verifyDeclarations: false,
+      mode: SCRIPT_TEST_MODES.affected,
     });
     expect(
       parseScriptTestArguments(["--timeout", "120000", "--depth"]),
@@ -177,7 +179,7 @@ describe("parseScriptTestArguments", () => {
       type: "valid",
       timeout: 120_000,
       depth: true,
-      verifyDeclarations: false,
+      mode: SCRIPT_TEST_MODES.affected,
     });
   });
 
@@ -188,7 +190,7 @@ describe("parseScriptTestArguments", () => {
       type: "valid",
       timeout: undefined,
       depth: true,
-      verifyDeclarations: true,
+      mode: SCRIPT_TEST_MODES.verifyDeclarations,
     });
   });
 
@@ -341,6 +343,35 @@ describe("script test impact selection", () => {
     }
   });
 
+  test("a scan preload change selects only the tests that import it", () => {
+    const root = makeFixture();
+    writeFileSync(
+      path.join(root, SCAN_PRELOAD_PATH),
+      "export const preload = true;\n",
+    );
+    writeFileSync(
+      path.join(root, "scripts/preload.test.ts"),
+      'import { preload } from "./script-test-scan-preload"; void preload;\n',
+    );
+    const tests = [
+      "scripts/subject.test.ts",
+      "scripts/reader.test.ts",
+      "scripts/preload.test.ts",
+    ];
+    try {
+      expect(
+        selectAffectedScriptTests({
+          tests,
+          changed: [SCAN_PRELOAD_PATH],
+          root,
+          inputs: { "scripts/reader.test.ts": ["data/**"] },
+        }),
+      ).toEqual({ files: ["scripts/preload.test.ts"], skipped: 2 });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("a declaration edit selects only its own test when the edit is known", () => {
     const root = makeFixture();
     const tests = ["scripts/subject.test.ts", "scripts/reader.test.ts"];
@@ -373,7 +404,6 @@ describe("script test impact selection", () => {
         files: tests,
         skipped: 0,
         reason: "shared test configuration or runner changed",
-        verifierChanged: true,
       });
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -1355,7 +1385,7 @@ test("CI does not require or install strace when no tests are selected", () => {
   expect(installs).toBe(0);
 });
 
-describe("declaration verification on pull requests", () => {
+describe("declaration verification", () => {
   test("names tests whose declaration or exemption changed", () => {
     expect(
       changedDeclarations(
@@ -1372,44 +1402,82 @@ describe("declaration verification on pull requests", () => {
     expect(changedDeclarations(undefined, { inputs: {} })).toBe("all");
   });
 
-  const selection = {
-    files: ["a.test.ts", "b.test.ts", "c.test.ts"],
-    skipped: 0,
-  };
+  const tests = ["a.test.ts", "b.test.ts", "c.test.ts"];
 
-  test("traces only tests whose own file or declaration changed", () => {
-    expect(
-      testsToTrace({
-        selection,
+  test("a pull request runs its selection untraced, whatever changed", () => {
+    for (const comparison of [
+      {
         changed: ["a.test.ts", "lib.ts"],
-        declarationChanges: new Set(["c.test.ts", "gone.test.ts"]),
-        verifyAll: false,
-      }),
-    ).toEqual(["a.test.ts", "c.test.ts"]);
-    expect(
-      testsToTrace({
-        selection,
-        changed: ["lib.ts"],
-        declarationChanges: new Set(),
-        verifyAll: false,
-      }),
-    ).toEqual([]);
+        declarationChanges: new Set<string>(),
+      },
+      {
+        changed: ["scripts/script-test-inputs.json"],
+        declarationChanges: new Set(["c.test.ts"]),
+      },
+      {
+        changed: ["scripts/script-test-inputs.json"],
+        declarationChanges: "all" as const,
+      },
+      {
+        changed: ["scripts/run-unlisted-script-tests.ts"],
+        declarationChanges: new Set<string>(),
+      },
+      { changed: [SCAN_PRELOAD_PATH], declarationChanges: new Set<string>() },
+    ]) {
+      const selection = { files: ["a.test.ts", "c.test.ts"], skipped: 1 };
+      const selected: unknown[] = [];
+      expect(
+        planScriptTestRun({
+          mode: SCRIPT_TEST_MODES.affected,
+          tests,
+          comparison,
+          selectAffected: (received) => {
+            selected.push(received);
+            return selection;
+          },
+        }),
+      ).toEqual({ selection, traced: [] });
+      expect(selected).toEqual([comparison]);
+    }
   });
 
-  test("traces every selected test on request, for a changed verifier, or for unknown declaration edits", () => {
-    for (const options of [
-      { verifyAll: true, declarationChanges: new Set<string>() },
-      {
-        verifyAll: false,
-        declarationChanges: new Set<string>(),
-        selection: { ...selection, verifierChanged: true },
+  test("a missing comparison runs every test untraced", () => {
+    expect(
+      planScriptTestRun({
+        mode: SCRIPT_TEST_MODES.affected,
+        tests,
+        comparison: undefined,
+        selectAffected: () => panic("A selection needs a comparison"),
+      }),
+    ).toEqual({
+      selection: {
+        files: tests,
+        skipped: 0,
+        reason: "no comparison base is available",
       },
-      { verifyAll: false, declarationChanges: "all" as const },
-    ]) {
-      expect(testsToTrace({ selection, changed: [], ...options })).toEqual(
-        selection.files,
-      );
-    }
+      traced: [],
+    });
+  });
+
+  test("declaration verification runs and traces every test", () => {
+    expect(
+      planScriptTestRun({
+        mode: SCRIPT_TEST_MODES.verifyDeclarations,
+        tests,
+        comparison: {
+          changed: ["lib.ts"],
+          declarationChanges: new Set<string>(),
+        },
+        selectAffected: () => ({ files: [], skipped: tests.length }),
+      }),
+    ).toEqual({
+      selection: {
+        files: tests,
+        skipped: 0,
+        reason: "every declaration is verified",
+      },
+      traced: tests,
+    });
   });
 });
 

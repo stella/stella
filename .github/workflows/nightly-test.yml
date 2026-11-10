@@ -629,10 +629,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Every repository script test traced against its declared inputs in
-  # scripts/script-test-inputs.json. A pull request runs only the tests its
-  # diff selects and traces only those whose own file or declaration changed,
-  # so a declaration that stops covering a test's reads after any other change
-  # fails here, through the scheduled-run alert, within a day.
+  # scripts/script-test-inputs.json. Pull requests run only the tests their
+  # diff selects, untraced, so a declaration that stops covering a test's
+  # reads fails here, through the scheduled-run alert, within a day.
   script-test-declarations:
     runs-on: ubuntu-24.04
     timeout-minutes: 45

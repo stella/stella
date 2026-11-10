@@ -10,10 +10,9 @@
 // the dependency install. This run takes the remainder, so the set of tests CI
 // executes is derived from the directory rather than kept by hand.
 //
-// A pull request runs only the tests its diff can affect. Tracing a test's
-// file accesses against its declared inputs costs minutes, so a pull request
-// traces only the tests whose own file or declaration changed (all selected
-// tests when the runner itself changed); the nightly run traces every test.
+// A pull request runs only the tests its diff can affect, untraced. Tracing a
+// test's file accesses against its declared inputs costs minutes, so only the
+// nightly `--verify-declarations` run traces, and it traces every test.
 //
 //   bun scripts/run-unlisted-script-tests.ts [--depth] [--verify-declarations]
 
@@ -39,13 +38,23 @@ import scriptTestInputs from "./script-test-inputs.json" with { type: "json" };
 
 const declaredInputs = new Map(Object.entries(scriptTestInputs.inputs));
 
+/**
+ * `affected` runs the tests the diff selects, untraced; `verify-declarations`
+ * runs and traces every test, whatever the diff.
+ */
+export const SCRIPT_TEST_MODES = {
+  affected: "affected",
+  verifyDeclarations: "verify-declarations",
+} as const;
+type ScriptTestMode =
+  (typeof SCRIPT_TEST_MODES)[keyof typeof SCRIPT_TEST_MODES];
+
 type ScriptTestArguments =
   | {
       readonly type: "valid";
       readonly timeout: number | undefined;
       readonly depth: boolean;
-      /** Run and trace every test, whatever the diff. */
-      readonly verifyDeclarations: boolean;
+      readonly mode: ScriptTestMode;
     }
   | { readonly type: "invalid"; readonly message: string };
 
@@ -54,7 +63,7 @@ export const parseScriptTestArguments = (
 ): ScriptTestArguments => {
   let timeout: number | undefined;
   let depth = false;
-  let verifyDeclarations = false;
+  let mode: ScriptTestMode = SCRIPT_TEST_MODES.affected;
   const argumentsIterator = args.values();
   for (const argument of argumentsIterator) {
     if (argument === "--depth") {
@@ -65,13 +74,13 @@ export const parseScriptTestArguments = (
       continue;
     }
     if (argument === "--verify-declarations") {
-      if (verifyDeclarations) {
+      if (mode === SCRIPT_TEST_MODES.verifyDeclarations) {
         return {
           type: "invalid",
           message: "--verify-declarations may be supplied once",
         };
       }
-      verifyDeclarations = true;
+      mode = SCRIPT_TEST_MODES.verifyDeclarations;
       continue;
     }
     if (argument !== "--timeout") {
@@ -96,7 +105,7 @@ export const parseScriptTestArguments = (
     }
     timeout = parsed;
   }
-  return { type: "valid", timeout, depth, verifyDeclarations };
+  return { type: "valid", timeout, depth, mode };
 };
 
 type UnlistedTestCommandOptions = {
@@ -256,8 +265,6 @@ type ScriptTestSelection = {
   readonly files: string[];
   readonly skipped: number;
   readonly reason?: string;
-  /** The runner or its scan preload changed: its verification changed. */
-  readonly verifierChanged?: boolean;
 };
 
 /** Tests whose declaration entry changed, or "all" when unknown. */
@@ -334,34 +341,61 @@ const declarationsAt = (
   return declarations.success ? declarations.output : undefined;
 };
 
-/**
- * The selected tests whose declarations this run verifies by tracing: all of
- * them on request or when the verifier changed, otherwise only those whose
- * own file or declaration changed. Every other test's declarations are
- * verified by the nightly run.
- */
-export const testsToTrace = ({
-  selection,
-  changed,
-  declarationChanges,
-  verifyAll,
-}: {
-  readonly selection: ScriptTestSelection;
+type ScriptTestComparison = {
   readonly changed: readonly string[];
   readonly declarationChanges: DeclarationChanges;
-  readonly verifyAll: boolean;
-}): string[] => {
-  if (
-    verifyAll ||
-    selection.verifierChanged === true ||
-    declarationChanges === "all"
-  ) {
-    return [...selection.files];
+};
+
+type ScriptTestPlan = {
+  readonly selection: ScriptTestSelection;
+  /** Tests run one per process under strace, against their declarations. */
+  readonly traced: readonly string[];
+};
+
+/**
+ * What a run executes and traces. A pull request never traces: a declaration
+ * that stops covering a test's reads fails the nightly declaration run on
+ * main instead. Without a comparison every test runs.
+ */
+export const planScriptTestRun = ({
+  mode,
+  tests,
+  comparison,
+  selectAffected,
+}: {
+  readonly mode: ScriptTestMode;
+  readonly tests: readonly string[];
+  readonly comparison: ScriptTestComparison | undefined;
+  readonly selectAffected: (
+    comparison: ScriptTestComparison,
+  ) => ScriptTestSelection;
+}): ScriptTestPlan => {
+  switch (mode) {
+    case SCRIPT_TEST_MODES.verifyDeclarations:
+      return {
+        selection: {
+          files: [...tests],
+          skipped: 0,
+          reason: "every declaration is verified",
+        },
+        traced: [...tests],
+      };
+    case SCRIPT_TEST_MODES.affected:
+      return {
+        selection:
+          comparison === undefined
+            ? {
+                files: [...tests],
+                skipped: 0,
+                reason: "no comparison base is available",
+              }
+            : selectAffected(comparison),
+        traced: [],
+      };
+    default:
+      mode satisfies never;
+      return panic(`Unknown script test mode: ${String(mode)}`);
   }
-  const changedSet = new Set(changed);
-  return selection.files.filter(
-    (test) => changedSet.has(test) || declarationChanges.has(test),
-  );
 };
 
 // A submodule's gitlink is a commit pointer, not a file a test reads; the
@@ -404,14 +438,10 @@ export const selectAffectedScriptTests = ({
   const graph = buildImportGraph(realRoot, [
     ...tests.filter((test) => test.endsWith(".ts")),
     RUNNER_PATH,
-    SCAN_PRELOAD_PATH,
   ]);
-  // Every test runs with the scan preload, which the runner names but does
-  // not import.
-  const runnerClosure = new Set([
-    ...graph.closure(RUNNER_PATH),
-    ...graph.closure(SCAN_PRELOAD_PATH),
-  ]);
+  // Only traced runs load the scan preload, and a selection never traces, so
+  // a preload change affects only the tests that import it.
+  const runnerClosure = graph.closure(RUNNER_PATH);
   // The declarations file is in the runner's closure, but an edit to one
   // test's entry affects only that test when the changed entries are known.
   const declarationsKnown =
@@ -428,12 +458,6 @@ export const selectAffectedScriptTests = ({
       files: [...tests],
       skipped: 0,
       reason: "shared test configuration or runner changed",
-      verifierChanged: changed.some(
-        (file) =>
-          file === RUNNER_PATH ||
-          file === SCAN_PRELOAD_PATH ||
-          (file === SCRIPT_TEST_INPUTS_PATH && !declarationsKnown),
-      ),
     };
   }
   const undeclared = tests.filter((test) => {
@@ -1333,40 +1357,37 @@ if (import.meta.main) {
       workflowText,
     );
     const unlisted = selectScriptTests(discovered, DEPTH_TESTS, options.depth);
-    const base = options.verifyDeclarations ? undefined : comparisonBase();
+    const base =
+      options.mode === SCRIPT_TEST_MODES.affected
+        ? comparisonBase()
+        : undefined;
     const changed = base === undefined ? [] : changedFilesSince(base);
-    const declarationChanges =
-      base === undefined || !changed.includes(SCRIPT_TEST_INPUTS_PATH)
-        ? new Set<string>()
-        : changedDeclarations(declarationsAt(base), scriptTestInputs);
-    const selection =
-      base === undefined
-        ? {
-            files: unlisted,
-            skipped: 0,
-            reason: options.verifyDeclarations
-              ? "every declaration is verified"
-              : "no comparison base is available",
-          }
-        : selectAffectedScriptTests({
-            tests: unlisted,
-            changed,
-            declarationChanges,
-          });
+    const { selection, traced: tracedTests } = planScriptTestRun({
+      mode: options.mode,
+      tests: unlisted,
+      comparison:
+        base === undefined
+          ? undefined
+          : {
+              changed,
+              declarationChanges: changed.includes(SCRIPT_TEST_INPUTS_PATH)
+                ? changedDeclarations(declarationsAt(base), scriptTestInputs)
+                : new Set<string>(),
+            },
+      selectAffected: ({ changed: files, declarationChanges }) =>
+        selectAffectedScriptTests({
+          tests: unlisted,
+          changed: files,
+          declarationChanges,
+        }),
+    });
     console.log(
       `Selected ${selection.files.length} and skipped ${selection.skipped} unlisted script test file(s).`,
     );
     if (selection.reason !== undefined) {
       console.log(`Full run: ${selection.reason}.`);
     }
-    const traced = new Set(
-      testsToTrace({
-        selection,
-        changed,
-        declarationChanges,
-        verifyAll: options.verifyDeclarations,
-      }),
-    );
+    const traced = new Set(tracedTests);
     const hasStrace = () =>
       Bun.spawnSync(["sh", "-c", "command -v strace"], { stdout: "ignore" })
         .exitCode === 0;
@@ -1382,7 +1403,9 @@ if (import.meta.main) {
       traced.clear();
     }
     console.log(
-      `Tracing ${traced.size} test file(s) against their declared inputs; the nightly declaration run traces the other ${selection.files.length - traced.size}.`,
+      traced.size === 0
+        ? "Running untraced; the nightly declaration run verifies declared inputs."
+        : `Tracing ${traced.size} test file(s) against their declared inputs.`,
     );
     const graph =
       traced.size === 0
