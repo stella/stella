@@ -2152,6 +2152,7 @@ const config = defineConfig({
     "./.oxlint-plugins/s3-object-boundary.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
     "./.oxlint-plugins/tooltip-provider-owner.ts",
+    "./.oxlint-plugins/copy-feedback-owner.ts",
     "./.oxlint-plugins/sql-client-owner.ts",
     "./.oxlint-plugins/no-direct-unsaved-work-guard.ts",
     "./.oxlint-plugins/require-cn-for-classname-composition.ts",
@@ -2983,6 +2984,13 @@ const config = defineConfig({
       ],
       rules: {
         "tooltip-provider-owner/tooltip-provider-owner": "error",
+      },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/copy-feedback-owner.fixture.tsx"],
+      rules: {
+        "copy-feedback-owner/copy-feedback-owner": "error",
+        "copy-feedback-owner/no-raw-copy-listener": "error",
       },
     },
     {
@@ -4880,6 +4888,22 @@ const config = defineConfig({
       excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
       rules: {
         "tooltip-provider-owner/tooltip-provider-owner": "error",
+      },
+    },
+    {
+      // A Copy control confirms through its owner: CopyButton for a fixed
+      // value, useSelectionCopy for selected words, which also confirms the
+      // reader's own Cmd+C. The sanctioned copy listeners and the feedback
+      // owner are listed in the rule; a test fires synthetic events.
+      files: [
+        ...PRODUCT_FRONTEND_FILES,
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/chat/src/**/*.{ts,tsx}",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "copy-feedback-owner/copy-feedback-owner": "error",
+        "copy-feedback-owner/no-raw-copy-listener": "error",
       },
     },
     {
