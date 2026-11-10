@@ -129,7 +129,15 @@ describe("Table", () => {
     expect(markup).toContain('aria-sort="ascending"');
     expect(markup).toContain('data-slot="button"');
     expect(markup).toContain('type="button"');
-    expect(markup).toContain("-ms-3");
+    // The button cancels the head's own padding (px-2.5) and no more, so it
+    // stays inside the first column instead of reaching past the table edge.
+    const buttonClasses =
+      /<button[^>]*class="(?<classes>[^"]*)"/u
+        .exec(markup)
+        ?.groups?.["classes"]?.split(" ") ?? [];
+    expect(buttonClasses).toContain("px-2.5");
+    expect(buttonClasses).toContain("-ms-2.5");
+    expect(markup).not.toContain("-ms-3");
     expect(markup).not.toContain("flex-row-reverse");
   });
 
@@ -142,7 +150,7 @@ describe("Table", () => {
 
     expect(markup).toContain('aria-sort="none"');
     expect(markup).toMatch(/<th class="[^"]*text-end[^"]*tabular-nums/u);
-    expect(markup).toContain("-me-3 flex-row-reverse");
+    expect(markup).toContain("-me-2.5 flex-row-reverse");
   });
 });
 

@@ -59,6 +59,7 @@ const READINESS: ChatLocalRunReadiness = {
       ],
     },
   ],
+  maxApprovals: "full_auto",
 };
 
 const LOCAL: ChatRunTarget = {
@@ -75,9 +76,12 @@ const CODEX: ChatRunTarget = {
   approvals: "ask",
 };
 
-const renderMenu = (selected: ChatRunTarget) => {
+const renderMenu = (
+  selected: ChatRunTarget,
+  readiness: ChatLocalRunReadiness = READINESS,
+) => {
   const client = new QueryClient();
-  client.setQueryData(localRunnersOptions(ORGANIZATION_ID).queryKey, READINESS);
+  client.setQueryData(localRunnersOptions(ORGANIZATION_ID).queryKey, readiness);
   const chosen: ChatRunTarget[] = [];
   const tree = (target: ChatRunTarget) => (
     <QueryClientProvider client={client}>
@@ -134,6 +138,20 @@ test("a local turn offers every permission mode, and the ones this computer cann
   expect(auto.textContent).toContain(
     "Does what it judges safe on its own; asks about the rest.",
   );
+});
+
+test("a mode above the organization's limit is disabled with that reason, apart from the ones the computer cannot run", async () => {
+  const { view, chosen } = renderMenu(LOCAL, {
+    ...READINESS,
+    maxApprovals: "ask",
+  });
+  const auto = await permissionItem(view, "Auto");
+  const fullAuto = await permissionItem(view, "Full auto");
+  expect(auto.getAttribute("aria-disabled")).toBe("true");
+  expect(auto.textContent).toContain("Not allowed by your organization");
+  expect(fullAuto.textContent).toContain("Not available on this computer");
+  fireEvent.click(auto);
+  expect(chosen).toEqual([]);
 });
 
 test("choosing a permission mode keeps the harness and model, and the stored choice reads back as checked", async () => {

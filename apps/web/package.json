@@ -6,11 +6,11 @@
   "type": "module",
   "imports": {
     "#aho-corasick": {
-      "browser": "@stll/aho-corasick-wasm",
+      "browser": "./src/lib/platform/aho-corasick.browser.ts",
       "default": "@stll/aho-corasick"
     },
     "#regex-set": {
-      "browser": "@stll/regex-set-wasm",
+      "browser": "./src/lib/platform/regex-set.browser.ts",
       "default": "@stll/regex-set"
     }
   },
@@ -25,8 +25,8 @@
     "typegen": "bun run generate:messages && bun scripts/sync-prepaint-locales.ts && bun scripts/sync-withdrawn-decision-labels.ts",
     "glossary": "bun ../../packages/scripts/src/glossary-gen.ts src/i18n",
     "typecheck": "([ -n \"$TURBO_HASH\" ] || bun run --cwd ../.. generate) && bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=e2e/tsconfig.json && bun check --no-pretty --all --project=e2e/unit/tsconfig.json",
-    "lint": "cd ../.. && ([ -n \"$TURBO_HASH\" ] || bun run generate) && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/web && bun test scripts/mutation-query-census.test.ts scripts/check-mutation-query-invalidation.test.ts && bun scripts/check-mutation-query-invalidation.ts --check",
-    "lint:fix": "cd ../.. && ([ -n \"$TURBO_HASH\" ] || bun run generate) && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/web",
+    "lint": "cd ../.. && ([ -n \"$TURBO_HASH\" ] || bun run generate) && bun scripts/lint.ts apps/web && bun test scripts/mutation-query-census.test.ts scripts/check-mutation-query-invalidation.test.ts && bun scripts/check-mutation-query-invalidation.ts --check",
+    "lint:fix": "cd ../.. && ([ -n \"$TURBO_HASH\" ] || bun run generate) && bun scripts/lint.ts --fix apps/web",
     "i18n:accept": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --accept",
     "i18n:brief": "bun ../../packages/scripts/src/i18n-brief.ts src/i18n/langs --usage-in=src --usage-in=scripts --usage-in=../../packages/ai-catalog/src",
     "i18n:check": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --unused-in=src --unused-in=scripts --unused-in=../../packages/ai-catalog/src --unused-in=../../packages/workspace-ui/src && bun ../../packages/scripts/src/glossary-gen.ts src/i18n --check && bun ../../packages/scripts/src/i18n-lint.ts src/i18n/langs && bun scripts/sync-prepaint-locales.ts --check && bun scripts/sync-withdrawn-decision-labels.ts --check",
@@ -39,6 +39,7 @@
     "test:e2e:anonymized-export": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.anonymized-export.config.ts",
     "test:e2e:stack-redaction": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.stack-redaction.config.ts",
     "test:e2e:collab": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.collab.config.ts",
+    "test:e2e:phone": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.phone.config.ts --project phone-layout",
     "test:e2e:ui-playground": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.ui-playground.config.ts",
     "test:e2e:ui-playground:update": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.ui-playground.config.ts --update-snapshots=all",
     "test:e2e:marketing": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.marketing.config.ts --project app",
@@ -118,7 +119,6 @@
     "@t3-oss/env-core": "catalog:",
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-client": "catalog:",
-    "@tanstack/ai-react": "catalog:",
     "@tanstack/react-devtools": "^0.10.14",
     "@tanstack/react-form": "^1.33.5",
     "@tanstack/react-hotkeys": "^0.17.0",

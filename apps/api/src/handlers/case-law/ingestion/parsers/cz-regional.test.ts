@@ -5,6 +5,7 @@ import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import type { ParseRegionalInput } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { PROCESSED_FIELD_EVIDENCE_READERS } from "@/api/tests/helpers/processed-field-evidence";
 
 const parseRegionalDecision = guardParser(uncheckedParseRegionalDecision);
 
@@ -786,4 +787,53 @@ test("quote repair preserves the publisher span owning every surviving character
     { type: "text", text: "„" },
     { type: "text", text: "J. N.", anonymized: true },
   ]);
+});
+
+describe("a line break typed inside a paragraph", () => {
+  test("12 C 183/2022: the citation the publisher's entries split reads as one paragraph", async () => {
+    const [decision] = await PROCESSED_FIELD_EVIDENCE_READERS["cz-regional"](
+      "src/handlers/case-law/ingestion/parsers/__fixtures__/cz-regional-12-c-183-2022.finaldoc.json.gz",
+    );
+    const texts = (decision?.ast.blocks ?? []).flatMap((block) =>
+      block.type === "paragraph" ? [block.plainText] : [],
+    );
+    expect(texts.filter((text) => text.startsWith("č. 351/2013 Sb."))).toEqual(
+      [],
+    );
+    expect(
+      texts.some((text) =>
+        /s\snařízením vlády č\. 351\/2013 Sb\., je její nárok/u.test(text),
+      ),
+    ).toBe(true);
+  });
+
+  test.each([
+    [
+      "a carriage return joins the entries",
+      "Žalobce uplatnil nárok podle\rzákona.\nSoud žalobě vyhověl.",
+      2,
+    ],
+    [
+      "a newline keeps them apart",
+      "Žalobce uplatnil nárok podle\nzákona.\nSoud žalobě vyhověl.",
+      3,
+    ],
+    ["texts that do not line up keep them apart", "Jiný text.\rZcela.", 3],
+  ])("%s", (_, justificationText, count) => {
+    const { documentAst } = parseRegionalDecision(
+      baseInput({
+        justification: [
+          makePara("Žalobce uplatnil nárok podle"),
+          makePara("zákona."),
+          makePara("Soud žalobě vyhověl."),
+        ],
+        justificationText,
+      }),
+    );
+    const texts = documentAst.blocks
+      .filter(isParagraph)
+      .map((block) => block.plainText);
+    expect(texts).toHaveLength(count);
+    expect(texts.join(" ")).toContain("podle zákona.");
+  });
 });

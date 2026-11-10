@@ -799,9 +799,9 @@
           "paragraph-intro": 4,
           "heading": 2,
           "paragraph-holding": 2,
-          "paragraph": 45,
+          "paragraph": 44,
           "paragraph-closing": 1,
-          "paragraph-signature": 1
+          "paragraph-signature": 2
         },
         "tinyBlocks": 7,
         "hugeBlocks": 0,
@@ -865,9 +865,9 @@
           "paragraph-intro": 4,
           "heading": 2,
           "paragraph-holding": 2,
-          "paragraph": 44,
+          "paragraph": 43,
           "paragraph-closing": 1,
-          "paragraph-signature": 1
+          "paragraph-signature": 2
         },
         "tinyBlocks": 7,
         "hugeBlocks": 0,
@@ -903,9 +903,9 @@
           "paragraph-intro": 4,
           "heading": 2,
           "paragraph-holding": 2,
-          "paragraph": 46,
+          "paragraph": 45,
           "paragraph-closing": 1,
-          "paragraph-signature": 1
+          "paragraph-signature": 2
         },
         "tinyBlocks": 7,
         "hugeBlocks": 0,
@@ -935,9 +935,9 @@
           "paragraph-intro": 4,
           "heading": 2,
           "paragraph-holding": 2,
-          "paragraph": 45,
+          "paragraph": 44,
           "paragraph-closing": 1,
-          "paragraph-signature": 1
+          "paragraph-signature": 2
         },
         "tinyBlocks": 7,
         "hugeBlocks": 0,
@@ -967,9 +967,9 @@
           "paragraph-intro": 4,
           "heading": 2,
           "paragraph-holding": 2,
-          "paragraph": 45,
+          "paragraph": 44,
           "paragraph-closing": 1,
-          "paragraph-signature": 1
+          "paragraph-signature": 2
         },
         "tinyBlocks": 7,
         "hugeBlocks": 0,
@@ -999,9 +999,9 @@
           "heading": 2,
           "paragraph-intro": 3,
           "paragraph-holding": 1,
-          "paragraph": 39,
+          "paragraph": 38,
           "paragraph-closing": 1,
-          "paragraph-signature": 1
+          "paragraph-signature": 2
         },
         "tinyBlocks": 4,
         "hugeBlocks": 0,
@@ -1075,9 +1075,9 @@
           "heading": 2,
           "paragraph-intro": 3,
           "paragraph-holding": 1,
-          "paragraph": 38,
+          "paragraph": 37,
           "paragraph-closing": 1,
-          "paragraph-signature": 1
+          "paragraph-signature": 2
         },
         "tinyBlocks": 4,
         "hugeBlocks": 0,
@@ -1113,9 +1113,9 @@
           "heading": 2,
           "paragraph-intro": 3,
           "paragraph-holding": 1,
-          "paragraph": 40,
+          "paragraph": 39,
           "paragraph-closing": 1,
-          "paragraph-signature": 1
+          "paragraph-signature": 2
         },
         "tinyBlocks": 4,
         "hugeBlocks": 0,
@@ -1145,9 +1145,9 @@
           "heading": 2,
           "paragraph-intro": 3,
           "paragraph-holding": 1,
-          "paragraph": 39,
+          "paragraph": 38,
           "paragraph-closing": 1,
-          "paragraph-signature": 1
+          "paragraph-signature": 2
         },
         "tinyBlocks": 4,
         "hugeBlocks": 0,
@@ -1177,9 +1177,9 @@
           "heading": 2,
           "paragraph-intro": 3,
           "paragraph-holding": 1,
-          "paragraph": 39,
+          "paragraph": 38,
           "paragraph-closing": 1,
-          "paragraph-signature": 1
+          "paragraph-signature": 2
         },
         "tinyBlocks": 4,
         "hugeBlocks": 0,
@@ -3418,6 +3418,256 @@
     }
   },
   {
+    "name": "parsers/cz-us-iv-us-35-96.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 10433,
+        "astLength": 10179,
+        "retainedPct": 97.6,
+        "blockCount": 22,
+        "missingWords": [
+          "iv.ús",
+          "sbnu",
+          "exkluzivitě",
+          "ochraně",
+          "nabytého",
+          "aplikací",
+          "předpisu"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 15
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 20861,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-35-96.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "CONTENT_LOSS",
+          "message": "Only 88.8% of text retained (threshold: 90%)",
+          "severity": "error"
+        },
+        {
+          "code": "MISSING_WORDS",
+          "message": "50 meaningful words missing: iv.ús, sbnu, exkluzivitě, ochraně, nabytého, aplikací, předpisu, uvádějí, uzavřené, náležitostí",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 10433,
+        "astLength": 9264,
+        "retainedPct": 88.8,
+        "blockCount": 21,
+        "missingWords": [
+          "iv.ús",
+          "sbnu",
+          "exkluzivitě",
+          "ochraně",
+          "nabytého",
+          "aplikací",
+          "předpisu",
+          "uvádějí",
+          "uzavřené",
+          "náležitostí",
+          "žádný",
+          "předpis",
+          "včetně",
+          "neuváděl",
+          "úkony",
+          "učiněné",
+          "doby",
+          "prohlášení",
+          "těchto",
+          "nepřátele",
+          "zahájení",
+          "jsou",
+          "právně",
+          "neúčinné",
+          "takové",
+          "tvrzení",
+          "uvedeno",
+          "namítají",
+          "fakticky",
+          "existovalo",
+          "dobu",
+          "aniž",
+          "mohl",
+          "kdokoli",
+          "předpokládat",
+          "bývalý",
+          "bude",
+          "prohlášen",
+          "zásahu",
+          "práv",
+          "protiprávním",
+          "porušujícím",
+          "obecně",
+          "uznávaná",
+          "lidská",
+          "svobody",
+          "navrhují",
+          "zrušení",
+          "obou",
+          "napadených"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 14
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 20861,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-35-96.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 10433,
+        "astLength": 11094,
+        "retainedPct": 106.3,
+        "blockCount": 23,
+        "missingWords": [
+          "iv.ús",
+          "sbnu",
+          "exkluzivitě",
+          "ochraně",
+          "nabytého",
+          "aplikací",
+          "předpisu"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 16
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 20861,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-35-96.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 10433,
+        "astLength": 10178,
+        "retainedPct": 97.6,
+        "blockCount": 22,
+        "missingWords": [
+          "iv.ús",
+          "sbnu",
+          "exkluzivitě",
+          "ochraně",
+          "nabytého",
+          "aplikací",
+          "předpisu"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 15
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 20861,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-us-iv-us-35-96.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 10433,
+        "astLength": 10179,
+        "retainedPct": 97.6,
+        "blockCount": 22,
+        "missingWords": [
+          "iv.ús",
+          "sbnu",
+          "exkluzivitě",
+          "ochraně",
+          "nabytého",
+          "aplikací",
+          "předpisu"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 15
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 12,
+          "textCharacters": 20861,
+          "ancestorChecks": 15
+        }
+      }
+    }
+  },
+  {
     "name": "parsers/cz-us-iv-us-422-26.html.gz#current",
     "result": {
       "ok": true,
@@ -3618,9 +3868,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
         },
@@ -3721,9 +3971,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 13
         },
@@ -3768,9 +4018,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 15
         },
@@ -3809,9 +4059,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
         },
@@ -3850,9 +4100,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 12,
-          "paragraph": 48,
-          "paragraph-intro": 1,
+          "paragraph-intro": 4,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
         },
@@ -3877,7 +4127,7 @@
         "originalLength": 99612,
         "astLength": 99478,
         "retainedPct": 99.9,
-        "blockCount": 178,
+        "blockCount": 174,
         "missingWords": ["sbnu", "změna"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
@@ -3887,7 +4137,7 @@
           "paragraph": 76,
           "paragraph-closing": 7,
           "paragraph-signature": 2,
-          "paragraph-dissent": 73
+          "paragraph-dissent": 69
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -3908,32 +4158,19 @@
       "issues": [],
       "stats": {
         "originalLength": 99612,
-        "astLength": 99092,
-        "retainedPct": 99.5,
-        "blockCount": 177,
-        "missingWords": [
-          "sbnu",
-          "změna",
-          "násobkem",
-          "základního",
-          "narůstání",
-          "končí",
-          "nulové",
-          "mne",
-          "nesvědčí",
-          "vycházel",
-          "věrohodný",
-          "analýze"
-        ],
+        "astLength": 99305,
+        "retainedPct": 99.7,
+        "blockCount": 173,
+        "missingWords": ["sbnu", "změna", "pořádkem"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
           "paragraph-intro": 1,
           "paragraph-holding": 3,
-          "paragraph": 76,
+          "paragraph": 75,
           "paragraph-closing": 7,
           "paragraph-signature": 2,
-          "paragraph-dissent": 72
+          "paragraph-dissent": 69
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -3960,19 +4197,19 @@
       ],
       "stats": {
         "originalLength": 99612,
-        "astLength": 99864,
-        "retainedPct": 100.3,
-        "blockCount": 179,
+        "astLength": 99651,
+        "retainedPct": 100,
+        "blockCount": 175,
         "missingWords": ["sbnu", "změna"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
           "paragraph-intro": 1,
           "paragraph-holding": 3,
-          "paragraph": 76,
+          "paragraph": 77,
           "paragraph-closing": 7,
           "paragraph-signature": 2,
-          "paragraph-dissent": 74
+          "paragraph-dissent": 69
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -3995,7 +4232,7 @@
         "originalLength": 99612,
         "astLength": 99477,
         "retainedPct": 99.9,
-        "blockCount": 178,
+        "blockCount": 174,
         "missingWords": ["sbnu", "změna"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
@@ -4005,7 +4242,7 @@
           "paragraph": 76,
           "paragraph-closing": 7,
           "paragraph-signature": 2,
-          "paragraph-dissent": 73
+          "paragraph-dissent": 69
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -4028,7 +4265,7 @@
         "originalLength": 99612,
         "astLength": 99478,
         "retainedPct": 99.9,
-        "blockCount": 178,
+        "blockCount": 174,
         "missingWords": ["sbnu", "změna"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
@@ -4038,7 +4275,7 @@
           "paragraph": 76,
           "paragraph-closing": 7,
           "paragraph-signature": 2,
-          "paragraph-dissent": 73
+          "paragraph-dissent": 69
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -5376,7 +5613,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 41,
-          "paragraph-intro": 51,
+          "paragraph-intro": 12,
+          "paragraph-publisher-note": 39,
           "paragraph": 711
         },
         "tinyBlocks": 20,
@@ -5414,7 +5652,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 41,
-          "paragraph-intro": 51,
+          "paragraph-intro": 12,
+          "paragraph-publisher-note": 39,
           "paragraph": 710
         },
         "tinyBlocks": 20,
@@ -5449,7 +5688,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 41,
-          "paragraph-intro": 51,
+          "paragraph-intro": 12,
+          "paragraph-publisher-note": 39,
           "paragraph": 712
         },
         "tinyBlocks": 20,
@@ -5478,7 +5718,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 41,
-          "paragraph-intro": 51,
+          "paragraph-intro": 12,
+          "paragraph-publisher-note": 39,
           "paragraph": 711
         },
         "tinyBlocks": 20,
@@ -5507,7 +5748,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 41,
-          "paragraph-intro": 51,
+          "paragraph-intro": 12,
+          "paragraph-publisher-note": 39,
           "paragraph": 711
         },
         "tinyBlocks": 20,
@@ -5551,7 +5793,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 41,
-          "paragraph-intro": 51,
+          "paragraph-intro": 12,
+          "paragraph-publisher-note": 39,
           "paragraph": 710
         },
         "tinyBlocks": 20,
@@ -10366,9 +10609,11 @@
         "blockTypeCounts": {
           "heading": 12,
           "paragraph-case-number": 1,
-          "paragraph-holding": 10,
-          "paragraph": 233,
-          "paragraph-quote": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 8,
+          "paragraph-argumentation": 226,
+          "paragraph-quote": 7,
+          "paragraph": 7
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -10397,9 +10642,11 @@
         "blockTypeCounts": {
           "heading": 12,
           "paragraph-case-number": 1,
-          "paragraph-holding": 10,
-          "paragraph": 232,
-          "paragraph-quote": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 8,
+          "paragraph-argumentation": 225,
+          "paragraph-quote": 7,
+          "paragraph": 7
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -10434,9 +10681,11 @@
         "blockTypeCounts": {
           "heading": 12,
           "paragraph-case-number": 1,
-          "paragraph-holding": 10,
-          "paragraph": 234,
-          "paragraph-quote": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 8,
+          "paragraph-argumentation": 227,
+          "paragraph-quote": 7,
+          "paragraph": 7
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -10465,9 +10714,11 @@
         "blockTypeCounts": {
           "heading": 12,
           "paragraph-case-number": 1,
-          "paragraph-holding": 10,
-          "paragraph": 233,
-          "paragraph-quote": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 8,
+          "paragraph-argumentation": 226,
+          "paragraph-quote": 7,
+          "paragraph": 7
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -10496,9 +10747,11 @@
         "blockTypeCounts": {
           "heading": 12,
           "paragraph-case-number": 1,
-          "paragraph-holding": 10,
-          "paragraph": 233,
-          "paragraph-quote": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 8,
+          "paragraph-argumentation": 226,
+          "paragraph-quote": 7,
+          "paragraph": 7
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -10527,9 +10780,11 @@
         "blockTypeCounts": {
           "heading": 12,
           "paragraph-case-number": 1,
-          "paragraph-holding": 10,
-          "paragraph": 232,
-          "paragraph-quote": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 8,
+          "paragraph-argumentation": 226,
+          "paragraph-quote": 7,
+          "paragraph": 6
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -10558,9 +10813,11 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 11,
-          "paragraph": 90,
-          "paragraph-quote": 4
+          "paragraph-intro": 2,
+          "paragraph-holding": 9,
+          "paragraph-argumentation": 86,
+          "paragraph-quote": 4,
+          "paragraph": 4
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10589,9 +10846,11 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 11,
-          "paragraph": 89,
-          "paragraph-quote": 4
+          "paragraph-intro": 2,
+          "paragraph-holding": 9,
+          "paragraph-argumentation": 85,
+          "paragraph-quote": 4,
+          "paragraph": 4
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10626,9 +10885,11 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 11,
-          "paragraph": 91,
-          "paragraph-quote": 4
+          "paragraph-intro": 2,
+          "paragraph-holding": 9,
+          "paragraph-argumentation": 87,
+          "paragraph-quote": 4,
+          "paragraph": 4
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10657,9 +10918,11 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 11,
-          "paragraph": 90,
-          "paragraph-quote": 4
+          "paragraph-intro": 2,
+          "paragraph-holding": 9,
+          "paragraph-argumentation": 86,
+          "paragraph-quote": 4,
+          "paragraph": 4
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10688,9 +10951,11 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 11,
-          "paragraph": 90,
-          "paragraph-quote": 4
+          "paragraph-intro": 2,
+          "paragraph-holding": 9,
+          "paragraph-argumentation": 86,
+          "paragraph-quote": 4,
+          "paragraph": 4
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10719,9 +10984,11 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 11,
-          "paragraph": 89,
-          "paragraph-quote": 4
+          "paragraph-intro": 2,
+          "paragraph-holding": 9,
+          "paragraph-argumentation": 86,
+          "paragraph-quote": 4,
+          "paragraph": 3
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10750,8 +11017,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 6
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 6
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10780,8 +11048,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 5
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 5
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10816,8 +11085,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 7
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 7
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10846,8 +11116,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 6
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 6
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10876,8 +11147,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 6
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 6
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10906,8 +11178,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 41
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 41
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10936,8 +11209,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 40
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 40
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -10972,8 +11246,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 42
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 42
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -11002,8 +11277,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 41
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 41
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -11032,8 +11308,9 @@
         "blockTypeCounts": {
           "heading": 2,
           "paragraph-case-number": 1,
-          "paragraph-holding": 3,
-          "paragraph": 41
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 41
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,

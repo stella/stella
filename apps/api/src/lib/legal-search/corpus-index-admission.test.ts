@@ -3,7 +3,9 @@ import { afterEach, expect, test } from "bun:test";
 
 import {
   createCorpusSearchAdmission,
+  runAsCorpusSearchCaller,
   runInCorpusSearchLane,
+  runWithPatientCorpusReads,
 } from "@/api/lib/legal-search/corpus-index-admission";
 import {
   CorpusIndexError,
@@ -252,4 +254,138 @@ test("a read admitted without queueing reports no wait, however late it resumes"
       : panic(`Expected admission, got ${result.reason}`);
   read.release();
   expect(read.waitedMs).toBe(0);
+});
+
+test("one caller's backlog does not delay another caller's first read", async () => {
+  const admission = createCorpusSearchAdmission({ slots: 1 });
+  const held = await admitted(admission);
+  const order: string[] = [];
+  const read = async (caller: string, name: string): Promise<void> =>
+    await runAsCorpusSearchCaller(caller, async () => {
+      const result = await admission.acquire({ waitLimit: unbounded() });
+      order.push(name);
+      if (result.type === "admitted") {
+        queueMicrotask(result.release);
+      }
+    });
+  const backlog = Array.from(
+    { length: 6 },
+    async (_, index) => await read("noisy", `noisy-${String(index)}`),
+  );
+  // Queued after the whole backlog, but its turn comes before the backlog's tail.
+  const quiet = read("quiet", "quiet");
+  await Promise.resolve();
+  held();
+  await Promise.all([...backlog, quiet]);
+  expect(order.indexOf("quiet")).toBeLessThan(order.indexOf("noisy-2"));
+  // Each caller's own reads still keep their arrival order.
+  const noisy = order.filter((name) => name.startsWith("noisy"));
+  expect(noisy).toEqual(noisy.toSorted());
+});
+
+test("reads with no caller keep the plain request order", async () => {
+  const admission = createCorpusSearchAdmission({ slots: 1 });
+  const held = await admitted(admission);
+  const order: string[] = [];
+  const read = async (name: string, lane: number): Promise<void> =>
+    await runInCorpusSearchLane(lane, async () => {
+      const result = await admission.acquire({ waitLimit: unbounded() });
+      order.push(name);
+      if (result.type === "admitted") {
+        queueMicrotask(result.release);
+      }
+    });
+  // Two reads of one request, so the lane is what tells them apart.
+  const reads = runWithinRequestLatencyBudget(
+    { label: "one-request", budgetMs: 60_000, startedAtMs: 1 },
+    () => [read("late", 1), read("early", 0)],
+  );
+  await Promise.resolve();
+  held();
+  await Promise.all(reads);
+  expect(order).toEqual(["early", "late"]);
+});
+
+test("a read the queue estimates cannot start in time is refused at once", async () => {
+  let clock = 0;
+  const admission = createCorpusSearchAdmission({
+    slots: 1,
+    now: () => clock,
+  });
+  // Teach the queue reads take a second each.
+  for (let index = 0; index < 8; index++) {
+    const release = await admitted(admission);
+    clock += 1000;
+    release();
+  }
+  const held = await admitted(admission);
+  const queued = admission.acquire({ waitLimit: unbounded() });
+  await Promise.resolve();
+  expect(admission.estimatedWaitMs()).toBeGreaterThan(1000);
+
+  const refused = await admission.acquire({
+    waitLimit: unbounded(),
+    maxWaitMs: 500,
+  });
+  expect(refused).toMatchObject({
+    type: "refused",
+    reason: "deadline",
+    waitedMs: 0,
+  });
+
+  // With time to spare it queues as usual.
+  const patient = admission.acquire({
+    waitLimit: unbounded(),
+    maxWaitMs: 60_000,
+  });
+  await Promise.resolve();
+  expect(admission.stats().queued).toBe(2);
+  held();
+  const first = await queued;
+  if (first.type === "admitted") {
+    first.release();
+  }
+  const second = await patient;
+  if (second.type === "admitted") {
+    second.release();
+  }
+});
+
+test("an unmeasured queue never refuses for its estimate", async () => {
+  const admission = createCorpusSearchAdmission({ slots: 1 });
+  const held = await admitted(admission);
+  const queued = admission.acquire({ waitLimit: unbounded(), maxWaitMs: 1 });
+  await Promise.resolve();
+  expect(admission.stats().queued).toBe(1);
+  held();
+  const result = await queued;
+  if (result.type === "admitted") {
+    result.release();
+  }
+});
+
+test("a patient read waits out a full queue where another is refused", async () => {
+  const admission = createCorpusSearchAdmission({ slots: 1, maxWaiters: 1 });
+  const held = await admitted(admission);
+  const queued = admission.acquire({ waitLimit: unbounded() });
+  await Promise.resolve();
+
+  expect(await admission.acquire({ waitLimit: unbounded() })).toMatchObject({
+    type: "refused",
+    reason: "busy",
+  });
+
+  const patient = runWithPatientCorpusReads(
+    async () => await admission.acquire({ waitLimit: unbounded() }),
+  );
+  held();
+  const first = await queued;
+  if (first.type === "admitted") {
+    first.release();
+  }
+  const admittedPatient = await patient;
+  expect(admittedPatient.type).toBe("admitted");
+  if (admittedPatient.type === "admitted") {
+    admittedPatient.release();
+  }
 });

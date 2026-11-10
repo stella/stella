@@ -16,12 +16,12 @@ import { panic, Result } from "better-result";
  * claimable, and findings upsert on `(runId, positionId)`. A re-delivered job
  * is therefore either a no-op or writes exactly the rows it wrote before.
  */
-import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, lt, or } from "drizzle-orm";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
-import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
+import { documentReviewRuns } from "@/api/db/schema";
 import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
@@ -37,7 +37,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import {
   buildDocumentReviewFindingRow,
   recountDocumentReviewFindingProgress,
-  upsertDocumentReviewFindings,
+  writeReviewFindingBatch,
 } from "@/api/lib/document-review/finding-write";
 import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
@@ -53,11 +53,17 @@ import type {
   DocumentReviewRunBasis,
   DocumentReviewRunErrorCode,
 } from "@/api/lib/document-review/run-contract";
-import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
+import {
+  failReviewRun,
+  finalizeWorkerRun,
+  recordRunWithheldSources,
+  reportFinalizedReviewRun,
+} from "@/api/lib/document-review/run-finalize";
 import { resolveDocumentReviewRunInputs } from "@/api/lib/document-review/run-inputs";
 import type { PinnedDocument } from "@/api/lib/document-review/run-inputs";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import type { ReviewRunPlan } from "@/api/lib/document-review/run-plan";
+import { DocumentTooLargeError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -83,9 +89,14 @@ import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 import type { ResolvedTiers } from "@/api/lib/workflow/playbook-positions";
 import {
+  answerShapeForPosition,
   isTierStandard,
   resolveEffectiveAsk,
 } from "@/api/lib/workflow/position-runtime";
+import {
+  fitDocxFilesToRequestBudget,
+  requestBudgetBytesForTask,
+} from "@/api/lib/workflow/request-budget";
 import {
   loadClauseSnapshots,
   resolveTiers,
@@ -763,6 +774,29 @@ const runGradingPass = async ({
     return null;
   }
 
+  const fit = fitDocxFilesToRequestBudget({
+    files: [target],
+    budgetBytes: requestBudgetBytesForTask("pdf", deps.orgAIConfig, {
+      dataClass: "customer",
+      organizationId: actor.organizationId,
+      modelTier: deps.admission.modelTier,
+    }),
+  });
+  if (Result.isError(fit)) {
+    return "document_too_large";
+  }
+  if (fit.value.type === "cut") {
+    const { withheld } = fit.value;
+    await actor.writeDb(
+      async (tx) =>
+        await recordRunWithheldSources(
+          tx,
+          { workspaceId: actor.workspaceId, runId: actor.runId },
+          withheld,
+        ),
+    );
+  }
+
   const positions = plan.positions.map((planned) => planned.position);
   const clauseSnapshots = await actor.writeDb(
     async (tx) =>
@@ -791,6 +825,7 @@ const runGradingPass = async ({
       sourceId: position.sourceId,
       question: ask.question.trim(),
       content,
+      answerShape: answerShapeForPosition(position),
     });
   }
 
@@ -800,7 +835,9 @@ const runGradingPass = async ({
     ...deps,
   });
   if (Result.isError(extraction)) {
-    return "playbook_check_failed";
+    return DocumentTooLargeError.is(extraction.error)
+      ? "document_too_large"
+      : "playbook_check_failed";
   }
 
   const plannedByPositionId = new Map(
@@ -829,9 +866,10 @@ const runGradingPass = async ({
   const graded: ReviewFinding[] = await buildFindings({
     positions,
     passageTextById,
-    contentBySourceId: extraction.value.contentBySourceId,
+    askOutcomes: extraction.value.outcomeBySourceId,
     tiersBySourceId,
     target,
+    documentRead: fit.value.type,
     perspective: run.basis.perspective,
     referenceEntityVersionIds: run.basis.references.map(
       (reference) => reference.entityVersionId,
@@ -877,31 +915,22 @@ const buildFindingRow = ({
     payload,
   });
 
-/** Commit the pass's findings and record how many the run holds, in the same
- *  transaction as the write, so the number can never run ahead of the rows. */
+/** Commit one batch of the pass's findings through the step both executors
+ *  share. The run completes once, after the pass, in `finalizeRun`. */
 const upsertFindings = async (
   actor: RunActor,
   rows: readonly FindingRow[],
 ): Promise<void> => {
-  await actor.writeDb(async (tx) => {
-    await upsertDocumentReviewFindings(tx, rows);
-    // audit: skip — progress bookkeeping on the run row audited at create.
-    await tx
-      .update(documentReviewRuns)
-      .set({
-        completed: sql<number>`(
-          select count(*)::int from ${documentReviewFindings}
-          where ${documentReviewFindings.runId} = ${documentReviewRuns.id}
-        )`,
-      })
-      .where(
-        and(
-          eq(documentReviewRuns.id, actor.runId),
-          eq(documentReviewRuns.workspaceId, actor.workspaceId),
-          eq(documentReviewRuns.status, "running"),
-        ),
-      );
-  });
+  await actor.writeDb(
+    async (tx) =>
+      await writeReviewFindingBatch({
+        tx,
+        workspaceId: actor.workspaceId,
+        rows,
+        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
+        runId: actor.runId,
+      }),
+  );
 };
 
 /**
@@ -914,35 +943,20 @@ const finalizeRun = async (
   run: ClaimedRun,
   plan: ReviewRunPlan,
 ): Promise<DocumentReviewRunErrorCode | null> => {
-  const finalized = await actor.writeDb(
-    async (tx) =>
-      await finalizeReviewRun({
-        tx,
-        workspaceId: actor.workspaceId,
-        runId: actor.runId,
-        entityId: run.entityId,
-        fileFieldId: run.fileFieldId,
-        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
-        expectedFindingCount: plan.expectedFindingCount,
-      }),
-  );
+  const finalized = await finalizeWorkerRun({
+    actor,
+    basis: run.basis,
+    entityId: run.entityId,
+    fileFieldId: run.fileFieldId,
+    expectedFindingCount: plan.expectedFindingCount,
+  });
   if (finalized.type === "incomplete") {
     return "internal";
   }
-  if (finalized.carried > 0) {
-    logger.info("document_review_run.decisions_carried", {
-      count: String(finalized.carried),
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
-  }
-  if (finalized.skippedForPendingLimit > 0) {
-    logger.warn("document_review_run.fixes_unstaged_pending_limit", {
-      count: String(finalized.skippedForPendingLimit),
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
-  }
+  reportFinalizedReviewRun(finalized, {
+    workspaceId: actor.workspaceId,
+    runId: actor.runId,
+  });
   return null;
 };
 
@@ -950,19 +964,14 @@ const setRunFailed = async (
   actor: RunActor,
   errorCode: DocumentReviewRunErrorCode,
 ): Promise<void> => {
-  await actor.writeDb(async (tx) => {
-    // audit: skip — failure bookkeeping on the run row audited at create.
-    await tx
-      .update(documentReviewRuns)
-      .set({ status: "failed", errorCode, finishedAt: new Date() })
-      .where(
-        and(
-          eq(documentReviewRuns.id, actor.runId),
-          eq(documentReviewRuns.workspaceId, actor.workspaceId),
-          inArray(documentReviewRuns.status, ["queued", "running"]),
-        ),
-      );
-  });
+  await actor.writeDb(
+    async (tx) =>
+      await failReviewRun(
+        tx,
+        { workspaceId: actor.workspaceId, runId: actor.runId },
+        errorCode,
+      ),
+  );
 };
 
 /** Last-resort failure marker used from the worker `failed` handler: rebrands

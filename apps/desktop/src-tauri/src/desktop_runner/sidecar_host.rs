@@ -71,11 +71,13 @@ const JOURNAL_BATCH: usize = 256;
 /// Room a run message needs in a frame beyond its chunk.
 const FRAME_ENVELOPE_BYTES: usize = 1024;
 
-/// An installed harness CLI, kept in place while `lease` lives.
+/// An installed harness CLI, kept in place while `lease` lives. So are the
+/// managed tools in `tool_path`, the directories its commands find them in.
 pub(crate) struct InstalledHarness {
   pub(crate) version: String,
   pub(crate) executable: PathBuf,
   pub(crate) config_dir: PathBuf,
+  pub(crate) tool_path: Vec<PathBuf>,
   pub(crate) lease: Box<dyn Send + Sync>,
 }
 
@@ -853,6 +855,11 @@ impl HarnessHost for SidecarHarnessHost {
         SKILL_FOLDER_BUDGET,
         Arc::clone(&self.shared.harnesses),
       ),
+      tool_path: installed
+        .tool_path
+        .iter()
+        .map(|dir| dir.to_string_lossy().into_owned())
+        .collect(),
       model: start.model,
       instructions: start.instructions,
       messages: start.messages,

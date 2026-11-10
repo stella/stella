@@ -1,10 +1,24 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  containsPlOperativeVerb,
+  isPlAppealInstruction,
+  isPlAuthorityDecisionTitle,
+  isPlBenchMemberLine,
+  isPlCompositionLine,
+  isPlDecisionDateLine,
   isPlHoldingHeading,
+  isPlInstructionHeading,
+  isPlLegalBasisRuling,
   isPlReasonsHeading,
+  isPlRecitalLine,
+  isPlRemedyFilingLine,
   isPlSignatureBlank,
   isPlSignatureLine,
+  namesPlDocumentType,
+  opensPlRuling,
+  opensWithPlSignatureTitle,
+  plRulingClauseStart,
   startsWithPlOperativeVerb,
 } from "./polish-document-roles";
 
@@ -78,6 +92,7 @@ describe("a Polish holding heading", () => {
     "uchwala",
     "uchwalić",
     "uchwalił:",
+    "ustalił:",
     "zarządza",
   ])("recognizes a bare holding heading: %s", (text) => {
     expect(isPlHoldingHeading(text)).toBe(true);
@@ -151,4 +166,235 @@ describe("the Polish reasons heading", () => {
       expect(isPlReasonsHeading(text)).toBe(false);
     },
   );
+});
+
+describe("the Polish head matter before the ruling", () => {
+  test.each([
+    "po rozpoznaniu w sprawie przeciwko skazanemu D. P.",
+    "po przeprowadzeniu postępowania administracyjnego w sprawie przetwarzania danych osobowych przez Burmistrza G., Prezes Urzędu Ochrony Danych Osobowych",
+    "Na podstawie art. 104 § 1 ustawy z dnia 14 czerwca 1960 r. Kodeks postępowania administracyjnego,",
+    "na podstawie art. 437 § 2 kpk",
+  ])("introduces the ruling: %s", (text) => {
+    expect(isPlRecitalLine(text)).toBe(true);
+  });
+
+  test.each([
+    // A ruling point that rules on its legal basis is the ruling.
+    "na podstawie art. 4 ust. 2 ustawy o Trybunale Konstytucyjnym umorzyć postępowanie",
+    "po rozpoznaniu apelacji oddala ją",
+    "1. zasądza od pozwanego kwotę 100 zł",
+  ])("rules: %s", (text) => {
+    expect(isPlRecitalLine(text)).toBe(false);
+  });
+
+  test("a ruling point that opens on its object still rules", () => {
+    expect(containsPlOperativeVerb("I. powództwo oddala,")).toBe(true);
+    expect(containsPlOperativeVerb("o d d a l a apelację")).toBe(true);
+    expect(containsPlOperativeVerb("sprawy z powództwa M. D.")).toBe(false);
+    expect(containsPlOperativeVerb("o oddaleniu powództwa")).toBe(false);
+  });
+
+  test("a spaced holding heading is the heading", () => {
+    expect(isPlHoldingHeading("p o s t a n a w i a")).toBe(true);
+    expect(isPlHoldingHeading("o r z e k a :")).toBe(true);
+    expect(startsWithPlOperativeVerb("o d d a l a apelację")).toBe(true);
+  });
+});
+
+describe("the opening of a Polish ruling", () => {
+  test.each([
+    "postanawia:",
+    "1. zasądza od pozwanego kwotę 100 zł",
+    "I.zmienia zaskarżoną decyzję",
+    "oddala apelację",
+    "o r z e k a :",
+  ])("opens a ruling: %s", (text) => {
+    expect(opensPlRuling(text)).toBe(true);
+  });
+
+  test.each([
+    "I. powództwo oddala,",
+    "po rozpoznaniu sprawy z powództwa M. D.",
+    "1. Sąd zważył, co następuje",
+  ])("does not open one on its verb: %s", (text) => {
+    expect(opensPlRuling(text)).toBe(false);
+  });
+
+  test("an authority rules in the sentence naming its legal basis", () => {
+    expect(
+      isPlLegalBasisRuling(
+        "Na podstawie art. 14b § 1 Ordynacji podatkowej Dyrektor Izby Skarbowej stwierdza, że stanowisko jest nieprawidłowe.",
+      ),
+    ).toBe(true);
+    expect(isPlLegalBasisRuling("na podstawie art. 437 § 2 kpk")).toBe(false);
+    expect(isPlLegalBasisRuling("1. zasądza na podstawie art. 98 k.p.c.")).toBe(
+      false,
+    );
+  });
+
+  test("the bench opens in either wording", () => {
+    expect(isPlCompositionLine("w składzie:")).toBe(true);
+    expect(
+      isPlCompositionLine(
+        "Sąd Okręgowy w Szczecinie Wydział VIII Gospodarczy w składzie następującym:",
+      ),
+    ).toBe(true);
+    expect(isPlCompositionLine("w składzie orzekającym zasiadał")).toBe(false);
+  });
+
+  test("a document's title names its declared type", () => {
+    expect(
+      namesPlDocumentType(
+        " INTERPRETACJA INDYWIDUALNA ",
+        "interpretacja indywidualna",
+      ),
+    ).toBe(true);
+    expect(
+      namesPlDocumentType(
+        "Zmiana interpretacji indywidualnej",
+        "zmiana interpretacji indywidualnej",
+      ),
+    ).toBe(true);
+    expect(
+      namesPlDocumentType("INTERPRETACJA INDYWIDUALNA", "interpretacja ogólna"),
+    ).toBe(false);
+    expect(namesPlDocumentType("", "")).toBe(false);
+  });
+});
+
+describe("a Polish instruction on appeal", () => {
+  test.each([
+    "Na orzeczenie - w terminie 14 dni od jego doręczenia - przysługuje skarga za pośrednictwem Prezesa Krajowej Izby Odwoławczej do Sądu Okręgowego w Warszawie.",
+    "Stosownie do art. 198a i 198b ustawy z dnia 29 stycznia 2004 r. Prawo zamówień publicznych na niniejszy wyrok - w terminie 7 dni od dnia jego doręczenia - przysługuje skarga.",
+    "Stosownie do treści art. 81 ust. 1 ustawy o ochronie konkurencji i konsumentów od niniejszej decyzji przysługuje stronie odwołanie do Sądu Okręgowego w Warszawie.",
+    "Stronie przysługuje prawo do wniesienia skargi na niniejszą interpretację przepisów prawa podatkowego z powodu jej niezgodności z prawem.",
+  ])("%p instructs on the remedy against this decision", (text) => {
+    expect(isPlAppealInstruction(text)).toBe(true);
+  });
+
+  test.each([
+    "Odwołującemu przysługuje prawo do skorzystania ze środka ochrony prawnej, gdyż wypełniono przesłankę interesu.",
+    "Od decyzji organu pierwszej instancji przysługuje odwołanie, z którego strona skorzystała.",
+    "Korekta kosztów wynagrodzenia pracowników przysługuje nam również w roku 2022.",
+    "oddala skargę",
+  ])("%p is not an instruction", (text) => {
+    expect(isPlAppealInstruction(text)).toBe(false);
+  });
+
+  test("its heading and where the remedy is filed", () => {
+    expect(isPlInstructionHeading("Pouczenie")).toBe(true);
+    expect(isPlInstructionHeading("POUCZENIA:")).toBe(true);
+    expect(isPlInstructionHeading("14. Pouczenie")).toBe(true);
+    expect(isPlInstructionHeading("P o u c z e n i e")).toBe(true);
+    expect(
+      isPlInstructionHeading("Pouczenie o prawie do odwołania jest zbędne."),
+    ).toBe(false);
+    expect(
+      isPlRemedyFilingLine("Skargę wnosi się za pośrednictwem organu."),
+    ).toBe(true);
+    expect(isPlRemedyFilingLine("Skarga została wniesiona w terminie.")).toBe(
+      false,
+    );
+  });
+});
+
+describe("a Polish head-matter line", () => {
+  test.each([
+    "Przewodniczący: Ewa Sikorska",
+    "Przewodnicząca: Agnieszka Trojanowska",
+    "Protokolant: Aldona Karpińska",
+    "Członkowie: Katarzyna Prowadzisz",
+    "Protokolant: stażysta Anna Kosowska",
+    "Przewodniczący: SSO Katarzyna Banko",
+  ])("%p names who sat", (line) => {
+    expect(isPlBenchMemberLine(line)).toBe(true);
+  });
+
+  test.each([
+    "Przewodniczący:…………………………",
+    "Przewodniczący:",
+    "Skład orzekający Izby:",
+    "Prokurator: zarzuty wobec oskarżonego",
+    "Członkowie: zarzuty wobec członków zarządu",
+  ])("%p is a signing label or a heading, not a name", (line) => {
+    expect(isPlBenchMemberLine(line)).toBe(false);
+  });
+
+  test("the decision's date on a line of its own", () => {
+    expect(isPlDecisionDateLine("z dnia 4 lutego 2022 r.")).toBe(true);
+    expect(isPlDecisionDateLine("Warszawa, dnia 1 września 2025 roku")).toBe(
+      true,
+    );
+    expect(isPlDecisionDateLine("Dnia 31 grudnia 2019 r.")).toBe(true);
+    expect(isPlDecisionDateLine("z dnia 12.03.2021 r.")).toBe(true);
+    expect(isPlDecisionDateLine("z dnia 4 lutego 2022 r.,")).toBe(true);
+    expect(
+      isPlDecisionDateLine(
+        "po rozpoznaniu na rozprawie w dniu 1 lutego 2022 roku",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("a line opening on an office", () => {
+  test.each([
+    "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+    "Przewodniczący: Anna Kowalska",
+    "Sędzia sprawozdawca:",
+  ])("%p signs", (line) => {
+    expect(opensWithPlSignatureTitle(line)).toBe(true);
+  });
+
+  test.each([
+    "Prezes Urzędu ustalił następujący stan faktyczny:",
+    "Prezes Urzędu ustalił, co następuje:",
+    "Prezes Urzędu Ochrony Konkurencji i Konsumentów zważył, co następuje.",
+    "Prezes Urzędu zważył, co następuje",
+  ])("%p leads in to the reasons and signs nothing", (line) => {
+    expect(opensWithPlSignatureTitle(line)).toBe(false);
+  });
+});
+
+describe("a Polish authority's decision title", () => {
+  test.each([
+    "DECYZJA RGD - 1/2026",
+    "DECYZJA DIH-1/48/2017",
+    "DECYZJA NR RBG - 11/2018",
+    "DECYZJA Nr RWA-26/2009",
+    "DECYZJA nr RPZ 6/2011",
+    "Decyzja nr 12",
+  ])("%p is a decision title", (line) => {
+    expect(isPlAuthorityDecisionTitle(line)).toBe(true);
+  });
+
+  test.each([
+    "DECYZJA",
+    "decyzja Prezesa Urzędu z dnia 3 marca 2020 r.",
+    "Decyzja ta jest ostateczna.",
+    "Decyzja nr 5 z dnia 3 marca 2020 r. została uchylona.",
+    "Decyzja nr 5 z dnia 3 marca 2020",
+    "Decyzja nr DOK-9/2011 jest prawomocna",
+  ])("%p is not one", (line) => {
+    expect(isPlAuthorityDecisionTitle(line)).toBe(false);
+  });
+});
+
+describe("a Polish recital that rules in its last clause", () => {
+  test("the ruling starts at its verb", () => {
+    const text =
+      "po przeprowadzeniu postępowania przeciwko spółce z siedzibą w Warszawie, uznaje się, że działanie narusza interesy konsumentów";
+    const start = plRulingClauseStart(text);
+    expect(start === undefined ? undefined : text.slice(start)).toStartWith(
+      "uznaje się, że działanie",
+    );
+  });
+
+  test("a recital without a ruling, or a ruling without a recital, is not split", () => {
+    expect(
+      plRulingClauseStart(
+        "po rozpoznaniu na rozprawie w dniu 1 lutego 2022 roku w Warszawie odwołania",
+      ),
+    ).toBeUndefined();
+    expect(plRulingClauseStart("Sąd, oddala apelację")).toBeUndefined();
+  });
 });

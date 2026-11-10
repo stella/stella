@@ -14,6 +14,9 @@ import {
   type HarnessAdapter,
   type HarnessAuth,
   type HarnessCapability,
+  type HarnessImageMediaType,
+  type HarnessInputFile,
+  type HarnessInputFileType,
   type HarnessModel,
   type HarnessProbe,
   HarnessProbeError,
@@ -30,6 +33,7 @@ import {
 } from "../events";
 import { packageCacheEnvironment } from "../package-cache";
 import { redactingSkillPaths } from "../skill-redaction";
+import { toolPathEnvironment } from "../tool-path";
 import { buildTurnPrompt } from "../transcript-handoff";
 import { settlesWithin } from "../turn-lifecycle";
 import {
@@ -96,16 +100,72 @@ export type ClaudeCodeHarnessAdapterOptions = {
   platform: NodeJS.Platform;
 };
 
-/**
- * What this adapter does with Claude Code. Image input stays off until turns
- * send attachments: the prompt is text only.
- */
-const CLAUDE_CODE_CAPABILITIES = {
+/** What this adapter does with Claude Code. */
+// Typed, not literal: every row could turn off, so each is a real check.
+const CLAUDE_CODE_CAPABILITIES: Readonly<Record<HarnessCapability, boolean>> = {
   approvals: true,
   interrupt: true,
   resume: true,
-  image_input: false,
-} as const satisfies Record<HarnessCapability, boolean>;
+  // The turn's images and PDFs open the user message as content blocks.
+  image_input: true,
+};
+
+/** Claude reads images and PDFs as model input. */
+const CLAUDE_CODE_INPUT_FILE_TYPES = [
+  "image",
+  "pdf",
+] as const satisfies readonly HarnessInputFileType[];
+
+/** A user content block of the CLI's stream-json input, as the API takes it. */
+type UserContentBlock =
+  | { type: "text"; text: string }
+  | {
+      type: "image";
+      source: {
+        type: "base64";
+        media_type: HarnessImageMediaType;
+        data: string;
+      };
+    }
+  | {
+      type: "document";
+      source: { type: "base64"; media_type: "application/pdf"; data: string };
+    };
+
+const inputFileBlock = (file: HarnessInputFile): UserContentBlock => {
+  switch (file.type) {
+    case "image":
+      return {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: file.mediaType,
+          data: file.base64,
+        },
+      };
+    case "pdf":
+      return {
+        type: "document",
+        source: {
+          type: "base64",
+          media_type: "application/pdf",
+          data: file.base64,
+        },
+      };
+    default:
+      file satisfies never;
+      return panic("Claude Code adapter: unknown input file");
+  }
+};
+
+/**
+ * The turn's user message. Files come first, as the API advises, and the
+ * text after them still names each file's copy, so the agent can open it.
+ */
+const userContent = (
+  files: readonly HarnessInputFile[],
+  text: string,
+): UserContentBlock[] => [...files.map(inputFileBlock), { type: "text", text }];
 
 const capabilities = (): HarnessCapability[] =>
   Object.entries(CLAUDE_CODE_CAPABILITIES).flatMap(([capability, supported]) =>
@@ -409,7 +469,10 @@ const authOf = ({ account }: Initialized): HarnessAuth => {
   };
 };
 
-/** The CLI lists no input modalities; stella sends it text only. */
+/**
+ * The CLI lists no input modalities per model, so none beyond text is claimed
+ * for one; the adapter's `image_input` says what a turn hands every model.
+ */
 const TEXT_ONLY = ["text"] as const;
 
 type ListedModel = Initialized["models"][number];
@@ -584,7 +647,10 @@ const openSession = async (
     options,
     cwd: input.workspaceDir,
     args: turnArgs(options, input, target, skills),
-    environment: packageCacheEnvironment(input.cacheDir),
+    environment: {
+      ...packageCacheEnvironment(input.cacheDir),
+      ...toolPathEnvironment(options.environment, input.toolPath),
+    },
     handlers: session.handlers,
     // Instructions travel over stdio, never on the command line.
     initialize: { appendSystemPrompt: input.instructions },
@@ -695,7 +761,10 @@ const openTurn = async (
   session.begin({ sessionId: target.sessionId, continuation });
   client.send({
     type: "user",
-    message: { role: "user", content: [{ type: "text", text: prompt.value }] },
+    message: {
+      role: "user",
+      content: userContent(input.inputFiles, prompt.value),
+    },
     parent_tool_use_id: null,
     session_id: target.sessionId,
   });
@@ -798,6 +867,7 @@ export const createClaudeCodeHarnessAdapter = (
   validateOptions(options);
   return {
     harness: "claude-code",
+    inputFileTypes: CLAUDE_CODE_INPUT_FILE_TYPES,
     probe: async () => probe(options),
     startTurn: async (input) => startTurn(options, input),
   };

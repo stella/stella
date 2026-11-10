@@ -20,6 +20,7 @@ import {
 } from "@stll/api-contract/desktop-runner";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import { pairAppCall, recordAppCall } from "@/api/lib/desktop-runner/app-calls";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
 import {
   type RunAnswerMessage,
@@ -551,6 +552,18 @@ export const createDesktopRunnerControl = ({
     ) =>
       await Result.tryPromise({
         try: async () => await readRunOutputFile(db, options),
+        catch: toDatabaseError,
+      }),
+    /** Record what the server answered the run for a tool an app presents. */
+    recordAppCall: async (options: Parameters<typeof recordAppCall>[1]) =>
+      await Result.tryPromise({
+        try: async () => await recordAppCall(db, options),
+        catch: toDatabaseError,
+      }),
+    /** The server's answer for a call the run reported, paired with it once. */
+    pairAppCall: async (options: Parameters<typeof pairAppCall>[1]) =>
+      await Result.tryPromise({
+        try: async () => await pairAppCall(db, options),
         catch: toDatabaseError,
       }),
     /** The run's stored messages after `afterSeq`, in sequence order. */

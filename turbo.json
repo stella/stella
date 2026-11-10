@@ -169,6 +169,7 @@
     "@stll/web#lint": {
       "dependsOn": [
         "transit",
+        "tailwind-cache",
         "generate:api-types",
         "generate:route-tree",
         "generate:messages"
@@ -178,6 +179,8 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -261,6 +264,8 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -488,7 +493,7 @@
       "dependsOn": [
         "transit",
         "^generate:capability-runtime",
-        "//#generate:tailwind-cache"
+        "tailwind-cache"
       ],
       // Root oxlint, oxlint-tsgolint, oxlint-tailwindcss, tsrs and
       // better-result are covered by Turbo's global root dependency hash.
@@ -499,6 +504,8 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -563,6 +570,50 @@
         "$TURBO_ROOT$/types/**"
       ]
     },
+    // Lint reads the generated Tailwind cache only in the workspaces whose files
+    // the Tailwind rules cover (oxlint.config.ts `settings.tailwindcss`). Each
+    // lint depends on its own workspace's node, and only those workspaces'
+    // nodes depend on generating the cache, so a change to the Tailwind
+    // sources re-lints the workspaces that read the cache, not every one.
+    "tailwind-cache": {
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/web#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/desktop#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/playground#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/landing#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/ui#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/chat#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/workspace-ui#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
     "//#generate:tailwind-cache": {
       "cache": true,
       "inputs": [
@@ -574,11 +625,13 @@
         "$TURBO_ROOT$/packages/chat/**",
         "$TURBO_ROOT$/packages/workspace-ui/**",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.tailwind.config.ts",
         "$TURBO_ROOT$/scripts/generate-tailwind-classes.ts",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
-        "$TURBO_ROOT$/patches/oxlint-tailwindcss@1.16.0.patch",
+        "$TURBO_ROOT$/patches/oxlint-tailwindcss@*.patch",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock"
       ],
@@ -595,12 +648,14 @@
     "@stll/landing#lint": {
       // Astro check generates the content types consumed by type-aware Oxlint.
       // Running a second astro sync concurrently races on the same temp file.
-      "dependsOn": ["typecheck"],
+      "dependsOn": ["typecheck", "tailwind-cache"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -673,6 +728,8 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -742,6 +799,8 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -886,6 +945,8 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -1075,6 +1136,8 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -1677,6 +1740,8 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -1801,6 +1866,7 @@
         "$TURBO_ROOT$/packages/skills/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/parser-output-fixtures.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"

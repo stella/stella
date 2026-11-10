@@ -88,6 +88,9 @@ const ephemeralPin = (positions: readonly Position[]): PinnedPlaybook => ({
   definitionSnapshot: {
     name: EPHEMERAL_PLAYBOOK_NAME,
     positions: { version: 3, items: [...positions] },
+    // No playbook, so no scope: the run reviews the document the reviewer
+    // picked, and nothing gates it by document type.
+    scope: null,
   },
 });
 
@@ -246,7 +249,7 @@ const createDocumentReviewRun = createSafeHandler(
           // RLS scopes both reads to the caller's organization.
           const definition = await tx.query.playbookDefinitions.findFirst({
             where: { id: { eq: playbookId } },
-            columns: { id: true, name: true, positions: true },
+            columns: { id: true, name: true, positions: true, scope: true },
           });
           if (!definition) {
             return null;
@@ -274,6 +277,7 @@ const createDocumentReviewRun = createSafeHandler(
         definitionSnapshot: {
           name: pin.definitionSnapshot.name,
           positions: { version: 3, items: positions },
+          scope: pin.definitionSnapshot.scope,
         },
       };
     }

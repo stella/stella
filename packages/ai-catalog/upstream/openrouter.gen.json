@@ -211,6 +211,12 @@
       }
     },
     {
+      "id": "deepseek/deepseek-v4.1-flash-1017:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "deepseek/deepseek-v4.1-flash:batch",
       "reasoning": {
         "default_effort": "high"
@@ -382,24 +388,6 @@
       "id": "ibm-granite/granite-4.2-8b",
       "reasoning": {
         "default_effort": "high"
-      }
-    },
-    {
-      "id": "inception/mercury-2",
-      "reasoning": {
-        "default_effort": "medium"
-      }
-    },
-    {
-      "id": "inception/mercury-2.5",
-      "reasoning": {
-        "default_effort": "medium"
-      }
-    },
-    {
-      "id": "inception/mercury-3",
-      "reasoning": {
-        "default_effort": "medium"
       }
     },
     {
@@ -1142,6 +1130,12 @@
     },
     {
       "id": "z-ai/glm-5.2",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.2:batch",
       "reasoning": {
         "default_effort": "high"
       }

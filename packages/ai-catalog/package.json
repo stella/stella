@@ -1,6 +1,6 @@
 {
   "name": "@stll/ai-catalog",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "description": "Provider-neutral AI model roles, capabilities, and curated model metadata.",
   "keywords": [
     "ai",
@@ -48,8 +48,8 @@
     "test:defaults": "bun test src/model-defaults-ledger.test.ts",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/ai-catalog",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ai-catalog",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/ai-catalog",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/ai-catalog",
     "prepack": "bun run build"
   },
   "dependencies": {

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useRef, useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -118,6 +118,15 @@ export const DefaultErrorComponent = ({
   const routeTemplate = useRouterState({
     select: ({ matches }) => resolveCaughtRouteTemplate(matches),
   });
+  const router = useRouter();
+  // A loader's failure stays on its match until the loader runs again:
+  // resetting the boundary alone would only show the same error.
+  const loaderFailed = useRouterState({
+    select: ({ matches }) =>
+      matches.some(
+        (match) => match.status === "error" && match.error === error,
+      ),
+  });
   const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const isCancelledError = error instanceof CancelledError;
@@ -141,7 +150,15 @@ export const DefaultErrorComponent = ({
           });
         });
 
-      reset();
+      if (loaderFailed) {
+        // Running the failed loaders again replaces their matches, which
+        // resets this boundary with the outcome.
+        await router.invalidate({
+          filter: (match) => match.status === "error",
+        });
+      } else {
+        reset();
+      }
       // Don't reset networkRetryCount here. If the error
       // persists, the error boundary re-catches and the
       // counter keeps accumulating toward AUTO_RETRY_LIMIT.
