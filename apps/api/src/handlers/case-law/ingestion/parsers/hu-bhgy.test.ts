@@ -966,6 +966,132 @@ describe("reading a document folio handed over", () => {
     ]);
   });
 
+  test("a title heads a numbered paragraph; a sentence's opening words before its continuation stay prose", () => {
+    const parsed = parse([
+      { text: "Indokolás" },
+      { text: "[1]\tAz alperes a kérelmet elutasította." },
+      { text: "A bíróság a keresetet" },
+      { text: "elutasította, mert az nem alapos." },
+      { text: "A felperes keresete" },
+      { text: "[2]\tA felperes a határozat megsemmisítését kérte." },
+    ]);
+    expect(shapeOf(parsed.documentAst.blocks)).toEqual([
+      "h1:section-heading:Indokolás",
+      "p:argumentation#1:Az alperes a kérelmet elutasította.",
+      "p:argumentation:A bíróság a keresetet",
+      "p:argumentation:elutasította, mert az nem alapos.",
+      "h2:section-heading:A felperes keresete",
+      "p:argumentation#2:A felperes a határozat megsemmisítését kérte.",
+    ]);
+  });
+
+  test("after a paragraph without a final full stop, a title set apart in bold is a heading", () => {
+    const parsed = parse([
+      { text: "Indokolás" },
+      { text: "[1]\tAz alperes a kérelmet elutasította" },
+      { text: "A felperes keresete", bold: true },
+      { text: "[2]\tA felperes a határozat megsemmisítését kérte" },
+      { text: "Magyarország Alaptörvénye" },
+      { text: "[3]\tA kereset nem alapos." },
+    ]);
+    expect(shapeOf(parsed.documentAst.blocks)).toEqual([
+      "h1:section-heading:Indokolás",
+      "p:argumentation#1:Az alperes a kérelmet elutasította",
+      "h2:section-heading:A felperes keresete",
+      "p:argumentation#2:A felperes a határozat megsemmisítését kérte",
+      "p:argumentation:Magyarország Alaptörvénye",
+      "p:argumentation#3:A kereset nem alapos.",
+    ]);
+  });
+
+  test("a table ends the sentence before it, so a title after the table is a heading", () => {
+    const document = documentOf([
+      { text: "Indokolás" },
+      { text: "[1]\tAz alperes a következő összegeket állapította meg" },
+    ]);
+    const amounts = table({
+      rows: [
+        [
+          { content: [paragraphOf({ text: "Tőke" })] },
+          { content: [paragraphOf({ text: "100 000 Ft" })] },
+        ],
+      ],
+    });
+    document.package.document.content.push(
+      amounts,
+      paragraphOf({ text: "A törvényszék döntése" }),
+      paragraphOf({ text: "[2]\tA kereset nem alapos." }),
+      amounts,
+      paragraphOf({ text: "Az alperes ezt vitatta" }),
+      paragraphOf({ text: "azzal, hogy a tőke kevesebb." }),
+    );
+    expect(shapeOf(parseDocument(document).documentAst.blocks)).toEqual([
+      "h1:section-heading:Indokolás",
+      "p:argumentation#1:Az alperes a következő összegeket állapította meg",
+      "table:Tőke\t100 000 Ft",
+      "h2:section-heading:A törvényszék döntése",
+      "p:argumentation#2:A kereset nem alapos.",
+      "table:Tőke\t100 000 Ft",
+      "p:argumentation:Az alperes ezt vitatta",
+      "p:argumentation:azzal, hogy a tőke kevesebb.",
+    ]);
+  });
+
+  test("a title before a soft break heads the numbered paragraph after it, each keeping its formatting", () => {
+    const parsed = parseDocument(
+      bodyOf([
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "run",
+              formatting: { bold: true },
+              content: [{ type: "text", text: "Kereset" }],
+            },
+            { type: "run", content: [{ type: "break" }] },
+            {
+              type: "run",
+              content: [{ type: "text", text: "[2]\tA felperes " }],
+            },
+            {
+              type: "run",
+              formatting: { italic: true },
+              content: [{ type: "text", text: "keresetében" }],
+            },
+            {
+              type: "run",
+              content: [
+                { type: "text", text: " a határozat megsemmisítését kérte." },
+              ],
+            },
+          ],
+        },
+        softBrokenParagraph([
+          "A bíróság megállapította",
+          "hogy a kereset alapos.",
+        ]),
+      ]),
+    );
+    const blocks = parsed.documentAst.blocks;
+    expect(shapeOf(blocks)).toEqual([
+      "h1:section-heading:Indokolás",
+      "h2:section-heading:Kereset",
+      "p:argumentation#2:A felperes keresetében a határozat megsemmisítését kérte.",
+      "p:argumentation:A bíróság megállapította\nhogy a kereset alapos.",
+    ]);
+    const [, title, paragraph] = blocks;
+    expect(title?.type === "heading" ? title.inlines : undefined).toEqual([
+      { type: "bold", children: [{ type: "text", text: "Kereset" }] },
+    ]);
+    expect(
+      paragraph?.type === "paragraph" ? paragraph.inlines : undefined,
+    ).toEqual([
+      { type: "text", text: "A felperes " },
+      { type: "italic", children: [{ type: "text", text: "keresetében" }] },
+      { type: "text", text: " a határozat megsemmisítését kérte." },
+    ]);
+  });
+
   test("court summaries and applied legislation open substantive sections", () => {
     const parsed = parse([
       { text: "Indokolás" },
