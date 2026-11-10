@@ -212,16 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "Sobre o registro de fatos-âncora",
       "addFact": "Adicionar um fato",
       "addFactPlaceholder": "Descreva o fato como as evidências o mostram",
       "addInterpretationNote": "Adicionar nota de interpretação",
+      "busyLine": "Os fatos que você aceitar aparecem aqui.",
+      "confidenceLevels": {
+        "high": "Confiança alta",
+        "low": "Confiança baixa",
+        "medium": "Confiança média"
+      },
       "description": "Evidências concretas (e-mails, mensagens, extratos bancários, fatos acordados) extraídas para o registro de fatos-âncora contra o qual as alegações são verificadas. Revise, edite ou adicione fatos manualmente.",
       "editInterpretationNote": "Editar nota de interpretação",
+      "emptyLine": "Extraia fatos dos documentos do caso ou adicione um manualmente.",
       "emptyTitle": "Ainda não há fatos-âncora",
-      "extractionAndReview": "Extração e revisão",
-      "factCount": "{count, plural, one {# fato} other {# fatos} many {# fatos}}",
       "heldDescription": "Estas extrações são <strong>genuinamente incertas quanto ao significado</strong>: o conteúdo é provisório ou não confirmado, e não apenas escrito à mão. Elas ficam fora da pontuação até que um revisor as confirme, edite ou redigite. Uma fonte legível nunca é colocada em espera apenas por causa do seu meio.",
+      "heldFilter": "{count, plural, one {# em espera para revisão} other {# em espera para revisão}}",
       "heldForReview": "Em espera para revisão",
+      "hideSources": "Ocultar fontes",
       "holdOutOfScoring": "Excluir da pontuação",
       "inScoring": "Na pontuação",
       "includeInScoring": "Incluir na pontuação",
@@ -230,7 +238,7 @@
       "interpretiveConfidence": "Confiança interpretativa",
       "openList": "Abrir lista",
       "record": "Registro de fatos-âncora",
-      "setConfidence": "Definir confiança",
+      "showSources": "Mostrar fontes",
       "title": "Fatos-âncora"
     },
     "claimDetail": {
@@ -325,9 +333,10 @@
     },
     "extraction": {
       "busy": "Conclua primeiro a extração em andamento e a revisão dela.",
-      "dialogDescription": "Cada fato proposto cita o trecho de onde vem. Você aceita ou recusa cada um antes que ele entre no registro.",
+      "confirmStart": "{units, plural, one {Iniciar, # unidade} other {Iniciar, # unidades}}",
+      "dialogDescription": "Você aceita ou recusa cada fato antes que ele entre no registro.",
       "dialogTitle": "Extrair fatos de documentos",
-      "documentsChosen": "{count, plural, one {# de {max} documentos escolhido} other {# de {max} documentos escolhidos}}",
+      "documentsChosen": "{count, plural, one {# escolhido, até {max}} other {# escolhidos, até {max}}}",
       "documentsLabel": "Documentos a ler",
       "errors": {
         "accessRevoked": "A extração de fatos parou porque o acesso não está disponível.",
@@ -342,13 +351,13 @@
       },
       "extractFromDocuments": "Extrair de documentos",
       "failedTitle": "A extração de fatos falhou",
-      "inProgressTitle": "Extraindo fatos",
       "instructionLabel": "O que procurar (opcional)",
       "instructionPlaceholder": "Por exemplo: pagamentos entre as partes e quando foram feitos",
       "nothingFound": "Nenhum fato foi encontrado nos documentos escolhidos.",
+      "proposedTitle": "Fatos propostos",
       "queued": "Aguardando o início.",
-      "reviewTitle": "{count, plural, one {# fato proposto para revisar} other {# fatos propostos para revisar}}",
       "reviewed": "{accepted} de {proposed, plural, one {# fato proposto} other {# fatos propostos}} aceitos.",
+      "runSize": "{available, plural, one {Esta execução usa cerca de {estimated} da sua # unidade disponível.} other {Esta execução usa cerca de {estimated} das suas # unidades disponíveis.}}",
       "running": "Lendo os documentos. Os fatos propostos aparecerão aqui para revisão.",
       "startFailed": "Não foi possível iniciar a extração de fatos",
       "submit": "{count, plural, =0 {Extrair fatos} one {Extrair fatos de # documento} other {Extrair fatos de # documentos}}"

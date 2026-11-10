@@ -1,11 +1,11 @@
 /**
  * The review of one generation run's proposed list items: each candidate with
- * the passages it cites, accepted or declined one at a time or all at once.
+ * the passage it quotes, accepted or declined one at a time or all at once.
  * The lists page and AVT's anchor facts both review candidates here.
  */
 
-import type { ReactNode } from "react";
-import { useState } from "react";
+import type { ReactElement, ReactNode } from "react";
+import { Fragment, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
@@ -14,7 +14,21 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CheckCheckIcon } from "@stll/ui/icons";
+import {
+  List,
+  ListGroup,
+  ListGroupAction,
+  ListGroupCount,
+  ListGroupDescription,
+  ListGroupHeader,
+  ListGroupHeading,
+  ListGroupTitle,
+  ListItem,
+  ListItemContent,
+  ListItemTitle,
+} from "@stll/ui/list";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
+import type { ReviewDecisionState } from "@stll/ui/review-decision-actions";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
@@ -22,10 +36,7 @@ import {
   acceptAllTargets,
   reviewableCandidates,
 } from "@/components/workspaces/generation-candidates-review.logic";
-import type {
-  GenerationCandidate,
-  GenerationCandidateSource,
-} from "@/components/workspaces/generation-candidates-review.logic";
+import type { GenerationCandidate } from "@/components/workspaces/generation-candidates-review.logic";
 import {
   SourceLocatorLabel,
   sourceLocatorPage,
@@ -45,6 +56,14 @@ import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
 
 type CandidateDecision = "accept" | "reject";
 
+/** Where each candidate status stands in the shared review chrome. */
+const DECISION_STATE = {
+  pending: "pending",
+  accepting: "applying",
+  accepted: "accepted",
+  rejected: "rejected",
+} as const satisfies Record<GenerationCandidate["status"], ReviewDecisionState>;
+
 type DecisionProgress =
   | { type: "idle" }
   | { type: "one"; candidateId: string }
@@ -59,7 +78,8 @@ type CandidateDecisionsArgs = {
 /**
  * Accept or decline a run's candidates. One decision runs at a time; "accept
  * all" accepts the undecided ones in proposal order and stops at the first
- * refusal, leaving the rest for the reviewer.
+ * refusal, leaving the rest for the reviewer. Each resolves to how many
+ * candidates it accepted, or `null` when a request was refused.
  */
 export const useGenerationCandidateDecisions = ({
   workspaceId,
@@ -125,9 +145,12 @@ export const useGenerationCandidateDecisions = ({
     ]);
   };
 
-  const decide = async (candidateId: string, decision: CandidateDecision) => {
+  const decide = async (
+    candidateId: string,
+    decision: CandidateDecision,
+  ): Promise<number | null> => {
     if (progress.type !== "idle") {
-      return;
+      return null;
     }
     setProgress({ type: "one", candidateId });
     const result = await send(candidateId, decision);
@@ -136,12 +159,19 @@ export const useGenerationCandidateDecisions = ({
       report(result.error);
     }
     await refresh();
+    if (result.isErr()) {
+      return null;
+    }
+    return decision === "accept" ? 1 : 0;
   };
 
-  const acceptAll = async (candidateIds: readonly string[]) => {
+  const acceptAll = async (
+    candidateIds: readonly string[],
+  ): Promise<number | null> => {
     if (progress.type !== "idle" || candidateIds.length === 0) {
-      return;
+      return null;
     }
+    let accepted = 0;
     for (const [index, candidateId] of candidateIds.entries()) {
       setProgress({ type: "all", done: index, total: candidateIds.length });
       // Sequential on purpose: each acceptance creates a list item, and the
@@ -151,12 +181,25 @@ export const useGenerationCandidateDecisions = ({
         report(result.error);
         break;
       }
+      accepted += 1;
     }
     setProgress({ type: "idle" });
     await refresh();
+    return accepted === candidateIds.length ? accepted : null;
   };
 
   return { progress, decide, acceptAll };
+};
+
+/** What a run came to once its last candidate was decided here. */
+export type CandidateReviewSummary = { proposed: number; accepted: number };
+
+/** Item-type detail for one candidate: a status and quiet facts about it. */
+export type CandidateMeta = {
+  /** Shown before the quote's source, e.g. a held fact and why. */
+  status: ReactNode;
+  /** One quiet line of labels; the source document is appended. */
+  parts: ReactElement[];
 };
 
 type GenerationCandidatesReviewProps = {
@@ -165,12 +208,13 @@ type GenerationCandidatesReviewProps = {
   runId: string;
   /** Every candidate of the run; decided ones are left out here. */
   candidates: readonly GenerationCandidate[];
-  title: ReactNode;
-  /** `strip` scrolls cards sideways under a page header; `stack` lists them. */
-  layout: "strip" | "stack";
+  title: string;
+  description?: ReactNode;
+  /** `strip` scrolls cards sideways under a page header; `list` stacks rows. */
+  layout: "strip" | "list";
   canDecide: boolean;
-  /** Item-type detail shown under a candidate's text (a fact's date, …). */
-  renderDetails?: (candidate: GenerationCandidate) => ReactNode;
+  renderMeta?: (candidate: GenerationCandidate) => CandidateMeta;
+  onReviewFinished?: (summary: CandidateReviewSummary) => void;
   className?: string;
 };
 
@@ -180,9 +224,11 @@ export const GenerationCandidatesReview = ({
   runId,
   candidates,
   title,
+  description,
   layout,
   canDecide,
-  renderDetails,
+  renderMeta,
+  onReviewFinished,
   className,
 }: GenerationCandidatesReviewProps) => {
   const t = useTranslations();
@@ -206,195 +252,212 @@ export const GenerationCandidatesReview = ({
   }
   const toAccept = acceptAllTargets(open);
   const busy = progress.type !== "idle";
+  const alreadyAccepted = candidates.filter(
+    (candidate) => candidate.status === "accepted",
+  ).length;
+  // Reported only when this page decided the last open candidate; another
+  // reviewer's decisions arrive through the refreshed run instead.
+  const finish = (accepted: number | null, decided: number) => {
+    if (accepted === null || decided < open.length) {
+      return;
+    }
+    onReviewFinished?.({
+      proposed: candidates.length,
+      accepted: alreadyAccepted + accepted,
+    });
+  };
 
-  const cards = open.map((candidate) => (
-    <CandidateCard
-      busy={busy}
-      canDecide={canDecide}
-      candidate={candidate}
-      documentName={documentName}
-      key={candidate.id}
-      layout={layout}
-      onDecide={(decision) => {
+  const decideOne = async (
+    candidateId: string,
+    decision: CandidateDecision,
+  ) => {
+    finish(await decide(candidateId, decision), 1);
+  };
+
+  const rows = open.map((candidate) => {
+    const body = (
+      <CandidateBody
+        candidate={candidate}
+        documentName={documentName}
+        meta={renderMeta?.(candidate)}
+        workspaceId={workspaceId}
+      />
+    );
+    const actions = (
+      <ReviewDecisionActions
+        acceptLabel={t("common.accept")}
+        className="shrink-0"
+        disabled={!canDecide || busy}
+        emphasis="quiet"
+        onAccept={() => {
+          detached(
+            decideOne(candidate.id, "accept"),
+            "lists.decide-generation-candidate",
+          );
+        }}
+        onReject={() => {
+          detached(
+            decideOne(candidate.id, "reject"),
+            "lists.decide-generation-candidate",
+          );
+        }}
+        rejectLabel={t("common.decline")}
+        size="sm"
+        state={
+          progress.type === "one" && progress.candidateId === candidate.id
+            ? "applying"
+            : DECISION_STATE[candidate.status]
+        }
+      />
+    );
+    return layout === "strip" ? (
+      <article
+        className="bg-background flex w-80 shrink-0 flex-col gap-2 rounded-lg border p-3"
+        key={candidate.id}
+      >
+        {body}
+        <div className="flex justify-end">{actions}</div>
+      </article>
+    ) : (
+      <ListItem
+        className="flex-col items-stretch sm:flex-row sm:items-start"
+        key={candidate.id}
+      >
+        {body}
+        {actions}
+      </ListItem>
+    );
+  });
+
+  const showAcceptAll = canDecide && toAccept.length > 1;
+  const acceptAllButton = showAcceptAll && (
+    <Button
+      disabled={busy}
+      loading={progress.type === "all"}
+      onClick={() => {
         detached(
-          decide(candidate.id, decision),
-          "lists.decide-generation-candidate",
+          (async () => {
+            finish(await acceptAll(toAccept), toAccept.length);
+          })(),
+          "lists.accept-all-generation-candidates",
         );
       }}
-      renderDetails={renderDetails}
-      deciding={
-        progress.type === "one" && progress.candidateId === candidate.id
-      }
-      workspaceId={workspaceId}
-    />
-  ));
+      size="sm"
+      variant={layout === "list" ? "default" : "outline"}
+    >
+      <CheckCheckIcon />
+      {progress.type === "all"
+        ? t("lists.candidates.accepting", {
+            done: format.number(progress.done),
+            total: format.number(progress.total),
+          })
+        : t("docxReview.acceptAll")}
+    </Button>
+  );
 
-  return (
-    <section className={cn("space-y-2", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-muted-foreground min-w-0 text-xs font-medium">
-          {title}
+  if (layout === "strip") {
+    return (
+      <section className={cn("space-y-2", className)}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-muted-foreground min-w-0 text-xs font-medium">
+            {title}
+          </p>
+          {acceptAllButton}
         </div>
-        {canDecide && toAccept.length > 1 && (
-          <Button
-            loading={progress.type === "all"}
-            disabled={busy}
-            onClick={() => {
-              detached(
-                acceptAll(toAccept),
-                "lists.accept-all-generation-candidates",
-              );
-            }}
-            size="sm"
-            variant="outline"
-          >
-            <CheckCheckIcon />
-            {progress.type === "all"
-              ? t("lists.candidates.accepting", {
-                  done: format.number(progress.done),
-                  total: format.number(progress.total),
-                })
-              : t("docxReview.acceptAll")}
-          </Button>
-        )}
-      </div>
-      {layout === "strip" ? (
         <ScrollArea>
-          <div className="flex gap-2 pb-2">{cards}</div>
+          <div className="flex gap-2 pb-2">{rows}</div>
         </ScrollArea>
-      ) : (
-        <ul className="bg-background divide-y rounded-xl border">{cards}</ul>
-      )}
-    </section>
+      </section>
+    );
+  }
+  return (
+    <ListGroup className={className}>
+      <ListGroupHeader>
+        <ListGroupHeading>
+          <ListGroupTitle>
+            {title}
+            <ListGroupCount count={format.number(open.length)} />
+          </ListGroupTitle>
+          {description !== undefined && (
+            <ListGroupDescription>{description}</ListGroupDescription>
+          )}
+        </ListGroupHeading>
+        {showAcceptAll && <ListGroupAction>{acceptAllButton}</ListGroupAction>}
+      </ListGroupHeader>
+      <List>{rows}</List>
+    </ListGroup>
   );
 };
 
-type CandidateCardProps = {
+type CandidateBodyProps = {
   workspaceId: string;
   candidate: GenerationCandidate;
-  layout: "strip" | "stack";
-  canDecide: boolean;
-  busy: boolean;
-  deciding: boolean;
+  meta: CandidateMeta | undefined;
   documentName: (entityId: string) => string | null;
-  renderDetails: ((candidate: GenerationCandidate) => ReactNode) | undefined;
-  onDecide: (decision: CandidateDecision) => void;
 };
 
-const CandidateCard = ({
+/**
+ * The proposal, then the passage it rests on, then one quiet line saying what
+ * kind of item it is and where the passage sits.
+ */
+const CandidateBody = ({
   workspaceId,
   candidate,
-  layout,
-  canDecide,
-  busy,
-  deciding,
+  meta,
   documentName,
-  renderDetails,
-  onDecide,
-}: CandidateCardProps) => {
-  const t = useTranslations();
-  const content = (
-    <>
-      <p
-        className="text-sm leading-snug font-medium text-pretty wrap-break-word"
-        dir="auto"
+}: CandidateBodyProps) => {
+  const openSourceDocument = useOpenSourceDocument(workspaceId);
+  const source = candidate.sources.at(0);
+  const parts = [...(meta?.parts ?? [])];
+  if (source !== undefined) {
+    parts.push(
+      <Button
+        className="min-w-0"
+        key="source"
+        onClick={() =>
+          openSourceDocument(
+            source.sourceEntityId,
+            sourceLocatorPage(source.locator),
+          )
+        }
+        size="inline"
+        variant="link"
       >
-        {candidate.name}
-      </p>
+        <span className="truncate">
+          <SourceLocatorLabel
+            documentName={documentName(source.sourceEntityId)}
+            locator={source.locator}
+          />
+        </span>
+      </Button>,
+    );
+  }
+  return (
+    <ListItemContent>
+      <ListItemTitle variant="statement">{candidate.name}</ListItemTitle>
       {candidate.description && (
         <p className="text-muted-foreground line-clamp-2 text-xs" dir="auto">
           {candidate.description}
         </p>
       )}
-      {renderDetails?.(candidate)}
-      <CandidateSources
-        documentName={documentName}
-        sources={candidate.sources}
-        workspaceId={workspaceId}
-      />
-    </>
-  );
-  const actions = (
-    <ReviewDecisionActions
-      acceptLabel={t("common.accept")}
-      className="shrink-0 justify-end"
-      disabled={!canDecide || busy}
-      onAccept={() => onDecide("accept")}
-      onReject={() => onDecide("reject")}
-      rejectLabel={t("common.decline")}
-      size="sm"
-      state={
-        deciding || candidate.status === "accepting" ? "applying" : "pending"
-      }
-    />
-  );
-  // A card in the sideways strip keeps its actions underneath; a row in the
-  // list puts them beside the text once there is room.
-  return layout === "strip" ? (
-    <article className="bg-background flex w-80 shrink-0 flex-col gap-1.5 rounded-lg border p-3">
-      {content}
-      {actions}
-    </article>
-  ) : (
-    <li className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-start sm:gap-4">
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">{content}</div>
-      {actions}
-    </li>
-  );
-};
-
-type CandidateSourcesProps = {
-  workspaceId: string;
-  sources: readonly GenerationCandidateSource[];
-  documentName: (entityId: string) => string | null;
-};
-
-/** The passages a candidate cites, each with the document page it is on. */
-const CandidateSources = ({
-  workspaceId,
-  sources,
-  documentName,
-}: CandidateSourcesProps) => {
-  const t = useTranslations();
-  const openSourceDocument = useOpenSourceDocument(workspaceId);
-  if (sources.length === 0) {
-    return null;
-  }
-  return (
-    <ul className="space-y-1.5">
-      {sources.map((source) => (
-        <li className="min-w-0 space-y-0.5" key={source.id}>
-          {source.quote !== null && (
-            <blockquote
-              aria-label={t("inbox.evidence.quote")}
-              className="text-muted-foreground border-s-2 ps-2 text-xs leading-relaxed text-pretty wrap-break-word"
-              dir="auto"
-            >
-              <BidiText as="span" className="line-clamp-4">
-                {source.quote}
-              </BidiText>
-            </blockquote>
-          )}
-          <Button
-            className="max-w-full min-w-0 justify-start"
-            onClick={() =>
-              openSourceDocument(
-                source.sourceEntityId,
-                sourceLocatorPage(source.locator),
-              )
-            }
-            size="xs"
-            variant="link"
-          >
-            <span className="truncate">
-              <SourceLocatorLabel
-                documentName={documentName(source.sourceEntityId)}
-                locator={source.locator}
-              />
-            </span>
-          </Button>
-        </li>
-      ))}
-    </ul>
+      {source !== undefined && source.quote !== null && (
+        <p className="text-foreground mt-1 line-clamp-3 text-sm leading-relaxed text-pretty">
+          <q>
+            <BidiText as="span">{source.quote}</BidiText>
+          </q>
+        </p>
+      )}
+      {meta?.status}
+      {parts.length > 0 && (
+        <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
+          {parts.map((part, index) => (
+            <Fragment key={part.key}>
+              {index > 0 && <span aria-hidden="true">·</span>}
+              {part}
+            </Fragment>
+          ))}
+        </div>
+      )}
+    </ListItemContent>
   );
 };

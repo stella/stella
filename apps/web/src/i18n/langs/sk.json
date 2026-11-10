@@ -212,16 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "O súbore referenčných faktov",
       "addFact": "Pridať fakt",
       "addFactPlaceholder": "Uveďte fakt tak, ako vyplýva z dôkazov",
       "addInterpretationNote": "Pridať poznámku k výkladu",
+      "busyLine": "Prijaté fakty sa zobrazia tu.",
+      "confidenceLevels": {
+        "high": "Vysoká istota",
+        "low": "Nízka istota",
+        "medium": "Stredná istota"
+      },
       "description": "Priame dôkazy (e-maily, správy, bankové záznamy, nesporné skutočnosti) spracované do súboru referenčných faktov, s ktorými sa porovnávajú tvrdenia. Fakty môžete kontrolovať, upravovať alebo ručne pridávať.",
       "editInterpretationNote": "Upraviť poznámku k výkladu",
+      "emptyLine": "Vyťažte fakty z dokumentov spisu alebo nejaký pridajte ručne.",
       "emptyTitle": "Zatiaľ žiadne referenčné fakty",
-      "extractionAndReview": "Extrakcia a kontrola",
-      "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktov} other {# faktu}}",
       "heldDescription": "Význam týchto extrahovaných údajov je <strong>skutočne neistý</strong>: ich obsah je predbežný alebo nepotvrdený, nejde iba o ručne písaný text. Do hodnotenia sa nezahrnú, kým ich kontrolujúca osoba nepotvrdí, neupraví alebo neprepíše. Čitateľný zdroj sa nikdy nezaradí do poradia len pre svoje médium.",
+      "heldFilter": "{count, plural, one {# pozastavený na kontrolu} few {# pozastavené na kontrolu} many {# pozastaveného na kontrolu} other {# pozastavených na kontrolu}}",
       "heldForReview": "Pozastavené na kontrolu",
+      "hideSources": "Skryť zdroje",
       "holdOutOfScoring": "Vylúčiť z hodnotenia",
       "inScoring": "Zahrnuté do hodnotenia",
       "includeInScoring": "Zahrnúť do hodnotenia",
@@ -230,7 +238,7 @@
       "interpretiveConfidence": "Istota výkladu",
       "openList": "Otvoriť zoznam",
       "record": "Súbor referenčných faktov",
-      "setConfidence": "Nastaviť istotu",
+      "showSources": "Zobraziť zdroje",
       "title": "Referenčné fakty"
     },
     "claimDetail": {
@@ -325,9 +333,10 @@
     },
     "extraction": {
       "busy": "Najprv dokončite prebiehajúce vyťažovanie a jeho kontrolu.",
-      "dialogDescription": "Každý navrhnutý fakt cituje pasáž, z ktorej pochádza. Skôr než sa dostane do súboru faktov, každý prijmete alebo odmietnete.",
+      "confirmStart": "{units, plural, one {Spustiť, # jednotka} few {Spustiť, # jednotky} many {Spustiť, # jednotky} other {Spustiť, # jednotiek}}",
+      "dialogDescription": "Každý fakt prijmete alebo odmietnete skôr, než sa dostane do súboru.",
       "dialogTitle": "Vyťažiť fakty z dokumentov",
-      "documentsChosen": "{count, plural, one {Vybraný # z {max} dokumentov} few {Vybrané # z {max} dokumentov} many {Vybraných # z {max} dokumentov} other {Vybraných # z {max} dokumentov}}",
+      "documentsChosen": "{count, plural, one {Vybraný #, najviac {max}} few {Vybrané #, najviac {max}} many {Vybraných #, najviac {max}} other {Vybraných #, najviac {max}}}",
       "documentsLabel": "Dokumenty na čítanie",
       "errors": {
         "accessRevoked": "Vyťažovanie faktov sa zastavilo, pretože prístup nie je k dispozícii.",
@@ -342,13 +351,13 @@
       },
       "extractFromDocuments": "Vyťažiť z dokumentov",
       "failedTitle": "Vyťažovanie faktov zlyhalo",
-      "inProgressTitle": "Vyťažovanie faktov",
       "instructionLabel": "Na čo sa zamerať (nepovinné)",
       "instructionPlaceholder": "Napríklad: platby medzi stranami a kedy prebehli",
       "nothingFound": "Vo vybraných dokumentoch sa nenašli žiadne fakty.",
+      "proposedTitle": "Navrhnuté fakty",
       "queued": "Čaká na spustenie.",
-      "reviewTitle": "{count, plural, one {# navrhnutý fakt na kontrolu} few {# navrhnuté fakty na kontrolu} many {# navrhnutého faktu na kontrolu} other {# navrhnutých faktov na kontrolu}}",
       "reviewed": "Prijatých {accepted} z {proposed, plural, one {# navrhnutého faktu} few {# navrhnutých faktov} many {# navrhnutého faktu} other {# navrhnutých faktov}}.",
+      "runSize": "{available, plural, one {Toto spustenie spotrebuje asi {estimated} z vašej # dostupnej jednotky.} few {Toto spustenie spotrebuje asi {estimated} z vašich # dostupných jednotiek.} many {Toto spustenie spotrebuje asi {estimated} z vašich # dostupnej jednotky.} other {Toto spustenie spotrebuje asi {estimated} z vašich # dostupných jednotiek.}}",
       "running": "Dokumenty sa čítajú. Navrhnuté fakty sa tu zobrazia na kontrolu.",
       "startFailed": "Vyťažovanie faktov sa nepodarilo spustiť",
       "submit": "{count, plural, =0 {Vyťažiť fakty} one {Vyťažiť fakty z # dokumentu} few {Vyťažiť fakty z # dokumentov} many {Vyťažiť fakty z # dokumentu} other {Vyťažiť fakty z # dokumentov}}"

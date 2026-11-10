@@ -6,12 +6,15 @@
 
 import { panic } from "better-result";
 
-import type { GenerationCandidate } from "@/components/workspaces/generation-candidates-review.logic";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
+
 import type {
   GenerationRunErrorCode,
   GenerationRunSummary,
 } from "@/features/avt/types";
 import { EXTRACTION_ERROR_KEYS } from "@/features/avt/types";
+import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
+import type { WorkspaceFile } from "@/lib/workspaces/queries/entities";
 
 /** Documents one extraction reads, the start endpoint's cap. */
 export const FACT_EXTRACTION_DOCUMENTS_MAX = 25;
@@ -82,23 +85,35 @@ const extractionErrorKey = (
   code: GenerationRunErrorCode | null,
 ): ExtractionErrorKey => EXTRACTION_ERROR_KEYS[code ?? "internal"];
 
-export type SettledOutcome =
-  | { type: "nothingFound" }
-  | { type: "reviewed"; proposed: number; accepted: number };
+type PickableDocument = Pick<
+  WorkspaceFile,
+  "entityId" | "fileName" | "mimeType" | "name"
+>;
 
-/** What a finished run came to: nothing proposed, or how much was kept. */
-export const settledOutcome = (
-  candidates: readonly Pick<GenerationCandidate, "status">[],
-): SettledOutcome =>
-  candidates.length === 0
-    ? { type: "nothingFound" }
-    : {
-        type: "reviewed",
-        proposed: candidates.length,
-        accepted: candidates.filter(
-          (candidate) => candidate.status === "accepted",
-        ).length,
-      };
+/**
+ * The documents a fact extraction can read (DOCX and PDF), narrowed by the
+ * search, with the chosen ones first in the order they were chosen so a
+ * long matter never scrolls them out of sight.
+ */
+export const pickableDocuments = <T extends PickableDocument>(
+  files: readonly T[],
+  picked: readonly string[],
+  search: string,
+): T[] => {
+  const matches = createSearchQueryMatcher(search);
+  const readable = files.filter(
+    (file) => file.mimeType === DOCX_MIME || file.mimeType === PDF_MIME,
+  );
+  const chosen = picked.flatMap((entityId) => {
+    const file = readable.find((entry) => entry.entityId === entityId);
+    return file === undefined ? [] : [file];
+  });
+  const rest = readable.filter(
+    (file) =>
+      !picked.includes(file.entityId) && matches(file.name ?? file.fileName),
+  );
+  return [...chosen, ...rest];
+};
 
 /**
  * The refusals of a start request that name something the reviewer can fix,

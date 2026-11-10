@@ -212,16 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "Über den Ankerfaktenbestand",
       "addFact": "Tatsache hinzufügen",
       "addFactPlaceholder": "Tatsache so angeben, wie sie aus den Belegen hervorgeht",
       "addInterpretationNote": "Notiz zur Auslegung hinzufügen",
+      "busyLine": "Angenommene Tatsachen erscheinen hier.",
+      "confidenceLevels": {
+        "high": "Hohe Sicherheit",
+        "low": "Geringe Sicherheit",
+        "medium": "Mittlere Sicherheit"
+      },
       "description": "Harte Belege – E-Mails, Nachrichten, Bankunterlagen, unstreitige Tatsachen – werden in einem Ankerfaktenbestand erfasst, mit dem Behauptungen abgeglichen werden. Prüfen, bearbeiten oder ergänzen Sie Fakten von Hand.",
       "editInterpretationNote": "Notiz zur Auslegung bearbeiten",
+      "emptyLine": "Tatsachen aus den Dokumenten der Akte extrahieren oder eine von Hand hinzufügen.",
       "emptyTitle": "Noch keine Ankerfakten",
-      "extractionAndReview": "Extraktion und Prüfung",
-      "factCount": "{count, plural, one {# Fakt} other {# Fakten}}",
       "heldDescription": "Diese Extraktionen sind <strong>inhaltlich tatsächlich unsicher</strong> – ihr Inhalt ist vorläufig oder unbestätigt, nicht lediglich handschriftlich. Sie fließen erst in die Bewertung ein, wenn ein Prüfer sie bestätigt, bearbeitet oder neu eingibt. Eine lesbare Quelle wird nie allein wegen ihres Mediums zurückgestellt.",
+      "heldFilter": "{count, plural, one {# zur Prüfung zurückgestellt} other {# zur Prüfung zurückgestellt}}",
       "heldForReview": "Zur Prüfung zurückgestellt",
+      "hideSources": "Quellen ausblenden",
       "holdOutOfScoring": "Aus der Bewertung ausschließen",
       "inScoring": "In der Bewertung",
       "includeInScoring": "In die Bewertung einbeziehen",
@@ -230,7 +238,7 @@
       "interpretiveConfidence": "Auslegungssicherheit",
       "openList": "Liste öffnen",
       "record": "Ankerfaktenbestand",
-      "setConfidence": "Sicherheit festlegen",
+      "showSources": "Quellen anzeigen",
       "title": "Ankerfakten"
     },
     "claimDetail": {
@@ -325,9 +333,10 @@
     },
     "extraction": {
       "busy": "Schließen Sie zuerst die laufende Extraktion und ihre Prüfung ab.",
-      "dialogDescription": "Jede vorgeschlagene Tatsache zitiert die Stelle, aus der sie stammt. Sie nehmen jede an oder lehnen sie ab, bevor sie in den Bestand aufgenommen wird.",
+      "confirmStart": "{units, plural, one {Starten, # Einheit} other {Starten, # Einheiten}}",
+      "dialogDescription": "Sie nehmen jede Tatsache an oder lehnen sie ab, bevor sie in den Bestand aufgenommen wird.",
       "dialogTitle": "Tatsachen aus Dokumenten extrahieren",
-      "documentsChosen": "{count, plural, one {# von {max} Dokumenten ausgewählt} other {# von {max} Dokumenten ausgewählt}}",
+      "documentsChosen": "{count, plural, one {# ausgewählt, höchstens {max}} other {# ausgewählt, höchstens {max}}}",
       "documentsLabel": "Zu lesende Dokumente",
       "errors": {
         "accessRevoked": "Die Extraktion der Tatsachen wurde beendet, weil kein Zugriff besteht.",
@@ -342,13 +351,13 @@
       },
       "extractFromDocuments": "Aus Dokumenten extrahieren",
       "failedTitle": "Extraktion der Tatsachen fehlgeschlagen",
-      "inProgressTitle": "Tatsachen werden extrahiert",
       "instructionLabel": "Worauf achten (optional)",
       "instructionPlaceholder": "Zum Beispiel: Zahlungen zwischen den Parteien und wann sie erfolgten",
       "nothingFound": "In den ausgewählten Dokumenten wurden keine Tatsachen gefunden.",
+      "proposedTitle": "Vorgeschlagene Tatsachen",
       "queued": "Wartet auf den Start.",
-      "reviewTitle": "{count, plural, one {# vorgeschlagene Tatsache zu prüfen} other {# vorgeschlagene Tatsachen zu prüfen}}",
       "reviewed": "{accepted} von {proposed, plural, one {# vorgeschlagenen Tatsache} other {# vorgeschlagenen Tatsachen}} angenommen.",
+      "runSize": "{available, plural, one {Dieser Lauf verbraucht etwa {estimated} Ihrer # verfügbaren Einheit.} other {Dieser Lauf verbraucht etwa {estimated} Ihrer # verfügbaren Einheiten.}}",
       "running": "Die Dokumente werden gelesen. Vorgeschlagene Tatsachen erscheinen hier zur Prüfung.",
       "startFailed": "Die Extraktion der Tatsachen konnte nicht gestartet werden",
       "submit": "{count, plural, =0 {Tatsachen extrahieren} one {Tatsachen aus # Dokument extrahieren} other {Tatsachen aus # Dokumenten extrahieren}}"

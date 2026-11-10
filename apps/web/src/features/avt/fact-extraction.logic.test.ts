@@ -5,7 +5,7 @@ import {
   extractionPhase,
   isExtractionBusy,
   latestFactExtraction,
-  settledOutcome,
+  pickableDocuments,
   startRefusalKey,
 } from "@/features/avt/fact-extraction.logic";
 import type {
@@ -13,6 +13,7 @@ import type {
   GenerationRunSummary,
 } from "@/features/avt/types";
 import { EXTRACTION_ERROR_KEYS } from "@/features/avt/types";
+import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
 
 const runId = (id: string) => toSafeId<"legalListGenerationRun">(id);
@@ -129,19 +130,36 @@ describe("extractionPhase", () => {
   });
 });
 
-describe("settledOutcome", () => {
-  test("a run that proposed nothing says it found nothing", () => {
-    expect(settledOutcome([])).toEqual({ type: "nothingFound" });
+describe("pickableDocuments", () => {
+  const file = (entityId: string, fileName: string, mimeType: string) => ({
+    entityId,
+    fileName,
+    mimeType,
+    name: null,
+  });
+  const files = [
+    file("a", "Board_minutes.pdf", PDF_MIME),
+    file("b", "Notes.txt", "text/plain"),
+    file("c", "Supply_agreement.docx", DOCX_MIME),
+    file("d", "Witness_statement.pdf", PDF_MIME),
+  ];
+
+  test("offers only documents a fact extraction can read", () => {
+    expect(
+      pickableDocuments(files, [], "").map(({ entityId }) => entityId),
+    ).toEqual(["a", "c", "d"]);
   });
 
-  test("a reviewed run counts what was kept against what was proposed", () => {
+  test("keeps chosen documents first, in the order chosen", () => {
     expect(
-      settledOutcome([
-        { status: "accepted" },
-        { status: "rejected" },
-        { status: "accepted" },
-      ]),
-    ).toEqual({ type: "reviewed", proposed: 3, accepted: 2 });
+      pickableDocuments(files, ["d", "a"], "").map(({ entityId }) => entityId),
+    ).toEqual(["d", "a", "c"]);
+  });
+
+  test("a search narrows the rest but never hides a chosen document", () => {
+    expect(
+      pickableDocuments(files, ["a"], "supply").map(({ entityId }) => entityId),
+    ).toEqual(["a", "c"]);
   });
 });
 

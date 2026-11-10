@@ -91,6 +91,13 @@ export const CONFIDENCE_LABEL_KEYS = {
   low: "common.low",
 } as const satisfies Record<FactConfidence, TranslationKey>;
 
+/** A confidence as a phrase that stands alone in a row ("High confidence"). */
+export const CONFIDENCE_PHRASE_KEYS = {
+  high: "avt.anchorFacts.confidenceLevels.high",
+  medium: "avt.anchorFacts.confidenceLevels.medium",
+  low: "avt.anchorFacts.confidenceLevels.low",
+} as const satisfies Record<FactConfidence, TranslationKey>;
+
 type StateMeta = {
   state: ClaimState;
   labelKey: TranslationKey;

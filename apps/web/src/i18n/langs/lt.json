@@ -212,16 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "Apie atraminių faktų registrą",
       "addFact": "Pridėti faktą",
       "addFactPlaceholder": "Nurodykite faktą taip, kaip jis matyti iš įrodymų",
       "addInterpretationNote": "Pridėti aiškinimo pastabą",
+      "busyLine": "Jūsų priimti faktai bus rodomi čia.",
+      "confidenceLevels": {
+        "high": "Didelis tikrumas",
+        "low": "Mažas tikrumas",
+        "medium": "Vidutinis tikrumas"
+      },
       "description": "Patikimi įrodymai, pavyzdžiui, el. laiškai, žinutės, banko įrašai ir sutarti faktai, išskirti į atraminių faktų registrą, su kuriuo tikrinami teiginiai. Peržiūrėkite, redaguokite arba pridėkite faktų rankiniu būdu.",
       "editInterpretationNote": "Redaguoti aiškinimo pastabą",
+      "emptyLine": "Išgaukite faktus iš bylos dokumentų arba pridėkite faktą ranka.",
       "emptyTitle": "Atraminių faktų dar nėra",
-      "extractionAndReview": "Išskyrimas ir peržiūra",
-      "factCount": "{count, plural, one {# faktas} few {# faktai} many {# faktų} other {# fakto}}",
       "heldDescription": "Šių ištraukų <strong>reikšmė iš tiesų neaiški</strong>: turinys yra preliminarus arba nepatvirtintas, o ne vien parašytas ranka. Jos nevertinamos, kol tikrintojas jų nepatvirtina, nepataiso arba neįveda iš naujo. Įskaitomas šaltinis niekada nesiunčiamas peržiūrėti vien dėl jo laikmenos.",
+      "heldFilter": "{count, plural, one {# sulaikytas peržiūrai} few {# sulaikyti peržiūrai} many {# sulaikyto peržiūrai} other {# sulaikytų peržiūrai}}",
       "heldForReview": "Sulaikyta peržiūrai",
+      "hideSources": "Slėpti šaltinius",
       "holdOutOfScoring": "Neįtraukti į vertinimą",
       "inScoring": "Įtraukta į vertinimą",
       "includeInScoring": "Įtraukti į vertinimą",
@@ -230,7 +238,7 @@
       "interpretiveConfidence": "Aiškinimo patikimumas",
       "openList": "Atverti sąrašą",
       "record": "Atraminių faktų registras",
-      "setConfidence": "Nustatyti patikimumą",
+      "showSources": "Rodyti šaltinius",
       "title": "Atraminiai faktai"
     },
     "claimDetail": {
@@ -325,9 +333,10 @@
     },
     "extraction": {
       "busy": "Pirmiausia užbaikite vykdomą išgavimą ir jo peržiūrą.",
-      "dialogDescription": "Kiekvienas siūlomas faktas cituoja ištrauką, iš kurios jis kilęs. Kiekvieną priimate arba atmetate, kol jis dar nepateko į registrą.",
+      "confirmStart": "{units, plural, one {Pradėti, # vienetas} few {Pradėti, # vienetai} many {Pradėti, # vieneto} other {Pradėti, # vienetų}}",
+      "dialogDescription": "Kiekvieną faktą priimate arba atmetate, kol jis nepateko į registrą.",
       "dialogTitle": "Išgauti faktus iš dokumentų",
-      "documentsChosen": "{count, plural, one {Pasirinktas # iš {max} dokumentų} few {Pasirinkti # iš {max} dokumentų} many {Pasirinkta # iš {max} dokumentų} other {Pasirinkta # iš {max} dokumentų}}",
+      "documentsChosen": "{count, plural, one {Pasirinktas #, daugiausia {max}} few {Pasirinkti #, daugiausia {max}} many {Pasirinkta #, daugiausia {max}} other {Pasirinkta #, daugiausia {max}}}",
       "documentsLabel": "Skaitomi dokumentai",
       "errors": {
         "accessRevoked": "Faktų išgavimas sustabdytas, nes prieiga neprieinama.",
@@ -342,13 +351,13 @@
       },
       "extractFromDocuments": "Išgauti iš dokumentų",
       "failedTitle": "Faktų išgavimas nepavyko",
-      "inProgressTitle": "Išgaunami faktai",
       "instructionLabel": "Ko ieškoti (neprivaloma)",
       "instructionPlaceholder": "Pavyzdžiui: šalių tarpusavio mokėjimai ir jų datos",
       "nothingFound": "Pasirinktuose dokumentuose faktų nerasta.",
+      "proposedTitle": "Siūlomi faktai",
       "queued": "Laukiama pradžios.",
-      "reviewTitle": "{count, plural, one {# siūlomas faktas peržiūrai} few {# siūlomi faktai peržiūrai} many {# siūlomo fakto peržiūrai} other {# siūlomų faktų peržiūrai}}",
       "reviewed": "Priimta {accepted} iš {proposed, plural, one {# siūlomo fakto} few {# siūlomų faktų} many {# siūlomo fakto} other {# siūlomų faktų}}.",
+      "runSize": "{available, plural, one {Šis paleidimas sunaudos apie {estimated} iš jūsų # turimo vieneto.} few {Šis paleidimas sunaudos apie {estimated} iš jūsų # turimų vienetų.} many {Šis paleidimas sunaudos apie {estimated} iš jūsų # turimo vieneto.} other {Šis paleidimas sunaudos apie {estimated} iš jūsų # turimų vienetų.}}",
       "running": "Skaitomi dokumentai. Siūlomi faktai čia pasirodys peržiūrai.",
       "startFailed": "Nepavyko pradėti faktų išgavimo",
       "submit": "{count, plural, =0 {Išgauti faktus} one {Išgauti faktus iš # dokumento} few {Išgauti faktus iš # dokumentų} many {Išgauti faktus iš # dokumento} other {Išgauti faktus iš # dokumentų}}"

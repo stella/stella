@@ -212,16 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "Par enkurfaktu reģistru",
       "addFact": "Pievienot faktu",
       "addFactPlaceholder": "Norādiet faktu tā, kā tas izriet no pierādījumiem",
       "addInterpretationNote": "Pievienot interpretācijas piezīmi",
+      "busyLine": "Jūsu pieņemtie fakti parādīsies šeit.",
+      "confidenceLevels": {
+        "high": "Augsta noteiktība",
+        "low": "Zema noteiktība",
+        "medium": "Vidēja noteiktība"
+      },
       "description": "Droši pierādījumi, piemēram, e-pasta vēstules, ziņas, bankas ieraksti un saskaņoti fakti, kas iegūti enkurfaktu reģistram, ar kuru tiek pārbaudīti apgalvojumi. Pārskatiet, rediģējiet vai manuāli pievienojiet faktus.",
       "editInterpretationNote": "Rediģēt interpretācijas piezīmi",
+      "emptyLine": "Izgūstiet faktus no lietas dokumentiem vai pievienojiet faktu manuāli.",
       "emptyTitle": "Enkurfaktu vēl nav",
-      "extractionAndReview": "Iegūšana un pārskatīšana",
-      "factCount": "{count, plural, zero {# faktu} one {# fakts} other {# fakti}}",
       "heldDescription": "Šo izvilkumu <strong>nozīme patiešām ir neskaidra</strong>: saturs ir provizorisks vai neapstiprināts, nevis tikai rakstīts ar roku. Tie netiek vērtēti, kamēr pārbaudītājs tos neapstiprina, nerediģē vai neievada vēlreiz. Salasāms avots nekad netiek nosūtīts pārskatīšanai tikai tā nesēja dēļ.",
+      "heldFilter": "{count, plural, zero {# aizturēti pārskatīšanai} one {# aizturēts pārskatīšanai} other {# aizturēti pārskatīšanai}}",
       "heldForReview": "Aizturēts pārskatīšanai",
+      "hideSources": "Paslēpt avotus",
       "holdOutOfScoring": "Izslēgt no vērtējuma",
       "inScoring": "Iekļauts vērtējumā",
       "includeInScoring": "Iekļaut vērtējumā",
@@ -230,7 +238,7 @@
       "interpretiveConfidence": "Interpretācijas ticamība",
       "openList": "Atvērt sarakstu",
       "record": "Enkurfaktu reģistrs",
-      "setConfidence": "Iestatīt ticamību",
+      "showSources": "Rādīt avotus",
       "title": "Enkurfakti"
     },
     "claimDetail": {
@@ -325,9 +333,10 @@
     },
     "extraction": {
       "busy": "Vispirms pabeidziet notiekošo izgūšanu un tās pārskatīšanu.",
-      "dialogDescription": "Katrs ierosinātais fakts citē fragmentu, no kura tas nāk. Katru jūs pieņemat vai noraidāt, pirms tas nonāk reģistrā.",
+      "confirmStart": "{units, plural, zero {Sākt, # vienību} one {Sākt, # vienība} other {Sākt, # vienības}}",
+      "dialogDescription": "Katru faktu jūs pieņemat vai noraidāt, pirms tas nonāk reģistrā.",
       "dialogTitle": "Izgūt faktus no dokumentiem",
-      "documentsChosen": "{count, plural, zero {Izvēlēti # no {max} dokumentiem} one {Izvēlēts # no {max} dokumentiem} other {Izvēlēti # no {max} dokumentiem}}",
+      "documentsChosen": "{count, plural, zero {Izvēlēti #, ne vairāk kā {max}} one {Izvēlēts #, ne vairāk kā {max}} other {Izvēlēti #, ne vairāk kā {max}}}",
       "documentsLabel": "Lasāmie dokumenti",
       "errors": {
         "accessRevoked": "Faktu izgūšana tika apturēta, jo piekļuve nav pieejama.",
@@ -342,13 +351,13 @@
       },
       "extractFromDocuments": "Izgūt no dokumentiem",
       "failedTitle": "Faktu izgūšana neizdevās",
-      "inProgressTitle": "Notiek faktu izgūšana",
       "instructionLabel": "Ko meklēt (neobligāti)",
       "instructionPlaceholder": "Piemēram: maksājumi starp pusēm un to datumi",
       "nothingFound": "Izvēlētajos dokumentos netika atrasts neviens fakts.",
+      "proposedTitle": "Ierosinātie fakti",
       "queued": "Gaida sākšanu.",
-      "reviewTitle": "{count, plural, zero {# ierosinātu faktu pārskatīšanai} one {# ierosināts fakts pārskatīšanai} other {# ierosināti fakti pārskatīšanai}}",
       "reviewed": "Pieņemti {accepted} no {proposed, plural, zero {# ierosinātajiem faktiem} one {# ierosinātā fakta} other {# ierosinātajiem faktiem}}.",
+      "runSize": "{available, plural, zero {Šī palaišana izmantos aptuveni {estimated} no jūsu # pieejamajām vienībām.} one {Šī palaišana izmantos aptuveni {estimated} no jūsu # pieejamās vienības.} other {Šī palaišana izmantos aptuveni {estimated} no jūsu # pieejamajām vienībām.}}",
       "running": "Notiek dokumentu lasīšana. Ierosinātie fakti šeit parādīsies pārskatīšanai.",
       "startFailed": "Neizdevās sākt faktu izgūšanu",
       "submit": "{count, plural, =0 {Izgūt faktus} zero {Izgūt faktus no # dokumentiem} one {Izgūt faktus no # dokumenta} other {Izgūt faktus no # dokumentiem}}"

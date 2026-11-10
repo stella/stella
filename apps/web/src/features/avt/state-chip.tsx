@@ -22,6 +22,7 @@ import {
   SplitIcon,
   XCircleIcon,
 } from "@stll/ui/icons";
+import { ListItemStatus } from "@stll/ui/list";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { TEXT_MARK_TONE_COLOR } from "@stll/ui/text-mark";
@@ -38,6 +39,7 @@ import type {
 import {
   CLAIM_TYPE_META,
   CONFIDENCE_LABEL_KEYS,
+  CONFIDENCE_PHRASE_KEYS,
   STATE_META,
 } from "@/features/avt/types";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -206,6 +208,32 @@ export const InterpNote = ({ note }: { note: string | null }) => {
         className="text-warning mt-0.5 size-3.5 shrink-0"
       />
       <span dir="auto">{note}</span>
+    </div>
+  );
+};
+
+/** A fact's interpretive confidence as a phrase in a quiet meta line. */
+export const ConfidencePhrase = ({ level }: { level: FactConfidence }) => {
+  const t = useTranslations();
+  return <span>{t(CONFIDENCE_PHRASE_KEYS[level])}</span>;
+};
+
+/**
+ * A fact held out of scoring in a list row: the status as a dot and label,
+ * and why it is held as one clamped quiet line beside it.
+ */
+export const HeldStatus = ({ note }: { note: string | null }) => {
+  const t = useTranslations();
+  return (
+    <div className="flex min-w-0 items-baseline gap-1.5 text-xs">
+      <ListItemStatus tone="warning">
+        {t("avt.anchorFacts.heldForReview")}
+      </ListItemStatus>
+      {note !== null && note !== "" && (
+        <span className="text-muted-foreground line-clamp-1 min-w-0" dir="auto">
+          {note}
+        </span>
+      )}
     </div>
   );
 };

@@ -43,6 +43,7 @@ const document = {
   parentId: null,
   mimeType:
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  sizeBytes: 24_000,
 } satisfies WorkspaceFile;
 const clients: InstanceType<typeof QueryClient>[] = [];
 const mountDocuments = (

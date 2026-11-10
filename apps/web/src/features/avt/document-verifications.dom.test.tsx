@@ -69,6 +69,7 @@ const mountDocuments = (locale: "en" | "cs" = "en") => {
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       parentId: null,
+      sizeBytes: 18_000,
     },
   ]);
   client.setQueryData(
