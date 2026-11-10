@@ -5,6 +5,8 @@
 // `--report-unused-disable-directives-severity=error` fails CI. Lines without a
 // directive cover the allow-list and must keep passing.
 
+import { panic } from "better-result";
+
 declare const CHAT_ACTIVE_RUN_STATE: {
   readonly needsYou: "needs-you";
   readonly working: "working";
@@ -23,6 +25,8 @@ export const _a = () => {
     case "working":
       return null;
   }
+  state satisfies never;
+  return panic("unknown run state");
 };
 export const _b = () =>
   // oxlint-disable-next-line no-hand-drawn-run-state/no-hand-drawn-run-state -- regression fixture for a hand-drawn running mark
