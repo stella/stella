@@ -4,7 +4,11 @@ import fc from "fast-check";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import shortTexts from "./short-text.test-fixture.json";
-import { classifyCourtListenerText } from "./usability";
+import {
+  classifyCourtListenerText,
+  excludesSourcePlaceholder,
+  isSourcePlaceholderSequence,
+} from "./usability";
 
 const whitespace = fc
   .array(fc.constantFrom(" ", "\t", "\n", "\r\n", "\u00a0"), {
@@ -314,4 +318,46 @@ test.each(withdrawalRelatedProse)(
   (text) => {
     expect(classifyCourtListenerText(text)).toBe("usable");
   },
+);
+
+const placeholderPart = fc.constantFrom(
+  "This opinion was withdrawn. Opinion 12-345",
+  "Opinion #A-1234 was never issued.",
+  "Opinion x 77 was never issued.",
+  "USCA5 opinion can't open 12-3456a.pdf",
+  "Unavailable",
+  "Test document",
+  "No opinion found. Click here to view source material.",
+  "this opinion was never issued. case 4 '",
+  "#ab",
+  "–12",
+  "12-3456e1.05",
+  "usca13",
+  "Plaintiff",
+  "court.",
+  "Ωmega",
+  "a5bcde",
+  "opinions",
+);
+const placeholderSpacing = fc.constantFrom(" ", "  ", "\n", "\t", " ");
+
+test(
+  "CourtListener placeholder exclusion never rejects an accepted publisher sequence",
+  () => {
+    assertProperty(
+      "CourtListener placeholder exclusion never rejects an accepted publisher sequence",
+      fc.property(
+        fc.array(fc.tuple(placeholderPart, placeholderSpacing), {
+          maxLength: 6,
+        }),
+        (parts) => {
+          const text = parts.map(([part, space]) => part + space).join("");
+          if (isSourcePlaceholderSequence(text)) {
+            expect(excludesSourcePlaceholder(text)).toBe(false);
+          }
+        },
+      ),
+    );
+  },
+  propertyTestTimeout(10_000),
 );

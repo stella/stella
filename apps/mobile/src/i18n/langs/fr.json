@@ -351,5 +351,13 @@
     "share": "Partager",
     "cancel": "Annuler",
     "openFailed": "Le lien n’a pas pu être ouvert."
+  },
+  "share": {
+    "title": "Ajouter à stella",
+    "start": "Commencer",
+    "uploading": "Envoi de {done} sur {total}…",
+    "filesOnly": "Seuls les fichiers sont enregistrés, sans les liens ni le texte.",
+    "unavailableTitle": "Rien à ajouter",
+    "unavailable": "Ce partage n’est plus disponible. Partagez-le à nouveau depuis l’autre application."
   }
 }

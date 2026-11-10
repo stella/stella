@@ -3,8 +3,8 @@
 # and their tests, run the tests, and lint the regression fixtures under
 # `.oxlint-plugins/__fixtures__`. Each fixture relies on
 # `oxlint-disable-next-line` directives that go unused when the
-# associated custom rule regresses, so we run oxlint with
-# `--report-unused-disable-directives-severity=error` here.
+# associated custom rule regresses, so they go through scripts/lint.ts,
+# whose check reports unused directives as errors.
 #
 # Arguments forwarded by callers (e.g. `--affected` from
 # `bun run lint -- --affected` in CI) are intentionally swallowed:
@@ -52,11 +52,7 @@ if [[ ${#plugin_sources[@]} -eq 0 ]]; then
   exit 1
 fi
 
-bun --bun oxlint -c oxlint.config.ts \
-  --report-unused-disable-directives-severity=error \
-  --type-aware \
-  --type-check \
-  "${plugin_sources[@]}"
+bun scripts/lint.ts "${plugin_sources[@]}"
 
 bun test ./scripts/oxlint-safe-fixers.test.ts
 bun test ./scripts/oxlint-additional-guards.test.ts
@@ -71,7 +67,4 @@ bun scripts/check-desktop-section-sign-glyph.ts
 # check then proves each fires exactly as often as its fixture line claims.
 bun scripts/check-oxlint-fixture-counts.ts
 
-exec bun --bun oxlint -c oxlint.config.ts \
-  --report-unused-disable-directives-severity=error \
-  --type-aware \
-  .oxlint-plugins/__fixtures__
+exec bun scripts/lint.ts --no-type-check .oxlint-plugins/__fixtures__

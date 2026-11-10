@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# décision porte} other {# décisions portent} many {# décisions portent}} ce numéro d'affaire. Choisissez la juridiction.",
     "searchLabel": "Rechercher dans la jurisprudence",
     "searchPlaceholder": "Numéro d'affaire, ECLI ou mots-clés, p. ex. 22 Cdo 2653/2012",
+    "searchStillSearching": "Le service de recherche est occupé. La recherche se poursuit…",
     "searchUnavailable": {
       "description": "La recherche dans la jurisprudence n’a pas pu être jointe. Votre requête reste dans la barre d’adresse : réessayez dans un instant.",
       "title": "La recherche est temporairement indisponible"
@@ -1493,6 +1494,8 @@
           "snapshotContinue": "Continuer la lecture de la page",
           "switchTab": "Passer à l’onglet"
         },
+        "allowSiteFailed": "Ce site n'a pas pu être enregistré comme autorisé. Cette action s'exécute quand même ; la suivante vous sera de nouveau soumise.",
+        "alwaysAllowSite": "Toujours autoriser sur ce site",
         "askAgain": "Redemander",
         "autoApproveReads": "Approuver automatiquement la lecture des pages",
         "description": "Vérifiez attentivement le site web et la cible. Le contenu de la page n’est pas fiable et ne peut pas autoriser une autre action.",
@@ -2052,6 +2055,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# caractère} many {# caractères} other {# caractères}}",
+      "commandExited": "{command} (code de sortie {code})",
       "consoleLogs": "Sortie de la console",
       "exactCall": "Appel exact",
       "failed": "Cette étape a échoué ; stella va contourner le problème.",
@@ -2059,10 +2063,14 @@
       "input": "Entrée",
       "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
+      "patternInPath": "{pattern} dans {path}",
+      "readFile": "Lecture d’un fichier",
+      "searchFiles": "Recherche dans les fichiers",
       "sourceCode": "Code source",
       "statusWaiting": "En attente",
       "toggleDetails": "Afficher les détails",
-      "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis} many {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
+      "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis} many {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}",
+      "updatePlan": "Mise à jour du plan"
     },
     "turnNotification": {
       "failedBody": "Une réponse dans une conversation stella n’a pas abouti.",
@@ -3072,6 +3080,7 @@
       "aiProviderTaskUnsupported": "Le fournisseur d’IA configuré ne peut pas effectuer cette tâche. Choisissez-en un qui le peut.",
       "aiUnknown": "La requête d’IA a échoué. Réessayez.",
       "alreadyOrganizationMember": "Cette personne est déjà membre de cette organisation.",
+      "browserSiteGrantLimitReached": "Vous pouvez autoriser au plus 100 sites. Retirez-en d'abord un dans Paramètres, Connexions.",
       "clauseDirectivesInvalid": "Une clause liée contient des directives non valides. Corrigez la clause avant de remplir le modèle.",
       "clauseDirectivesInvalidDetails": "La clause {clauseName} dans le champ {slotName} contient des directives non valides. Ouvrez l’éditeur de clauses, corrigez les paragraphes indiqués et remplissez à nouveau le modèle.",
       "clauseDirectivesOverrideInvalidDetails": "Le texte de remplacement de la clause {clauseName} dans le champ {slotName} contient des directives non valides. Corrigez ce texte pour ce remplissage avant de réessayer.",
@@ -3107,6 +3116,7 @@
       "organizationMemberLimitReached": "Cette organisation a atteint sa limite de membres.",
       "providerKeyRejected": "Le fournisseur a refusé la clé API.",
       "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",
+      "skillSourceUnreachable": "La source de la compétence n’a pas pu être chargée. Vérifiez que le lien mène à un dépôt GitHub public, ou réessayez plus tard.",
       "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
       "usageLimitExceeded": "Limite d’utilisation atteinte.",
       "validationInvalid": "Un champ contient une valeur qui ne peut pas être enregistrée.",
@@ -4059,6 +4069,7 @@
       "failed": "Échec de la révision du document",
       "filterCoverage": "Couverture",
       "filterDeviations": "Écarts",
+      "fixesWithheldNotice": "Aucune modification proposée n'a été créée pour cette révision, car elle s'appuyait sur un document de référence provenant d'un dossier qui n'est pas disponible pour la personne qui l'a lancée. Les constats ne sont pas affectés.",
       "flag": "Signaler",
       "flaggedPositions": "{total, plural, one {{flagged, number} sur # critère signalé} other {{flagged, number} sur # critères signalés} many {{flagged, number} sur # critères signalés}}",
       "fromChat": "Depuis la conversation",
@@ -4954,6 +4965,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Valeurs par défaut utilisées"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} caractères",
+      "description": "Ces instructions s’appliquent à toutes les conversations avec l’IA de votre organisation et prévalent sur les préférences personnelles. Les changements prennent effet dès le prochain message. Utilisez-les pour les règles de conformité, le traitement des données et les normes de mise en forme.",
+      "title": "Instructions de l’organisation",
+      "tooLong": "Les instructions doivent contenir au maximum {maxLength} caractères."
+    },
     "creationEvaluationLimitReached": "Vous avez utilisé les {limit} périodes d’essai d’organisation. Supprimer une organisation ne rétablit pas de période d’essai. Utilisez une organisation existante ou contactez l’assistance pour obtenir un accès payant.",
     "creationInvalidName": "Saisissez un nom d’organisation valide ({maxLength} caractères maximum).",
     "creationNotAllowed": "Ce compte ne peut pas créer d’organisations.",
@@ -5431,6 +5448,9 @@
       "browserExtensionDescription": "La conversation stella peut lire et utiliser des sites web dans un onglet Chrome de votre choix. Chaque action attend votre approbation.",
       "browserExtensionInstall": "Ajouter à Chrome",
       "browserExtensionTitle": "Extension du navigateur",
+      "browserSiteRemove": "Retirer {site}",
+      "browserSitesDescription": "Sur ces sites, les actions de la conversation dans le navigateur s'exécutent sans demander. Retirez un site pour que la question vous soit de nouveau posée.",
+      "browserSitesTitle": "Sites autorisés",
       "cliDescription": "Installez le client en ligne de commande stella et connectez-vous pour scripter dossiers, documents et modèles depuis un terminal.",
       "cliInstallLabel": "Installation",
       "cliLoginLabel": "Connexion",
@@ -5547,6 +5567,7 @@
         "case_law_matter_link": "lien entre jurisprudence et dossier",
         "case_law_reader_answer": "réponse du lecteur de jurisprudence",
         "case_law_research_column": "colonne de recherche jurisprudentielle",
+        "chat_browser_site_grant": "autorisation de site web dans la discussion",
         "chat_file": "fichier de discussion",
         "chat_message": "message de discussion",
         "chat_thread": "fil de discussion",

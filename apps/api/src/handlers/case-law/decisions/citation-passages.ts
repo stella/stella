@@ -171,6 +171,7 @@ export type CitationPassageFilter = (
 
 /** Documents whose AST is fetched at once while resolving one page. */
 const PASSAGE_AST_GROUP_SIZE = LIMITS.caseLawCitationPassageConcurrency;
+const PASSAGE_VERSION_ATTEMPTS = 3;
 
 /**
  * Which decisions a passage read may take text from, and where their AST
@@ -441,8 +442,7 @@ const readCitationAdmission = async ({
       .filter((pointer) => {
         const current = freshById.get(pointer.id);
         return (
-          current !== undefined &&
-          current.textWithheldReason === null &&
+          current?.textWithheldReason === null &&
           current.textEligibilityFingerprint ===
             pointer.textEligibilityFingerprint &&
           decisionPayloadKey(current) === decisionPayloadKey(pointer) &&
@@ -454,67 +454,93 @@ const readCitationAdmission = async ({
   return { allowed, freshById };
 };
 
-export const readDecisionTextGroup = async ({
+type DecisionTextAttemptOptions = DecisionTextGroupOptions & {
+  /** Citing decisions whose page rows carry evidence windows; only these read section text eagerly. */
+  evidenceDecisionIds: ReadonlySet<string>;
+};
+
+type RefreshedPointer = {
+  previous: PassageSourcePointer;
+  current: PassageSourcePointer;
+};
+
+type DecisionTextAttempt = {
+  textByDecision: Map<string, DecisionTextRead>;
+  /** Pointers whose payload version changed while text was eligible. */
+  refreshed: RefreshedPointer[];
+};
+
+type VersionedPayloadBatchOptions<K extends DecisionPayloadColumn> = {
+  caseLawDb: CaseLawPublicReadDb;
+  column: K;
+  versions: readonly PassageSourcePointer[];
+};
+
+/** Every lazy miss in a bounded group shares one version-qualified read. */
+const versionedPayloadBatch = <K extends DecisionPayloadColumn>({
+  caseLawDb,
+  column,
+  versions,
+}: VersionedPayloadBatchOptions<K>) => {
+  let pending: Promise<Map<string, DecisionPayloadRead<K>>> | undefined;
+  return async (pointer: PassageSourcePointer) => {
+    pending ??= caseLawDb(
+      async (tx) =>
+        await readDecisionVersionedPayloads({ tx, versions, column }),
+    );
+    return (
+      (await pending).get(pointer.id) ?? { kind: "version-changed" as const }
+    );
+  };
+};
+
+const readDecisionTextAttempt = async ({
   readTombstones = readCorpusTombstones,
   caseLawDb,
   pointers,
   countries,
-}: DecisionTextGroupOptions): Promise<Map<string, DecisionTextRead>> => {
+  evidenceDecisionIds,
+}: DecisionTextAttemptOptions): Promise<DecisionTextAttempt> => {
   const admission = { caseLawDb, pointers, countries, readTombstones };
-  const before = await Result.tryPromise(() =>
-    readCitationAdmission(admission),
+  const before = await Result.tryPromise(
+    async () => await readCitationAdmission(admission),
   );
   if (Result.isError(before)) {
     observeFailure(before.error, {
       sink: citationTextReadFailure,
       ctx: { phase: "admission" },
     });
-    return new Map(
-      pointers.map(({ id }) => [String(id), UNAVAILABLE_DECISION_TEXT]),
-    );
-  }
-  // Every lazy miss in this bounded group shares one version-qualified read.
-  // Storage-backed AST hits never start the Postgres AST read.
-  const payloadBatch = <K extends DecisionPayloadColumn>(column: K) => {
-    let pending: Promise<Map<string, DecisionPayloadRead<K>>> | undefined;
-    return async (pointer: PassageSourcePointer) => {
-      pending ??= caseLawDb(
-        async (tx) =>
-          await readDecisionVersionedPayloads({
-            tx,
-            versions: pointers.filter(
-              ({ textWithheldReason }) => textWithheldReason === null,
-            ),
-            column,
-          }),
-      );
-      return (
-        (await pending).get(pointer.id) ?? { kind: "version-changed" as const }
-      );
+    return {
+      textByDecision: new Map(
+        pointers.map(({ id }) => [String(id), UNAVAILABLE_DECISION_TEXT]),
+      ),
+      refreshed: [],
     };
-  };
-  const readAst = payloadBatch("documentAst");
-  const sectionsRead = await Result.tryPromise(() =>
-    caseLawDb(
-      async (tx) =>
-        await readDecisionVersionedPayloads({
-          tx,
-          versions: pointers.filter(({ id }) => before.value.allowed.has(id)),
-          column: "sections",
-        }),
-    ),
-  );
-  if (Result.isError(sectionsRead)) {
-    observeFailure(sectionsRead.error, {
-      sink: citationTextReadFailure,
-      ctx: { phase: "sections" },
-    });
-    return new Map(
-      pointers.map(({ id }) => [String(id), UNAVAILABLE_DECISION_TEXT]),
-    );
   }
-  const readSections = (pointer: PassageSourcePointer) =>
-    sectionsRead.value.get(pointer.id) ?? { kind: "version-changed" as const };
+  // Storage-backed AST hits never start the Postgres AST read.
+  const payloadBatch = <K extends DecisionPayloadColumn>(
+    column: K,
+    versions: readonly PassageSourcePointer[],
+  ) => versionedPayloadBatch({ caseLawDb, column, versions });
+  const readAst = payloadBatch(
+    "documentAst",
+    pointers.filter(({ textWithheldReason }) => textWithheldReason === null),
+  );
+  // Section text is read only where a page row renders evidence from it or
+  // the section index misses its cache; each decision's sections are read once.
+  const admitted = pointers.filter(({ id }) => before.value.allowed.has(id));
+  const readEvidenceSections = payloadBatch(
+    "sections",
+    admitted.filter(({ id }) => evidenceDecisionIds.has(id)),
+  );
+  const readIndexSections = payloadBatch(
+    "sections",
+    admitted.filter(({ id }) => !evidenceDecisionIds.has(id)),
+  );
+  const readSections = async (pointer: PassageSourcePointer) =>
+    evidenceDecisionIds.has(pointer.id)
+      ? await readEvidenceSections(pointer)
+      : await readIndexSections(pointer);
   const changed = new Set<SafeId<"caseLawDecision">>();
   const entries = await Promise.all(
     pointers.map(async (pointer) => {
@@ -556,16 +582,20 @@ export const readDecisionTextGroup = async ({
           ast,
           onVersionChanged,
           readSections: async () => {
-            const result = readSections(pointer);
+            const result = await readSections(pointer);
             return result.kind === "version-changed"
               ? DECISION_ROW_AST_VERSION_CHANGED
               : result.value;
           },
         });
-        const evidence = readSections(pointer);
-        if (evidence.kind === "version-changed") {
-          onVersionChanged();
-          return null;
+        let evidenceSections: DecisionSection[] | null = null;
+        if (evidenceDecisionIds.has(pointer.id)) {
+          const evidence = await readEvidenceSections(pointer);
+          if (evidence.kind === "version-changed") {
+            onVersionChanged();
+            return null;
+          }
+          evidenceSections = evidence.value;
         }
         return changed.has(pointer.id)
           ? null
@@ -575,7 +605,7 @@ export const readDecisionTextGroup = async ({
                 ast,
                 language: pointer.language,
                 sections,
-                evidenceSections: evidence.value,
+                evidenceSections,
               },
             };
       });
@@ -619,7 +649,9 @@ export const readDecisionTextGroup = async ({
       });
     }
   }
-  const after = await Result.tryPromise(() => readCitationAdmission(admission));
+  const after = await Result.tryPromise(
+    async () => await readCitationAdmission(admission),
+  );
   if (Result.isError(after)) {
     observeFailure(after.error, {
       sink: citationTextReadFailure,
@@ -650,6 +682,50 @@ export const readDecisionTextGroup = async ({
       );
     }
   }
+  // A newer payload version is admitted again under the policy it carries now.
+  const refreshed = Result.isError(after)
+    ? []
+    : pointers.flatMap((pointer) => {
+        const current = after.value.freshById.get(pointer.id);
+        return pointer.textWithheldReason === null &&
+          current?.textWithheldReason === null &&
+          decisionPayloadKey(current) !== decisionPayloadKey(pointer)
+          ? [{ previous: pointer, current }]
+          : [];
+      });
+  return { textByDecision, refreshed };
+};
+
+type ReadDecisionTextGroupOptions = DecisionTextAttemptOptions & {
+  attempt?: number;
+};
+
+export const readDecisionTextGroup = async ({
+  attempt = 1,
+  ...group
+}: ReadDecisionTextGroupOptions): Promise<Map<string, DecisionTextRead>> => {
+  const { textByDecision, refreshed } = await readDecisionTextAttempt(group);
+  if (refreshed.length === 0 || attempt >= PASSAGE_VERSION_ATTEMPTS) {
+    return textByDecision;
+  }
+  const retried = await readDecisionTextGroup({
+    ...group,
+    pointers: refreshed.map(({ current }) => current),
+    // Evidence windows stay bound to the text eligibility the page admitted.
+    evidenceDecisionIds: new Set(
+      refreshed.flatMap(({ previous, current }) =>
+        group.evidenceDecisionIds.has(current.id) &&
+        current.textEligibilityFingerprint ===
+          previous.textEligibilityFingerprint
+          ? [current.id]
+          : [],
+      ),
+    ),
+    attempt: attempt + 1,
+  });
+  for (const [id, text] of retried) {
+    textByDecision.set(id, text);
+  }
   return textByDecision;
 };
 
@@ -664,6 +740,7 @@ type ReadCitationTextsOptions = {
   pointers: readonly PassageSourcePointer[];
   citations: readonly Omit<CitationTextRead, "disposition">[];
   countries: readonly string[];
+  evidenceDecisionIds: ReadonlySet<string>;
 };
 
 const readCitationTexts = async ({
@@ -671,6 +748,7 @@ const readCitationTexts = async ({
   pointers,
   citations,
   countries,
+  evidenceDecisionIds,
 }: ReadCitationTextsOptions): Promise<CitationTextRead[]> => {
   const admitted: CitationTextRead[] = citations.map(
     ({ citation, citingId }) => ({
@@ -685,6 +763,7 @@ const readCitationTexts = async ({
       caseLawDb,
       pointers: group,
       countries,
+      evidenceDecisionIds,
     });
     for (const [id, text] of entries) {
       textByDecision.set(id, text);
@@ -902,6 +981,11 @@ export const completeDecisionCitations = async ({
   ) {
     return gated;
   }
+  const evidenceByCitation = new Map(
+    gated.evidence.type === "ready"
+      ? gated.evidence.rows.map((row) => [String(row.id), row] as const)
+      : [],
+  );
   const resolved = await readCitationTexts({
     caseLawDb,
     pointers: gated.sources,
@@ -910,14 +994,17 @@ export const completeDecisionCitations = async ({
       citation,
       citingId: String(citation.printedBy),
     })),
+    evidenceDecisionIds: new Set(
+      gated.page.items.flatMap((item) =>
+        (evidenceByCitation.get(String(item.id))?.evidenceWindows ?? null) ===
+        null
+          ? []
+          : [String(item.printedBy)],
+      ),
+    ),
   });
   const textByDecision = new Map(
     resolved.map(({ citingId, disposition }) => [citingId, disposition]),
-  );
-  const evidenceByCitation = new Map(
-    gated.evidence.type === "ready"
-      ? gated.evidence.rows.map((row) => [String(row.id), row] as const)
-      : [],
   );
   const items = gated.page.items.map((item): CitationWithPassage => {
     const disposition = textByDecision.get(String(item.printedBy));

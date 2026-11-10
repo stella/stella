@@ -43,10 +43,13 @@ import {
   matchedSuggestions,
   nextSuggestion,
   segmentTitles,
+  suggestionPieces,
+  suggestionSummary,
 } from "./activity-calendar-logic";
 import type {
   ActivityBlock,
   ActivitySuggestion,
+  SuggestionSummary,
 } from "./activity-calendar-logic";
 import { calendarDate, timedSegments } from "./activity-logic";
 import type { ActivityDaySnapshot } from "./activity-types";
@@ -70,7 +73,8 @@ import type {
 } from "./billing-draft-settings";
 import { EVIDENCE_DETAIL_LIMIT, matchDay } from "./day-review-logic";
 import type { MatchedSegment } from "./day-review-logic";
-import { useDurationLabel } from "./use-duration-label";
+import { SuggestionPieceLabel } from "./SuggestionPieceLabel";
+import { useDurationLabel, useMinutesLabel } from "./use-duration-label";
 
 const ACTIVITY_COLUMN_ID = "activity";
 const ENTRIES_COLUMN_ID = "entries";
@@ -278,6 +282,9 @@ const SubmissionFeedback = ({
 
 type ActivityDayCalendarProps = {
   header: ReactNode;
+  /** A question or note that belongs under the header, such as the
+   * browser question; nothing when absent. */
+  notice?: ReactNode;
   snapshot: ActivityDaySnapshot;
   preferences: ActivityCalendarPreferences;
   onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
@@ -287,6 +294,7 @@ type ActivityDayCalendarProps = {
 
 export const ActivityDayCalendar = ({
   header,
+  notice,
   snapshot,
   preferences,
   onPreferencesChange,
@@ -440,16 +448,12 @@ export const ActivityDayCalendar = ({
     openNext(suggestion);
   };
 
-  const formatRange = (startMs: number, endMs: number) =>
-    format.dateTimeRange(startMs, endMs, {
-      hour: "numeric",
-      minute: "2-digit",
-    });
   const hours = (tenths: number) =>
     format.number(tenths / 10, {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     });
+  const summaryLabel = useSummaryLabel();
   const columns = useCalendarColumns({
     segments: day.segments,
     granularity: preferences.granularity,
@@ -476,10 +480,7 @@ export const ActivityDayCalendar = ({
         edit={narratives.editFor(openSuggestion)}
         candidates={matters}
         editable={editable}
-        timeLabel={t("rangeHours", {
-          range: formatRange(openSuggestion.startMs, openSuggestion.endMs),
-          hours: hours(openSuggestion.roundedTenths),
-        })}
+        timeLabel={summaryLabel(suggestionSummary(openSuggestion))}
         sourceAppVisuals={snapshot.sourceAppVisuals}
         assist={narratives.view(openSuggestion)}
         earlierEntries={narratives.earlierEntries(openSuggestion)}
@@ -525,6 +526,7 @@ export const ActivityDayCalendar = ({
           }
         />
       </div>
+      {notice}
       {candidates.type === "failed" ? (
         <div
           role="alert"
@@ -591,6 +593,42 @@ export const ActivityDayCalendar = ({
       <p className="text-muted-foreground text-xs">{t("calendarHint")}</p>
     </div>
   );
+};
+
+/** What a suggestion card's header says about its time: its range or how
+ * many pieces it has, the minutes they hold and the hours they bill. */
+const useSummaryLabel = () => {
+  const t = useTranslations("activity");
+  const format = useFormatter();
+  const minutesLabel = useMinutesLabel();
+  const hours = (tenths: number) =>
+    format.number(tenths / 10, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
+  return (summary: SuggestionSummary) => {
+    const duration = minutesLabel(summary.minutes);
+    switch (summary.type) {
+      case "range":
+        return t("suggestionRange", {
+          duration,
+          hours: hours(summary.tenths),
+          range: format.dateTimeRange(summary.startMs, summary.endMs, {
+            hour: "numeric",
+            minute: "2-digit",
+          }),
+        });
+      case "pieces":
+        return t("suggestionPieces", {
+          count: summary.count,
+          duration,
+          hours: hours(summary.tenths),
+        });
+      default:
+        summary satisfies never;
+        return panic("Unhandled suggestion summary");
+    }
+  };
 };
 
 /** The card for a range selected on the grid, named by the range it opened
@@ -665,15 +703,8 @@ function useCalendarColumns({
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     });
-  const hoursUnit = (tenths: number) =>
-    format.number(tenths / 10, {
-      maximumFractionDigits: 1,
-      minimumFractionDigits: 1,
-      style: "unit",
-      unit: "hour",
-      unitDisplay: "narrow",
-    });
   const durationLabel = useDurationLabel();
+  const minutesLabel = useMinutesLabel();
   const titleOf = segmentTitles(segments);
 
   const activity = activityBlocks(segments, granularity).map(
@@ -774,35 +805,32 @@ function useCalendarColumns({
   for (const suggestion of suggestions) {
     const name = suggestion.matter?.name ?? t("newEntry");
     const roundedHours = hours(suggestion.roundedTenths);
-    const accessibleLabel = t("suggestionLabel", {
-      matter: name,
-      hours: roundedHours,
-    });
-    // The description reads first, as on a timesheet; the range stands in
-    // while there is none.
+    // Each piece shows its own time; the matter's total is its card's.
     const narrative = narrativeFor(suggestion).trim();
-    for (const run of suggestion.runs) {
+    for (const piece of suggestionPieces(suggestion)) {
+      const range = formatRange(piece.startMs, piece.endMs);
+      const duration = minutesLabel(piece.minutes);
       entries.push({
-        accessibleLabel,
-        caption:
-          narrative.length > 0 ? (
-            <bdi>{narrative}</bdi>
-          ) : (
-            t("rangeHours", {
-              range: formatRange(run.startMs, run.endMs),
-              hours: roundedHours,
-            })
-          ),
-        endMs: run.endMs,
-        id: `${suggestion.id}:${String(run.startMs)}`,
+        accessibleLabel: t("suggestionPieceLabel", {
+          duration,
+          hours: roundedHours,
+          matter: name,
+          range,
+        }),
+        // The description reads under the time, as on a timesheet.
+        ...(narrative.length > 0 ? { caption: <bdi>{narrative}</bdi> } : {}),
+        endMs: piece.endMs,
+        id: `${suggestion.id}:${String(piece.startMs)}`,
         kind: "entry",
         onActivate: () => onActivate(suggestion),
-        startMs: run.startMs,
+        startMs: piece.startMs,
         state: "suggestion",
         title: (
-          <bdi>
-            {name} · {hoursUnit(suggestion.roundedTenths)}
-          </bdi>
+          <SuggestionPieceLabel
+            duration={duration}
+            matter={name}
+            range={range}
+          />
         ),
         tone: matterTone(suggestion.matter),
       });
@@ -850,6 +878,16 @@ function matterTone(
     ? { type: "neutral" }
     : { color: matter.color, matterId: matter.id, type: "matter" };
 }
+
+/** The titles a card's description names: those whose time went to its
+ * matter, the longest first in each app. */
+const matterTitles = (suggestion: ActivitySuggestion, matterId: string) =>
+  suggestion.evidence.flatMap(({ details }) =>
+    details
+      .filter(({ matter }) => matter?.id === matterId)
+      .slice(0, EVIDENCE_DETAIL_LIMIT)
+      .map(({ title }) => title),
+  );
 
 type SuggestionDraftsOptions = {
   drafting: BillingDraftSettingsControl;
@@ -999,11 +1037,14 @@ function useSuggestionDrafts({
   const [edits, setEdits] = useState<Record<string, SuggestionEdit>>({});
   const [statuses, setStatuses] = useState<Record<string, DraftStatus>>({});
 
-  // The template never exceeds what a time entry accepts.
+  // The template never exceeds what a time entry accepts. A card that starts
+  // on no matter starts with no description: its time is not one matter's
+  // work until the user says whose it is.
   const template = (suggestion: ActivitySuggestion) => {
-    const titles = suggestion.evidence.flatMap(({ details }) =>
-      details.slice(0, EVIDENCE_DETAIL_LIMIT).map(({ title }) => title),
-    );
+    if (suggestion.matter === null) {
+      return "";
+    }
+    const titles = matterTitles(suggestion, suggestion.matter.id);
     const text =
       titles.length > 0
         ? t("narrativeEvidence", {
@@ -1021,7 +1062,8 @@ function useSuggestionDrafts({
   };
   const editFor = (suggestion: ActivitySuggestion): SuggestionEdit =>
     edits[suggestion.id] ?? {
-      billable: true,
+      // Billable time is a matter's time.
+      billable: suggestion.matter !== null,
       matter: suggestion.matter,
       narrative: template(suggestion),
       written: 0,

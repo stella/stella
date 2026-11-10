@@ -11,7 +11,7 @@ import { panic } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/tooltip";
-import { getMatterColor, resolveMatterColor } from "../lib/matter-colors";
+import { resolveMatterColor } from "../lib/matter-colors";
 import { cn } from "../lib/utils";
 import {
   boundsHeight,
@@ -33,11 +33,13 @@ import type {
   DayCalendarLanePlacement,
   DayCalendarRange,
 } from "./day-calendar.logic";
+import { getTopicColor } from "./topic-colors";
 
 /**
- * A block paints in its matter's colour; in a topic's colour, a lighter tint
- * from the same palette keyed by a stable topic key and without the matter's
- * edge; or in the neutral surface tone.
+ * A block paints in its matter's colour, with the matter's edge; in a topic's
+ * colour, from the separate low-chroma topic set keyed by a stable topic key
+ * and without an edge, so it never reads as a matter; or in the neutral
+ * surface tone.
  */
 export type DayCalendarTone =
   | { color: string | null; matterId: string; type: "matter" }
@@ -609,11 +611,12 @@ const DayCalendarBlockView = ({
     insetBlockStart: top,
     insetInlineStart: `${String((lane.lane * 100) / lane.laneCount)}%`,
   } satisfies CSSProperties;
+  const oneLine = blockSize < TWO_LINE_BLOCK_MIN_PX;
   const className = cn(
-    "text-foreground flex h-full w-full min-w-0 overflow-hidden rounded-md px-2.5 text-start text-xs",
-    blockSize < TWO_LINE_BLOCK_MIN_PX
-      ? "flex-row items-center gap-2"
-      : "flex-col gap-0.5 py-1",
+    // A size container: the block's width is set by its placement, never by
+    // its content, so a label can adapt to it with a container query.
+    "text-foreground @container flex h-full w-full min-w-0 overflow-hidden rounded-md px-2.5 text-start text-xs",
+    oneLine ? "flex-row items-center gap-2" : "flex-col gap-0.5 py-1",
     BLOCK_KIND_CLASSES[block.kind],
     block.kind === "entry" && ENTRY_STATE_CLASSES[block.state],
     block.tone.type === "matter" && "border-s-[3px]",
@@ -622,11 +625,23 @@ const DayCalendarBlockView = ({
   const content =
     blockSize < DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX ? null : (
       <>
-        <span className="min-w-0 shrink-0 truncate font-medium">
+        {/* On one line the caption gives way first, then the title ends in
+            an ellipsis rather than being cut at the block's edge. */}
+        <span
+          className={cn(
+            "min-w-0 truncate font-medium",
+            oneLine ? "shrink" : "shrink-0",
+          )}
+        >
           {block.title}
         </span>
         {block.caption === undefined ? null : (
-          <span className="text-muted-foreground min-w-0 truncate tabular-nums">
+          <span
+            className={cn(
+              "text-muted-foreground min-w-0 truncate tabular-nums",
+              oneLine && "shrink-[999]",
+            )}
+          >
             {block.caption}
           </span>
         )}
@@ -692,11 +707,15 @@ const TONE_TINT_PERCENT = {
   suggestion: 8,
 } as const;
 
-/** A topic is not a matter yet: its tint sits between a suggestion's and an
- * entry's. */
-const TOPIC_TINT_PERCENT = 12;
+/** A topic swatch is already muted, so it mixes in stronger than a matter's
+ * to stay visible; the result is still far less saturated. */
+const TOPIC_TINT_PERCENT = 30;
 
-function blockSurfaceStyle(block: DayCalendarBlock): CSSProperties {
+/** A block's surface. Its tone's colour is a custom property the tint reads,
+ * so the swatch a block took can be read back from its style. */
+type BlockSurfaceStyle = CSSProperties & { "--day-calendar-tone"?: string };
+
+function blockSurfaceStyle(block: DayCalendarBlock): BlockSurfaceStyle {
   const tone = block.tone;
   const suggestion = block.kind === "entry" && block.state === "suggestion";
   switch (tone.type) {
@@ -706,9 +725,9 @@ function blockSurfaceStyle(block: DayCalendarBlock): CSSProperties {
       };
     }
     case "topic": {
-      const color = getMatterColor(tone.key);
       return {
-        backgroundColor: `color-mix(in srgb, ${color} ${String(TOPIC_TINT_PERCENT)}%, var(--card))`,
+        "--day-calendar-tone": getTopicColor(tone.key),
+        backgroundColor: `color-mix(in srgb, var(--day-calendar-tone) ${String(TOPIC_TINT_PERCENT)}%, var(--card))`,
       };
     }
     case "matter": {
@@ -717,7 +736,8 @@ function blockSurfaceStyle(block: DayCalendarBlock): CSSProperties {
         ? TONE_TINT_PERCENT.suggestion
         : TONE_TINT_PERCENT.entry;
       return {
-        backgroundColor: `color-mix(in srgb, ${color} ${String(tint)}%, var(--card))`,
+        "--day-calendar-tone": color,
+        backgroundColor: `color-mix(in srgb, var(--day-calendar-tone) ${String(tint)}%, var(--card))`,
         borderColor: suggestion ? color : undefined,
         borderInlineStartColor: color,
       };

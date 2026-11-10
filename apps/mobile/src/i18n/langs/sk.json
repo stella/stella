@@ -351,5 +351,13 @@
     "share": "Zdieľať",
     "cancel": "Zrušiť",
     "openFailed": "Odkaz sa nepodarilo otvoriť."
+  },
+  "share": {
+    "title": "Pridať do stelly",
+    "start": "Začať",
+    "uploading": "Nahrávam {done} z {total}…",
+    "filesOnly": "Uložia sa iba súbory; odkazy a text sa vynechajú.",
+    "unavailableTitle": "Nie je čo pridať",
+    "unavailable": "Táto zdieľaná položka už tu nie je. Zdieľajte ju znova z druhej aplikácie."
   }
 }

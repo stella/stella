@@ -22,11 +22,18 @@
       "expires": "2026-11-04"
     },
     {
-      "id": "apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx::persisted claims stop polling at timeout when the server is hanging",
+      "id": "apps/web/src/routes/law/-law-home/law-recent.dom.test.tsx::a delayed second-client import cannot restore history cleared by the first client",
       "owner": "stella",
-      "reason": "The unchanged test begins 300 ms before the persisted claim deadline. Fake-timer waitFor can cross that deadline before observing streaming, so the setup assertion races the correct timeout projection.",
-      "created": "2026-10-31",
-      "expires": "2026-11-07"
+      "reason": "Times out at the 5 s fast-suite limit under parallel load on main as well as on branches, together with the retry case in the same file; it mounts two server-history clients and needs a lighter fixture.",
+      "created": "2026-11-10",
+      "expires": "2026-11-24"
+    },
+    {
+      "id": "apps/web/src/routes/law/-law-home/law-recent.dom.test.tsx::remove can be retried after a failed server write without losing local history",
+      "owner": "stella",
+      "reason": "Times out at the 5 s fast-suite limit under parallel load on main as well as on branches (local runs at load ~20: 5.3 s and 7.8 s on main); the full server-history mount with a dynamic import needs a lighter fixture.",
+      "created": "2026-11-10",
+      "expires": "2026-11-24"
     }
   ]
 }

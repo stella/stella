@@ -6,6 +6,13 @@
  */
 export const SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
 
+/**
+ * A skill import could not fetch the source the person linked: the host was
+ * unreachable, timed out or answered an error status (a private or missing
+ * repository, a rate limit). Checking the link or retrying later answers it.
+ */
+export const SKILL_SOURCE_UNREACHABLE_CODE = "skill_source_unreachable";
+
 /** Browser-safe path grammar shared by skill-resource producers and editors. */
 export const SKILL_RESOURCE_PATH_PATTERN =
   /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;

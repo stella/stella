@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# rozhodnutí nese} few {# rozhodnutí nesou} other {# rozhodnutí nese} many {# rozhodnutí nese}} tuto spisovou značku. Vyberte soud.",
     "searchLabel": "Hledat v judikatuře",
     "searchPlaceholder": "Spisová značka, ECLI nebo slova, např. 22 Cdo 2653/2012",
+    "searchStillSearching": "Vyhledávání je přetížené. Stále hledáme…",
     "searchUnavailable": {
       "description": "Vyhledávání v judikatuře se nepodařilo kontaktovat. Váš dotaz zůstává v adresním řádku, zkuste to prosím za chvíli znovu.",
       "title": "Vyhledávání je dočasně nedostupné"
@@ -1493,6 +1494,8 @@
           "snapshotContinue": "Pokračovat ve čtení stránky",
           "switchTab": "Přepnout na kartu"
         },
+        "allowSiteFailed": "Web se nepodařilo uložit jako povolený. Tato akce proběhne; u další se znovu zeptáme.",
+        "alwaysAllowSite": "Vždy povolit na tomto webu",
         "askAgain": "Znovu se ptát",
         "autoApproveReads": "Automaticky schvalovat čtení stránek",
         "description": "Pečlivě zkontrolujte web a cíl. Obsah stránky není důvěryhodný a nemůže schválit další akci.",
@@ -2052,6 +2055,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znaků} many {# znaku}}",
+      "commandExited": "{command} (návratový kód {code})",
       "consoleLogs": "Výstup konzole",
       "exactCall": "Přesné volání",
       "failed": "Tento krok selhal; stella si poradí jinak.",
@@ -2059,10 +2063,14 @@
       "input": "Vstup",
       "interrupted": "Přerušeno před dokončením",
       "output": "Výstup",
+      "patternInPath": "{pattern} v {path}",
+      "readFile": "Čtení souboru",
+      "searchFiles": "Hledání v souborech",
       "sourceCode": "Zdrojový kód",
       "statusWaiting": "Čeká",
       "toggleDetails": "Přepnout detaily",
-      "unrestoredFields": "{count, plural, one {# pole se nepodařilo} few {# pole se nepodařilo} many {# pole se nepodařilo} other {# polí se nepodařilo}} v anonymizovaném režimu vyplnit skutečnými hodnotami. Zkontrolujte: {fields}"
+      "unrestoredFields": "{count, plural, one {# pole se nepodařilo} few {# pole se nepodařilo} many {# pole se nepodařilo} other {# polí se nepodařilo}} v anonymizovaném režimu vyplnit skutečnými hodnotami. Zkontrolujte: {fields}",
+      "updatePlan": "Aktualizace plánu"
     },
     "turnNotification": {
       "failedBody": "Odpověď v chatu stelly se nedokončila.",
@@ -3072,6 +3080,7 @@
       "aiProviderTaskUnsupported": "Nastavený poskytovatel AI tuto úlohu nezvládá. Zvolte poskytovatele, který ji zvládá.",
       "aiUnknown": "Požadavek AI se nezdařil. Zkuste to znovu.",
       "alreadyOrganizationMember": "Tato osoba už je členem této organizace.",
+      "browserSiteGrantLimitReached": "Povolit lze nejvýše 100 webů. Nejdřív některý odeberte v Nastavení, v části Připojení.",
       "clauseDirectivesInvalid": "Propojené ustanovení obsahuje neplatné direktivy. Před vyplněním vzoru ustanovení opravte.",
       "clauseDirectivesInvalidDetails": "Ustanovení {clauseName} na pozici {slotName} obsahuje neplatné direktivy. Otevřete editor ustanovení, opravte uvedené odstavce a znovu vyplňte vzor.",
       "clauseDirectivesOverrideInvalidDetails": "Přepsané ustanovení {clauseName} na pozici {slotName} obsahuje neplatné direktivy. Před dalším vyplněním opravte přepsané znění v tomto vyplnění.",
@@ -3107,6 +3116,7 @@
       "organizationMemberLimitReached": "Tato organizace dosáhla limitu členů.",
       "providerKeyRejected": "Poskytovatel odmítl klíč API.",
       "providerRateLimited": "Byl dosažen limit požadavků poskytovatele. Zkuste to brzy znovu.",
+      "skillSourceUnreachable": "Zdroj dovednosti se nepodařilo načíst. Zkontrolujte, že odkaz vede na veřejný repozitář GitHub, nebo to zkuste později.",
       "thirdPartyBoundaryRefusal": "Požadavek se pokusil použít obsah mimo povolený kontext pracovního prostoru.",
       "usageLimitExceeded": "Byl dosažen limit využití.",
       "validationInvalid": "Pole obsahuje hodnotu, kterou nelze uložit.",
@@ -4059,6 +4069,7 @@
       "failed": "Kontrola dokumentu se nezdařila",
       "filterCoverage": "Pokrytí",
       "filterDeviations": "Odchylky",
+      "fixesWithheldNotice": "Pro tuto kontrolu nebyly vytvořeny navrhované změny, protože použila referenční dokument ze spisu, který osoba, jež ji spustila, nemá k dispozici. Zjištění tím nejsou dotčena.",
       "flag": "Označit",
       "flaggedPositions": "{total, plural, one {označeno {flagged, number} z # pozice} few {označeno {flagged, number} z # pozic} other {označeno {flagged, number} z # pozic} many {označeno {flagged, number} z # pozice}}",
       "fromChat": "Z chatu",
@@ -4954,6 +4965,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Používá výchozí nastavení"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} znaků",
+      "description": "Tyto pokyny platí pro všechny konverzace s AI ve vaší organizaci a mají přednost před osobními preferencemi. Změny se projeví od další zprávy. Použijte je pro pravidla dodržování předpisů, nakládání s daty a formátování.",
+      "title": "Pokyny organizace",
+      "tooLong": "Pokyny mohou obsahovat nejvýše {maxLength} znaků."
+    },
     "creationEvaluationLimitReached": "Využili jste všechna {limit} zkušební období organizací. Smazáním organizace se zkušební období neobnoví. Použijte existující organizaci nebo kontaktujte podporu a domluvte si placený přístup.",
     "creationInvalidName": "Zadejte platný název organizace (nejvýše {maxLength} znaků).",
     "creationNotAllowed": "Tento účet nemůže vytvářet organizace.",
@@ -5431,6 +5448,9 @@
       "browserExtensionDescription": "Chat ve stelle může číst weby a pracovat s nimi v kartě Chromu, kterou zvolíte. Každá akce čeká na vaše schválení.",
       "browserExtensionInstall": "Přidat do Chromu",
       "browserExtensionTitle": "Rozšíření prohlížeče",
+      "browserSiteRemove": "Odebrat {site}",
+      "browserSitesDescription": "Akce chatu v prohlížeči na těchto webech probíhají bez ptaní. Po odebrání webu se budeme znovu ptát.",
+      "browserSitesTitle": "Povolené weby",
       "cliDescription": "Nainstalujte si příkazový řádek stella a přihlaste se, abyste mohli z terminálu skriptovat spisy, dokumenty a vzory.",
       "cliInstallLabel": "Instalace",
       "cliLoginLabel": "Přihlášení",
@@ -5547,6 +5567,7 @@
         "case_law_matter_link": "propojení judikátu se spisem",
         "case_law_reader_answer": "odpověď čtečky judikatury",
         "case_law_research_column": "sloupec rešerše judikatury",
+        "chat_browser_site_grant": "schválení webu v chatu",
         "chat_file": "soubor v konverzaci",
         "chat_message": "zpráva v konverzaci",
         "chat_thread": "konverzace",

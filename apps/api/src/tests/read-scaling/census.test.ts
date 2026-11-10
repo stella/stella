@@ -16,6 +16,8 @@ import {
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
+import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
+import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
 import { claimCommentScalingScenarios } from "./claim-comments";
@@ -41,11 +43,16 @@ import { myOpenTasksScalingScenario } from "./my-open-tasks";
 import { organizationAuditExportScalingScenario } from "./organization-audit-export";
 import { organizationCreateScalingScenario } from "./organization-create";
 import { organizationSlugScalingScenario } from "./organization-slug";
+import { outlookClientMetadataScalingScenario } from "./outlook-client-metadata";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
+import {
+  softLawReadScalingScenario,
+  softLawSearchScalingScenario,
+} from "./soft-law";
 import {
   apiScalingSurface,
   mcpScalingSurface,
@@ -69,7 +76,9 @@ const measuredApiScenarios = [
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
+  chatLocalFilesUndoScalingScenario,
   chatActiveRunsScalingScenario,
+  browserSiteGrantsScalingScenario,
   chatMcpAppBundleScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
@@ -77,6 +86,7 @@ const measuredApiScenarios = [
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
   mobileClientMetadataScalingScenario,
+  outlookClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,
@@ -86,6 +96,8 @@ const measuredApiScenarios = [
   dictationScalingScenario,
   organizationSlugScalingScenario,
   organizationAuditExportScalingScenario,
+  softLawSearchScalingScenario,
+  softLawReadScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

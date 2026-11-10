@@ -52,6 +52,7 @@ import {
   ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
+import { ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS } from "./organization-ai-instructions-constraint-validation";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 import { caseLawPolarityRules } from "./schema/case-law";
 
@@ -788,6 +789,7 @@ describe("online migrations", () => {
   test.each([
     ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
     ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+    ...ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS,
   ])(
     "validates registered constraint $name once and rejects incomplete startup",
     async (validation) => {
@@ -1557,7 +1559,10 @@ describe("online migrations", () => {
     expect(indexOfStatement(harness.statements, DROP_INDEX_FRAGMENT)).toBe(-1);
   });
 
-  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
+  test.each([
+    ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
+    ...ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS,
+  ])(
     "defers at validation $name while the gate holds it, then validates it on a healthy run",
     async (validation) => {
       const { name } = validation;

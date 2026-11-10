@@ -12,11 +12,17 @@ import type {
   DayCalendarRange,
 } from "@stll/ui/day-calendar.logic";
 
-import { appTotals, roundedTenthsOfHour } from "./activity-logic";
+import {
+  appTotals,
+  roundedTenthsOfHour,
+  totalDurationMs,
+} from "./activity-logic";
 import type { AppTotal } from "./activity-logic";
 import {
   appEvidence,
   cleanSharedContext,
+  leadingMatter,
+  matterShare,
   withoutAppSuffix,
 } from "./day-review-logic";
 import type { DayReviewGroup, MatchedSegment } from "./day-review-logic";
@@ -385,6 +391,12 @@ const topicAppOf = (
   };
 };
 
+/** Whether a part holds at least half of some recorded time: the one rule
+ * that names an Activity block's topic and presets a selected range's
+ * matter. */
+const holdsMajority = (partMs: number, recordedMs: number) =>
+  partMs * 2 >= recordedMs;
+
 /** The topic holding at least half a stretch's recorded time, if any. */
 const majorityTopic = (
   draft: TopicDraft,
@@ -400,7 +412,7 @@ const majorityTopic = (
       topicMs += segment.endMs - segment.startMs;
     }
   }
-  return topicMs * 2 >= draft.durationMs ? topic : null;
+  return holdsMajority(topicMs, draft.durationMs) ? topic : null;
 };
 
 const rawSegmentTitle = (segment: MatchedSegment) => {
@@ -496,24 +508,121 @@ export const contiguousRuns = (
   return runs;
 };
 
+/**
+ * Why a selected range starts on the matter it does: one matter holds at
+ * least half its recorded time; or none does, because most of that time
+ * belongs to no matter or because it is split between matters; or nothing
+ * was recorded in it.
+ */
+export type RangeMatterBasis =
+  "majority" | "mostlyUnmatched" | "splitBetweenMatters" | "nothingRecorded";
+
 export type ActivitySuggestion = DayReviewGroup & {
   endMs: number;
   runs: DayCalendarRange[];
   startMs: number;
-  type: "matched" | "manual";
-};
+} & ({ type: "matched" } | { matterBasis: RangeMatterBasis; type: "manual" });
 
-const toSuggestion = (
-  group: DayReviewGroup,
-  type: ActivitySuggestion["type"],
-): ActivitySuggestion => {
+const toSuggestion = (group: DayReviewGroup): ActivitySuggestion => {
   const runs = contiguousRuns(group.segments);
   return {
     ...group,
     endMs: runs.at(-1)?.endMs ?? 0,
     runs,
     startMs: runs.at(0)?.startMs ?? 0,
-    type,
+    type: "matched",
+  };
+};
+
+/** Whole numbers that add up to the rounded sum of `values`: each value is
+ * rounded down, then the largest remainders take the minutes left over. */
+const roundedTogether = (values: readonly number[]): number[] => {
+  const floors = values.map((value) => Math.floor(value));
+  let left =
+    Math.round(values.reduce((sum, value) => sum + value, 0)) -
+    floors.reduce((sum, value) => sum + value, 0);
+  const byRemainder = values
+    .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
+    .sort(
+      (first, second) =>
+        second.remainder - first.remainder || first.index - second.index,
+    );
+  for (const { index } of byRemainder) {
+    if (left <= 0) {
+      break;
+    }
+    floors[index] = (floors[index] ?? 0) + 1;
+    left -= 1;
+  }
+  return floors;
+};
+
+/** One dashed piece of a suggestion in the Time entries column. */
+export type SuggestionPiece = DayCalendarRange & {
+  /** The piece's own time in whole minutes. Pieces round together, so
+   * their minutes add up to the suggestion's {@link SuggestionSummary}. */
+  minutes: number;
+};
+
+/**
+ * A suggestion's pieces, each with its own time: what was recorded in it for
+ * a matched suggestion, its whole length for a selected range, so pauses
+ * inside a piece never count and the pieces make up the suggestion's
+ * duration.
+ */
+export const suggestionPieces = (
+  suggestion: ActivitySuggestion,
+): SuggestionPiece[] => {
+  const durations = suggestion.runs.map((run) =>
+    suggestion.type === "manual"
+      ? run.endMs - run.startMs
+      : suggestion.segments.reduce(
+          (sum, segment) =>
+            sum +
+            Math.max(
+              0,
+              Math.min(segment.endMs, run.endMs) -
+                Math.max(segment.startMs, run.startMs),
+            ),
+          0,
+        ),
+  );
+  const minutes = roundedTogether(
+    durations.map((durationMs) => durationMs / MINUTE_MS),
+  );
+  return suggestion.runs.map((run, index) => ({
+    endMs: run.endMs,
+    minutes: minutes[index] ?? 0,
+    startMs: run.startMs,
+  }));
+};
+
+/** What a suggestion card's header says about its time: the range for a
+ * suggestion in one piece, else how many pieces; with the minutes they hold
+ * and the tenths of an hour they bill. */
+export type SuggestionSummary = {
+  minutes: number;
+  tenths: number;
+} & (
+  | { endMs: number; startMs: number; type: "range" }
+  | { count: number; type: "pieces" }
+);
+
+export const suggestionSummary = (
+  suggestion: ActivitySuggestion,
+): SuggestionSummary => {
+  const pieces = suggestionPieces(suggestion);
+  const minutes = pieces.reduce((sum, piece) => sum + piece.minutes, 0);
+  const tenths = suggestion.roundedTenths;
+  if (pieces.length > 1) {
+    return { count: pieces.length, minutes, tenths, type: "pieces" };
+  }
+  return {
+    endMs: suggestion.endMs,
+    minutes,
+    startMs: suggestion.startMs,
+    tenths,
+    type: "range",
   };
 };
 
@@ -524,7 +633,7 @@ export const matchedSuggestions = (
 ): ActivitySuggestion[] =>
   groups
     .filter((group) => group.matter !== null && !leftOut.has(group.id))
-    .map((group) => toSuggestion(group, "matched"))
+    .map(toSuggestion)
     .sort((left, right) => left.startMs - right.startMs);
 
 /** The parts of `range` no drafted entry covers, in time order; an empty or
@@ -569,15 +678,19 @@ type ManualSuggestionOptions = {
 /**
  * An entry for exactly the range the user selected, less any time an entry
  * already covers: the range is the claim, whether or not activity was
- * recorded in it. The recorded time inside it is the evidence, and the matter
- * that took most of that time is the starting choice.
+ * recorded in it. The recorded time inside it is the evidence. A matter is
+ * the starting choice only when it holds at least half that time, the rule
+ * that names Activity blocks; a minority matter never claims the range.
  */
 export const manualSuggestion = ({
   id,
   range,
   segments,
   drafted,
-}: ManualSuggestionOptions): ActivitySuggestion => {
+}: ManualSuggestionOptions): Extract<
+  ActivitySuggestion,
+  { type: "manual" }
+> => {
   const parts = undraftedParts(
     range,
     drafted.map(({ start, end }) => ({
@@ -592,28 +705,7 @@ export const manualSuggestion = ({
       return endMs > startMs ? [{ ...segment, endMs, startMs }] : [];
     }),
   );
-  const matterTime = new Map<
-    string,
-    { durationMs: number; matter: DesktopTimeEntryMatterCandidate }
-  >();
-  for (const segment of clipped) {
-    if (!segment.matter) {
-      continue;
-    }
-    const existing = matterTime.get(segment.matter.id);
-    matterTime.set(segment.matter.id, {
-      durationMs: (existing?.durationMs ?? 0) + segment.endMs - segment.startMs,
-      matter: segment.matter,
-    });
-  }
-  const matter =
-    [...matterTime.values()]
-      .sort(
-        (left, right) =>
-          right.durationMs - left.durationMs ||
-          left.matter.id.localeCompare(right.matter.id),
-      )
-      .at(0)?.matter ?? null;
+  const { basis, matter } = rangeMatter(clipped);
   const durationMs = parts.reduce(
     (sum, part) => sum + part.endMs - part.startMs,
     0,
@@ -627,6 +719,7 @@ export const manualSuggestion = ({
     evidence: appEvidence(clipped),
     id,
     matter,
+    matterBasis: basis,
     ranges: parts.map(({ startMs, endMs }) => ({
       start: Temporal.Instant.fromEpochMilliseconds(startMs).toString(),
       end: Temporal.Instant.fromEpochMilliseconds(endMs).toString(),
@@ -636,6 +729,28 @@ export const manualSuggestion = ({
     segments: clipped,
     startMs: range.startMs,
     type: "manual",
+  };
+};
+
+/** The matter a selected range starts on, and why. */
+const rangeMatter = (
+  segments: readonly MatchedSegment[],
+): {
+  basis: RangeMatterBasis;
+  matter: DesktopTimeEntryMatterCandidate | null;
+} => {
+  const recordedMs = totalDurationMs(segments);
+  if (recordedMs === 0) {
+    return { basis: "nothingRecorded", matter: null };
+  }
+  const { leading, unmatchedMs } = matterShare(segments);
+  if (leading !== null && holdsMajority(leading.durationMs, recordedMs)) {
+    return { basis: "majority", matter: leading.matter };
+  }
+  return {
+    basis:
+      unmatchedMs * 2 > recordedMs ? "mostlyUnmatched" : "splitBetweenMatters",
+    matter: null,
   };
 };
 
@@ -718,28 +833,71 @@ export type EvidenceRow = {
   appIdentifier: string;
   durationMs: number;
   id: string;
+  /** A title or app name as recorded; for `untitled`, the app's name. */
   label: string;
+  /** The matter holding most of the row's time, if any. */
+  matter: DesktopTimeEntryMatterCandidate | null;
   /** Share of the suggestion's time, 0 to 1. */
   share: number;
+  /** `untitled` is an app's time with no title beyond the app's name. */
+  type: "named" | "untitled";
 };
 
-/** The Titles tab: every title across the suggestion's apps. */
-export const titleRows = (suggestion: ActivitySuggestion): EvidenceRow[] =>
-  suggestion.evidence
-    .flatMap(({ identifier, details }) =>
-      details.map(({ title, durationMs }) => ({
-        appIdentifier: identifier,
-        durationMs,
-        id: `${identifier}:${title}`,
-        label: title,
-        share: shareOf(durationMs, suggestion.durationMs),
-      })),
-    )
-    .sort(
-      (left, right) =>
-        right.durationMs - left.durationMs ||
-        left.label.localeCompare(right.label),
+/** Whether a segment recorded a title beyond its app's name, read as the
+ * Titles tab reads it. */
+const hasOwnTitle = (segment: MatchedSegment) =>
+  segment.evidence.some((detail) => {
+    const title = withoutAppSuffix(detail, segment.appName).trim();
+    return (
+      title.length > 0 && title.toLowerCase() !== segment.appName.toLowerCase()
     );
+  });
+
+/** The Titles tab: every title across the suggestion's apps, and each app's
+ * time without one, so the tab accounts for all of the suggestion's time. */
+export const titleRows = (suggestion: ActivitySuggestion): EvidenceRow[] => {
+  const named = suggestion.evidence.flatMap(({ identifier, details }) =>
+    details.map(({ title, durationMs, matter }): EvidenceRow => ({
+      appIdentifier: identifier,
+      durationMs,
+      id: `${identifier}:${title}`,
+      label: title,
+      matter,
+      share: shareOf(durationMs, suggestion.durationMs),
+      type: "named",
+    })),
+  );
+  const untitled = suggestion.apps.flatMap(
+    ({ identifier, name }): EvidenceRow[] => {
+      const segments = suggestion.segments.filter(
+        (segment) =>
+          segment.appIdentifier === identifier && !hasOwnTitle(segment),
+      );
+      let durationMs = 0;
+      for (const segment of segments) {
+        durationMs += segment.endMs - segment.startMs;
+      }
+      return durationMs > 0
+        ? [
+            {
+              appIdentifier: identifier,
+              durationMs,
+              id: `untitled:${identifier}`,
+              label: name,
+              matter: leadingMatter(segments),
+              share: shareOf(durationMs, suggestion.durationMs),
+              type: "untitled",
+            },
+          ]
+        : [];
+    },
+  );
+  return [...named, ...untitled].sort(
+    (left, right) =>
+      right.durationMs - left.durationMs ||
+      left.label.localeCompare(right.label),
+  );
+};
 
 /** The Apps tab: each app's time in the suggestion. */
 export const appRows = (suggestion: ActivitySuggestion): EvidenceRow[] =>
@@ -748,7 +906,13 @@ export const appRows = (suggestion: ActivitySuggestion): EvidenceRow[] =>
     durationMs,
     id: identifier,
     label: name,
+    matter: leadingMatter(
+      suggestion.segments.filter(
+        ({ appIdentifier }) => appIdentifier === identifier,
+      ),
+    ),
     share: shareOf(durationMs, suggestion.durationMs),
+    type: "named",
   }));
 
 function shareOf(durationMs: number, totalMs: number) {

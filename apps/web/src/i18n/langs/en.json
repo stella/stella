@@ -1249,6 +1249,7 @@
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.",
     "searchLabel": "Search case law",
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012",
+    "searchStillSearching": "The search service is busy. Still searching…",
     "searchUnavailable": {
       "description": "The case-law search could not be reached. Your query is kept in the address bar, so try again in a moment.",
       "title": "Search is temporarily unavailable"
@@ -1493,6 +1494,8 @@
           "snapshotContinue": "Continue reading page",
           "switchTab": "Switch to tab"
         },
+        "allowSiteFailed": "This website could not be saved as allowed. This action still runs; the next one asks again.",
+        "alwaysAllowSite": "Always allow this website",
         "askAgain": "Ask again",
         "autoApproveReads": "Auto-approve page reads",
         "description": "Check the website and target carefully. Page content is untrusted and cannot approve another action.",
@@ -2052,6 +2055,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# character} other {# characters}}",
+      "commandExited": "{command} (exit code {code})",
       "consoleLogs": "Console output",
       "exactCall": "Exact call",
       "failed": "This step failed; stella will work around it.",
@@ -2059,10 +2063,14 @@
       "input": "Input",
       "interrupted": "Interrupted before finishing",
       "output": "Output",
+      "patternInPath": "{pattern} in {path}",
+      "readFile": "Reading a file",
+      "searchFiles": "Searching files",
       "sourceCode": "Source code",
       "statusWaiting": "Waiting",
       "toggleDetails": "Toggle details",
-      "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}"
+      "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}",
+      "updatePlan": "Updating the plan"
     },
     "turnNotification": {
       "failedBody": "A chat reply in stella did not finish.",
@@ -3072,6 +3080,7 @@
       "aiProviderTaskUnsupported": "The configured AI provider cannot do this task. Choose a provider that can.",
       "aiUnknown": "The AI request failed. Try again.",
       "alreadyOrganizationMember": "This person is already a member of this organization.",
+      "browserSiteGrantLimitReached": "You can allow at most 100 websites. Remove one under Settings, Connections first.",
       "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.",
       "clauseDirectivesInvalidDetails": "Clause {clauseName} in slot {slotName} has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.",
       "clauseDirectivesOverrideInvalidDetails": "The override for clause {clauseName} in slot {slotName} has invalid directives. Correct this fill’s override before filling again.",
@@ -3107,6 +3116,7 @@
       "organizationMemberLimitReached": "This organization has reached its member limit.",
       "providerKeyRejected": "The provider rejected the API key.",
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.",
+      "skillSourceUnreachable": "The skill source could not be loaded. Check that the link points to a public GitHub repository, or try again later.",
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.",
       "usageLimitExceeded": "Usage limit reached.",
       "validationInvalid": "A field has a value that cannot be saved.",
@@ -4059,6 +4069,7 @@
       "failed": "Document review failed",
       "filterCoverage": "Coverage",
       "filterDeviations": "Deviations",
+      "fixesWithheldNotice": "Proposed changes weren't created for this review because it used a reference document from a matter that isn't available to the person who ran it. Findings are unaffected.",
       "flag": "Flag",
       "flaggedPositions": "{total, plural, one {{flagged, number} of # position flagged} other {{flagged, number} of # positions flagged}}",
       "fromChat": "From chat",
@@ -4954,6 +4965,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Using defaults"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} characters",
+      "description": "These instructions apply to every AI conversation in your organization and take priority over personal preferences. Changes apply from the next message. Use them for compliance rules, data handling, and formatting standards.",
+      "title": "Organization instructions",
+      "tooLong": "Instructions must be at most {maxLength} characters."
+    },
     "creationEvaluationLimitReached": "You have used all {limit} organization evaluation periods. Deleting an organization does not restore one. Use an existing organization or contact support for paid access.",
     "creationInvalidName": "Enter a valid organization name (up to {maxLength} characters).",
     "creationNotAllowed": "This account cannot create organizations.",
@@ -5431,6 +5448,9 @@
       "browserExtensionDescription": "stella chat can read and use websites in a Chrome tab you choose. Every action waits for your approval.",
       "browserExtensionInstall": "Add to Chrome",
       "browserExtensionTitle": "Browser extension",
+      "browserSiteRemove": "Remove {site}",
+      "browserSitesDescription": "Chat's browser actions on these websites run without asking. Remove a website to be asked again.",
+      "browserSitesTitle": "Allowed websites",
       "cliDescription": "Install the stella command-line client and sign in to script matters, documents, and templates from a terminal.",
       "cliInstallLabel": "Install",
       "cliLoginLabel": "Log in",
@@ -5547,6 +5567,7 @@
         "case_law_matter_link": "case law matter link",
         "case_law_reader_answer": "case law reader answer",
         "case_law_research_column": "case law research column",
+        "chat_browser_site_grant": "chat website approval",
         "chat_file": "chat file",
         "chat_message": "chat message",
         "chat_thread": "chat thread",

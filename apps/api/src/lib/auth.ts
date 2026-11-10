@@ -377,7 +377,7 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
-import type { SseStreamBinding } from "@/api/lib/sse";
+import type { SseStreamBinding, UserConnectionAudience } from "@/api/lib/sse";
 import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
 import {
   isSyntheticPrincipal,
@@ -3430,10 +3430,13 @@ export const isActiveOrganizationMember = async ({
 };
 
 /**
- * Whether one user-channel SSE stream may still receive events. Reads through
- * the owner connection for the same reason the workspace audience does: event
- * delivery must be able to evaluate a member whose access was just removed and
- * who can no longer open an RLS-scoped request of their own.
+ * Whether a user's user-channel SSE streams may still receive events: the
+ * membership every stream needs, and which browser sessions among
+ * `sessionIds` are live (an app token's stream has none to check). One
+ * statement answers both. Reads through the owner connection for the same
+ * reason the workspace audience does: event delivery must be able to evaluate
+ * a member whose access was just removed and who can no longer open an
+ * RLS-scoped request of their own.
  */
 export const resolveUserRealtimeAuthorization = async (
   {
@@ -3446,16 +3449,15 @@ export const resolveUserRealtimeAuthorization = async (
     userId: SafeId<"user">;
   },
   db: MemberAuthorizationDb,
-): Promise<ReadonlySet<string>> => {
+): Promise<UserConnectionAudience> => {
   const uniqueSessionIds = [...new Set(sessionIds)];
-  if (uniqueSessionIds.length === 0) {
-    return new Set();
-  }
 
+  // The member row comes back once per live session, or once with no session
+  // when none is live, so a member is never lost to the join.
   const rows = await db
     .select({ sessionId: authSession.id })
     .from(member)
-    .innerJoin(
+    .leftJoin(
       authSession,
       and(
         eq(authSession.userId, member.userId),
@@ -3466,9 +3468,14 @@ export const resolveUserRealtimeAuthorization = async (
     .where(
       and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
     )
-    .limit(uniqueSessionIds.length);
+    .limit(Math.max(1, uniqueSessionIds.length));
 
-  return new Set(rows.map((row) => row.sessionId));
+  return {
+    member: rows.length > 0,
+    liveSessionIds: new Set(
+      rows.flatMap(({ sessionId }) => (sessionId === null ? [] : [sessionId])),
+    ),
+  };
 };
 
 type WorkspaceRealtimeAudienceLookup = {

@@ -163,6 +163,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "E2E_DISABLE_AUTH_RATE_LIMIT",
   "SCHEDULED_JOBS_MODE",
   "EXTENSION_ORIGIN",
+  "OUTLOOK_ADDIN_ORIGIN",
   "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
@@ -559,8 +560,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "owner/repo that filed feedback is posted to as an issue. Requires FEEDBACK_GITHUB_TOKEN; unset disables GitHub delivery.",
   FEEDBACK_GITHUB_TOKEN:
     "Token used to file feedback issues in FEEDBACK_GITHUB_REPO. Needs issue-write scope only; unset disables GitHub delivery.",
+  SKILL_IMPORT_GITHUB_TOKEN:
+    "GitHub token for skill sources a person links. Grant public repositories read-only and no other access; never reuse GITHUB_TOKEN. Unset sends these requests without a token.",
   FRONTEND_URL:
     "Web app origin used for absolute transactional-email links, document verification links, and trusted redirects.",
+  OUTLOOK_ADDIN_ORIGIN:
+    "https origin serving the Outlook add-in's task pane, without a path. Set, the API publishes the add-in's OAuth client and accepts its sign-in callback and browser requests from this origin; unset, the add-in cannot sign in.",
   APPLE_AUTH_CLIENT_ID:
     "Sign in with Apple Services ID used as the OAuth client ID; required when the matching web login flag is enabled.",
   APPLE_AUTH_KEY_ID: "Key ID of the Sign in with Apple private key.",
@@ -886,6 +891,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   EDGAR_USER_AGENT: ENV_CREDENTIAL_KIND.notCredential,
   EMAIL_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   EXTENSION_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
+  OUTLOOK_ADDIN_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
   API_FEATURE_ACCESS_GRANTS: ENV_CREDENTIAL_KIND.notCredential,
   KILL_SWITCHES: ENV_CREDENTIAL_KIND.notCredential,
   API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME:
@@ -918,6 +924,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEEDBACK_GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
   FRONTEND_URL: ENV_CREDENTIAL_KIND.notCredential,
   GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  SKILL_IMPORT_GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_CH: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_EU: ENV_CREDENTIAL_KIND.credential,
   APPLE_AUTH_CLIENT_ID: ENV_CREDENTIAL_KIND.notCredential,
@@ -1489,6 +1496,8 @@ export const TOOLING_ENV_KEYS = new Set([
 
   // Dated guard-rollout healing requests full scope before removing the temporary scope.
   "STELLA_GUARD_SCOPE",
+  // scripts/lint.ts prints the linter command instead of running it.
+  "STELLA_LINT_DRY_RUN",
   // Release-only secret: the short-lived federated Chrome Web Store access token.
   "CHROME_WEB_STORE_ACCESS_TOKEN",
   // The mobile app's Expo config reads its variant and signing from the build.
@@ -1497,6 +1506,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
+  "MOBILE_SHARE_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
   // The fake harness CLIs log how they started and what they receive to the
   // file their tests name; the fake Codex app server also logs its CODEX_HOME.
@@ -1726,6 +1736,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_MAIN_REF",
   "JOURNEY_MCP_URL",
   "JOURNEY_NPM_REGISTRY_URL",
+  "JOURNEY_PROBE_RUN_SECONDS",
+  "JOURNEY_PROBE_SLOT",
+  "JOURNEY_PROBE_TIMEOUT_SECONDS",
   "JOURNEY_REGISTRY_TIMEOUT_MS",
   "JOURNEY_RELEASES_API_URL",
   "JOURNEY_RETRY_PAUSE_SECONDS",
@@ -1874,6 +1887,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
   // Private loopback endpoint passed to the isolated corpus-suite preload.
+  "STELLA_COLD_SEARCH_CONTAINER",
+  "STELLA_COLD_SEARCH_DROP_PAGE_CACHE",
+  "STELLA_COLD_SEARCH_MODE",
   "STELLA_CORPUS_ENGINE_TEST_ENDPOINT",
   "STELLA_DESKTOP_DOWNLOAD_BASE_URL",
   "STELLA_DESKTOP_NOW_EPOCH",

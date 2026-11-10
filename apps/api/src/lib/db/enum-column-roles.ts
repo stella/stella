@@ -84,7 +84,9 @@ export const ENUM_COLUMN_ROLES = {
     origin: ATTRIBUTE,
   },
   case_law_citations: {
+    cited_part: ATTRIBUTE,
     doctrinal_treatment: ATTRIBUTE,
+    polarity_source: ATTRIBUTE,
   },
   case_law_corpus_pack_refs: {
     kind: ATTRIBUTE,
@@ -101,6 +103,9 @@ export const ENUM_COLUMN_ROLES = {
   },
   case_law_decisions: {
     case_number_type: ATTRIBUTE,
+  },
+  case_law_polarity_rules: {
+    kind: ATTRIBUTE,
   },
   case_law_population_counts: {
     kind: ATTRIBUTE,
@@ -259,6 +264,9 @@ export const ENUM_COLUMN_ROLES = {
   desktop_runner_events: {
     type: ATTRIBUTE,
   },
+  desktop_runner_folder_restores: {
+    reason: ATTRIBUTE,
+  },
   desktop_runner_runs: {
     harness: ATTRIBUTE,
     outcome: ATTRIBUTE,
@@ -398,9 +406,17 @@ export const ENUM_COLUMN_ROLES = {
     entity_feature_gate: ATTRIBUTE,
   },
   legal_list_generation_candidates: {
+    confidence: ATTRIBUTE,
     entity_feature_gate: ATTRIBUTE,
     item_type: ATTRIBUTE,
+    occurred_on_precision: ATTRIBUTE,
     priority: ATTRIBUTE,
+    scoring: ATTRIBUTE,
+  },
+  legal_list_generation_runs: {
+    error_code: ATTRIBUTE,
+    item_type: ATTRIBUTE,
+    producer: ATTRIBUTE,
   },
   legal_list_generation_sources: {
     entity_feature_gate: ATTRIBUTE,

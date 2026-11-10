@@ -280,6 +280,14 @@ export const MODEL_RATES = {
     cachedInputPerMTok: 20_000,
     cachedWriteInputPerMTok: 250_000,
   },
+  // models.dev: anthropic:claude-fable-5-2
+  "claude-fable-5-2": {
+    kind: "flat",
+    inputPerMTok: 800_000,
+    outputPerMTok: 4_000_000,
+    cachedInputPerMTok: 20_000,
+    cachedWriteInputPerMTok: 1_000_000,
+  },
   // models.dev: anthropic:claude-fable-5-1
   "claude-fable-5-1": {
     kind: "flat",

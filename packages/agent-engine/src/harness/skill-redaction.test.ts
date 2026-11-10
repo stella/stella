@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_LOCAL_RUN_TOOL_LIMITS } from "@stll/api-contract/chat-local-run-tool";
+
 import type { HarnessTurn } from "./adapter";
 import { toolCallForUse, toolResultFor } from "./claude-code/items";
 import { toolCallForItem, toolResultForItem } from "./codex/items";
@@ -11,6 +13,7 @@ import {
   type HarnessToolCall,
 } from "./events";
 import { redactingSkillPaths, type SkillPathScope } from "./skill-redaction";
+import { HARNESS_TOOL_NAMES, shownToolInput } from "./tool-parts";
 
 const FOLDER = "/srv/member/skills/fixture-skill";
 const PLUGIN = "/data/harness-home/claude-code/stella-skill-plugins/abc";
@@ -90,19 +93,51 @@ describe("what a turn reports about its skill folders", () => {
     expect(event.toolCall).toEqual({
       id: "call-1",
       name: "harness_native_tool",
-      input: { tool: "Read" },
+      input: {
+        tool: "Read",
+        detail: {
+          kind: "read",
+          path: "<skill:fixture-skill>/references/commentary.md",
+        },
+      },
     });
     expect(event.result).toEqual({ content: STATUS_ONLY, status: "succeeded" });
     expect(JSON.stringify(event)).not.toContain(FOLDER);
   });
 
   test("a Claude Grep over a skill folder reports only the status", async () => {
-    const { result } = await claudeCall(
+    const { result, toolCall } = await claudeCall(
       "Grep",
       { pattern: "clause", path: FOLDER },
       "a licensed clause",
     );
+    expect(toolCall.input).toEqual({
+      tool: "Grep",
+      detail: {
+        kind: "search",
+        pattern: "clause",
+        path: "<skill:fixture-skill>",
+      },
+    });
     expect(result.content).toBe(STATUS_ONLY);
+  });
+
+  test("a skill path past a long command's cut is named before the cut, never shown in part", async () => {
+    const event = await claudeCall(
+      "Bash",
+      { command: `echo ${"x".repeat(280)} && cat ${FOLDER}/SKILL.md` },
+      "Licensed text.",
+    );
+    const shown = JSON.stringify(
+      shownToolInput(event.toolCall, "/data/runs/1"),
+    );
+    // The cut falls inside where the folder's path stood.
+    expect(`echo ${"x".repeat(280)} && cat ${FOLDER}`.length).toBeGreaterThan(
+      CHAT_LOCAL_RUN_TOOL_LIMITS.command,
+    );
+    expect(shown).toContain("…");
+    expect(shown).not.toContain("/srv");
+    expect(event.result.content).toBe(STATUS_ONLY);
   });
 
   test("a Claude read through the plugin's own link does the same", async () => {
@@ -111,7 +146,10 @@ describe("what a turn reports about its skill folders", () => {
       { file_path: `${PLUGIN}/skills/fixture-skill/SKILL.md` },
       "Licensed commentary.",
     );
-    expect(toolCall.input).toEqual({ tool: "Read" });
+    expect(toolCall.input).toEqual({
+      tool: "Read",
+      detail: { kind: "read", path: "<skill:fixture-skill>/SKILL.md" },
+    });
     expect(result.content).toBe(STATUS_ONLY);
   });
 
@@ -175,13 +213,10 @@ describe("what a turn reports about its skill folders", () => {
     ]);
   });
 
-  test("a Claude Bash that never names a skill stays as it was", async () => {
+  test("a Claude Bash that never names a skill keeps its command, and its output stays here", async () => {
     const event = await claudeCall("Bash", { command: "ls" }, "notes.md\n");
     expect(event.toolCall.input).toEqual({ command: "ls" });
-    expect(JSON.parse(event.result.content)).toEqual({
-      aggregated_output: "notes.md\n",
-      status: "completed",
-    });
+    expect(JSON.parse(event.result.content)).toEqual({ status: "completed" });
   });
 
   test("a Codex command reading a skill shows the name and reports only the status", async () => {
@@ -208,7 +243,10 @@ describe("what a turn reports about its skill folders", () => {
       ]),
     );
     expect(toolCall.input).toEqual({ command: "grep -r clause /srv/member" });
-    expect(result.content).toBe(STATUS_ONLY);
+    expect(JSON.parse(result.content)).toEqual({
+      exit_code: 0,
+      status: "completed",
+    });
   });
 
   test("a call known to have touched a skill when it started stays status only", async () => {
@@ -250,9 +288,10 @@ describe("what a turn reports about its skill folders", () => {
     const request: HarnessApprovalRequest = {
       requestId: "r-1",
       kind: "command",
+      // An adapter asks about the call it built, named as chat keeps it.
       toolCall: {
         id: "call-1",
-        name: "Bash",
+        name: HARNESS_TOOL_NAMES.commandExecution,
         input: { command: `bun ${FOLDER}/scripts/run.ts` },
       },
       reason: `Runs a script in ${FOLDER}`,
@@ -274,8 +313,11 @@ describe("what a turn reports about its skill folders", () => {
       { file_path: `${FOLDER}-old/notes.md` },
       "Not a skill.",
     );
-    expect(toolCall.input).toEqual({ tool: "Read" });
-    expect(result.content).toBe("Not a skill.");
+    expect(toolCall.input).toEqual({
+      tool: "Read",
+      detail: { kind: "read", path: `${FOLDER}-old/notes.md` },
+    });
+    expect(result.content).toBe(STATUS_ONLY);
   });
 
   test("a path with a space, as a shell writes it, counts too", async () => {

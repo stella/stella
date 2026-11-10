@@ -6,6 +6,10 @@ import * as v from "valibot";
 import { AGENT_HARNESSES } from "./agent-harness";
 import { API_STORABLE_INSTANT_CHECK } from "./api-date";
 import { STELLA_API_VERSION_PREFIX } from "./api-version";
+import {
+  CHAT_LOCAL_RUN_TOOL_LIMITS,
+  chatLocalRunShownText,
+} from "./chat-local-run-tool";
 import type { DesktopFeatureId } from "./desktop-feature-access";
 import {
   desktopProtocolSchema,
@@ -30,7 +34,16 @@ import {
  * closed value plus rejected ones; the desktop's serde types round-trip the
  * same file, so either side drifting fails its tests.
  */
-export const DESKTOP_RUNNER_PROTOCOL = { current: 1, minimum: 1 } as const;
+export const DESKTOP_RUNNER_PROTOCOL = { current: 2, minimum: 1 } as const;
+
+/**
+ * The first protocol with `folder.restore` and `folder.restored`. A desktop
+ * on an older one still runs turns, is never sent a restore, and an undo of
+ * a turn it ran is refused as `desktop_update_required`. Once a desktop
+ * release that speaks this protocol is published, `minimum` rises to it and
+ * this boundary goes.
+ */
+export const DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL = 2;
 
 /** Largest frame either side sends or accepts, in UTF-8 bytes. */
 export const DESKTOP_RUNNER_MAX_FRAME_BYTES = 4 * 1024 * 1024;
@@ -212,6 +225,7 @@ export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {
   runEvent: "run.event",
   runApprovalRequest: "run.approval_request",
   runFinished: "run.finished",
+  folderRestored: "folder.restored",
 } as const;
 
 export const DESKTOP_RUNNER_SERVER_MESSAGE = {
@@ -226,7 +240,30 @@ export const DESKTOP_RUNNER_SERVER_MESSAGE = {
   runCancel: "run.cancel",
   runToken: "run.token",
   ack: "ack",
+  folderRestore: "folder.restore",
 } as const;
+
+/**
+ * How a folder restore ended on the computer: done, no checkpoint for the
+ * run, a newer checkpoint not undone yet, a run using the folder, or a
+ * failure that left the folder as it was before the restore. A restore asked
+ * again after it was done answers `restored` again without touching the
+ * folder.
+ */
+export const DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS = [
+  "no_checkpoint",
+  "not_newest",
+  "folder_busy",
+  "failed",
+] as const;
+export type DesktopRunnerFolderRestoreRefusal =
+  (typeof DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS)[number];
+export const DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES = [
+  "restored",
+  ...DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS,
+] as const;
+export type DesktopRunnerFolderRestoreOutcome =
+  (typeof DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES)[number];
 
 export const DESKTOP_RUNNER_HARNESS_STATE = {
   ready: "ready",
@@ -276,6 +313,7 @@ export const DESKTOP_RUNNER_REJECT_REASONS = [
   "at_capacity",
   "run_too_large",
   "unknown_run",
+  "folder_busy",
 ] as const;
 
 export const DESKTOP_RUNNER_APPROVAL_KINDS = [
@@ -632,6 +670,36 @@ export type DesktopRunnerOutputEvent = v.InferOutput<
   typeof desktopRunnerOutputEventSchema
 >;
 
+/**
+ * The CUSTOM chunk a desktop reports once per run, before its harness starts:
+ * whether the run's folder was saved as it stood, so the turn's file changes
+ * can be undone. It carries no file names, counts or sizes.
+ */
+export const DESKTOP_RUNNER_CHECKPOINT_EVENT = "stella.checkpoint";
+
+/**
+ * Why a run's folder was not saved: past a size or time bound, holding
+ * something that cannot be saved (a pipe, a name the platform reserves), or a
+ * failure reading or writing it. The run goes on either way.
+ */
+export const DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS = [
+  "too_large",
+  "too_slow",
+  "unsupported",
+  "failed",
+] as const;
+
+export const desktopRunnerCheckpointEventSchema = v.variant("status", [
+  v.strictObject({ status: v.literal("taken") }),
+  v.strictObject({
+    status: v.literal("unavailable"),
+    reason: v.picklist(DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS),
+  }),
+]);
+export type DesktopRunnerCheckpointEvent = v.InferOutput<
+  typeof desktopRunnerCheckpointEventSchema
+>;
+
 export const desktopRunnerDesktopMessageSchema = v.variant("type", [
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.hello),
@@ -685,7 +753,19 @@ export const desktopRunnerDesktopMessageSchema = v.variant("type", [
     seq: seqSchema,
     requestId: requestIdSchema,
     kind: v.picklist(DESKTOP_RUNNER_APPROVAL_KINDS),
-    summary: v.pipe(v.string(), v.minLength(1), v.maxLength(4000)),
+    /**
+     * What the approval asks, kept as one bounded line however a desktop
+     * wrote it (`chatLocalRunApprovalMessage` already is one), so a longer
+     * summary is stored shown and the run still resumes.
+     */
+    summary: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(4000),
+      v.transform((summary) =>
+        chatLocalRunShownText(summary, CHAT_LOCAL_RUN_TOOL_LIMITS.approval),
+      ),
+    ),
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished),
@@ -694,6 +774,12 @@ export const desktopRunnerDesktopMessageSchema = v.variant("type", [
     outcome: v.picklist(DESKTOP_RUNNER_RUN_OUTCOMES),
     /** The harness session a later run resumes; `null` if none started. */
     harnessSessionId: harnessSessionIdSchema,
+  }),
+  /** How a `folder.restore` ended; it names no file. */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored),
+    restoreId: v.pipe(v.string(), v.uuid()),
+    outcome: v.picklist(DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES),
   }),
 ]);
 export type DesktopRunnerDesktopMessage = v.InferOutput<
@@ -802,6 +888,18 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.ack),
     runId: runIdSchema,
     seq: seqSchema,
+  }),
+  /**
+   * Put a chat's folder back as it was before the run, from the checkpoint the
+   * run took. Not a run command: it is sent to the run's computer whether or
+   * not a run is open, again on a new socket until it is answered, and the
+   * answer is `folder.restored` with the same `restoreId`.
+   */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.folderRestore),
+    restoreId: v.pipe(v.string(), v.uuid()),
+    folderId: v.pipe(v.string(), v.uuid()),
+    runId: runIdSchema,
   }),
 ]);
 export type DesktopRunnerServerMessage = v.InferOutput<
