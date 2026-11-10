@@ -30,7 +30,6 @@ import {
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import type { ReviewDecisionState } from "@stll/ui/review-decision-actions";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { cn } from "@stll/ui/utils";
 
 import {
   acceptAllTargets,
@@ -102,23 +101,25 @@ export const useGenerationCandidateDecisions = ({
       runId: toSafeId<"legalListGenerationRun">(runId),
       candidateId: toSafeId<"legalListGenerationCandidate">(candidateId),
     };
-    return await Result.tryPromise(async () => {
-      const response =
-        decision === "accept"
-          ? await submit.run({
-              operation: `lists.generation-candidates.accept:${workspaceId}`,
-              body,
-              send: endpoint.accept.post,
-            })
-          : await submit.run({
-              operation: `lists.generation-candidates.reject:${workspaceId}`,
-              body,
-              send: endpoint.reject.post,
-            });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    });
+    const sent = await Result.tryPromise(async () =>
+      decision === "accept"
+        ? await submit.run({
+            operation: `lists.generation-candidates.accept:${workspaceId}`,
+            body,
+            send: endpoint.accept.post,
+          })
+        : await submit.run({
+            operation: `lists.generation-candidates.reject:${workspaceId}`,
+            body,
+            send: endpoint.reject.post,
+          }),
+    );
+    if (sent.isErr()) {
+      return Result.err(sent.error);
+    }
+    return sent.value.error
+      ? Result.err(toAPIError(sent.value.error))
+      : Result.ok(undefined);
   };
 
   const report = (error: unknown) => {
@@ -215,7 +216,6 @@ type GenerationCandidatesReviewProps = {
   canDecide: boolean;
   renderMeta?: (candidate: GenerationCandidate) => CandidateMeta;
   onReviewFinished?: (summary: CandidateReviewSummary) => void;
-  className?: string;
 };
 
 export const GenerationCandidatesReview = ({
@@ -229,7 +229,6 @@ export const GenerationCandidatesReview = ({
   canDecide,
   renderMeta,
   onReviewFinished,
-  className,
 }: GenerationCandidatesReviewProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -240,9 +239,12 @@ export const GenerationCandidatesReview = ({
   });
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
   const filesView = queryView(filesQuery);
-  const files = filesView.type === "items" ? filesView.items : [];
+  // Until the files load (or if they cannot), a source shows as "Document".
   const documentName = (entityId: string): string | null => {
-    const file = files.find((entry) => entry.entityId === entityId);
+    if (filesView.type !== "items") {
+      return null;
+    }
+    const file = filesView.items.find((entry) => entry.entityId === entityId);
     return file === undefined ? null : (file.name ?? file.fileName);
   };
 
@@ -357,7 +359,7 @@ export const GenerationCandidatesReview = ({
 
   if (layout === "strip") {
     return (
-      <section className={cn("space-y-2", className)}>
+      <section className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-muted-foreground min-w-0 text-xs font-medium">
             {title}
@@ -371,7 +373,7 @@ export const GenerationCandidatesReview = ({
     );
   }
   return (
-    <ListGroup className={className}>
+    <ListGroup>
       <ListGroupHeader>
         <ListGroupHeading>
           <ListGroupTitle>
@@ -408,7 +410,7 @@ const CandidateBody = ({
 }: CandidateBodyProps) => {
   const openSourceDocument = useOpenSourceDocument(workspaceId);
   const source = candidate.sources.at(0);
-  const parts = [...(meta?.parts ?? [])];
+  const parts = meta === undefined ? [] : [...meta.parts];
   if (source !== undefined) {
     parts.push(
       <Button

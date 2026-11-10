@@ -16,10 +16,10 @@ import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
 
@@ -39,7 +39,6 @@ export const AddFactForm = ({
 }: AddFactFormProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const submit = useIdempotentSubmit();
   const [name, setName] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const statement = name.trim();
@@ -49,28 +48,26 @@ export const AddFactForm = ({
       return;
     }
     setSaving(true);
-    const endpoint = api.tasks({
-      workspaceId: toSafeId<"workspace">(workspaceId),
-    });
+    const body = {
+      name: statement,
+      listId: toSafeId<"legalList">(listId),
+      listItemType: LIST_ITEM_TYPE.FACT,
+    };
+    // The task endpoint takes no idempotency key; the capability header
+    // declares the write.
     const sent = await Result.tryPromise(
       async () =>
-        await submit.run({
-          operation: `tasks.create:${workspaceId}`,
-          body: {
-            name: statement,
-            listId: toSafeId<"legalList">(listId),
-            listItemType: LIST_ITEM_TYPE.FACT,
-          },
-          send: async (body) => endpoint.put(body),
-        }),
+        await invokeCapability("tasks.create", async (request) =>
+          unwrapApiResponse(
+            await api
+              .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+              .put(body, request),
+          ),
+        ),
     );
     setSaving(false);
     if (sent.isErr()) {
       notifyUserError(sent.error, t("errors.actionFailed"));
-      return;
-    }
-    if (sent.value.error) {
-      notifyUserError(toAPIError(sent.value.error), t("errors.actionFailed"));
       return;
     }
     // Stays open for the next fact; a reviewer often adds several.

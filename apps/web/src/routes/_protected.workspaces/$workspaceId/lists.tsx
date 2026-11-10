@@ -609,16 +609,17 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
         </Form>
       </div>
       {reviewRun && candidatesData && (
-        <GenerationCandidatesReview
-          canDecide
-          candidates={candidatesData.items}
-          className="bg-muted/30 border-b px-6 py-3"
-          layout="strip"
-          listId={listId}
-          runId={reviewRun.id}
-          title={reviewRun.instruction}
-          workspaceId={workspaceId}
-        />
+        <div className="bg-muted/30 border-b px-6 py-3 empty:hidden">
+          <GenerationCandidatesReview
+            canDecide
+            candidates={candidatesData.items}
+            layout="strip"
+            listId={listId}
+            runId={reviewRun.id}
+            title={reviewRun.instruction}
+            workspaceId={workspaceId}
+          />
+        </div>
       )}
       <div className="min-h-0 flex-1 overflow-auto">
         <Table inset="card" scroll="parent">
