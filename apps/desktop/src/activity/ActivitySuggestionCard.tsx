@@ -37,6 +37,7 @@ import { detectDesktopPlatform, formatShortcut } from "../shared/shortcut-keys";
 import type { ShortcutKeys } from "../shared/shortcut-keys";
 import {
   appRows,
+  hasWindowTitles,
   titleRows,
   wallClockTime,
   withMovedEdge,
@@ -358,7 +359,7 @@ export const ActivitySuggestionCard = ({
               card.current?.focus();
             }}
           />
-          {titlesNotice !== null && titleRows(suggestion).length === 0 ? (
+          {titlesNotice !== null && !hasWindowTitles(suggestion) ? (
             // The description falls back to app names without titles; say
             // why next to it, where the gap shows.
             <div className="text-xs" data-activity-titles-reason="">
@@ -987,7 +988,7 @@ const Evidence = ({
     return null;
   }
   // Untitled time alone would only repeat the Apps tab.
-  const titled = titles.some(({ type }) => type === "named");
+  const titled = hasWindowTitles(suggestion);
   return (
     <Tabs defaultValue={titled ? "titles" : "apps"}>
       <TabsList variant="underline">
