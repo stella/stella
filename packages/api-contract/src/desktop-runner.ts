@@ -241,12 +241,17 @@ export const DESKTOP_RUNNER_SERVER_MESSAGE = {
  * again after it was done answers `restored` again without touching the
  * folder.
  */
-export const DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES = [
-  "restored",
+export const DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS = [
   "no_checkpoint",
   "not_newest",
   "folder_busy",
   "failed",
+] as const;
+export type DesktopRunnerFolderRestoreRefusal =
+  (typeof DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS)[number];
+export const DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES = [
+  "restored",
+  ...DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS,
 ] as const;
 export type DesktopRunnerFolderRestoreOutcome =
   (typeof DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES)[number];

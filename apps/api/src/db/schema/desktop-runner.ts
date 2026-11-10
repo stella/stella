@@ -1,16 +1,18 @@
 import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import {
+  CHAT_LOCAL_FILES_UNDO_COMPUTER_REFUSALS,
+  CHAT_LOCAL_FILES_UNDO_LIVE_STATES,
+  CHAT_LOCAL_FILES_UNDO_SETTLED_STATES,
+  CHAT_LOCAL_FILES_UNDO_STATES,
+} from "@stll/api-contract/chat-local-files-undo";
 
 import { denyStellaAccessPolicies } from "@/api/db/rls";
 import {
   DESKTOP_RUNNER_COMMAND_KINDS,
   DESKTOP_RUNNER_CONNECTIONS,
   DESKTOP_RUNNER_EVENT_TYPES,
-  DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS,
-  DESKTOP_RUNNER_FOLDER_RESTORE_STATES,
   DESKTOP_RUNNER_LEASED_RUN_STATES,
-  DESKTOP_RUNNER_LIVE_FOLDER_RESTORE_STATES,
   DESKTOP_RUNNER_RUN_STATES,
-  DESKTOP_RUNNER_SETTLED_FOLDER_RESTORE_STATES,
   DESKTOP_RUNNER_STORED_OUTCOMES,
   DESKTOP_RUNNER_STORED_REJECT_REASONS,
 } from "@/api/lib/desktop-runner/states";
@@ -420,9 +422,9 @@ export const desktopRunnerFolderRestores = p.pgTable.withRLS(
     /** The run's computer and device key; only that socket is sent it. */
     desktopId: p.uuid("desktop_id").notNull(),
     deviceJkt: p.text("device_jkt").notNull(),
-    state: p.text({ enum: DESKTOP_RUNNER_FOLDER_RESTORE_STATES }).notNull(),
+    state: p.text({ enum: CHAT_LOCAL_FILES_UNDO_STATES }).notNull(),
     /** Set with `refused`: why the computer refused it. */
-    reason: p.text({ enum: DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS }),
+    reason: p.text({ enum: CHAT_LOCAL_FILES_UNDO_COMPUTER_REFUSALS }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     /** A `queued` request not sent by then is never sent. */
     expiresAt: timestamptz("expires_at").notNull(),
@@ -490,7 +492,7 @@ export const desktopRunnerFolderRestores = p.pgTable.withRLS(
       .uniqueIndex("desktop_runner_folder_restores_live_run_idx")
       .on(table.runId)
       .where(
-        sql`${table.state} IN (${sqlValues(DESKTOP_RUNNER_LIVE_FOLDER_RESTORE_STATES)})`,
+        sql`${table.state} IN (${sqlValues(CHAT_LOCAL_FILES_UNDO_LIVE_STATES)})`,
       ),
     p
       .index("desktop_runner_folder_restores_runner_state_idx")
@@ -513,15 +515,15 @@ export const desktopRunnerFolderRestores = p.pgTable.withRLS(
       .where(sql`${table.notedAt} IS NULL`),
     p.check(
       "desktop_runner_folder_restores_state_check",
-      sql`${table.state} IN (${sqlValues(DESKTOP_RUNNER_FOLDER_RESTORE_STATES)})`,
+      sql`${table.state} IN (${sqlValues(CHAT_LOCAL_FILES_UNDO_STATES)})`,
     ),
     p.check(
       "desktop_runner_folder_restores_reason_check",
-      sql`(${table.state} = 'refused') = (${table.reason} IS NOT NULL) AND (${table.reason} IS NULL OR ${table.reason} IN (${sqlValues(DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS)}))`,
+      sql`(${table.state} = 'refused') = (${table.reason} IS NOT NULL) AND (${table.reason} IS NULL OR ${table.reason} IN (${sqlValues(CHAT_LOCAL_FILES_UNDO_COMPUTER_REFUSALS)}))`,
     ),
     p.check(
       "desktop_runner_folder_restores_settled_check",
-      sql`(${table.state} IN (${sqlValues(DESKTOP_RUNNER_SETTLED_FOLDER_RESTORE_STATES)})) = (${table.settledAt} IS NOT NULL)`,
+      sql`(${table.state} IN (${sqlValues(CHAT_LOCAL_FILES_UNDO_SETTLED_STATES)})) = (${table.settledAt} IS NOT NULL)`,
     ),
     p.check(
       "desktop_runner_folder_restores_noted_check",

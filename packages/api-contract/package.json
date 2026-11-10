@@ -185,6 +185,7 @@
     "./desktop-presence": "./src/desktop-presence.ts",
     "./mcp-app-failure": "./src/mcp-app-failure.ts",
     "./desktop-runner": "./src/desktop-runner.ts",
+    "./chat-local-files-undo": "./src/chat-local-files-undo.ts",
     "./chat-run-target": "./src/chat-run-target.ts",
     "./chat-local-run-tool": "./src/chat-local-run-tool.ts",
     "./agent-harness": "./src/agent-harness.ts",

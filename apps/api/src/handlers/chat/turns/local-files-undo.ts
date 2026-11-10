@@ -2,6 +2,11 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import type {
+  ChatLocalFilesUndoAnswer,
+  ChatLocalFilesUndoRead,
+} from "@stll/api-contract/chat-local-files-undo";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { chatThreads, chatTurns } from "@/api/db/schema";
 import {
@@ -14,11 +19,8 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
-import type {
-  FolderRestoreRefusal,
-  FolderRestoreView,
-} from "@/api/lib/desktop-runner/folder-restores";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -146,18 +148,16 @@ export const createReadLocalFilesUndo = (dependencies?: UndoDependencies) =>
       if (read === null) {
         return Result.err(turnNotFound());
       }
-      return Result.ok({ undoable: read.undoable, undo: read.restore });
+      const body: ChatLocalFilesUndoRead = {
+        undoable: read.undoable,
+        undo: read.restore,
+      };
+      return Result.ok(body);
     },
   );
 
 /** What an undo request answers; one type for every branch, so the route infers the union. */
-type UndoAnswer =
-  | { status: "accepted"; undo: FolderRestoreView; reason: null }
-  | {
-      status: "refused";
-      undo: null;
-      reason: Exclude<FolderRestoreRefusal, "not_found">;
-    };
+type UndoAnswer = ChatLocalFilesUndoAnswer;
 const answer = (body: UndoAnswer) => Result.ok(body);
 
 const undoConfig = {
@@ -260,3 +260,9 @@ export const createUndoLocalFiles = (dependencies?: UndoDependencies) =>
 
 export const readLocalFilesUndo = createReadLocalFilesUndo();
 export const undoLocalFiles = createUndoLocalFiles();
+
+declareAggregateMutation(undoLocalFiles, {
+  type: "independent",
+  reason:
+    "Queues one undo of the caller's own turn in the desktop runner store, which takes the caller's runner capacity lock inside its own transaction, as the runner's other writes do; no chat aggregate is written.",
+});
