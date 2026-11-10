@@ -1408,6 +1408,7 @@
   "chat.localFilesUndo.expired": "Your computer did not answer in time. Try again.",
   "chat.localFilesUndo.pending": "Undoing file changes on your computer",
   "chat.localFilesUndo.refused.desktopOffline": "Your computer is offline. Open the stella desktop app and try again.",
+  "chat.localFilesUndo.refused.desktopUpdateRequired": "The stella desktop app on your computer is too old to undo changes. Update it, then try again.",
   "chat.localFilesUndo.refused.noCheckpoint": "This turn has no saved copy of the files to go back to.",
   "chat.localFilesUndo.refused.notNewest": "Only the newest turn's file changes can be undone.",
   "chat.localFilesUndo.refused.threadBusy": "This chat is still working. Try again when it finishes.",

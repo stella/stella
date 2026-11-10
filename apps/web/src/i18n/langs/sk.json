@@ -1773,6 +1773,7 @@
       "pending": "Vracanie zmien súborov vo vašom počítači",
       "refused": {
         "desktopOffline": "Váš počítač je offline. Otvorte desktopovú aplikáciu stella a skúste to znova.",
+        "desktopUpdateRequired": "Desktopová aplikácia stella vo vašom počítači je príliš stará na vrátenie zmien. Aktualizujte ju a skúste to znova.",
         "noCheckpoint": "Tento krok nemá uloženú kópiu súborov, ku ktorej by sa dalo vrátiť.",
         "notNewest": "Vrátiť možno len zmeny súborov z najnovšieho kroku.",
         "threadBusy": "Tento chat ešte pracuje. Skúste to znova, keď skončí."

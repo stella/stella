@@ -1773,6 +1773,7 @@
       "pending": "Notiek failu izmaiņu atsaukšana jūsu datorā",
       "refused": {
         "desktopOffline": "Jūsu dators ir bezsaistē. Atveriet stella darbvirsmas lietotni un mēģiniet vēlreiz.",
+        "desktopUpdateRequired": "Jūsu datorā esošā stella darbvirsmas lietotne ir pārāk veca, lai atsauktu izmaiņas. Atjauniniet to un mēģiniet vēlreiz.",
         "noCheckpoint": "Šim solim nav saglabātas failu kopijas, pie kuras atgriezties.",
         "notNewest": "Var atsaukt tikai jaunākā soļa failu izmaiņas.",
         "threadBusy": "Šī tērzēšana vēl darbojas. Mēģiniet vēlreiz, kad tā beigsies."

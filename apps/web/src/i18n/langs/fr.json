@@ -1773,6 +1773,7 @@
       "pending": "Annulation des modifications de fichiers sur votre ordinateur",
       "refused": {
         "desktopOffline": "Votre ordinateur est hors ligne. Ouvrez l’application de bureau stella et réessayez.",
+        "desktopUpdateRequired": "L’application de bureau stella de votre ordinateur est trop ancienne pour annuler des modifications. Mettez-la à jour et réessayez.",
         "noCheckpoint": "Cette étape n’a pas de copie enregistrée des fichiers à laquelle revenir.",
         "notNewest": "Seules les modifications de fichiers de l’étape la plus récente peuvent être annulées.",
         "threadBusy": "Une réponse est encore en cours dans cette conversation. Réessayez quand elle sera terminée."

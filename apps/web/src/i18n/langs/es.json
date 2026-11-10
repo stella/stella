@@ -1773,6 +1773,7 @@
       "pending": "Deshaciendo cambios en archivos de tu ordenador",
       "refused": {
         "desktopOffline": "Tu ordenador está sin conexión. Abre la aplicación de escritorio de stella e inténtalo de nuevo.",
+        "desktopUpdateRequired": "La aplicación de escritorio de stella de tu ordenador es demasiado antigua para deshacer cambios. Actualízala e inténtalo de nuevo.",
         "noCheckpoint": "Este paso no tiene una copia guardada de los archivos a la que volver.",
         "notNewest": "Solo se pueden deshacer los cambios en archivos del paso más reciente.",
         "threadBusy": "Este chat todavía está trabajando. Inténtalo de nuevo cuando termine."

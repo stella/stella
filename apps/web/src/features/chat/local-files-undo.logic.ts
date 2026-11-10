@@ -30,6 +30,7 @@ const REQUEST_REFUSAL_KEYS = {
   thread_busy: "chat.localFilesUndo.refused.threadBusy",
   no_checkpoint: "chat.localFilesUndo.refused.noCheckpoint",
   desktop_offline: "chat.localFilesUndo.refused.desktopOffline",
+  desktop_update_required: "chat.localFilesUndo.refused.desktopUpdateRequired",
 } as const satisfies Record<ChatLocalFilesUndoRefusal, TranslationKey>;
 
 /** The messages a turn's row can show about its undo. */

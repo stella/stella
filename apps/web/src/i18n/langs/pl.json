@@ -1773,6 +1773,7 @@
       "pending": "Cofanie zmian w plikach na Twoim komputerze",
       "refused": {
         "desktopOffline": "Twój komputer jest offline. Otwórz aplikację desktopową stella i spróbuj ponownie.",
+        "desktopUpdateRequired": "Aplikacja desktopowa stella na Twoim komputerze jest zbyt stara, aby cofać zmiany. Zaktualizuj ją i spróbuj ponownie.",
         "noCheckpoint": "Ten krok nie ma zapisanej kopii plików, do której można wrócić.",
         "notNewest": "Cofnąć można tylko zmiany w plikach z najnowszego kroku.",
         "threadBusy": "Ten czat jeszcze pracuje. Spróbuj ponownie, gdy skończy."

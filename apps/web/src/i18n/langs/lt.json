@@ -1773,6 +1773,7 @@
       "pending": "Atšaukiami failų pakeitimai jūsų kompiuteryje",
       "refused": {
         "desktopOffline": "Jūsų kompiuteris neprisijungęs. Atidarykite stella darbalaukio programą ir bandykite dar kartą.",
+        "desktopUpdateRequired": "Jūsų kompiuteryje esanti stella darbalaukio programa per sena pakeitimams atšaukti. Atnaujinkite ją ir bandykite dar kartą.",
         "noCheckpoint": "Šis žingsnis neturi išsaugotos failų kopijos, į kurią būtų galima grįžti.",
         "notNewest": "Atšaukti galima tik naujausio žingsnio failų pakeitimus.",
         "threadBusy": "Šis pokalbis dar vyksta. Bandykite dar kartą, kai jis baigsis."

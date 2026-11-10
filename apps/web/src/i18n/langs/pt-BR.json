@@ -1773,6 +1773,7 @@
       "pending": "Desfazendo alterações nos arquivos do seu computador",
       "refused": {
         "desktopOffline": "Seu computador está offline. Abra o aplicativo de desktop do stella e tente novamente.",
+        "desktopUpdateRequired": "O aplicativo de desktop do stella no seu computador é antigo demais para desfazer alterações. Atualize-o e tente novamente.",
         "noCheckpoint": "Esta etapa não tem uma cópia salva dos arquivos para a qual voltar.",
         "notNewest": "Só é possível desfazer as alterações nos arquivos da etapa mais recente.",
         "threadBusy": "Este chat ainda está trabalhando. Tente novamente quando ele terminar."

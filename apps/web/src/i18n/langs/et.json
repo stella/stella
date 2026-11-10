@@ -1773,6 +1773,7 @@
       "pending": "Teie arvutis võetakse failimuudatusi tagasi",
       "refused": {
         "desktopOffline": "Teie arvuti on võrguühenduseta. Avage stella töölauarakendus ja proovige uuesti.",
+        "desktopUpdateRequired": "Teie arvutis olev stella töölauarakendus on muudatuste tagasivõtmiseks liiga vana. Uuendage seda ja proovige uuesti.",
         "noCheckpoint": "Selle sammu jaoks pole failidest salvestatud koopiat, mille juurde naasta.",
         "notNewest": "Tagasi saab võtta ainult kõige uuema sammu failimuudatused.",
         "threadBusy": "See vestlus alles töötab. Proovige uuesti, kui see on lõppenud."

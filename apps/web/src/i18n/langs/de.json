@@ -1773,6 +1773,7 @@
       "pending": "Dateiänderungen auf Ihrem Computer werden rückgängig gemacht",
       "refused": {
         "desktopOffline": "Ihr Computer ist offline. Öffnen Sie die stella-Desktop-App und versuchen Sie es erneut.",
+        "desktopUpdateRequired": "Die stella-Desktop-App auf Ihrem Computer ist zu alt, um Änderungen rückgängig zu machen. Aktualisieren Sie sie und versuchen Sie es erneut.",
         "noCheckpoint": "Für diesen Schritt gibt es keine gespeicherte Kopie der Dateien, zu der zurückgekehrt werden kann.",
         "notNewest": "Nur die Dateiänderungen des neuesten Schritts können rückgängig gemacht werden.",
         "threadBusy": "Dieser Chat arbeitet noch. Versuchen Sie es erneut, wenn er fertig ist."

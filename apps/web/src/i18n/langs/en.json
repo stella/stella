@@ -1773,6 +1773,7 @@
       "pending": "Undoing file changes on your computer",
       "refused": {
         "desktopOffline": "Your computer is offline. Open the stella desktop app and try again.",
+        "desktopUpdateRequired": "The stella desktop app on your computer is too old to undo changes. Update it, then try again.",
         "noCheckpoint": "This turn has no saved copy of the files to go back to.",
         "notNewest": "Only the newest turn's file changes can be undone.",
         "threadBusy": "This chat is still working. Try again when it finishes."

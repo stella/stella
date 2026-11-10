@@ -1773,6 +1773,7 @@
       "pending": "Fájlmódosítások visszavonása a számítógépén",
       "refused": {
         "desktopOffline": "A számítógépe offline. Nyissa meg a stella asztali alkalmazást, és próbálja újra.",
+        "desktopUpdateRequired": "A számítógépén lévő stella asztali alkalmazás túl régi a módosítások visszavonásához. Frissítse, és próbálja újra.",
         "noCheckpoint": "Ehhez a lépéshez nincs mentett másolat a fájlokról, amelyhez vissza lehetne térni.",
         "notNewest": "Csak a legújabb lépés fájlmódosításai vonhatók vissza.",
         "threadBusy": "Ez a csevegés még dolgozik. Próbálja újra, ha befejezte."
