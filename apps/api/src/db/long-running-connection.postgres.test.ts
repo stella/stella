@@ -26,7 +26,7 @@ describe.skipIf(!enabled)("dedicated SQL counting with PostgreSQL", () => {
           );
           expect(counter.count).toBe(2);
           expect(raw.execute()).toBe(raw);
-          expect(await raw).toEqual([{ value: 17 }]);
+          expect([...(await raw)]).toEqual([{ value: 17 }]);
           expect(counter.count).toBe(3);
           expect(await db.execute(sql`SELECT 18::int AS value`)).toEqual([
             { value: 18 },
@@ -60,7 +60,7 @@ describe.skipIf(!enabled)("dedicated SQL counting with PostgreSQL", () => {
           ).toEqual([{ value: 22 }]);
           expect(counter.count).toBe(9);
           const rows = await raw.then((result) => result);
-          expect(rows).toEqual([{ value: 17 }]);
+          expect([...rows]).toEqual([{ value: 17 }]);
           expect(counter.count).toBe(9);
         },
       );

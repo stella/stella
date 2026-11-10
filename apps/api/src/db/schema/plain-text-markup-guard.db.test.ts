@@ -360,7 +360,7 @@ if (!runPostgresTests || !databaseUrl) {
                   `UPDATE "${tableName}" SET "${name}" = $1 WHERE fixture_id = 1`,
                   [value],
                 );
-                const rows = await client.unsafe<{ value: string }[]>(
+                const rows = await client.unsafe<{ value: string | null }[]>(
                   `SELECT "${name}" AS value FROM "${tableName}" WHERE fixture_id = 1`,
                 );
                 expect(rows.at(0)?.value).toBe(value);
