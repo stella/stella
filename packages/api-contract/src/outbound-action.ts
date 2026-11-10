@@ -30,6 +30,21 @@ export type OutboundActionStatus = (typeof OUTBOUND_ACTION_STATUSES)[number];
  */
 export const OUTBOUND_FAILURE_OUTCOME_UNKNOWN = "outcome_unknown";
 
+/** Stable codes of the refusals the outbound action endpoints answer. */
+export const OUTBOUND_ACTION_REFUSAL_CODE = {
+  /** No such action belongs to the signed-in user in this organization. */
+  notFound: "outbound_action_not_found",
+  /** The prepared preview does not match the preview schema. */
+  invalid: "outbound_action_invalid",
+  /**
+   * The action was already handled or expired, or the confirmed preview is
+   * not the stored one: the user reviews it again instead of retrying.
+   */
+  notConfirmable: "outbound_action_not_confirmable",
+  /** No provider is wired for this kind, so it cannot be sent yet. */
+  unavailable: "outbound_action_unavailable",
+} as const;
+
 /** How long a prepared preview stays confirmable. */
 export const OUTBOUND_ACTION_TTL_MS = 30 * 60 * 1000;
 

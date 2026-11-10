@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
+  OUTBOUND_ACTION_REFUSAL_CODE,
   OUTBOUND_ACTION_TTL_MS,
   type OutboundActionPreview,
   outboundActionPreviewSchema,
@@ -48,6 +49,7 @@ export const prepareOutboundAction = async ({
     return Result.err(
       new HandlerError({
         status: 400,
+        code: OUTBOUND_ACTION_REFUSAL_CODE.invalid,
         message: "The prepared action is not valid",
       }),
     );

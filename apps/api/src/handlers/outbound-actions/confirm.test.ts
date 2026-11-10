@@ -3,7 +3,10 @@ import { expect, test } from "bun:test";
 import { getColumns, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
-import { OUTBOUND_FAILURE_OUTCOME_UNKNOWN } from "@stll/api-contract/outbound-action";
+import {
+  OUTBOUND_ACTION_REFUSAL_CODE,
+  OUTBOUND_FAILURE_OUTCOME_UNKNOWN,
+} from "@stll/api-contract/outbound-action";
 import type { OutboundEmailPreview } from "@stll/api-contract/outbound-action";
 
 import { outboundActions } from "@/api/db/schema";
@@ -262,6 +265,7 @@ test("a confirm bound to another preview sends nothing", async () => {
   });
   expect(await fixture.handler.handler(fixture.context)).toMatchObject({
     code: 409,
+    response: { code: OUTBOUND_ACTION_REFUSAL_CODE.notConfirmable },
   });
   expect(fixture.executed).toEqual([]);
   expect(fixture.updates).toEqual([]);
@@ -275,6 +279,7 @@ test("an action that is not pending is never sent again", async () => {
     });
     expect(await fixture.handler.handler(fixture.context)).toMatchObject({
       code: 409,
+      response: { code: OUTBOUND_ACTION_REFUSAL_CODE.notConfirmable },
     });
     expect(fixture.executed).toEqual([]);
   }
@@ -287,6 +292,7 @@ test("an expired preview is not sent", async () => {
   });
   expect(await fixture.handler.handler(fixture.context)).toMatchObject({
     code: 409,
+    response: { code: OUTBOUND_ACTION_REFUSAL_CODE.notConfirmable },
   });
   expect(fixture.executed).toEqual([]);
   expect(fixture.updates).toEqual([]);
@@ -302,6 +308,7 @@ test("an action that expires between the read and the claim is not sent", async 
   });
   expect(await fixture.handler.handler(fixture.context)).toMatchObject({
     code: 409,
+    response: { code: OUTBOUND_ACTION_REFUSAL_CODE.notConfirmable },
   });
   expect(fixture.executed).toEqual([]);
 });
@@ -314,6 +321,7 @@ test("a confirm that loses the claim to a concurrent one sends nothing", async (
   });
   expect(await fixture.handler.handler(fixture.context)).toMatchObject({
     code: 409,
+    response: { code: OUTBOUND_ACTION_REFUSAL_CODE.notConfirmable },
   });
   expect(fixture.executed).toEqual([]);
   expect(fixture.audits).toEqual([]);
@@ -341,6 +349,7 @@ test("a kind without a provider cannot be confirmed", async () => {
   const fixture = setup({ action: await storedAction() });
   expect(await fixture.handler.handler(fixture.context)).toMatchObject({
     code: 409,
+    response: { code: OUTBOUND_ACTION_REFUSAL_CODE.unavailable },
   });
   expect(fixture.updates).toEqual([]);
 });
@@ -361,6 +370,7 @@ test("another user's or a missing action is not found", async () => {
   const fixture = setup({ action: undefined, executor: sends });
   expect(await fixture.handler.handler(fixture.context)).toMatchObject({
     code: 404,
+    response: { code: OUTBOUND_ACTION_REFUSAL_CODE.notFound },
   });
   expect(fixture.executed).toEqual([]);
 });

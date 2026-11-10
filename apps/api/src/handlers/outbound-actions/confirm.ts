@@ -3,6 +3,7 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  OUTBOUND_ACTION_REFUSAL_CODE,
   OUTBOUND_FAILURE_OUTCOME_UNKNOWN,
   OUTBOUND_PREVIEW_HASH_PATTERN,
 } from "@stll/api-contract/outbound-action";
@@ -49,8 +50,12 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const conflict = (message: string) =>
-  abortTransaction(new HandlerError({ status: 409, message }));
+type ConflictCode =
+  | typeof OUTBOUND_ACTION_REFUSAL_CODE.notConfirmable
+  | typeof OUTBOUND_ACTION_REFUSAL_CODE.unavailable;
+
+const conflict = (code: ConflictCode, message: string) =>
+  abortTransaction(new HandlerError({ status: 409, code, message }));
 
 /**
  * What the provider call established. A thrown call (timeout, dropped
@@ -155,24 +160,35 @@ export const createConfirmOutboundActionHandler = (
             return abortTransaction(
               new HandlerError({
                 status: 404,
+                code: OUTBOUND_ACTION_REFUSAL_CODE.notFound,
                 message: "Prepared action not found",
               }),
             );
           }
           if (action.status !== "pending") {
-            return conflict(`This action is already ${action.status}`);
+            return conflict(
+              OUTBOUND_ACTION_REFUSAL_CODE.notConfirmable,
+              `This action is already ${action.status}`,
+            );
           }
           if (action.expired) {
-            return conflict("This preview expired; prepare it again");
+            return conflict(
+              OUTBOUND_ACTION_REFUSAL_CODE.notConfirmable,
+              "This preview expired; prepare it again",
+            );
           }
           if (action.previewHash !== previewHash) {
             return conflict(
+              OUTBOUND_ACTION_REFUSAL_CODE.notConfirmable,
               "The preview changed; review it again before confirming",
             );
           }
           const executor = executors[action.kind];
           if (executor === undefined) {
-            return conflict("This action cannot be sent yet");
+            return conflict(
+              OUTBOUND_ACTION_REFUSAL_CODE.unavailable,
+              "This action cannot be sent yet",
+            );
           }
           const preview = await readStoredOutboundPreview({
             organizationId,
@@ -215,7 +231,10 @@ export const createConfirmOutboundActionHandler = (
               }),
           });
           if (transitioned === 0) {
-            return conflict("This action was already confirmed");
+            return conflict(
+              OUTBOUND_ACTION_REFUSAL_CODE.notConfirmable,
+              "This action was already confirmed",
+            );
           }
           return { executor, kind: action.kind, preview: preview.value };
         }),

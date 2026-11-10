@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { OUTBOUND_ACTION_REFUSAL_CODE } from "@stll/api-contract/outbound-action";
+
 import { outboundActions } from "@/api/db/schema";
 import { readStoredOutboundPreview } from "@/api/handlers/outbound-actions/store";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -79,7 +81,11 @@ const readOutboundAction = createSafeRootHandler(
     );
     if (!action) {
       return Result.err(
-        new HandlerError({ status: 404, message: "Prepared action not found" }),
+        new HandlerError({
+          status: 404,
+          code: OUTBOUND_ACTION_REFUSAL_CODE.notFound,
+          message: "Prepared action not found",
+        }),
       );
     }
     const preview = yield* Result.await(

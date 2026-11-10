@@ -1,12 +1,20 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { outboundActionPreviewSchema } from "@stll/api-contract/outbound-action";
+import {
+  OUTBOUND_ACTION_REFUSAL_CODE,
+  outboundActionPreviewSchema,
+} from "@stll/api-contract/outbound-action";
 import type { OutboundEmailPreview } from "@stll/api-contract/outbound-action";
 import { assertProperty } from "@stll/property-testing";
 
+import type { Transaction } from "@/api/db/root";
 import { outboundPreviewHash } from "@/api/handlers/outbound-actions/preview";
+import { prepareOutboundAction } from "@/api/handlers/outbound-actions/store";
+import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const preview: OutboundEmailPreview = {
   kind: "email.send",
@@ -104,5 +112,41 @@ describe("outbound email header fields", () => {
         },
       ),
     );
+  });
+});
+
+describe("prepareOutboundAction", () => {
+  test("refuses a preview outside the schema by its code and stores nothing", async () => {
+    const touched: PropertyKey[] = [];
+    const audits: unknown[] = [];
+    const result = await prepareOutboundAction({
+      chatThreadId: toSafeId<"chatThread">(
+        "00000000-0000-4000-8000-0000000000c1",
+      ),
+      now: new Date("2026-01-01T00:00:00Z"),
+      organizationId: toSafeId<"organization">("org_1"),
+      preview: { ...preview, to: [] },
+      recordAuditEvent: async (_tx, value) => {
+        audits.push(value);
+      },
+      tx: asTestRaw<Transaction>(
+        new Proxy(
+          {},
+          {
+            get: (_target, key) => {
+              touched.push(key);
+              return undefined;
+            },
+          },
+        ),
+      ),
+      userId: toSafeId<"user">("user_1"),
+    });
+    expect(Result.isError(result) ? result.error : null).toMatchObject({
+      status: 400,
+      code: OUTBOUND_ACTION_REFUSAL_CODE.invalid,
+    });
+    expect(touched).toEqual([]);
+    expect(audits).toEqual([]);
   });
 });
