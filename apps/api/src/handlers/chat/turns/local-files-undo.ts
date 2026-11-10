@@ -1,10 +1,18 @@
 import { panic, Result } from "better-result";
+import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { SafeDb } from "@/api/db/safe-db";
+import { chatThreads, chatTurns } from "@/api/db/schema";
+import {
+  type ChatWorkspaceAccess,
+  hasChatWorkspaceAccess,
+} from "@/api/handlers/chat/chat-scope";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import type {
@@ -42,6 +50,68 @@ type UndoDependencies = {
 const controlOf = (dependencies: UndoDependencies | undefined) =>
   dependencies?.control() ?? getDesktopRunnerControl().control;
 
+type TurnOf = {
+  safeDb: SafeDb;
+  owner: { userId: SafeId<"user">; organizationId: SafeId<"organization"> };
+  threadId: SafeId<"chatThread">;
+  turnId: SafeId<"chatTurn">;
+};
+
+/**
+ * The turn as the member's own scope sees it, with the matters its thread is
+ * scoped to and holds data of: chat RLS hides a turn whose matter the member
+ * can no longer open. `null` for a turn the member cannot see.
+ */
+const readVisibleTurn = async ({ safeDb, owner, threadId, turnId }: TurnOf) =>
+  await safeDb(async (tx) => {
+    const [turn] = await tx
+      .select({
+        workspaceId: chatThreads.workspaceId,
+        dataWorkspaceIds: chatThreads.dataWorkspaceIds,
+      })
+      .from(chatTurns)
+      .innerJoin(
+        chatThreads,
+        and(
+          eq(chatThreads.id, chatTurns.threadId),
+          eq(chatThreads.organizationId, owner.organizationId),
+          eq(chatThreads.userId, owner.userId),
+        ),
+      )
+      .where(
+        and(
+          eq(chatTurns.id, turnId),
+          eq(chatTurns.threadId, threadId),
+          eq(chatTurns.organizationId, owner.organizationId),
+        ),
+      )
+      .limit(1);
+    return turn ?? null;
+  });
+
+type WritableOptions = {
+  turn: {
+    workspaceId: SafeId<"workspace"> | null;
+    dataWorkspaceIds: readonly SafeId<"workspace">[];
+  };
+  getWorkspaceAccess: ChatWorkspaceAccess;
+};
+
+/** Whether the member may still change every matter the thread touches. */
+const mattersWritable = async ({ turn, getWorkspaceAccess }: WritableOptions) =>
+  (
+    await Promise.all(
+      [...new Set([turn.workspaceId, ...turn.dataWorkspaceIds])].map(
+        async (workspaceId: SafeId<"workspace"> | null) =>
+          await hasChatWorkspaceAccess({
+            admitted: "active",
+            workspaceId,
+            getWorkspaceAccess,
+          }),
+      ),
+    )
+  ).every(Boolean);
+
 const readConfig = {
   contract: "patch",
   description:
@@ -50,6 +120,7 @@ const readConfig = {
     "the computer's reason) or expired. A turn you cannot see is a 404.",
   permissions: CHAT_TURN_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  access: "read",
   mcp: { type: "internal", reason: "chat_thread_ui" },
   params,
 } satisfies HandlerConfig;
@@ -58,16 +129,19 @@ const readConfig = {
 export const createReadLocalFilesUndo = (dependencies?: UndoDependencies) =>
   createSafeRootHandler(
     readConfig,
-    async function* ({ params: { threadId, turnId }, session, user }) {
+    async function* ({ params: { threadId, turnId }, safeDb, session, user }) {
+      const owner = {
+        userId: user.id,
+        organizationId: session.activeOrganizationId,
+      };
+      const visible = yield* Result.await(
+        readVisibleTurn({ safeDb, owner, threadId, turnId }),
+      );
+      if (visible === null) {
+        return Result.err(turnNotFound());
+      }
       const read = yield* Result.await(
-        controlOf(dependencies).readFolderRestore({
-          owner: {
-            userId: user.id,
-            organizationId: session.activeOrganizationId,
-          },
-          threadId,
-          turnId,
-        }),
+        controlOf(dependencies).readFolderRestore({ owner, threadId, turnId }),
       );
       if (read === null) {
         return Result.err(turnNotFound());
@@ -106,6 +180,7 @@ export const createUndoLocalFiles = (dependencies?: UndoDependencies) =>
   createSafeRootHandler(
     undoConfig,
     async function* ({
+      getWorkspaceAccess,
       params: { threadId, turnId },
       recordAuditEvent,
       safeDb,
@@ -113,12 +188,30 @@ export const createUndoLocalFiles = (dependencies?: UndoDependencies) =>
       set,
       user,
     }) {
+      const owner = {
+        userId: user.id,
+        organizationId: session.activeOrganizationId,
+      };
+      const visible = yield* Result.await(
+        readVisibleTurn({ safeDb, owner, threadId, turnId }),
+      );
+      // Changing the folder writes to the thread's matters: an archived matter
+      // or one the member left refuses it like any write to it.
+      if (visible === null) {
+        return Result.err(turnNotFound());
+      }
+      const writable = yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await mattersWritable({ turn: visible, getWorkspaceAccess }),
+        ),
+      );
+      if (!writable) {
+        return Result.err(turnNotFound());
+      }
       const outcome = yield* Result.await(
         controlOf(dependencies).requestFolderRestore({
-          owner: {
-            userId: user.id,
-            organizationId: session.activeOrganizationId,
-          },
+          owner,
           threadId,
           turnId,
         }),

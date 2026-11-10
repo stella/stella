@@ -25,7 +25,6 @@ import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
 import {
   type FolderRestoreView,
   readTurnFolderRestore,
-  readUnnotedFolderRestores,
   type RequestedFolderRestore,
   requestFolderRestore,
   type TurnFolderRestore,
@@ -278,21 +277,6 @@ const startRun = async (
   input: StartLocalRunInput,
 ): Promise<Result<StartLocalRunOutcome, DesktopRunnerControlError>> => {
   const chat = input.chat ?? null;
-  const unnoted =
-    chat === null
-      ? Result.ok<string[], DatabaseError>([])
-      : await Result.tryPromise({
-          try: async () =>
-            await readUnnotedFolderRestores(deps.db, {
-              owner: input.owner,
-              threadId: chat.threadId,
-            }),
-          catch: toDatabaseError,
-        });
-  if (unnoted.isErr()) {
-    return unnoted;
-  }
-  const notedRestoreIds = unnoted.value;
   const runId = Bun.randomUUIDv7();
   const message = {
     type: DESKTOP_RUNNER_SERVER_MESSAGE.runStart,
@@ -304,16 +288,20 @@ const startRun = async (
     model: input.model,
     harnessSessionId: input.harnessSessionId,
     instructions: input.instructions,
-    messages:
-      notedRestoreIds.length === 0
-        ? input.messages
-        : withRestoredNote(input.messages),
+    messages: input.messages,
     attachments: input.attachments.map(({ path, s3Key }) => ({ path, s3Key })),
     policy: { network: "open", fs: "workspace", approvals: input.approvals },
     mcp: input.mcp,
   } as const;
+  // A chat's run tells about a restore of its folder when one is not told yet;
+  // the admission picks which is stored. The noted one is the larger, so its
+  // check covers both.
+  const withNote =
+    chat === null
+      ? message
+      : { ...message, messages: withRestoredNote(input.messages) };
   const checked = v.safeParse(desktopRunnerServerMessageSchema, {
-    ...message,
+    ...withNote,
     attachments: input.attachments.map(({ path }) => ({
       path,
       url: ATTACHMENT_LINK_SHAPE,
@@ -342,8 +330,7 @@ const startRun = async (
         approvals: input.approvals,
         workspaceIds: input.workspaceIds,
         chat,
-        notedRestoreIds,
-        payload: message,
+        payload: { plain: message, withNote },
         now: deps.now(),
         leaseMs: deps.timing.leaseMs,
         seenSince: seenSince(deps),

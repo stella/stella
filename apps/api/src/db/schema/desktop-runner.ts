@@ -428,7 +428,12 @@ export const desktopRunnerFolderRestores = p.pgTable.withRLS(
     expiresAt: timestamptz("expires_at").notNull(),
     /** When it was restored, refused or expired. */
     settledAt: timestamptz("settled_at"),
-    /** When a later run of the chat was told the folder went back. */
+    /**
+     * The latest run whose request carried the note that the folder went
+     * back; it is told once the computer accepts that run.
+     */
+    notedRunId: p.uuid("noted_run_id"),
+    /** When an accepted run of the chat was told the folder went back. */
     notedAt: timestamptz("noted_at"),
   },
   (table) => [
@@ -475,6 +480,13 @@ export const desktopRunnerFolderRestores = p.pgTable.withRLS(
       })
       .onDelete("cascade"),
     p
+      .foreignKey({
+        name: "desktop_runner_folder_restores_noted_run_fk",
+        columns: [table.notedRunId],
+        foreignColumns: [desktopRunnerRuns.runId],
+      })
+      .onDelete("set null"),
+    p
       .uniqueIndex("desktop_runner_folder_restores_live_run_idx")
       .on(table.runId)
       .where(
@@ -495,6 +507,10 @@ export const desktopRunnerFolderRestores = p.pgTable.withRLS(
     p
       .index("desktop_runner_folder_restores_chat_turn_idx")
       .on(table.chatTurnId),
+    p
+      .index("desktop_runner_folder_restores_noted_run_idx")
+      .on(table.notedRunId)
+      .where(sql`${table.notedAt} IS NULL`),
     p.check(
       "desktop_runner_folder_restores_state_check",
       sql`${table.state} IN (${sqlValues(DESKTOP_RUNNER_FOLDER_RESTORE_STATES)})`,
@@ -509,7 +525,7 @@ export const desktopRunnerFolderRestores = p.pgTable.withRLS(
     ),
     p.check(
       "desktop_runner_folder_restores_noted_check",
-      sql`${table.notedAt} IS NULL OR ${table.state} = 'restored'`,
+      sql`(${table.notedAt} IS NULL AND ${table.notedRunId} IS NULL) OR ${table.state} = 'restored'`,
     ),
     ...ownerOnlyPolicies("desktop_runner_folder_restores"),
   ],

@@ -53,8 +53,10 @@ import {
 } from "@/api/lib/db/transitions";
 import { questionPauseOf } from "@/api/lib/desktop-runner/chunk";
 import {
+  carryFolderRestoreNotes,
   hasPendingFolderRestore,
-  markFolderRestoresNoted,
+  markFolderRestoreNotesTold,
+  readUnnotedFolderRestores,
 } from "@/api/lib/desktop-runner/folder-restores";
 import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
 import {
@@ -636,6 +638,9 @@ export const recordRunAccepted = async (
       recordTransitionAuditEvent: skipRunAudit,
     });
     if (accepted.type === "transitioned") {
+      // The run's request reached the harness: any restore note it carried
+      // is told now, and no later run repeats it.
+      await markFolderRestoreNotesTold(tx, { runId, now });
       return { type: "applied" };
     }
     const run = await readBoundRun(tx, binding, runId);
@@ -1316,9 +1321,11 @@ type InsertRunOptions = {
   workspaceIds: readonly SafeId<"workspace">[];
   /** The chat turn that starts and reads the run, when one does. */
   chat?: ChatRunBinding | null;
-  /** Restores of the chat's folder the run's request tells about. */
-  notedRestoreIds?: readonly string[];
-  payload: object;
+  /**
+   * The `run.start` as stored: `withNote` when a restore of the chat's folder
+   * was not told to an accepted run yet, chosen inside the admission.
+   */
+  payload: { plain: object; withNote: object };
   now: Date;
   leaseMs: number;
   seenSince: Date;
@@ -1354,6 +1361,13 @@ export const insertAssignedRun = async (
 ): Promise<InsertedRun> =>
   await withAggregateTransaction(db, async (tx) => {
     const { owner, runId, desktopId, harness, harnessVersion, now } = options;
+    // Serialized with the account's restore requests and settlements, so a
+    // restore is either pending here (refused below) or settled and noted.
+    await withAggregateLock({
+      aggregate: "desktopRunnerCapacity",
+      id: { organizationId: owner.organizationId, userId: owner.userId },
+      tx,
+    });
     const [target] = await tx
       .select({
         deviceJkt: runner.deviceJkt,
@@ -1403,6 +1417,13 @@ export const insertAssignedRun = async (
     ) {
       return { type: "folder_busy" };
     }
+    const unnoted =
+      chat === null
+        ? []
+        : await readUnnotedFolderRestores(tx, {
+            owner,
+            threadId: chat.threadId,
+          });
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
     await tx.insert(runs).values({
       runId,
@@ -1424,14 +1445,15 @@ export const insertAssignedRun = async (
       runId,
       kind: "run.start",
       commandKey: runId,
-      payload: options.payload,
+      payload:
+        unnoted.length === 0 ? options.payload.plain : options.payload.withNote,
     });
     if (chat !== null) {
-      await markFolderRestoresNoted(tx, {
+      await carryFolderRestoreNotes(tx, {
         owner,
         threadId: chat.threadId,
-        restoreIds: options.notedRestoreIds ?? [],
-        now,
+        restoreIds: unnoted,
+        runId,
       });
     }
     return {

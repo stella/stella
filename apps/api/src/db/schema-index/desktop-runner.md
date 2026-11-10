@@ -112,5 +112,6 @@ desktop_runner_folder_restores.reason           text                null        
 desktop_runner_folder_restores.created_at       timestamptz         default,not null  desktop-runner.ts:426
 desktop_runner_folder_restores.expires_at       timestamptz         not null          desktop-runner.ts:428  A `queued` request not sent by then is never sent.
 desktop_runner_folder_restores.settled_at       timestamptz         null              desktop-runner.ts:430  When it was restored, refused or expired.
-desktop_runner_folder_restores.noted_at         timestamptz         null              desktop-runner.ts:432  When a later run of the chat was told the folder went back.
+desktop_runner_folder_restores.noted_run_id     uuid                fk,null           desktop-runner.ts:435  The latest run whose request carried the note that the folder went back; it is told once the computer accepts that run.
+desktop_runner_folder_restores.noted_at         timestamptz         null              desktop-runner.ts:437  When an accepted run of the chat was told the folder went back.
 ```

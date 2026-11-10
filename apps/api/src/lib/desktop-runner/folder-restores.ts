@@ -549,6 +549,12 @@ export const settleFolderRestore = async (
   { binding, restoreId, outcome, now }: SettleOptions,
 ): Promise<"settled" | "unknown"> =>
   await withAggregateTransaction(db, async (tx) => {
+    // Serialized with run admission, which reads the restores to note.
+    await withAggregateLock({
+      aggregate: "desktopRunnerCapacity",
+      id: { organizationId: binding.organizationId, userId: binding.userId },
+      tx,
+    });
     const to = outcome === "restored" ? "restored" : "refused";
     const settled = await transitionLifecycle({
       tx,
@@ -620,8 +626,9 @@ export const hasPendingFolderRestore = async (
 const MAX_NOTED_RESTORES = 20;
 
 /**
- * The thread's restores no run was told about yet: the next run's request says
- * the files went back, and marks them told when it is stored.
+ * The thread's restores no accepted run was told about yet. A run that carried
+ * the note but was refused or lost before the computer accepted it told
+ * nobody, so the next run carries it again.
  */
 export const readUnnotedFolderRestores = async (
   db: Pick<DesktopRunnerDb, "select">,
@@ -642,23 +649,23 @@ export const readUnnotedFolderRestores = async (
       .limit(MAX_NOTED_RESTORES)
   ).map(({ id }) => id);
 
-/** Record that a run's request told about these restores of the thread. */
-export const markFolderRestoresNoted = async (
+/** Record that run `runId`'s request carries the note about these restores. */
+export const carryFolderRestoreNotes = async (
   db: Pick<DesktopRunnerDb, "update">,
   {
     owner,
     threadId,
     restoreIds,
-    now,
-  }: ThreadOf & { restoreIds: readonly string[]; now: Date },
+    runId,
+  }: ThreadOf & { restoreIds: readonly string[]; runId: string },
 ): Promise<void> => {
   if (restoreIds.length === 0) {
     return;
   }
-  // audit: skip - bookkeeping of the note a run's request carried
+  // audit: skip - bookkeeping of the note a run's request carries
   await db
     .update(restores)
-    .set({ notedAt: now })
+    .set({ notedRunId: runId })
     .where(
       and(
         ownedBy(owner),
@@ -668,4 +675,16 @@ export const markFolderRestoresNoted = async (
         isNull(restores.notedAt),
       ),
     );
+};
+
+/** The computer accepted run `runId`: the restore notes it carried are told. */
+export const markFolderRestoreNotesTold = async (
+  db: Pick<DesktopRunnerDb, "update">,
+  { runId, now }: { runId: string; now: Date },
+): Promise<void> => {
+  // audit: skip - bookkeeping of the note a run's request carried
+  await db
+    .update(restores)
+    .set({ notedAt: now })
+    .where(and(eq(restores.notedRunId, runId), isNull(restores.notedAt)));
 };

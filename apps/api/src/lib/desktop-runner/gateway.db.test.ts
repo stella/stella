@@ -68,7 +68,9 @@ import {
   desktopRunners,
   featureEnrolments,
   userFiles,
+  workspaceMembers,
 } from "@/api/db/schema";
+import { createMembershipSafeDb } from "@/api/db/scoped";
 import {
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
@@ -94,8 +96,13 @@ import {
   toChatMessage,
 } from "@/api/handlers/chat/stream-chat";
 import { createChatMessageIdMapper } from "@/api/handlers/chat/stream-message-identity";
+import {
+  createReadLocalFilesUndo,
+  createUndoLocalFiles,
+} from "@/api/handlers/chat/turns/local-files-undo";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import type { HttpServer } from "@/api/http/context";
+import { createResponseSet, type HttpServer } from "@/api/http/context";
+import { status as httpStatus } from "@/api/http/status";
 import {
   type ApiServerWebSocket,
   type ApiSocketData,
@@ -147,6 +154,7 @@ import {
 } from "@/api/lib/desktop-runner/store";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileKey } from "@/api/lib/file-key";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { isRecord } from "@/api/lib/type-guards";
@@ -5729,13 +5737,16 @@ describe("undoing a turn's file changes", () => {
     });
   });
 
-  const newThread = async (): Promise<Thread> => {
+  const newThread = async (
+    dataWorkspaceIds: SafeId<"workspace">[] = [],
+  ): Promise<Thread> => {
     const id = toSafeId<"chatThread">(Bun.randomUUIDv7());
     await db.insert(chatThreads).values({
       id,
       organizationId: ids.orgA,
       userId: ids.userA1,
       title: "Files on this computer",
+      dataWorkspaceIds,
     });
     return id;
   };
@@ -5771,6 +5782,20 @@ describe("undoing a turn's file changes", () => {
       createdAt: new Date(clock.now),
     });
     return turnId;
+  };
+
+  /** End a turn without an answer, as a refused run's turn ends. */
+  const cancelUndoTurn = async (turnId: Turn) => {
+    await db
+      .update(chatTurns)
+      .set({
+        status: "cancelled",
+        cancellationReason: "user-stop",
+        executionId: null,
+        leaseExpiresAt: null,
+        settledAt: new Date(clock.now),
+      })
+      .where(eq(chatTurns.id, turnId));
   };
 
   const completeTurn = async (threadId: Thread, turnId: Turn) => {
@@ -5923,7 +5948,44 @@ describe("undoing a turn's file changes", () => {
       desktop.received.filter(({ type }) => type === "folder.restore"),
     ).toHaveLength(1);
 
-    // The next run's request carries the note, and only that run's.
+    // A run that carries the note but is refused before the computer
+    // accepts it told nobody: the next run carries it again.
+    const noteOf = async () =>
+      (
+        await db
+          .select({
+            notedAt: desktopRunnerFolderRestores.notedAt,
+            notedRunId: desktopRunnerFolderRestores.notedRunId,
+          })
+          .from(desktopRunnerFolderRestores)
+          .where(eq(desktopRunnerFolderRestores.id, undo.restoreId))
+      ).at(0);
+    const refusedTurn = await newTurn(threadId);
+    const refused = await startTurnRun(desktop, desktopId, {
+      threadId,
+      turnId: refusedTurn,
+    });
+    expect(JSON.stringify(refused.messages.at(-1))).toContain(
+      FOLDER_RESTORED_NOTE,
+    );
+    expect(await noteOf()).toEqual({
+      notedAt: null,
+      notedRunId: refused.runId,
+    });
+    desktop.send({
+      type: "run.rejected",
+      runId: refused.runId,
+      reason: "at_capacity",
+    });
+    await waitForExternalState({
+      description: "the refused run is stored as rejected",
+      read: async () => (await runState(refused.runId))?.state === "rejected",
+    });
+    expect((await noteOf())?.notedAt).toBeNull();
+    await cancelUndoTurn(refusedTurn);
+
+    // The next run's request carries the note, told once the computer
+    // accepts that run; later runs do not repeat it.
     const next = await newTurn(threadId);
     const told = await startTurnRun(desktop, desktopId, {
       threadId,
@@ -5932,12 +5994,12 @@ describe("undoing a turn's file changes", () => {
     expect(JSON.stringify(told.messages.at(-1))).toContain(
       FOLDER_RESTORED_NOTE,
     );
-    const [row] = await db
-      .select({ notedAt: desktopRunnerFolderRestores.notedAt })
-      .from(desktopRunnerFolderRestores)
-      .where(eq(desktopRunnerFolderRestores.id, undo.restoreId));
-    expect(row?.notedAt).toBeInstanceOf(Date);
+    expect(await noteOf()).toEqual({ notedAt: null, notedRunId: told.runId });
     desktop.send({ type: "run.accepted", runId: told.runId });
+    await waitForExternalState({
+      description: "the accepted run's note is told",
+      read: async () => (await noteOf())?.notedAt ?? null,
+    });
     desktop.send({
       type: "run.finished",
       runId: told.runId,
@@ -5952,6 +6014,84 @@ describe("undoing a turn's file changes", () => {
       turnId: await newTurn(threadId),
     });
     expect(JSON.stringify(after.messages)).not.toContain(FOLDER_RESTORED_NOTE);
+    await desktop.close();
+  });
+
+  test("a member who left a matter the thread holds data of can neither read nor ask an undo", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread([ids.wsA2]);
+    const { turnId, runId } = await finishedTurn(desktop, desktopId, {
+      threadId,
+    });
+    const handlerContext = (access: "member" | "revoked") =>
+      asTestRaw<never>({
+        params: { threadId, turnId },
+        safeDb: createMembershipSafeDb(db, {
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          serverValidatedWorkspaceIds: [],
+        }),
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
+          await Promise.resolve(
+            access === "member" ? { id: workspaceId, status: "active" } : null,
+          ),
+        recordAuditEvent: async () => await Promise.resolve(),
+        createAuditRecorder: () => async () => await Promise.resolve(),
+        memberRole: sessionMemberRole("member"),
+        request: new Request("https://example.test/chat"),
+        route: "/chat/threads/:threadId/turns/:turnId/local-files/undo",
+        path: "/chat",
+        headers: {},
+        server: null,
+        set: createResponseSet(),
+        status: httpStatus,
+      });
+    const undoControl = () => control;
+    const readUndo = createReadLocalFilesUndo({ control: undoControl });
+    const askUndo = createUndoLocalFiles({ control: undoControl });
+    /** The status code a refused request answers. */
+    const statusOf = (result: unknown) =>
+      isRecord(result) && typeof result["code"] === "number"
+        ? result["code"]
+        : null;
+
+    await db
+      .delete(workspaceMembers)
+      .where(eq(workspaceMembers.id, ids.memberA1wsA2));
+    try {
+      expect(statusOf(await readUndo.handler(handlerContext("revoked")))).toBe(
+        404,
+      );
+      expect(statusOf(await askUndo.handler(handlerContext("revoked")))).toBe(
+        404,
+      );
+      expect(
+        await db
+          .select({ id: desktopRunnerFolderRestores.id })
+          .from(desktopRunnerFolderRestores)
+          .where(eq(desktopRunnerFolderRestores.chatTurnId, turnId)),
+      ).toEqual([]);
+    } finally {
+      await db.insert(workspaceMembers).values({
+        id: ids.memberA1wsA2,
+        workspaceId: ids.wsA2,
+        userId: ids.userA1,
+      });
+    }
+
+    // With the membership back, the same turn reads as undoable and its undo
+    // reaches the computer.
+    expect(await readUndo.handler(handlerContext("member"))).toEqual({
+      undoable: true,
+      undo: null,
+    });
+    expect(await askUndo.handler(handlerContext("member"))).toMatchObject({
+      status: "accepted",
+      undo: { state: "queued" },
+    });
+    expect((await desktop.receive("folder.restore")).runId).toBe(runId);
     await desktop.close();
   });
 
