@@ -91,19 +91,19 @@ legal_list_claims.qualifiers                                   jsonb            
 legal_list_claims.created_at                                   timestamptz      default,not null  lists-verification.ts:396
 ```
 
-## legal_list_claim_review_events · `legalListClaimReviewEvents` · lists-verification.ts:486 · rls
+## legal_list_claim_review_events · `legalListClaimReviewEvents` · lists-verification.ts:487 · rls
 
 Reviewer actions on a claim, append-only.
 
 ```text
-legal_list_claim_review_events.{...entityFeatureGateColumns()}              spread                             lists-verification.ts:489
-legal_list_claim_review_events.{...entityFeatureOrganizationGateColumns()}  spread                             lists-verification.ts:490
-legal_list_claim_review_events.id                                           pUuid            pk,not null       lists-verification.ts:491
-legal_list_claim_review_events.workspace_id                                 safeWorkspaceId  fk,not null       lists-verification.ts:492
-legal_list_claim_review_events.run_id                                       safeUuid         fk,not null       lists-verification.ts:493
-legal_list_claim_review_events.claim_id                                     safeUuid         fk,not null       lists-verification.ts:494
-legal_list_claim_review_events.kind                                         text             not null          lists-verification.ts:495
-legal_list_claim_review_events.payload                                      jsonb            not null          lists-verification.ts:496
-legal_list_claim_review_events.actor_id                                     text             fk,null           lists-verification.ts:497
-legal_list_claim_review_events.created_at                                   timestamptz      default,not null  lists-verification.ts:503  The insert's own clock, not the transaction's start: events are folded in this order, and a reviewer whose transaction began earlier but took the claim's lock…
+legal_list_claim_review_events.{...entityFeatureGateColumns()}              spread                             lists-verification.ts:490
+legal_list_claim_review_events.{...entityFeatureOrganizationGateColumns()}  spread                             lists-verification.ts:491
+legal_list_claim_review_events.id                                           pUuid            pk,not null       lists-verification.ts:492
+legal_list_claim_review_events.workspace_id                                 safeWorkspaceId  fk,not null       lists-verification.ts:493
+legal_list_claim_review_events.run_id                                       safeUuid         fk,not null       lists-verification.ts:494
+legal_list_claim_review_events.claim_id                                     safeUuid         fk,not null       lists-verification.ts:495
+legal_list_claim_review_events.kind                                         text             not null          lists-verification.ts:496
+legal_list_claim_review_events.payload                                      jsonb            not null          lists-verification.ts:497
+legal_list_claim_review_events.actor_id                                     text             fk,null           lists-verification.ts:498
+legal_list_claim_review_events.created_at                                   timestamptz      default,not null  lists-verification.ts:504  The insert's own clock, not the transaction's start: events are folded in this order, and a reviewer whose transaction began earlier but took the claim's lock…
 ```
