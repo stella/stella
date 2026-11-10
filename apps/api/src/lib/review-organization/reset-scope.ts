@@ -135,6 +135,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "correspondence_drop_logs",
   "correspondence_filers",
   "desktop_presence",
+  "desktop_runner_folder_restores",
   "desktop_runner_runs",
   "desktop_runners",
   "desktop_time_entry_batches",
@@ -219,7 +220,12 @@ export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_R
   [
     // A desktop's presence and its runner rows: device bookkeeping the owner
     // removes directly, with the runs' commands and events by cascade.
-    ["desktop_presence", "desktop_runner_runs", "desktop_runners"],
+    [
+      "desktop_presence",
+      "desktop_runner_folder_restores",
+      "desktop_runner_runs",
+      "desktop_runners",
+    ],
     // The member's standing approvals, for websites and for tools: both
     // member-scoped, keyed on the same member and organization.
     ["chat_browser_site_grants", "chat_tool_grants"],

@@ -34,7 +34,16 @@ import {
  * closed value plus rejected ones; the desktop's serde types round-trip the
  * same file, so either side drifting fails its tests.
  */
-export const DESKTOP_RUNNER_PROTOCOL = { current: 1, minimum: 1 } as const;
+export const DESKTOP_RUNNER_PROTOCOL = { current: 2, minimum: 1 } as const;
+
+/**
+ * The first protocol with `folder.restore` and `folder.restored`. A desktop
+ * on an older one still runs turns, is never sent a restore, and an undo of
+ * a turn it ran is refused as `desktop_update_required`. Once a desktop
+ * release that speaks this protocol is published, `minimum` rises to it and
+ * this boundary goes.
+ */
+export const DESKTOP_RUNNER_FOLDER_RESTORE_PROTOCOL = 2;
 
 /** Largest frame either side sends or accepts, in UTF-8 bytes. */
 export const DESKTOP_RUNNER_MAX_FRAME_BYTES = 4 * 1024 * 1024;
@@ -216,6 +225,7 @@ export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {
   runEvent: "run.event",
   runApprovalRequest: "run.approval_request",
   runFinished: "run.finished",
+  folderRestored: "folder.restored",
 } as const;
 
 export const DESKTOP_RUNNER_SERVER_MESSAGE = {
@@ -230,7 +240,30 @@ export const DESKTOP_RUNNER_SERVER_MESSAGE = {
   runCancel: "run.cancel",
   runToken: "run.token",
   ack: "ack",
+  folderRestore: "folder.restore",
 } as const;
+
+/**
+ * How a folder restore ended on the computer: done, no checkpoint for the
+ * run, a newer checkpoint not undone yet, a run using the folder, or a
+ * failure that left the folder as it was before the restore. A restore asked
+ * again after it was done answers `restored` again without touching the
+ * folder.
+ */
+export const DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS = [
+  "no_checkpoint",
+  "not_newest",
+  "folder_busy",
+  "failed",
+] as const;
+export type DesktopRunnerFolderRestoreRefusal =
+  (typeof DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS)[number];
+export const DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES = [
+  "restored",
+  ...DESKTOP_RUNNER_FOLDER_RESTORE_REFUSALS,
+] as const;
+export type DesktopRunnerFolderRestoreOutcome =
+  (typeof DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES)[number];
 
 export const DESKTOP_RUNNER_HARNESS_STATE = {
   ready: "ready",
@@ -280,6 +313,7 @@ export const DESKTOP_RUNNER_REJECT_REASONS = [
   "at_capacity",
   "run_too_large",
   "unknown_run",
+  "folder_busy",
 ] as const;
 
 export const DESKTOP_RUNNER_APPROVAL_KINDS = [
@@ -741,6 +775,12 @@ export const desktopRunnerDesktopMessageSchema = v.variant("type", [
     /** The harness session a later run resumes; `null` if none started. */
     harnessSessionId: harnessSessionIdSchema,
   }),
+  /** How a `folder.restore` ended; it names no file. */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored),
+    restoreId: v.pipe(v.string(), v.uuid()),
+    outcome: v.picklist(DESKTOP_RUNNER_FOLDER_RESTORE_OUTCOMES),
+  }),
 ]);
 export type DesktopRunnerDesktopMessage = v.InferOutput<
   typeof desktopRunnerDesktopMessageSchema
@@ -848,6 +888,18 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.ack),
     runId: runIdSchema,
     seq: seqSchema,
+  }),
+  /**
+   * Put a chat's folder back as it was before the run, from the checkpoint the
+   * run took. Not a run command: it is sent to the run's computer whether or
+   * not a run is open, again on a new socket until it is answered, and the
+   * answer is `folder.restored` with the same `restoreId`.
+   */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.folderRestore),
+    restoreId: v.pipe(v.string(), v.uuid()),
+    folderId: v.pipe(v.string(), v.uuid()),
+    runId: runIdSchema,
   }),
 ]);
 export type DesktopRunnerServerMessage = v.InferOutput<
