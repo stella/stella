@@ -354,6 +354,7 @@ export class Holder {
       case "run.interrupt":
       case "run.cancel":
       case "run.token":
+      case "folder.restore":
         this.host.handle(message);
         return;
       default:

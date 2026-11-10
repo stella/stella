@@ -503,8 +503,7 @@ export default defineConfig(({ mode, command }) => {
             }
             if (
               id.includes("node_modules/@tanstack/ai/") ||
-              id.includes("node_modules/@tanstack/ai-client/") ||
-              id.includes("node_modules/@tanstack/ai-react/")
+              id.includes("node_modules/@tanstack/ai-client/")
             ) {
               // Let the chat boundary own its SDK graph; the eager router/query
               // vendor must never pull the AI runtime into every route.

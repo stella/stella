@@ -6,6 +6,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import {
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 
@@ -58,12 +59,16 @@ import {
 import { RELEASE_SCRIPT } from "@/api/lib/rate-limit/concurrency-lease";
 import { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
+import { createCompatCorpusContinuation } from "@/api/mcp/compat-corpus";
 import type { McpMode } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
+import { createLegislationContinuation } from "@/api/mcp/legislation-tools";
+import { CONTINUABLE_PUBLIC_READ_TOOLS } from "@/api/mcp/public-read-continuation";
 import {
   LAW_MCP_TOOL_DISPOSITION,
   MCP_PUBLIC_CORPUS_CLASS,
 } from "@/api/mcp/static-tool-definitions";
+import { createCaseLawContinuation } from "@/api/mcp/stella-tools";
 import type { McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import {
@@ -74,6 +79,7 @@ import {
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { createFakeContinuationStore } from "@/api/tests/helpers/fake-continuation-store";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -114,6 +120,8 @@ const EXPECTED_ENVELOPE = {
 const originalFetch = globalThis.fetch;
 const originalPublicLaw = env.FEATURE_PUBLIC_LAW;
 
+const slowEngineAnswers: PromiseWithResolvers<Response>[] = [];
+
 beforeEach(() => {
   // The index is gone: every request to it is refused before an answer.
   testFetchState.set(
@@ -131,6 +139,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // A continued read outlives its call; it must not hold the read slots of
+  // the next test.
+  for (const answer of slowEngineAnswers) {
+    answer.reject(new Error("The test ended"));
+  }
+  slowEngineAnswers.length = 0;
   testFetchState.restore();
   env.FEATURE_PUBLIC_LAW = originalPublicLaw;
 });
@@ -489,6 +503,7 @@ describe("search_index_unavailable", () => {
  * aborts, so only a deadline ends the wait.
  */
 const installSlowEngine = (): void => {
+  slowEngineAnswers.length = 0;
   testFetchState.set(
     Object.assign(
       async (
@@ -498,6 +513,7 @@ const installSlowEngine = (): void => {
         const signal =
           init?.signal ?? panic("Search requires a timeout signal");
         const answer = Promise.withResolvers<Response>();
+        slowEngineAnswers.push(answer);
         signal.addEventListener(
           "abort",
           () => {
@@ -512,6 +528,31 @@ const installSlowEngine = (): void => {
   );
 };
 
+/** A continuation of its own, so a run a test leaves behind stays there. */
+const withFreshContinuations = (
+  context: ReturnType<typeof createContext>,
+): ReturnType<typeof createContext> => ({
+  ...context,
+  testDependencies: {
+    ...context.testDependencies,
+    caseLawSearchContinuation: createCaseLawContinuation({
+      store: createFakeContinuationStore().store,
+    }),
+    legislationSearchContinuation: createLegislationContinuation({
+      store: createFakeContinuationStore().store,
+    }),
+    compatCorpusContinuation: createCompatCorpusContinuation({
+      store: createFakeContinuationStore().store,
+    }),
+  },
+});
+
+/** What a continued tool answers when its read has not finished. */
+const continuedAnswer = (toolName: string): Record<string, unknown> =>
+  toolName === "search"
+    ? { paginationOutcome: SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET }
+    : { status: "running" };
+
 /** A tool call inside the latency scope the MCP server opens for it. */
 const callWithinBudget = async (
   tool: (typeof INDEX_BACKED_TOOLS)[number],
@@ -522,7 +563,7 @@ const callWithinBudget = async (
     async () =>
       await handleMcpToolCall({
         args: tool.args,
-        context: createContext(),
+        context: withFreshContinuations(createContext()),
         mode: tool.mode,
         toolName: tool.toolName,
       }),
@@ -534,12 +575,29 @@ describe("a search the tool's latency budget ends is a timeout", () => {
       installSlowEngine();
       const startedAt = performance.now();
 
-      const result = await callWithinBudget(tool, 50);
+      // A query of its own: this engine never answers, and a later test must
+      // not join the search it leaves behind.
+      const result = await callWithinBudget(
+        {
+          ...tool,
+          args:
+            "queries" in tool.args
+              ? { ...tool.args, queries: ["slow engine"] }
+              : { ...tool.args, query: "slow engine" },
+        },
+        50,
+      );
 
       // The tool's budget ended the wait, not the search's own 30 s.
       expect(performance.now() - startedAt).toBeLessThan(
         CORPUS_INDEX_SEARCH_TIMEOUT_MS,
       );
+      if (CONTINUABLE_PUBLIC_READ_TOOLS.has(tool.toolName)) {
+        // The caller is told the search continues; nothing timed out for it.
+        expect(result.isError).not.toBe(true);
+        expect(payloadOf(result)).toMatchObject(continuedAnswer(tool.toolName));
+        return;
+      }
       expect(result.isError).toBe(true);
       expect(payloadOf(result)).toMatchObject({
         error: { code: "public_read_timeout", retryable: true },
@@ -557,7 +615,14 @@ describe("a search the tool's latency budget ends is a timeout", () => {
 
   for (const tool of INDEX_BACKED_TOOLS) {
     test(`${tool.toolName} (${tool.mode}) maps a returned timeout envelope to a retryable timeout`, async () => {
-      const context = createContext();
+      const base = withFreshContinuations(createContext());
+      const context = {
+        ...base,
+        testDependencies: {
+          ...base.testDependencies,
+          publicReadResponseDeadlineMs: 20,
+        },
+      };
       const timedOut = async () =>
         await Promise.resolve(
           publicReadTimeoutResponse({
@@ -579,12 +644,17 @@ describe("a search the tool's latency budget ends is a timeout", () => {
         toolName: tool.toolName,
       });
 
+      if (CONTINUABLE_PUBLIC_READ_TOOLS.has(tool.toolName)) {
+        expect(result.isError).not.toBe(true);
+        expect(payloadOf(result)).toMatchObject(continuedAnswer(tool.toolName));
+        return;
+      }
       expect(result.isError).toBe(true);
       // search_case_law answers its own timeouts with a case-law-specific hint.
       expect(payloadOf(result)).toMatchObject({
         error:
           tool.toolName === "search_case_law"
-            ? { code: "upstream_unavailable", retryable: true }
+            ? { code: "public_read_timeout", retryable: true }
             : {
                 code: "public_read_timeout",
                 hint: PUBLIC_READ_TIMEOUT_HINT,
@@ -713,7 +783,9 @@ describe("public corpus statement budgets", () => {
           },
           dispatchGatewayToolCall: async () => {
             exercised.push(toolName);
-            expect(admitted.at(-1)).toBe(toolName);
+            if (!CONTINUABLE_PUBLIC_READ_TOOLS.has(toolName)) {
+              expect(admitted.at(-1)).toBe(toolName);
+            }
             expect(getPublicReadSignal()).toBeDefined();
             const corpusClass = classes.get(toolName);
             if (corpusClass === undefined) {
@@ -733,7 +805,11 @@ describe("public corpus statement budgets", () => {
       expect(getPublicReadStatementTimeoutMs()).toBeUndefined();
     }
     expect(exercised.toSorted()).toEqual([...classes.keys()].toSorted());
-    expect(admitted.toSorted()).toEqual(exercised.toSorted());
+    expect(admitted.toSorted()).toEqual(
+      exercised
+        .filter((name) => !CONTINUABLE_PUBLIC_READ_TOOLS.has(name))
+        .toSorted(),
+    );
   });
 
   test("upstream-only dispatch does not acquire a public-read budget", async () => {
@@ -759,8 +835,8 @@ describe("public corpus statement budgets", () => {
   test("busy public reads return retry advice without dispatching", async () => {
     let dispatched = false;
     const result = await handleMcpToolCall({
-      toolName: "search_case_law",
-      args: { country: "CZE", queries: ["smlouva"] },
+      toolName: "read_statute",
+      args: { eli: "eli/cz/sb/2006/262" },
       context: createContext(),
       dependencies: {
         admitPublicRead: async () =>
@@ -797,7 +873,7 @@ describe("public corpus statement budgets", () => {
     } satisfies CallToolResult;
     try {
       const result = await handleMcpToolCall({
-        toolName: "search_case_law",
+        toolName: "read_statute",
         args: {},
         context: createContext(),
         dependencies: {
@@ -837,8 +913,8 @@ describe("public corpus statement budgets", () => {
   test("a public-read lease cancellation keeps its typed admission outcome", async () => {
     const context = createContext();
     const result = await handleMcpToolCall({
-      toolName: "search_case_law",
-      args: { country: "CZE", queries: ["smlouva"] },
+      toolName: "search",
+      args: { query: "smlouva" },
       context: {
         ...context,
         testDependencies: {
@@ -859,7 +935,7 @@ describe("public corpus statement budgets", () => {
     });
   });
 
-  test("one case-law search with several queries acquires one caller slot", async () => {
+  test("one case-law search with several queries takes no per-caller lease", async () => {
     let slots = 0;
     const queries = ["smlouva", "nájem", "škoda"];
     const searched: string[] = [];
@@ -871,8 +947,10 @@ describe("public corpus statement budgets", () => {
         ...context,
         testDependencies: {
           ...context.testDependencies,
+          caseLawSearchContinuation: createCaseLawContinuation({
+            store: createFakeContinuationStore().store,
+          }),
           searchDecisionsHandler: async ({ body }) => {
-            expect(slots).toBe(1);
             searched.push(body.query);
             return {
               hits: [],
@@ -899,20 +977,28 @@ describe("public corpus statement budgets", () => {
         dispatchGatewayToolCall: async () => null,
       },
     });
-    expect(slots).toBe(1);
+    // The continuation holds the caller to its concurrency, per run.
+    expect(slots).toBe(0);
     expect(searched.toSorted()).toEqual(queries.toSorted());
     expect(result.isError).not.toBe(true);
   });
 
-  test("a cancelled corpus search is retryable and transient without a defect", async () => {
+  test("a cancelled corpus search answers cut short, without a defect", async () => {
     const analytics = installRecordingAnalytics();
     const logs = installRecordingLogger();
     resetFailureObservationsForTesting();
     try {
-      const context = createContext();
+      const base = withFreshContinuations(createContext());
+      const context = {
+        ...base,
+        testDependencies: {
+          ...base.testDependencies,
+          publicReadResponseDeadlineMs: 20,
+        },
+      };
       const result = await handleMcpToolCall({
-        toolName: "search_case_law",
-        args: { country: "CZE", queries: ["smlouva"] },
+        toolName: "search",
+        args: { query: "smlouva" },
         context: {
           ...context,
           testDependencies: {
@@ -931,27 +1017,12 @@ describe("public corpus statement budgets", () => {
           },
         },
       });
-      expect(result.isError).toBe(true);
-      expect(payloadOf(result)).toEqual({
-        error: {
-          code: "public_read_timeout",
-          message: "Public read timed out. Please try again.",
-          hint: "Retry with a narrower query or a smaller selection of public-law documents.",
-          retryable: true,
-        },
+      expect(result.isError).not.toBe(true);
+      expect(payloadOf(result)).toMatchObject({
+        paginationOutcome: SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
       });
       expect(analytics.exceptions()).toEqual([]);
       flushFailureObservations();
-      expect(
-        logs.records.filter(({ message }) => message === "failure.observed"),
-      ).toMatchObject([
-        {
-          attributes: {
-            "failure.grade": "transient",
-            "failure.reason": "public_read_timeout",
-          },
-        },
-      ]);
       expect(
         logs.records.some(
           ({ attributes }) => attributes?.["failure.grade"] === "defect",

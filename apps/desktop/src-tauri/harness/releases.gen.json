@@ -1,7 +1,8 @@
 {
   "pins": {
     "codex": "0.166.0",
-    "claudeAgentSdk": "0.3.309"
+    "claudeAgentSdk": "0.3.309",
+    "bun": "1.4.4"
   },
   "harnesses": {
     "codex": {
@@ -83,6 +84,49 @@
           "archiveBytes": 136346594,
           "target": "x86_64-pc-windows-msvc",
           "executable": "package/claude.exe"
+        }
+      }
+    }
+  },
+  "tools": {
+    "bun": {
+      "version": "1.4.4",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://registry.npmjs.org/@oven/bun-darwin-aarch64/-/bun-darwin-aarch64-1.4.4.tgz",
+          "digest": {
+            "sha512": "cd6fe1c7073cb090082c6c01e5e4c2e22e3ca2e1977f457896bc6610e93724813a2646155b54d9875136a487a6a6ab1ece05b5b1c9132080ee74538df1b27633"
+          },
+          "archiveBytes": 41545333,
+          "target": "aarch64-apple-darwin",
+          "executable": "package/bin/bun"
+        },
+        "darwin-x64": {
+          "url": "https://registry.npmjs.org/@oven/bun-darwin-x64-baseline/-/bun-darwin-x64-baseline-1.4.4.tgz",
+          "digest": {
+            "sha512": "bb34977244e734d4bb527d62862337d51ecfe622a7759eb9b7a663de223bd92adfa15dae23decc28cf33d6a7abda8447caa5c72d42094c8863faa4f951e123af"
+          },
+          "archiveBytes": 43895192,
+          "target": "x86_64-apple-darwin",
+          "executable": "package/bin/bun"
+        },
+        "win32-arm64": {
+          "url": "https://registry.npmjs.org/@oven/bun-windows-aarch64/-/bun-windows-aarch64-1.4.4.tgz",
+          "digest": {
+            "sha512": "9f47a9e5944f099635f9da852699e7454641d70cb819853a02df1117ea72cf24822e390df51e2b161d8fb411c0805fe5835bce977fc2784477a4333ea78d004c"
+          },
+          "archiveBytes": 50843293,
+          "target": "aarch64-pc-windows-msvc",
+          "executable": "package/bin/bun.exe"
+        },
+        "win32-x64": {
+          "url": "https://registry.npmjs.org/@oven/bun-windows-x64-baseline/-/bun-windows-x64-baseline-1.4.4.tgz",
+          "digest": {
+            "sha512": "73ed7af55fa895edbdb24e46a45ba1e90e2e370443aaef6d5d901551822c75f1997a225e76e434df4064c478b73e63698fbc3f79cdbea0eda8911155142f62d6"
+          },
+          "archiveBytes": 55606170,
+          "target": "x86_64-pc-windows-msvc",
+          "executable": "package/bin/bun.exe"
         }
       }
     }

@@ -8,7 +8,6 @@ import {
   type ChatLocalRunHarness,
   type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
-import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   MenuGroup,
@@ -26,7 +25,10 @@ import {
   CHAT_LOCAL_HARNESS_NAMES,
   type ChatLocalHarnessOption,
   chatLocalHarnessOptions,
+  LOCAL_RUN_PERMISSION_KEYS,
+  localRunMaxApprovals,
   localRunTargetFor,
+  type PermissionAvailability,
   permissionView,
   runTargetValue,
   sameRunTarget,
@@ -50,22 +52,13 @@ const UNAVAILABLE_LABEL_KEY = {
   offline: "chat.localRun.stateOffline",
 } as const satisfies Record<UnavailableState, TranslationKey>;
 
-const PERMISSION_KEYS = {
-  ask: {
-    label: "common.ask",
-    description: "chat.localRun.permissionAskDescription",
-  },
-  auto: {
-    label: "chat.modelSelector.autoLabel",
-    description: "chat.localRun.permissionAutoDescription",
-  },
-  full_auto: {
-    label: "chat.localRun.permissionFullAuto",
-    description: "chat.localRun.permissionFullAutoDescription",
-  },
+/** Why a permission mode cannot be chosen, in its description's place. */
+const UNAVAILABLE_PERMISSION_KEY = {
+  computer: "chat.localRun.permissionUnavailable",
+  organization: "chat.localRun.permissionAboveLimit",
 } as const satisfies Record<
-  DesktopRunnerApprovalMode,
-  { label: TranslationKey; description: TranslationKey }
+  Exclude<PermissionAvailability, "available">,
+  TranslationKey
 >;
 
 /** How a harness that runs in one mode behaves, said once in its place. */
@@ -106,10 +99,11 @@ export const ChatRunTargetMenu = ({
   // the menu offers only stella's own models, as it does without the feature.
   // A thread already set to run on a computer always keeps the way back to
   // stella cloud, since stella's models are not listed while it runs there.
+  const readiness =
+    runnersView.type === "items" ? runnersView.items : undefined;
   const options =
-    chatLocalHarnessOptions(
-      runnersView.type === "items" ? runnersView.items : undefined,
-    ) ?? (selected.kind === "local" ? [] : null);
+    chatLocalHarnessOptions(readiness) ??
+    (selected.kind === "local" ? [] : null);
   if (options === null) {
     return null;
   }
@@ -119,7 +113,8 @@ export const ChatRunTargetMenu = ({
       onSelect(target);
     }
   };
-  const permissions = permissionView(selected, options);
+  const maxApprovals = localRunMaxApprovals(readiness);
+  const permissions = permissionView(selected, options, maxApprovals);
 
   const stateLabel = (option: ChatLocalHarnessOption) => {
     switch (option.state) {
@@ -189,6 +184,7 @@ export const ChatRunTargetMenu = ({
                       selected,
                       option,
                       model: model.id,
+                      maxApprovals,
                     });
                     return (
                       <MenuRadioItem
@@ -224,19 +220,19 @@ export const ChatRunTargetMenu = ({
           <MenuSeparator />
           <MenuRadioGroup value={selected.approvals}>
             <MenuGroupLabel>{t("chat.localRun.permissions")}</MenuGroupLabel>
-            {permissions.modes.map(({ mode, available }) => (
+            {permissions.modes.map(({ mode, availability }) => (
               <MenuRadioItem
-                disabled={!available}
+                disabled={availability !== "available"}
                 key={mode}
                 onClick={() => choose({ ...selected, approvals: mode })}
                 value={mode}
               >
                 <span className="flex min-w-0 flex-col py-0.5">
-                  <span>{t(PERMISSION_KEYS[mode].label)}</span>
+                  <span>{t(LOCAL_RUN_PERMISSION_KEYS[mode].label)}</span>
                   <span className="text-muted-foreground text-2xs text-pretty">
-                    {available
-                      ? t(PERMISSION_KEYS[mode].description)
-                      : t("chat.localRun.permissionUnavailable")}
+                    {availability === "available"
+                      ? t(LOCAL_RUN_PERMISSION_KEYS[mode].description)
+                      : t(UNAVAILABLE_PERMISSION_KEY[availability])}
                   </span>
                 </span>
               </MenuRadioItem>

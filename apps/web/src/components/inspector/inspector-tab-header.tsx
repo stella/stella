@@ -130,16 +130,18 @@ export const InspectorTabHeader = ({
       className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3"
       data-slot="inspector-panel-header"
     >
-      {/* Only the label clips: the field's focus ring is drawn outside it. */}
+      {/* Only the label clips: the field's focus ring is drawn outside it.
+          On a phone the box itself starts a little early, so the back
+          button sits optically flush with the edge and is not clipped. */}
       <div
         className={cn(
-          "flex min-w-0 items-center gap-2",
+          "flex min-w-0 items-center gap-2 max-md:-ms-1",
           !renaming && "overflow-hidden",
         )}
       >
         <Button
           aria-label={tCommon("back")}
-          className="-ms-1 md:hidden"
+          className="md:hidden"
           onClick={() => setMinimized(true)}
           size="icon-sm"
           title={tCommon("back")}

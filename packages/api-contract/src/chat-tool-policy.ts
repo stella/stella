@@ -41,6 +41,8 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   use_connector_secret: CHAT_TOOL_POLICY_KIND.external,
   // Chat-only presentation: its private attachment belongs to this chat turn.
   show_visual: CHAT_TOOL_POLICY_KIND.internal,
+  // Chat-only presentation of a read this turn already ran; it reads nothing.
+  show_app: CHAT_TOOL_POLICY_KIND.internal,
   boe_find_related_laws: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law_block: CHAT_TOOL_POLICY_KIND.publicOfficial,

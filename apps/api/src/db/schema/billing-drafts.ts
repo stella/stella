@@ -1,3 +1,4 @@
+import { accountErasureUserOwnerPolicies } from "@/api/db/account-erasure-policies";
 import { billingGuidelinePolicies } from "@/api/db/rls";
 
 import {
@@ -30,6 +31,7 @@ export const billingDraftUserSettings = p.pgTable(
   (table) => [
     p.primaryKey({ columns: [table.organizationId, table.userId] }),
     ...userOrganizationPolicies(),
+    ...accountErasureUserOwnerPolicies("billing_draft_user_settings"),
   ],
 );
 

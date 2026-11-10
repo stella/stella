@@ -73,6 +73,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Organization data-box settings support matter correspondence on every deployment",
   ],
   [
+    "/smoke/scheduled-jobs",
+    "Release-proof route gated by the smoke secret and the staging deployment origin, not by a feature flag",
+  ],
+  [
     "/v1/organizations",
     "Authenticated account holders can create organizations on every deployment",
   ],
@@ -105,12 +109,20 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "The member's own unfinished chat runs are readable on every deployment that serves chat",
   ],
   [
+    "/v1/chat/browser-site-grants",
+    "A member's standing website approvals for chat's browser actions are listed, added and removed on every deployment that serves chat; the browser tool itself needs the member's paired extension",
+  ],
+  [
     "/v1/chat/local-runners",
     "The chat computer list is mounted on every deployment and answers hidden unless the member's local-agents feature decision is enabled",
   ],
   [
     "/v1/chat/local-runs",
     "A run's output upload authenticates the run's agent token on every deployment; a run exists only once the member's local-agents feature let it start",
+  ],
+  [
+    "/v1/organization-settings/local-runs",
+    "An administrator's limit on local run permissions is settable on every deployment; it only narrows turns the member's local-agents feature lets start",
   ],
   [
     "/v1/desktop/time-entries",

@@ -382,6 +382,15 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     owner: "scoped",
     retention: "cleared",
   },
+  // Browser commands a website approval answered, with the websites allowed
+  // then, so their result is checked after a reload too.
+  {
+    area: "session",
+    prefix: "stella.chat.browserSiteGrantApprovals",
+    restoration: "data",
+    owner: "scoped",
+    retention: "cleared",
+  },
 ];
 
 export const DEVICE_STORAGE_FAMILIES = [

@@ -1,5 +1,11 @@
 # @stll/auth-model
 
+## 0.7.1
+
+### Patch Changes
+
+- [#6568](https://github.com/stella/stella/pull/6568) [`d61016a`](https://github.com/stella/stella/commit/d61016a6d30def831c2d1657b1e895b8f409d3f3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The opaque organization slug's random source takes an ArrayBuffer-backed byte view, so the module type-checks under both the Node and DOM declarations of `crypto.getRandomValues`.
+
 ## 0.7.0
 
 ### Minor Changes

@@ -2,6 +2,7 @@ import { toolDefinition } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai";
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { createPipelineContext } from "@stll/anonymize";
@@ -9,6 +10,7 @@ import { AI_ERROR_KINDS } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { usageEvents } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { deanonymizeFromBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -25,6 +27,7 @@ import {
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { usageUnitsFromTokens } from "@/api/lib/usage/unit-model";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
 import { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
 import {
@@ -44,6 +47,7 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import { runSubagent, subagentRunErrorMessage } from "./subagent-runner";
 import type { RunSubagentOptions } from "./subagent-runner";
@@ -77,10 +81,12 @@ const ANSWER_STEP_USAGE = {
 
 let ids: TestIds;
 let safeDb: SafeDb;
+let testDb: TestDatabase;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   ids = fixture.ids;
+  testDb = fixture.testDb;
   safeDb = toSafeDbMock(
     asTestRaw<ScopedDb>(
       createScopedDb(fixture.testDb, [ids.wsA1], ids.orgA, ids.userA1),
@@ -95,9 +101,10 @@ afterAll(async () => {
 type RunScriptedSubagentOverrides = Partial<
   Pick<
     RunSubagentOptions,
-    "systemSafe" | "systemUntrusted" | "thirdPartyBoundary"
+    "modelId" | "systemSafe" | "systemUntrusted" | "thirdPartyBoundary"
   >
 > & {
+  traceId?: string | undefined;
   /** Wraps the scripted transport, e.g. to record what the provider receives. */
   wrapAdapter?: ((adapter: AnyTextAdapter) => AnyTextAdapter) | undefined;
   admission?: ModelDispatchAdmission | undefined;
@@ -140,10 +147,11 @@ const runScriptedSubagent = async (
         safeDb,
         serviceTier: "standard",
         sessionId: Bun.randomUUIDv7(),
-        traceId: Bun.randomUUIDv7(),
+        traceId: overrides.traceId ?? Bun.randomUUIDv7(),
         userId: ids.userA1,
         workspaceId: ids.wsA1,
       },
+      modelId: overrides.modelId,
       organizationId: ids.orgA,
       admission: overrides.admission ?? testModelAdmission(ids.orgA),
       orgAIConfig,
@@ -372,6 +380,45 @@ describe("a subagent run across several model steps", () => {
         totalTokens: 275,
       },
     });
+  });
+});
+
+describe("a subagent run on a model its parent chose", () => {
+  test("meters usage at the chosen model's rate, not the task default's", async () => {
+    const traceId = Bun.randomUUIDv7();
+    const { result } = await runScriptedSubagent(
+      [
+        {
+          finishReason: "stop",
+          text: "Clause 12 allows termination for convenience.",
+          type: "text",
+          usage: ANSWER_STEP_USAGE,
+        },
+      ],
+      { modelId: "gpt-5.4", traceId },
+    );
+    expect(result).toMatchObject({ outcome: "completed" });
+
+    const ratedMicroUnits = (modelId: string) =>
+      usageUnitsFromTokens({
+        actionType: "subagent",
+        isByok: true,
+        modelId,
+        outputTokens: ANSWER_STEP_USAGE.completionTokens,
+        serviceTier: "standard",
+        uncachedInputTokens: ANSWER_STEP_USAGE.promptTokens,
+      }).rawUsageMicroUnits;
+    // short-text resolves to the org's fast override; the two rates must
+    // differ, or the row below cannot tell which model it was priced at.
+    expect(ratedMicroUnits("gpt-5.4")).not.toBe(
+      ratedMicroUnits(orgAIConfig.overrideModels.fast.modelId),
+    );
+
+    const rows = await testDb
+      .select({ rawUsageMicroUnits: usageEvents.rawUsageMicroUnits })
+      .from(usageEvents)
+      .where(eq(usageEvents.traceId, traceId));
+    expect(rows).toEqual([{ rawUsageMicroUnits: ratedMicroUnits("gpt-5.4") }]);
   });
 });
 

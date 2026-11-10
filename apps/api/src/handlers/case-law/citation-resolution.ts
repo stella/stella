@@ -824,8 +824,8 @@ const classificationCtes = (batch: SQL): SQL => sql`
  * different definitions of an honest link.
  *
  * `cited_decision_id` is written from the same CASE that writes the status, so
- * a resolved row always carries its target and an unresolved one never carries
- * a stale target from an earlier attempt.
+ * a resolved row carries its target and one answered unresolved carries none;
+ * a `pending` row may still hold the target it had before it was reopened.
  */
 const resolutionStatement = (selection: SQL): SQL => sql`
   WITH ${classificationCtes(sql`
@@ -1473,15 +1473,15 @@ export const reopenCitationsForKeys = async (
 };
 
 /**
- * Retract every edge drawn to a decision whose identity just changed.
+ * Re-queue every edge drawn to a decision whose identity just changed.
  *
- * The complement of `reopenCitationsForDecisionKey`, which deliberately
- * excludes the arriving decision's own links. A refresh that rewrites the case
- * number, the jurisdiction or the date changes what this decision is, and
- * every one of those three fields is a filter in the candidate join — so an
- * edge drawn under the old values was decided against a decision that no
- * longer exists in that form. It is not enough to announce the new key: the
- * old links point here, and nothing else would ever ask about them again.
+ * The complement of `reopenCitationsForDecisionKey`, which excludes the
+ * arriving decision's own links. A refresh rewriting the case number, the
+ * jurisdiction or the date changes what this decision is, and each is a
+ * filter in the candidate join, so these edges must be re-decided. The link
+ * stays until the resolver answers: clearing it empties the decision's
+ * incoming citations for as long as the queue takes, and most rows resolve
+ * to the same decision.
  *
  * Bounded by the cited-decision index, so the cost is this decision's incoming
  * citations rather than the table.
@@ -1495,7 +1495,6 @@ export const reopenCitationsResolvedTo = async (
     WITH retracted AS (
       UPDATE ${caseLawCitations}
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}::text,
-             cited_decision_id = NULL,
              resolution_rule_id = NULL
        WHERE cited_decision_id = ${decisionId}::uuid
          AND resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
@@ -1522,7 +1521,8 @@ export const reopenCitationsResolvedTo = async (
  *
  * Every non-pending row, not just the negatives: a date moving backwards
  * retracts, a date moving forwards revives, and this cannot tell which without
- * redoing the adjudication that the resolver owns.
+ * redoing the adjudication that the resolver owns. A `resolved` row keeps its
+ * link until that answer, as in `reopenCitationsResolvedTo`.
  *
  * Bounded by the citing index, so the cost is this decision's own citations.
  */
@@ -1535,7 +1535,6 @@ export const reopenCitationsFrom = async (
     WITH requeued AS (
       UPDATE ${caseLawCitations}
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}::text,
-             cited_decision_id = NULL,
              resolution_rule_id = NULL
        WHERE citing_decision_id = ${decisionId}::uuid
          AND resolution_status <> ${CITATION_RESOLUTION_STATUS.PENDING}
@@ -1557,6 +1556,7 @@ export const reopenCitationsFrom = async (
  *
  * Bounded by the caller's list, and the list is the caller's bound to keep;
  * this refuses an unbounded one by construction because it takes ids.
+ * Unlike the identity paths it clears the link: its callers want a new answer.
  */
 export const reopenCitations = async (
   tx: CitationGraphTransaction,

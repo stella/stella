@@ -89,6 +89,7 @@ fi
 case "$*" in
   *pulls?*) cat "$TEST_ROOT/pulls.json" ;;
   *statuses?*) cat "$TEST_ROOT/statuses.json" ;;
+  *actions/workflows/*/runs?*) printf '{"workflow_runs":[]}\\n' ;;
   *actions/runs/*) endpoint="\u0024{!#}"; cat "$TEST_ROOT/run-\u0024{endpoint##*/}.json" ;;
   *issues?*) printf '[[]]\\n' ;;
   *commits/*)

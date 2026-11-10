@@ -6,11 +6,11 @@
   "type": "module",
   "imports": {
     "#aho-corasick": {
-      "browser": "@stll/aho-corasick-wasm",
+      "browser": "./src/lib/platform/aho-corasick.browser.ts",
       "default": "@stll/aho-corasick"
     },
     "#regex-set": {
-      "browser": "@stll/regex-set-wasm",
+      "browser": "./src/lib/platform/regex-set.browser.ts",
       "default": "@stll/regex-set"
     }
   },
@@ -39,6 +39,7 @@
     "test:e2e:anonymized-export": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.anonymized-export.config.ts",
     "test:e2e:stack-redaction": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.stack-redaction.config.ts",
     "test:e2e:collab": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.collab.config.ts",
+    "test:e2e:phone": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.phone.config.ts --project phone-layout",
     "test:e2e:ui-playground": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.ui-playground.config.ts",
     "test:e2e:ui-playground:update": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.ui-playground.config.ts --update-snapshots=all",
     "test:e2e:marketing": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.marketing.config.ts --project app",
@@ -118,7 +119,6 @@
     "@t3-oss/env-core": "catalog:",
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-client": "catalog:",
-    "@tanstack/ai-react": "catalog:",
     "@tanstack/react-devtools": "^0.10.14",
     "@tanstack/react-form": "^1.33.5",
     "@tanstack/react-hotkeys": "^0.17.0",

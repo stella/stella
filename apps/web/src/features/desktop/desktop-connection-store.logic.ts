@@ -14,6 +14,12 @@ export type DesktopLinkOutcome =
   | { status: "approval-required" }
   | { status: "update-required" };
 
+/**
+ * How linking the account to the app ended: an outcome, or the failure the
+ * link reported. Named, so no caller infers it from the link's body.
+ */
+export type DesktopLinkResult = Result<DesktopLinkOutcome, unknown>;
+
 type DesktopConnectionOutcome = DesktopLinkOutcome | { status: "error" };
 
 export type DesktopConnectionState =
@@ -34,9 +40,7 @@ type DesktopLinkOptions = {
 
 type DesktopConnectionStoreOptions = {
   /** Link the account to a running app with a typed failure result. */
-  link: (
-    options: DesktopLinkOptions,
-  ) => Promise<Result<DesktopLinkOutcome, unknown>>;
+  link: (options: DesktopLinkOptions) => Promise<DesktopLinkResult>;
   /** Report a link failure; the store itself never throws into the UI. */
   onError: (error: unknown) => void;
 };

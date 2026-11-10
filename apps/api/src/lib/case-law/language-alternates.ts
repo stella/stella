@@ -16,6 +16,7 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * One language version of a decision, with everything its own public route
@@ -185,6 +186,85 @@ const groupPublicDecisionLanguageAlternates = (
 type ReadPublicDecisionLanguageAlternatesOptions = {
   caseLawDb: CaseLawPublicReadDb;
   languageGroupKeys: readonly string[];
+};
+
+/**
+ * The version of a decision to read instead of it, if any. A decision already
+ * in the language stays itself, and one missing from its own group's public
+ * list is left for the read gate to answer: it names no alternate.
+ */
+export const preferredLanguageVersionId = ({
+  id,
+  language,
+  alternates,
+  preferred,
+}: {
+  id: string;
+  language: string;
+  alternates: readonly PublicDecisionLanguageAlternate[];
+  preferred: string;
+}): string | undefined =>
+  normalizePublicDecisionLanguage(language) === preferred ||
+  !alternates.some((alternate) => alternate.id === id)
+    ? undefined
+    : alternates.find(
+        (alternate) =>
+          normalizePublicDecisionLanguage(alternate.language) === preferred,
+      )?.id;
+
+/**
+ * For each decision that has a version in `language` other than itself, the
+ * id of that version. A decision with none is absent from the answer.
+ */
+export const readPreferredLanguageVersionIds = async ({
+  caseLawDb,
+  decisionIds,
+  language: preferred,
+}: {
+  caseLawDb: CaseLawPublicReadDb;
+  decisionIds: readonly string[];
+  language: string;
+}): Promise<ReadonlyMap<string, string>> => {
+  const decisions = await caseLawDb(
+    async (tx) =>
+      await tx
+        .select({
+          id: publishedCaseLawDecisions.id,
+          language: publishedCaseLawDecisions.language,
+          languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+        })
+        .from(publishedCaseLawDecisions)
+        .where(
+          inArray(
+            publishedCaseLawDecisions.id,
+            decisionIds.map((id) => brandPersistedCaseLawDecisionId(id)),
+          ),
+        )
+        .limit(decisionIds.length),
+  );
+  const alternates = await readPublicDecisionLanguageAlternatesByGroup({
+    caseLawDb,
+    languageGroupKeys: [
+      ...new Set(
+        decisions.flatMap(({ languageGroupKey }) =>
+          languageGroupKey === null ? [] : [languageGroupKey],
+        ),
+      ),
+    ],
+  });
+  const versions = new Map<string, string>();
+  for (const { id, language, languageGroupKey } of decisions) {
+    const version = preferredLanguageVersionId({
+      id,
+      language,
+      alternates: alternates.alternatesFor(languageGroupKey),
+      preferred,
+    });
+    if (version !== undefined) {
+      versions.set(id, version);
+    }
+  }
+  return versions;
 };
 
 /** Alternates for a page of hits, keyed by language group. */

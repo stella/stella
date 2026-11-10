@@ -218,8 +218,14 @@ describe("a challenge the desktop app just opened", () => {
 
     // The connection store is shared by the module, so the attempt ends on an
     // outcome that returns it to idle: shuffled tests must not inherit a link.
+    // Built outside the call, as the test above builds its outcome: inferred
+    // inside `resolve`, its error type comes from the union the deferred
+    // takes, which the checker does not resolve the same way every run.
+    const approvalRequired = Result.ok({
+      status: "approval-required",
+    } as const);
     await act(async () => {
-      settled.resolve(Result.ok({ status: "approval-required" }));
+      settled.resolve(approvalRequired);
       await settled.promise;
     });
     expect(
