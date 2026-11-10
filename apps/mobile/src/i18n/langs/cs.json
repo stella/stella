@@ -151,7 +151,11 @@
     "scanDocument": "Naskenovat dokument",
     "newTask": "Nový úkol",
     "uploadDocument": "Nahrát dokument",
-    "uploadFailed": "Dokument se nepodařilo nahrát. Zkuste to znovu."
+    "uploadFailed": "Dokument se nepodařilo nahrát. Zkuste to znovu.",
+    "startTimer": "Spustit časovač",
+    "pauseTimer": "Pozastavit časovač",
+    "resumeTimer": "Pokračovat v časovači",
+    "timerRunning": "Časovač běží"
   },
   "entity": {
     "type": "Typ",
@@ -351,5 +355,13 @@
     "share": "Sdílet",
     "cancel": "Zrušit",
     "openFailed": "Odkaz se nepodařilo otevřít."
+  },
+  "share": {
+    "title": "Přidat do stelly",
+    "start": "Začít",
+    "uploading": "Nahrávám {done} z {total}…",
+    "filesOnly": "Uloží se jen soubory; odkazy a text se vynechají.",
+    "unavailableTitle": "Není co přidat",
+    "unavailable": "Tato sdílená položka už tu není. Sdílejte ji znovu z druhé aplikace."
   }
 }

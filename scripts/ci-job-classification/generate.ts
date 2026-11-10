@@ -6,7 +6,11 @@ import * as v from "valibot";
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { readDecisions } from "./decisions";
-import { approvalPathForKey, decisionPathForKey } from "./inputs";
+import {
+  approvalPathForKey,
+  CLASSIFICATION_DECISIONS_PATH,
+  decisionPathForKey,
+} from "./inputs";
 import {
   deriveJobPrivileges,
   expectedJobDigest,
@@ -24,6 +28,7 @@ import {
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
 import { isRepositoryWritingJob, ReviewRequiredError } from "./review";
+import { readFilesAtRevision } from "./revision-files";
 import { AdmissionError, parseDocument } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
@@ -143,9 +148,29 @@ export const readClassificationInputsAtRevision = (
   revision: string,
   { observeRead }: ReadClassificationInputsOptions = {},
 ) => {
+  // Workflows, local actions and the source manifest all live under .github,
+  // so one batched read serves them; anything else falls back to git show.
+  // Decision files are read by readDecisions, so they are left out here.
+  let githubFiles: Map<string, string> | undefined;
+  const prefetched = () => {
+    githubFiles ??= readFilesAtRevision(
+      root,
+      revision,
+      gitText(root, ["ls-tree", "-r", "--name-only", revision, "--", ".github"])
+        .split("\n")
+        .filter(
+          (file) =>
+            file.length > 0 &&
+            !file.startsWith(`${CLASSIFICATION_DECISIONS_PATH}/`),
+        ),
+    );
+    return githubFiles;
+  };
   const readCandidate = (file: string) => {
     observeRead?.(file);
-    return gitText(root, ["show", `${revision}:${file}`]);
+    return (
+      prefetched().get(file) ?? gitText(root, ["show", `${revision}:${file}`])
+    );
   };
   const readGithubJson = (file: string): unknown =>
     JSON.parse(readCandidate(`.github/${file}`));
@@ -212,6 +237,9 @@ export const readClassificationInputsAtRevision = (
       const file = ["action.yml", "action.yaml"]
         .map((name) => `${directory}/${name}`)
         .find((candidatePath) => {
+          if (prefetched().has(candidatePath)) {
+            return true;
+          }
           const result = Bun.spawnSync(
             [
               "git",

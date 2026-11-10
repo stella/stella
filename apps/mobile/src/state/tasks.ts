@@ -2,6 +2,10 @@ import { Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
+import {
+  TASK_CLOSED_STATUSES,
+  TASK_STATUS,
+} from "@stll/api-contract/entity-options";
 import type { TaskStatus } from "@stll/api-contract/entity-options";
 
 import type { Fetch } from "@/connection/http";
@@ -249,6 +253,14 @@ export const setTaskStatus = async ({
     );
     return Result.ok(undefined);
   });
+
+/** Whether a task in `status` is finished: done or cancelled. */
+export const isTaskClosed = (status: string): boolean =>
+  TASK_CLOSED_STATUSES.some((closed) => closed === status);
+
+/** The one change a phone makes to a task: done, or open again once finished. */
+export const nextTaskStatus = (status: string): TaskStatus =>
+  isTaskClosed(status) ? TASK_STATUS.OPEN : TASK_STATUS.DONE;
 
 /** When a task falls due, as the list groups them. */
 export type TaskDue =

@@ -517,8 +517,12 @@ const finalizeAcceptance = async ({
         eq(legalListGenerationCandidateSources.listId, body.listId),
         eq(legalListGenerationCandidateSources.workspaceId, workspaceId),
       ),
-    )
-    .for("update");
+    );
+  // No row lock here: the application role holds no UPDATE on candidate
+  // sources, which every row-locking clause needs. None is needed either:
+  // the rows are insert-only, the run and candidate locks above hold off a
+  // cascade from either, and a cited document deleted meanwhile fails the
+  // item-source insert's foreign key check, so no copy outlives it.
   const claimedSourceIds = new Set(claimedSources.map((source) => source.id));
   if (
     liveSources.length === 0 ||

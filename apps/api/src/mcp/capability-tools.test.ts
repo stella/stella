@@ -68,11 +68,6 @@ import {
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
 
-beforeEach(() => {
-  consumeRateLimitMock.mockReset();
-  loadOrgSettingsMock.mockClear();
-});
-
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
   orgAIConfigStatus: "ok" as const,
@@ -330,6 +325,8 @@ const callCapability = async (args: Record<string, unknown>) =>
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  consumeRateLimitMock.mockReset();
+  loadOrgSettingsMock.mockClear();
   analytics = installRecordingAnalytics();
   loadOrgSettingsMock.mockClear();
   consumeRateLimitMock.mockReset();
@@ -346,6 +343,10 @@ describe("list verification access grants across MCP tools", () => {
   const resourceId = "a2222222-2222-4222-8222-222222222222";
   const params = { matterId };
   const inputs = {
+    "lists.fact-extractions.create": {
+      params,
+      body: { listId: resourceId, entityIds: [resourceId] },
+    },
     "lists.verifications.create": {
       params,
       body: {

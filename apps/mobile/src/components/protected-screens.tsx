@@ -234,6 +234,10 @@ const Screens = () => {
                 sheetGrabberVisible: true,
               }}
             />
+            <Stack.Screen
+              name="share/[shareId]"
+              options={{ ...pushedScreen, presentation: "modal" }}
+            />
             <Stack.Screen name="timers/index" options={pushedScreen} />
             <Stack.Screen
               name="timers/new"

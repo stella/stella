@@ -45,9 +45,10 @@ import {
   type DesignLintBacklog,
   type DesignLintBacklogRule,
 } from "./design-lint-policy.ts";
+import { LINT_CONFIGS, lintCommand } from "./lint-command.ts";
 
 const BASELINE_PATH = BASELINE_PATHS.designLint;
-const CONFIG_PATH = "oxlint.design.config.ts";
+const CONFIG_PATH = LINT_CONFIGS.design;
 /** The paths `code-check` lints; the baseline is measured on the same tree. */
 const LINT_SCOPE = [".claude/mcp", "apps", "packages"];
 /**
@@ -184,7 +185,7 @@ const lint = (paths: readonly string[]): DesignLintBacklog => {
   const reportDirectory = mkdtempSync(path.join(tmpdir(), "design-lint-"));
   const reportPath = path.join(reportDirectory, "report.json");
   const result = Bun.spawnSync(
-    ["bun", "--bun", "oxlint", "-c", CONFIG_PATH, "--format=json", ...paths],
+    lintCommand({ config: "design" }, ["--format=json", ...paths]),
     {
       cwd: REPOSITORY_ROOT,
       // The backlog counts every finding: a rule still in its changed-lines
@@ -328,7 +329,7 @@ const run = (): number => {
     }
     console.error(
       "\nThe rule is off in these files only for the findings already there.\n" +
-        "Fix the new finding: `bun --bun oxlint -c oxlint.design.config.ts <file>`\n" +
+        "Fix the new finding: `bun scripts/lint.ts --config=design <file>`\n" +
         "names the replacement to use, or the function to split.",
     );
   }

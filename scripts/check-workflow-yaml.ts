@@ -6,6 +6,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const WORKFLOW_DIRECTORY = ".github/workflows";
@@ -264,6 +265,77 @@ export const validateLocalActionReferences = ({
   }
 };
 
+/** The `repository` input that names the workflow's own repository. */
+const SAME_REPOSITORY = ["$", "{{ github.repository }}"].join("");
+
+/**
+ * The workspace directory a step checks this repository out into, `""` for
+ * the root, or null for any other step (another repository included).
+ */
+const checkoutDirectory = (step: Record<string, unknown>): string | null => {
+  const uses = step["uses"];
+  if (!isRepositoryCheckoutAction(uses)) {
+    return null;
+  }
+  const inputs = isRecord(step["with"]) ? step["with"] : {};
+  const repository = inputs["repository"];
+  if (repository !== undefined && repository !== SAME_REPOSITORY) {
+    return null;
+  }
+  const destination = inputs["path"];
+  if (typeof destination !== "string" || destination === ".") {
+    return "";
+  }
+  // The checkout action resolves `a//b` and `./a/./b` to `a/b`.
+  let directory = path.posix.normalize(destination);
+  if (directory === "." || directory === "./") {
+    return "";
+  }
+  while (directory.endsWith("/")) {
+    directory = directory.slice(0, -1);
+  }
+  return directory;
+};
+
+/**
+ * A `./` action is read from the workspace, so a job can only use one after
+ * it has checked this repository out where the path points. Used earlier,
+ * the runner fails the step with "Can't find 'action.yml'".
+ */
+export const validateLocalActionsAfterCheckout = (
+  value: unknown,
+  file: string,
+): void => {
+  if (!isRecord(value) || !isRecord(value["jobs"])) {
+    return;
+  }
+  for (const [jobName, job] of Object.entries(value["jobs"])) {
+    if (!isRecord(job) || !("steps" in job)) {
+      continue;
+    }
+    const checkedOut = new Set<string>();
+    for (const step of flattenWorkflowSteps(job["steps"])) {
+      const uses = step["uses"];
+      if (typeof uses === "string" && uses.startsWith("./")) {
+        const target = path.posix.normalize(uses.slice(2));
+        const reachable = [...checkedOut].some(
+          (directory) => directory === "" || target.startsWith(`${directory}/`),
+        );
+        if (!reachable) {
+          throw new WorkflowYamlError({
+            message: `${file}: job ${jobName} uses ${uses} before checking out the repository there; a workspace action cannot run before the checkout that brings it`,
+            file,
+          });
+        }
+      }
+      const directory = checkoutDirectory(step);
+      if (directory !== null) {
+        checkedOut.add(directory);
+      }
+    }
+  }
+};
+
 const DOWNLOAD_ARTIFACT_ACTION = "actions/download-artifact";
 
 export const ARTIFACT_DOWNLOAD_EXCEPTION_REASON = {
@@ -513,6 +585,7 @@ export const checkWorkflowYaml = async (
     const value = await parseWorkflowYaml(file);
     validateWorkflowJobTimeouts(value, file);
     validateNoRubyShell(value, file);
+    validateLocalActionsAfterCheckout(value, file);
     validateLocalActionReferences({
       value,
       root,

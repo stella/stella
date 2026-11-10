@@ -40,6 +40,10 @@ import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
+import {
+  readLocalFilesUndo,
+  undoLocalFiles,
+} from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { routes } from "@/api/http/route";
@@ -96,6 +100,10 @@ export const chatRoute = routes(
     "/threads/:threadId/turns/:turnId/resume": { GET: probeChatTurn },
     "/threads/:threadId/turns/:turnId/join": { GET: joinChatTurn },
     "/threads/:threadId/turns/:turnId/cancel": { POST: cancelTurn },
+    "/threads/:threadId/turns/:turnId/local-files/undo": {
+      GET: readLocalFilesUndo,
+      POST: undoLocalFiles,
+    },
     "/threads/:threadId/fork": { POST: forkThread },
     "/threads/:threadId/export": { POST: createMessageExport },
   },
