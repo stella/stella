@@ -2356,6 +2356,10 @@
     "stopResponse": "Peata",
     "stopped": "Peatatud",
     "stopping": "Peatamine…",
+    "subagentRun": {
+      "browseWeb": "Veebi sirvimine",
+      "generic": "Alamülesande täitmine"
+    },
     "suggestTitle": "Paku pealkiri",
     "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
     "suggestingTitle": "Pealkirja pakkumine…",

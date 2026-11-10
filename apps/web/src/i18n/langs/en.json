@@ -2356,6 +2356,10 @@
     "stopResponse": "Stop",
     "stopped": "Stopped",
     "stopping": "Stopping…",
+    "subagentRun": {
+      "browseWeb": "Browsing the web",
+      "generic": "Working on a subtask"
+    },
     "suggestTitle": "Suggest a title",
     "suggestTitleUnavailableAnonymized": "Title suggestions are unavailable for anonymized conversations.",
     "suggestingTitle": "Suggesting a title…",

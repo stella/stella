@@ -60,10 +60,12 @@ import {
 import {
   ArrowUpIcon,
   ChevronRightIcon,
+  CircleDashedIcon,
   ClockIcon,
   PaperclipIcon,
   RotateCcwIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { StatusMark } from "@stll/ui/status-mark";
 import { SwapText } from "@stll/ui/swap-text";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -104,6 +106,13 @@ import {
   formatChatElapsed,
   processSummaryText,
 } from "@/components/chat/chat-step-summary";
+import type { SubagentChatPart } from "@/components/chat/chat-subagent-parts.logic";
+import {
+  pairSubagentRuns,
+  subagentRunMessages,
+  subagentRunTask,
+  subagentRunTitleKey,
+} from "@/components/chat/chat-subagent-run.logic";
 import {
   assistantMessageFallbackText,
   buildMessageTurns,
@@ -135,6 +144,7 @@ import type {
 import {
   getAwaitedAssistantMessageId,
   getPausedChatTurn,
+  hasUserAnswerablePart,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
   isPendingApprovalPart,
@@ -2133,6 +2143,18 @@ type AssistantPartRenderEntry =
   | {
       type: "standard";
       part: Exclude<ChatUIPart, RichChatPart>;
+    }
+  /** A sub-agent run, with the call that started it when the message holds
+   *  that call. */
+  | {
+      type: "subagent";
+      call: Extract<ChatUIPart, { type: "tool-call" }> | null;
+      part: SubagentChatPart;
+    }
+  /** The call that started a sub-agent run: its run shows it. */
+  | {
+      type: "subagent-call";
+      part: Extract<ChatUIPart, { type: "tool-call" }>;
     };
 
 type TextMessagePartsProps = {
@@ -2288,8 +2310,24 @@ const toAssistantPartRenderEntries = (
 ): AssistantPartRenderEntry[] => {
   const entries: AssistantPartRenderEntry[] = [];
   const richPartOccurrences = new Map<string, number>();
+  const subagentRuns = pairSubagentRuns(parts);
 
   for (const part of parts) {
+    if (part.type === "subagent") {
+      entries.push({
+        type: "subagent",
+        call: subagentRuns.callFor(part),
+        part,
+      });
+      continue;
+    }
+    if (
+      part.type === "tool-call" &&
+      subagentRuns.startingCallIds.has(part.id)
+    ) {
+      entries.push({ type: "subagent-call", part });
+      continue;
+    }
     if (!isRichChatPart(part)) {
       entries.push({ type: "standard", part });
       continue;
@@ -2314,7 +2352,7 @@ const toAssistantPartRenderEntries = (
 // disclosure; an approval-gated call is one from its first input byte,
 // before the request arrives.
 const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
-  if (entry.type === "rich") {
+  if (entry.type !== "standard") {
     return false;
   }
   const { part } = entry;
@@ -2338,7 +2376,7 @@ const carriesAnswerNotice = (message: ChatUIMessage): boolean =>
 const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
   toAssistantPartRenderEntries(parts).some((entry) => {
     if (entry.type !== "standard") {
-      return true;
+      return isVisibleProcessEntry(entry);
     }
     const { part } = entry;
     if (part.type === "text") {
@@ -2353,10 +2391,22 @@ const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
     return isVisibleProcessEntry(entry);
   });
 
-const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean =>
-  entry.type !== "standard" ||
-  // Finished searches and fetches show in the sources tray instead.
-  isVisibleProcessStep(entry.part, { searchesShownApart: true });
+const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
+  switch (entry.type) {
+    case "rich":
+    case "subagent":
+      return true;
+    case "subagent-call":
+      return false;
+    case "standard":
+      // Finished searches and fetches show in the sources tray instead.
+      return isVisibleProcessStep(entry.part, { searchesShownApart: true });
+    default:
+      return panic("Unhandled assistant part render entry", {
+        entry: entry satisfies never,
+      });
+  }
+};
 
 type ProcessStepTitleKey = ToolCallTitleKey | "chat.reasoning";
 
@@ -2533,27 +2583,28 @@ const stepFindsContext = ({
   stepRefTargets: readChatStepRefTargets(message.metadata?.refContext),
 });
 
-const AssistantMessageParts = ({
-  threadRef,
-  activeFileName,
-  activeOrganizationId,
-  assistantTextDensity,
-  isAwaitingUser,
-  isGenerating,
-  isLatestAssistantMessage,
-  message,
-  onAskUserEditAndRerun,
-  onAskUserEditingChange,
-  onAskUserSubmit,
-  onCreateDocumentResolve,
-  onOpenCreateDocumentDraft,
-  onOpenCreatedDocument,
-  onOpenPlaybook,
-  shouldShowToolCalls,
-  streamdownComponents,
-  turnStatus,
-  workspaceId,
-}: AssistantMessagePartsProps) => {
+const AssistantMessageParts = (props: AssistantMessagePartsProps) => {
+  const {
+    threadRef,
+    activeFileName,
+    activeOrganizationId,
+    assistantTextDensity,
+    isAwaitingUser,
+    isGenerating,
+    isLatestAssistantMessage,
+    message,
+    onAskUserEditAndRerun,
+    onAskUserEditingChange,
+    onAskUserSubmit,
+    onCreateDocumentResolve,
+    onOpenCreateDocumentDraft,
+    onOpenCreatedDocument,
+    onOpenPlaybook,
+    shouldShowToolCalls,
+    streamdownComponents,
+    turnStatus,
+    workspaceId,
+  } = props;
   const label = useTranslations()("knowledge.playbooks.openInPane");
   const questionPause = useLocalRunQuestionPause(isAwaitingUser, message);
   const restorationPairs = collectAnonRestorations(message);
@@ -2591,6 +2642,9 @@ const AssistantMessageParts = ({
     entry.part.type === "tool-call" &&
     subagentGroups.rowIn.has(entry.part.id);
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
+    if (isSubagentRenderEntry(entry)) {
+      return renderSubagentEntry(entry, props);
+    }
     if (entry.type === "rich") {
       return (
         <ChatRichMessagePart
@@ -3077,6 +3131,153 @@ const NarratedIntent = ({
     />
   </TruncatedText>
 );
+
+type SubagentRenderEntry = Extract<
+  AssistantPartRenderEntry,
+  { type: "subagent" | "subagent-call" }
+>;
+
+const isSubagentRenderEntry = (
+  entry: AssistantPartRenderEntry,
+): entry is SubagentRenderEntry =>
+  entry.type === "subagent" || entry.type === "subagent-call";
+
+/** A sub-agent run as its parent message draws it. The call that started it
+ *  draws nothing: its run shows it. */
+const renderSubagentEntry = (
+  entry: SubagentRenderEntry,
+  { message, ...partsProps }: AssistantMessagePartsProps,
+) =>
+  entry.type === "subagent-call" ? null : (
+    <SubagentRunCard
+      {...partsProps}
+      call={entry.call}
+      key={`${message.id}-subagent-${entry.part.subagent.id}`}
+      part={entry.part}
+    />
+  );
+
+type SubagentRunCardProps = Omit<AssistantMessagePartsProps, "message"> & {
+  call: Extract<ChatUIPart, { type: "tool-call" }> | null;
+  part: SubagentChatPart;
+};
+
+/**
+ * A sub-agent run inside its parent's answer: its title, the task its call
+ * gave it, and its own messages drawn by the same parts renderer as a
+ * top-level message, so its approval cards, client calls and nested runs
+ * behave exactly as top-level ones. A finished run's last text is what it
+ * found. Folded when it renders settled; a card the user must answer keeps it
+ * open.
+ */
+const SubagentRunCard = ({
+  call,
+  part,
+  ...partsProps
+}: SubagentRunCardProps) => {
+  const t = useTranslations();
+  const { name, status } = part.subagent;
+  const isRunActive = status === "running" || status === "suspended";
+  const [isOpen, setIsOpen] = useState(isRunActive);
+  const awaitsUser = partsProps.isAwaitingUser && hasUserAnswerablePart([part]);
+  const open = isOpen || awaitsUser;
+  const task = subagentRunTask(call);
+  const messages = subagentRunMessages(part);
+  return (
+    <div
+      data-slot="chat-subagent-run"
+      className="border-border bg-muted/30 my-1 max-w-[min(44rem,100%)] rounded-lg border text-sm"
+    >
+      <Collapsible onOpenChange={setIsOpen} open={open}>
+        <CollapsibleTrigger render={<Button variant="plain" />}>
+          <span className="inline-flex min-h-8 items-center gap-1.5 px-3 py-1.5">
+            <DirectionalIcon
+              className={cn(
+                "text-muted-foreground size-3.5 shrink-0 transition-transform",
+                open && "rotate-90",
+              )}
+              flip={!open}
+              icon={ChevronRightIcon}
+            />
+            <span className="font-medium">{t(subagentRunTitleKey(name))}</span>
+            <SubagentRunStatus status={status} />
+          </span>
+        </CollapsibleTrigger>
+        {task !== null && (
+          <TruncatedText
+            className="text-muted-foreground px-3 pb-2 text-xs"
+            dir="auto"
+            lines={2}
+            render={<p />}
+          >
+            {task}
+          </TruncatedText>
+        )}
+        <CollapsiblePanel>
+          <div className="border-border/50 flex flex-col gap-2 border-t px-3 py-2">
+            {messages.map((entry, index) => {
+              if (entry.type === "unavailable") {
+                return (
+                  <p className="text-muted-foreground text-sm" key={entry.id}>
+                    {t("chat.messageUnavailable")}
+                  </p>
+                );
+              }
+              return (
+                <AssistantMessageParts
+                  {...partsProps}
+                  isLatestAssistantMessage={
+                    partsProps.isLatestAssistantMessage &&
+                    isRunActive &&
+                    index === messages.length - 1
+                  }
+                  key={entry.message.id}
+                  message={entry.message}
+                />
+              );
+            })}
+          </div>
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
+  );
+};
+
+const SubagentRunStatus = ({
+  status,
+}: {
+  status: SubagentChatPart["subagent"]["status"];
+}) => {
+  const t = useTranslations();
+  switch (status) {
+    case "running":
+      return (
+        <Loader
+          className="size-3.5 shrink-0"
+          label={t("tasks.statusValues.in_progress")}
+          size="sm"
+        />
+      );
+    // Paused on a card the user answers; the card itself says what it needs.
+    case "suspended":
+      return (
+        <CircleDashedIcon
+          aria-hidden="true"
+          className="text-muted-foreground size-3.5 shrink-0"
+        />
+      );
+    case "error":
+      return (
+        <span className="text-destructive text-xs">{t("common.failed")}</span>
+      );
+    case "finished":
+      return null;
+    default:
+      return panic("Unhandled sub-agent run status", {
+        status: status satisfies never,
+      });
+  }
+};
 
 const getFirstThinkingPartIndex = (parts: readonly ChatPart[]): number =>
   parts.findIndex(

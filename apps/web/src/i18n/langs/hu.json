@@ -2356,6 +2356,10 @@
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
     "stopping": "Leállítás…",
+    "subagentRun": {
+      "browseWeb": "Böngészés az interneten",
+      "generic": "Részfeladat feldolgozása"
+    },
     "suggestTitle": "Cím javaslata",
     "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
     "suggestingTitle": "Cím javaslása…",

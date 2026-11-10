@@ -2356,6 +2356,10 @@
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
     "stopping": "Aptur…",
+    "subagentRun": {
+      "browseWeb": "Tīmekļa pārlūkošana",
+      "generic": "Apakšuzdevuma izpilde"
+    },
     "suggestTitle": "Ieteikt nosaukumu",
     "suggestTitleUnavailableAnonymized": "Anonimizētām sarunām nosaukuma ieteikumi nav pieejami.",
     "suggestingTitle": "Notiek nosaukuma ieteikšana…",

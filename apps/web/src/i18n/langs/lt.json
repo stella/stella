@@ -2356,6 +2356,10 @@
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
     "stopping": "Stabdoma…",
+    "subagentRun": {
+      "browseWeb": "Naršoma internete",
+      "generic": "Atliekama dalinė užduotis"
+    },
     "suggestTitle": "Pasiūlyti pavadinimą",
     "suggestTitleUnavailableAnonymized": "Anonimizuotiems pokalbiams pavadinimų pasiūlymai negalimi.",
     "suggestingTitle": "Siūlomas pavadinimas…",

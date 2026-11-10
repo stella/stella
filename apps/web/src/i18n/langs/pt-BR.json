@@ -2356,6 +2356,10 @@
     "stopResponse": "Parar",
     "stopped": "Interrompido",
     "stopping": "Parando…",
+    "subagentRun": {
+      "browseWeb": "Navegando na web",
+      "generic": "Trabalhando em uma subtarefa"
+    },
     "suggestTitle": "Sugerir um título",
     "suggestTitleUnavailableAnonymized": "Sugestões de título não estão disponíveis para conversas anonimizadas.",
     "suggestingTitle": "Sugerindo um título…",

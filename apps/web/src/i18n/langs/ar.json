@@ -2356,6 +2356,10 @@
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
     "stopping": "جارٍ الإيقاف…",
+    "subagentRun": {
+      "browseWeb": "تصفح الويب",
+      "generic": "العمل على مهمة فرعية"
+    },
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
     "suggestingTitle": "جارٍ اقتراح عنوان…",

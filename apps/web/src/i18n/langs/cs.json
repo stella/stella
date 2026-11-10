@@ -2356,6 +2356,10 @@
     "stopResponse": "Zastavit",
     "stopped": "Zastaveno",
     "stopping": "Zastavuji…",
+    "subagentRun": {
+      "browseWeb": "Procházení webu",
+      "generic": "Práce na dílčím úkolu"
+    },
     "suggestTitle": "Navrhnout název",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nejsou dostupné pro anonymizované konverzace.",
     "suggestingTitle": "Navrhuji název…",

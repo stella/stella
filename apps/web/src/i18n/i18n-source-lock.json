@@ -1883,6 +1883,8 @@
   "chat.stopResponse": "Stop",
   "chat.stopped": "Stopped",
   "chat.stopping": "Stopping…",
+  "chat.subagentRun.browseWeb": "Browsing the web",
+  "chat.subagentRun.generic": "Working on a subtask",
   "chat.suggestTitle": "Suggest a title",
   "chat.suggestTitleUnavailableAnonymized": "Title suggestions are unavailable for anonymized conversations.",
   "chat.suggestingTitle": "Suggesting a title…",
