@@ -140,17 +140,19 @@ const FIRST_POLL_MS = 1000;
 const LONGEST_POLL_MS = 15_000;
 
 /**
- * How long until the read is asked again while the undo settles: doubling
- * from a second, up to fifteen, so a quick computer answers fast and a slow
- * one is not asked too often. `false` once it settled.
+ * How long until the read is asked again while the undo settles: as long as
+ * the undo has been followed, from a second up to fifteen, so the reads land
+ * at 1, 2, 4, 8 and 16 seconds and then every 15, whether or not a read
+ * failed. A quick computer answers fast and a slow one is not asked too
+ * often. `false` once it settled.
  */
 export const localFilesUndoPollMs = ({
   read,
-  polls,
+  pendingForMs,
 }: {
   read: ChatLocalFilesUndoRead | undefined;
-  polls: number;
+  pendingForMs: number;
 }): number | false =>
   localFilesUndoSettling(read)
-    ? Math.min(FIRST_POLL_MS * 2 ** Math.max(0, polls), LONGEST_POLL_MS)
+    ? Math.min(Math.max(FIRST_POLL_MS, pendingForMs), LONGEST_POLL_MS)
     : false;

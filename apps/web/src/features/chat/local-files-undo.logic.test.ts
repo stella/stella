@@ -116,14 +116,28 @@ describe("what the newest turn's row shows of its undo", () => {
 });
 
 describe("following an undo until it settles", () => {
-  test("the read is asked again with a doubling pause, capped, and stops once settled", () => {
-    const pauses = [0, 1, 2, 3, 4, 5, 10].map((polls) =>
-      localFilesUndoPollMs({ read: undo("sent"), polls }),
-    );
-    expect(pauses).toEqual([1000, 2000, 4000, 8000, 15_000, 15_000, 15_000]);
-    for (const read of [undo("restored"), undo("refused"), undo("expired")]) {
-      expect(localFilesUndoPollMs({ read, polls: 1 })).toBe(false);
+  test("the reads land at a doubling pause from a second, capped at fifteen, and stop once settled", () => {
+    const readsAt: number[] = [];
+    let followedFor = 0;
+    for (let reads = 0; reads < 8; reads += 1) {
+      const pause = localFilesUndoPollMs({
+        read: undo("sent"),
+        pendingForMs: followedFor,
+      });
+      if (pause === false) {
+        throw new TypeError("Expected a pending undo to be followed");
+      }
+      followedFor += pause;
+      readsAt.push(followedFor);
     }
-    expect(localFilesUndoPollMs({ read: undefined, polls: 0 })).toBe(false);
+    expect(readsAt).toEqual([
+      1000, 2000, 4000, 8000, 16_000, 31_000, 46_000, 61_000,
+    ]);
+    for (const read of [undo("restored"), undo("refused"), undo("expired")]) {
+      expect(localFilesUndoPollMs({ read, pendingForMs: 1000 })).toBe(false);
+    }
+    expect(localFilesUndoPollMs({ read: undefined, pendingForMs: 0 })).toBe(
+      false,
+    );
   });
 });

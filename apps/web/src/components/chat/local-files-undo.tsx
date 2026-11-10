@@ -29,6 +29,7 @@ import {
   type LocalFilesUndoView,
   localFilesUndoView,
 } from "@/features/chat/local-files-undo.logic";
+import { readClientClockMs } from "@/hooks/client-clock";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -56,10 +57,13 @@ const NO_TURN: LocalFilesUndoTurn = {
 export const useLocalFilesUndo = ({
   threadId,
   turnId,
+  offered,
   undone,
 }: {
   threadId: string;
   turnId: string | null;
+  /** Whether a new undo may be asked now; its status shows either way. */
+  offered: boolean;
   /** The page read this turn as undone: it keeps the marker regardless. */
   undone: boolean;
 }): { actions: EntityAction[]; extras: ReactNode } => {
@@ -68,6 +72,11 @@ export const useLocalFilesUndo = ({
   const user = useMaybeAuthenticatedUser();
   const [confirming, setConfirming] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
+  // Since when a pending undo is followed: when this page asked for it, or
+  // when the row mounted for one asked elsewhere. The poll's pause grows with
+  // it, whatever the reads in between answered.
+  const [mountedAt] = useState(readClientClockMs);
+  const [askedAt, setAskedAt] = useState<number | null>(null);
   const turn: LocalFilesUndoTurn | null =
     turnId === null || user === null
       ? null
@@ -77,7 +86,7 @@ export const useLocalFilesUndo = ({
           threadId,
           turnId,
         };
-  const options = localFilesUndoOptions(turn ?? NO_TURN);
+  const options = localFilesUndoOptions(turn ?? NO_TURN, askedAt ?? mountedAt);
   const readView = queryView(useQuery({ ...options, enabled: turn !== null }));
   useQueryViewError(readView, "LocalFilesUndo:query");
 
@@ -94,6 +103,16 @@ export const useLocalFilesUndo = ({
           ? { turnId, reason: answer.reason }
           : null,
       );
+      if (answer.type === "accepted") {
+        // The answer names the undo: the turn follows it from here, even
+        // when the next read fails.
+        setAskedAt(readClientClockMs());
+        queryClient.setQueryData(options.queryKey, (read) =>
+          read === undefined
+            ? panic("An undo is asked only after its turn's read")
+            : { undoable: read.undoable, undo: answer.undo },
+        );
+      }
       await queryClient.invalidateQueries({ queryKey: options.queryKey });
     },
     onError: (error) => {
@@ -125,7 +144,8 @@ export const useLocalFilesUndo = ({
     undone && view.status.type === "none"
       ? { canUndo: false, status: { type: "restored" } }
       : view;
-  const actions: EntityAction[] = shown.canUndo
+  const canAsk = offered && shown.canUndo;
+  const actions: EntityAction[] = canAsk
     ? [
         {
           disabled: undo.isPending,
@@ -140,42 +160,47 @@ export const useLocalFilesUndo = ({
     extras: (
       <>
         <LocalFilesUndoStatus status={shown.status} />
-        <AlertDialog
-          onOpenChange={(open) => {
-            if (!undo.isPending) {
-              setConfirming(open);
-            }
-          }}
-          open={confirming}
-        >
-          <AlertDialogPopup>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {t("chat.localFilesUndo.confirmTitle")}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {t("chat.localFilesUndo.confirmDescription")}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogClose
-                disabled={undo.isPending}
-                render={<Button variant="outline" />}
-              >
-                {t("common.cancel")}
-              </AlertDialogClose>
-              <Button
-                loading={undo.isPending}
-                onClick={() => {
-                  undo.mutate();
-                }}
-                variant="destructive"
-              >
-                {t("chat.localFilesUndo.confirm")}
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogPopup>
-        </AlertDialog>
+        {/* A send or a newer turn takes the offer away, and an open
+            confirmation goes with it: it would ask about a turn that is no
+            longer the newest. */}
+        {canAsk && (
+          <AlertDialog
+            onOpenChange={(open) => {
+              if (!undo.isPending) {
+                setConfirming(open);
+              }
+            }}
+            open={confirming}
+          >
+            <AlertDialogPopup>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t("chat.localFilesUndo.confirmTitle")}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t("chat.localFilesUndo.confirmDescription")}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogClose
+                  disabled={undo.isPending}
+                  render={<Button variant="outline" />}
+                >
+                  {t("common.cancel")}
+                </AlertDialogClose>
+                <Button
+                  loading={undo.isPending}
+                  onClick={() => {
+                    undo.mutate();
+                  }}
+                  variant="destructive"
+                >
+                  {t("chat.localFilesUndo.confirm")}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogPopup>
+          </AlertDialog>
+        )}
       </>
     ),
   };

@@ -1,7 +1,9 @@
 import { queryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
+  type ChatLocalFilesUndo,
   chatLocalFilesUndoAnswerSchema,
   type ChatLocalFilesUndoRead,
   type ChatLocalFilesUndoRefusal,
@@ -9,6 +11,7 @@ import {
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { localFilesUndoPollMs } from "@/features/chat/local-files-undo.logic";
+import { readClientClockMs } from "@/hooks/client-clock";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
@@ -29,16 +32,15 @@ const undoRoute = ({
     .turns({ turnId: toSafeId<"chatTurn">(turnId) })["local-files"].undo;
 
 /**
- * Where the undo of a turn's file changes stands. While the computer may
- * still answer, the read is asked again with a growing pause
- * (`localFilesUndoPollMs`) until the undo settles.
+ * Where the undo of a turn's file changes stands. While the cached undo may
+ * still be answered, the read is asked again with a pause that grows with how
+ * long the page has followed it (since `followedSince`, epoch ms) until it
+ * settles. A failed read keeps the cached undo, so it is followed on.
  */
-export const localFilesUndoOptions = ({
-  activeOrganizationId,
-  userId,
-  threadId,
-  turnId,
-}: LocalFilesUndoTurn) =>
+export const localFilesUndoOptions = (
+  { activeOrganizationId, userId, threadId, turnId }: LocalFilesUndoTurn,
+  followedSince: number,
+) =>
   queryOptions({
     queryKey: chatKeys.localFilesUndo(
       activeOrganizationId,
@@ -53,13 +55,14 @@ export const localFilesUndoOptions = ({
     refetchInterval: (query) =>
       localFilesUndoPollMs({
         read: query.state.data,
-        polls: query.state.dataUpdateCount,
+        pendingForMs: readClientClockMs() - followedSince,
       }),
   });
 
-/** How a request to undo was answered: taken, or refused with the reason. */
+/** How a request to undo was answered: taken with its undo, or refused with the reason. */
 export type LocalFilesUndoRequested =
-  { type: "accepted" } | { type: "refused"; reason: ChatLocalFilesUndoRefusal };
+  | { type: "accepted"; undo: ChatLocalFilesUndo }
+  | { type: "refused"; reason: ChatLocalFilesUndoRefusal };
 
 const REFUSED_STATUS = 409;
 
@@ -81,6 +84,14 @@ export const requestLocalFilesUndo = async (
     }
   }
   // Any other failure is the mutation's error.
-  unwrapApiResponse(response);
-  return { type: "accepted" };
+  const answer = unwrapApiResponse(response);
+  switch (answer.status) {
+    case "accepted":
+      return { type: "accepted", undo: answer.undo };
+    case "refused":
+      return { type: "refused", reason: answer.reason };
+    default:
+      answer satisfies never;
+      return panic("Unhandled local files undo answer");
+  }
 };

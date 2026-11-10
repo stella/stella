@@ -53,10 +53,15 @@ const server: {
   undo: { state: UndoState; reason: string | null } | null;
   answer: { status: number; body: unknown };
   requests: number;
+  /** Reads still to fail before the server answers them again. */
+  failingReads: number;
+  reads: number;
 } = {
   undo: null,
   answer: { status: 202, body: null },
   requests: 0,
+  failingReads: 0,
+  reads: 0,
 };
 
 const UNDO_PATH = `/v1/chat/threads/${THREAD_ID}/turns/${TURN_ID}/local-files/undo`;
@@ -77,6 +82,8 @@ const clients: InstanceType<typeof QueryClient>[] = [];
 beforeEach(() => {
   server.undo = null;
   server.requests = 0;
+  server.failingReads = 0;
+  server.reads = 0;
   spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
       async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -94,6 +101,11 @@ beforeEach(() => {
           return Response.json(server.answer.body, {
             status: server.answer.status,
           });
+        }
+        server.reads += 1;
+        if (server.failingReads > 0) {
+          server.failingReads -= 1;
+          return Response.json({ message: "unavailable" }, { status: 503 });
         }
         return Response.json(read());
       },
@@ -115,82 +127,90 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const renderTurn = ({
-  transcript = [answerMessage],
-  undoneTurns,
-}: {
+type TurnPage = {
   transcript?: ChatUIMessage[];
   undoneTurns?: { assistantMessageId: string }[];
-} = {}) => {
+  isGenerating?: boolean;
+};
+
+const renderTurn = (page: TurnPage = {}) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   clients.push(queryClient);
-  const view = render(
-    <ChatThreadTestRouter>
-      <QueryClientProvider client={queryClient}>
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <FormattingProvider locale="en" timeZone="UTC">
-            <AuthenticatedUserProvider
-              user={{
-                activeOrganizationId: "org-1",
-                email: "member@example.test",
-                id: "user-1",
-                image: null,
-                name: "Member",
-                preferredName: null,
-                timezoneId: "UTC",
-                wordEditShortcut: null,
-              }}
-            >
-              <ChatMattersContext
-                value={{ createDocumentMattersView: { type: "empty" } }}
-              >
-                <ChatApprovalContext value={testChatApprovalContextValue}>
-                  <ChatEditorProvider>
-                    <ChatThreadMessages
-                      activitySession={{
-                        reportedUnknownActivityTypes: new Set<string>(),
-                      }}
-                      approvalPendingMessageId={null}
-                      messages={transcript}
-                      newestLocalTurn={{
-                        id: toSafeId<"chatTurn">(TURN_ID),
-                        assistantMessageId: toSafeId<"chatMessage">(
-                          answerMessage.id,
-                        ),
-                      }}
-                      undoneTurns={undoneTurns?.map(
-                        ({ assistantMessageId }) => ({
-                          assistantMessageId:
-                            toSafeId<"chatMessage">(assistantMessageId),
-                        }),
-                      )}
-                      onAskUserSubmit={() => {}}
-                      onCreateDocumentResolve={() => {}}
-                      onOpenCreatedDocument={() => {}}
-                      onResend={() => {}}
-                      streamdownComponents={{
-                        a: ({ children, ...props }) => (
-                          <a {...props}>{children}</a>
-                        ),
-                      }}
-                      threadRef={{
-                        scope: "global",
-                        threadId: toSafeId<"chatThread">(THREAD_ID),
-                      }}
-                    />
-                  </ChatEditorProvider>
-                </ChatApprovalContext>
-              </ChatMattersContext>
-            </AuthenticatedUserProvider>
-          </FormattingProvider>
-        </IntlProvider>
-      </QueryClientProvider>
-    </ChatThreadTestRouter>,
-  );
-  return { queryClient, view };
+  const view = render(turnPage(queryClient, page));
+  return {
+    queryClient,
+    view,
+    show: (next: TurnPage) => view.rerender(turnPage(queryClient, next)),
+  };
 };
+
+const turnPage = (
+  queryClient: InstanceType<typeof QueryClient>,
+  { transcript = [answerMessage], undoneTurns, isGenerating = false }: TurnPage,
+) => (
+  <ChatThreadTestRouter>
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <AuthenticatedUserProvider
+            user={{
+              activeOrganizationId: "org-1",
+              email: "member@example.test",
+              id: "user-1",
+              image: null,
+              name: "Member",
+              preferredName: null,
+              timezoneId: "UTC",
+              wordEditShortcut: null,
+            }}
+          >
+            <ChatMattersContext
+              value={{ createDocumentMattersView: { type: "empty" } }}
+            >
+              <ChatApprovalContext value={testChatApprovalContextValue}>
+                <ChatEditorProvider>
+                  <ChatThreadMessages
+                    activitySession={{
+                      reportedUnknownActivityTypes: new Set<string>(),
+                    }}
+                    approvalPendingMessageId={null}
+                    isGenerating={isGenerating}
+                    messages={transcript}
+                    newestLocalTurn={{
+                      id: toSafeId<"chatTurn">(TURN_ID),
+                      assistantMessageId: toSafeId<"chatMessage">(
+                        answerMessage.id,
+                      ),
+                    }}
+                    undoneTurns={undoneTurns?.map(({ assistantMessageId }) => ({
+                      assistantMessageId:
+                        toSafeId<"chatMessage">(assistantMessageId),
+                    }))}
+                    onAskUserSubmit={() => {}}
+                    onCreateDocumentResolve={() => {}}
+                    onOpenCreatedDocument={() => {}}
+                    onResend={() => {}}
+                    streamdownComponents={{
+                      a: ({ children, ...props }) => (
+                        <a {...props}>{children}</a>
+                      ),
+                    }}
+                    threadRef={{
+                      scope: "global",
+                      threadId: toSafeId<"chatThread">(THREAD_ID),
+                    }}
+                  />
+                </ChatEditorProvider>
+              </ChatApprovalContext>
+            </ChatMattersContext>
+          </AuthenticatedUserProvider>
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>
+  </ChatThreadTestRouter>
+);
 
 const row = (view: ReturnType<typeof render>, messageId = answerMessage.id) => {
   const actions = view.container.querySelector(
@@ -345,4 +365,63 @@ test("an undone turn keeps its marker after a newer turn, also when the page loa
   );
   await openActions(view);
   expect(menuItems()).toContain(messages.chat.localFilesUndo.action);
+});
+
+test("an accepted undo stays followed when the next read fails", async () => {
+  server.answer = {
+    status: 202,
+    body: {
+      status: "accepted",
+      undo: { restoreId: "restore-1", state: "queued", reason: null },
+      reason: null,
+    },
+  };
+  const { view } = renderTurn();
+  const dialog = await askToUndo(view);
+  const readsBefore = server.reads;
+  // The server took the undo, but the read right after it fails.
+  server.undo = { state: "queued", reason: null };
+  server.failingReads = 1;
+  fireEvent.click(
+    within(dialog).getByRole("button", {
+      name: messages.chat.localFilesUndo.confirm,
+    }),
+  );
+  await waitFor(() => {
+    expect(server.reads).toBe(readsBefore + 1);
+  });
+  expect(server.failingReads).toBe(0);
+  expect(row(view).textContent).toContain(messages.chat.localFilesUndo.pending);
+  await openActions(view);
+  expect(menuItems()).not.toContain(messages.chat.localFilesUndo.action);
+
+  // The poll goes on: the computer's answer still reaches the turn.
+  server.undo = { state: "restored", reason: null };
+  // real-time: the next read is the turn's own poll, a second or two away.
+  await waitFor(
+    () => {
+      expect(row(view).textContent).toContain(
+        messages.chat.localFilesUndo.restored,
+      );
+    },
+    { timeout: 4000 },
+  );
+  expect(server.reads).toBeGreaterThan(readsBefore + 1);
+});
+
+test("a send takes the undo away from the previous answer and closes its confirmation", async () => {
+  const { view, show } = renderTurn();
+  await askToUndo(view);
+  const prompt = {
+    id: "00000000-0000-4000-8000-000000000012",
+    role: "user",
+    parts: [{ type: "text", content: "Also update the cover letter." }],
+  } satisfies ChatUIMessage;
+  show({ transcript: [answerMessage, prompt], isGenerating: true });
+  await waitFor(() => {
+    expect(view.queryByRole("alertdialog")).toBeNull();
+  });
+  await openActions(view);
+  expect(menuItems()).not.toContain(messages.chat.localFilesUndo.action);
+  expect(server.requests).toBe(0);
 });

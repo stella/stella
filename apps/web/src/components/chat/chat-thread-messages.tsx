@@ -111,6 +111,7 @@ import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
   canRetryChatRequest,
+  canUndoLocalFilesOf,
   finalChatRefusalKey,
   isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
@@ -356,21 +357,45 @@ const ActiveTurnStatus = memo(
   },
 );
 
-/** Whether `messageId` answered a turn whose file changes were undone. */
-const isUndoneAnswer = (
-  undoneTurns: readonly UndoneLocalTurn[] | undefined,
-  messageId: string,
-): boolean =>
-  undoneTurns?.some(
-    ({ assistantMessageId }) => assistantMessageId === messageId,
-  ) ?? false;
+/** What the thread knows about undoing its local turns' file changes. */
+type LocalFilesUndoFacts = {
+  generationActive: boolean;
+  messages: ChatUIMessage[];
+  newestLocalTurn: NewestLocalTurn | null | undefined;
+  undoneTurns: readonly UndoneLocalTurn[] | undefined;
+};
 
-/** The turn whose file changes `messageId` may undo: only the newest turn's answer. */
-const localFilesUndoTurnIdFor = (
-  newestLocalTurn: NewestLocalTurn | null | undefined,
+/**
+ * The undo props of `messageId`'s actions: the turn it may undo (only the
+ * newest turn's answer), whether a new undo may be asked now, and whether
+ * its turn was undone already.
+ */
+const localFilesUndoPropsFor = (
+  {
+    generationActive,
+    messages,
+    newestLocalTurn,
+    undoneTurns,
+  }: LocalFilesUndoFacts,
   messageId: string,
-): string | null =>
-  newestLocalTurn?.assistantMessageId === messageId ? newestLocalTurn.id : null;
+) => {
+  const turn =
+    newestLocalTurn?.assistantMessageId === messageId ? newestLocalTurn : null;
+  return {
+    localFilesUndoTurnId: turn?.id ?? null,
+    localFilesUndoOffered:
+      turn !== null &&
+      canUndoLocalFilesOf({
+        isGenerating: generationActive,
+        messageId,
+        messages,
+      }),
+    localFilesUndone:
+      undoneTurns?.some(
+        ({ assistantMessageId }) => assistantMessageId === messageId,
+      ) ?? false,
+  };
+};
 
 export const ChatThreadMessages = ({
   activitySession,
@@ -421,6 +446,7 @@ export const ChatThreadMessages = ({
     [messages],
   );
   const generationActive = error === undefined && isGenerating;
+  const undo = { generationActive, messages, newestLocalTurn, undoneTurns };
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
     [messages],
@@ -478,11 +504,7 @@ export const ChatThreadMessages = ({
                 ? findCreateDocumentArtifactForMessage(messages, index)
                 : null
             }
-            localFilesUndoTurnId={localFilesUndoTurnIdFor(
-              newestLocalTurn,
-              message.id,
-            )}
-            localFilesUndone={isUndoneAnswer(undoneTurns, message.id)}
+            {...localFilesUndoPropsFor(undo, message.id)}
             message={message}
             threadRef={messageActionsThreadRef(message, threadRef)}
           >

@@ -261,3 +261,23 @@ export const canForkAssistantMessage = ({
   ...message
 }: AssistantMessageActionState): boolean =>
   !isGenerating || !isLatestAssistantMessage(message);
+
+/**
+ * Undoing a local turn's file changes is offered only while nothing runs and
+ * no prompt follows the answer: a send or a streaming turn leaves the turn
+ * behind the computer's newest one, which the server refuses to undo.
+ */
+export const canUndoLocalFilesOf = ({
+  isGenerating,
+  messageId,
+  messages,
+}: AssistantMessageActionState): boolean => {
+  if (isGenerating) {
+    return false;
+  }
+  const index = messages.findIndex(({ id }) => id === messageId);
+  return (
+    index !== -1 &&
+    messages.slice(index + 1).every(({ role }) => role !== "user")
+  );
+};
