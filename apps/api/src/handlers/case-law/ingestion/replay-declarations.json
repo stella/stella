@@ -256,5 +256,11 @@
     "parserVersion": 7,
     "type": "pending-enrolment-wave",
     "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "us-courtlistener",
+    "parserVersion": 21,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
   }
 ]
