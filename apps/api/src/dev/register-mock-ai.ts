@@ -849,7 +849,7 @@ const MOCK_FACT_RULES: readonly MockFactRule[] = [
     medium: "Contract",
   },
   {
-    matches: /\b(?:pay|paid|payment|invoice|price)\b/iu,
+    matches: /\b(?:payment|invoices?|shall pay)\b/iu,
     fact: "The agreement sets when and how payment falls due.",
     kind: "document",
     medium: "Contract",
