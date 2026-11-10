@@ -1,6 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -25,64 +26,72 @@ const changes = {
   revisionPolicy: sql`WITH updated AS (UPDATE case_law_published_decisions SET updated_at = '2026-01-01T00:00:00.123457Z' RETURNING id) UPDATE case_law_sources SET descriptor = '{"allowsRedistribution":true,"allowsDerivedAi":false}'::jsonb`,
   tombstone: sql`SELECT 1`,
 };
+type FixtureDb = { execute: (query: SQL) => Promise<unknown> };
+
+const createFixture = async (db: FixtureDb) => {
+  const columns = [
+    publishedCaseLawDecisions.id,
+    publishedCaseLawDecisions.sourceId,
+    publishedCaseLawDecisions.country,
+    publishedCaseLawDecisions.language,
+    publishedCaseLawDecisions.updatedAt,
+    publishedCaseLawDecisions.contentHash,
+    publishedCaseLawDecisions.astS3Key,
+    publishedCaseLawDecisions.documentAst,
+    publishedCaseLawDecisions.sections,
+    publishedCaseLawDecisions.extractionWarnings,
+  ];
+  await db.execute(
+    sql`CREATE TABLE case_law_published_decisions (${sql.join(
+      columns.map(
+        (column) =>
+          sql`${sql.identifier(column.name)} ${sql.raw(column.getSQLType())}`,
+      ),
+      sql`, `,
+    )})`,
+  );
+  await db.execute(
+    sql`CREATE TABLE case_law_sources (id uuid, descriptor jsonb)`,
+  );
+  const sourceId = createSafeId<"caseLawSource">();
+  const id = createSafeId<"caseLawDecision">();
+  const ast = {
+    version: 1,
+    source: { system: "test", documentId: id, webUrl: "", printUrl: "" },
+    metadata: {
+      caseNumber: "Synthetic 1",
+      court: "Synthetic court",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: "p1",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Synthetic citation text." }],
+        plainText: "Synthetic citation text.",
+      },
+    ],
+  } satisfies DocumentAst;
+  await db.execute(
+    sql`INSERT INTO case_law_sources VALUES (${sourceId}, NULL)`,
+  );
+  await db.execute(sql`INSERT INTO case_law_published_decisions (id, source_id, country, language, updated_at, content_hash, ast_s3_key, document_ast, sections, extraction_warnings)
+      VALUES (${id}, ${sourceId}, 'CZE', 'cs', '2026-01-01T00:00:00.123456Z', 'hash', ${`synthetic/${id}`}, ${JSON.stringify(ast)}::text::jsonb, '[{"index":0,"text":"Synthetic citation text.","type":"argumentation","title":null}]'::jsonb, '[]'::jsonb)`);
+  return { id, ast };
+};
+
 for (const [fence, change] of Object.entries(changes)) {
   for (const mode of ["cached", "windowed"] as const) {
     test(`${fence} fence prevents citation text from a ${mode} read`, async () => {
       const client = await PGlite.create();
       const db = drizzle({ client });
       try {
-        const columns = [
-          publishedCaseLawDecisions.id,
-          publishedCaseLawDecisions.sourceId,
-          publishedCaseLawDecisions.country,
-          publishedCaseLawDecisions.updatedAt,
-          publishedCaseLawDecisions.contentHash,
-          publishedCaseLawDecisions.astS3Key,
-          publishedCaseLawDecisions.documentAst,
-          publishedCaseLawDecisions.sections,
-          publishedCaseLawDecisions.extractionWarnings,
-        ];
-        await db.execute(
-          sql`CREATE TABLE case_law_published_decisions (${sql.join(
-            columns.map(
-              (column) =>
-                sql`${sql.identifier(column.name)} ${sql.raw(column.getSQLType())}`,
-            ),
-            sql`, `,
-          )})`,
-        );
-        await db.execute(
-          sql`CREATE TABLE case_law_sources (id uuid, descriptor jsonb)`,
-        );
-        const sourceId = createSafeId<"caseLawSource">();
-        const id = createSafeId<"caseLawDecision">();
-        const ast = {
-          version: 1,
-          source: { system: "test", documentId: id, webUrl: "", printUrl: "" },
-          metadata: {
-            caseNumber: "Synthetic 1",
-            court: "Synthetic court",
-            ecli: null,
-            decisionDate: null,
-            decisionType: null,
-            keywords: [],
-            statutes: [],
-          },
-          blocks: [
-            {
-              id: "p1",
-              anchorId: "p1",
-              type: "paragraph",
-              inlines: [{ type: "text", text: "Synthetic citation text." }],
-              plainText: "Synthetic citation text.",
-            },
-          ],
-        } satisfies DocumentAst;
-        await db.execute(
-          sql`INSERT INTO case_law_sources VALUES (${sourceId}, NULL)`,
-        );
-        await db.execute(sql`INSERT INTO case_law_published_decisions (id, source_id, country, updated_at, content_hash, ast_s3_key, document_ast, sections, extraction_warnings)
-          VALUES (${id}, ${sourceId}, 'CZE', '2026-01-01T00:00:00.123456Z', 'hash', ${`synthetic/${id}`}, ${JSON.stringify(ast)}::text::jsonb, '[{"index":0,"text":"Synthetic citation text.","type":"argumentation","title":null}]'::jsonb, '[]'::jsonb)`);
+        const { id, ast } = await createFixture(db);
         const tx = asTestRaw<CaseLawPublicReadTransaction>(db);
         let admissionReads = 0;
         const mutateAt = mode === "cached" ? 1 : 4;
@@ -114,6 +123,7 @@ for (const [fence, change] of Object.entries(changes)) {
             caseLawDb,
             pointers,
             countries: ["CZE", "SVK"],
+            evidenceDecisionIds: new Set([id]),
             readTombstones: async () => new Set(),
           });
           expect(warm.get(id)).toMatchObject({ type: "source", text: { ast } });
@@ -125,6 +135,7 @@ for (const [fence, change] of Object.entries(changes)) {
           caseLawDb,
           pointers,
           countries: ["CZE", "SVK"],
+          evidenceDecisionIds: new Set([id]),
           readTombstones: async () => {
             reads += 1;
 
@@ -149,3 +160,56 @@ for (const [fence, change] of Object.entries(changes)) {
     });
   }
 }
+
+test("a page without evidence windows reads section text only when the section index misses", async () => {
+  const client = await PGlite.create();
+  const db = drizzle({ client });
+  try {
+    const { id } = await createFixture(db);
+    const tx = asTestRaw<CaseLawPublicReadTransaction>(db);
+    let reads = 0;
+    const caseLawDb = Object.assign(
+      async <T>(fn: (value: CaseLawPublicReadTransaction) => Promise<T>) => {
+        reads += 1;
+        return await fn(tx);
+      },
+      caseLawPublicReadDb,
+    );
+    const pointers = await readPassageSourcePointers(tx, [id], ["CZE", "SVK"]);
+    const read = async (evidenceDecisionIds: ReadonlySet<string>) => {
+      reads = 0;
+      const result = await readDecisionTextGroup({
+        caseLawDb,
+        pointers,
+        countries: ["CZE", "SVK"],
+        evidenceDecisionIds,
+        readTombstones: async () => new Set(),
+      });
+      return { reads, text: result.get(id) };
+    };
+    // Cold: admission, AST, section index and revalidation.
+    expect(await read(new Set())).toMatchObject({
+      reads: 4,
+      text: { type: "source", text: { evidenceSections: null } },
+    });
+    // Warm: both caches hit, so only admission and revalidation read.
+    expect(await read(new Set())).toMatchObject({
+      reads: 2,
+      text: { type: "source", text: { evidenceSections: null } },
+    });
+    // A row with evidence windows reads its section text on a warm read too.
+    expect(await read(new Set([id]))).toMatchObject({
+      reads: 3,
+      text: {
+        type: "source",
+        text: {
+          evidenceSections: [
+            expect.objectContaining({ text: "Synthetic citation text." }),
+          ],
+        },
+      },
+    });
+  } finally {
+    await client.close();
+  }
+});
