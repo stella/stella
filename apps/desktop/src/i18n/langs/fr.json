@@ -412,7 +412,7 @@
     "captureModesDescription": "Applications enregistrées le jour choisi et applications avec leur propre réglage.",
     "captureModesDetailsOff": "Les titres des fenêtres sont désactivés pour toutes les applications. Activez-les ci-dessus pour les choisir par application.",
     "captureModeLabel": "Ce qu’il faut enregistrer pour {name}",
-    "captureModeTitles": "Titres des fenêtres",
+    "captureModeTitles": "Titres de fenêtre",
     "captureModeAppOnly": "App seule",
     "captureModeNothing": "Rien",
     "captureModeBrowser": "Navigateur",

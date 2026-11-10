@@ -28,7 +28,6 @@ import {
   ListItem,
   ListItemContent,
   ListItemDescription,
-  ListItemMedia,
   ListItemTitle,
 } from "@stll/ui/list";
 import {
@@ -474,19 +473,25 @@ const CaptureModeRow = ({
   const mode = effectiveCaptureMode(settings, app.identifier);
   const browser = isBrowserApp(settings, app.identifier);
   return (
-    <ListItem className="items-start">
-      <ListItemMedia>
-        <ActivitySourceIcon
-          appIdentifier={app.identifier}
-          sourceAppVisuals={settings.sourceAppVisuals}
-        />
-      </ListItemMedia>
-      <ListItemContent className="gap-2">
-        <div className="flex min-h-8 min-w-0 flex-col justify-center gap-0.5">
-          <ListItemTitle>{app.name}</ListItemTitle>
-          {browser ? (
-            <ListItemDescription>{t("captureModeBrowser")}</ListItemDescription>
-          ) : null}
+    <ListItem>
+      {/* One line while the name keeps its minimum width beside the choice;
+       * the choice wraps under the name only when the row is too narrow,
+       * so the width decides, whatever the locale. A 16px icon instead of
+       * the 32px tile leaves the name room in the 480px window. */}
+      <div className="flex w-full flex-wrap items-center justify-end gap-x-2 gap-y-2">
+        <div className="flex min-w-0 grow basis-20 items-center gap-2">
+          <ActivitySourceIcon
+            appIdentifier={app.identifier}
+            sourceAppVisuals={settings.sourceAppVisuals}
+          />
+          <ListItemContent>
+            <ListItemTitle title={app.name}>{app.name}</ListItemTitle>
+            {browser ? (
+              <ListItemDescription>
+                {t("captureModeBrowser")}
+              </ListItemDescription>
+            ) : null}
+          </ListItemContent>
         </div>
         <ToggleGroup<CaptureMode>
           aria-describedby={
@@ -521,7 +526,7 @@ const CaptureModeRow = ({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-      </ListItemContent>
+      </div>
     </ListItem>
   );
 };
