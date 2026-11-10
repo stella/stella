@@ -1,11 +1,7 @@
 import { defineConfig } from "oxlint";
 import type { OxlintOverride } from "oxlint";
 
-import {
-  libraryIgnorePatterns,
-  libraryOverrides,
-  stellaLowercasePluginSpecifier,
-} from "@stll/oxlint-config";
+import { libraryIgnorePatterns, libraryOverrides } from "@stll/oxlint-config";
 
 import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-exceptions.json" with { type: "json" };
 import {
@@ -2065,7 +2061,8 @@ const config = defineConfig({
     { name: "gdp-ts", specifier: "./scripts/oxlint-presets/gdp-plugin.mjs" },
     "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
-    stellaLowercasePluginSpecifier,
+    // The package's plugins load through local re-exports; the modules say why.
+    "./scripts/oxlint-presets/stella-lowercase-plugin.mjs",
     "./.oxlint-plugins/no-raw-cache-control.ts",
     "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/confine-online-ddl.ts",
@@ -2076,7 +2073,7 @@ const config = defineConfig({
     "@tanstack/eslint-plugin-router",
     "./.oxlint-plugins/drizzle.ts",
     "oxlint-tailwindcss",
-    "@stll/oxlint-config/no-raw-colors",
+    "./scripts/oxlint-presets/no-raw-colors-plugin.mjs",
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-native-ui.ts",
     "./.oxlint-plugins/plain-button-placement-only.ts",
