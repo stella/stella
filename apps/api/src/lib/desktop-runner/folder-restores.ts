@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   and,
   desc,
@@ -6,6 +7,7 @@ import {
   isNull,
   notInArray,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
 
@@ -431,13 +433,13 @@ type ClaimOptions = {
   resendSent: boolean;
 };
 
-const ofComputer = (binding: RunnerBinding) =>
+const ofComputer = (binding: RunnerBinding): SQL =>
   and(
     eq(restores.userId, binding.userId),
     eq(restores.organizationId, binding.organizationId),
     eq(restores.desktopId, binding.desktopId),
     eq(restores.deviceJkt, binding.deviceJkt),
-  );
+  ) ?? panic("A computer's restores are named by its binding");
 
 /** Restores one claim sends at most; a computer holds one per chat at a time. */
 const MAX_RESTORES_PER_CLAIM = 100;

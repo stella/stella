@@ -7,6 +7,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
+import type {
+  FolderRestoreRefusal,
+  FolderRestoreView,
+} from "@/api/lib/desktop-runner/folder-restores";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -72,6 +76,16 @@ export const createReadLocalFilesUndo = (dependencies?: UndoDependencies) =>
     },
   );
 
+/** What an undo request answers; one type for every branch, so the route infers the union. */
+type UndoAnswer =
+  | { status: "accepted"; undo: FolderRestoreView; reason: null }
+  | {
+      status: "refused";
+      undo: null;
+      reason: Exclude<FolderRestoreRefusal, "not_found">;
+    };
+const answer = (body: UndoAnswer) => Result.ok(body);
+
 const undoConfig = {
   contract: "patch",
   description:
@@ -128,8 +142,8 @@ export const createUndoLocalFiles = (dependencies?: UndoDependencies) =>
             );
           }
           set.status = UNDO_ACCEPTED_STATUS;
-          return Result.ok({
-            status: "accepted" as const,
+          return answer({
+            status: "accepted",
             undo: outcome.restore,
             reason: null,
           });
@@ -139,8 +153,8 @@ export const createUndoLocalFiles = (dependencies?: UndoDependencies) =>
             return Result.err(turnNotFound());
           }
           set.status = UNDO_REFUSED_STATUS;
-          return Result.ok({
-            status: "refused" as const,
+          return answer({
+            status: "refused",
             undo: null,
             reason: outcome.reason,
           });
