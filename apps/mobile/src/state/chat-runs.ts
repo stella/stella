@@ -49,7 +49,7 @@ export type ActiveChatRun = {
 };
 
 /** The runs this build can draw, in the order the server lists them. */
-export const knownRuns = (
+const knownRuns = (
   items: readonly v.InferOutput<typeof runSchema>[],
 ): ActiveChatRun[] =>
   items.flatMap(({ since, state, threadId, threadTitle, workspaceId }) =>

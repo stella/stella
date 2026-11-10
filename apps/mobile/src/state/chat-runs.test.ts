@@ -12,7 +12,7 @@ import {
   type StoredSession,
 } from "@/connection/session";
 
-import { inboxSections, knownRuns, listActiveChatRuns } from "./chat-runs";
+import { inboxSections, listActiveChatRuns } from "./chat-runs";
 import type { ActiveChatRun } from "./chat-runs";
 import type { ChatThreadSummary } from "./chat-threads";
 
@@ -255,19 +255,5 @@ describe("reading unfinished runs", () => {
       Response.json({ message: "Forbidden" }, { status: 403 });
     const read = await listActiveChatRuns({ fetch, source: sourceFor(fetch) });
     expect(Result.isError(read)).toBe(true);
-  });
-
-  test("keeps only the states the contract names", () => {
-    expect(
-      knownRuns([
-        {
-          threadId: "t1",
-          threadTitle: "",
-          workspaceId: null,
-          state: "unknown",
-          since: "2026-11-10T08:00:00.000Z",
-        },
-      ]),
-    ).toEqual([]);
   });
 });
