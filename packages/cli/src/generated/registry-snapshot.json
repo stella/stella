@@ -13488,11 +13488,6 @@
           "type": "boolean",
           "description": "Show matter numbers in titles"
         },
-        "ai_instructions": {
-          "type": "string",
-          "maxLength": 3000,
-          "description": "Org-wide AI instructions (3000 chars); empty clears. Next message onward; override personal preferences."
-        },
         "prompt_caching_enabled": {
           "type": "boolean",
           "description": "Toggle AI prompt caching"

@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
+import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
@@ -348,7 +349,6 @@ describe("matter membership and organization settings", () => {
       ).toContain("user_id");
       for (const extra of [
         { prompt_caching_enabled: true },
-        { ai_instructions: "Use concise language." },
         { action: "add_member" },
       ]) {
         expect(
@@ -394,35 +394,37 @@ describe("matter membership and organization settings", () => {
     ).toEqual({ type: "always" });
   });
 
-  test("rejects organization AI instructions exceeding the shared limit", async () => {
-    for (const aiInstructions of [
-      "x".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH + 1),
-      "😀".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH / 2 + 1),
-    ]) {
-      expect(
-        errorText(
-          await RESEARCH_ADMIN_TOOL_HANDLERS.update_organization_settings({
-            args: { ai_instructions: aiInstructions },
-            context: createContext(),
-          }),
-        ),
-      ).toContain("ai_instructions");
-    }
-  });
-
-  test("allows setting and clearing AI instructions through the organization authority gate", async () => {
-    for (const aiInstructions of [
-      "Use concise language.",
-      "",
-      "😀".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH / 2),
-    ]) {
-      const result =
+  // Organization AI instructions stay off the curated tool, which keeps the
+  // connect-time tool list within budget; agents reach them on demand through
+  // the organization-settings.update capability instead.
+  test("AI instructions are written through the settings capability, not the curated tool", async () => {
+    expect(
+      errorText(
         await RESEARCH_ADMIN_TOOL_HANDLERS.update_organization_settings({
-          args: { ai_instructions: aiInstructions },
-          context: createContext("member"),
-        });
-      expect(errorMessage(result)).toBe("Forbidden");
-    }
+          args: { ai_instructions: "Use concise language." },
+          context: createContext(),
+        }),
+      ),
+    ).toContain("validation_error");
+    const entry = readCapabilityCatalog().find(
+      (candidate) =>
+        typeof candidate === "object" &&
+        candidate !== null &&
+        "id" in candidate &&
+        candidate.id === "organization-settings.update",
+    );
+    expect(entry).toMatchObject({
+      inputSchema: {
+        body: {
+          properties: {
+            aiInstructions: {
+              type: "string",
+              maxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
+            },
+          },
+        },
+      },
+    });
   });
 
   test("settings reject empty updates, unpaired numbering, and member fields", async () => {
