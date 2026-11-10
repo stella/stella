@@ -7,6 +7,7 @@ import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { loadCurrentOcrExport } from "@/api/lib/document-content-provenance";
 import { createOcrSearchablePdfKey } from "@/api/lib/file-key";
+import { lockLiveVersionField } from "@/api/lib/files/read-file";
 import { getS3 } from "@/api/lib/s3";
 import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -87,8 +88,12 @@ export const readOcrExport = async ({
     }
     // The storage lookup runs between the two reads, so the export is read
     // again where the URL is signed: a link is issued only while the version
-    // and its OCR run are still current.
+    // and its OCR run are still current. The version's share lock keeps a
+    // tombstone from committing until the link is signed and audited.
     const url = await scopedDb(async (tx) => {
+      if ((await lockLiveVersionField(tx, fieldId, workspaceId)) === null) {
+        return null;
+      }
       const current = await loadExport(tx);
       if (current?.ocrRunId !== row.ocrRunId) {
         return null;

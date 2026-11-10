@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { status } from "@/api/http/status";
 import type { HttpStatusResponse } from "@/api/http/status";
@@ -14,7 +13,7 @@ import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import { fileFieldQuery } from "@/api/lib/files/read-file";
+import { lockLiveVersionField } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { callerDownloadSource } from "@/api/lib/s3-presign";
 
@@ -40,8 +39,9 @@ const config = {
  * Redirect to the WebP thumbnail of a matter image file.
  *
  * The field is resolved through the same workspace-bound, tombstone-excluding
- * lookup as the file itself, so a field from another matter answers 404. A
- * file without a generated thumbnail, or an encrypted one, answers 404 too.
+ * lookup as the file itself, so a field from another matter answers 404, and
+ * stays locked against a tombstone until the link is signed. A file without a
+ * generated thumbnail, or an encrypted one, answers 404 too.
  *
  * @yields Structured errors from thumbnail lookup or URL signing.
  */
@@ -56,19 +56,14 @@ export default createSafeHandler(
     workspaceId,
   }): SafeHandlerGenerator<Response | HttpStatusResponse<404, string>> {
     const organizationId = session.activeOrganizationId;
-    // The lookup and the signature share one transaction: a link is issued
-    // only for a field whose version is live when the URL is signed.
+    // The lookup holds the version's share lock through the signature, so a
+    // tombstone either commits before the lookup (404) or waits until the
+    // link is signed and audited.
     const presignedUrl = yield* Result.await(
       Result.tryPromise(
         async () =>
           await scopedDb(async (tx) => {
-            const inTransaction: ScopedDb = async (read) => await read(tx);
-            const rows = await fileFieldQuery(
-              inTransaction,
-              fieldId,
-              workspaceId,
-            );
-            const row = rows.at(0);
+            const row = await lockLiveVersionField(tx, fieldId, workspaceId);
             if (row?.content.type !== "file") {
               return null;
             }
