@@ -1,0 +1,44 @@
+{
+  "name": "@stll/outlook",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "cert": "bun scripts/create-dev-cert.ts",
+    "dev": "bun scripts/dev.ts",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware --type-check apps/outlook",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/outlook",
+    "probe:deployment": "bun scripts/probe-deployment.ts",
+    "serve": "bun scripts/serve.ts",
+    "test": "bun test src scripts",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "validate:manifest": "bun scripts/validate-manifest.ts"
+  },
+  "dependencies": {
+    "@stll/api-contract": "workspace:*",
+    "@stll/concurrency": "workspace:*",
+    "@stll/sha256": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
+    "@stll/time": "0.4.2",
+    "@stll/ui": "workspace:*",
+    "better-result": "catalog:",
+    "mimetext": "^3.0.28",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
+    "use-intl": "catalog:",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@tailwindcss/cli": "4.3.3",
+    "@types/office-js": "^1.0.604",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "bun-types": "catalog:",
+    "libxml2-wasm": "^0.7.1",
+    "tailwindcss": "catalog:"
+  },
+  "crawlPosture": "private"
+}

@@ -129,6 +129,20 @@
         "src/**/*.test.ts"
       ]
     },
+    // scripts/build.ts bundles these entry points into the static task pane,
+    // dialog and command pages; knip cannot follow the bundler's list.
+    "apps/outlook": {
+      "entry": [
+        "src/main.tsx",
+        "src/commands.ts",
+        "src/auth-start.ts",
+        "src/auth-callback.ts",
+        "src/office-history-*.ts",
+        "scripts/*.ts",
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx"
+      ]
+    },
     "apps/landing": {
       "entry": [
         "src/**/*.astro",
