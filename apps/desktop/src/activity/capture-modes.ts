@@ -181,7 +181,8 @@ export const undecidedBrowser = (
         const seen = firstSeen(browser.identifier);
         return seen === null ? [] : [{ browser, seen }];
       })
-      .toSorted((left, right) => left.seen.localeCompare(right.seen))
+      // Sorted in place, a fresh array: older WebViews lack `toSorted`.
+      .sort((left, right) => left.seen.localeCompare(right.seen))
       .at(0)?.browser ?? null
   );
 };
@@ -216,10 +217,9 @@ export const captureModeApps = (
     }
   }
   const collator = new Intl.Collator(locale, { sensitivity: "base" });
-  return [
-    ...dayApps,
-    ...saved.toSorted((left, right) => collator.compare(left.name, right.name)),
-  ];
+  // Sorted in place, a local array: older WebViews lack `toSorted`.
+  saved.sort((left, right) => collator.compare(left.name, right.name));
+  return [...dayApps, ...saved];
 };
 
 /** Whether the native side classified this app as a browser. */
