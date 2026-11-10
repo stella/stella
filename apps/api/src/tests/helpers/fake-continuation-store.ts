@@ -94,6 +94,8 @@ export const createFakeContinuationStore = () => {
     },
     /** Whether an answer has been stored for this work. */
     hasFinished: (workId: string) => live(`done:${workId}`) !== null,
+    /** Whether progress has been stored for this work. */
+    hasProgress: (workId: string) => live(`prog:${workId}`) !== null,
     setAvailable: (value: boolean) => {
       available = value;
     },
