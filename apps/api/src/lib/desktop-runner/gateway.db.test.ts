@@ -160,6 +160,7 @@ import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { isRecord } from "@/api/lib/type-guards";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { chatLocalFilesUndoScalingScenario } from "@/api/tests/read-scaling/chat-local-files-undo";
 import { chatLocalRunnersScalingScenario } from "@/api/tests/read-scaling/chat-local-runners";
 import { desktopRunnerUpgradeScalingScenario } from "@/api/tests/read-scaling/desktop-runner-upgrade";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
@@ -6092,6 +6093,49 @@ describe("undoing a turn's file changes", () => {
       undo: { state: "queued" },
     });
     expect((await desktop.receive("folder.restore")).runId).toBe(runId);
+    await desktop.close();
+  });
+
+  test("a turn's undo reads the same however many undos were asked before", async () => {
+    const { desktopId, desktop } = await connected();
+    const threadId = await newThread();
+    const { turnId, runId } = await finishedTurn(desktop, desktopId, {
+      threadId,
+    });
+    const counted = createDesktopRunnerControl({
+      // SAFETY: PGlite and Bun SQL expose the same Drizzle query APIs.
+      db: asTestRaw<DesktopRunnerDb>(withQueryLogger(db, queryCountLogger)),
+      doorbell: sharedDoorbell,
+      now,
+      timing: TIMING,
+    });
+    const fixture = { control: counted, owner, threadId, turnId };
+    const small = await chatLocalFilesUndoScalingScenario.measure(fixture);
+    const [runner] = await db
+      .select({ deviceJkt: desktopRunners.deviceJkt })
+      .from(desktopRunners)
+      .where(eq(desktopRunners.desktopId, desktopId));
+    // Undos the computer refused, each asked again after the last.
+    await db.insert(desktopRunnerFolderRestores).values(
+      Array.from({ length: 20 }, (_, index) => ({
+        id: Bun.randomUUIDv7(),
+        userId: ids.userA1,
+        organizationId: ids.orgA,
+        chatThreadId: threadId,
+        chatTurnId: turnId,
+        runId,
+        desktopId,
+        deviceJkt: runner?.deviceJkt ?? panic("the computer has a runner row"),
+        state: "refused" as const,
+        reason: "failed" as const,
+        createdAt: new Date(clock.now + index),
+        expiresAt: new Date(clock.now + index + MINUTE_MS),
+        settledAt: new Date(clock.now + index),
+      })),
+    );
+    const large = await chatLocalFilesUndoScalingScenario.measure(fixture);
+    expect(small.statements).toBeGreaterThan(0);
+    expect(readScalingViolations({ small, large })).toEqual([]);
     await desktop.close();
   });
 

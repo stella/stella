@@ -173,10 +173,6 @@
       "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
-      "id": "GET /v1/chat/threads/:threadId/turns/:turnId/local-files/undo",
-      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
-    },
-    {
       "id": "GET /v1/chat/threads/:threadId/turns/:turnId/resume",
       "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },

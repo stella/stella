@@ -17,6 +17,7 @@ import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
+import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
 import { claimCommentScalingScenarios } from "./claim-comments";
@@ -74,6 +75,7 @@ const measuredApiScenarios = [
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
+  chatLocalFilesUndoScalingScenario,
   chatActiveRunsScalingScenario,
   browserSiteGrantsScalingScenario,
   chatMcpAppBundleScalingScenario,

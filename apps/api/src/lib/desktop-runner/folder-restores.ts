@@ -229,15 +229,13 @@ export const readTurnFolderRestore = async (
   };
 };
 
-/** Why a turn's undo was not queued: the endpoint's refusals, or no such turn. */
-export type FolderRestoreRefusal = "not_found" | ChatLocalFilesUndoRefusal;
-
 export type RequestedFolderRestore =
   /** Queued now; its computer's socket is rung. */
   | { type: "queued"; restore: FolderRestoreView; holder: RunHolder }
   /** The turn's restore that is still going or done, answered again. */
   | { type: "existing"; restore: FolderRestoreView }
-  | { type: "refused"; reason: FolderRestoreRefusal };
+  /** The endpoint's refusals, or no such turn of the member. */
+  | { type: "refused"; reason: "not_found" | ChatLocalFilesUndoRefusal };
 
 type RequestOptions = TurnOptions & {
   restoreId: string;

@@ -85,6 +85,7 @@ import type {
   ChatRunForRequest,
   DesktopRunnerRunView,
   RunOwner,
+  SequencedRunMessage,
 } from "@/api/lib/desktop-runner/store";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -1314,6 +1315,33 @@ const openedCalls = async (
  *
  * @yields Chunks of the chat run, ending with its terminal one.
  */
+/**
+ * A message the gateway stored for a run, as the turn reads it back. It
+ * stores only the sequenced ones, each validated when it arrived.
+ */
+const storedRunMessage = (stored: unknown): SequencedRunMessage => {
+  const parsed = v.safeParse(desktopRunnerDesktopMessageSchema, stored);
+  if (!parsed.success) {
+    return panic("A stored desktop runner message no longer validates");
+  }
+  const message = parsed.output;
+  switch (message.type) {
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished:
+      return message;
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.hello:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.harnessStatus:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runAccepted:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runRejected:
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored:
+      return panic(`A run stored an unsequenced ${message.type}`);
+    default:
+      message satisfies never;
+      return panic("Unknown desktop runner message");
+  }
+};
+
 async function* readRunChunks({
   context,
   runnerRunId,
@@ -1410,14 +1438,7 @@ async function* readRunChunks({
       }
       for (const item of page.value.items) {
         position = item.seq;
-        const parsed = v.safeParse(
-          desktopRunnerDesktopMessageSchema,
-          item.message,
-        );
-        if (!parsed.success) {
-          panic("A stored desktop runner message no longer validates");
-        }
-        const message = parsed.output;
+        const message = storedRunMessage(item.message);
         switch (message.type) {
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent: {
             if (!isPublicStreamChunk(message.chunk)) {
@@ -1492,13 +1513,10 @@ async function* readRunChunks({
             }
             return;
           }
-          // The gateway stores only sequenced messages for a run.
-          case DESKTOP_RUNNER_DESKTOP_MESSAGE.hello:
-          case DESKTOP_RUNNER_DESKTOP_MESSAGE.harnessStatus:
-          case DESKTOP_RUNNER_DESKTOP_MESSAGE.runAccepted:
-          case DESKTOP_RUNNER_DESKTOP_MESSAGE.runRejected:
-          case DESKTOP_RUNNER_DESKTOP_MESSAGE.folderRestored:
-            panic(`A run stored an unsequenced ${message.type}`);
+          default: {
+            message satisfies never;
+            panic("Unknown stored desktop runner message");
+          }
         }
       }
       if (page.value.nextAfterSeq !== null) {

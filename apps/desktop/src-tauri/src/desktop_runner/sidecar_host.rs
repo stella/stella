@@ -165,7 +165,7 @@ struct Shared {
   restores: Mutex<HashSet<String>>,
   /// Every restore request the host was handed, repeats included, so a test
   /// knows a resend arrived before it moves on.
-  #[cfg(test)]
+  #[cfg(all(test, unix))]
   restores_asked: std::sync::atomic::AtomicUsize,
 }
 
@@ -182,7 +182,7 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 impl SidecarHarnessHost {
   /// How many restore requests the host was handed, repeats included.
-  #[cfg(test)]
+  #[cfg(all(test, unix))]
   pub(crate) fn restores_asked(&self) -> usize {
     self
       .shared
@@ -198,7 +198,7 @@ impl SidecarHarnessHost {
       shared: Arc::new(Shared {
         folders: Mutex::new(HashSet::new()),
         restores: Mutex::new(HashSet::new()),
-        #[cfg(test)]
+        #[cfg(all(test, unix))]
         restores_asked: std::sync::atomic::AtomicUsize::new(0),
         settings,
         harnesses,
@@ -959,15 +959,11 @@ impl HarnessHost for SidecarHarnessHost {
   }
 
   fn restore_folder(&self, restore: FolderRestore, answer: FolderAnswer) {
-    // Only a UUID names a folder.
-    let Ok(folder_id) = Uuid::parse_str(&restore.folder_id) else {
-      answer.send(FolderRestoreOutcome::Failed);
-      return;
-    };
+    let folder_id = restore.folder_id.uuid();
     // The same restore asked again while it runs: its answer comes when it
     // ends, on whichever socket is up then.
     let fresh = locked(&self.shared.restores).insert(restore.restore_id.clone());
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     self
       .shared
       .restores_asked

@@ -516,13 +516,39 @@ pub(crate) struct Ack {
   pub(crate) seq: NonZeroU32,
 }
 
+/// A chat folder's id. Only a UUID names a folder, so no path rides in it;
+/// anything else fails to parse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub(crate) struct FolderId(uuid::Uuid);
+
+impl FolderId {
+  pub(crate) const fn uuid(self) -> uuid::Uuid {
+    self.0
+  }
+}
+
+impl TryFrom<String> for FolderId {
+  type Error = uuid::Error;
+
+  fn try_from(id: String) -> Result<Self, Self::Error> {
+    uuid::Uuid::parse_str(&id).map(Self)
+  }
+}
+
+impl From<FolderId> for String {
+  fn from(id: FolderId) -> Self {
+    id.0.to_string()
+  }
+}
+
 /// Put a chat's folder back as it was before the run, from the checkpoint the
 /// run took. Sent again on a new socket until it is answered.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct FolderRestore {
   pub(crate) restore_id: String,
-  pub(crate) folder_id: String,
+  pub(crate) folder_id: FolderId,
   pub(crate) run_id: String,
 }
 
