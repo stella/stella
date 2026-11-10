@@ -2,11 +2,16 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { DESKTOP_RUNNER_PROTOCOL } from "@stll/api-contract/desktop-runner";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   chatMessages,
   chatThreads,
   chatTurns,
+  desktopRunnerFolderRestores,
+  desktopRunnerRuns,
+  desktopRunners,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
@@ -229,6 +234,61 @@ const readResponse = async (fixture: Fixture, messages: Messages) =>
     }),
   );
 
+/** The thread's only turn, its file changes undone on the member's computer. */
+const seedRestoredUndo = async (fixture: Fixture, messages: Messages) => {
+  const [turn] = await fixture.db
+    .select({ id: chatTurns.id })
+    .from(chatTurns)
+    .where(eq(chatTurns.threadId, messages.threadId));
+  const desktopId = Bun.randomUUIDv7();
+  const deviceJkt = `jkt-${desktopId}`;
+  const owner = {
+    userId: fixture.userId,
+    organizationId: fixture.organizationId,
+  };
+  await fixture.db.insert(desktopRunners).values({
+    ...owner,
+    desktopId,
+    deviceJkt,
+    keyId: `key-${desktopId}`,
+    sessionId: Bun.randomUUIDv7(),
+    instanceId: "api-test",
+    connection: "connected",
+    protocol: DESKTOP_RUNNER_PROTOCOL.current,
+    appVersion: "1.4.0",
+    sidecarVersion: "1.4.0",
+    harnesses: [],
+    connectedAt: settledAt,
+    lastSeenAt: settledAt,
+  });
+  const runId = Bun.randomUUIDv7();
+  await fixture.db.insert(desktopRunnerRuns).values({
+    ...owner,
+    runId,
+    desktopId,
+    deviceJkt,
+    harness: "codex",
+    harnessVersion: "1.0.0",
+    workspaceIds: [],
+    state: "finished",
+    outcome: "completed",
+    leaseExpiresAt: settledAt,
+    chatThreadId: messages.threadId,
+  });
+  await fixture.db.insert(desktopRunnerFolderRestores).values({
+    ...owner,
+    id: Bun.randomUUIDv7(),
+    chatThreadId: messages.threadId,
+    chatTurnId: turn?.id ?? panic("the turn was not seeded"),
+    runId,
+    desktopId,
+    deviceJkt,
+    state: "restored",
+    expiresAt: settledAt,
+    settledAt,
+  });
+};
+
 const readMessages = async (fixture: Fixture, messages: Messages) => {
   const response = await readResponse(fixture, messages);
   if ("code" in response) {
@@ -368,6 +428,43 @@ if (!databaseUrl || !runPostgresTests) {
             assistantMessageId: messages.assistantMessageId,
           },
         );
+      });
+    });
+
+    test("an undone turn stays named as undone after the chat moves to the cloud", async () => {
+      await withFixture(async (fixture) => {
+        const messages = await seedMessages(fixture, fixture.workspaceId);
+        await seedTurn({
+          fixture,
+          messages,
+          durationMs: 4000,
+          state: "completed",
+        });
+        await fixture.db
+          .update(chatThreads)
+          .set({
+            chatLocalRunTarget: {
+              kind: "local",
+              harness: "codex",
+              model: "gpt-test",
+              approvals: "ask",
+            },
+          })
+          .where(eq(chatThreads.id, messages.threadId));
+        await seedRestoredUndo(fixture, messages);
+        const undone = [{ assistantMessageId: messages.assistantMessageId }];
+        expect((await readMessages(fixture, messages)).undoneTurns).toEqual(
+          undone,
+        );
+
+        await fixture.db
+          .update(chatThreads)
+          .set({ chatLocalRunTarget: null })
+          .where(eq(chatThreads.id, messages.threadId));
+        const cloud = await readMessages(fixture, messages);
+        // A cloud chat offers no new undo, but the old one keeps its marker.
+        expect(cloud.newestLocalTurn).toBe(null);
+        expect(cloud.undoneTurns).toEqual(undone);
       });
     });
 

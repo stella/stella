@@ -474,6 +474,19 @@ const getMessages = createSafeRootHandler(
       revisionNoteTokens,
     } = reads;
 
+    // The turns whose file changes on the member's computer were undone keep
+    // their marker after newer turns, and after the chat moves to the cloud:
+    // the restores are read whatever the chat runs on now.
+    const undoneTurns = yield* Result.await(
+      getDesktopRunnerControl().control.readRestoredTurns({
+        owner: {
+          userId: user.id,
+          organizationId: session.activeOrganizationId,
+        },
+        threadId,
+      }),
+    );
+
     // Estimated for every thread, empty ones included: with no messages and no
     // summary the estimate is just the cache-stable floor, so the meter is
     // honest from the first render instead of reading 0% until the first send.
@@ -481,20 +494,6 @@ const getMessages = createSafeRootHandler(
     // path applies (provider availability and the thread's opt-in), and (unlike
     // template studio) the standalone read path never carries template-authoring
     // tools. The trigger denominator resolves the same model the next send uses.
-    // The turns whose file changes on the member's computer were undone keep
-    // their marker after newer turns; read only for a chat that runs there.
-    const undoneTurns =
-      reads.newestLocalTurn === null
-        ? []
-        : yield* Result.await(
-            getDesktopRunnerControl().control.readRestoredTurns({
-              owner: {
-                userId: user.id,
-                organizationId: session.activeOrganizationId,
-              },
-              threadId,
-            }),
-          );
     const persistedMessages = windowedMessages.map((message) =>
       chatMessageFromPersisted(message),
     );
