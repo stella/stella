@@ -1803,7 +1803,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
               await locker.unsafe<{ blocked: unknown }[]>(
                 `SELECT ${expression} AS blocked`,
               )
-            ).at(0)?.["blocked"] === true,
+            ).at(0)?.blocked === true,
         });
         expect(counts).toBe(0);
       } finally {

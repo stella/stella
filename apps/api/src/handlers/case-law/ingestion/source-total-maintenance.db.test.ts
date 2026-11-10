@@ -249,7 +249,7 @@ describe.skipIf(!enabled)(
             );
             const owner = (
               await client<{ owner: unknown }[]>`SELECT current_user AS owner`
-            ).at(0)?.["owner"];
+            ).at(0)?.owner;
             if (typeof owner !== "string") {
               panic("Fixture login omitted its role name");
             }
