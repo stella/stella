@@ -22,6 +22,7 @@ export const MODEL_OVERRIDE_GROUPS = [
   "chat",
   "reasoning",
   "pdf",
+  "browse",
 ] as const;
 export type ModelOverrideGroup = (typeof MODEL_OVERRIDE_GROUPS)[number];
 
@@ -35,12 +36,31 @@ export const MODEL_TASK_OVERRIDE_GROUP = {
   "short-text": "fast",
 } as const satisfies Record<ModelTask, ModelOverrideGroup>;
 
+/**
+ * The one place a role (an override group an admin picks a model for) names
+ * the task whose defaults and capability checks it inherits. A role that does
+ * not own that task, like `browse`, has no default of its own: while the admin
+ * has not picked a model for it, it runs on the owning role's model.
+ */
 export const MODEL_OVERRIDE_GROUP_TASK = {
   fast: "short-text",
   chat: "chat",
   reasoning: "reasoning",
   pdf: "pdf",
+  browse: "short-text",
 } as const satisfies Record<ModelOverrideGroup, ModelTask>;
+
+/**
+ * The role whose choice an unset role follows, or null for a role that owns
+ * its task. Derived from the two maps above, so it cannot drift: `browse`
+ * inherits `short-text`, which `fast` owns.
+ */
+export const inheritedOverrideGroup = (
+  group: ModelOverrideGroup,
+): ModelOverrideGroup | null => {
+  const owner = MODEL_TASK_OVERRIDE_GROUP[MODEL_OVERRIDE_GROUP_TASK[group]];
+  return owner === group ? null : owner;
+};
 
 /** A reasoning request is capability-clamped before it reaches the provider. */
 export type ModelMode =
@@ -155,13 +175,14 @@ const UNMEASURED_SEED_QUALITY = {
   measurement: { status: "unmeasured" },
 } as const satisfies ModelDefaultQuality;
 
-const DEFAULT_RATIONALE_BY_GROUP = {
+export const DEFAULT_RATIONALE_BY_GROUP = {
   fast: { rationaleKey: "organization.aiConfig.defaultRationale.fast" },
   chat: { rationaleKey: "organization.aiConfig.defaultRationale.chat" },
   reasoning: {
     rationaleKey: "organization.aiConfig.defaultRationale.reasoning",
   },
   pdf: { rationaleKey: "organization.aiConfig.defaultRationale.pdf" },
+  browse: { rationaleKey: "organization.aiConfig.defaultRationale.browse" },
 } as const satisfies Record<ModelOverrideGroup, ModelDefaultRationale>;
 
 const CHAT_DEFAULTS = {
@@ -580,6 +601,12 @@ export const resolveDefaultOverrideModels = <TProvider extends AIProvider>(
     pdf: defaultSelection(
       resolveDefaultModel({
         task: MODEL_OVERRIDE_GROUP_TASK.pdf,
+        orgProviders,
+      }),
+    ),
+    browse: defaultSelection(
+      resolveDefaultModel({
+        task: MODEL_OVERRIDE_GROUP_TASK.browse,
         orgProviders,
       }),
     ),

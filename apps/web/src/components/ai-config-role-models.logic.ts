@@ -5,6 +5,7 @@ import {
   BYOK_MODEL_OPTIONS,
   DECISION_MODEL_CATALOG,
   DECISION_MODEL_PROVIDERS,
+  inheritedOverrideGroup,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   MODEL_OVERRIDE_GROUPS,
@@ -37,6 +38,7 @@ const MODEL_GROUP_DISPLAY_ORDER = {
   fast: 1,
   reasoning: 2,
   pdf: 3,
+  browse: 4,
 } as const satisfies Record<ModelOverrideGroup, number>;
 export const ROLE_KEYS = MODEL_OVERRIDE_GROUPS.toSorted(
   (left, right) =>
@@ -273,6 +275,7 @@ export const projectDefaultRoleModels = (
     fast: project(defaultModels.fast),
     reasoning: project(defaultModels.reasoning),
     pdf: project(defaultModels.pdf),
+    browse: project(defaultModels.browse),
   };
 };
 
@@ -328,7 +331,19 @@ export const roleModelsFromOverrideModels = ({
     }
   }
 
-  return { ...defaultModels, ...Object.fromEntries(entries) };
+  const resolved: RoleModelSelections = {
+    ...defaultModels,
+    ...Object.fromEntries(entries),
+  };
+  // A role the admin never picked (a config saved before it existed) runs on
+  // the role it inherits, as the server resolves it, so show that model.
+  const inheritedEntries = ROLE_KEYS.flatMap((role) => {
+    const inherited = inheritedOverrideGroup(role);
+    return inherited !== null && overrideModels[role] === undefined
+      ? [[role, resolved[inherited]] as const]
+      : [];
+  });
+  return { ...resolved, ...Object.fromEntries(inheritedEntries) };
 };
 
 export const roleOverridesFromStoredModels = ({
@@ -517,12 +532,13 @@ export const serializeOverrideModels = ({
   const fast = roleModels.fast;
   const reasoning = roleModels.reasoning;
   const pdf = roleModels.pdf;
+  const browse = roleModels.browse;
 
-  if (!(chat && fast && reasoning && pdf)) {
+  if (!(chat && fast && reasoning && pdf && browse)) {
     return null;
   }
 
-  const selections = { chat, fast, reasoning, pdf } satisfies Record<
+  const selections = { chat, fast, reasoning, pdf, browse } satisfies Record<
     RoleValue,
     ModelSelection
   >;
@@ -542,6 +558,7 @@ export const serializeOverrideModels = ({
     fast: normalizeModelSelection(fast),
     reasoning: normalizeModelSelection(reasoning),
     pdf: normalizeModelSelection(pdf),
+    browse: normalizeModelSelection(browse),
   };
 };
 

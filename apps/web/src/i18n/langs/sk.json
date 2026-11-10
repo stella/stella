@@ -4899,6 +4899,7 @@
       "defaultModel": "Predvolené: {model}",
       "defaultModelOption": "Predvolené",
       "defaultRationale": {
+        "browse": "Na prácu s webovými stránkami v prehliadači.",
         "chat": "Na konverzáciu a bežné otázky.",
         "fast": "Na krátke, rutinné úlohy.",
         "pdf": "Na čítanie a analýzu dokumentov PDF.",
@@ -4950,6 +4951,7 @@
       "replaceKey": "Nahradiť kľúč",
       "roleUnavailable": "{provider} túto rolu nepodporuje.",
       "roles": {
+        "browse": "Prehliadanie webu",
         "chat": "Chat",
         "fast": "Rýchly",
         "pdf": "PDF",

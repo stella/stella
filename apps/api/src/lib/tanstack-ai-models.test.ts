@@ -1090,6 +1090,7 @@ describe("tanStackModelOptionsForTask", () => {
       chat: "routine",
       reasoning: "reasoning",
       pdf: "routine",
+      browse: "fast",
     } as const satisfies Record<
       ModelOverrideGroup,
       keyof typeof baseline.google

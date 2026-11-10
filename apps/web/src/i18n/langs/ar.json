@@ -4899,6 +4899,7 @@
       "defaultModel": "الافتراضي: {model}",
       "defaultModelOption": "الافتراضي",
       "defaultRationale": {
+        "browse": "للعمل على المواقع الإلكترونية في المتصفح.",
         "chat": "للمحادثات والأسئلة اليومية.",
         "fast": "للمهام القصيرة والروتينية.",
         "pdf": "لقراءة مستندات PDF وتحليلها.",
@@ -4950,6 +4951,7 @@
       "replaceKey": "استبدال المفتاح",
       "roleUnavailable": "لا يدعم {provider} هذا الدور.",
       "roles": {
+        "browse": "التصفح",
         "chat": "دردشة",
         "fast": "سريع",
         "pdf": "PDF",

@@ -83,18 +83,22 @@ const decisionBody = v.union([
   decisionBodyByProvider.openai,
 ]);
 
+// One entry per role, checked against the role list: an object schema drops
+// keys it does not list, so a role missing here was discarded on save.
+const overrideModelsBodyEntries = {
+  fast: v.optional(modelSelectionBody),
+  chat: v.optional(modelSelectionBody),
+  reasoning: v.optional(modelSelectionBody),
+  pdf: v.optional(modelSelectionBody),
+  browse: v.optional(modelSelectionBody),
+} satisfies Record<
+  ModelOverrideGroup,
+  v.OptionalSchema<typeof modelSelectionBody, undefined>
+>;
+
 const updateAIConfigBody = v.object({
   providers: v.pipe(v.array(providerBody), v.minLength(1)),
-  overrideModels: v.optional(
-    v.nullable(
-      v.object({
-        fast: v.optional(modelSelectionBody),
-        chat: v.optional(modelSelectionBody),
-        reasoning: v.optional(modelSelectionBody),
-        pdf: v.optional(modelSelectionBody),
-      }),
-    ),
-  ),
+  overrideModels: v.optional(v.nullable(v.object(overrideModelsBodyEntries))),
   decision: v.optional(v.nullable(decisionBody)),
 });
 

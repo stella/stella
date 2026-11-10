@@ -4899,6 +4899,7 @@
       "defaultModel": "Noklusējums: {model}",
       "defaultModelOption": "Noklusējums",
       "defaultRationale": {
+        "browse": "Darbam ar tīmekļa vietnēm pārlūkprogrammā.",
         "chat": "Sarunām un ikdienas jautājumiem.",
         "fast": "Īsiem, ikdienišķiem uzdevumiem.",
         "pdf": "PDF dokumentu lasīšanai un analīzei.",
@@ -4950,6 +4951,7 @@
       "replaceKey": "Aizstāt atslēgu",
       "roleUnavailable": "{provider} neatbalsta šo lomu.",
       "roles": {
+        "browse": "Pārlūkošana",
         "chat": "Tērzēšana",
         "fast": "Ātrs",
         "pdf": "PDF",

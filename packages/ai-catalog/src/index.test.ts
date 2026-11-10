@@ -396,7 +396,8 @@ describe("resolveWorkingBYOKModelForTask", () => {
         expect(entry.rationaleKey).toBe(
           `organization.aiConfig.defaultRationale.${role}`,
         );
-        expect(BYOK_MODEL_OPTIONS[provider]).toContain(entry.modelId);
+        const offered: readonly string[] = BYOK_MODEL_OPTIONS[provider];
+        expect(offered).toContain(entry.modelId);
         expect(
           isBYOKModelRoleSupported({ provider, modelId: entry.modelId, role }),
         ).toBe(true);

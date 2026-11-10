@@ -43,30 +43,35 @@ const GOOGLE_DEFAULTS = {
   fast: { provider: "google", modelId: "gemini-3.8-flash" },
   reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
   pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+  browse: { provider: "google", modelId: "gemini-3.8-flash" },
 } satisfies RoleModelSelections;
 const ANTHROPIC_DEFAULTS = {
   chat: { provider: "anthropic", modelId: "claude-opus-5-5" },
   fast: { provider: "anthropic", modelId: "claude-haiku-5-5" },
   reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
   pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
+  browse: { provider: "anthropic", modelId: "claude-haiku-5-5" },
 } satisfies RoleModelSelections;
 const OPENAI_DEFAULTS = {
   chat: { provider: "openai", modelId: "gpt-6-sol" },
   fast: { provider: "openai", modelId: "gpt-6-luna" },
   reasoning: { provider: "openai", modelId: "gpt-6-sol" },
   pdf: { provider: "openai", modelId: "gpt-6-sol" },
+  browse: { provider: "openai", modelId: "gpt-6-luna" },
 } satisfies RoleModelSelections;
 const OPENROUTER_DEFAULTS = {
   chat: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
   fast: { provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" },
   reasoning: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
   pdf: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
+  browse: { provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" },
 } satisfies RoleModelSelections;
 const MISTRAL_DEFAULTS = {
   chat: { provider: "mistral", modelId: "mistral-medium-latest" },
   fast: { provider: "mistral", modelId: "mistral-small-latest" },
   reasoning: { provider: "mistral", modelId: "mistral-medium-latest" },
   pdf: null,
+  browse: { provider: "mistral", modelId: "mistral-small-latest" },
 } satisfies RoleModelSelections;
 
 describe("BYOK provider and model configuration", () => {
@@ -196,6 +201,7 @@ describe("BYOK provider and model configuration", () => {
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
       reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
       pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
+      browse: { provider: "anthropic", modelId: "claude-haiku-5-5" },
     });
   });
 
@@ -247,6 +253,7 @@ describe("BYOK provider and model configuration", () => {
       fast: { provider: "openai", modelId: "gpt-6-luna" },
       reasoning: { provider: "openai", modelId: "gpt-6-sol" },
       pdf: { provider: "openai", modelId: "gpt-6-sol" },
+      browse: { provider: "openai", modelId: "gpt-6-luna" },
     });
   });
 
@@ -262,6 +269,8 @@ describe("BYOK provider and model configuration", () => {
     ).toEqual({
       ...GOOGLE_DEFAULTS,
       fast: { provider: "anthropic", modelId: "claude-opus-5-5" },
+      // Unset browsing follows the fast pick.
+      browse: { provider: "anthropic", modelId: "claude-opus-5-5" },
     });
     expect(GOOGLE_DEFAULTS.fast.provider).toBe("google");
   });
@@ -287,7 +296,13 @@ describe("BYOK provider and model configuration", () => {
     ).toEqual([{ provider: "google", defaultModels: GOOGLE_DEFAULTS }]);
   });
 
-  test("normalizes stored role selections into picker state", () => {
+  test("normalizes stored role selections into picker state, browsing on the chosen fast model", () => {
+    // The fixture's fast pick differs from the default the browse row
+    // would otherwise show.
+    expect(ANTHROPIC_DEFAULTS.browse).not.toEqual({
+      provider: "openai",
+      modelId: "gpt-5.4-nano",
+    });
     expect(
       roleModelsFromOverrideModels({
         providers: ["anthropic", "openai"],
@@ -302,7 +317,21 @@ describe("BYOK provider and model configuration", () => {
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
       reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
       pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
+      browse: { provider: "openai", modelId: "gpt-5.4-nano" },
     });
+  });
+
+  test("keeps a browsing model the admin picked", () => {
+    expect(
+      roleModelsFromOverrideModels({
+        providers: ["anthropic", "openai"],
+        defaultModels: ANTHROPIC_DEFAULTS,
+        overrideModels: {
+          fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+          browse: { provider: "anthropic", modelId: "claude-opus-5-5" },
+        },
+      }).browse,
+    ).toEqual({ provider: "anthropic", modelId: "claude-opus-5-5" });
   });
 
   test("encodes OpenRouter model values without breaking model IDs that contain slashes", () => {
@@ -500,6 +529,7 @@ describe("BYOK provider and model configuration", () => {
       "fast",
       "reasoning",
       "pdf",
+      "browse",
     ]);
     expect(rows.at(0)?.selection).toEqual({
       provider: "anthropic",

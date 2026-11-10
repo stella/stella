@@ -118,6 +118,7 @@ const buildOrgAIConfig = (selection: ModelSelection): OrgAIConfig => {
     chat: modelSelection,
     reasoning: modelSelection,
     pdf: modelSelection,
+    browse: modelSelection,
   };
   return {
     providers: [{ provider: selection.provider, apiKey: selection.apiKey }],

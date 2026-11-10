@@ -4899,6 +4899,7 @@
       "defaultModel": "Domyślny: {model}",
       "defaultModelOption": "Domyślny",
       "defaultRationale": {
+        "browse": "Do pracy na stronach internetowych w przeglądarce.",
         "chat": "Do rozmów i codziennych pytań.",
         "fast": "Do krótkich, rutynowych zadań.",
         "pdf": "Do czytania i analizowania dokumentów PDF.",
@@ -4950,6 +4951,7 @@
       "replaceKey": "Zastąp klucz",
       "roleUnavailable": "{provider} nie obsługuje tej roli.",
       "roles": {
+        "browse": "Przeglądanie",
         "chat": "Czat",
         "fast": "Szybki",
         "pdf": "PDF",

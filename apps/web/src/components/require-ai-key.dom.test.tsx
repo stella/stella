@@ -72,6 +72,7 @@ globalThis.fetch = Object.assign(
           fast: { provider: "google", modelId: "gemini-3.8-flash" },
           reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
           pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+          browse: { provider: "google", modelId: "gemini-3.8-flash" },
         },
         providerDefaultModels: [
           {
@@ -81,6 +82,7 @@ globalThis.fetch = Object.assign(
               fast: { provider: "google", modelId: "gemini-3.8-flash" },
               reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
               pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+              browse: { provider: "google", modelId: "gemini-3.8-flash" },
             },
           },
         ],
@@ -99,6 +101,7 @@ globalThis.fetch = Object.assign(
               fast: null,
               reasoning: null,
               pdf: null,
+              browse: null,
             },
           })
         : Response.json({ error: "Forbidden" }, { status: configStatus });

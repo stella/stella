@@ -4,9 +4,9 @@ import {
   EventType,
   type TokenUsage,
 } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
-import type { ModelTask } from "@stll/ai-catalog";
+import type { ModelOverrideGroup, ModelTask } from "@stll/ai-catalog";
 import {
   sanitizeErrorAttributesForOutput,
   sanitizeErrorForOutput,
@@ -19,7 +19,12 @@ import type {
   UsageEventLane,
   UsageServiceTier,
 } from "@/api/db/schema";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
+import {
+  type ModelLookup,
+  modelLookupLabel,
+  modelLookupTask,
+  type OrgAIConfig,
+} from "@/api/lib/ai-config";
 import {
   classifyAIBoundaryFailure,
   isAnticipatedAIFailure,
@@ -44,7 +49,7 @@ import { emitPromptCacheMetric } from "@/api/lib/observability/request-metrics";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import {
   getTanStackTextModelInfoById,
-  getTanStackTextModelInfoForTask,
+  getTanStackTextModelInfoForLookup,
   type ResolvedTanStackTextModelInfo,
   resolveEffectiveServiceTierForProvider,
 } from "@/api/lib/tanstack-ai-models";
@@ -114,7 +119,29 @@ export type TanStackAIUsageMetering = {
 
 export type AIUsageMetering = TanStackAIUsageMetering;
 
+/**
+ * What the calls are for, recorded on every usage event: a task (default
+ * `chat`), or a role an admin picks a model for (`browse`), which records the
+ * role and resolves the role's model. A call names one, never both.
+ */
+const analyticsModelLookup = (use: {
+  modelTask?: ModelTask | undefined;
+  modelOverrideGroup?: ModelOverrideGroup | undefined;
+}): ModelLookup => {
+  if (use.modelOverrideGroup === undefined) {
+    return { task: use.modelTask ?? "chat" };
+  }
+  if (use.modelTask !== undefined) {
+    return panic("Analytics callbacks name a task or a role, not both");
+  }
+  return { overrideGroup: use.modelOverrideGroup };
+};
+
 type TanStackAIAnalyticsProps = {
+  /** The task the calls run for; omit when `modelOverrideGroup` is set. */
+  modelTask?: ModelTask;
+  /** The admin-chosen role the calls run for (`browse`), instead of a task. */
+  modelOverrideGroup?: ModelOverrideGroup;
   dataClass: AIDataClass;
   feature: string;
   traceId: string;
@@ -122,7 +149,6 @@ type TanStackAIAnalyticsProps = {
   distinctId?: string;
   properties?: AnalyticsMetadata;
   analytics?: ServerAnalytics;
-  modelTask?: ModelTask;
   /**
    * Explicit per-turn model selection (dev override or validated
    * thread model). When set, metering rates this model instead of the
@@ -358,7 +384,7 @@ const recordTanStackConsumption = async ({
       unitsConsumed: lane === "pool" ? unitsConsumed : 0,
       isByok: modelInfo.keySource === "byok",
       lane,
-      modelTask: config.modelTask ?? "chat",
+      modelTask: modelLookupLabel(analyticsModelLookup(config)),
       organizationId: metering.organizationId,
       rawUsageMicroUnits,
       serviceTier: effectiveServiceTier,
@@ -420,7 +446,8 @@ const createFamilyMember = (
 ): TanStackAIAnalyticsCallbacks => {
   const { analytics } = family;
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
-  const modelTask = config.modelTask ?? "chat";
+  const lookup = analyticsModelLookup(config);
+  const modelTask = modelLookupTask(lookup);
   // Group attachment is derived centrally so call sites cannot forget it:
   // from the metering context when present, else from the analytics-only
   // organization identity. Events with neither stay ungrouped.
@@ -483,7 +510,7 @@ const createFamilyMember = (
                   modelTier: config.modelTier,
                 },
               )
-            : getTanStackTextModelInfoForTask(modelTask, config.orgAIConfig, {
+            : getTanStackTextModelInfoForLookup(lookup, config.orgAIConfig, {
                 dataClass: config.dataClass,
                 organizationId: analyticsOrganizationId,
                 modelTier: config.modelTier,

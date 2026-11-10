@@ -4899,6 +4899,7 @@
       "defaultModel": "Padrão: {model}",
       "defaultModelOption": "Padrão",
       "defaultRationale": {
+        "browse": "Para trabalhar em sites no navegador.",
         "chat": "Para conversas e perguntas do dia a dia.",
         "fast": "Para tarefas curtas e rotineiras.",
         "pdf": "Para ler e analisar documentos PDF.",
@@ -4950,6 +4951,7 @@
       "replaceKey": "Substituir chave",
       "roleUnavailable": "{provider} não oferece suporte a esta função.",
       "roles": {
+        "browse": "Navegação",
         "chat": "Chat",
         "fast": "Rápido",
         "pdf": "PDF",

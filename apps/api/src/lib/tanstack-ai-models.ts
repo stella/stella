@@ -49,9 +49,12 @@ import { env } from "@/api/env";
 import {
   type AIRequestServiceTier,
   type DataRegion,
+  type ModelLookup,
+  modelLookupTask,
   normalizeProviderRegion,
   type OrgAIConfig,
   type OrgAIProviderConfig,
+  resolveOrgAIModel,
   resolveOrgAIModelForTask,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
@@ -1587,12 +1590,17 @@ const getInstanceFactory = (
     ...policy,
   });
 
+// One setting per role that owns a task. A role that inherits its task
+// (browse) has none: it runs on that task's instance model.
 const MODEL_OVERRIDES = {
   fast: env.AI_MODEL_FAST,
   chat: env.AI_MODEL_CHAT,
   reasoning: env.AI_MODEL_REASONING,
   pdf: env.AI_MODEL_PDF,
-} satisfies Record<ModelOverrideGroup, string | undefined>;
+} satisfies Record<
+  (typeof MODEL_TASK_OVERRIDE_GROUP)[ModelTask],
+  string | undefined
+>;
 
 /** The fast tier serves every task with the short-text model. */
 const managedModelTask = (
@@ -2212,21 +2220,42 @@ const resolveInstanceTextModel = ({
   });
 };
 
+type TextModelOptions = {
+  organizationId: SafeId<"organization"> | null;
+  modelTier: ManagedModelTier;
+  managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
+} & AIRequestPolicy;
+
+type TextModelInfoOptions = {
+  dataClass: AIDataClass;
+  organizationId: SafeId<"organization"> | null;
+  modelTier: ManagedModelTier;
+};
+
 export const getTanStackTextModelForTask = (
   task: ModelTask,
   orgConfig: OrgAIConfig | null | undefined,
-  {
-    modelTier,
-    ...options
-  }: {
-    organizationId: SafeId<"organization"> | null;
-    modelTier: ManagedModelTier;
-    managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
-  } & AIRequestPolicy,
+  options: TextModelOptions,
+): ResolvedTanStackTextModel =>
+  getTanStackTextModelForLookup({ task }, orgConfig, options);
+
+/** The model of a role an admin picks (`browse`), else of its inherited task. */
+export const getTanStackTextModelForOverrideGroup = (
+  overrideGroup: ModelOverrideGroup,
+  orgConfig: OrgAIConfig | null | undefined,
+  options: TextModelOptions,
+): ResolvedTanStackTextModel =>
+  getTanStackTextModelForLookup({ overrideGroup }, orgConfig, options);
+
+// An instance deployment has one setting per task-owning role; a role that
+// inherits its task (browse) runs on that task's instance model.
+const getTanStackTextModelForLookup = (
+  lookup: ModelLookup,
+  orgConfig: OrgAIConfig | null | undefined,
+  { modelTier, ...options }: TextModelOptions,
 ): ResolvedTanStackTextModel => {
-  const selection = orgConfig
-    ? resolveOrgAIModelForTask(orgConfig, task)
-    : null;
+  const task = modelLookupTask(lookup);
+  const selection = orgConfig ? resolveOrgAIModel(orgConfig, lookup) : null;
   if (orgConfig && selection !== null) {
     return resolveByokTextModel({
       task,
@@ -2266,15 +2295,18 @@ export const getTanStackTextModelForTask = (
 export const getTanStackTextModelInfoForTask = (
   task: ModelTask,
   orgConfig: OrgAIConfig | null | undefined,
-  options: {
-    dataClass: AIDataClass;
-    organizationId: SafeId<"organization"> | null;
-    modelTier: ManagedModelTier;
-  },
+  options: TextModelInfoOptions,
+): ResolvedTanStackTextModelInfo =>
+  getTanStackTextModelInfoForLookup({ task }, orgConfig, options);
+
+/** Metadata twin of `getTanStackTextModelForLookup`, without an adapter. */
+export const getTanStackTextModelInfoForLookup = (
+  lookup: ModelLookup,
+  orgConfig: OrgAIConfig | null | undefined,
+  options: TextModelInfoOptions,
 ): ResolvedTanStackTextModelInfo => {
-  const selection = orgConfig
-    ? resolveOrgAIModelForTask(orgConfig, task)
-    : null;
+  const task = modelLookupTask(lookup);
+  const selection = orgConfig ? resolveOrgAIModel(orgConfig, lookup) : null;
   if (orgConfig && selection !== null) {
     const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
     const region = providerRegion(providerConfig);

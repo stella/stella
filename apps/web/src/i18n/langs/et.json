@@ -4899,6 +4899,7 @@
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",
       "defaultRationale": {
+        "browse": "Veebisaitidega töötamiseks brauseris.",
         "chat": "Vestlusteks ja igapäevasteks küsimusteks.",
         "fast": "Lühikesteks tavapärasteks ülesanneteks.",
         "pdf": "PDF-dokumentide lugemiseks ja analüüsimiseks.",
@@ -4950,6 +4951,7 @@
       "replaceKey": "Asenda võti",
       "roleUnavailable": "{provider} ei toeta seda rolli.",
       "roles": {
+        "browse": "Sirvimine",
         "chat": "Vestlus",
         "fast": "Kiire",
         "pdf": "PDF",
