@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -165,6 +165,88 @@ const THREAD_LIST_PROJECTION = {
   workspaceName: workspacesTable.name,
 } as const;
 
+/**
+ * A title search reads at most this many batches of `limit + 1` rows while it
+ * skips threads that matched only by a withdrawn title; a page cut short by
+ * the budget still returns a cursor, so the walk continues on the next page.
+ */
+const TITLE_SEARCH_SCAN_BATCHES_MAX = 4;
+
+type ListCursor = NonNullable<
+  ReturnType<typeof chatThreadListCursorCodec.decode>
+>;
+type ListedRow = { id: SafeId<"chatThread">; updatedAtCursor: string };
+
+type ReadListPageOptions<Row extends ListedRow> = {
+  cursor: ListCursor | null;
+  limit: number;
+  readBatch: (after: ListCursor | null) => Promise<Row[]>;
+  /** Null keeps every row read; a search filter decides per batch. */
+  admitBatch: ((batch: Row[]) => Promise<(row: Row) => boolean>) | null;
+};
+
+/**
+ * One page of rows the filter admits, read in keyset batches of `limit + 1`.
+ * The cursor resumes after the page's last row, or after the last row read
+ * when the batch budget ends the page early.
+ */
+const readListPage = async <Row extends ListedRow>({
+  cursor,
+  limit,
+  readBatch,
+  admitBatch,
+}: ReadListPageOptions<Row>) => {
+  const admitted: Row[] = [];
+  let after = cursor;
+  let scanned: Row | undefined;
+  let exhausted = false;
+  const batchesMax = admitBatch === null ? 1 : TITLE_SEARCH_SCAN_BATCHES_MAX;
+  for (
+    let batchIndex = 0;
+    batchIndex < batchesMax && admitted.length <= limit && !exhausted;
+    batchIndex++
+  ) {
+    const batch = await readBatch(after);
+    exhausted = batch.length <= limit;
+    const admits = admitBatch === null ? () => true : await admitBatch(batch);
+    for (const row of batch) {
+      if (admitted.length > limit) {
+        break;
+      }
+      scanned = row;
+      if (admits(row)) {
+        admitted.push(row);
+      }
+    }
+    if (scanned !== undefined) {
+      after =
+        chatThreadListCursorCodec.decode(
+          encodeChatThreadListCursor({
+            id: scanned.id,
+            updatedAt: scanned.updatedAtCursor,
+          }),
+        ) ?? panic("A listed thread must encode a decodable cursor");
+    }
+  }
+  const page = admitted.slice(0, limit);
+  let resumeAfter: Row | undefined;
+  if (admitted.length > limit) {
+    resumeAfter = page.at(-1);
+  } else if (!exhausted) {
+    resumeAfter = scanned;
+  }
+  return {
+    page,
+    nextCursor:
+      resumeAfter === undefined
+        ? null
+        : encodeChatThreadListCursor({
+            id: resumeAfter.id,
+            updatedAt: resumeAfter.updatedAtCursor,
+          }),
+  };
+};
+
 type GetThreadsDependencies = {
   readDecisionBadges: typeof readPublicDecisionBadges;
   readCopies?: typeof readWithdrawnCopyProjection;
@@ -223,20 +305,8 @@ export const createGetThreads = ({
       // data_workspace_ids entry on global threads without materializing an
       // application-side workspace allowlist. The joined status predicate keeps
       // deleting workspaces sealed at the product layer.
-      if (cursor) {
-        const cursorCondition = chatThreadListCursorCodec.keysetAfter({
-          cursor,
-          direction: "descending",
-          idColumn: chatThreads.id,
-        });
-        if (cursorCondition) {
-          conditions.push(cursorCondition);
-        }
-      }
-
-      const { contexts, rows } = yield* Result.await(
+      const { contexts, nextCursor, page } = yield* Result.await(
         safeDb(async (tx) => {
-          const listConditions = [...conditions];
           // A matter pinned to a thread, or whose data it embedded, matches by
           // name too. The lateral probe looks up that thread's own matter ids
           // (bounded like its context preview) by primary key, so no matching
@@ -261,56 +331,75 @@ export const createGetThreads = ({
                   )
                   .limit(1)
                   .as("context_matter_match");
-          if (searchPattern !== null && contextMatterMatch !== null) {
-            const searchCondition = or(
-              ilike(chatThreads.title, searchPattern),
-              ilike(workspacesTable.name, searchPattern),
-              sql`${contextMatterMatch.matched} IS TRUE`,
-            );
-            if (searchCondition) {
-              listConditions.push(searchCondition);
-            }
-          }
+          const matterMatch =
+            searchPattern === null || contextMatterMatch === null
+              ? sql<boolean>`false`
+              : sql<boolean>`coalesce(${ilike(workspacesTable.name, searchPattern)} OR ${contextMatterMatch.matched} IS TRUE, false)`;
+          const searchCondition =
+            searchPattern === null
+              ? undefined
+              : or(ilike(chatThreads.title, searchPattern), matterMatch);
 
-          let listQuery = tx
-            .select(THREAD_LIST_PROJECTION)
-            .from(chatThreads)
-            .leftJoin(
-              workspacesTable,
-              eq(workspacesTable.id, chatThreads.workspaceId),
-            )
-            .$dynamic();
-          if (contextMatterMatch !== null) {
-            listQuery = listQuery.leftJoinLateral(
-              contextMatterMatch,
-              sql`true`,
-            );
-          }
-          const listedRows = await listQuery
-            .where(and(...listConditions))
-            .orderBy(desc(chatThreads.updatedAt), desc(chatThreads.id))
-            .limit(limit + 1);
+          const readBatch = async (after: typeof cursor) => {
+            let listQuery = tx
+              .select({ ...THREAD_LIST_PROJECTION, matterMatched: matterMatch })
+              .from(chatThreads)
+              .leftJoin(
+                workspacesTable,
+                eq(workspacesTable.id, chatThreads.workspaceId),
+              )
+              .$dynamic();
+            if (contextMatterMatch !== null) {
+              listQuery = listQuery.leftJoinLateral(
+                contextMatterMatch,
+                sql`true`,
+              );
+            }
+            const keyset =
+              after === null
+                ? undefined
+                : chatThreadListCursorCodec.keysetAfter({
+                    cursor: after,
+                    direction: "descending",
+                    idColumn: chatThreads.id,
+                  });
+            return await listQuery
+              .where(and(...conditions, searchCondition, keyset))
+              .orderBy(desc(chatThreads.updatedAt), desc(chatThreads.id))
+              .limit(limit + 1);
+          };
+
+          // A withdrawn title is masked when listed, so its stored text cannot
+          // be what matched: such a thread stays only when a matter name did.
+          const { nextCursor: listedCursor, page: listedPage } =
+            await readListPage({
+              cursor,
+              limit,
+              readBatch,
+              admitBatch:
+                searchPattern === null
+                  ? null
+                  : async (batch) => {
+                      const projection = await readCopies({ values: batch });
+                      return (row) =>
+                        row.matterMatched ||
+                        projection.threadTitleMarker(row) === null;
+                    },
+            });
 
           // One bounded read for the whole page's context, never one per row.
           const threadContexts = await readChatThreadContexts({
             previewLimit: CHAT_THREAD_CONTEXT_PREVIEW_LIMIT,
-            threadIds: listedRows.slice(0, limit).map((row) => row.id),
+            threadIds: listedPage.map((row) => row.id),
             tx,
           });
-          return { contexts: threadContexts, rows: listedRows };
+          return {
+            contexts: threadContexts,
+            nextCursor: listedCursor,
+            page: listedPage,
+          };
         }),
       );
-
-      const hasMore = rows.length > limit;
-      const page = hasMore ? rows.slice(0, limit) : rows;
-      const lastItem = page.at(-1);
-      const nextCursor =
-        hasMore && lastItem
-          ? encodeChatThreadListCursor({
-              id: lastItem.id,
-              updatedAt: lastItem.updatedAtCursor,
-            })
-          : null;
 
       // After the tenant transaction, not inside it: decisions live in the
       // public corpus, read through its own gated connection.
