@@ -500,7 +500,7 @@
     "moreApps": "{count, plural, one {+1 další} few {+{count} další} other {+{count} dalších}}",
     "suggestionPieceLabel": "Navržený záznam: {matter}, {range}, {duration}, celkem {hours} h",
     "suggestionRange": "{range} · {duration} · {hours} h",
-    "suggestionPieces": "{count, plural, one {# úsek} few {# úseky} many {# úseku} other {# úseků}} · {duration} · {hours} h",
+    "suggestionPieces": "{count, plural, one {# úsek} few {# úseky} other {# úseků}} · {duration} · {hours} h",
     "draftedRange": "{range} · koncept",
     "newEntry": "Nový záznam",
     "chooseMatter": "Vybrat spis",
