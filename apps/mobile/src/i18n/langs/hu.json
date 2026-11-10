@@ -151,7 +151,11 @@
     "scanDocument": "Dokumentum szkennelése",
     "newTask": "Új feladat",
     "uploadDocument": "Dokumentum feltöltése",
-    "uploadFailed": "A dokumentumot nem sikerült feltölteni. Próbálja újra."
+    "uploadFailed": "A dokumentumot nem sikerült feltölteni. Próbálja újra.",
+    "startTimer": "Időzítő indítása",
+    "pauseTimer": "Időzítő szüneteltetése",
+    "resumeTimer": "Időzítő folytatása",
+    "timerRunning": "Az időzítő fut"
   },
   "entity": {
     "type": "Típus",

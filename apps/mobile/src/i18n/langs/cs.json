@@ -151,7 +151,11 @@
     "scanDocument": "Naskenovat dokument",
     "newTask": "Nový úkol",
     "uploadDocument": "Nahrát dokument",
-    "uploadFailed": "Dokument se nepodařilo nahrát. Zkuste to znovu."
+    "uploadFailed": "Dokument se nepodařilo nahrát. Zkuste to znovu.",
+    "startTimer": "Spustit časovač",
+    "pauseTimer": "Pozastavit časovač",
+    "resumeTimer": "Pokračovat v časovači",
+    "timerRunning": "Časovač běží"
   },
   "entity": {
     "type": "Typ",

@@ -151,7 +151,11 @@
     "scanDocument": "Numériser un document",
     "newTask": "Nouvelle tâche",
     "uploadDocument": "Téléverser un document",
-    "uploadFailed": "Le document n’a pas pu être importé. Réessayez."
+    "uploadFailed": "Le document n’a pas pu être importé. Réessayez.",
+    "startTimer": "Démarrer le minuteur",
+    "pauseTimer": "Mettre le minuteur en pause",
+    "resumeTimer": "Reprendre le minuteur",
+    "timerRunning": "Minuteur en cours"
   },
   "entity": {
     "type": "Type",
