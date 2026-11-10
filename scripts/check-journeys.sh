@@ -60,6 +60,7 @@ request() {
     --dump-header "$scratch/headers" --output "$scratch/body" --write-out '%{http_code} %{num_redirects}' "$@" 2>"$scratch/error")" || rc=$?
   status="${response%% *}"
   redirects="${response##* }"
+  last_status="$status"
   request_count=$((request_count + redirects))
   if [[ ! -s "$scratch/error" ]]; then detail="HTTP status check: received $status (curl exit $rc)"; fi
   if [[ "$rc" == 28 ]]; then reason=timeout; return 1; fi
@@ -226,9 +227,154 @@ auth_rejection() {
   fi
 }
 
+# Fresh-query probe (--search-probe, case-law-search-probe.yml). A fixed query
+# answers from caches once it has run, and a retry hides exactly the failure
+# this looks for (a first hit that times out and passes when repeated), so
+# every query is new for the slot and nothing is retried.
+#
+# Each run: one query per country, plus two court-filtered ones rotating
+# through the apex courts. Seven searches, sequential, about 2,000 a day.
+# 20 terms a country give 380 ordered pairs, a cycle of 31 hours at one slot
+# per five minutes, longer than any search cache (the longest is one hour).
+probe_terms() {
+  case "$1" in
+    CZE) printf '%s\n' náhrada nájem výpověď dědictví žaloba rozsudek smlouva škoda pojištění exekuce insolvence vlastnictví zaměstnanec úrok promlčení odpovědnost spotřebitel věřitel dlužník stavba ;;
+    SVK) printf '%s\n' náhrada nájom výpoveď dedičstvo žaloba rozsudok zmluva škoda poistenie exekúcia konkurz vlastníctvo zamestnanec úrok premlčanie zodpovednosť spotrebiteľ veriteľ dlžník stavba ;;
+    POL) printf '%s\n' odszkodowanie najem wypowiedzenie spadek pozew wyrok umowa szkoda ubezpieczenie egzekucja upadłość własność pracownik odsetki przedawnienie odpowiedzialność konsument wierzyciel dłużnik budowa ;;
+    HUN) printf '%s\n' kártérítés bérlet felmondás öröklés kereset ítélet szerződés kár biztosítás végrehajtás felszámolás tulajdon munkavállaló kamat elévülés felelősség fogyasztó hitelező adós építkezés ;;
+    EU) printf '%s\n' damages lease termination succession action judgment contract liability insurance enforcement insolvency ownership worker interest limitation consumer creditor debtor construction competition ;;
+  esac
+}
+
+# Two different terms from the country's pool, a distinct ordered pair per slot.
+probe_query() {
+  local terms=() term first second
+  while IFS= read -r term; do terms+=("$term"); done < <(probe_terms "$1")
+  local count="${#terms[@]}"
+  first=$(($2 % count))
+  second=$((($2 / count) % (count - 1)))
+  if [[ "$second" -ge "$first" ]]; then second=$((second + 1)); fi
+  printf '%s %s' "${terms[$first]}" "${terms[$second]}"
+}
+
+# The codes a search that ran out of time answers with, directly or through
+# its continuation.
+probe_timeout_code() {
+  case "$1" in
+    public_read_timeout | upstream_unavailable | search_index_unavailable | public_read_unfinished | continuation_expired) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# One search, followed through its continuation. Sets reason and detail, and
+# returns nonzero on any failure.
+probe_search() {
+  local args="$1" payload code status token wait_ms polls=0
+  while :; do
+    payload="$(jq -nc --argjson args "$args" '{jsonrpc:"2.0",id:2,method:"tools/call",params:{name:"search_case_law",arguments:$args}}')"
+    rpc "$payload" 2 || return 1
+    if jq -e '.result.isError == true' "$scratch/body" >/dev/null 2>"$scratch/error"; then
+      code="$(jq -r '[.result.content[]? | select(.type == "text") | .text | fromjson? | .error.code? // empty] | first // "unknown"' "$scratch/body")"
+      detail="tool error $code"
+      if probe_timeout_code "$code"; then reason=timeout; else reason=contract_error; fi
+      return 1
+    fi
+    reason=contract_error
+    detail="tool content check: expected exactly one JSON text payload"
+    jq -e '.result.content | map(select(.type == "text") | .text | fromjson) | if length == 1 then .[0] else error("contract") end' \
+      "$scratch/body" > "$scratch/payload" 2>"$scratch/error" || return 1
+    status="$(jq -r '.status? // empty' "$scratch/payload")"
+    if [[ "$status" != running ]]; then break; fi
+    # A search still running answers with a token: following it is what a
+    # client does, and giving up on it is a timeout the client would see.
+    if [[ "$polls" -ge "$probe_poll_limit" ]] || ((SECONDS - probe_started >= probe_run_limit)); then
+      reason=timeout
+      detail="still running after $polls continuations"
+      return 1
+    fi
+    polls=$((polls + 1))
+    token="$(jq -r '.continuationToken' "$scratch/payload")"
+    wait_ms="$(jq -r '.retryAfterMs // 1000' "$scratch/payload")"
+    sleep "$(jq -rn --argjson ms "$wait_ms" '[$ms, 10000] | min | . / 1000')"
+    args="$(jq -c --arg token "$token" '. + {continuation_token: $token}' <<<"$args")"
+  done
+  # An empty page is a correct answer to a generated query.
+  detail="result check: results must be an array"
+  jq -e '.results | type == "array"' "$scratch/payload" >/dev/null 2>"$scratch/error"
+}
+
+probe_one() {
+  local name="$1" args="$2" started="$SECONDS"
+  detail=
+  if ((SECONDS - probe_started > probe_run_limit)); then
+    # A skipped search is coverage nobody is getting.
+    report "$name" failed run_budget
+    return
+  fi
+  last_status=
+  : > "$scratch/error"
+  probe_total=$((probe_total + 1))
+  if probe_search "$args"; then
+    probe_answered=$((probe_answered + 1))
+    report "$name" passed ok
+  elif [[ "$reason" == http_status && "$last_status" == 000 ]]; then
+    # Unreachable from this runner: not an answer from the service. A run in
+    # which nothing was reached still fails, below.
+    report "$name" skipped network_error
+  else
+    probe_answered=$((probe_answered + 1))
+    report "$name" failed "$reason"
+  fi
+  printf 'journey-timing %s %ss\n' "$name" "$((SECONDS - started))"
+}
+
+search_probe() {
+  local countries=(CZE SVK POL HUN EU)
+  local courts=(CZE:NS CZE:NSS CZE:ÚS SVK:NS SVK:ÚS POL:SN POL:NSA POL:TK HUN:Kúria HUN:AB EU:CJEU EU:GC)
+  local slot="${JOURNEY_PROBE_SLOT:-$(($(date -u +%s) / 300))}" country court pick offset
+  local court_label=(a b)
+  # Above the 30-second public read budget, so a timeout answers as the
+  # service's own error code whenever the service still answers at all.
+  deadline="${JOURNEY_PROBE_TIMEOUT_SECONDS:-35}"
+  # Seven searches, each with up to three continuations, plus the session
+  # setup and its notification; the wall-clock bound below stops a run first.
+  request_limit=30
+  probe_run_limit="${JOURNEY_PROBE_RUN_SECONDS:-240}"
+  probe_poll_limit=3
+  probe_started="$SECONDS"
+  probe_total=0
+  probe_answered=0
+  # The workflow only runs once enabled, so an absent token is a broken probe.
+  if [[ -z "$credential" ]]; then
+    report mcp_probe failed no_credential
+    return
+  fi
+  if ! initialize; then
+    report mcp_probe_initialize failed "$reason"
+    return
+  fi
+  for country in "${countries[@]}"; do
+    probe_one "mcp_probe_$(tr '[:upper:]' '[:lower:]' <<<"$country")" \
+      "$(jq -nc --arg query "$(probe_query "$country" "$slot")" --arg country "$country" '{queries:[$query],country:$country,limit:3}')"
+  done
+  for offset in 0 1; do
+    pick="${courts[$(((slot + offset * 5) % ${#courts[@]}))]}"
+    country="${pick%%:*}"
+    court="${pick#*:}"
+    # A different term pair from the same slot's unfiltered query.
+    probe_one "mcp_probe_$(tr '[:upper:]' '[:lower:]' <<<"$country")_court_${court_label[$offset]}" \
+      "$(jq -nc --arg query "$(probe_query "$country" "$((slot + 191))")" --arg country "$country" --arg court "$court" '{queries:[$query],country:$country,courts:[$court],limit:3}')"
+  done
+  if [[ "$probe_total" -gt 0 && "$probe_answered" -eq 0 ]]; then
+    report mcp_probe_reachable failed http_status
+  fi
+}
+
 case_args="$(jq -nc --arg query "$search_query" --arg country "$search_country" '{queries:[$query],country:$country,limit:1}')"
 read_args="$(jq -nc --arg id "$decision_id" '{decision_ids:[$id],max_chars:1000,include:[]}')"
-if [[ "${1:-}" == --cli ]]; then
+if [[ "${1:-}" == --search-probe ]]; then
+  search_probe
+elif [[ "${1:-}" == --cli ]]; then
   probe cli_version cli_version
   if [[ "$probe_status" == skipped ]]; then
     report cli_search skipped "$probe_reason"

@@ -1,0 +1,6 @@
+{
+  "metric": "unclassified-handler-failures",
+  "file": "apps/api/src/handlers/lists/fact-extractions/create.ts",
+  "delta": 1,
+  "reason": "A run whose job could not be queued is failed as enqueue_failed and answered 500, the same branch the verification start handler carries; the cause chain carries the queue store failure that grades it."
+}

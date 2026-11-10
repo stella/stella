@@ -1,4 +1,4 @@
-// parser-output-unchanged: [pl-uodo] only adds the recital-then-ruling clause reading, which the data-protection reader does not call.
+// parser-output-unchanged: [pl-uodo] only narrows the signature-title opening, which the data-protection reader does not call.
 /**
  * How a Polish decision names its own parts: the operative verbs its ruling
  * opens with, the reasons heading, the recital before the ruling, the closing
@@ -305,12 +305,39 @@ const SIGNATURE_TITLE_RE =
 /** Longest line a signature title opening is read on. */
 const SIGNATURE_TITLE_LINE_MAX_CHARS = 120;
 
-/** Whether a short line opens on a judge's title or office. */
+/**
+ * Fewest words a lead-in ending on a colon runs to (`Prezes Urzędu ustalił
+ * następujący stan faktyczny:`); a signing label before its colon is one or
+ * two (`Przewodniczący:`, `Sędzia sprawozdawca:`).
+ */
+const LEAD_IN_MIN_WORDS = 4;
+
+/**
+ * The formula a lead-in ends on, whatever closes it (`Prezes Urzędu
+ * zważył, co następuje.`).
+ */
+const LEAD_IN_FORMULA_RE = /,? co następuje\s?[.:]?$/u;
+
+/**
+ * Whether a line is a sentence leading in to what follows: on a colon after
+ * a sentence's worth of words, or on the formula `co następuje`.
+ */
+const leadsIn = (line: string): boolean =>
+  (line.endsWith(":") && line.split(" ").length >= LEAD_IN_MIN_WORDS) ||
+  LEAD_IN_FORMULA_RE.test(line);
+
+/**
+ * Whether a short line opens on a judge's title or office. A sentence that
+ * opens on the office and leads in to the reasons (`Prezes Urzędu ustalił
+ * następujący stan faktyczny:`, `Prezes Urzędu zważył, co następuje.`)
+ * signs nothing.
+ */
 export const opensWithPlSignatureTitle = (text: string): boolean => {
   const line = grammarLine(text);
   return (
     line.length <= SIGNATURE_TITLE_LINE_MAX_CHARS &&
-    SIGNATURE_TITLE_RE.test(line)
+    SIGNATURE_TITLE_RE.test(line) &&
+    !leadsIn(line)
   );
 };
 

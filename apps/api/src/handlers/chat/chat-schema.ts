@@ -50,6 +50,10 @@ import {
   validateStoredFileRefs,
 } from "@/api/handlers/chat/attachment-validation";
 import {
+  BROWSER_EXTENSION_LOCAL_RUN,
+  type TurnBrowserExtension,
+} from "@/api/handlers/chat/browser-extension-capability";
+import {
   chatMessageFromPersisted,
   continueStoredChatPart,
   getAwaitingUserInteractions,
@@ -232,6 +236,21 @@ export const resolveBrowserExtensionCapability = (
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     status: BROWSER_EXTENSION_STATUS.unsupportedDevice,
   };
+
+/**
+ * The browser a turn can reach. A turn that runs on the member's computer
+ * cannot reach the extension the web tab reports, whatever its state.
+ */
+export const resolveTurnBrowserExtension = ({
+  reported,
+  runsLocally,
+}: {
+  reported: v.InferOutput<typeof browserExtensionSchema> | undefined;
+  runsLocally: boolean;
+}): TurnBrowserExtension =>
+  runsLocally
+    ? BROWSER_EXTENSION_LOCAL_RUN
+    : resolveBrowserExtensionCapability(reported);
 
 export const activeSkillSchema = activeContextSchema({
   // A built-in skill has no row: `skillName` alone names it.

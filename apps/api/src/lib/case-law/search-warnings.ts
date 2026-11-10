@@ -133,7 +133,7 @@ export const caseLawSearchWarnings = ({
  *   matches that cite it; how widely it is cited was not established.
  * - `phrasing_timed_out`: one of several phrasings ran out of the call's time
  *   budget, so the page holds the phrasings that finished and none of its
- *   hits; the hint names how to run it again.
+ *   hits; the returned cursor runs it again.
  * - `partial_matches_unread`: the partial matches a short page tops up with
  *   were due and could not be read, so the list is shorter than usual.
  */
@@ -309,25 +309,19 @@ export const filterUnreadWarning = ({
 /**
  * A phrasing of a several-phrasing search stopped on the call's time budget
  * while the others finished. Its absence from the page is not "nothing
- * matched", so it is said: a continuation of the page retries it, and a
- * phrasing that had not returned a page yet is rerun by name, since the
- * cursor cannot hold a first page that never ran.
+ * matched", so it is said, and the page's cursor runs it again from where it
+ * stood: its continuation, or its first page if it had not returned one.
  */
 export const phrasingTimedOutWarning = ({
   query,
-  retriedByCursor,
 }: {
   query: string;
-  /** Whether the page's cursor carries this phrasing's continuation. */
-  retriedByCursor: boolean;
 }): AgentCaseLawSearchWarning => ({
   code: "phrasing_timed_out",
   // The phrasing is named: two phrasings can time out on one page, and the
   // call keeps each distinct note once, so identical wording would merge them.
   message: `The phrasing ${JSON.stringify(query)} ran out of the search's time budget, so the page holds none of its hits; the phrasings that finished are on the page.`,
-  hint: retriedByCursor
-    ? "Pass the returned cursor to retry this phrasing with the others, or search it on its own."
-    : `Search this phrasing on its own (queries: [${JSON.stringify(query)}]), or narrow it with a court, date range or provision filter.`,
+  hint: "Pass the returned nextCursor as cursor, with the same queries in the same order, to run this phrasing again; the phrasings that finished continue from their next page. If it times out again, search it on its own or narrow it with a court, date range or provision filter.",
 });
 
 /**
@@ -477,10 +471,7 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       slots: 5,
     }),
   phrasing_timed_out: () =>
-    phrasingTimedOutWarning({
-      query: "náhrada škody promlčení",
-      retriedByCursor: false,
-    }),
+    phrasingTimedOutWarning({ query: "náhrada škody promlčení" }),
   partial_matches_unread: () =>
     partialMatchesUnreadWarning({ query: "náhrada škody promlčení" }),
 } as const satisfies Record<

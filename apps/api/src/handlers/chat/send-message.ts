@@ -7,7 +7,6 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  type BrowserExtensionCapability,
   CHAT_INPUT_REFUSAL_CODE,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
@@ -42,6 +41,7 @@ import {
   resolveActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
 import { createTurnAnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
+import type { TurnBrowserExtension } from "@/api/handlers/chat/browser-extension-capability";
 import {
   chatMessageFromPersisted,
   getAwaitedApprovalToolNames,
@@ -96,7 +96,7 @@ import {
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
   requireUserMessageContent,
-  resolveBrowserExtensionCapability,
+  resolveTurnBrowserExtension,
   toolCallOwnershipOf,
   validateMessage,
   validateToolCallParts,
@@ -2847,6 +2847,12 @@ export const createSendMessage = (
             workspaceId,
           }),
         );
+        // One decision for the turn: the prompt's browser line and the
+        // browser tool offer both read it, so they cannot disagree.
+        const turnBrowserExtension = resolveTurnBrowserExtension({
+          reported: body.browserExtension,
+          runsLocally: localRun !== undefined,
+        });
 
         const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({
@@ -3143,9 +3149,7 @@ export const createSendMessage = (
           hasActiveDocxEditClient,
           hasActiveDocxFileClient,
           docxSuggestionSurface,
-          browserExtension: resolveBrowserExtensionCapability(
-            body.browserExtension,
-          ),
+          browserExtension: turnBrowserExtension,
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,
@@ -3231,9 +3235,7 @@ export const createSendMessage = (
               toolScope: body.toolScope,
             }),
           },
-          browserExtension: resolveBrowserExtensionCapability(
-            body.browserExtension,
-          ),
+          browserExtension: turnBrowserExtension,
           userContext: body.userContext,
           userId: user.id,
           workspaceId,
@@ -3865,7 +3867,7 @@ type PrepareChatContextProps = {
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   toolAvailability: ChatToolAvailability;
-  browserExtension: BrowserExtensionCapability;
+  browserExtension: TurnBrowserExtension;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
