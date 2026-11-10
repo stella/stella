@@ -9,13 +9,12 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import type { Logger } from "drizzle-orm";
-import { AsyncLocalStorage } from "node:async_hooks";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
+import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   chatMessages,
@@ -35,6 +34,11 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { MAX_CATCHUP_BYTES, MAX_CATCHUP_CHUNKS } from "@/api/lib/chat/run-log";
+import {
+  currentQueryCounter,
+  queryCountLogger,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   createApprovalHarness,
@@ -51,11 +55,16 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { withQueryLogger } from "@/api/tests/security/test-utils";
+import { ROOT_POOL_SENTINEL_MESSAGE } from "@/api/tests/test-database-environment";
 
 // What each chat path costs the database and the wire, measured through the
 // real handlers: the send route and `streamChat` with a scripted model behind
 // the adapter seam (`chat-approval-harness.ts`), the thread page, the older
 // page, the rejoin probe and join, and Stop, all against the test database.
+// Statements are counted by the request's own query counter, the seam behind
+// `x-db-queries`, so a path's reads through the root pool or a dedicated
+// session count as much as its member-scoped ones: a budget that sees only
+// one connection misses whatever a path moves to another.
 // Every path runs on a short thread and on a long one and must cost the same
 // SQL on both: a per-message or per-tool-call query (an N+1) fails here
 // however small its absolute cost. Bytes are bounded per page and per streamed
@@ -166,12 +175,6 @@ const budgetOf = <TPath extends keyof typeof CHAT_PATH_BUDGETS>(
 };
 
 type StatementLog = { statements: string[] };
-const statementStore = new AsyncLocalStorage<StatementLog>();
-const recordingLogger: Logger = {
-  logQuery: (query) => {
-    statementStore.getStore()?.statements.push(query);
-  },
-};
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -181,7 +184,7 @@ const seededThreadIds: SafeId<"chatThread">[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
-  testDb = withQueryLogger(fixture.testDb, recordingLogger);
+  testDb = withQueryLogger(fixture.testDb, queryCountLogger);
   ids = fixture.ids;
   scopedDb = asTestRaw<ScopedDb>(
     createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
@@ -291,11 +294,19 @@ const seedThread = async ({
   return threadId;
 };
 
-/** Runs `operation` with every statement it (and whatever it starts)
- *  issues recorded in its own log. */
+/** Runs `operation` in its own query counter, with every statement it (and
+ *  whatever it awaits) issues on any connection recorded in its log. Work it
+ *  detaches is not its cost, as for a request's `x-db-queries`. */
 const recorded = async <T>(operation: () => Promise<T>) => {
   const log: StatementLog = { statements: [] };
-  const value = await statementStore.run(log, operation);
+  const value = await runWithQueryCounter(async () => {
+    const counter =
+      currentQueryCounter() ?? panic("A recorded operation runs in a counter");
+    counter.onStatement = (statement) => {
+      log.statements.push(statement);
+    };
+    return await operation();
+  });
   return { log, value };
 };
 
@@ -706,6 +717,28 @@ const expectFlatStatements = (
     expect(statements, report).toBeLessThanOrEqual(budget);
   }
 };
+
+describe("the statement log", () => {
+  // Every connection a path can reach here is either counted or refused: the
+  // test database reports to the request's counter, and the shared root pool
+  // answers with the hermetic sentinel, so a path moved onto it fails here
+  // instead of leaving the budget.
+  test("counts the test database and refuses the root pool", async () => {
+    const { log } = await recorded(async () => {
+      await testDb.execute(sql`select 1 as counted`);
+    });
+    expect(log.statements).toEqual(["select 1 as counted"]);
+    // Awaited directly: a Bun SQL query is a lazy thenable.
+    const refusal = await rootDb.execute(sql`select 1 as refused`).then(
+      () => "answered",
+      (error: unknown) =>
+        error instanceof Error && error.cause instanceof Error
+          ? error.cause.message
+          : String(error),
+    );
+    expect(refusal).toContain(ROOT_POOL_SENTINEL_MESSAGE);
+  });
+});
 
 describe("chat path budgets", () => {
   beforeAll(async () => {
