@@ -70,8 +70,9 @@ import { ROOT_POOL_SENTINEL_MESSAGE } from "@/api/tests/test-database-environmen
 // however small its absolute cost. Bytes are bounded per page and per streamed
 // delta, never per thread.
 //
-// Calibration: `measured` is what main measured, identical on the short and
-// the long thread. A budget is that measurement plus a small headroom
+// Calibration: `measured` is what main measures, identical on the short and
+// the long thread, and a test holds it to today's measurement: a change that
+// moves a figure updates it here, so the recorded figures cannot drift. A budget is that measurement plus a small headroom
 // (`withHeadroom`): 10% of the statements, at least one, and 15% of the
 // bytes; a measurement that also depends on timing gets its stated
 // `TIMING_ALLOWANCE` instead. Byte figures hold for this fixture's messages (a text question, an
@@ -96,19 +97,19 @@ const REJOINED_DELTAS = { replayed: 100, snapshotted: 600 } as const;
 
 const CHAT_PATH_BUDGETS = {
   /** The thread page: thread, settings, the newest page, context estimate. */
-  openThread: { measured: { pageBytes: 15_245, statements: 9 } },
+  openThread: { measured: { pageBytes: 15_245, statements: 10 } },
   /** One older page. */
-  olderPage: { measured: { pageBytes: 14_365, statements: 5 } },
+  olderPage: { measured: { pageBytes: 14_365, statements: 6 } },
   /** A send up to its first delivery-log append: the thread and history
    *  reads, the turn's acceptance and claim, the run's setup. */
-  sendUntilStream: { measured: { statements: 58 } },
+  sendUntilStream: { measured: { statements: 63 } },
   /** The streamed answer: delivery-log appends batch deltas, so a delta
    *  costs a share of one append, and its SSE event a fixed frame. */
   streamedText: {
     measured: {
       framingBytesPerDelta: 135,
-      statementsPer100Deltas: 21,
-      statementsPerAppend: 7,
+      statementsPer100Deltas: 24,
+      statementsPerAppend: 8,
     },
   },
   /** The turn's settlement after its last append: the assistant message,
@@ -120,7 +121,7 @@ const CHAT_PATH_BUDGETS = {
   rejoinJoin: {
     measured: {
       replayedBytes: 15_166,
-      replayedStatements: 8,
+      replayedStatements: 9,
       snapshotBytes: 3672,
       snapshotStatements: 13,
     },
@@ -890,6 +891,70 @@ describe("chat path budgets", () => {
         measured.short.rejoin[key].catchUpBytes;
       expect(Math.abs(grown), report).toBeLessThanOrEqual(SEQUENCE_WIDTH_BYTES);
     }
+  });
+
+  test("every recorded figure is today's measurement", () => {
+    const { long } = measured;
+    const first =
+      long.olderPages.at(0) ?? panic("The long thread has no older page");
+    const today = {
+      openThread: {
+        pageBytes: long.openThread.pageBytes,
+        statements: long.openThread.statements,
+      },
+      olderPage: {
+        pageBytes: Math.max(...long.olderPages.map(({ bytes }) => bytes)),
+        statements: first.statements,
+      },
+      sendUntilStream: { statements: Math.max(...long.send.beforeStream) },
+      streamedText: {
+        framingBytesPerDelta: long.send.framingBytesPerDelta,
+        statementsPer100Deltas: long.send.statementsPer100Deltas,
+        statementsPerAppend: Math.max(...long.send.appendStatements),
+      },
+      settleTurn: { statements: Math.max(...long.send.settlement) },
+      rejoinProbe: {
+        bytes: long.rejoin.replayed.probeBytes,
+        statements: long.rejoin.replayed.probeStatements,
+      },
+      rejoinJoin: {
+        replayedBytes: long.rejoin.replayed.catchUpBytes,
+        replayedStatements: long.rejoin.replayed.joinStatements,
+        snapshotBytes: long.rejoin.snapshotted.catchUpBytes,
+        snapshotStatements: long.rejoin.snapshotted.joinStatements,
+      },
+      stop: { statements: long.rejoin.replayed.stopStatements },
+    } satisfies {
+      [Path in keyof typeof CHAT_PATH_BUDGETS]: Record<
+        keyof (typeof CHAT_PATH_BUDGETS)[Path]["measured"],
+        number
+      >;
+    };
+    // A figure that also depends on timing varies run to run; its budget's
+    // allowance bounds it instead.
+    const exact = (
+      figures: Readonly<Record<string, Readonly<Record<string, number>>>>,
+    ) =>
+      Object.fromEntries(
+        Object.entries(figures).map(([path, values]) => [
+          path,
+          Object.fromEntries(
+            Object.entries(values).filter(
+              ([name]) => TIMING_ALLOWANCE[name] === undefined,
+            ),
+          ),
+        ]),
+      );
+    const recordedFigures = Object.fromEntries(
+      Object.entries(CHAT_PATH_BUDGETS).map(([path, budget]) => [
+        path,
+        budget.measured,
+      ]),
+    );
+    expect(
+      exact(today),
+      `update CHAT_PATH_BUDGETS to today's figures; ${report}`,
+    ).toEqual(exact(recordedFigures));
   });
 
   test("Stop costs a fixed number of statements", () => {
