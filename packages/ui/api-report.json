@@ -10140,11 +10140,6 @@
           "space": "type"
         },
         {
-          "name": "TOPIC_SWATCHES",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
           "name": "getMatterColor",
           "kind": "variable",
           "space": "value"
@@ -10156,16 +10151,6 @@
         },
         {
           "name": "getMatterSwatch",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "getTopicColor",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "getTopicSwatch",
           "kind": "variable",
           "space": "value"
         },
@@ -12508,7 +12493,7 @@
     "./src/lib/file-picker.d.ts": "type PickedFiles = [\n    File,\n    ...File[]\n];\ntype OpenFilePickerOptions = {\n    accept?: string | undefined;\n    multiple?: boolean | undefined;\n    onPick: (files: PickedFiles) => void;\n};\ndeclare const openFilePicker: ({ accept, multiple, onPick, }: OpenFilePickerOptions) => void;\nexport { openFilePicker, type OpenFilePickerOptions };\n",
     "./src/lib/initials.d.ts": "export declare const getInitials: (name: string | null) => string;\n",
     "./src/lib/inline-reorder.d.ts": "type InlineDropEdge = \"top\" | \"right\" | \"bottom\" | \"left\";\nexport type InlineDirection = \"ltr\" | \"rtl\";\nexport type InlineDropPosition = \"before\" | \"after\";\nexport declare const toInlineDropPosition: (edge: InlineDropEdge | null, direction: InlineDirection) => InlineDropPosition | null;\ntype ReorderInlineIdsParams = {\n    ids: readonly string[];\n    draggedId: string;\n    targetId: string;\n    position: InlineDropPosition;\n};\nexport declare const reorderInlineIds: ({ ids, draggedId, targetId, position, }: ReorderInlineIdsParams) => string[] | null;\nexport {};\n",
-    "./src/lib/matter-colors.d.ts": "import type { CSSProperties } from \"react\";\nexport declare const MATTER_SWATCHES: readonly [\n    \"--option-blue\",\n    \"--option-emerald\",\n    \"--option-amber\",\n    \"--option-violet\",\n    \"--option-red\",\n    \"--option-cyan\",\n    \"--option-orange\",\n    \"--option-teal\"\n];\nexport declare const getMatterSwatch: (id: string) => \"--option-blue\" | \"--option-emerald\" | \"--option-amber\" | \"--option-violet\" | \"--option-red\" | \"--option-cyan\" | \"--option-orange\" | \"--option-teal\";\nexport declare const getMatterColor: (id: string) => string;\nexport declare const TOPIC_SWATCHES: readonly [\n    \"--topic-sand\",\n    \"--topic-sage\",\n    \"--topic-mist\",\n    \"--topic-heather\",\n    \"--topic-clay\",\n    \"--topic-slate\"\n];\nexport declare const getTopicSwatch: (key: string) => \"--topic-sand\" | \"--topic-sage\" | \"--topic-mist\" | \"--topic-heather\" | \"--topic-clay\" | \"--topic-slate\";\nexport declare const getTopicColor: (key: string) => string;\nexport declare const getMatterPickerColor: (id: string, color: string | null) => string;\nexport declare const toStoredMatterColor: (color: string) => string;\nexport declare const resolveMatterColor: (id: string, color: string | null) => string;\nexport declare const MATTER_TINT_GROUND: {\n    readonly chrome: \"var(--untinted-sidebar)\";\n    readonly content: \"var(--untinted-background)\";\n};\ntype MatterTintGround = (typeof MATTER_TINT_GROUND)[keyof typeof MATTER_TINT_GROUND];\nexport declare const matterTint: (color: string | null, ground: MatterTintGround) => string;\nexport type MatterChromeStyle = CSSProperties & {\n    \"--matter-background-tint\": string;\n    \"--matter-sidebar-tint\": string;\n};\nexport declare const matterChromeStyle: (color: string | null) => MatterChromeStyle;\nexport {};\n",
+    "./src/lib/matter-colors.d.ts": "import type { CSSProperties } from \"react\";\nexport declare const MATTER_SWATCHES: readonly [\n    \"--option-blue\",\n    \"--option-emerald\",\n    \"--option-amber\",\n    \"--option-violet\",\n    \"--option-red\",\n    \"--option-cyan\",\n    \"--option-orange\",\n    \"--option-teal\"\n];\nexport declare const getMatterSwatch: (id: string) => \"--option-blue\" | \"--option-emerald\" | \"--option-amber\" | \"--option-violet\" | \"--option-red\" | \"--option-cyan\" | \"--option-orange\" | \"--option-teal\";\nexport declare const getMatterColor: (id: string) => string;\nexport declare const getMatterPickerColor: (id: string, color: string | null) => string;\nexport declare const toStoredMatterColor: (color: string) => string;\nexport declare const resolveMatterColor: (id: string, color: string | null) => string;\nexport declare const MATTER_TINT_GROUND: {\n    readonly chrome: \"var(--untinted-sidebar)\";\n    readonly content: \"var(--untinted-background)\";\n};\ntype MatterTintGround = (typeof MATTER_TINT_GROUND)[keyof typeof MATTER_TINT_GROUND];\nexport declare const matterTint: (color: string | null, ground: MatterTintGround) => string;\nexport type MatterChromeStyle = CSSProperties & {\n    \"--matter-background-tint\": string;\n    \"--matter-sidebar-tint\": string;\n};\nexport declare const matterChromeStyle: (color: string | null) => MatterChromeStyle;\nexport {};\n",
     "./src/lib/native-context-menu.d.ts": "export type NativeContextMenuReason = \"editable\" | \"link\" | \"selection\" | \"shift\";\ntype ContextMenuEventLike = {\n    readonly shiftKey: boolean;\n    readonly target: EventTarget | null;\n};\nexport declare const isEditableContextMenuTarget: (element: Element) => boolean;\nexport declare const isLinkContextMenuTarget: (element: Element) => boolean;\nexport declare const isSelectedTextContextMenuTarget: (element: Element) => boolean;\nexport declare const nativeContextMenuReason: (event: ContextMenuEventLike) => NativeContextMenuReason | null;\nexport declare const nativeTextContextMenuReason: (event: Pick<ContextMenuEventLike, \"target\">) => Extract<NativeContextMenuReason, \"editable\" | \"selection\"> | null;\nexport {};\n",
     "./src/lib/option-color.d.ts": "export type OptionColor = \"red\" | \"orange\" | \"amber\" | \"yellow\" | \"lime\" | \"green\" | \"emerald\" | \"teal\" | \"cyan\" | \"sky\" | \"blue\" | \"indigo\" | \"violet\" | \"purple\" | \"fuchsia\" | \"gray\" | (string & Record<never, never>);\nexport type ColorVariants = {\n    background: string;\n    foreground: string;\n    color: string;\n};\nexport declare const emptyColor: ColorVariants;\nexport declare const resolveOptionColor: (color: OptionColor) => ColorVariants;\nexport declare const optionColors: readonly OptionColor[];\n",
     "./src/lib/overlay-layer.d.ts": "export declare const BOARD_DRAG_OVERLAY_Z_INDEX = 75;\nexport declare const SHELL_CHROME_LAYER_CLASS_NAME = \"z-30\";\nexport declare const OVERLAY_LAYER_CLASS_NAMES: {\n    readonly chrome: \"z-[80]\";\n    readonly \"chrome-raised\": \"z-[81]\";\n    readonly default: \"z-[85]\";\n    readonly search: \"z-[86]\";\n    readonly popup: \"z-[100]\";\n    readonly \"search-child\": \"z-[100]\";\n};\nexport type OverlayLayer = keyof typeof OVERLAY_LAYER_CLASS_NAMES;\nexport declare const OVERLAY_COLLISION_PADDING = 8;\n",
