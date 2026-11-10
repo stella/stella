@@ -227,7 +227,7 @@
       "emptyLine": "Extraiga hechos de los documentos del asunto o añada uno a mano.",
       "emptyTitle": "Aún no hay hechos de referencia",
       "heldDescription": "Estas extracciones son <strong>realmente inciertas en cuanto a su significado</strong>: el contenido es provisional o no está confirmado, no es simplemente manuscrito. Se excluyen de la puntuación hasta que un revisor las confirme, edite o vuelva a escribir. Una fuente legible nunca se pone en espera solo por su formato.",
-      "heldFilter": "{count, plural, one {# pendiente de revisión} other {# pendientes de revisión}}",
+      "heldFilter": "{count, plural, one {# pendiente de revisión} many {# pendientes de revisión} other {# pendientes de revisión}}",
       "heldForReview": "Pendiente de revisión",
       "hideSources": "Ocultar fuentes",
       "holdOutOfScoring": "Excluir de la puntuación",
@@ -333,10 +333,10 @@
     },
     "extraction": {
       "busy": "Termine primero la extracción en curso y su revisión.",
-      "confirmStart": "{units, plural, one {Iniciar, # unidad} other {Iniciar, # unidades}}",
+      "confirmStart": "{units, plural, one {Iniciar, # unidad} many {Iniciar, # unidades} other {Iniciar, # unidades}}",
       "dialogDescription": "Usted acepta o rechaza cada hecho antes de que entre en el registro.",
       "dialogTitle": "Extraer hechos de documentos",
-      "documentsChosen": "{count, plural, one {# elegido, hasta {max}} other {# elegidos, hasta {max}}}",
+      "documentsChosen": "{count, plural, one {# elegido, hasta {max}} many {# elegidos, hasta {max}} other {# elegidos, hasta {max}}}",
       "documentsLabel": "Documentos que leer",
       "errors": {
         "accessRevoked": "La extracción de hechos se detuvo porque el acceso no está disponible.",
@@ -356,11 +356,11 @@
       "nothingFound": "No se encontraron hechos en los documentos elegidos.",
       "proposedTitle": "Hechos propuestos",
       "queued": "Esperando para empezar.",
-      "reviewed": "Aceptados {accepted} de {proposed, plural, one {# hecho propuesto} other {# hechos propuestos}}.",
-      "runSize": "{available, plural, one {Esta ejecución usa unas {estimated} de su # unidad disponible.} other {Esta ejecución usa unas {estimated} de sus # unidades disponibles.}}",
+      "reviewed": "Aceptados {accepted} de {proposed, plural, one {# hecho propuesto} many {# hechos propuestos} other {# hechos propuestos}}.",
+      "runSize": "{available, plural, one {Esta ejecución usa unas {estimated} de su # unidad disponible.} many {Esta ejecución usa unas {estimated} de sus # unidades disponibles.} other {Esta ejecución usa unas {estimated} de sus # unidades disponibles.}}",
       "running": "Leyendo los documentos. Los hechos propuestos aparecerán aquí para su revisión.",
       "startFailed": "No se pudo iniciar la extracción de hechos",
-      "submit": "{count, plural, =0 {Extraer hechos} one {Extraer hechos de # documento} other {Extraer hechos de # documentos}}"
+      "submit": "{count, plural, =0 {Extraer hechos} one {Extraer hechos de # documento} many {Extraer hechos de # documentos} other {Extraer hechos de # documentos}}"
     },
     "guidance": {
       "escalate": "Remitir",

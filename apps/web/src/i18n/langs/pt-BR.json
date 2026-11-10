@@ -227,7 +227,7 @@
       "emptyLine": "Extraia fatos dos documentos do caso ou adicione um manualmente.",
       "emptyTitle": "Ainda não há fatos-âncora",
       "heldDescription": "Estas extrações são <strong>genuinamente incertas quanto ao significado</strong>: o conteúdo é provisório ou não confirmado, e não apenas escrito à mão. Elas ficam fora da pontuação até que um revisor as confirme, edite ou redigite. Uma fonte legível nunca é colocada em espera apenas por causa do seu meio.",
-      "heldFilter": "{count, plural, one {# em espera para revisão} other {# em espera para revisão}}",
+      "heldFilter": "{count, plural, one {# em espera para revisão} many {# em espera para revisão} other {# em espera para revisão}}",
       "heldForReview": "Em espera para revisão",
       "hideSources": "Ocultar fontes",
       "holdOutOfScoring": "Excluir da pontuação",
@@ -333,10 +333,10 @@
     },
     "extraction": {
       "busy": "Conclua primeiro a extração em andamento e a revisão dela.",
-      "confirmStart": "{units, plural, one {Iniciar, # unidade} other {Iniciar, # unidades}}",
+      "confirmStart": "{units, plural, one {Iniciar, # unidade} many {Iniciar, # unidades} other {Iniciar, # unidades}}",
       "dialogDescription": "Você aceita ou recusa cada fato antes que ele entre no registro.",
       "dialogTitle": "Extrair fatos de documentos",
-      "documentsChosen": "{count, plural, one {# escolhido, até {max}} other {# escolhidos, até {max}}}",
+      "documentsChosen": "{count, plural, one {# escolhido, até {max}} many {# escolhidos, até {max}} other {# escolhidos, até {max}}}",
       "documentsLabel": "Documentos a ler",
       "errors": {
         "accessRevoked": "A extração de fatos parou porque o acesso não está disponível.",
@@ -356,11 +356,11 @@
       "nothingFound": "Nenhum fato foi encontrado nos documentos escolhidos.",
       "proposedTitle": "Fatos propostos",
       "queued": "Aguardando o início.",
-      "reviewed": "{accepted} de {proposed, plural, one {# fato proposto} other {# fatos propostos}} aceitos.",
-      "runSize": "{available, plural, one {Esta execução usa cerca de {estimated} da sua # unidade disponível.} other {Esta execução usa cerca de {estimated} das suas # unidades disponíveis.}}",
+      "reviewed": "{accepted} de {proposed, plural, one {# fato proposto} many {# fatos propostos} other {# fatos propostos}} aceitos.",
+      "runSize": "{available, plural, one {Esta execução usa cerca de {estimated} da sua # unidade disponível.} many {Esta execução usa cerca de {estimated} das suas # unidades disponíveis.} other {Esta execução usa cerca de {estimated} das suas # unidades disponíveis.}}",
       "running": "Lendo os documentos. Os fatos propostos aparecerão aqui para revisão.",
       "startFailed": "Não foi possível iniciar a extração de fatos",
-      "submit": "{count, plural, =0 {Extrair fatos} one {Extrair fatos de # documento} other {Extrair fatos de # documentos}}"
+      "submit": "{count, plural, =0 {Extrair fatos} one {Extrair fatos de # documento} many {Extrair fatos de # documentos} other {Extrair fatos de # documentos}}"
     },
     "guidance": {
       "escalate": "Escalar",

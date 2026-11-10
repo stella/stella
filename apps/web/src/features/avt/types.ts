@@ -69,8 +69,6 @@ export type GenerationRunSummary =
 export type GenerationRunErrorCode = NonNullable<
   GenerationRunSummary["errorCode"]
 >;
-export type FactExtractionBody =
-  ListsRoutes["fact-extractions"]["post"]["body"];
 
 export const FACT_CONFIDENCES = [
   "high",

@@ -2,13 +2,12 @@ import type { WebApiRoutes } from "@/lib/api";
 
 type ListRoutes = WebApiRoutes["lists"][":workspaceId"][":listId"];
 
-export type GenerationCandidatePage =
+type GenerationCandidatePage =
   ListRoutes["generations"][":runId"]["candidates"]["get"]["response"][200];
 export type GenerationCandidate = GenerationCandidatePage["items"][number];
-export type GenerationCandidateSource = GenerationCandidate["sources"][number];
 
 /** A candidate still waiting for a person: undecided, or being accepted. */
-export const isReviewableCandidate = (
+const isReviewableCandidate = (
   candidate: Pick<GenerationCandidate, "status">,
 ): boolean =>
   candidate.status === "pending" || candidate.status === "accepting";

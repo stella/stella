@@ -80,7 +80,7 @@ type CandidateDecisionsArgs = {
  * refusal, leaving the rest for the reviewer. Each resolves to how many
  * candidates it accepted, or `null` when a request was refused.
  */
-export const useGenerationCandidateDecisions = ({
+const useGenerationCandidateDecisions = ({
   workspaceId,
   listId,
   runId,

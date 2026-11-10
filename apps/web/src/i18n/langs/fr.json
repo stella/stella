@@ -227,7 +227,7 @@
       "emptyLine": "Extrayez des faits des documents du dossier ou ajoutez-en un à la main.",
       "emptyTitle": "Aucun fait d’ancrage pour l’instant",
       "heldDescription": "Le sens de ces extractions est <strong>réellement incertain</strong> : leur contenu est provisoire ou non confirmé, et pas simplement manuscrit. Elles sont exclues du scoring jusqu’à ce qu’un relecteur les confirme, les modifie ou les requalifie. Une source lisible n’est jamais mise en attente pour son seul support.",
-      "heldFilter": "{count, plural, one {# en attente de relecture} other {# en attente de relecture}}",
+      "heldFilter": "{count, plural, one {# en attente de relecture} many {# en attente de relecture} other {# en attente de relecture}}",
       "heldForReview": "En attente de relecture",
       "hideSources": "Masquer les sources",
       "holdOutOfScoring": "Exclure de la notation",
@@ -333,10 +333,10 @@
     },
     "extraction": {
       "busy": "Terminez d’abord l’extraction en cours et sa relecture.",
-      "confirmStart": "{units, plural, one {Lancer, # unité} other {Lancer, # unités}}",
+      "confirmStart": "{units, plural, one {Lancer, # unité} many {Lancer, # unités} other {Lancer, # unités}}",
       "dialogDescription": "Vous acceptez ou refusez chaque fait avant qu’il n’entre dans le dossier.",
       "dialogTitle": "Extraire des faits de documents",
-      "documentsChosen": "{count, plural, one {# choisi, jusqu’à {max}} other {# choisis, jusqu’à {max}}}",
+      "documentsChosen": "{count, plural, one {# choisi, jusqu’à {max}} many {# choisis, jusqu’à {max}} other {# choisis, jusqu’à {max}}}",
       "documentsLabel": "Documents à lire",
       "errors": {
         "accessRevoked": "L’extraction des faits s’est arrêtée, car l’accès n’est pas disponible.",
@@ -356,11 +356,11 @@
       "nothingFound": "Aucun fait n’a été trouvé dans les documents choisis.",
       "proposedTitle": "Faits proposés",
       "queued": "En attente de démarrage.",
-      "reviewed": "{accepted} sur {proposed, plural, one {# fait proposé} other {# faits proposés}} acceptés.",
-      "runSize": "{available, plural, one {Cette exécution utilise environ {estimated} de votre # unité disponible.} other {Cette exécution utilise environ {estimated} de vos # unités disponibles.}}",
+      "reviewed": "{accepted} sur {proposed, plural, one {# fait proposé} many {# faits proposés} other {# faits proposés}} acceptés.",
+      "runSize": "{available, plural, one {Cette exécution utilise environ {estimated} de votre # unité disponible.} many {Cette exécution utilise environ {estimated} de vos # unités disponibles.} other {Cette exécution utilise environ {estimated} de vos # unités disponibles.}}",
       "running": "Lecture des documents. Les faits proposés apparaîtront ici pour relecture.",
       "startFailed": "Impossible de lancer l’extraction des faits",
-      "submit": "{count, plural, =0 {Extraire des faits} one {Extraire des faits de # document} other {Extraire des faits de # documents}}"
+      "submit": "{count, plural, =0 {Extraire des faits} one {Extraire des faits de # document} many {Extraire des faits de # documents} other {Extraire des faits de # documents}}"
     },
     "guidance": {
       "escalate": "Faire remonter",
