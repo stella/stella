@@ -56,7 +56,7 @@ describe("swipeable rows", () => {
 
   test("the row never stands open past either edge", () => {
     assertProperty(
-      "swipe offset stays within the row",
+      "the row never stands open past either edge",
       fc.property(travel, rest, width, (dx, at, rowWidth) => {
         const offset = swipeOffset({ dx, rest: at, width: rowWidth });
         expect(offset).toBeGreaterThanOrEqual(0);
@@ -67,7 +67,7 @@ describe("swipeable rows", () => {
 
   test("dragging further never does less", () => {
     assertProperty(
-      "swipe settle is monotone in offset",
+      "dragging further never does less",
       fc.property(
         travel,
         travel,
@@ -92,7 +92,7 @@ describe("swipeable rows", () => {
 
   test("letting go runs the action exactly past half the row", () => {
     assertProperty(
-      "swipe runs exactly past half the row",
+      "letting go runs the action exactly past half the row",
       fc.property(
         fc.double({ max: 1400, min: 1, noNaN: true }),
         fc.double({ max: 1, min: 0, noNaN: true }),
@@ -111,7 +111,7 @@ describe("swipeable rows", () => {
 
   test("the list keeps mostly vertical drags, and a closed row the wrong way", () => {
     assertProperty(
-      "swipe claims only sideways drags",
+      "the list keeps mostly vertical drags, and a closed row the wrong way",
       fc.property(travel, travel, rest, (dx, dy, at) => {
         const claimed = claimsSwipe({ dx, dy, rest: at });
         if (Math.abs(dx) <= Math.abs(dy) * 2) {

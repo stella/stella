@@ -126,7 +126,7 @@ describe("a matter's timer action", () => {
 
   test("pauses the matter's running timer, else resumes its paused one, else starts", () => {
     assertProperty(
-      "matter timer action follows the matter's own timers",
+      "pauses the matter's running timer, else resumes its paused one, else starts",
       fc.property(timers, (drawn) => {
         const all = drawn.map((timer): Timer => ({ ...TIMER, ...timer }));
         const own = all.filter((timer) => timer.matterId === "matter-1");
