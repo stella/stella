@@ -18,6 +18,8 @@
  * engine is asked again.
  */
 
+import { requestAbortedRefusal } from "@/api/lib/legal-search/search-index-unavailable";
+
 type PublicSearchCoalescerLimits = {
   maxEntries: number;
   /** Approximate retained bytes: the UTF-16 size of each stored answer's JSON. */
@@ -48,7 +50,10 @@ type PublicSearchCoalescerOptions = {
 
 type CoalescedSearchOptions<T> = {
   key: string;
-  /** The caller's cancellation: only it leaves the flight, others stay. */
+  /**
+   * The caller's cancellation: only it leaves the flight, others stay. A
+   * caller that leaves is refused as a request abort, its reason the cause.
+   */
   signal?: AbortSignal | undefined;
   /** Whether this answer may be kept: complete, not shaped by load. */
   cacheable: (answer: T) => boolean;
@@ -154,7 +159,7 @@ export const createPublicSearchCoalescer = <T>({
     const left = Promise.withResolvers<never>();
     const onAbort = () => {
       leave(flight, signal.reason);
-      left.reject(signal.reason);
+      left.reject(requestAbortedRefusal(signal.reason));
     };
     signal.addEventListener("abort", onAbort, { once: true });
     return await Promise.race([flight.settled, left.promise]).finally(() => {
@@ -172,7 +177,9 @@ export const createPublicSearchCoalescer = <T>({
     cacheable,
     run,
   }: CoalescedSearchOptions<T>): Promise<T> => {
-    signal?.throwIfAborted();
+    if (signal?.aborted === true) {
+      throw requestAbortedRefusal(signal.reason);
+    }
     const stored = lookup(key);
     if (stored !== undefined) {
       return structuredClone(stored);
