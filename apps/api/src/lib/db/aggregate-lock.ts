@@ -3259,6 +3259,11 @@ export const lockActiveTableRun = async (
       .for("no key update")
   ).at(0);
 
+/** A table run as `lockActiveTableRun` returned it, held under its row lock. */
+export type LockedTableRun = NonNullable<
+  Awaited<ReturnType<typeof lockActiveTableRun>>
+>;
+
 /** Fence matter-client assignments while a bulk delete classifies contacts. */
 export const lockOwnedContactsForBulkDelete = async ({
   tx,

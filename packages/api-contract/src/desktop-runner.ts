@@ -636,6 +636,36 @@ export type DesktopRunnerOutputEvent = v.InferOutput<
   typeof desktopRunnerOutputEventSchema
 >;
 
+/**
+ * The CUSTOM chunk a desktop reports once per run, before its harness starts:
+ * whether the run's folder was saved as it stood, so the turn's file changes
+ * can be undone. It carries no file names, counts or sizes.
+ */
+export const DESKTOP_RUNNER_CHECKPOINT_EVENT = "stella.checkpoint";
+
+/**
+ * Why a run's folder was not saved: past a size or time bound, holding
+ * something that cannot be saved (a pipe, a name the platform reserves), or a
+ * failure reading or writing it. The run goes on either way.
+ */
+export const DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS = [
+  "too_large",
+  "too_slow",
+  "unsupported",
+  "failed",
+] as const;
+
+export const desktopRunnerCheckpointEventSchema = v.variant("status", [
+  v.strictObject({ status: v.literal("taken") }),
+  v.strictObject({
+    status: v.literal("unavailable"),
+    reason: v.picklist(DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS),
+  }),
+]);
+export type DesktopRunnerCheckpointEvent = v.InferOutput<
+  typeof desktopRunnerCheckpointEventSchema
+>;
+
 export const desktopRunnerDesktopMessageSchema = v.variant("type", [
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.hello),

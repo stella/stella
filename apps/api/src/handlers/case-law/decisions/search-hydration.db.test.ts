@@ -84,6 +84,7 @@ import {
   installCorpusDispositionScan,
   installCorpusRevisionScan,
 } from "@/api/tests/helpers/corpus-disposition-scan";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -1789,9 +1790,10 @@ test("a provision-only list reads its page and excerpts in one snapshot", async 
       loadCourtWeights: async () => await Promise.resolve(courtWeights),
     },
   });
-  // One read for ids, citing sentences and rows (one repeatable-read
-  // transaction), one for the language alternates.
-  expect(reads - before).toBe(2);
+  // One read for the provision's scope, which only chooses the path; one for
+  // ids, citing sentences and rows (one repeatable-read transaction); one for
+  // the language alternates.
+  expect(reads - before).toBe(3);
 });
 
 test("a provision-only list cursor resumes only the request it was issued for", async () => {
@@ -1919,6 +1921,73 @@ test("a provision-only list cursor resumes only the request it was issued for", 
         .delete(caseLawProvisionCitations)
         .where(eq(caseLawProvisionCitations.id, extra.id));
     }
+  }
+});
+
+test("a citation removed after the scope read leaves the provision-only page", async () => {
+  const db = drizzle({ client });
+  const [extra] = await db
+    .insert(caseLawProvisionCitations)
+    .values({
+      anchor: "par_316-odst_1",
+      confidence: 0.9,
+      decisionDate: "2024-01-01",
+      decisionId: slovakId,
+      jurisdiction: "CZE",
+      section: 316,
+      subsection: "1",
+      sentenceText: "sentence par_316-odst_1",
+      spanEnd: 60,
+      spanStart: 50,
+      unit: "section",
+      workCollection: "Sb.",
+      workIdentifier: "262/2006 Sb.",
+      workNumber: 262,
+      workYear: 2006,
+    })
+    .returning({ id: caseLawProvisionCitations.id });
+  if (extra === undefined) {
+    throw new Error("expected the inserted citation");
+  }
+  try {
+    let scopeRead = false;
+    const removingAfterScopeRead = asTestRaw<CaseLawPublicReadDb>(
+      async (
+        fn: Parameters<CaseLawPublicReadDb>[0],
+        options: Parameters<CaseLawPublicReadDb>[1],
+      ) => {
+        const answer = await caseLawDb(fn, options);
+        if (!scopeRead) {
+          scopeRead = true;
+          await db
+            .delete(caseLawProvisionCitations)
+            .where(eq(caseLawProvisionCitations.id, extra.id));
+        }
+        return answer;
+      },
+    );
+    const listed = await listCaseLawProvisionDecisions({
+      body: {
+        ...SEARCH_BODY,
+        provision: { work: "262/2006 Sb.", anchor: "par_316" },
+      },
+      caseLawDb: removingAfterScopeRead,
+      dependencies: {
+        servingGeneration: GENERATION,
+        provider: "corpus-index",
+        loadCourtWeights: async () => await Promise.resolve(courtWeights),
+      },
+    });
+    if (!("hits" in listed)) {
+      throw new Error("expected a page");
+    }
+    expect(listed.hits.map(({ decisionId }) => decisionId)).toEqual([
+      String(czechId),
+    ]);
+  } finally {
+    await db
+      .delete(caseLawProvisionCitations)
+      .where(eq(caseLawProvisionCitations.id, extra.id));
   }
 });
 

@@ -27,7 +27,8 @@ export type ChatAuditResourceType =
   | typeof AUDIT_RESOURCE_TYPE.CHAT_MESSAGE
   | typeof AUDIT_RESOURCE_TYPE.CHAT_FILE
   | typeof AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION
-  | typeof AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT;
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT;
 
 export type NonChatAuditResourceType = Exclude<
   AuditResourceType,
@@ -71,6 +72,7 @@ const CHAT_CHANGE_FIELDS = {
   // Tool executions and grants describe themselves in `metadata` only.
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: new Set<string>(),
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: new Set<string>(),
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: new Set<string>(),
 } as const satisfies Record<ChatAuditResourceType, ReadonlySet<string>>;
 
 type AuditDiff = { old: unknown; new: unknown };
@@ -93,6 +95,7 @@ export type ChatAuditChanges = {
   [AUDIT_RESOURCE_TYPE.CHAT_FILE]: Record<string, never>;
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: Record<string, never>;
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: Record<string, never>;
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: Record<string, never>;
 };
 
 const isChatResourceType = (
@@ -241,6 +244,7 @@ export const AUDIT_DETAIL_POLICY = {
   [AUDIT_RESOURCE_TYPE.CHAT_THREAD]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CLAUSE]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CLAUSE_CATEGORY]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.CLAUSE_TEMPLATE_LINK]: UNGATED_AUDIT_DETAILS,

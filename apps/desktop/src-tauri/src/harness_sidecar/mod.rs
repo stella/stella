@@ -59,8 +59,8 @@ use tokio::sync::{mpsc, oneshot};
 pub(crate) use endpoint::EndpointError;
 use endpoint::Endpoints;
 pub(crate) use protocol::{
-  HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
-  SidecarRunStart, SkillFolderRef,
+  CHECKPOINT_STORE_SUFFIX, HarnessLaunchSettings, HarnessProbe, HarnessProcess,
+  HeldRun, ProbeOutcome, SidecarRunStart, SkillFolderRef,
 };
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProbeFailure,
@@ -1422,6 +1422,14 @@ impl Supervisor {
             outcome: finished.outcome,
             harness_session_id: finished.harness_session_id,
           },
+        );
+      }
+      SidecarMessage::FolderRestored(restored) => {
+        // This desktop sends no restore yet; an answer is only logged.
+        tracing::warn!(
+          target: LOG_TARGET,
+          outcome = restored.outcome.wire_name(),
+          "harness holder answered a folder restore this desktop did not send"
         );
       }
       SidecarMessage::Rejected(rejected) => {

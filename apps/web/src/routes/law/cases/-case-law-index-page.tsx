@@ -111,6 +111,7 @@ import {
   QuestionColumnControls,
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
+import { isSearchBusy } from "@/features/case-law/search-busy.logic";
 import { caseLawWarningSurfaces } from "@/features/case-law/search-warnings.logic";
 import { useCaseLawRefine } from "@/features/case-law/use-case-law-refine";
 import { useDecisionFind } from "@/features/case-law/use-decision-find";
@@ -222,6 +223,24 @@ const useCaseLawResultsTiming = ({
     query ?? "",
     page !== undefined && !isPlaceholderData,
   );
+};
+
+type SearchStillBusyNoticeProps = {
+  failureReason: unknown;
+  isFetching: boolean;
+};
+
+/** The first answer was "busy" and its one retry is on the way. */
+const SearchStillBusyNotice = ({
+  failureReason,
+  isFetching,
+}: SearchStillBusyNoticeProps) => {
+  const t = useTranslations();
+  return isFetching && isSearchBusy(failureReason) ? (
+    <p className="text-muted-foreground text-sm" role="status">
+      {t("caseLaw.searchStillSearching")}
+    </p>
+  ) : null;
 };
 
 type PublicCaseLawIndexProps = {
@@ -868,6 +887,10 @@ export function PublicCaseLawIndex({
           />
         </div>
         {feedback.aboveResults}
+        <SearchStillBusyNotice
+          failureReason={pageQuery.failureReason}
+          isFetching={pageQuery.isFetching}
+        />
 
         {isSearchUnavailable ? (
           <PublicLawListFailure

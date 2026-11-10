@@ -28,6 +28,7 @@
     "@stll/errors": "workspace:*",
     "@stll/fetch": "workspace:*",
     "@stll/portable-path": "workspace:*",
+    "@stll/sha256": "workspace:*",
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-codex": "catalog:",
     "@tanstack/ai-persistence": "catalog:",
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
+    "@stll/test-kit": "0.4.1",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:"

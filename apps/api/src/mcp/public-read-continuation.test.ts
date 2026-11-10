@@ -10,6 +10,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import {
   createToolContinuation,
   runContinuablePublicRead,
+  waitForPublicRead,
 } from "@/api/mcp/public-read-continuation";
 import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
@@ -186,6 +187,42 @@ describe("public read continuation over MCP", () => {
     );
     await run.call(2000, token);
     expect(run.runs()).toBe(2);
+  });
+
+  test("a wait the attach already spent ends without another round", async () => {
+    let attaches = 0;
+    let clock = 0;
+    const waited = await waitForPublicRead({
+      toolName: "search",
+      continuation: {
+        attach: async () => {
+          attaches += 1;
+          clock += 6;
+          return await Promise.resolve({
+            status: "running" as const,
+            token: "work",
+            retryAfterMs: 60_000,
+            phase: "running" as const,
+            progress: null,
+          });
+        },
+        resolveToken: async () =>
+          await Promise.resolve({ status: "unknown" as const }),
+      },
+      args: { query: "smlouva" },
+      context: {
+        organizationId,
+        userId,
+        clientId: null,
+        testDependencies: { publicReadResponseDeadlineMs: 5 },
+      },
+      waitMs: 5,
+      execute: async () =>
+        await Promise.resolve(toolDataResult<Data, Data>({ ok: true })),
+      now: () => clock,
+    });
+    expect(waited).toEqual({ type: "still_running" });
+    expect(attaches).toBe(1);
   });
 
   test("a full fleet-wide caller pool is waited out, not refused", async () => {
