@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { Result } from "better-result";
 
-import { parseOutlookAISummaryResponse } from "@stll/api-contract";
+import { parseOutlookAISummaryResponse } from "@stll/api-contract/outlook-ai";
 
 import { buildAISummaryRequest } from "@/hooks/ai-request.logic";
 import { requestOutlookApi } from "@/lib/outlook-api-client";

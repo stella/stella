@@ -1,3 +1,4 @@
+import { OUTLOOK_AI_INTENT_MAX_CHARS } from "@stll/api-contract/outlook-ai";
 import { Button } from "@stll/ui/components/button";
 import { Separator } from "@stll/ui/components/separator";
 import { Skeleton } from "@stll/ui/components/skeleton";
@@ -171,6 +172,7 @@ const DraftSection = ({
     <PanelTitle icon={<AiActionIcon />} title={t("draftReply")} />
     <Textarea
       aria-label={t("draftReply")}
+      maxLength={OUTLOOK_AI_INTENT_MAX_CHARS}
       onChange={(event) => onIntentChange(event.currentTarget.value)}
       placeholder={t("draftIntentPlaceholder")}
       value={draftIntent}

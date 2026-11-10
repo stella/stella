@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { OUTLOOK_AI_INPUT_MAX_CHARS } from "@stll/api-contract";
+import {
+  OUTLOOK_AI_FROM_MAX_CHARS,
+  OUTLOOK_AI_INPUT_MAX_CHARS,
+  OUTLOOK_AI_SUBJECT_MAX_CHARS,
+} from "@stll/api-contract/outlook-ai";
 
 import {
   buildAIDraftRequest,
@@ -50,5 +54,21 @@ describe("Outlook AI request bodies", () => {
         snapshot: overLimitSnapshot,
       }).originalBody,
     ).toBe(snapshot.bodyText);
+  });
+
+  test("keeps the subject and sender within the endpoint's limits", () => {
+    const request = buildAIDraftRequest({
+      intent: "Reply",
+      snapshot: {
+        ...snapshot,
+        subject: "s".repeat(OUTLOOK_AI_SUBJECT_MAX_CHARS + 1),
+        from: {
+          email: `${"a".repeat(OUTLOOK_AI_FROM_MAX_CHARS)}@x.test`,
+          name: "",
+        },
+      },
+    });
+    expect(request.originalSubject).toHaveLength(OUTLOOK_AI_SUBJECT_MAX_CHARS);
+    expect(request).not.toHaveProperty("originalFrom");
   });
 });
