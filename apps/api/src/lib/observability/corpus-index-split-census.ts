@@ -78,18 +78,18 @@ export const splitCensusAttributes = (
 export const reportCorpusIndexSplitCensus = async (
   generations: readonly ServedGeneration[],
 ): Promise<void> => {
-  const clusters = [...new Set(generations.map(({ cluster }) => cluster))];
+  const servedByCluster = new Map<QuickwitCluster, Set<string>>();
+  for (const { cluster, generation } of generations) {
+    const served = servedByCluster.get(cluster) ?? new Set<string>();
+    served.add(generation);
+    servedByCluster.set(cluster, served);
+  }
   const counts: CorpusIndexPublishedSplitCount[] = [];
-  for (const cluster of clusters) {
+  for (const [cluster, served] of servedByCluster) {
     // A deployment without a corpus index has no splits to count.
     if (readCorpusIndexSearchBaseUrl(cluster) === null) {
       continue;
     }
-    const served = new Set(
-      generations
-        .filter((generation) => generation.cluster === cluster)
-        .map(({ generation }) => generation),
-    );
     const read = await getCorpusIndexClient(cluster).readPublishedSplitCounts({
       includes: (indexId) => {
         const generation = tryCorpusIndexGeneration(indexId);
