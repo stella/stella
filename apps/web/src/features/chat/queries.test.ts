@@ -179,6 +179,27 @@ describe("chatKeys", () => {
     expect(inMatter.queryKey.at(-1)).toBe("matter_b");
   });
 
+  test("isolates the pinned and unpinned histories from each other and the unfiltered list", () => {
+    const activeOrganizationId = "org_test";
+    const userId = "user_test";
+    const keys = ([undefined, "pinned", "unpinned"] as const).map(
+      (pinState) =>
+        groupedChatThreadsOptions({
+          activeOrganizationId,
+          ...(pinState === undefined ? {} : { pinState }),
+          userId,
+        }).queryKey,
+    );
+
+    expect(new Set(keys.map((key) => JSON.stringify(key))).size).toBe(3);
+    // Each sits under the reader's lists prefix the user stream refreshes.
+    for (const key of keys) {
+      expect(key.slice(0, 5)).toEqual(
+        chatKeys.groupedThreadLists(activeOrganizationId, userId),
+      );
+    }
+  });
+
   test("separates plain chat transports from active DOCX edit transports", () => {
     const threadId = toChatThreadId("thread-A");
     const base = {

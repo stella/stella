@@ -246,9 +246,9 @@ export const chatKeys = {
     workspaceId,
   }: GroupedChatThreadsKey) => [
     ...chatKeys.groupedThreadLists(activeOrganizationId, userId),
+    pinState ?? "",
     search ?? "",
     workspaceId ?? "",
-    pinState ?? "",
   ],
   toolGrants: (
     activeOrganizationId: string,
