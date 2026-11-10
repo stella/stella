@@ -103,6 +103,9 @@ export const AnchorFactsPanel = ({
   const [addingFact, setAddingFact] = React.useState(false);
   const [startedRunId, setStartedRunId] = React.useState<string | null>(null);
   const empty = facts.length === 0;
+  // While a run is in progress or under review, its card is the way forward,
+  // so an empty record says only that; both actions then sit in the header.
+  const showEmptyState = empty && !extractionBusy;
 
   const factActions = (
     <FactActions
@@ -111,7 +114,7 @@ export const AnchorFactsPanel = ({
       extractionBusy={extractionBusy}
       onAddFact={() => setAddingFact(true)}
       onExtract={() => setExtractOpen(true)}
-      prominent={empty}
+      prominent={showEmptyState}
     />
   );
 
@@ -127,7 +130,7 @@ export const AnchorFactsPanel = ({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!empty && factActions}
+          {!showEmptyState && factActions}
           {legalListsEnabled && (
             <Button
               render={
@@ -195,9 +198,7 @@ export const AnchorFactsPanel = ({
         </span>
       </div>
 
-      {/* While a run is in progress or under review, its card above is the
-          way forward, so the empty record offers nothing more. */}
-      {empty && !extractionBusy && (
+      {showEmptyState && (
         <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed p-4">
           <p className="text-sm font-medium">
             {t("avt.anchorFacts.emptyTitle")}
