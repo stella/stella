@@ -611,11 +611,12 @@ const DayCalendarBlockView = ({
     insetBlockStart: top,
     insetInlineStart: `${String((lane.lane * 100) / lane.laneCount)}%`,
   } satisfies CSSProperties;
+  const oneLine = blockSize < TWO_LINE_BLOCK_MIN_PX;
   const className = cn(
-    "text-foreground flex h-full w-full min-w-0 overflow-hidden rounded-md px-2.5 text-start text-xs",
-    blockSize < TWO_LINE_BLOCK_MIN_PX
-      ? "flex-row items-center gap-2"
-      : "flex-col gap-0.5 py-1",
+    // A size container: the block's width is set by its placement, never by
+    // its content, so a label can adapt to it with a container query.
+    "text-foreground @container flex h-full w-full min-w-0 overflow-hidden rounded-md px-2.5 text-start text-xs",
+    oneLine ? "flex-row items-center gap-2" : "flex-col gap-0.5 py-1",
     BLOCK_KIND_CLASSES[block.kind],
     block.kind === "entry" && ENTRY_STATE_CLASSES[block.state],
     block.tone.type === "matter" && "border-s-[3px]",
@@ -624,11 +625,23 @@ const DayCalendarBlockView = ({
   const content =
     blockSize < DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX ? null : (
       <>
-        <span className="min-w-0 shrink-0 truncate font-medium">
+        {/* On one line the caption gives way first, then the title ends in
+            an ellipsis rather than being cut at the block's edge. */}
+        <span
+          className={cn(
+            "min-w-0 truncate font-medium",
+            oneLine ? "shrink" : "shrink-0",
+          )}
+        >
           {block.title}
         </span>
         {block.caption === undefined ? null : (
-          <span className="text-muted-foreground min-w-0 truncate tabular-nums">
+          <span
+            className={cn(
+              "text-muted-foreground min-w-0 truncate tabular-nums",
+              oneLine && "shrink-[999]",
+            )}
+          >
             {block.caption}
           </span>
         )}

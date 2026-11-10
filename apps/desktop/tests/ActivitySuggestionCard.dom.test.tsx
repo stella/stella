@@ -179,3 +179,86 @@ describe("a selected range's card", () => {
     expect(accepted).toEqual([]);
   });
 });
+
+describe("the stella AI consent on a card", () => {
+  const renderConsent = () => {
+    const allowed: true[] = [];
+    testing.render(
+      <DesktopIntlProvider language="en" messages={defaultMessages}>
+        <ActivitySuggestionCard
+          assist={{ pending: false, type: "consent" }}
+          candidates={[]}
+          earlierEntries={[]}
+          edit={{
+            billable: true,
+            classification: null,
+            matter: MATTER,
+            narrative: "Call with the landlord's counsel",
+            undo: null,
+            written: 0,
+          }}
+          editable
+          flags={[]}
+          onAccept={noop}
+          onAcceptProposal={noop}
+          onAcceptStructure={noop}
+          onAllow={() => {
+            allowed.push(true);
+          }}
+          onClose={noop}
+          onCopy={async () => true}
+          onDismissProposal={noop}
+          onDraft={noop}
+          onEdit={noop}
+          onRefine={noop}
+          onReject={noop}
+          onRestoreTemplate={noop}
+          onUndo={noop}
+          sourceAppVisuals={[]}
+          structure={null}
+          suggestion={manualSuggestion({
+            drafted: [],
+            id: "manual:consent",
+            range: { startMs: wall("10:00"), endMs: wall("10:30") },
+            segments: [],
+          })}
+          timeLabel=""
+          times={{ type: "recorded" }}
+        />
+      </DesktopIntlProvider>,
+    );
+    return { allowed };
+  };
+  const isShown = (element: HTMLElement) =>
+    element.closest("[hidden]") === null;
+
+  test("asks in one line and shows everything a draft sends on request", async () => {
+    renderConsent();
+    expect(testing.screen.getByText(messages.aiDraftOffer)).toBeDefined();
+    const details = testing.screen.queryByText(messages.aiDraftConsent);
+    expect(details === null || !isShown(details)).toBe(true);
+
+    const whatIsSent = testing.screen.getByRole("button", {
+      name: messages.aiDraftWhatIsSent,
+    });
+    expect(whatIsSent.getAttribute("aria-expanded")).toBe("false");
+    await testing.act(async () => {
+      testing.fireEvent.click(whatIsSent);
+    });
+    expect(whatIsSent.getAttribute("aria-expanded")).toBe("true");
+    expect(isShown(testing.screen.getByText(messages.aiDraftConsent))).toBe(
+      true,
+    );
+  });
+
+  test("Allow grants consent once, whether or not the details are open", async () => {
+    const { allowed } = renderConsent();
+    const allow = testing.screen.getByRole("button", {
+      name: messages.aiDraftAllow,
+    });
+    await testing.act(async () => {
+      testing.fireEvent.click(allow);
+    });
+    expect(allowed).toEqual([true]);
+  });
+});
