@@ -52,6 +52,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/mobile/src/widgets/**/*.{ts,tsx}",
   "apps/mobile/src/app/document/**/*.{ts,tsx}",
   "apps/mobile/src/components/document-viewer/**/*.{ts,tsx}",
+  "apps/outlook/src/components/**/*.{ts,tsx}",
+  "apps/outlook/src/i18n/**/*.{ts,tsx}",
+  "apps/outlook/src/lib/oauth/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
@@ -546,6 +549,21 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "apps/mobile/src/app" },
   { reason: "unreviewed", unit: "apps/mobile/src/app/(tabs)" },
   { reason: "unreviewed", unit: "apps/mobile/src/components" },
+  {
+    reason:
+      "Outlook add-in adapters and entry scripts: api.ts and outlook.ts reject with typed errors that the hooks consume through Result.tryPromise, and the entry scripts catch Office.js startup failures. Enrol once those adapters return Result.",
+    unit: "apps/outlook/src",
+  },
+  {
+    reason:
+      "Outlook hooks turn adapter rejections into task pane state through Result.tryPromise, and a stale mail item rejects inside that wrapper. Enrol together with apps/outlook/src.",
+    unit: "apps/outlook/src/hooks",
+  },
+  {
+    reason:
+      "Office.js and API client adapters: office.ts reads callback APIs that fail by throwing, and outlook-api-client.ts rejects with typed errors its callers wrap in Result.tryPromise. Enrol together with apps/outlook/src.",
+    unit: "apps/outlook/src/lib",
+  },
   { reason: "unreviewed", unit: "apps/playground/src" },
   { reason: "unreviewed", unit: "apps/web/src" },
   { reason: "unreviewed", unit: "apps/web/src/components" },

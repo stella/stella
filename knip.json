@@ -141,7 +141,10 @@
         "scripts/*.ts",
         "src/**/*.test.ts",
         "src/**/*.test.tsx"
-      ]
+      ],
+      // scripts/build.ts runs the Tailwind CLI through `bun x`, which knip
+      // does not read as a use of the package.
+      "ignoreDependencies": ["@tailwindcss/cli"]
     },
     "apps/landing": {
       "entry": [
