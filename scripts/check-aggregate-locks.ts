@@ -221,7 +221,7 @@ export const rowLockHolderProblems = ({
       `The privilege census has no application role ${APPLICATION_ROLE}`,
     );
   }
-  const holders = new Map(
+  const holders = new Map<string, string>(
     baseline.flatMap((row) =>
       row.holder === undefined
         ? []
@@ -466,7 +466,7 @@ if (import.meta.main) {
     ]);
     // A rekeyed row lock keeps the holder of the row it replaces.
     const holders = new Map<string, string>();
-    const existingHolders = new Map(
+    const existingHolders = new Map<string, string | undefined>(
       existing.map(
         (row) => [`${row.file}:${row.fingerprint}`, row.holder] as const,
       ),
@@ -493,7 +493,7 @@ if (import.meta.main) {
       const holder = holders.get(key);
       return {
         ...row,
-        reason: reasons.get(key) ?? row.reason,
+        reason: reasons.get(`${row.file}:${row.fingerprint}`) ?? row.reason,
         ...(holder === undefined ? {} : { holder }),
       };
     });

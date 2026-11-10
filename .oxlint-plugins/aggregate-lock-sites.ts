@@ -42,7 +42,7 @@ export type AggregateLockBaselineRow = {
    * The role whose transactions take this row lock, when it is not the
    * application role: a role in the privilege census, or `owner`.
    */
-  holder?: string;
+  holder?: string | undefined;
 };
 
 const maskSqlLiteralsAndComments = (text: string) =>
