@@ -77,7 +77,7 @@ const RunningRing = ({
     const spin = Animated.loop(
       Animated.timing(turn, {
         duration: STATUS_MARK_SPIN_MS,
-        easing: Easing.linear,
+        easing: (progress) => Easing.linear(progress),
         isInteraction: false,
         toValue: 1,
         useNativeDriver: true,
