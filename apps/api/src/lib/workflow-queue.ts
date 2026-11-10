@@ -1895,6 +1895,7 @@ const processOneBatch = async ({
             entityId,
             entityVersionId,
             graded: verdictOutput.gradedVerdicts,
+            ungraded: verdictOutput.ungradedVerdicts,
             unresolvedPropertyIds: [
               ...verdictOutput.skippedPropertyIds,
               ...verdictOutput.erroredPropertyIds,

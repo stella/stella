@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import * as v from "valibot";
 
 import { normalizeCountry } from "@stll/agent-input";
 import {
@@ -41,6 +42,10 @@ import {
   isSearchCaseLawSuccess,
   isStatuteDocument,
 } from "@/api/mcp/public-law-handlers";
+import {
+  createToolContinuation,
+  waitForPublicRead,
+} from "@/api/mcp/public-read-continuation";
 import type {
   InternalToolErrorResult,
   McpCompatSearchResult,
@@ -51,6 +56,7 @@ import {
   errorResult,
   legalCitationLinkFields,
   searchRefusalResult,
+  toolDataResult,
   toPlainCorpusText,
 } from "@/api/mcp/tool-utils";
 
@@ -527,7 +533,7 @@ export type CompatCorpusSearchOutcome =
  * be inventing an order. A question that names an act is answered by its
  * statute hits being present, not by their being first.
  */
-export const searchCompatCorpus = async ({
+const searchCompatCorpus = async ({
   context,
   countries,
   cursors,
@@ -572,6 +578,101 @@ export const searchCompatCorpus = async ({
       statutes: statutes.page.cursors,
     },
   };
+};
+
+/** How long `search` waits on the server for a continued corpus read. */
+const COMPAT_CORPUS_WAIT_MS = 25_000;
+
+const compatSubCursors = v.record(v.string(), v.nullable(v.string()));
+
+const compatCorpusWorkArgs = v.strictObject({
+  countries: v.strictObject({
+    caseLaw: v.array(v.picklist(PUBLIC_CASE_LAW_COUNTRIES)),
+    legislation: v.array(v.picklist(PUBLIC_LEGISLATION_COUNTRIES)),
+  }),
+  cursors: v.strictObject({
+    decisions: compatSubCursors,
+    statutes: compatSubCursors,
+  }),
+  query: v.string(),
+});
+
+type CompatCorpusPage = Omit<
+  Extract<CompatCorpusSearchOutcome, { type: "page" }>,
+  "type"
+>;
+
+export const createCompatCorpusContinuation = (
+  options: Pick<
+    Parameters<typeof createToolContinuation>[1],
+    "store" | "ownerId" | "limits"
+  > = {},
+) =>
+  createToolContinuation<typeof compatCorpusWorkArgs, CompatCorpusPage, null>(
+    compatCorpusWorkArgs,
+    { ...options, progress: () => null },
+  );
+
+export type CompatCorpusContinuation = ReturnType<
+  typeof createCompatCorpusContinuation
+>;
+
+let compatCorpusContinuation: CompatCorpusContinuation | undefined;
+
+/** One per process, so concurrent calls on this task can find each other. */
+const getCompatCorpusContinuation = (): CompatCorpusContinuation => {
+  compatCorpusContinuation ??= createCompatCorpusContinuation();
+  return compatCorpusContinuation;
+};
+
+type WaitForCompatCorpusOptions = {
+  context: McpRequestResources;
+  countries: CompatCorpusCountries;
+  cursors: CompatCorpusCursors;
+  query: string;
+};
+
+/** The corpus half of `search`, continued like the other public searches. */
+export const waitForCompatCorpus = async ({
+  context,
+  countries,
+  cursors,
+  query,
+}: WaitForCompatCorpusOptions): Promise<
+  CompatCorpusSearchOutcome | { type: "still_running" }
+> => {
+  const waited = await waitForPublicRead({
+    toolName: "search",
+    continuation:
+      context.testDependencies?.compatCorpusContinuation ??
+      getCompatCorpusContinuation(),
+    args: {
+      countries: {
+        caseLaw: [...countries.caseLaw],
+        legislation: [...countries.legislation],
+      },
+      cursors,
+      query,
+    },
+    context,
+    waitMs: COMPAT_CORPUS_WAIT_MS,
+    execute: async (workArgs) => {
+      const outcome = await searchCompatCorpus({ context, ...workArgs });
+      return outcome.type === "failed"
+        ? outcome.result
+        : toolDataResult({
+            results: [...outcome.results],
+            cursors: outcome.cursors,
+            paginationOutcome: outcome.paginationOutcome,
+          });
+    },
+  });
+  if (waited.type === "still_running") {
+    return waited;
+  }
+  return waited.result.status === "error"
+    ? { type: "failed", result: waited.result }
+    : { type: "page", ...waited.result.data };
 };
 
 /** Whether any corpus source can still answer a further page. */

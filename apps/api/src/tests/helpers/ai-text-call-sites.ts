@@ -5,6 +5,7 @@ import {
   compactChatMessagesForModel,
   COMPACTION_SUMMARY_MESSAGE_ID,
   compactModelMessagesForModel,
+  MODEL_COMPACTION_CHECKPOINT_NOTE,
   planChatCompaction,
   planModelCompaction,
 } from "@/api/handlers/chat/compaction";
@@ -149,6 +150,13 @@ const SUMMARY_SEPARATOR = "\n\n";
 const summaryTextOf = (content: string): string => {
   const at = content.indexOf(SUMMARY_SEPARATOR);
   return at === -1 ? content : content.slice(at + SUMMARY_SEPARATOR.length);
+};
+
+/** A model-step checkpoint also carries its untrusted-checkpoint note. */
+const modelSummaryTextOf = (content: string): string => {
+  const text = summaryTextOf(content);
+  const note = `${MODEL_COMPACTION_CHECKPOINT_NOTE}${SUMMARY_SEPARATOR}`;
+  return text.startsWith(note) ? text.slice(note.length) : text;
 };
 
 type HistoryShapeOptions<TMessage> = {
@@ -320,7 +328,7 @@ const modelCompactionDriver = textCallSiteDriver({
       summaryErrors,
       summaryOf: (message) =>
         !modelThread.includes(message) && typeof message.content === "string"
-          ? summaryTextOf(message.content)
+          ? modelSummaryTextOf(message.content)
           : undefined,
     });
   },

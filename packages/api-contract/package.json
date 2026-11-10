@@ -51,6 +51,7 @@
     "./capability-request": "./src/capability-request.ts",
     "./browser-storage": "./src/browser-storage.ts",
     "./browser-control": "./src/browser-control.ts",
+    "./browser-site-grants": "./src/browser-site-grants.ts",
     "./chat-connector": "./src/chat-connector.ts",
     "./internal-ui-transport": "./src/internal-ui-transport.ts",
     "./chat-secret": "./src/chat-secret.ts",
@@ -185,6 +186,7 @@
     "./mcp-app-failure": "./src/mcp-app-failure.ts",
     "./desktop-runner": "./src/desktop-runner.ts",
     "./chat-run-target": "./src/chat-run-target.ts",
+    "./chat-local-run-tool": "./src/chat-local-run-tool.ts",
     "./agent-harness": "./src/agent-harness.ts",
     "./document-ocr-availability": "./src/document-ocr-availability.ts",
     "./mcp-app-messages": "./src/mcp-app-messages.json",
@@ -198,8 +200,8 @@
     "test": "bun test src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/api-contract",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/api-contract"
+    "lint": "cd ../.. && bun scripts/lint.ts packages/api-contract",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/api-contract"
   },
   "dependencies": {
     "@stll/agent-input": "workspace:*",

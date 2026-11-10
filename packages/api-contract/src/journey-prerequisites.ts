@@ -20,6 +20,13 @@ export const JOURNEY_PREREQUISITE_IDS = [
 
 export type JourneyPrerequisiteId = (typeof JOURNEY_PREREQUISITE_IDS)[number];
 
+/**
+ * The longest one scheduled job run may take. The API scheduler leases each
+ * run for this long, and a journey waits this long for the run it brought
+ * forward: a job still inside its budget has not failed.
+ */
+export const SCHEDULED_JOB_MAX_RUNTIME_MS = 30 * 60_000;
+
 /** Staging-only, secret-gated: `POST` brings the jobs forward, `GET` reports their runs. */
 export const JOURNEY_PREREQUISITES_PATH =
   "/smoke/scheduled-jobs/journey-prerequisites";

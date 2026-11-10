@@ -304,6 +304,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | --- | --- | --- | --- | --- |
 | `lists.columns.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists columns-create` |
 | `lists.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists create` |
+| `lists.fact-extractions.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists fact-extractions-create` |
 | `lists.generation-candidates.acceptance.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generation-candidates-acceptance-create` |
 | `lists.generation-candidates.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generation-candidates-create` |
 | `lists.generation-candidates.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists generation-candidates-list` |
@@ -778,7 +779,7 @@ mechanics, and similar), not gaps in coverage.
 | assistant_chat | 16 |
 | auth_plumbing | 38 |
 | billing_ui | 1 |
-| chat_thread_ui | 21 |
+| chat_thread_ui | 24 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 26 |

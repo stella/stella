@@ -1,8 +1,19 @@
 import { panic } from "better-result";
 
+import { chatLocalRunToolResultContent } from "@stll/api-contract/chat-local-run-tool";
+
 import type { HarnessToolCall, HarnessToolResult } from "../events";
-import { HARNESS_TOOL_NAMES, mcpToolCallName } from "../tool-parts";
-import { type CodexItem, type CodexItemType, isMcpTextBlock } from "./protocol";
+import {
+  HARNESS_TOOL_NAMES,
+  mcpToolCallName,
+  nativeToolCall,
+} from "../tool-parts";
+import {
+  type CodexItem,
+  type CodexItemType,
+  type CodexPlanUpdate,
+  isMcpTextBlock,
+} from "./protocol";
 
 /**
  * Codex thread items as harness events. Text is the agent's markdown, passed
@@ -38,7 +49,8 @@ export const codexItemHandling = (kind: CodexItemType): CodexItemHandling => {
       // The harness's record of a tool output it already reported as an item.
       return "ignore";
     case "plan":
-      // The harness's working plan; the answer text states what was done.
+      // A plan proposal's text; the steps of the working plan arrive as
+      // `turn/plan/updated` and are shown by title (`planUpdateStep`).
       return "ignore";
     case "dynamicToolCall":
       // stella registers no dynamic tools and declines `item/tool/call`.
@@ -96,17 +108,15 @@ export const toolCallForItem = (
 ): HarnessToolCall => {
   switch (item.type) {
     case "commandExecution":
-      return {
-        id: item.id,
+      return nativeToolCall(item.id, {
         name: HARNESS_TOOL_NAMES.commandExecution,
         input: { command: item.command },
-      };
+      });
     case "fileChange":
-      return {
-        id: item.id,
+      return nativeToolCall(item.id, {
         name: HARNESS_TOOL_NAMES.fileChange,
         input: { changes: fileChanges(item) },
-      };
+      });
     case "mcpToolCall":
       return {
         id: item.id,
@@ -118,16 +128,46 @@ export const toolCallForItem = (
         input: item.arguments ?? {},
       };
     case "webSearch":
-      return {
-        id: item.id,
+      return nativeToolCall(item.id, {
         name: HARNESS_TOOL_NAMES.webSearch,
         input: { query: item.query },
-      };
+      });
     default:
       item satisfies never;
       return panic("Unhandled Codex tool item");
   }
 };
+
+/**
+ * Codex's own name for the tool that updates its plan, as a Claude
+ * `TodoWrite` is named after the tool.
+ */
+const PLAN_TOOL = "update_plan";
+
+/**
+ * A plan update as a completed step: its steps' titles, never their
+ * statuses or the explanation around them. Each update is its own step, so
+ * `sequence` (the update's number in the turn) keeps the ids apart.
+ */
+export const planUpdateStep = (
+  update: CodexPlanUpdate,
+  sequence: number,
+): { toolCall: HarnessToolCall; result: HarnessToolResult } => ({
+  toolCall: nativeToolCall(`${update.turnId}:plan:${String(sequence)}`, {
+    name: HARNESS_TOOL_NAMES.nativeTool,
+    input: {
+      tool: PLAN_TOOL,
+      detail: { kind: "plan", items: update.plan.map(({ step }) => step) },
+    },
+  }),
+  result: {
+    content: chatLocalRunToolResultContent({
+      name: HARNESS_TOOL_NAMES.nativeTool,
+      result: { status: "completed" },
+    }),
+    status: "succeeded",
+  },
+});
 
 const status = (failed: boolean): HarnessToolResult["status"] =>
   failed ? "failed" : "succeeded";
@@ -163,21 +203,27 @@ const mcpResult = (
 export const toolResultForItem = (item: CodexToolItem): HarnessToolResult => {
   switch (item.type) {
     case "commandExecution":
+      // The exit code and status only; the command's output stays here.
       return {
-        content: JSON.stringify({
-          aggregated_output: item.aggregatedOutput ?? "",
-          ...(typeof item.exitCode === "number"
-            ? { exit_code: item.exitCode }
-            : {}),
-          status: EXEC_STATUS[item.status],
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.commandExecution,
+          result: {
+            status: EXEC_STATUS[item.status],
+            ...(typeof item.exitCode === "number"
+              ? { exit_code: item.exitCode }
+              : {}),
+          },
         }),
         status: status(item.status === "failed" || item.status === "declined"),
       };
     case "fileChange":
       return {
-        content: JSON.stringify({
-          changes: fileChanges(item),
-          status: EXEC_STATUS[item.status],
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.fileChange,
+          result: {
+            changes: fileChanges(item),
+            status: EXEC_STATUS[item.status],
+          },
         }),
         status: status(item.status === "failed" || item.status === "declined"),
       };
@@ -185,7 +231,10 @@ export const toolResultForItem = (item: CodexToolItem): HarnessToolResult => {
       return mcpResult(item);
     case "webSearch":
       return {
-        content: JSON.stringify({ status: "completed" }),
+        content: chatLocalRunToolResultContent({
+          name: HARNESS_TOOL_NAMES.webSearch,
+          result: { status: "completed" },
+        }),
         status: "succeeded",
       };
     default:

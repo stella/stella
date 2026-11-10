@@ -37,6 +37,7 @@ import {
 import {
   codexItemHandling,
   isToolItem,
+  planUpdateStep,
   reasoningText,
   toolCallForItem,
   toolResultForItem,
@@ -250,6 +251,8 @@ export class CodexTurnSession {
   private readonly resolved = new Set<string>();
   private readonly answeredByMessage = new Set<string>();
   private unsupportedItems = 0;
+  /** Plan updates reported so far in this turn. */
+  private planUpdates = 0;
   private capacityRetries = 0;
 
   private readonly lifecycle: HarnessTurnLifecycle<AppServerClient>;
@@ -440,6 +443,17 @@ export class CodexTurnSession {
         const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
         if (parsed !== null) {
           this.rateLimits = mergeRateLimits(this.rateLimits, parsed.rateLimits);
+        }
+        return;
+      }
+      case "turn/plan/updated": {
+        const parsed = this.parse(CODEX_NOTIFICATIONS[method], params, method);
+        if (parsed !== null && parsed.turnId === this.turnId) {
+          this.planUpdates += 1;
+          this.emit({
+            type: "tool.completed",
+            ...planUpdateStep(parsed, this.planUpdates),
+          });
         }
         return;
       }

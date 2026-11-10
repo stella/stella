@@ -38,7 +38,7 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 import { recordDocumentReviewRunModel } from "@/api/lib/document-review/run-queue";
 import { formatModelRef } from "@/api/lib/tanstack-ai-models";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { memberScopedDb } from "@/api/tests/helpers/application-role-db";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -52,6 +52,14 @@ let testDb: TestDatabase;
 let ids: TestIds;
 
 const seededRunIds: SafeId<"documentReviewRun">[] = [];
+
+/** Runs the code under test as the member, on the application role. */
+const asMember = async <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> =>
+  await memberScopedDb(testDb, {
+    organizationId: ids.orgA,
+    workspaceIds: [ids.wsA1],
+    userId: ids.userA1,
+  })(fn);
 
 const REFERENCE_POSITION_ID = "44444444-4444-4444-8444-444444444444";
 const POSITION_ID = "11111111-1111-4111-8111-111111111111";
@@ -402,10 +410,10 @@ describe("document review run persistence", () => {
 
     await Promise.all(
       rows.map(async (row) => {
-        await testDb.transaction(
+        await asMember(
           async (tx) =>
             await writeReviewFindingBatch({
-              tx: asTestRaw<Transaction>(tx),
+              tx,
               workspaceId: ids.wsA1,
               rows: [row],
               executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
@@ -432,10 +440,10 @@ describe("document review run persistence", () => {
     expect(committed).toHaveLength(2);
     expect(beforeRecount.at(0)?.completed).toBe(1);
 
-    await testDb.transaction(
+    await asMember(
       async (tx) =>
         await recountDocumentReviewFindingProgress({
-          tx: asTestRaw<Transaction>(tx),
+          tx,
           workspaceId: ids.wsA1,
           runId,
         }),
@@ -617,13 +625,16 @@ describe("document review run persistence", () => {
     const repeatRun = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId: repeatRun, status: "running", target });
     await upsertReferenceFinding(repeatRun, target, "Original passage");
-    const carried = await carryOverDecisions({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      runId: repeatRun,
-      entityId: target.entityId,
-      fileFieldId: target.fileFieldId,
-    });
+    const carried = await asMember(
+      async (tx) =>
+        await carryOverDecisions({
+          tx,
+          workspaceId: ids.wsA1,
+          runId: repeatRun,
+          entityId: target.entityId,
+          fileFieldId: target.fileFieldId,
+        }),
+    );
     expect(carried).toBe(1);
     expect(await decisionsOf(repeatRun)).toEqual([
       { decision: "accepted", decidedBy: ids.userA1, decidedAt },
@@ -638,13 +649,16 @@ describe("document review run persistence", () => {
     const changedRun = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId: changedRun, status: "running", target });
     await upsertReferenceFinding(changedRun, target, "Renegotiated passage");
-    const carriedAfterChange = await carryOverDecisions({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      runId: changedRun,
-      entityId: target.entityId,
-      fileFieldId: target.fileFieldId,
-    });
+    const carriedAfterChange = await asMember(
+      async (tx) =>
+        await carryOverDecisions({
+          tx,
+          workspaceId: ids.wsA1,
+          runId: changedRun,
+          entityId: target.entityId,
+          fileFieldId: target.fileFieldId,
+        }),
+    );
     expect(carriedAfterChange).toBe(0);
     expect(await decisionsOf(changedRun)).toEqual([
       { decision: "open", decidedBy: null, decidedAt: null },
@@ -687,15 +701,18 @@ describe("document review run persistence", () => {
     // A run carries no model until grading resolves one.
     expect(await modelRefOf()).toBeNull();
 
-    await recordDocumentReviewRunModel({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      runId,
-      modelRef: formatModelRef({
-        provider: "anthropic",
-        modelId: "claude-sonnet-4-5",
-      }),
-    });
+    await asMember(
+      async (tx) =>
+        await recordDocumentReviewRunModel({
+          tx,
+          workspaceId: ids.wsA1,
+          runId,
+          modelRef: formatModelRef({
+            provider: "anthropic",
+            modelId: "claude-sonnet-4-5",
+          }),
+        }),
+    );
 
     expect(await modelRefOf()).toBe("anthropic/claude-sonnet-4-5");
   });

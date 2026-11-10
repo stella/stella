@@ -1,6 +1,7 @@
 import {
   foldMarkText,
   originalWordRange,
+  queryFindPhrase,
   queryFindTokens,
   wordSpans,
 } from "./query-marks";
@@ -119,14 +120,108 @@ const firstWordAtOrAfter = (
   return low;
 };
 
+/** Index positions `[first, last]` of the words one match covers, in one piece. */
+type WordRun = { readonly first: number; readonly last: number };
+
+/** Every word the token starts (or, when `exact`, equals), in no set order. */
+const wordsOfToken = (
+  index: ReaderSearchIndex,
+  token: string,
+  exact: boolean,
+): number[] => {
+  const words: number[] = [];
+  for (
+    let sorted = firstWordAtOrAfter(index, token);
+    sorted < index.wordsByText.length;
+    sorted += 1
+  ) {
+    const word = index.wordsByText[sorted] ?? 0;
+    const text = index.wordText[word] ?? "";
+    if (exact ? text !== token : !text.startsWith(token)) {
+      break;
+    }
+    words.push(word);
+  }
+  return words;
+};
+
 /**
- * Every word of the query, wherever it starts a word in the text.
+ * Where the text uses the typed words in order, one after the other in one
+ * piece. Every word but the last must be the typed word itself, so "10 As"
+ * does not run on from "100"; the last may be a prefix, as it is while the
+ * reader is still typing it.
+ */
+const phraseRuns = (
+  index: ReaderSearchIndex,
+  phrase: readonly string[],
+): WordRun[] => {
+  const [head] = phrase;
+  if (head === undefined || phrase.length < 2) {
+    return [];
+  }
+  const lastOffset = phrase.length - 1;
+  const runs: WordRun[] = [];
+  for (const first of wordsOfToken(index, head, true)) {
+    const piece = index.wordPiece[first];
+    let matched = true;
+    for (let offset = 1; offset <= lastOffset && matched; offset += 1) {
+      const word = first + offset;
+      const text = index.wordText[word];
+      const token = phrase[offset] ?? "";
+      matched =
+        text !== undefined &&
+        index.wordPiece[word] === piece &&
+        (offset === lastOffset ? text.startsWith(token) : text === token);
+    }
+    if (matched) {
+      runs.push({ first, last: first + lastOffset });
+    }
+  }
+  runs.sort((left, right) => left.first - right.first);
+  // A phrase that repeats its own words ("a a") can start inside the run
+  // before it; the earlier run keeps those words.
+  const separate: WordRun[] = [];
+  for (const run of runs) {
+    const previous = separate.at(-1);
+    if (previous === undefined || run.first > previous.last) {
+      separate.push(run);
+    }
+  }
+  return separate;
+};
+
+/** Every word a query token starts, each its own run, in document order. */
+const wordRuns = (
+  index: ReaderSearchIndex,
+  tokens: readonly string[],
+): WordRun[] => {
+  // A word two tokens both start is still one match.
+  const hits = new Set<number>();
+  for (const token of tokens) {
+    for (const word of wordsOfToken(index, token, false)) {
+      hits.add(word);
+    }
+  }
+  // Words were listed piece by piece and left to right, so their positions
+  // are document order.
+  return Array.from(Int32Array.from(hits).toSorted(), (word) => ({
+    first: word,
+    last: word,
+  }));
+};
+
+/**
+ * The phrase where the text uses it, else every word of the query wherever
+ * it starts a word in the text.
  *
- * Word-prefix rather than substring, so a multi-word query marks its words
- * where the text actually uses them — an inflected corpus almost never repeats
- * the reader's phrase verbatim, and a phrase that does appear is marked
- * anyway, one word at a time. Matches are numbered in piece order and then in
- * position order, so a match index is a position in the document.
+ * A reader who types "10 As 245/2016" over a decision that cites it is after
+ * that citation, not every "10" on the page, so when the typed words occur
+ * in order, one after the other, each occurrence is one match and the words
+ * are left alone elsewhere. An inflected corpus rarely repeats a phrase
+ * verbatim, though, so when the text never uses it each word is marked where
+ * it starts a word: word-prefix rather than substring, so "odpovědnost"
+ * marks "odpovědnosti" whole. Matches are numbered in piece order and then
+ * in position order, so a match index is a position in the document.
  *
  * The work is the query's tokens looked up in the index plus the matches
  * found, not the length of the text.
@@ -143,36 +238,23 @@ export const searchReaderIndex = (
   if (tokens.length === 0) {
     return { matchCount: 0, rangesByPieceId: {} };
   }
-
-  // A word two tokens both start is still one match.
-  const hits = new Set<number>();
-  for (const token of tokens) {
-    for (
-      let sorted = firstWordAtOrAfter(index, token);
-      sorted < index.wordsByText.length;
-      sorted += 1
-    ) {
-      const word = index.wordsByText[sorted] ?? 0;
-      if (!(index.wordText[word] ?? "").startsWith(token)) {
-        break;
-      }
-      hits.add(word);
-    }
-  }
-  // Words were listed piece by piece and left to right, so their positions
-  // are document order.
-  const ordered = Int32Array.from(hits).toSorted();
+  const phrase = phraseRuns(index, queryFindPhrase(query));
+  const runs = phrase.length > 0 ? phrase : wordRuns(index, tokens);
 
   const rangesByPieceId: Record<string, ReaderSearchMatchRange[]> = {};
   let matchCount = 0;
-  for (const word of ordered) {
-    const piece = index.pieces[index.wordPiece[word] ?? 0];
+  for (const { first, last } of runs) {
+    const piece = index.pieces[index.wordPiece[first] ?? 0];
     if (piece === undefined) {
       continue;
     }
-    const { end, start } = originalWordRange(piece.folded, {
-      start: index.wordStart[word] ?? 0,
-      end: index.wordEnd[word] ?? 0,
+    const { start } = originalWordRange(piece.folded, {
+      start: index.wordStart[first] ?? 0,
+      end: index.wordEnd[first] ?? 0,
+    });
+    const { end } = originalWordRange(piece.folded, {
+      start: index.wordStart[last] ?? 0,
+      end: index.wordEnd[last] ?? 0,
     });
     const range: ReaderSearchMatchRange = {
       type: "search",

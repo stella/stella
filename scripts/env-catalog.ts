@@ -1492,6 +1492,8 @@ export const TOOLING_ENV_KEYS = new Set([
 
   // Dated guard-rollout healing requests full scope before removing the temporary scope.
   "STELLA_GUARD_SCOPE",
+  // scripts/lint.ts prints the linter command instead of running it.
+  "STELLA_LINT_DRY_RUN",
   // Release-only secret: the short-lived federated Chrome Web Store access token.
   "CHROME_WEB_STORE_ACCESS_TOKEN",
   // The mobile app's Expo config reads its variant and signing from the build.
@@ -1882,6 +1884,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
   // Private loopback endpoint passed to the isolated corpus-suite preload.
+  "STELLA_COLD_SEARCH_CONTAINER",
+  "STELLA_COLD_SEARCH_DROP_PAGE_CACHE",
+  "STELLA_COLD_SEARCH_MODE",
   "STELLA_CORPUS_ENGINE_TEST_ENDPOINT",
   "STELLA_DESKTOP_DOWNLOAD_BASE_URL",
   "STELLA_DESKTOP_NOW_EPOCH",
