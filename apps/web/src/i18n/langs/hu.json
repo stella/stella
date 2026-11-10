@@ -1758,6 +1758,27 @@
     "loadEarlierMessages": "Korábbi üzenetek betöltése",
     "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
     "loadingEarlierMessages": "Korábbi üzenetek betöltése…",
+    "localFilesUndo": {
+      "action": "Fájlmódosítások visszavonása",
+      "computer": {
+        "failed": "A számítógépe nem tudta visszavonni a módosításokat. A fájlok olyanok, amilyenek a kérése előtt voltak.",
+        "folderBusy": "Egy futás használja ezt a mappát a számítógépén. Próbálja újra, ha befejeződött.",
+        "noCheckpoint": "A számítógépén nincs mentett másolat a fájlokról a lépés előtti állapotból, így semmi sem vonódott vissza.",
+        "notNewest": "A számítógépén újabb módosítások vannak ebben a mappában, így semmi sem vonódott vissza."
+      },
+      "confirm": "Módosítások visszavonása",
+      "confirmDescription": "Azok a fájlok, amelyeket ez a lépés a mappájában módosított a számítógépén, visszakerülnek a lépés előtti állapotukba. Csak ennek a lépésnek a módosításai vonódnak vissza; a korábbi lépések módosításai megmaradnak.",
+      "confirmTitle": "Visszavonja ennek a lépésnek a fájlmódosításait?",
+      "expired": "A számítógépe nem válaszolt időben. Próbálja újra.",
+      "pending": "Fájlmódosítások visszavonása a számítógépén",
+      "refused": {
+        "desktopOffline": "A számítógépe offline. Nyissa meg a stella asztali alkalmazást, és próbálja újra.",
+        "noCheckpoint": "Ehhez a lépéshez nincs mentett másolat a fájlokról, amelyhez vissza lehetne térni.",
+        "notNewest": "Csak a legújabb lépés fájlmódosításai vonhatók vissza.",
+        "threadBusy": "Ez a csevegés még dolgozik. Próbálja újra, ha befejezte."
+      },
+      "restored": "Fájlmódosítások visszavonva"
+    },
     "localRun": {
       "cloud": "stella-felhő",
       "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",

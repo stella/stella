@@ -1758,6 +1758,27 @@
     "loadEarlierMessages": "Ielādēt vecākus ziņojumus",
     "loadEarlierMessagesError": "Neizdevās ielādēt vecākus ziņojumus",
     "loadingEarlierMessages": "Ielādē vecākus ziņojumus…",
+    "localFilesUndo": {
+      "action": "Atsaukt failu izmaiņas",
+      "computer": {
+        "failed": "Jūsu dators nevarēja atsaukt izmaiņas. Faili ir tādi, kādi tie bija pirms jūsu pieprasījuma.",
+        "folderBusy": "Šo mapi jūsu datorā pašlaik izmanto cits izpildes process. Mēģiniet vēlreiz, kad tas beigsies.",
+        "noCheckpoint": "Jūsu datorā nav saglabātas failu kopijas no laika pirms šī soļa, tāpēc nekas netika atsaukts.",
+        "notNewest": "Jūsu datorā šajā mapē ir jaunākas izmaiņas, tāpēc nekas netika atsaukts."
+      },
+      "confirm": "Atsaukt izmaiņas",
+      "confirmDescription": "Faili, ko šis solis mainīja savā mapē jūsu datorā, atgriezīsies stāvoklī pirms šī soļa. Tiek atsauktas tikai šī soļa izmaiņas; iepriekšējo soļu izmaiņas paliek.",
+      "confirmTitle": "Vai atsaukt šī soļa failu izmaiņas?",
+      "expired": "Jūsu dators neatbildēja laikā. Mēģiniet vēlreiz.",
+      "pending": "Notiek failu izmaiņu atsaukšana jūsu datorā",
+      "refused": {
+        "desktopOffline": "Jūsu dators ir bezsaistē. Atveriet stella darbvirsmas lietotni un mēģiniet vēlreiz.",
+        "noCheckpoint": "Šim solim nav saglabātas failu kopijas, pie kuras atgriezties.",
+        "notNewest": "Var atsaukt tikai jaunākā soļa failu izmaiņas.",
+        "threadBusy": "Šī tērzēšana vēl darbojas. Mēģiniet vēlreiz, kad tā beigsies."
+      },
+      "restored": "Failu izmaiņas atsauktas"
+    },
     "localRun": {
       "cloud": "stella mākonis",
       "errorLimitReached": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Mēģiniet vēlreiz, kad limits tiks atjaunots.",

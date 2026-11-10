@@ -162,6 +162,7 @@ import {
 } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
+import type { NewestLocalTurn } from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
@@ -355,6 +356,13 @@ const ActiveTurnStatus = memo(
   },
 );
 
+/** The turn whose file changes `messageId` may undo: only the newest turn's answer. */
+const localFilesUndoTurnIdFor = (
+  newestLocalTurn: NewestLocalTurn | null | undefined,
+  messageId: string,
+): string | null =>
+  newestLocalTurn?.assistantMessageId === messageId ? newestLocalTurn.id : null;
+
 export const ChatThreadMessages = ({
   activitySession,
   activeFileName,
@@ -384,6 +392,7 @@ export const ChatThreadMessages = ({
   showToolCalls,
   stickyUserMessages = false,
   waitingForComputer = false,
+  newestLocalTurn,
   queuedMessages,
   queuedMessageActions,
   streamdownComponents,
@@ -459,6 +468,10 @@ export const ChatThreadMessages = ({
                 ? findCreateDocumentArtifactForMessage(messages, index)
                 : null
             }
+            localFilesUndoTurnId={localFilesUndoTurnIdFor(
+              newestLocalTurn,
+              message.id,
+            )}
             message={message}
             threadRef={messageActionsThreadRef(message, threadRef)}
           >
@@ -1507,6 +1520,11 @@ type ChatThreadMessagesProps = {
   /** The turn runs on the member's computer, which is away until it
    *  reconnects; the turn shows the wait in place of its live status. */
   waitingForComputer?: boolean | undefined;
+  /**
+   * The newest turn of a chat that runs on the member's computer: the
+   * message that answered it offers to undo its file changes.
+   */
+  newestLocalTurn?: NewestLocalTurn | null | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
   /**

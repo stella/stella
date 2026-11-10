@@ -1758,6 +1758,27 @@
     "loadEarlierMessages": "Načítať staršie správy",
     "loadEarlierMessagesError": "Staršie správy sa nepodarilo načítať",
     "loadingEarlierMessages": "Načítavajú sa staršie správy…",
+    "localFilesUndo": {
+      "action": "Vrátiť zmeny súborov",
+      "computer": {
+        "failed": "Váš počítač zmeny vrátiť nedokázal. Súbory sú v stave, v akom boli pred vašou žiadosťou.",
+        "folderBusy": "Tento priečinok vo vašom počítači práve používa iný beh. Skúste to znova, keď skončí.",
+        "noCheckpoint": "Váš počítač nemá uloženú kópiu súborov spred tohto kroku, takže sa nič nevrátilo.",
+        "notNewest": "Váš počítač má v tomto priečinku novšie zmeny, takže sa nič nevrátilo."
+      },
+      "confirm": "Vrátiť zmeny",
+      "confirmDescription": "Súbory, ktoré tento krok zmenil vo svojom priečinku vo vašom počítači, sa vrátia do stavu pred týmto krokom. Vrátia sa len zmeny tohto kroku; zmeny skorších krokov zostanú.",
+      "confirmTitle": "Vrátiť zmeny súborov z tohto kroku?",
+      "expired": "Váš počítač neodpovedal včas. Skúste to znova.",
+      "pending": "Vracanie zmien súborov vo vašom počítači",
+      "refused": {
+        "desktopOffline": "Váš počítač je offline. Otvorte desktopovú aplikáciu stella a skúste to znova.",
+        "noCheckpoint": "Tento krok nemá uloženú kópiu súborov, ku ktorej by sa dalo vrátiť.",
+        "notNewest": "Vrátiť možno len zmeny súborov z najnovšieho kroku.",
+        "threadBusy": "Tento chat ešte pracuje. Skúste to znova, keď skončí."
+      },
+      "restored": "Zmeny súborov vrátené"
+    },
     "localRun": {
       "cloud": "Cloud stella",
       "errorLimitReached": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Skúste to znova, keď sa limit obnoví.",

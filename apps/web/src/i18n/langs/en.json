@@ -1758,6 +1758,27 @@
     "loadEarlierMessages": "Load earlier messages",
     "loadEarlierMessagesError": "Couldn't load earlier messages",
     "loadingEarlierMessages": "Loading earlier messages…",
+    "localFilesUndo": {
+      "action": "Undo file changes",
+      "computer": {
+        "failed": "Your computer could not undo the changes. The files are as they were before you asked.",
+        "folderBusy": "A run on your computer is using this folder. Try again when it finishes.",
+        "noCheckpoint": "Your computer has no saved copy of the files from before this turn, so nothing was undone.",
+        "notNewest": "Your computer has newer changes in this folder, so nothing was undone."
+      },
+      "confirm": "Undo changes",
+      "confirmDescription": "The files this turn changed in its folder on your computer go back to how they were before the turn. Only this turn's changes are undone; earlier turns' changes stay.",
+      "confirmTitle": "Undo this turn's file changes?",
+      "expired": "Your computer did not answer in time. Try again.",
+      "pending": "Undoing file changes on your computer",
+      "refused": {
+        "desktopOffline": "Your computer is offline. Open the stella desktop app and try again.",
+        "noCheckpoint": "This turn has no saved copy of the files to go back to.",
+        "notNewest": "Only the newest turn's file changes can be undone.",
+        "threadBusy": "This chat is still working. Try again when it finishes."
+      },
+      "restored": "File changes undone"
+    },
     "localRun": {
       "cloud": "stella cloud",
       "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",

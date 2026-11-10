@@ -246,6 +246,19 @@ export const chatKeys = {
     userId: string,
     threadId: string,
   ) => [...chatKeys.all, activeOrganizationId, userId, "tool-grants", threadId],
+  localFilesUndo: (
+    activeOrganizationId: string,
+    userId: string,
+    threadId: string,
+    turnId: string,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "local-files-undo",
+    threadId,
+    turnId,
+  ],
   browserSiteGrants: (activeOrganizationId: string, userId: string) => [
     ...chatKeys.all,
     activeOrganizationId,

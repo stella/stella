@@ -112,6 +112,38 @@ export type ChatMessagePage = {
   lastActivityAt: string | null;
 };
 
+/** A thread's newest turn and the answer it wrote, if it wrote one yet. */
+export type NewestChatTurn = {
+  id: SafeId<"chatTurn">;
+  assistantMessageId: SafeId<"chatMessage"> | null;
+};
+
+/**
+ * The member's newest turn of the thread: the one whose file changes on
+ * their computer the page may offer to undo, since only the newest turn can
+ * be undone.
+ */
+export const readNewestChatTurnOnTx = async ({
+  tx,
+  threadId,
+  userId,
+}: {
+  tx: Transaction;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+}): Promise<NewestChatTurn | null> => {
+  const [turn] = await tx
+    .select({
+      id: chatTurns.id,
+      assistantMessageId: chatTurns.assistantMessageId,
+    })
+    .from(chatTurns)
+    .where(and(eq(chatTurns.threadId, threadId), eq(chatTurns.userId, userId)))
+    .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
+    .limit(1);
+  return turn ?? null;
+};
+
 /**
  * Core query, callable directly against an already-open transaction so
  * callers sharing one scoped tx (e.g. get-messages.ts) can run it without

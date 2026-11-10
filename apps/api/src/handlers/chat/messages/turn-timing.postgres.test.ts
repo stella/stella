@@ -334,6 +334,43 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
+    test("a chat that runs on the member's computer names its newest turn and the answer it wrote; a cloud chat names none", async () => {
+      await withFixture(async (fixture) => {
+        const messages = await seedMessages(fixture, fixture.workspaceId);
+        await seedTurn({
+          fixture,
+          messages,
+          durationMs: 4000,
+          state: "completed",
+        });
+        expect((await readMessages(fixture, messages)).newestLocalTurn).toBe(
+          null,
+        );
+
+        await fixture.db
+          .update(chatThreads)
+          .set({
+            chatLocalRunTarget: {
+              kind: "local",
+              harness: "codex",
+              model: "gpt-test",
+              approvals: "ask",
+            },
+          })
+          .where(eq(chatThreads.id, messages.threadId));
+        const [newest] = await fixture.db
+          .select({ id: chatTurns.id })
+          .from(chatTurns)
+          .where(eq(chatTurns.threadId, messages.threadId));
+        expect((await readMessages(fixture, messages)).newestLocalTurn).toEqual(
+          {
+            id: newest?.id ?? panic("the turn was not seeded"),
+            assistantMessageId: messages.assistantMessageId,
+          },
+        );
+      });
+    });
+
     test("a different matter cannot expose messages or their timing", async () => {
       await withFixture(async (fixture) => {
         const messages = await seedMessages(fixture, fixture.otherWorkspaceId);

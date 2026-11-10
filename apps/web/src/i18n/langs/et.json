@@ -1758,6 +1758,27 @@
     "loadEarlierMessages": "Laadi varasemad sõnumid",
     "loadEarlierMessagesError": "Varasemate sõnumite laadimine ebaõnnestus",
     "loadingEarlierMessages": "Varasemate sõnumite laadimine…",
+    "localFilesUndo": {
+      "action": "Võta failimuudatused tagasi",
+      "computer": {
+        "failed": "Teie arvuti ei saanud muudatusi tagasi võtta. Failid on samas olekus nagu enne teie päringut.",
+        "folderBusy": "Seda kausta kasutab teie arvutis praegu üks käivitus. Proovige uuesti, kui see on lõppenud.",
+        "noCheckpoint": "Teie arvutis pole selle sammu-eelsetest failidest salvestatud koopiat, seega midagi tagasi ei võetud.",
+        "notNewest": "Teie arvutis on selles kaustas uuemad muudatused, seega midagi tagasi ei võetud."
+      },
+      "confirm": "Võta muudatused tagasi",
+      "confirmDescription": "Failid, mida see samm teie arvutis oma kaustas muutis, taastatakse sammu-eelsesse olekusse. Tagasi võetakse ainult selle sammu muudatused; varasemate sammude muudatused jäävad alles.",
+      "confirmTitle": "Kas võtta selle sammu failimuudatused tagasi?",
+      "expired": "Teie arvuti ei vastanud õigel ajal. Proovige uuesti.",
+      "pending": "Teie arvutis võetakse failimuudatusi tagasi",
+      "refused": {
+        "desktopOffline": "Teie arvuti on võrguühenduseta. Avage stella töölauarakendus ja proovige uuesti.",
+        "noCheckpoint": "Selle sammu jaoks pole failidest salvestatud koopiat, mille juurde naasta.",
+        "notNewest": "Tagasi saab võtta ainult kõige uuema sammu failimuudatused.",
+        "threadBusy": "See vestlus alles töötab. Proovige uuesti, kui see on lõppenud."
+      },
+      "restored": "Failimuudatused on tagasi võetud"
+    },
     "localRun": {
       "cloud": "stella pilv",
       "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",

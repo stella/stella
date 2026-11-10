@@ -1758,6 +1758,27 @@
     "loadEarlierMessages": "Cargar mensajes anteriores",
     "loadEarlierMessagesError": "No se pudieron cargar los mensajes anteriores",
     "loadingEarlierMessages": "Cargando mensajes anteriores…",
+    "localFilesUndo": {
+      "action": "Deshacer cambios en archivos",
+      "computer": {
+        "failed": "Tu ordenador no pudo deshacer los cambios. Los archivos están como estaban antes de tu solicitud.",
+        "folderBusy": "Una ejecución en tu ordenador está usando esta carpeta. Inténtalo de nuevo cuando termine.",
+        "noCheckpoint": "Tu ordenador no tiene una copia guardada de los archivos de antes de este paso, así que no se deshizo nada.",
+        "notNewest": "Tu ordenador tiene cambios más recientes en esta carpeta, así que no se deshizo nada."
+      },
+      "confirm": "Deshacer cambios",
+      "confirmDescription": "Los archivos que este paso cambió en su carpeta de tu ordenador vuelven a como estaban antes del paso. Solo se deshacen los cambios de este paso; los de pasos anteriores se mantienen.",
+      "confirmTitle": "¿Deshacer los cambios en archivos de este paso?",
+      "expired": "Tu ordenador no respondió a tiempo. Inténtalo de nuevo.",
+      "pending": "Deshaciendo cambios en archivos de tu ordenador",
+      "refused": {
+        "desktopOffline": "Tu ordenador está sin conexión. Abre la aplicación de escritorio de stella e inténtalo de nuevo.",
+        "noCheckpoint": "Este paso no tiene una copia guardada de los archivos a la que volver.",
+        "notNewest": "Solo se pueden deshacer los cambios en archivos del paso más reciente.",
+        "threadBusy": "Este chat todavía está trabajando. Inténtalo de nuevo cuando termine."
+      },
+      "restored": "Cambios en archivos deshechos"
+    },
     "localRun": {
       "cloud": "Nube de stella",
       "errorLimitReached": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Vuelve a intentarlo cuando se restablezca el límite.",

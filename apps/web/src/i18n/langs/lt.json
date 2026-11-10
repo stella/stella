@@ -1758,6 +1758,27 @@
     "loadEarlierMessages": "Įkelti ankstesnes žinutes",
     "loadEarlierMessagesError": "Nepavyko įkelti ankstesnių žinučių",
     "loadingEarlierMessages": "Kraunamos ankstesnės žinutės…",
+    "localFilesUndo": {
+      "action": "Atšaukti failų pakeitimus",
+      "computer": {
+        "failed": "Jūsų kompiuteris negalėjo atšaukti pakeitimų. Failai yra tokie, kokie buvo prieš jūsų užklausą.",
+        "folderBusy": "Šį aplanką jūsų kompiuteryje naudoja kitas vykdymas. Bandykite dar kartą, kai jis baigsis.",
+        "noCheckpoint": "Jūsų kompiuteryje nėra išsaugotos failų kopijos iš laiko prieš šį žingsnį, todėl niekas neatšaukta.",
+        "notNewest": "Jūsų kompiuteryje šiame aplanke yra naujesnių pakeitimų, todėl niekas neatšaukta."
+      },
+      "confirm": "Atšaukti pakeitimus",
+      "confirmDescription": "Failai, kuriuos šis žingsnis pakeitė savo aplanke jūsų kompiuteryje, grįš į būseną prieš šį žingsnį. Atšaukiami tik šio žingsnio pakeitimai; ankstesnių žingsnių pakeitimai lieka.",
+      "confirmTitle": "Atšaukti šio žingsnio failų pakeitimus?",
+      "expired": "Jūsų kompiuteris laiku neatsakė. Bandykite dar kartą.",
+      "pending": "Atšaukiami failų pakeitimai jūsų kompiuteryje",
+      "refused": {
+        "desktopOffline": "Jūsų kompiuteris neprisijungęs. Atidarykite stella darbalaukio programą ir bandykite dar kartą.",
+        "noCheckpoint": "Šis žingsnis neturi išsaugotos failų kopijos, į kurią būtų galima grįžti.",
+        "notNewest": "Atšaukti galima tik naujausio žingsnio failų pakeitimus.",
+        "threadBusy": "Šis pokalbis dar vyksta. Bandykite dar kartą, kai jis baigsis."
+      },
+      "restored": "Failų pakeitimai atšaukti"
+    },
     "localRun": {
       "cloud": "stella debesis",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
