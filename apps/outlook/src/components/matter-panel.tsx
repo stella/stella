@@ -1,6 +1,6 @@
+import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { ExternalLinkIcon, FileTextIcon } from "@stll/ui/icons";
-import { cn } from "@stll/ui/lib/utils";
 
 import { Notice } from "@/components/notice";
 import { Panel, PanelTitle } from "@/components/panel";
@@ -120,14 +120,12 @@ const MatterOption = ({
     .join(" · ");
 
   return (
-    <button
+    <Button
       aria-pressed={isSelected}
-      className={cn(
-        "border-input bg-popover hover:bg-accent/50 flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-start",
-        isSelected && "border-ring bg-accent/50",
-      )}
+      className="h-auto min-h-12 w-full justify-between gap-3 px-3 py-2.5 text-start"
       onClick={() => onSelect(workspace.id)}
-      type="button"
+      selected={isSelected}
+      variant="outline"
     >
       <span className="min-w-0">
         <span className="block truncate text-sm/5 font-medium">
@@ -144,6 +142,6 @@ const MatterOption = ({
           {t("suggested")}
         </span>
       ) : null}
-    </button>
+    </Button>
   );
 };

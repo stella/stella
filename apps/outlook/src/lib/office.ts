@@ -12,7 +12,7 @@ export type OfficeAttachmentMetadata = {
   size?: number;
 };
 
-export type OfficeAttachmentListCapability =
+type OfficeAttachmentListCapability =
   | {
       read: () => Promise<OfficeAttachmentMetadata[]>;
       status: "available";
@@ -22,12 +22,12 @@ export type OfficeAttachmentListCapability =
       status: "unavailable";
     };
 
-export type OfficeAttachmentContent = {
+type OfficeAttachmentContent = {
   content: string;
   format: string;
 };
 
-export type OfficeAttachmentContentCapability =
+type OfficeAttachmentContentCapability =
   | {
       read: (attachmentId: string) => Promise<OfficeAttachmentContent>;
       status: "available";
@@ -50,22 +50,7 @@ const isOfficeRuntime = (value: unknown): value is OfficeRuntime =>
   typeof value["onReady"] === "function" &&
   isRecord(value["context"]);
 
-let officeRuntimeOverride: OfficeRuntime | null | undefined;
-
-/** Allows unit tests to exercise the adapter without mutating the global object. */
-export const setOfficeRuntimeForTesting = (runtime: OfficeRuntime | null) => {
-  officeRuntimeOverride = runtime;
-};
-
-export const resetOfficeRuntimeForTesting = () => {
-  officeRuntimeOverride = undefined;
-};
-
 export const getOfficeRuntime = (): OfficeRuntime | null => {
-  if (officeRuntimeOverride !== undefined) {
-    return officeRuntimeOverride;
-  }
-
   const value: unknown = Reflect.get(globalThis, "Office");
   return isOfficeRuntime(value) ? value : null;
 };

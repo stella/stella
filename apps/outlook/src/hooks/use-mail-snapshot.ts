@@ -6,7 +6,7 @@ import { isAttachmentReadError, OutlookError } from "@/lib/outlook-error";
 import { loadMailSnapshot, subscribeMailboxItemChanges } from "@/outlook";
 import type { MailSnapshot } from "@/types";
 
-export type MailSnapshotState =
+type MailSnapshotState =
   | { type: "loading" }
   | { snapshot: MailSnapshot; type: "ready" }
   | { message: string; type: "error" };

@@ -6,13 +6,54 @@ import {
   OUTLOOK_SCOPES,
   outlookClientMetadataUrl,
 } from "@stll/api-contract/outlook-client";
+import { createFetchWithTimeout } from "@stll/fetch";
+import { readBodyJsonWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import { SignInError } from "@/lib/oauth/errors";
 
 /** The network, injected so tests own it and development can use its proxy. */
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
+/**
+ * How long the server has to answer with headers, and then the longest its
+ * body may stall between two chunks.
+ */
 const REQUEST_TIMEOUT_MS = 20_000;
+
+/** Metadata, registration and token answers are a few kilobytes. */
+const MAX_ANSWER_BYTES = 256 * 1024;
+
+type OAuthAnswer = {
+  readonly json: unknown;
+  readonly ok: boolean;
+  readonly status: number;
+};
+
+/**
+ * One request to the authorization server, its body read as JSON. Rejects
+ * when the headers do not arrive in time, the body stalls or outgrows its
+ * cap, or the body is not JSON; callers wrap it in `Result.tryPromise`.
+ */
+export const sendOAuthRequest = async (
+  fetch: Fetch,
+  url: string,
+  init: Pick<RequestInit, "body" | "headers" | "method">,
+): Promise<OAuthAnswer> => {
+  // The wrapper hands `url` back unchanged; the injected fetch takes it as
+  // the string it already is.
+  const response = await createFetchWithTimeout(
+    async (_input, transportInit) => await fetch(url, transportInit),
+  )(url, {
+    ...init,
+    credentials: "omit",
+    timeout: { type: "headers", ms: REQUEST_TIMEOUT_MS },
+  });
+  const json = await readBodyJsonWithIdleDeadline(response, {
+    idleMs: REQUEST_TIMEOUT_MS,
+    maxBytes: MAX_ANSWER_BYTES,
+  });
+  return { json, ok: response.ok, status: response.status };
+};
 
 /**
  * RFC 8414 metadata paths, tried in order: the spec's root-issuer location,
@@ -54,18 +95,19 @@ const readCandidate = async (
   fetch: Fetch,
   url: string,
 ): Promise<AuthorizationServerMetadata | undefined> => {
-  const body = await Result.tryPromise(async (): Promise<unknown> => {
-    const response = await fetch(url, {
-      credentials: "omit",
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    return response.ok ? await response.json() : undefined;
-  });
-  if (Result.isError(body) || body.value === undefined) {
+  const answer = await Result.tryPromise(
+    async () =>
+      await sendOAuthRequest(fetch, url, {
+        headers: { Accept: "application/json" },
+      }),
+  );
+  if (Result.isError(answer) || !answer.value.ok) {
     return undefined;
   }
-  const parsed = v.safeParse(authorizationServerMetadataSchema, body.value);
+  const parsed = v.safeParse(
+    authorizationServerMetadataSchema,
+    answer.value.json,
+  );
   return parsed.success ? parsed.output : undefined;
 };
 
@@ -173,31 +215,30 @@ export const resolveClientId = async ({
       }),
     );
   }
-  const answered = await Result.tryPromise(async (): Promise<unknown> => {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      credentials: "omit",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        // The server refuses a `web` client with a loopback redirect, which
-        // is what a local task pane has; it registers as `native` like the
-        // mobile app does against a local server.
-        application_type: isLoopbackRedirect(redirectUri) ? "native" : "web",
-        client_name: OUTLOOK_CLIENT_NAME,
-        grant_types: ["authorization_code", "refresh_token"],
-        redirect_uris: [redirectUri],
-        resources: [resource],
-        response_types: ["code"],
-        scope: OUTLOOK_SCOPES.join(" "),
-        token_endpoint_auth_method: "none",
+  const answered = await Result.tryPromise(
+    async () =>
+      await sendOAuthRequest(fetch, endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          // The server refuses a `web` client with a loopback redirect, which
+          // is what a local task pane has; it registers as `native` like the
+          // mobile app does against a local server.
+          application_type: isLoopbackRedirect(redirectUri) ? "native" : "web",
+          client_name: OUTLOOK_CLIENT_NAME,
+          grant_types: ["authorization_code", "refresh_token"],
+          redirect_uris: [redirectUri],
+          resources: [resource],
+          response_types: ["code"],
+          scope: OUTLOOK_SCOPES.join(" "),
+          token_endpoint_auth_method: "none",
+        }),
       }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    return response.ok ? await response.json() : undefined;
-  });
-  const registration = Result.isOk(answered)
-    ? v.safeParse(registrationResponseSchema, answered.value)
-    : undefined;
+  );
+  const registration =
+    Result.isOk(answered) && answered.value.ok
+      ? v.safeParse(registrationResponseSchema, answered.value.json)
+      : undefined;
   if (registration?.success !== true) {
     return Result.err(
       new SignInError({

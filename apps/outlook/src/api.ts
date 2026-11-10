@@ -107,7 +107,7 @@ export const sha256Hex = async (bytes: Uint8Array): Promise<string> =>
  * The matter's file column: the property every document upload names. A
  * matter gets one when it is created; the add-in does not create columns.
  */
-export const findFilePropertyId = async (
+const findFilePropertyId = async (
   workspaceId: SafeId<"workspace">,
   { request }: Pick<FileEmailDependencies, "request"> = defaultDependencies,
 ): Promise<SafeId<"property"> | null> => {
@@ -127,15 +127,17 @@ const abortUpload = async (
   uploadId: SafeId<"pendingUpload">,
 ): Promise<void> => {
   // Best effort: an unfinalized reservation also expires on its own.
-  await Result.tryPromise(
-    async () =>
-      await request({
-        body: {},
-        method: "POST",
-        parse: () => ({ output: undefined, success: true }),
-        path: `/uploads/${workspacePath(workspaceId)}/${encodeURIComponent(uploadId)}/abort`,
-      }),
-  );
+  (
+    await Result.tryPromise(
+      async () =>
+        await request({
+          body: {},
+          method: "POST",
+          parse: () => ({ output: undefined, success: true }),
+          path: `/uploads/${workspacePath(workspaceId)}/${encodeURIComponent(uploadId)}/abort`,
+        }),
+    )
+  ).unwrapOr(undefined);
 };
 
 /**

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import type { Fetch } from "@/lib/oauth/discovery";
+import { type Fetch, sendOAuthRequest } from "@/lib/oauth/discovery";
 import { TokenError } from "@/lib/oauth/errors";
 
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -23,28 +23,23 @@ const requestTokens = async (
   parameters: Record<string, string>,
 ): Promise<Result<TokenResponse, TokenError>> => {
   const answered = await Result.tryPromise({
-    try: async () => {
-      const response = await fetch(tokenEndpoint, {
+    try: async () =>
+      await sendOAuthRequest(fetch, tokenEndpoint, {
         method: "POST",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams(parameters).toString(),
-        credentials: "omit",
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-      const json: unknown = await response.json();
-      return { status: response.ok ? null : response.status, json };
-    },
+      }),
     catch: (cause) =>
       new TokenError({ message: "The token request failed", cause }),
   });
   if (Result.isError(answered)) {
     return Result.err(answered.error);
   }
-  const { status, json } = answered.value;
-  if (status !== null) {
+  const { json, ok, status } = answered.value;
+  if (!ok) {
     const refusal = v.safeParse(oauthErrorSchema, json);
     return Result.err(
       new TokenError({

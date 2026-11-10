@@ -67,7 +67,7 @@ export const useOutlookAuth = () => {
             ? { failure: result.error.failure, type: "error" }
             : { type: "idle" },
         );
-        return result;
+        return;
       })
       .catch(() => {
         setSignInState({ failure: "unavailable", type: "error" });

@@ -8,7 +8,7 @@ const VERIFIER_BYTES = 32;
 const STATE_BYTES = 32;
 
 /** RFC 4648 §5 base64url without padding. */
-export const encodeBase64Url = (bytes: Uint8Array): string =>
+const encodeBase64Url = (bytes: Uint8Array): string =>
   btoa(String.fromCodePoint(...bytes))
     .replaceAll("+", "-")
     .replaceAll("/", "_")

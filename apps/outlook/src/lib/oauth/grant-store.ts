@@ -51,8 +51,10 @@ export const createGrantStore = ({
 }): GrantStore => {
   const key = grantStorageKey(partitionKey);
   return {
+    // Storage that refuses a write or removal leaves the grant in memory only;
+    // the add-in keeps working for this session.
     clear: () => {
-      Result.try(() => storage?.removeItem(key));
+      Result.try(() => storage?.removeItem(key)).unwrapOr(undefined);
     },
     read: () => {
       const raw = Result.try(() => storage?.getItem(key) ?? null);
@@ -67,7 +69,9 @@ export const createGrantStore = ({
       return grant.success ? grant.output : null;
     },
     write: (grant) => {
-      Result.try(() => storage?.setItem(key, JSON.stringify(grant)));
+      Result.try(() => storage?.setItem(key, JSON.stringify(grant))).unwrapOr(
+        undefined,
+      );
     },
   };
 };

@@ -19,7 +19,7 @@ import {
 
 import { SignInError } from "@/lib/oauth/errors";
 
-export const OUTLOOK_AUTH_START_PATH = "/auth/start.html" as const;
+const OUTLOOK_AUTH_START_PATH = "/auth/start.html" as const;
 const AUTHORIZE_PARAMETER = "authorize";
 
 export const OUTLOOK_AUTH_CALLBACK_MESSAGE_TYPE =
@@ -114,9 +114,7 @@ const callbackMessageSchema = v.object({
   state: v.nullable(boundedString),
 });
 
-export type AuthorizationCallbackMessage = v.InferOutput<
-  typeof callbackMessageSchema
->;
+type AuthorizationCallbackMessage = v.InferOutput<typeof callbackMessageSchema>;
 
 const boundedParameter = (
   parameters: URLSearchParams,

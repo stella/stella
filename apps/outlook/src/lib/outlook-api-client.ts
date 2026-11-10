@@ -9,7 +9,7 @@ import { type OutlookAuth, outlookAuth } from "@/lib/outlook-auth";
 const REQUEST_TIMEOUT_MS = 10_000;
 const UNAUTHORIZED = 401;
 
-export type ParseResponse<TResponse> = (
+type ParseResponse<TResponse> = (
   input: unknown,
 ) => { output: TResponse; success: true } | { success: false };
 

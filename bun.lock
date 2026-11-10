@@ -465,6 +465,7 @@
       "dependencies": {
         "@stll/api-contract": "workspace:*",
         "@stll/concurrency": "workspace:*",
+        "@stll/fetch": "workspace:*",
         "@stll/sha256": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "0.4.2",

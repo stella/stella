@@ -48,7 +48,7 @@ const ACCESS_TOKEN_EXPIRY_SKEW_MS = 60_000;
 
 export type AuthStatus = "signed-in" | "signed-out";
 
-export type DialogAnswer = {
+type DialogAnswer = {
   readonly message: string;
   readonly origin: string | undefined;
 };
@@ -377,12 +377,16 @@ export const createOutlookAuth = ({
     if (current === null) {
       return;
     }
-    await revokeRefreshToken({
-      clientId: current.clientId,
-      fetch,
-      refreshToken: current.refreshToken,
-      revocationEndpoint: current.revocationEndpoint,
-    });
+    // The grant is already forgotten here; a refused or unreachable
+    // revocation leaves the refresh token to expire on its own.
+    (
+      await revokeRefreshToken({
+        clientId: current.clientId,
+        fetch,
+        refreshToken: current.refreshToken,
+        revocationEndpoint: current.revocationEndpoint,
+      })
+    ).unwrapOr(undefined);
   };
 
   return {
