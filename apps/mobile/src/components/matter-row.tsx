@@ -19,8 +19,8 @@ import { PauseIcon, PlayIcon } from "@/icons.gen";
 import { canScan } from "@/native/document-scanner";
 import type { ApiError } from "@/state/api-request";
 import type { MatterSummary } from "@/state/matters";
-import { startTimer, toggleTimer } from "@/state/timers";
-import type { MatterTimerAction } from "@/state/timers";
+import { matterTimerAction, startTimer, toggleTimer } from "@/state/timers";
+import type { MatterTimerAction, Timer } from "@/state/timers";
 
 /**
  * One matter: its name, then reference, client and the day of its last
@@ -35,18 +35,19 @@ import type { MatterTimerAction } from "@/state/timers";
 export const MatterRow = ({
   matter,
   source,
-  timer,
+  timers,
   underClient = false,
 }: {
   matter: MatterSummary;
   source: AccessTokenSource;
-  /** What the timer swipe does; null when the timers could not be read. */
-  timer: MatterTimerAction | null;
+  /** Every timer as the last load read them; null when they could not be read. */
+  timers: readonly Timer[] | null;
   underClient?: boolean;
 }) => {
   const format = useFormatter();
   const t = useTranslations("matter");
-  const timers = useTranslations("timers");
+  const timerText = useTranslations("timers");
+  const timer = timers === null ? null : matterTimerAction(timers, matter.id);
   const reportedRunning = timer?.type === "pause";
   const {
     failure,
@@ -54,6 +55,7 @@ export const MatterRow = ({
     value: running,
     write,
   } = useOptimisticWrite({
+    from: timers ?? matter,
     kind: "timers",
     reported: reportedRunning,
     source,
@@ -139,7 +141,7 @@ export const MatterRow = ({
                 )}
                 <WriteFailureNotice
                   failure={failure}
-                  message={timers(
+                  message={timerText(
                     timer?.type === "start" ? "startFailed" : "changeFailed",
                   )}
                 />

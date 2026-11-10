@@ -8,11 +8,14 @@ import { isTaskClosed, nextTaskStatus, setTaskStatus } from "@/state/tasks";
  * finished, shown at once and undone if it does not save.
  */
 export const useTaskStatus = ({
+  from,
   matterId,
   source,
   status,
   taskId,
 }: {
+  /** The load the status came from. */
+  from: object;
   matterId: string;
   source: AccessTokenSource;
   /** The status as the last load reported it. */
@@ -20,6 +23,7 @@ export const useTaskStatus = ({
   taskId: string;
 }) => {
   const { failure, saving, value, write } = useOptimisticWrite({
+    from,
     kind: "tasks",
     reported: status,
     source,

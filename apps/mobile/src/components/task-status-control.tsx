@@ -82,7 +82,7 @@ const LoadedTaskStatus = ({
 const TaskStatusBody = ({
   matterId,
   source,
-  task: { assignees, dueDate, status: reported },
+  task,
   taskId,
 }: {
   matterId: string;
@@ -93,7 +93,9 @@ const TaskStatusBody = ({
   const t = useTranslations("tasks");
   const matter = useTranslations("matter");
   const format = useFormatter();
+  const { assignees, dueDate, status: reported } = task;
   const { change, closed, failure, saving, status } = useTaskStatus({
+    from: task,
     matterId,
     source,
     status: reported ?? TASK_STATUS.OPEN,

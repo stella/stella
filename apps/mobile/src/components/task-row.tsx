@@ -36,6 +36,7 @@ export const TaskRow = ({
   const router = useRouter();
   const layout = useLayout();
   const { change, closed, failure, saving } = useTaskStatus({
+    from: task,
     matterId: task.matterId,
     source,
     status: task.status ?? TASK_STATUS.OPEN,

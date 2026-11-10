@@ -16,7 +16,6 @@ import { ChevronDownIcon, ChevronRightIcon } from "@/icons.gen";
 import type { ApiError } from "@/state/api-request";
 import type { MattersLoad, MatterSummary } from "@/state/matters";
 import { groupByClient } from "@/state/matters-groups";
-import { matterTimerAction } from "@/state/timers";
 import type { Timer } from "@/state/timers";
 import { useAppColors } from "@/theme";
 
@@ -69,11 +68,7 @@ export const LoadedMatters = ({
     <MatterRow
       matter={matter}
       source={source}
-      timer={
-        Result.isOk(loadedTimers)
-          ? matterTimerAction(loadedTimers.value, matter.id)
-          : null
-      }
+      timers={Result.isOk(loadedTimers) ? loadedTimers.value : null}
       underClient={underClient}
     />
   );
