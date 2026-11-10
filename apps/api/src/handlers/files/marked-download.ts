@@ -72,7 +72,11 @@ export const readMarkedDownload = async function* ({
   )).at(0);
   if (!row) {
     return Result.err(
-      new HandlerError({ status: 404, message: "File not found" }),
+      new HandlerError({
+        status: 404,
+        code: "not_found",
+        message: "File not found",
+      }),
     );
   }
   if (row.content.type !== "file") {
