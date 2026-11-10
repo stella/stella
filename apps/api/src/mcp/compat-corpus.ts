@@ -605,7 +605,7 @@ type CompatCorpusPage = Omit<
 export const createCompatCorpusContinuation = (
   options: Pick<
     Parameters<typeof createToolContinuation>[1],
-    "store" | "ownerId" | "limits"
+    "store" | "ownerId" | "limits" | "clock"
   > = {},
 ) =>
   createToolContinuation<typeof compatCorpusWorkArgs, CompatCorpusPage, null>(
