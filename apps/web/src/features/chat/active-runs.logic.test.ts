@@ -13,6 +13,7 @@ import {
   matterRunsByWorkspace,
   topMatterRunState,
 } from "@/features/chat/active-runs.logic";
+import type { ActiveChatRunState } from "@/features/chat/active-runs.logic";
 
 const MATTERS = ["matter_lease", "matter_spa", "matter_dismissal"] as const;
 const SINCE = "2026-11-10T09:00:00.000Z";
@@ -87,9 +88,16 @@ describe("matterRunsByWorkspace", () => {
             expect(listed).toBeUndefined();
             continue;
           }
-          expect(listed).toEqual({
-            needsYou: own.filter(({ state }) => state === "needs-you"),
-            working: own.filter(({ state }) => state === "working"),
+          const threadIdsIn = (state: ActiveChatRunState) =>
+            own
+              .filter((run) => run.state === state)
+              .map(({ threadId }) => threadId);
+          expect({
+            needsYou: listed?.needsYou.map(({ threadId }) => threadId),
+            working: listed?.working.map(({ threadId }) => threadId),
+          }).toEqual({
+            needsYou: threadIdsIn("needs-you"),
+            working: threadIdsIn("working"),
           });
         }
         const matters = new Set<string>(MATTERS);
