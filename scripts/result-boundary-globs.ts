@@ -59,6 +59,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/account-exports/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
+  "apps/api/src/handlers/ai/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
   "apps/api/src/handlers/audit-logs/**/*.ts",
   "apps/api/src/handlers/auth/**/*.ts",

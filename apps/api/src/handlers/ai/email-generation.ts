@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { AI_FAILURE_CODES } from "@stll/api-contract";
+import { classifyFailure } from "@stll/errors";
 
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
@@ -110,13 +111,17 @@ export const buildEmailDraftMessage = ({
     ),
   ].join("\n");
 
+// An empty answer is the model's outcome, not a fault of this service.
 const emptyAnswer = () =>
-  new HandlerError({
-    status: 502,
-    code: AI_FAILURE_CODES.empty_completion,
-    message:
-      "The AI model returned an empty reply. Please try again, or rephrase the request.",
-  });
+  classifyFailure(
+    new HandlerError({
+      status: 502,
+      code: AI_FAILURE_CODES.empty_completion,
+      message:
+        "The AI model returned an empty reply. Please try again, or rephrase the request.",
+    }),
+    "chat_empty_completion",
+  );
 
 export type EmailGenerationRequest = {
   system: string;
