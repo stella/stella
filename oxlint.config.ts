@@ -7374,15 +7374,13 @@ const config = defineConfig({
         "security-guards/no-raw-filename-write": "off",
         "security-guards/no-unsanitized-href": "off",
         "vitest/no-focused-tests": "error",
-        // bun:test globals (describe/test/expect/it/…) can resolve as `error`
-        // when test files are excluded from a package's main tsconfig.
-        // Suppressing unsafe rules for test files avoids false positives that
-        // would require modifying every test or adding a separate tsconfig.
-        "typescript/no-unsafe-call": "off",
-        "typescript/no-unsafe-member-access": "off",
+        // Asymmetric matchers such as `expect.stringContaining()` and
+        // `expect.any()` are typed `any`, so passing them to `toEqual` or
+        // storing them in an expected-value object is allowed. Calling,
+        // member access and returning `any` are still reported, matching
+        // `unsafeAnyOverrides` in @stll/oxlint-config 4.0.0.
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-argument": "off",
-        "typescript/no-unsafe-return": "off",
         "typescript/strict-boolean-expressions": "off",
       },
     },
