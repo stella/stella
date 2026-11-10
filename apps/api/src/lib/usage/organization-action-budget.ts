@@ -121,6 +121,8 @@ export const FREE_WITHOUT_OWN_KEY = {
   "properties.preview": "counts",
   "search.refine": "counts",
   "search.summarize": "counts",
+  "email.summarize": "counts",
+  "email.draft-reply": "counts",
   "playbooks.derive-ask": "counts",
   "case-law.analysis": "counts",
   "case-law.search-refine": "counts",

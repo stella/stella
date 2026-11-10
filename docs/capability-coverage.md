@@ -787,7 +787,7 @@ mechanics, and similar), not gaps in coverage.
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_device | 5 |
-| native_tool_ui | 8 |
+| native_tool_ui | 10 |
 | provider_secret | 34 |
 | public_indexing | 9 |
 | realtime_stream | 9 |
