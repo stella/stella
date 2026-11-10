@@ -35,7 +35,7 @@ import {
 } from "@/api/handlers/chat/tool-result-retention";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
-import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
+import { buildServedSnapshot } from "@/api/tests/helpers/chat-fixtures";
 
 const pageResult = (index: number): BrowserControlResult =>
   v.parse(browserControlResultSchema, {
@@ -318,10 +318,10 @@ const storeAndReload = (parts: ChatPart[]): ChatMessage => {
   });
 };
 
-// The snapshot the SDK serializer builds for the answer: its parts, and a
-// `tool` row beside them for every call that has an output.
+// The served snapshot of the answer: its anchor carrying the parts, and the
+// engine's `tool` row beside it for every result part.
 const snapshotOf = (parts: ChatPart[]): StreamChunk =>
-  buildWireSnapshot([{ id: "answer", parts, role: "assistant" }]);
+  buildServedSnapshot([{ id: "answer", parts, role: "assistant" }]);
 
 describe("a browsing turn's stored and streamed parts", () => {
   test("store one page however many the turn read", () => {
