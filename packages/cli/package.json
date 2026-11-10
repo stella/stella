@@ -1,6 +1,6 @@
 {
   "name": "@stll/cli",
-  "version": "6.8.3",
+  "version": "6.9.0",
   "description": "Stella command-line client",
   "keywords": [
     "cli",
@@ -51,8 +51,8 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun run codegen:runtime && bun test",
     "typecheck": "bun run codegen:runtime && bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "bun run codegen:runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/cli",
-    "lint:fix": "bun run codegen:runtime && cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/cli",
+    "lint": "bun run codegen:runtime && cd ../.. && bun scripts/lint.ts packages/cli",
+    "lint:fix": "bun run codegen:runtime && cd ../.. && bun scripts/lint.ts --fix packages/cli",
     "codegen:runtime": "bun ../scripts/src/prepare-cli-runtime.ts",
     "prepublishOnly": "bun run build"
   },

@@ -17,6 +17,7 @@ import {
   legalListGenerationCandidateSources,
   legalListGenerationRuns,
   legalListItems,
+  legalListItemSources,
   legalLists,
   workObligations,
   workspaces,
@@ -31,6 +32,7 @@ import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { CandidateFactDetailColumns } from "@/api/lib/lists/generation/candidate-fact-details";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
+import { memberSafeDb } from "@/api/tests/helpers/application-role-db";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -345,6 +347,7 @@ const seedAcceptance = async ({
 const runAcceptance = async (
   accept: AcceptGenerationCandidate,
   seeded: SeededAcceptance,
+  safeDb: SafeDb = testSafeDb,
 ) =>
   await accept.handler(
     asTestRaw<AcceptGenerationCandidateCtx>({
@@ -363,7 +366,7 @@ const runAcceptance = async (
       ),
       route:
         "/v1/lists/:workspaceId/generation-candidates/accept" satisfies ApiRoutePath,
-      safeDb: testSafeDb,
+      safeDb,
       session: { activeOrganizationId: seeded.organizationId },
       user: { id: seeded.userId },
       workspaceId: seeded.workspaceId,
@@ -628,4 +631,38 @@ test("an accepted fact's details commit with the item, before acceptance finaliz
       interpretationNote: "Two readings.",
     }),
   ]);
+});
+
+// The other tests run the handler as the database owner, which holds every
+// privilege. Production runs it on the application role, so this one does too:
+// every statement acceptance issues, its row locks included, must be one that
+// role may run.
+test("a member accepts a cited candidate on the application role", async () => {
+  const seeded = await seedAcceptance({
+    itemType: LIST_ITEM_TYPE.TASK,
+    ownership: "created-here",
+    sources: "cited",
+  });
+
+  const accepted = await runAcceptance(
+    acceptGenerationCandidate,
+    seeded,
+    memberSafeDb(testDb, {
+      organizationId: seeded.organizationId,
+      workspaceIds: [seeded.workspaceId],
+      userId: seeded.userId,
+    }),
+  );
+
+  expect(accepted).toEqual({ entityId: expect.any(String) });
+  expect(await candidateReservation(seeded)).toEqual({
+    reservedEntityId: null,
+    status: "accepted",
+  });
+  expect(
+    await testDb.$count(
+      legalListItemSources,
+      eq(legalListItemSources.workspaceId, seeded.workspaceId),
+    ),
+  ).toBe(2);
 });
