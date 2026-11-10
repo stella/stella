@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   chmodSync,
@@ -28,6 +29,7 @@ import {
   type CheckpointLimits,
   checkpointStoreOf,
   type CheckpointUnavailableReason,
+  lockAt,
   restoreCheckpoint,
 } from "./checkpoints";
 
@@ -1048,6 +1050,27 @@ describe("a run folder's checkpoint", () => {
       ).toEqual({ status: "taken" });
       expect(manifestIds(workspaceDir)).toHaveLength(2);
       expect(existsSync(lockFile(workspaceDir))).toBe(false);
+    });
+
+    test("a lock its holder gives up while another reads it reads as held or as free, never as a failure", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "a.txt", "saved");
+      await capture(workspaceDir);
+      const file = lockFile(workspaceDir);
+      const held = { pid: process.pid, token: crypto.randomUUID() };
+      // A holder gives its lock up at any moment; a waiting holder that reads
+      // the lock right then must read it as held or free. Reading a name
+      // checked a moment before failed the capture of the one who read it.
+      // Given up before the name is opened: no lock holds it.
+      expect(await lockAt(file)).toEqual(Result.ok(null));
+      // Given up after the name is opened: the read is of the lock it held.
+      writeFileSync(file, JSON.stringify(held));
+      const read = await lockAt(file, async () => {
+        rmSync(file);
+        await Promise.resolve();
+      });
+      expect(read).toEqual(Result.ok(held));
+      expect(existsSync(file)).toBe(false);
     });
 
     test.skipIf(isWindows)(
