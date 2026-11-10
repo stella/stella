@@ -2055,6 +2055,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znaků} many {# znaku}}",
+      "commandExited": "{command} (návratový kód {code})",
       "consoleLogs": "Výstup konzole",
       "exactCall": "Přesné volání",
       "failed": "Tento krok selhal; stella si poradí jinak.",
@@ -2062,10 +2063,14 @@
       "input": "Vstup",
       "interrupted": "Přerušeno před dokončením",
       "output": "Výstup",
+      "patternInPath": "{pattern} v {path}",
+      "readFile": "Čtení souboru",
+      "searchFiles": "Hledání v souborech",
       "sourceCode": "Zdrojový kód",
       "statusWaiting": "Čeká",
       "toggleDetails": "Přepnout detaily",
-      "unrestoredFields": "{count, plural, one {# pole se nepodařilo} few {# pole se nepodařilo} many {# pole se nepodařilo} other {# polí se nepodařilo}} v anonymizovaném režimu vyplnit skutečnými hodnotami. Zkontrolujte: {fields}"
+      "unrestoredFields": "{count, plural, one {# pole se nepodařilo} few {# pole se nepodařilo} many {# pole se nepodařilo} other {# polí se nepodařilo}} v anonymizovaném režimu vyplnit skutečnými hodnotami. Zkontrolujte: {fields}",
+      "updatePlan": "Aktualizace plánu"
     },
     "turnNotification": {
       "failedBody": "Odpověď v chatu stelly se nedokončila.",

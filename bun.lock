@@ -688,6 +688,7 @@
         "@stll/api-contract": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/fetch": "workspace:*",
+        "@stll/portable-path": "workspace:*",
         "@stll/sha256": "workspace:*",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-codex": "catalog:",

@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "./agent-harness";
+import { CHAT_LOCAL_RUN_TOOL_LIMITS } from "./chat-local-run-tool";
 import {
   DESKTOP_RUNNER_ANSWER_LIMITS,
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
@@ -368,6 +369,34 @@ describe("question answers", () => {
   test("count lengths in UTF-16 code units", () => {
     // Two UTF-8 bytes each, one code unit: the bound is on code units.
     expect(parses({ tone: ["é".repeat(maxAnswerLength)] })).toBe(true);
+  });
+});
+
+describe("approval summaries", () => {
+  test("a long or multi-line summary is kept as one bounded line, not refused", () => {
+    const parsed = v.parse(desktopRunnerDesktopMessageSchema, {
+      type: "run.approval_request",
+      runId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
+      seq: 4,
+      requestId: "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+      kind: "command",
+      summary: `cat > notes.md <<'EOF'\nPrivate terms\nEOF ${"x".repeat(3000)}`,
+    });
+    expect(parsed).toMatchObject({
+      type: "run.approval_request",
+      summary: "cat > notes.md <<'EOF'…",
+    });
+    const long = v.parse(desktopRunnerDesktopMessageSchema, {
+      type: "run.approval_request",
+      runId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
+      seq: 5,
+      requestId: "0192f3a0-6b1c-7d2e-8f30-0000000000a2",
+      kind: "command",
+      summary: "y".repeat(3000),
+    });
+    expect(
+      long.type === "run.approval_request" ? long.summary.length : null,
+    ).toBe(CHAT_LOCAL_RUN_TOOL_LIMITS.approval);
   });
 });
 

@@ -2055,6 +2055,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
+      "commandExited": "{command} (išėjimo kodas {code})",
       "consoleLogs": "Konsolės išvestis",
       "exactCall": "Tikslus iškvietimas",
       "failed": "Šis žingsnis nepavyko; stella tęs kitu būdu.",
@@ -2062,10 +2063,14 @@
       "input": "Įvestis",
       "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
+      "patternInPath": "{pattern} ({path})",
+      "readFile": "Skaitomas failas",
+      "searchFiles": "Ieškoma failuose",
       "sourceCode": "Pirminis kodas",
       "statusWaiting": "Laukiama",
       "toggleDetails": "Perjungti detales",
-      "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
+      "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}",
+      "updatePlan": "Atnaujinamas planas"
     },
     "turnNotification": {
       "failedBody": "stellos pokalbio atsakymas nebuvo baigtas.",
