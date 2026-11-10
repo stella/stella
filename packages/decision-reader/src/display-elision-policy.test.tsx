@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
+import { renderReaderFixture as renderToStaticMarkup } from "../tests/reader-adapters";
 import { LiteralTextProvider } from "./display-elision-policy";
 import { BlockRenderer, inlinesToPlainText } from "./document-ast-text";
-import { renderReaderFixture as renderToStaticMarkup } from "./reader-adapters.fixture";
 
 const SPACED_LETTERS = "The choices are A B C D.";
 

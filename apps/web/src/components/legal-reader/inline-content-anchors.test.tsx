@@ -6,7 +6,7 @@ import type { ReaderSearchMatchRange } from "@stll/decision-reader/reader-search
 import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import type { Inline } from "@stll/legal-ast/document-ast";
 
-import { renderReaderFixture as renderToStaticMarkup } from "../../../../../packages/decision-reader/src/reader-adapters.fixture";
+import { renderReaderFixture as renderToStaticMarkup } from "../../../../../packages/decision-reader/tests/reader-adapters";
 
 /**
  * A source document's own hyperlinks render only for the publisher that

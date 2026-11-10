@@ -10,7 +10,7 @@ import {
 import type { HeadingLevel } from "@stll/legal-ast/document-ast";
 import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
-import { renderReaderFixture as renderToStaticMarkup } from "../../../../../packages/decision-reader/src/reader-adapters.fixture";
+import { renderReaderFixture as renderToStaticMarkup } from "../../../../../packages/decision-reader/tests/reader-adapters";
 
 // A statute is navigated by its containers (Část, Hlava, Díl, Oddíl) and
 // read by its sections. The four containers carry the hierarchy; the

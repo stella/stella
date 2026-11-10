@@ -17,6 +17,10 @@ import {
   locateEuProvisionCitations,
 } from "@stll/legal-atlas/eu-provision-citations";
 
+import {
+  fakeReaderAdapters,
+  renderReaderFixture,
+} from "../tests/reader-adapters";
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
 import type { FullProvisionRead } from "./cited-provision";
 import {
@@ -30,10 +34,6 @@ import {
   ReaderPresentationProvider,
 } from "./reader-adapters";
 import type { DecisionReaderAdapters } from "./reader-adapters";
-import {
-  fakeReaderAdapters,
-  renderReaderFixture,
-} from "./reader-adapters.fixture";
 import type {
   CitedProvisionTarget,
   DecisionProvisionAnchor,

@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { panic } from "better-result";
 
-import { DecisionReaderProvider } from "./reader-adapters";
-import type { DecisionReaderAdapters } from "./reader-adapters";
+import { DecisionReaderProvider } from "../src/reader-adapters";
+import type { DecisionReaderAdapters } from "../src/reader-adapters";
 
 // Reader adapters for tests: fixed English messages and plain links, so a
 // rendered decision can be read and compared without the host app.
@@ -67,7 +67,7 @@ export const fakeReaderAdapters = {
     }
   },
   renderBodyUnavailable: ({ reason }) => <p>{reason}</p>,
-  copyPermalink: async () => true,
+  copyPermalink: async () => await Promise.resolve(true),
   openProvision: () => undefined,
   // oxlint-disable-next-line jsx-a11y/anchor-has-content -- a render element; the peek supplies its content
   provisionPageLink: ({ payload }) => <a href={`#${payload.anchorId}`} />,

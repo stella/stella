@@ -8,12 +8,12 @@ import type {
 import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 
+import { renderReaderFixture } from "../tests/reader-adapters";
 import {
   BlockRenderer,
   FulltextFallback,
   READER_PROSE_CLASS,
 } from "./document-ast-text";
-import { renderReaderFixture } from "./reader-adapters.fixture";
 
 // Running text is start-aligned. Justified decision text stretches the word
 // spaces of any line that holds a long unbreakable token (a case number, a
