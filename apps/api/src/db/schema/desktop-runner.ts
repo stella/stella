@@ -508,7 +508,7 @@ export const desktopRunnerFolderRestores = p.pgTable.withRLS(
       .on(table.chatThreadId, table.state),
     p
       .index("desktop_runner_folder_restores_chat_turn_idx")
-      .on(table.chatTurnId),
+      .on(table.chatTurnId, table.createdAt, table.id),
     p
       .index("desktop_runner_folder_restores_noted_run_idx")
       .on(table.notedRunId)

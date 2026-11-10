@@ -6110,29 +6110,37 @@ describe("undoing a turn's file changes", () => {
       timing: TIMING,
     });
     const fixture = { control: counted, owner, threadId, turnId };
-    const small = await chatLocalFilesUndoScalingScenario.measure(fixture);
     const [runner] = await db
       .select({ deviceJkt: desktopRunners.deviceJkt })
       .from(desktopRunners)
       .where(eq(desktopRunners.desktopId, desktopId));
-    // Undos the computer refused, each asked again after the last.
-    await db.insert(desktopRunnerFolderRestores).values(
-      Array.from({ length: 20 }, (_, index) => ({
-        id: Bun.randomUUIDv7(),
-        userId: ids.userA1,
-        organizationId: ids.orgA,
-        chatThreadId: threadId,
-        chatTurnId: turnId,
-        runId,
-        desktopId,
-        deviceJkt: runner?.deviceJkt ?? panic("the computer has a runner row"),
-        state: "refused" as const,
-        reason: "failed" as const,
-        createdAt: new Date(clock.now + index),
-        expiresAt: new Date(clock.now + index + MINUTE_MS),
-        settledAt: new Date(clock.now + index),
-      })),
-    );
+    const deviceJkt =
+      runner?.deviceJkt ?? panic("the computer has a runner row");
+    /** Undos the computer refused, each asked again after the last. */
+    const refusedUndos = async (from: number, count: number) => {
+      await db.insert(desktopRunnerFolderRestores).values(
+        Array.from({ length: count }, (_, offset) => ({
+          id: Bun.randomUUIDv7(),
+          userId: ids.userA1,
+          organizationId: ids.orgA,
+          chatThreadId: threadId,
+          chatTurnId: turnId,
+          runId,
+          desktopId,
+          deviceJkt,
+          state: "refused" as const,
+          reason: "failed" as const,
+          createdAt: new Date(clock.now + from + offset),
+          expiresAt: new Date(clock.now + from + offset + MINUTE_MS),
+          settledAt: new Date(clock.now + from + offset),
+        })),
+      );
+    };
+    // The small read already answers one undo, so both reads return the same
+    // shape and only the undos asked before it differ.
+    await refusedUndos(0, 1);
+    const small = await chatLocalFilesUndoScalingScenario.measure(fixture);
+    await refusedUndos(1, 20);
     const large = await chatLocalFilesUndoScalingScenario.measure(fixture);
     expect(small.statements).toBeGreaterThan(0);
     expect(readScalingViolations({ small, large })).toEqual([]);

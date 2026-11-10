@@ -36,7 +36,7 @@ CREATE TABLE "desktop_runner_folder_restores" (
 CREATE UNIQUE INDEX "desktop_runner_folder_restores_live_run_idx" ON "desktop_runner_folder_restores" USING btree ("run_id") WHERE "state" IN ('queued','sent','restored');--> statement-breakpoint
 CREATE INDEX "desktop_runner_folder_restores_runner_state_idx" ON "desktop_runner_folder_restores" USING btree ("user_id", "organization_id", "desktop_id", "device_jkt", "state");--> statement-breakpoint
 CREATE INDEX "desktop_runner_folder_restores_chat_thread_idx" ON "desktop_runner_folder_restores" USING btree ("chat_thread_id", "state");--> statement-breakpoint
-CREATE INDEX "desktop_runner_folder_restores_chat_turn_idx" ON "desktop_runner_folder_restores" USING btree ("chat_turn_id");--> statement-breakpoint
+CREATE INDEX "desktop_runner_folder_restores_chat_turn_idx" ON "desktop_runner_folder_restores" USING btree ("chat_turn_id", "created_at", "id");--> statement-breakpoint
 CREATE INDEX "desktop_runner_folder_restores_noted_run_idx" ON "desktop_runner_folder_restores" USING btree ("noted_run_id") WHERE "noted_at" IS NULL;--> statement-breakpoint
 
 ALTER TABLE "desktop_runner_folder_restores" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
