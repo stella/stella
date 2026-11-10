@@ -37,6 +37,7 @@ import { detectDesktopPlatform, formatShortcut } from "../shared/shortcut-keys";
 import type { ShortcutKeys } from "../shared/shortcut-keys";
 import {
   appRows,
+  hasWindowTitles,
   titleRows,
   wallClockTime,
   withMovedEdge,
@@ -110,6 +111,9 @@ type ActivitySuggestionCardProps = {
   editable: boolean;
   timeLabel: string;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+  /** Why no window titles were recorded, with the action that changes it;
+   * `null` when no action would. */
+  titlesNotice: React.ReactElement | null;
   assist: DraftAssistView;
   /** The user's earlier entries the current draft followed. */
   earlierEntries: CardDraft["earlierEntries"];
@@ -171,6 +175,7 @@ export const ActivitySuggestionCard = ({
   editable,
   timeLabel,
   sourceAppVisuals,
+  titlesNotice,
   assist,
   earlierEntries,
   flags,
@@ -354,6 +359,13 @@ export const ActivitySuggestionCard = ({
               card.current?.focus();
             }}
           />
+          {titlesNotice !== null && !hasWindowTitles(suggestion) ? (
+            // The description falls back to app names without titles; say
+            // why next to it, where the gap shows.
+            <div className="text-xs" data-activity-titles-reason="">
+              {titlesNotice}
+            </div>
+          ) : null}
           <Textarea
             aria-label={t("entryNarrative")}
             className="min-h-16 shrink-0 resize-none"
@@ -976,7 +988,7 @@ const Evidence = ({
     return null;
   }
   // Untitled time alone would only repeat the Apps tab.
-  const titled = titles.some(({ type }) => type === "named");
+  const titled = hasWindowTitles(suggestion);
   return (
     <Tabs defaultValue={titled ? "titles" : "apps"}>
       <TabsList variant="underline">
