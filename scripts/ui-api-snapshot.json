@@ -1722,6 +1722,7 @@
     ],
     "./review-status-badge": ["ReviewStatusBadge"],
     "./review-word-diff": ["diffWords"],
+    "./run-state-mark": ["RunStateMark"],
     "./scroll-area": ["ScrollArea", "ScrollBar"],
     "./scroll-edge-fade": [
       "SCROLL_EDGE_FADE_CLASS",
@@ -2135,6 +2136,8 @@
       "success",
       "warning"
     ],
+    "RunStateMark.size": ["badge", "row"],
+    "RunStateMark.state": ["needs-you", "working"],
     "ScrollArea.axis": ["both", "vertical"],
     "SegmentedIconToggle.size": ["compact", "touch"],
     "SelectTrigger.align": ["center", "start"],

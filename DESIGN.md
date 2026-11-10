@@ -387,6 +387,8 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `ReviewSeverityDot` `level`: `critical`, `high`, `low`, `medium`, `none`
 - `ReviewStatusBadge`, `ReviewStatusDot` `tone`: `destructive`, `highlight`, `neutral`, `success`, `warning`
 - `ReviewStatusBadge` `variant`: `outline`, `solid`, `strong`
+- `RunStateMark` `size`: `badge`, `row`
+- `RunStateMark` `state`: `needs-you`, `working`
 - `ScrollArea` `axis`: `both`, `vertical`
 - `SelectTrigger` `align`: `center`, `start`
 - `SheetContent`, `SheetPopup` `side`: `block-end`, `block-start`, `inline-end`, `inline-start`

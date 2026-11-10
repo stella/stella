@@ -28,7 +28,6 @@ import {
   staticStringValue,
   unwrapExpression,
 } from "./utils.ts";
-import type { AstNode } from "./utils.ts";
 
 const NEEDS_YOU = "needs-you";
 const RUN_STATE_CONSTANT = "CHAT_ACTIVE_RUN_STATE";
@@ -84,11 +83,15 @@ const draws = (branch: unknown): boolean =>
     return false;
   });
 
-const propertyKeyIsRunState = (property: AstNode): boolean =>
+const propertyKeyIsRunState = (property: unknown): boolean =>
+  isAstNode(property) &&
   property.type === "Property" &&
   (property.computed === true
     ? isRunStateValue(property.key)
     : staticStringValue(property.key) === NEEDS_YOU);
+
+const propertyDraws = (property: unknown): boolean =>
+  isAstNode(property) && property.type === "Property" && draws(property.value);
 
 export default eslintCompatPlugin({
   meta: { name: "no-hand-drawn-run-state" },
@@ -104,18 +107,13 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const report = (node: AstNode) => {
-          context.report({ node, messageId: "handDrawn" });
-        };
         return {
           SwitchStatement(node) {
-            const cases = Array.isArray(node.cases) ? node.cases : [];
-            const onRunState = cases.some(
-              (switchCase: unknown) =>
-                isAstNode(switchCase) && isRunStateValue(switchCase.test),
-            );
-            if (onRunState && draws(cases)) {
-              report(node);
+            if (
+              node.cases.some(({ test }) => isRunStateValue(test)) &&
+              draws(node.cases)
+            ) {
+              context.report({ node, messageId: "handDrawn" });
             }
           },
           IfStatement(node) {
@@ -123,7 +121,7 @@ export default eslintCompatPlugin({
               testsRunState(node.test) &&
               (draws(node.consequent) || draws(node.alternate))
             ) {
-              report(node);
+              context.report({ node, messageId: "handDrawn" });
             }
           },
           ConditionalExpression(node) {
@@ -131,7 +129,7 @@ export default eslintCompatPlugin({
               testsRunState(node.test) &&
               (draws(node.consequent) || draws(node.alternate))
             ) {
-              report(node);
+              context.report({ node, messageId: "handDrawn" });
             }
           },
           LogicalExpression(node) {
@@ -140,21 +138,15 @@ export default eslintCompatPlugin({
               testsRunState(node.left) &&
               draws(node.right)
             ) {
-              report(node);
+              context.report({ node, messageId: "handDrawn" });
             }
           },
           ObjectExpression(node) {
-            const properties = Array.isArray(node.properties)
-              ? node.properties.filter(isAstNode)
-              : [];
             if (
-              properties.some(propertyKeyIsRunState) &&
-              properties.some(
-                (property) =>
-                  property.type === "Property" && draws(property.value),
-              )
+              node.properties.some(propertyKeyIsRunState) &&
+              node.properties.some(propertyDraws)
             ) {
-              report(node);
+              context.report({ node, messageId: "handDrawn" });
             }
           },
         };
