@@ -6,6 +6,10 @@ import * as v from "valibot";
 import { AGENT_HARNESSES } from "./agent-harness";
 import { API_STORABLE_INSTANT_CHECK } from "./api-date";
 import { STELLA_API_VERSION_PREFIX } from "./api-version";
+import {
+  CHAT_LOCAL_RUN_TOOL_LIMITS,
+  chatLocalRunShownText,
+} from "./chat-local-run-tool";
 import type { DesktopFeatureId } from "./desktop-feature-access";
 import {
   desktopProtocolSchema,
@@ -632,6 +636,36 @@ export type DesktopRunnerOutputEvent = v.InferOutput<
   typeof desktopRunnerOutputEventSchema
 >;
 
+/**
+ * The CUSTOM chunk a desktop reports once per run, before its harness starts:
+ * whether the run's folder was saved as it stood, so the turn's file changes
+ * can be undone. It carries no file names, counts or sizes.
+ */
+export const DESKTOP_RUNNER_CHECKPOINT_EVENT = "stella.checkpoint";
+
+/**
+ * Why a run's folder was not saved: past a size or time bound, holding
+ * something that cannot be saved (a pipe, a name the platform reserves), or a
+ * failure reading or writing it. The run goes on either way.
+ */
+export const DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS = [
+  "too_large",
+  "too_slow",
+  "unsupported",
+  "failed",
+] as const;
+
+export const desktopRunnerCheckpointEventSchema = v.variant("status", [
+  v.strictObject({ status: v.literal("taken") }),
+  v.strictObject({
+    status: v.literal("unavailable"),
+    reason: v.picklist(DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS),
+  }),
+]);
+export type DesktopRunnerCheckpointEvent = v.InferOutput<
+  typeof desktopRunnerCheckpointEventSchema
+>;
+
 export const desktopRunnerDesktopMessageSchema = v.variant("type", [
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.hello),
@@ -685,7 +719,19 @@ export const desktopRunnerDesktopMessageSchema = v.variant("type", [
     seq: seqSchema,
     requestId: requestIdSchema,
     kind: v.picklist(DESKTOP_RUNNER_APPROVAL_KINDS),
-    summary: v.pipe(v.string(), v.minLength(1), v.maxLength(4000)),
+    /**
+     * What the approval asks, kept as one bounded line however a desktop
+     * wrote it (`chatLocalRunApprovalMessage` already is one), so a longer
+     * summary is stored shown and the run still resumes.
+     */
+    summary: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(4000),
+      v.transform((summary) =>
+        chatLocalRunShownText(summary, CHAT_LOCAL_RUN_TOOL_LIMITS.approval),
+      ),
+    ),
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished),

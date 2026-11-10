@@ -401,3 +401,28 @@ describe("public sources under corpus chips", () => {
     }
   });
 });
+
+describe("guidance under a corpus scope", () => {
+  it.each(["search_guidance", "read_guidance"] as const)(
+    "a scoped turn refuses %s, which no chip can name",
+    async (toolName) => {
+      const scoped = await scopeCorpusRead({
+        scopes: CZECH_CASE_LAW,
+        toolName,
+        args: {},
+        resolveCountries: RESOLVER,
+      });
+      expect(Result.isError(scoped)).toBe(true);
+    },
+  );
+
+  it("an unscoped turn may read guidance", async () => {
+    const unscoped = await scopeCorpusRead({
+      scopes: [],
+      toolName: "search_guidance",
+      args: { query: "souhlas" },
+      resolveCountries: RESOLVER,
+    });
+    expect(Result.isOk(unscoped)).toBe(true);
+  });
+});

@@ -100,6 +100,27 @@ describe("soft-law access", () => {
     }
   });
 
+  test.each(["cz-uoou", "cz-suip"] as const)(
+    "%s withholds its kinds that can name individuals",
+    (authority) => {
+      const setting = SOFT_LAW_SERVING_SETTINGS[authority];
+      for (const kind of ["inspection_report", "other"]) {
+        expect(
+          softLawAccessOf(setting, {
+            surface: SOFT_LAW_READ_SURFACE.people,
+            kind,
+          }),
+        ).toBe("none");
+      }
+      expect(
+        softLawAccessOf(setting, {
+          surface: SOFT_LAW_READ_SURFACE.mcp,
+          kind: "methodology",
+        }),
+      ).toBe("text");
+    },
+  );
+
   test("a metadata-link source never reaches text on any surface", () => {
     const setting = {
       serve: SOFT_LAW_SERVE_MODE.metadataLink,

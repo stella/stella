@@ -39,6 +39,7 @@ import {
 const MODEL = "gpt-test";
 const RUN_ID = "run-1";
 const THREAD_ID = "thread-1";
+const WORKSPACE_DIR = "/workspace";
 
 const counter = () => {
   let next = 0;
@@ -46,6 +47,35 @@ const counter = () => {
     next += 1;
     return `id-${next}`;
   };
+};
+
+/**
+ * A cloud turn's parts as a local turn keeps them: a command's output stays
+ * on the member's computer, so its result keeps only its exit code and
+ * status, in the same order.
+ */
+const withoutCommandOutput = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    if (!value.includes('"aggregated_output"')) {
+      return value;
+    }
+    const { aggregated_output: _output, ...kept } = v.parse(
+      v.record(v.string(), v.unknown()),
+      JSON.parse(value),
+    );
+    return JSON.stringify(kept);
+  }
+  if (Array.isArray(value)) {
+    return value.map(withoutCommandOutput);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "aggregated_output")
+        .map(([key, entry]) => [key, withoutCommandOutput(entry)]),
+    );
+  }
+  return value;
 };
 
 async function* from<T>(items: readonly T[]): AsyncGenerator<T> {
@@ -61,6 +91,7 @@ const localChunks = async (events: readonly HarnessEvent[]) => {
     model: MODEL,
     runId: RUN_ID,
     threadId: THREAD_ID,
+    workspaceDir: WORKSPACE_DIR,
     generateId: counter(),
     now: () => 0,
   })) {
@@ -222,7 +253,10 @@ describe("local harness chunks", () => {
     const cloudStored = storedParts(fold(await cloudChunks(cloud)));
     const localStream = await localChunks(local);
     expect(cloudStored.flatMap(({ parts }) => parts).length).toBeGreaterThan(3);
-    expect(storedParts(fold(localStream))).toEqual(cloudStored);
+    expect(withoutCommandOutput(cloudStored)).toEqual(
+      storedParts(fold(localStream)),
+    );
+    expect(JSON.stringify(localStream)).not.toContain("aggregated_output");
 
     // Usage and finish reason match; each stream stamps its own time.
     const finish = (chunks: readonly StreamChunk[]) => {
@@ -305,6 +339,50 @@ describe("local harness chunks", () => {
     expect(finished).toContainEqual(
       expect.objectContaining({ type: "text", content: "Left it in place." }),
     );
+  });
+
+  test("an approval's call carries the same bounded input as the call it pauses on", async () => {
+    const write = {
+      id: "call-write",
+      name: "command_execution",
+      input: {
+        command:
+          "cat > /workspace/notes.md <<'EOF'\nPrivate settlement terms\nEOF",
+      },
+    } as const satisfies HarnessToolCall;
+    const chunks = await localChunks([
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("native-3"),
+        continuation: { type: "fresh" },
+      },
+      {
+        type: "approval.requested",
+        request: {
+          requestId: "approval-1",
+          kind: "command",
+          toolCall: write,
+          reason: null,
+          options: [{ id: "accept", decision: "approve" }],
+        },
+      },
+    ]);
+    const shown = { command: "cat > /workspace/notes.md <<'EOF'…" };
+    const pause = chunks.find(
+      (chunk) =>
+        chunk.type === EventType.RUN_FINISHED &&
+        chunk.outcome?.type === "interrupt",
+    );
+    expect(pause).toMatchObject({
+      outcome: { interrupts: [{ metadata: { input: shown } }] },
+    });
+    const call = fold(chunks)
+      .flatMap(({ parts }) => parts)
+      .find((part) => part.type === "tool-call" && part.id === write.id);
+    expect(call).toMatchObject({
+      input: shown,
+      arguments: JSON.stringify(shown),
+    });
   });
 
   test("a question answered by the next message completes its call without pausing", async () => {

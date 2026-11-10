@@ -53,7 +53,7 @@ import {
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { memberScopedDb } from "@/api/tests/helpers/application-role-db";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -67,6 +67,15 @@ let testDb: TestDatabase;
 let ids: TestIds;
 
 const seededRunIds: SafeId<"documentReviewRun">[] = [];
+
+/** Runs the code under test as the member, on the application role. */
+const asMember = async <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> =>
+  await memberScopedDb(testDb, {
+    organizationId: ids.orgA,
+    workspaceIds: [ids.wsA1],
+    userId: ids.userA1,
+  })(fn);
+
 // Tracked by kind, because that is what taking them down again requires: a
 // verdict column's dependency edge restricts deleting the ASK column it reads.
 const seededAskIds: SafeId<"property">[] = [];
@@ -235,15 +244,18 @@ const seedMaterializedColumns = async (
 };
 
 const openTableRuns = async (definitionId: SafeId<"playbookDefinition">) => {
-  const result = await createPlaybookTableRuns({
-    tx: asTestRaw<Transaction>(testDb),
-    workspaceId: ids.wsA1,
-    organizationId: ids.orgA,
-    userId: ids.userA1,
-    playbook: pinnedPlaybook(definitionId),
-    docTypeGate: null,
-    projection: "none",
-  });
+  const result = await asMember(
+    async (tx) =>
+      await createPlaybookTableRuns({
+        tx,
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        playbook: pinnedPlaybook(definitionId),
+        docTypeGate: null,
+        projection: "none",
+      }),
+  );
   for (const run of result.runs) {
     seededRunIds.push(run.runId);
   }
@@ -288,12 +300,15 @@ const removeColumns = async (
   verdictIds: readonly SafeId<"property">[],
   askIds: readonly SafeId<"property">[],
 ): Promise<void> => {
-  await deletePlaybookColumns({
-    tx: asTestRaw<Transaction>(testDb),
-    workspaceId: ids.wsA1,
-    verdictIds,
-    askIds,
-  });
+  await asMember(
+    async (tx) =>
+      await deletePlaybookColumns({
+        tx,
+        workspaceId: ids.wsA1,
+        verdictIds,
+        askIds,
+      }),
+  );
 };
 
 const clearRuns = async (): Promise<void> => {
@@ -375,15 +390,19 @@ describe("opening runs for a files table", () => {
     });
 
     const openedFileFieldIds = async (projection: PlaybookRunProjection) => {
-      const { runs } = await createPlaybookTableRuns({
-        tx: asTestRaw<Transaction>(testDb),
-        workspaceId: ids.wsA1,
-        organizationId: ids.orgA,
-        userId: ids.userA1,
-        playbook: pinnedPlaybook(await seedPlaybookDefinition()),
-        docTypeGate: null,
-        projection,
-      });
+      const playbook = pinnedPlaybook(await seedPlaybookDefinition());
+      const { runs } = await asMember(
+        async (tx) =>
+          await createPlaybookTableRuns({
+            tx,
+            workspaceId: ids.wsA1,
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+            playbook,
+            docTypeGate: null,
+            projection,
+          }),
+      );
       seededRunIds.push(...runs.map(({ runId }) => runId));
       const rows = await testDb
         .select({ fileFieldId: documentReviewRuns.fileFieldId })
@@ -453,15 +472,18 @@ describe("opening runs for a files table", () => {
     expect(await propertyCount()).toBe(before);
 
     // A document already under review is left alone rather than reviewed twice.
-    const second = await createPlaybookTableRuns({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      organizationId: ids.orgA,
-      userId: ids.userA1,
-      playbook: pinnedPlaybook(definitionId),
-      docTypeGate: null,
-      projection: "none",
-    });
+    const second = await asMember(
+      async (tx) =>
+        await createPlaybookTableRuns({
+          tx,
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          playbook: pinnedPlaybook(definitionId),
+          docTypeGate: null,
+          projection: "none",
+        }),
+    );
     expect(second.runs).toEqual([]);
     expect(second.skippedActiveCount).toBe(1);
 
@@ -483,21 +505,25 @@ describe("opening runs for a files table", () => {
       .where(eq(documentReviewRuns.id, firstRunId));
     await seedFinding(firstRunId);
 
-    const finalized = await finalizeReviewRun({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      runId: firstRunId,
-      entityId: ids.entityA1,
-      fileFieldId: ids.fileFieldA1,
-      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
-      expectedFindingCount: 1,
-    });
+    const finalized = await asMember(
+      async (tx) =>
+        await finalizeReviewRun({
+          tx,
+          workspaceId: ids.wsA1,
+          runId: firstRunId,
+          entityId: ids.entityA1,
+          fileFieldId: ids.fileFieldA1,
+          executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+          expectedFindingCount: 1,
+        }),
+    );
     expect(finalized).toEqual({
       type: "completed",
       committed: 1,
       carried: 0,
       staged: 0,
       skippedForPendingLimit: 0,
+      skippedForUnreadableReference: 0,
     });
 
     const decidedAt = new Date();
@@ -521,21 +547,25 @@ describe("opening runs for a files table", () => {
       .where(eq(documentReviewRuns.id, secondRunId));
     await seedFinding(secondRunId);
 
-    const refinalized = await finalizeReviewRun({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      runId: secondRunId,
-      entityId: ids.entityA1,
-      fileFieldId: ids.fileFieldA1,
-      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
-      expectedFindingCount: 1,
-    });
+    const refinalized = await asMember(
+      async (tx) =>
+        await finalizeReviewRun({
+          tx,
+          workspaceId: ids.wsA1,
+          runId: secondRunId,
+          entityId: ids.entityA1,
+          fileFieldId: ids.fileFieldA1,
+          executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+          expectedFindingCount: 1,
+        }),
+    );
     expect(refinalized).toEqual({
       type: "completed",
       committed: 1,
       carried: 1,
       staged: 0,
       skippedForPendingLimit: 0,
+      skippedForUnreadableReference: 0,
     });
 
     const carried = await testDb
@@ -552,8 +582,7 @@ describe("opening runs for a files table", () => {
 });
 
 describe("telling a table run how its document was read", () => {
-  const scopedDb: ScopedDb = async (run) =>
-    await run(asTestRaw<Transaction>(testDb));
+  const scopedDb: ScopedDb = asMember;
   const source = (charactersWithheld: number) => ({
     fileFieldId: ids.fileFieldA1,
     passagesCut: 1,
@@ -678,11 +707,14 @@ describe("deleting what a review was measured against", () => {
     const definitionId = await seedPlaybookDefinition();
     const { askId, verdictId } = await seedMaterializedColumns(definitionId);
 
-    await deletePlaybookPositionColumns({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      playbookSourceId: POSITION_ID,
-    });
+    await asMember(
+      async (tx) =>
+        await deletePlaybookPositionColumns({
+          tx,
+          workspaceId: ids.wsA1,
+          playbookSourceId: POSITION_ID,
+        }),
+    );
 
     const remaining = await testDb
       .select({ id: properties.id })

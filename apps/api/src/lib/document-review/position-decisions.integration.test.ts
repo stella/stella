@@ -19,7 +19,6 @@ import { inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
-import { createMembershipScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readPositionDecisionOverlay } from "@/api/lib/document-review/position-decisions";
@@ -29,6 +28,7 @@ import type {
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
 } from "@/api/lib/document-review/run-contract";
+import { membershipScopedDb } from "@/api/tests/helpers/application-role-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -144,11 +144,17 @@ const seedFinding = async ({
 };
 
 const overlay = async () =>
-  await readPositionDecisionOverlay({
-    tx: asTestRaw<Transaction>(testDb),
+  await membershipScopedDb(testDb, {
     organizationId: ids.orgA,
-    positionIds: [DECIDED_POSITION_ID, UNTOUCHED_POSITION_ID],
-  });
+    userId: ids.userA1,
+  })(
+    async (tx) =>
+      await readPositionDecisionOverlay({
+        tx,
+        organizationId: ids.orgA,
+        positionIds: [DECIDED_POSITION_ID, UNTOUCHED_POSITION_ID],
+      }),
+  );
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -326,14 +332,13 @@ describe("position decision overlay", () => {
 
     const overlayFor = async (userId: SafeId<"user">) =>
       (
-        await createMembershipScopedDb(testDb, {
+        await membershipScopedDb(testDb, {
           organizationId: ids.orgA,
-          serverValidatedWorkspaceIds: [],
           userId,
         })(
           async (tx) =>
             await readPositionDecisionOverlay({
-              tx: asTestRaw<Transaction>(tx),
+              tx,
               organizationId: ids.orgA,
               positionIds: [REFERENCE_POSITION_ID],
             }),
@@ -346,6 +351,97 @@ describe("position decision overlay", () => {
       latestAcceptedFixText: "Wording drawn from the reference document",
     });
     // userA2 belongs to wsA2 only: the decision counts, the text does not.
+    expect(await overlayFor(ids.userA2)).toMatchObject({
+      accepted: 1,
+      latestAcceptedFixText: null,
+    });
+  });
+
+  // One grading call can cover positions from several matters, so a fix on a
+  // tier position can restate a reference graded beside it: its text follows
+  // access to every matter the run's references came from.
+  test("a tier fix's text follows access to the run's other reference matters", async () => {
+    const TIERS_POSITION_ID = "88888888-8888-4888-8888-888888888888";
+    const mixedBasis: DocumentReviewRunBasis =
+      asTestRaw<DocumentReviewRunBasis>({
+        ...basis,
+        playbook: {
+          ...basis.playbook,
+          definitionSnapshot: {
+            ...basis.playbook.definitionSnapshot,
+            positions: {
+              version: 3,
+              items: [
+                {
+                  sourceId: "77777777-7777-4777-8777-777777777777",
+                  mode: "graded",
+                  standard: {
+                    source: "reference",
+                    termKind: "language",
+                    passages: [
+                      {
+                        id: Bun.randomUUIDv7(),
+                        workspaceId: ids.wsA1,
+                        entityId: Bun.randomUUIDv7(),
+                        fileFieldId: Bun.randomUUIDv7(),
+                        entityVersionId: Bun.randomUUIDv7(),
+                        blockId: "r-1",
+                      },
+                    ],
+                  },
+                },
+                {
+                  sourceId: TIERS_POSITION_ID,
+                  mode: "graded",
+                  standard: {
+                    source: "tiers",
+                    tiers: {
+                      acceptable: { rules: [] },
+                      fallback: { entries: [] },
+                      notAcceptable: { rules: [] },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      });
+    const runId = await seedRun(ids.orgA, ids.wsA2, mixedBasis);
+    await seedFinding({
+      runId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA2,
+      decision: "accepted",
+      decidedAt: new Date("2026-08-30T10:00:00.000Z"),
+      fix: {
+        kind: "replaceBlock",
+        blockId: "para-5",
+        text: "Wording graded beside the reference",
+      },
+      standardSource: "tiers",
+      positionId: TIERS_POSITION_ID,
+    });
+
+    const overlayFor = async (userId: SafeId<"user">) =>
+      (
+        await membershipScopedDb(testDb, {
+          organizationId: ids.orgA,
+          userId,
+        })(
+          async (tx) =>
+            await readPositionDecisionOverlay({
+              tx,
+              organizationId: ids.orgA,
+              positionIds: [TIERS_POSITION_ID],
+            }),
+        )
+      )[TIERS_POSITION_ID];
+
+    expect(await overlayFor(ids.userA1)).toMatchObject({
+      accepted: 1,
+      latestAcceptedFixText: "Wording graded beside the reference",
+    });
     expect(await overlayFor(ids.userA2)).toMatchObject({
       accepted: 1,
       latestAcceptedFixText: null,

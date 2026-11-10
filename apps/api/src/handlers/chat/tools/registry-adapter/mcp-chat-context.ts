@@ -4,6 +4,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { SOFT_LAW_READ_SURFACE } from "@/api/lib/legal-search/soft-law-serving";
 import {
   credentialPermissionsForContext,
   roleForDisplay,
@@ -105,6 +106,7 @@ export const buildMcpContextFromChat = (
       )
     : undefined;
   return {
+    softLawReadSurface: SOFT_LAW_READ_SURFACE.chat,
     featureAccessSnapshot: deps.featureAccessSnapshot,
     ...(deps.testDependencies === undefined
       ? {}

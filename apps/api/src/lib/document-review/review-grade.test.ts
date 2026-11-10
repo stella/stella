@@ -6,13 +6,17 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";
 import {
   type gradeReferencePositions,
+  insufficientEvidenceGrading,
   REFERENCE_GRADE_BATCH_SIZE,
-  ungradedReferenceGrading,
+  type ReferenceGrading,
+  type ReferenceStandardPosition,
 } from "@/api/lib/document-review/reference-grade";
-import type { AskExtraction } from "@/api/lib/document-review/review-extract";
+import type { AskOutcome } from "@/api/lib/document-review/review-extract";
 import { buildFindings } from "@/api/lib/document-review/review-grade";
+import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type {
+  DeterministicCheck,
   Position,
   ResolvedTiers,
 } from "@/api/lib/workflow/playbook-positions";
@@ -142,7 +146,8 @@ const referencePosition = (index: number): Position => {
   };
 };
 
-const extraction = (): AskExtraction => ({
+const extraction = (): AskOutcome => ({
+  type: "answered",
   content: { version: 1, type: "text", value: "Ten days" },
   citations: [
     {
@@ -196,9 +201,7 @@ const buildArgs = (
     gradedBatches.push(findings.map(({ positionId }) => positionId));
     await Promise.resolve();
   },
-  contentBySourceId: new Map(
-    positions.map(({ sourceId: id }) => [id, extraction()]),
-  ),
+  askOutcomes: new Map(positions.map(({ sourceId: id }) => [id, extraction()])),
   tiersBySourceId: new Map(
     positions.map(({ sourceId: id }) => [id, resolvedTiers]),
   ),
@@ -223,7 +226,6 @@ const buildArgs = (
   perspective: NEUTRAL_PERSPECTIVE,
   referenceEntityVersionIds: [],
   passageTextById: referencePassageTextById,
-  refusedSourceIds: new Set<string>(),
   documentRead: "whole" as const,
   gradeTierMatches: gradeTierMatchesMock,
   gradeReferencePositions: gradeReferencePositionsMock,
@@ -247,7 +249,7 @@ describe("document review grading", () => {
       [answered, unanswered],
       new AbortController().signal,
     );
-    args.contentBySourceId.delete(unanswered.sourceId);
+    args.askOutcomes.set(unanswered.sourceId, { type: "not-stated" });
 
     const findings = await buildFindings({ ...args, documentRead: "cut" });
 
@@ -263,15 +265,10 @@ describe("document review grading", () => {
   test("flags a refused ask for review, in a whole or a cut document", async () => {
     const refused = position(1);
     const args = buildArgs([refused], new AbortController().signal);
-    args.contentBySourceId.delete(refused.sourceId);
-    const refusedSourceIds = new Set([refused.sourceId]);
+    args.askOutcomes.set(refused.sourceId, { type: "refused" });
 
     for (const documentRead of ["whole", "cut"] as const) {
-      const [finding] = await buildFindings({
-        ...args,
-        refusedSourceIds,
-        documentRead,
-      });
+      const [finding] = await buildFindings({ ...args, documentRead });
 
       expect(finding).toMatchObject({
         verdict: "deviation",
@@ -279,6 +276,61 @@ describe("document review grading", () => {
           "Automated comparison against the standard could not be completed.",
       });
     }
+  });
+
+  // Every way a graded position can be decided without a model. A position
+  // extraction settled nothing for learned nothing about the document, so
+  // whichever check it carries, it must be flagged rather than read as absent.
+  const CHECKS = {
+    "tier match": undefined,
+    "required presence": { kind: "presence", expectation: "required" },
+    "restricted presence": { kind: "presence", expectation: "restricted" },
+    constraint: {
+      kind: "constraint",
+      condition: {
+        type: "compare",
+        left: { type: "property", propertyId: sourceId(1) },
+        op: "eq",
+        right: { type: "literal", value: "Ten days" },
+      },
+    },
+  } as const satisfies Record<string, DeterministicCheck | undefined>;
+  const withCheck = (check: DeterministicCheck | undefined): Position => {
+    const graded = position(1);
+    return graded.mode === "graded" && check !== undefined
+      ? { ...graded, check }
+      : graded;
+  };
+
+  test.each(Object.entries(CHECKS))(
+    "%s: a position extraction settled nothing for is flagged, never missing",
+    async (_, check) => {
+      const unextracted = withCheck(check);
+      const args = buildArgs([unextracted], new AbortController().signal);
+      args.askOutcomes.delete(unextracted.sourceId);
+
+      for (const documentRead of ["whole", "cut"] as const) {
+        const [finding] = await buildFindings({ ...args, documentRead });
+
+        expect(finding).toMatchObject({
+          verdict: "deviation",
+          rationale:
+            "Automated comparison against the standard could not be completed.",
+          fix: null,
+        });
+      }
+      expect(gradeTierMatchesMock).not.toHaveBeenCalled();
+    },
+  );
+
+  test("a value the model stated is absent in a whole document still grades as missing", async () => {
+    const stated = position(1);
+    const args = buildArgs([stated], new AbortController().signal);
+    args.askOutcomes.set(stated.sourceId, { type: "not-stated" });
+
+    const [finding] = await buildFindings(args);
+
+    expect(finding?.verdict).toBe("missing");
   });
 
   test("does not propose a fix when model grading produced no verdict", async () => {
@@ -397,7 +449,7 @@ describe("document review grading", () => {
         new Map(
           call.positions.map((referencedPosition) => [
             referencedPosition.sourceId,
-            ungradedReferenceGrading(referencedPosition),
+            insufficientEvidenceGrading(referencedPosition),
           ]),
         ),
       );
@@ -422,5 +474,109 @@ describe("document review grading", () => {
     );
     // The final findings are still in the positions' original order.
     expect(findings.map(({ positionId }) => positionId)).toEqual(expectedOrder);
+  });
+  /** Runs a pass over reference positions, answering every grading call with
+   *  `answer` as it is made. */
+  const gradeReferences = async (
+    positions: readonly Position[],
+    answer: (
+      call: (typeof referenceGradeCalls)[number],
+    ) => Awaited<ReturnType<typeof gradeReferencePositions>>,
+    documentRead: "whole" | "cut" = "whole",
+  ) => {
+    const pass = buildFindings({
+      ...buildArgs(positions, new AbortController().signal),
+      documentRead,
+    });
+    for (const call of referenceGradeCalls) {
+      call.resolve(answer(call));
+    }
+    return await pass;
+  };
+
+  const gradingWith = (
+    reference: ReferenceStandardPosition,
+    overrides: Partial<ReferenceGrading>,
+  ): ReferenceGrading => ({
+    ...insufficientEvidenceGrading(reference),
+    ...overrides,
+  });
+
+  const FLAGGED_REFERENCE = {
+    standardSource: "reference",
+    verdict: "deviation",
+    rationale:
+      "Automated comparison against the standard could not be completed.",
+    fix: null,
+  } as const;
+
+  test("a reference grading call that fails is flagged, never read as not applicable", async () => {
+    const referenced = referencePosition(1);
+    const [finding] = await gradeReferences([referenced], () =>
+      Result.err(
+        new WorkflowIntegrationError({
+          message: "Reference position grading failed",
+        }),
+      ),
+    );
+
+    expect(finding).toMatchObject(FLAGGED_REFERENCE);
+    expect(finding?.explanation).toBeUndefined();
+    // The standard it was to be compared with is still shown.
+    expect(finding?.referenceCitations).toEqual([
+      {
+        fileFieldId: FILE_FIELD_ID,
+        passages: [{ id: referencePassageId(1), blockId: "ref-block-1" }],
+      },
+    ]);
+  });
+
+  test("a reference position the model left out is flagged, never read as not applicable", async () => {
+    const [finding] = await gradeReferences([referencePosition(1)], () =>
+      Result.ok(new Map()),
+    );
+
+    expect(finding).toMatchObject(FLAGGED_REFERENCE);
+    expect(finding?.explanation).toBeUndefined();
+  });
+
+  test("a reference term missing from a document read in part is flagged, from one read whole it is missing", async () => {
+    const answerMissing = (call: (typeof referenceGradeCalls)[number]) =>
+      Result.ok(
+        new Map(
+          call.positions.map((reference) => [
+            reference.sourceId,
+            gradingWith(reference, {
+              verdict: "missing",
+              explanation: {
+                type: "comparison",
+                text: "The target has no such clause.",
+              },
+            }),
+          ]),
+        ),
+      );
+
+    const [cut] = await gradeReferences(
+      [referencePosition(1)],
+      answerMissing,
+      "cut",
+    );
+    expect(cut).toMatchObject({
+      verdict: "deviation",
+      rationale: CUT_DOCUMENT_RATIONALE,
+      fix: null,
+    });
+
+    referenceGradeCalls = [];
+    const [whole] = await gradeReferences(
+      [referencePosition(1)],
+      answerMissing,
+      "whole",
+    );
+    expect(whole).toMatchObject({
+      verdict: "missing",
+      rationale: "The target has no such clause.",
+    });
   });
 });

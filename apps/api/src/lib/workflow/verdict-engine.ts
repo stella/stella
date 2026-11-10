@@ -106,16 +106,18 @@ type AskCell = {
 
 /**
  * What an ASK cell can support. `unfinished` means it says nothing about the
- * document, because extraction failed, is unfinished, was refused or could not
- * read the file, so it must never grade as a missing clause. `cutUnanswered`
- * means no answer turned up in a document that was only partly read. A model's
- * "not stated" answer is stored as `unsupported` too, and only its settlement
- * tells these apart. No cell at all stays gradable: a failed extraction always
- * leaves a cell.
+ * document, because extraction failed, is unfinished or could not read the
+ * file, so it must never grade as a missing clause. `refused` means the
+ * document was read but the model declined this one question: it says nothing
+ * about the document either, but nothing about the rest of the review.
+ * `cutUnanswered` means no answer turned up in a document that was only partly
+ * read. A model's "not stated" answer is stored as `unsupported` too, and only
+ * its settlement tells these apart. No cell at all stays gradable: a failed
+ * extraction always leaves a cell.
  */
 const askCellStanding = (
   cell: AskCell | undefined,
-): "gradable" | "unfinished" | "cutUnanswered" => {
+): "gradable" | "unfinished" | "refused" | "cutUnanswered" => {
   if (cell === undefined) {
     return "gradable";
   }
@@ -127,8 +129,9 @@ const askCellStanding = (
       return "gradable";
     case "notFoundInCutDocument":
       return "cutUnanswered";
-    case "value":
     case "refused":
+      return "refused";
+    case "value":
     case "failed":
     case undefined:
       return "unfinished";
@@ -789,17 +792,30 @@ export type GradedVerdict = {
   extracted: ExtractedAskValue | null;
 };
 
+/**
+ * A position whose document was read but which this batch could not grade: the
+ * model declined its question, or the tier-match call failed. Its cell settles
+ * as failed, so it stays re-runnable; the files-table run records it the way
+ * the review worker does, as a finding flagged for a person.
+ */
+export type UngradedVerdict = {
+  propertyId: SafeId<"property">;
+  extracted: ExtractedAskValue | null;
+};
+
 export type VerdictBatchOutput = {
   aiResults: AIResult[];
   aiJustifications: AIJustification[];
   /** Every verdict this batch actually decided, in grading order. Excludes the
-   *  skipped and errored ids below, which decided nothing. */
+   *  ungraded, skipped and errored ones below, which decided nothing. */
   gradedVerdicts: GradedVerdict[];
+  ungradedVerdicts: UngradedVerdict[];
   // Verdicts gated out by an unmet dependency condition: their field is left
   // untouched, matching the extraction path's skip semantics.
   skippedPropertyIds: SafeId<"property">[];
-  // positionMatch verdicts whose LLM call failed: the caller flips their field
-  // to "error" so they stay re-runnable.
+  // Verdicts whose ASK extraction never finished, or whose grading was aborted:
+  // nothing was decided, so the caller flips their field to "error" and they
+  // stay re-runnable.
   erroredPropertyIds: SafeId<"property">[];
   /** One disposition for every verdict cell claimed by this batch. */
   settlements: ReadonlyMap<
@@ -933,6 +949,7 @@ export const computeVerdictBatch = async ({
   const aiResults: AIResult[] = [];
   const aiJustifications: AIJustification[] = [];
   const gradedVerdicts: GradedVerdict[] = [];
+  const ungradedVerdicts: UngradedVerdict[] = [];
   const skippedPropertyIds: SafeId<"property">[] = [];
   const erroredPropertyIds: SafeId<"property">[] = [];
   const settlements = new Map<
@@ -984,6 +1001,11 @@ export const computeVerdictBatch = async ({
     );
     if (rule.kind !== "extractOnly" && standing === "unfinished") {
       erroredPropertyIds.push(property.id);
+      settlements.set(property.id, "failedTransient");
+      continue;
+    }
+    if (rule.kind !== "extractOnly" && standing === "refused") {
+      ungradedVerdicts.push({ propertyId: property.id, extracted: null });
       settlements.set(property.id, "failedTransient");
       continue;
     }
@@ -1074,18 +1096,26 @@ export const computeVerdictBatch = async ({
           serviceTier,
           usageMetering,
         });
+        const extracted = extractedFromCitedClause(
+          fieldContentByPropertyId.get(property.tool.askPropertyId),
+          passages,
+        );
         if (Result.isError(graded)) {
-          erroredPropertyIds.push(property.id);
+          // A call cut short by the job's abort or the batch budget says
+          // nothing about this position: it stays errored, like an unfinished
+          // extraction, rather than completing a review the retry would redo.
+          if (abortSignal.aborted) {
+            erroredPropertyIds.push(property.id);
+          } else {
+            ungradedVerdicts.push({ propertyId: property.id, extracted });
+          }
           settlements.set(property.id, "failedTransient");
           return;
         }
         const records = tierMatchRecords({
           propertyId: property.id,
           graded: graded.value,
-          extracted: extractedFromCitedClause(
-            fieldContentByPropertyId.get(property.tool.askPropertyId),
-            passages,
-          ),
+          extracted,
         });
         aiResults.push(records.result);
         gradedVerdicts.push(records.graded);
@@ -1099,6 +1129,7 @@ export const computeVerdictBatch = async ({
     aiResults,
     aiJustifications,
     gradedVerdicts,
+    ungradedVerdicts,
     skippedPropertyIds,
     erroredPropertyIds,
     settlements,
