@@ -1,11 +1,11 @@
 import { panic } from "better-result";
-import * as v from "valibot";
 
 import {
-  CHAT_LOCAL_FILES_UNDO_PENDING_STATES,
-  CHAT_LOCAL_FILES_UNDO_REQUEST_REFUSALS,
-  type ChatLocalFilesUndoComputerReason,
-  type ChatLocalFilesUndoRequestRefusal,
+  CHAT_LOCAL_FILES_UNDO_LIVE_STATES,
+  CHAT_LOCAL_FILES_UNDO_SETTLED_STATES,
+  type ChatLocalFilesUndoComputerRefusal,
+  type ChatLocalFilesUndoRead,
+  type ChatLocalFilesUndoRefusal,
   type ChatLocalFilesUndoState,
 } from "@stll/api-contract/chat-local-files-undo";
 
@@ -18,43 +18,24 @@ import type { TranslationKey } from "@/i18n/types";
  * last request got.
  */
 
-export type LocalFilesUndoState = ChatLocalFilesUndoState;
-export type LocalFilesUndoComputerReason = ChatLocalFilesUndoComputerReason;
-export type LocalFilesUndoRequestRefusal = ChatLocalFilesUndoRequestRefusal;
-
-export type LocalFilesUndoRead = {
-  undoable: boolean;
-  undo: {
-    restoreId: string;
-    state: LocalFilesUndoState;
-    reason: LocalFilesUndoComputerReason | null;
-  } | null;
-};
-
-/** The body of a refused undo request (409). */
-export const localFilesUndoRefusalSchema = v.object({
-  status: v.literal("refused"),
-  reason: v.picklist(CHAT_LOCAL_FILES_UNDO_REQUEST_REFUSALS),
-});
-
 const COMPUTER_REASON_KEYS = {
   no_checkpoint: "chat.localFilesUndo.computer.noCheckpoint",
   not_newest: "chat.localFilesUndo.computer.notNewest",
   folder_busy: "chat.localFilesUndo.computer.folderBusy",
   failed: "chat.localFilesUndo.computer.failed",
-} as const satisfies Record<LocalFilesUndoComputerReason, TranslationKey>;
+} as const satisfies Record<ChatLocalFilesUndoComputerRefusal, TranslationKey>;
 
 const REQUEST_REFUSAL_KEYS = {
   not_newest: "chat.localFilesUndo.refused.notNewest",
   thread_busy: "chat.localFilesUndo.refused.threadBusy",
   no_checkpoint: "chat.localFilesUndo.refused.noCheckpoint",
   desktop_offline: "chat.localFilesUndo.refused.desktopOffline",
-} as const satisfies Record<LocalFilesUndoRequestRefusal, TranslationKey>;
+} as const satisfies Record<ChatLocalFilesUndoRefusal, TranslationKey>;
 
 /** The messages a turn's row can show about its undo. */
 type LocalFilesUndoMessageKey =
-  | (typeof COMPUTER_REASON_KEYS)[LocalFilesUndoComputerReason]
-  | (typeof REQUEST_REFUSAL_KEYS)[LocalFilesUndoRequestRefusal]
+  | (typeof COMPUTER_REASON_KEYS)[ChatLocalFilesUndoComputerRefusal]
+  | (typeof REQUEST_REFUSAL_KEYS)[ChatLocalFilesUndoRefusal]
   | "chat.localFilesUndo.expired";
 
 /**
@@ -81,8 +62,8 @@ export const localFilesUndoView = ({
   read,
   refusal,
 }: {
-  read: LocalFilesUndoRead | undefined;
-  refusal: LocalFilesUndoRequestRefusal | null;
+  read: ChatLocalFilesUndoRead | undefined;
+  refusal: ChatLocalFilesUndoRefusal | null;
 }): LocalFilesUndoView => {
   if (read === undefined) {
     return NOTHING;
@@ -102,7 +83,7 @@ export const localFilesUndoView = ({
 const settledView = ({
   undo,
   undoable,
-}: LocalFilesUndoRead): LocalFilesUndoView => {
+}: ChatLocalFilesUndoRead): LocalFilesUndoView => {
   if (undo === null) {
     return { canUndo: undoable, status: { type: "none" } };
   }
@@ -138,12 +119,18 @@ const settledView = ({
 };
 
 /** Whether the computer may still answer: the read is followed until not. */
-const PENDING_STATES: ReadonlySet<LocalFilesUndoState> = new Set(
-  CHAT_LOCAL_FILES_UNDO_PENDING_STATES,
+/** States the computer may still answer: counted, and not yet settled. */
+const SETTLED_STATES: ReadonlySet<ChatLocalFilesUndoState> = new Set(
+  CHAT_LOCAL_FILES_UNDO_SETTLED_STATES,
+);
+const PENDING_STATES: ReadonlySet<ChatLocalFilesUndoState> = new Set(
+  CHAT_LOCAL_FILES_UNDO_LIVE_STATES.filter(
+    (state) => !SETTLED_STATES.has(state),
+  ),
 );
 
 export const localFilesUndoSettling = (
-  read: LocalFilesUndoRead | undefined,
+  read: ChatLocalFilesUndoRead | undefined,
 ): boolean => {
   const state = read?.undo?.state;
   return state !== undefined && PENDING_STATES.has(state);
@@ -161,7 +148,7 @@ export const localFilesUndoPollMs = ({
   read,
   polls,
 }: {
-  read: LocalFilesUndoRead | undefined;
+  read: ChatLocalFilesUndoRead | undefined;
   polls: number;
 }): number | false =>
   localFilesUndoSettling(read)

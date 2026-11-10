@@ -1,13 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 import * as v from "valibot";
 
-import { chatKeys } from "@/features/chat/chat-query-contract";
 import {
-  localFilesUndoPollMs,
-  type LocalFilesUndoRead,
-  localFilesUndoRefusalSchema,
-  type LocalFilesUndoRequestRefusal,
-} from "@/features/chat/local-files-undo.logic";
+  chatLocalFilesUndoAnswerSchema,
+  type ChatLocalFilesUndoRead,
+  type ChatLocalFilesUndoRefusal,
+} from "@stll/api-contract/chat-local-files-undo";
+
+import { chatKeys } from "@/features/chat/chat-query-contract";
+import { localFilesUndoPollMs } from "@/features/chat/local-files-undo.logic";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
@@ -45,7 +46,7 @@ export const localFilesUndoOptions = ({
       threadId,
       turnId,
     ),
-    queryFn: async ({ signal }): Promise<LocalFilesUndoRead> =>
+    queryFn: async ({ signal }): Promise<ChatLocalFilesUndoRead> =>
       unwrapApiResponse(
         await undoRoute({ threadId, turnId }).get({ fetch: { signal } }),
       ),
@@ -58,8 +59,7 @@ export const localFilesUndoOptions = ({
 
 /** How a request to undo was answered: taken, or refused with the reason. */
 export type LocalFilesUndoRequested =
-  | { type: "accepted" }
-  | { type: "refused"; reason: LocalFilesUndoRequestRefusal };
+  { type: "accepted" } | { type: "refused"; reason: ChatLocalFilesUndoRefusal };
 
 const REFUSED_STATUS = 409;
 
@@ -72,12 +72,12 @@ export const requestLocalFilesUndo = async (
 ): Promise<LocalFilesUndoRequested> => {
   const response = await undoRoute(turn).post();
   if (response.error?.status === REFUSED_STATUS) {
-    const refusal = v.safeParse(
-      localFilesUndoRefusalSchema,
+    const answer = v.safeParse(
+      chatLocalFilesUndoAnswerSchema,
       response.error.value,
     );
-    if (refusal.success) {
-      return { type: "refused", reason: refusal.output.reason };
+    if (answer.success && answer.output.status === "refused") {
+      return { type: "refused", reason: answer.output.reason };
     }
   }
   // Any other failure is the mutation's error.

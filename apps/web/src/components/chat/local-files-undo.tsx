@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { ChatLocalFilesUndoRefusal } from "@stll/api-contract/chat-local-files-undo";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -25,7 +26,6 @@ import {
   requestLocalFilesUndo,
 } from "@/features/chat/local-files-undo";
 import {
-  type LocalFilesUndoRequestRefusal,
   type LocalFilesUndoView,
   localFilesUndoView,
 } from "@/features/chat/local-files-undo.logic";
@@ -37,7 +37,7 @@ import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 
 /** The member's last refused request, for the turn it was asked on. */
-type Refusal = { turnId: string; reason: LocalFilesUndoRequestRefusal };
+type Refusal = { turnId: string; reason: ChatLocalFilesUndoRefusal };
 
 /** A turn nobody can undo here: its read never runs. */
 const NO_TURN: LocalFilesUndoTurn = {

@@ -1,23 +1,23 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  CHAT_LOCAL_FILES_UNDO_COMPUTER_REASONS,
-  CHAT_LOCAL_FILES_UNDO_REQUEST_REFUSALS,
+  CHAT_LOCAL_FILES_UNDO_COMPUTER_REFUSALS,
+  CHAT_LOCAL_FILES_UNDO_REFUSALS,
+  type ChatLocalFilesUndoComputerRefusal,
+  type ChatLocalFilesUndoRead,
+  type ChatLocalFilesUndoState,
 } from "@stll/api-contract/chat-local-files-undo";
 
 import {
-  type LocalFilesUndoComputerReason,
   localFilesUndoPollMs,
-  type LocalFilesUndoRead,
-  type LocalFilesUndoState,
   type LocalFilesUndoView,
   localFilesUndoView,
 } from "@/features/chat/local-files-undo.logic";
 
 const undo = (
-  state: LocalFilesUndoState,
-  reason: LocalFilesUndoComputerReason | null = null,
-): LocalFilesUndoRead => ({
+  state: ChatLocalFilesUndoState,
+  reason: ChatLocalFilesUndoComputerRefusal | null = null,
+): ChatLocalFilesUndoRead => ({
   undoable: true,
   undo: { restoreId: "restore-1", state, reason },
 });
@@ -58,11 +58,14 @@ describe("what the newest turn's row shows of its undo", () => {
     );
     expect(
       localFilesUndoView({ read: undo("restored"), refusal: null }),
-    ).toEqual({ canUndo: false, status: { type: "restored" } });
+    ).toEqual({
+      canUndo: false,
+      status: { type: "restored" },
+    });
   });
 
   test("each of the computer's reasons gets its own message, and the undo may be asked again", () => {
-    const keys = CHAT_LOCAL_FILES_UNDO_COMPUTER_REASONS.map((reason) => {
+    const keys = CHAT_LOCAL_FILES_UNDO_COMPUTER_REFUSALS.map((reason) => {
       const view = localFilesUndoView({
         read: undo("refused", reason),
         refusal: null,
@@ -71,7 +74,7 @@ describe("what the newest turn's row shows of its undo", () => {
       return view.status.type === "problem" ? view.status.messageKey : null;
     });
     expect(new Set(keys).size).toBe(
-      CHAT_LOCAL_FILES_UNDO_COMPUTER_REASONS.length,
+      CHAT_LOCAL_FILES_UNDO_COMPUTER_REFUSALS.length,
     );
     expect(keys).not.toContain(null);
   });
@@ -86,16 +89,14 @@ describe("what the newest turn's row shows of its undo", () => {
   });
 
   test("each refused request gets its own message, unless the undo is already on its way or done", () => {
-    const keys = CHAT_LOCAL_FILES_UNDO_REQUEST_REFUSALS.map((refusal) => {
+    const keys = CHAT_LOCAL_FILES_UNDO_REFUSALS.map((refusal) => {
       const view = localFilesUndoView({
         read: { undoable: true, undo: null },
         refusal,
       });
       return view.status.type === "problem" ? view.status.messageKey : null;
     });
-    expect(new Set(keys).size).toBe(
-      CHAT_LOCAL_FILES_UNDO_REQUEST_REFUSALS.length,
-    );
+    expect(new Set(keys).size).toBe(CHAT_LOCAL_FILES_UNDO_REFUSALS.length);
     expect(keys).toContain("chat.localFilesUndo.refused.desktopOffline");
     // A refusal answered after an expired undo replaces the old message.
     expect(
@@ -108,7 +109,9 @@ describe("what the newest turn's row shows of its undo", () => {
     expect(
       localFilesUndoView({ read: undo("restored"), refusal: "not_newest" })
         .status,
-    ).toEqual({ type: "restored" });
+    ).toEqual({
+      type: "restored",
+    });
   });
 });
 
