@@ -46,6 +46,19 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type StoredPartType = keyof typeof STORED_CHAT_PART_TYPES;
 
+/** A sub-agent run's child messages: stored as content of their own, so a
+ *  newer release's additions inside them are that content's own case. */
+const subagentMessages = (): Extract<
+  ChatPart,
+  { type: "subagent" }
+>["subagent"]["messages"] => [
+  {
+    id: "child-1",
+    parts: [{ content: "The register is closed.", type: "text" }],
+    role: "assistant",
+  },
+];
+
 /** One part of every type this release stores, every field it knows set. */
 const CURRENT_PARTS = {
   activity: {
@@ -75,6 +88,22 @@ const CURRENT_PARTS = {
     raw: '{"mutual":true}',
     status: "complete",
     type: "structured-output",
+  },
+  subagent: {
+    subagent: {
+      description: "Reads pages for the task.",
+      error: { code: "child_failed", message: "The child failed." },
+      id: "subagent-run-1",
+      interruptIds: ["interrupt-1"],
+      messages: subagentMessages(),
+      metadata: { depth: 1 },
+      name: "browse",
+      parentRunId: "run-1",
+      parentSubagentRunId: "subagent-run-0",
+      parentToolCallId: "call-1",
+      status: "error",
+    },
+    type: "subagent",
   },
   text: { content: "The NDA is mutual.", type: "text" },
   thinking: {
@@ -150,6 +179,7 @@ const FREE_FIELDS: Record<StoredPartType, readonly Path[]> = {
   document: [["metadata"]],
   image: [["metadata"]],
   "structured-output": [["data"], ["partial"]],
+  subagent: [["subagent", "metadata"]],
   text: [["metadata"], ["providerMetadata"]],
   thinking: [["providerMetadata"]],
   "tool-call": [
@@ -171,6 +201,7 @@ const ENUM_FIELDS: Record<StoredPartType, readonly Path[]> = {
   document: [["source", "type"]],
   image: [["source", "type"]],
   "structured-output": [["status"]],
+  subagent: [["subagent", "status"]],
   text: [],
   thinking: [],
   "tool-call": [
@@ -195,14 +226,19 @@ const KNOWN_FIELD_NAMES = new Set([
   "approved",
   "blob",
   "call",
+  "code",
   "content",
   "createdAt",
   "data",
+  "description",
   "error",
   "errorMessage",
   "format",
   "id",
   "input",
+  "interruptIds",
+  "message",
+  "messages",
   "meta",
   "metadata",
   "mimeType",
@@ -211,6 +247,9 @@ const KNOWN_FIELD_NAMES = new Set([
   "needsApproval",
   "outcome",
   "output",
+  "parentRunId",
+  "parentSubagentRunId",
+  "parentToolCallId",
   "partial",
   "provenance",
   "provider",
@@ -227,6 +266,7 @@ const KNOWN_FIELD_NAMES = new Set([
   "state",
   "status",
   "stepId",
+  "subagent",
   "subagentRunId",
   "text",
   "toolCallId",

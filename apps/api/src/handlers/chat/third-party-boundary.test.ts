@@ -182,12 +182,26 @@ const STORED_PART_CENSUS = {
     subagent: {
       id: "subagent-run-1",
       name: "research",
+      // The one shape a thread stores: a tool-mode run, whose child reaches
+      // the parent model only through the result of `parentToolCallId`.
+      parentToolCallId: "call_census",
       status: "finished",
       messages: [
         {
           id: "subagent-msg-1",
           role: "assistant",
-          parts: [{ type: "text", content: STORED_PART_VALUE }],
+          parts: [
+            { type: "text", content: STORED_PART_VALUE },
+            {
+              type: "tool-call",
+              id: "child_call",
+              name: "use-browser",
+              arguments: JSON.stringify({ query: STORED_PART_VALUE }),
+              state: "complete",
+              input: { query: STORED_PART_VALUE },
+              output: { title: STORED_PART_VALUE },
+            },
+          ],
         },
       ],
     },

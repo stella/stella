@@ -353,10 +353,39 @@ export type ChatMessageContentCandidate = {
 
 type PersistedChatToolPartV3 = PersistedToolCallPart | PersistedToolResultPart;
 
+export type ChatSubagentPart = Extract<ChatPart, { type: "subagent" }>;
+
+/** The fields of a sub-agent run a stored part keeps: every field the SDK
+ *  gives the run's handle except its messages and the client's stop hook. */
+export type PersistedSubagentHandle = Omit<
+  ChatSubagentPart["subagent"],
+  "messages" | "stop"
+>;
+
+/**
+ * One message of a sub-agent run as stored: its parts are encoded exactly as
+ * a chat message's own content, so every rule a stored message follows
+ * (canonical tool encoding, result retention, the part budget) holds for a
+ * child's parts too.
+ */
+export type PersistedSubagentMessage = {
+  content: PersistedChatMessageContentV3;
+  id: string;
+  role: ChatSubagentPart["subagent"]["messages"][number]["role"];
+};
+
+export type PersistedSubagentPart = {
+  subagent: PersistedSubagentHandle & {
+    messages: PersistedSubagentMessage[];
+  };
+  type: "subagent";
+};
+
 export type PersistedChatMessageContentV3 = {
   data: (
     | PersistedChatToolPartV3
-    | Exclude<ChatPart, { type: "tool-call" | "tool-result" }>
+    | PersistedSubagentPart
+    | Exclude<ChatPart, { type: "tool-call" | "tool-result" | "subagent" }>
   )[];
   metadata?: ChatMessageMetadata | undefined;
   readonly [persistedChatMessageContentV3Proof]: true;
