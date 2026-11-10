@@ -2,7 +2,9 @@ import {
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
   INVOICE_LANGUAGES,
 } from "@stll/api-contract";
+import { CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS } from "@stll/api-contract/chat-run-target";
 import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
+import { DESKTOP_RUNNER_APPROVAL_MODES } from "@stll/api-contract/desktop-runner";
 import type { TimeZoneId } from "@stll/time";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -206,6 +208,17 @@ export const organizationSettings = p.pgTable(
       .text("personal_api_key_policy", { enum: PERSONAL_API_KEY_POLICIES })
       .notNull()
       .default("enabled"),
+    /**
+     * The most a chat turn run on a member's computer may do without asking
+     * (`ask < auto < full_auto`). A turn above it is refused when it starts;
+     * a run already going keeps the mode it started with.
+     */
+    localRunMaxApprovalMode: p
+      .text("local_run_max_approval_mode", {
+        enum: DESKTOP_RUNNER_APPROVAL_MODES,
+      })
+      .notNull()
+      .default(CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS),
     /** Default document language for invoices; null derives it from the seller. */
     invoiceLanguage: p.text("invoice_language", { enum: INVOICE_LANGUAGES }),
     sanctionsMonitoringMode: p
@@ -421,6 +434,13 @@ export const organizationSettings = p.pgTable(
       "organization_settings_sanctions_monitoring_mode_check",
       sql`${table.sanctionsMonitoringMode} IN (${sql.join(
         SANCTIONS_MONITORING_MODES.map((mode) => sql`${mode}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "organization_settings_local_run_max_approval_mode_check",
+      sql`${table.localRunMaxApprovalMode} IN (${sql.join(
+        DESKTOP_RUNNER_APPROVAL_MODES.map((mode) => sql`${mode}`),
         sql`, `,
       )})`,
     ),

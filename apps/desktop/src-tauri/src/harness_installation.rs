@@ -1,5 +1,5 @@
-//! Managed agent CLIs: install, cancel, remove, status and the executable a
-//! run starts, per harness.
+//! Managed agent CLIs and tools: install, cancel, remove, status and the
+//! executable a run starts, per harness or tool.
 //!
 //! Approach adapted from t3code's `CodexInstallation` (MIT): a pinned URL,
 //! digest and size; a streamed download with a size cap and a running digest;
@@ -10,19 +10,19 @@
 //! Layout under the app data directory:
 //!
 //! ```text
-//! harness/<harness>/<version>/              one release, `.install-complete.json` inside
-//! harness/<harness>/active.json             {"version", "previous"}
-//! harness/<harness>/.install-<operation>/   staging, removed when the operation ends
-//! harness-home/<harness>/                   CODEX_HOME or CLAUDE_CONFIG_DIR
+//! harness/<id>/<version>/              one release, `.install-complete.json` inside
+//! harness/<id>/active.json             {"version", "previous"}
+//! harness/<id>/.install-<operation>/   staging, removed when the operation ends
+//! harness-home/<harness>/              CODEX_HOME or CLAUDE_CONFIG_DIR; a tool has none
 //! ```
 //!
 //! A new release becomes active only after its probe passes, so a failed or
 //! cancelled install leaves the active release as it was. The pointer keeps
 //! the release it replaced; when the active release is found incomplete, the
 //! pointer rolls back to that previous release. Executables are never placed
-//! on `PATH`: a run starts the absolute path from its lease, with only the
-//! Stella-owned configuration directory, never the user's `~/.codex` or
-//! `~/.claude`.
+//! on the computer's `PATH`: a run starts the absolute path from its lease, with
+//! only the Stella-owned configuration directory, never the user's `~/.codex`
+//! or `~/.claude`, and puts a leased tool on the `PATH` of that one process.
 
 // Leases, state subscriptions and configuration directories are taken by the
 // desktop agent runner; until it lands only the tests take them, and those
@@ -49,8 +49,8 @@ use tokio::{io::AsyncWriteExt, sync::watch};
 
 use crate::harness_archive::{self, UnpackError};
 use crate::harness_release::{
-  ArchiveDigest, HarnessRelease, HarnessReleases, ManagedHarness,
-  is_contained_relative, is_release_version,
+  ArchiveDigest, HarnessRelease, HarnessReleases, ManagedHarness, ManagedInstall,
+  ManagedTool, is_contained_relative, is_release_version,
 };
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
@@ -181,6 +181,7 @@ struct Slot {
 struct Slots {
   codex: Mutex<Slot>,
   claude_code: Mutex<Slot>,
+  bun: Mutex<Slot>,
 }
 
 struct Inner {
@@ -195,18 +196,40 @@ struct Inner {
 #[derive(Clone)]
 pub struct HarnessInstallation(Arc<Inner>);
 
+/// Holds one installed release in place until it drops.
+struct ReleaseHold {
+  inner: Arc<Inner>,
+  managed: ManagedInstall,
+  version: String,
+}
+
 /// Keeps one installed release in place while a process runs from it.
 pub struct HarnessLease {
-  inner: Arc<Inner>,
+  hold: ReleaseHold,
   harness: ManagedHarness,
-  version: String,
   executable: PathBuf,
   config_dir: PathBuf,
 }
 
+/// Keeps one installed tool in place while a process may start it.
+pub struct ToolLease {
+  hold: ReleaseHold,
+  executable: PathBuf,
+}
+
+impl ToolLease {
+  pub fn version(&self) -> &str {
+    &self.hold.version
+  }
+
+  pub fn executable(&self) -> &Path {
+    &self.executable
+  }
+}
+
 impl HarnessLease {
   pub fn version(&self) -> &str {
-    &self.version
+    &self.hold.version
   }
 
   pub fn executable(&self) -> &Path {
@@ -219,9 +242,9 @@ impl HarnessLease {
   }
 }
 
-impl Drop for HarnessLease {
+impl Drop for ReleaseHold {
   fn drop(&mut self) {
-    let mut slot = self.inner.slot(self.harness);
+    let mut slot = self.inner.slot(self.managed);
     let remaining = slot
       .leases
       .get(&self.version)
@@ -273,8 +296,8 @@ impl HarnessInstallation {
         return None;
       }
     };
-    let slot = |harness: ManagedHarness| {
-      let dir = root.join(harness.id());
+    let slot = |managed: ManagedInstall| {
+      let dir = root.join(managed.id());
       remove_staging(&dir);
       Mutex::new(Slot {
         state: watch::channel(disk_state(&dir)).0,
@@ -283,8 +306,9 @@ impl HarnessInstallation {
       })
     };
     let slots = Slots {
-      codex: slot(ManagedHarness::Codex),
-      claude_code: slot(ManagedHarness::ClaudeCode),
+      codex: slot(ManagedHarness::Codex.into()),
+      claude_code: slot(ManagedHarness::ClaudeCode.into()),
+      bun: slot(ManagedTool::Bun.into()),
     };
     Some(Self(Arc::new(Inner {
       slots,
@@ -295,36 +319,37 @@ impl HarnessInstallation {
     })))
   }
 
-  pub fn state(&self, harness: ManagedHarness) -> HarnessInstallState {
-    self.0.slot(harness).state.borrow().clone()
+  pub fn state(&self, managed: impl Into<ManagedInstall>) -> HarnessInstallState {
+    self.0.slot(managed.into()).state.borrow().clone()
   }
 
   pub fn subscribe(
     &self,
-    harness: ManagedHarness,
+    managed: impl Into<ManagedInstall>,
   ) -> watch::Receiver<HarnessInstallState> {
-    self.0.slot(harness).state.subscribe()
+    self.0.slot(managed.into()).state.subscribe()
   }
 
   /// Starts installing the pinned release, or returns the install already
-  /// running for this harness.
+  /// running for it.
   pub fn start(
     &self,
-    harness: ManagedHarness,
+    managed: impl Into<ManagedInstall>,
   ) -> Result<HarnessInstallState, HarnessError> {
+    let managed = managed.into();
     let release = self
       .0
       .releases
-      .get(harness)
+      .get(managed)
       .cloned()
       .ok_or(HarnessError::UnsupportedPlatform)?;
-    let mut slot = self.0.slot(harness);
+    let mut slot = self.0.slot(managed);
     match slot.operation {
       Operation::Idle => {}
       Operation::Installing { .. } => return Ok(slot.state.borrow().clone()),
       Operation::Removing => return Err(HarnessError::Busy),
     }
-    let active = resolve_active(&self.0.harness_dir(harness))
+    let active = resolve_active(&self.0.harness_dir(managed))
       .ok()
       .map(|installed| installed.version);
     if active.as_ref() == Some(&release.version) {
@@ -348,7 +373,7 @@ impl HarnessInstallation {
     };
     drop(slot);
     let inner = Arc::clone(&self.0);
-    tauri::async_runtime::spawn(inner.run(harness, release, id, cancelled));
+    tauri::async_runtime::spawn(inner.run(managed, release, id, cancelled));
     Ok(state)
   }
 
@@ -356,10 +381,10 @@ impl HarnessInstallation {
   /// was active before it.
   pub fn cancel(
     &self,
-    harness: ManagedHarness,
+    managed: impl Into<ManagedInstall>,
     operation_id: &str,
   ) -> Result<HarnessInstallState, HarnessError> {
-    let slot = self.0.slot(harness);
+    let slot = self.0.slot(managed.into());
     let Operation::Installing { id, cancel } = &slot.operation else {
       return Err(HarnessError::NotCurrent);
     };
@@ -373,19 +398,23 @@ impl HarnessInstallation {
   }
 
   pub fn cancel_all(&self) {
-    for harness in ManagedHarness::ALL {
-      let slot = self.0.slot(harness);
+    for managed in ManagedInstall::ALL {
+      let slot = self.0.slot(managed);
       if let Operation::Installing { cancel, .. } = &slot.operation {
         cancel.send_modify(|cancelled| *cancelled = true);
       }
     }
   }
 
-  /// Removes every installed release of the harness. Refused while a process
-  /// holds a lease or an install runs. The configuration directory stays.
-  pub async fn remove(&self, harness: ManagedHarness) -> Result<(), HarnessError> {
+  /// Removes every installed release. Refused while a process holds a lease
+  /// or an install runs. The configuration directory stays.
+  pub async fn remove(
+    &self,
+    managed: impl Into<ManagedInstall>,
+  ) -> Result<(), HarnessError> {
+    let managed = managed.into();
     {
-      let mut slot = self.0.slot(harness);
+      let mut slot = self.0.slot(managed);
       if !matches!(slot.operation, Operation::Idle) {
         return Err(HarnessError::Busy);
       }
@@ -394,9 +423,9 @@ impl HarnessInstallation {
       }
       slot.operation = Operation::Removing;
     }
-    let dir = self.0.harness_dir(harness);
+    let dir = self.0.harness_dir(managed);
     let removed = remove_tree(dir.clone()).await;
-    let mut slot = self.0.slot(harness);
+    let mut slot = self.0.slot(managed);
     slot.operation = Operation::Idle;
     replace_state(&slot, disk_state(&dir));
     drop(slot);
@@ -408,24 +437,25 @@ impl HarnessInstallation {
 
   /// Marks a removal of the harness as running until the guard drops.
   #[cfg(test)]
-  pub(crate) fn removing(&self, harness: ManagedHarness) -> impl Drop {
-    struct Removing(Arc<Inner>, ManagedHarness);
+  pub(crate) fn removing(&self, managed: impl Into<ManagedInstall>) -> impl Drop {
+    struct Removing(Arc<Inner>, ManagedInstall);
     impl Drop for Removing {
       fn drop(&mut self) {
         self.0.slot(self.1).operation = Operation::Idle;
       }
     }
-    let mut slot = self.0.slot(harness);
+    let managed = managed.into();
+    let mut slot = self.0.slot(managed);
     assert!(matches!(slot.operation, Operation::Idle));
     slot.operation = Operation::Removing;
     drop(slot);
-    Removing(Arc::clone(&self.0), harness)
+    Removing(Arc::clone(&self.0), managed)
   }
 
   /// Removes the harness's own sign-in from its Stella-owned configuration
   /// directory, leaving its settings and sessions in place.
   pub fn remove_sign_in(&self, harness: ManagedHarness) -> std::io::Result<()> {
-    let dir = self.0.config_dir(harness);
+    let dir = self.0.config_dir(harness.into());
     for name in sign_in_files(harness) {
       match std::fs::remove_file(dir.join(name)) {
         Ok(()) => {}
@@ -439,18 +469,37 @@ impl HarnessInstallation {
   /// The active release's executable, held in place until the lease drops.
   /// An incomplete active release rolls the pointer back to the previous one.
   pub fn acquire(&self, harness: ManagedHarness) -> Result<HarnessLease, HarnessError> {
-    let config_dir = self.0.config_dir(harness);
+    let config_dir = self.0.config_dir(harness.into());
     crate::local_store::create_private_dir(&config_dir).map_err(
       crate::logging::replaced_logged(
         "managed harness configuration directory was not created",
         HarnessError::Storage,
       ),
     )?;
-    let mut slot = self.0.slot(harness);
+    let (hold, executable) = self.hold_active(harness.into())?;
+    Ok(HarnessLease {
+      hold,
+      harness,
+      executable,
+      config_dir,
+    })
+  }
+
+  /// The active release of a tool, held in place until the lease drops.
+  pub fn acquire_tool(&self, tool: ManagedTool) -> Result<ToolLease, HarnessError> {
+    let (hold, executable) = self.hold_active(tool.into())?;
+    Ok(ToolLease { hold, executable })
+  }
+
+  fn hold_active(
+    &self,
+    managed: ManagedInstall,
+  ) -> Result<(ReleaseHold, PathBuf), HarnessError> {
+    let mut slot = self.0.slot(managed);
     if matches!(slot.operation, Operation::Removing) {
       return Err(HarnessError::Busy);
     }
-    let installed = resolve_active(&self.0.harness_dir(harness))?;
+    let installed = resolve_active(&self.0.harness_dir(managed))?;
     let count = slot
       .leases
       .get(&installed.version)
@@ -463,13 +512,14 @@ impl HarnessInstallation {
       );
     }
     drop(slot);
-    Ok(HarnessLease {
-      inner: Arc::clone(&self.0),
-      harness,
-      version: installed.version,
-      executable: installed.executable,
-      config_dir,
-    })
+    Ok((
+      ReleaseHold {
+        inner: Arc::clone(&self.0),
+        managed,
+        version: installed.version,
+      },
+      installed.executable,
+    ))
   }
 }
 
@@ -483,39 +533,40 @@ fn sign_in_files(harness: ManagedHarness) -> &'static [&'static str] {
 }
 
 impl Inner {
-  fn slot(&self, harness: ManagedHarness) -> MutexGuard<'_, Slot> {
-    let slot = match harness {
-      ManagedHarness::Codex => &self.slots.codex,
-      ManagedHarness::ClaudeCode => &self.slots.claude_code,
+  fn slot(&self, managed: ManagedInstall) -> MutexGuard<'_, Slot> {
+    let slot = match managed {
+      ManagedInstall::Harness(ManagedHarness::Codex) => &self.slots.codex,
+      ManagedInstall::Harness(ManagedHarness::ClaudeCode) => &self.slots.claude_code,
+      ManagedInstall::Tool(ManagedTool::Bun) => &self.slots.bun,
     };
     slot.lock().unwrap_or_else(PoisonError::into_inner)
   }
 
-  fn harness_dir(&self, harness: ManagedHarness) -> PathBuf {
-    self.root.join(harness.id())
+  fn harness_dir(&self, managed: ManagedInstall) -> PathBuf {
+    self.root.join(managed.id())
   }
 
   /// The Stella-owned directory the CLI's configuration variable names.
-  fn config_dir(&self, harness: ManagedHarness) -> PathBuf {
-    self.config_root.join(harness.id())
+  fn config_dir(&self, managed: ManagedInstall) -> PathBuf {
+    self.config_root.join(managed.id())
   }
 
   async fn run(
     self: Arc<Self>,
-    harness: ManagedHarness,
+    managed: ManagedInstall,
     release: HarnessRelease,
     id: String,
     cancelled: watch::Receiver<bool>,
   ) {
-    let dir = self.harness_dir(harness);
+    let dir = self.harness_dir(managed);
     let staging = dir.join(format!("{STAGING_PREFIX}{id}"));
     let outcome = self
-      .install(harness, &release, &id, &staging, cancelled)
+      .install(managed, &release, &id, &staging, cancelled)
       .await;
     if let Err(error) = remove_tree(staging).await {
       crate::logging::log_cause(&error, "managed harness staging was not removed");
     }
-    let mut slot = self.slot(harness);
+    let mut slot = self.slot(managed);
     slot.operation = Operation::Idle;
     let active = resolve_active(&dir).ok().map(|installed| installed.version);
     let state = match outcome {
@@ -528,13 +579,13 @@ impl Inner {
 
   async fn install(
     &self,
-    harness: ManagedHarness,
+    managed: ManagedInstall,
     release: &HarnessRelease,
     id: &str,
     staging: &Path,
     mut cancelled: watch::Receiver<bool>,
   ) -> Result<(), Stop> {
-    let dir = self.harness_dir(harness);
+    let dir = self.harness_dir(managed);
     crate::local_store::create_private_dir(&dir)
       .map_err(failed_storage("managed harness directory was not created"))?;
     crate::local_store::create_private_dir_new(staging)
@@ -542,20 +593,20 @@ impl Inner {
     let destination = dir.join(&release.version);
     if tokio::fs::symlink_metadata(&destination).await.is_ok() {
       if let Some(executable) = matching_release(&dir, release) {
-        self.verifying(harness, id);
+        self.verifying(managed, id);
         probe(
-          harness,
+          managed,
           &executable,
           &release.version,
           staging,
           &mut cancelled,
         )
         .await?;
-        return self.activate(harness, &release.version).await;
+        return self.activate(managed, &release.version).await;
       }
       // An incomplete or different release under the pinned version's name;
       // a running process cannot hold it, because leases need a valid record.
-      if self.slot(harness).leases.contains_key(&release.version) {
+      if self.slot(managed).leases.contains_key(&release.version) {
         return Err(Stop::Failed(InstallFailure::Storage));
       }
       remove_tree(destination.clone())
@@ -567,9 +618,9 @@ impl Inner {
 
     let archive = staging.join("download");
     self
-      .download(harness, id, release, &archive, &mut cancelled)
+      .download(managed, id, release, &archive, &mut cancelled)
       .await?;
-    self.verifying(harness, id);
+    self.verifying(managed, id);
     let runtime = staging.join("runtime");
     crate::local_store::create_private_dir_new(&runtime)
       .map_err(failed_storage("managed harness runtime was not created"))?;
@@ -599,7 +650,7 @@ impl Inner {
       return Err(Stop::Failed(InstallFailure::ArchiveRejected));
     }
     probe(
-      harness,
+      managed,
       &executable,
       &release.version,
       staging,
@@ -626,12 +677,12 @@ impl Inner {
     publish(&runtime, &destination)
       .await
       .map_err(failed_storage("managed harness release was not published"))?;
-    self.activate(harness, &release.version).await
+    self.activate(managed, &release.version).await
   }
 
   async fn download(
     &self,
-    harness: ManagedHarness,
+    managed: ManagedInstall,
     id: &str,
     release: &HarnessRelease,
     archive: &Path,
@@ -690,7 +741,7 @@ impl Inner {
         .map_err(failed_storage("managed harness download was not written"))?;
       if reported.is_none_or(|at| at.elapsed() >= PROGRESS_INTERVAL) {
         reported = Some(tokio::time::Instant::now());
-        self.progress(harness, id, downloaded);
+        self.progress(managed, id, downloaded);
       }
     }
     file
@@ -701,7 +752,7 @@ impl Inner {
       .sync_all()
       .await
       .map_err(failed_storage("managed harness download was not flushed"))?;
-    self.progress(harness, id, downloaded);
+    self.progress(managed, id, downloaded);
     if downloaded != asset.archive_bytes {
       return Err(Stop::Failed(InstallFailure::Incomplete));
     }
@@ -712,9 +763,9 @@ impl Inner {
     Ok(())
   }
 
-  fn progress(&self, harness: ManagedHarness, id: &str, downloaded: u64) {
+  fn progress(&self, managed: ManagedInstall, id: &str, downloaded: u64) {
     self
-      .slot(harness)
+      .slot(managed)
       .state
       .send_if_modified(|state| match state {
         HarnessInstallState::Downloading {
@@ -729,9 +780,9 @@ impl Inner {
       });
   }
 
-  fn verifying(&self, harness: ManagedHarness, id: &str) {
+  fn verifying(&self, managed: ManagedInstall, id: &str) {
     self
-      .slot(harness)
+      .slot(managed)
       .state
       .send_if_modified(|state| match state {
         HarnessInstallState::Downloading {
@@ -754,15 +805,17 @@ impl Inner {
 
   /// Points new runs at `version`, keeping the release it replaces, and
   /// removes every other release no lease holds.
-  async fn activate(&self, harness: ManagedHarness, version: &str) -> Result<(), Stop> {
-    // An active release always has its configuration directory: without it
+  async fn activate(&self, managed: ManagedInstall, version: &str) -> Result<(), Stop> {
+    // An active harness always has its configuration directory: without it
     // the CLI cannot start with the directory its variable names.
-    crate::local_store::create_private_dir(&self.config_dir(harness)).map_err(
-      failed_storage("managed harness configuration directory was not created"),
-    )?;
-    let dir = self.harness_dir(harness);
+    if managed.config_env().is_some() {
+      crate::local_store::create_private_dir(&self.config_dir(managed)).map_err(
+        failed_storage("managed harness configuration directory was not created"),
+      )?;
+    }
+    let dir = self.harness_dir(managed);
     let stale = {
-      let slot = self.slot(harness);
+      let slot = self.slot(managed);
       let previous = resolve_active(&dir)
         .ok()
         .map(|installed| installed.version)
@@ -1017,7 +1070,7 @@ fn is_nonempty_file(path: &Path) -> bool {
 /// directory, so the probe can neither reach the network nor read the
 /// user's own configuration.
 fn probe_command(
-  harness: ManagedHarness,
+  managed: ManagedInstall,
   executable: &Path,
   home: &Path,
 ) -> tokio::process::Command {
@@ -1027,13 +1080,15 @@ fn probe_command(
     .env_clear()
     .env("HOME", home)
     .env("TMPDIR", home)
-    .env(harness.config_env(), home)
-    .envs(harness.probe_env().iter().copied())
+    .envs(managed.probe_env().iter().copied())
     .current_dir(home)
     .stdin(Stdio::null())
     .stdout(Stdio::piped())
     .stderr(Stdio::null())
     .kill_on_drop(true);
+  if let Some(variable) = managed.config_env() {
+    command.env(variable, home);
+  }
   #[cfg(windows)]
   {
     command
@@ -1051,7 +1106,7 @@ fn probe_command(
 }
 
 async fn probe(
-  harness: ManagedHarness,
+  managed: ManagedInstall,
   executable: &Path,
   version: &str,
   staging: &Path,
@@ -1060,7 +1115,7 @@ async fn probe(
   let home = staging.join("probe-home");
   crate::local_store::create_private_dir(&home)
     .map_err(failed_storage("managed harness probe home was not created"))?;
-  let mut command = probe_command(harness, executable, &home);
+  let mut command = probe_command(managed, executable, &home);
   let output = until_cancelled(
     cancelled,
     tokio::time::timeout(PROBE_TIMEOUT, probe_output(&mut command)),
@@ -1075,7 +1130,7 @@ async fn probe(
     Stop::Failed(InstallFailure::ProbeFailed)
   })?;
   if output.status.success()
-    && harness.reports_version(&String::from_utf8_lossy(&output.stdout), version)
+    && managed.reports_version(&String::from_utf8_lossy(&output.stdout), version)
   {
     return Ok(());
   }
@@ -1372,6 +1427,7 @@ pub(crate) mod tests {
       HarnessReleases {
         codex: Some(codex),
         claude_code: None,
+        bun: None,
       },
     )
     .unwrap()
@@ -1446,6 +1502,115 @@ pub(crate) mod tests {
       .build()
       .unwrap()
       .block_on(test());
+  }
+
+  /// A Bun-shaped archive whose executable prints `reported`, and only with no
+  /// configuration directory set: a tool has none.
+  fn bun_archive(reported: &str) -> Vec<u8> {
+    let script = format!(
+      "#!/bin/sh\n\
+       [ -z \"$CODEX_HOME$CLAUDE_CONFIG_DIR\" ] || exit 4\n\
+       echo \"{reported}\"\n"
+    );
+    archive(&[
+      FixtureEntry::Directory("bin/"),
+      FixtureEntry::File {
+        path: "bin/bun",
+        contents: script.as_bytes(),
+        mode: 0o755,
+      },
+    ])
+  }
+
+  fn open_with_bun(dir: &TempDir, bun: HarnessRelease) -> HarnessInstallation {
+    HarnessInstallation::open(
+      dir.path().join("harness"),
+      dir.path().join("harness-home"),
+      HarnessReleases {
+        codex: None,
+        claude_code: None,
+        bun: Some(bun),
+      },
+    )
+    .unwrap()
+  }
+
+  async fn settle_tool(installation: &HarnessInstallation) -> HarnessInstallState {
+    let mut changes = installation.subscribe(ManagedTool::Bun);
+    tokio::time::timeout(
+      Duration::from_secs(30),
+      changes.wait_for(|state| !state.is_running()),
+    )
+    .await
+    .expect("the install settles")
+    .unwrap()
+    .clone()
+  }
+
+  #[test]
+  fn a_tool_installs_and_leases_without_a_configuration_directory() {
+    run(|| async {
+      let bytes = bun_archive("1.4.4");
+      let fixture = serve(vec![("/bun.tgz", Serve::Bytes(bytes.clone()))]).await;
+      let dir = TempDir::new();
+      let installation = open_with_bun(
+        &dir,
+        release_of("bin/bun", "1.4.4", fixture.url("/bun.tgz"), &bytes),
+      );
+      assert_eq!(
+        installation.acquire_tool(ManagedTool::Bun).err(),
+        Some(HarnessError::NotInstalled)
+      );
+
+      installation.start(ManagedTool::Bun).unwrap();
+
+      assert_eq!(settle_tool(&installation).await, ready("1.4.4"));
+      let lease = installation.acquire_tool(ManagedTool::Bun).unwrap();
+      assert_eq!(lease.version(), "1.4.4");
+      assert_eq!(
+        lease.executable(),
+        dir.path().join("harness/bun/1.4.4/bin/bun")
+      );
+      assert!(
+        !dir.path().join("harness-home").exists(),
+        "a tool has no configuration directory"
+      );
+      assert_eq!(
+        installation.remove(ManagedTool::Bun).await,
+        Err(HarnessError::InUse),
+        "a run's lease keeps the tool in place"
+      );
+      drop(lease);
+      installation.remove(ManagedTool::Bun).await.unwrap();
+      assert_eq!(
+        installation.state(ManagedTool::Bun),
+        HarnessInstallState::NotInstalled
+      );
+    });
+  }
+
+  #[test]
+  fn a_tool_reporting_another_version_is_not_activated() {
+    run(|| async {
+      let bytes = bun_archive("9.9.9");
+      let fixture = serve(vec![("/bun.tgz", Serve::Bytes(bytes.clone()))]).await;
+      let dir = TempDir::new();
+      let installation = open_with_bun(
+        &dir,
+        release_of("bin/bun", "1.4.4", fixture.url("/bun.tgz"), &bytes),
+      );
+
+      installation.start(ManagedTool::Bun).unwrap();
+
+      assert_eq!(
+        settle_tool(&installation).await,
+        failed(InstallFailure::ProbeFailed, None)
+      );
+      assert_eq!(
+        installation.acquire_tool(ManagedTool::Bun).err(),
+        Some(HarnessError::NotInstalled)
+      );
+    });
   }
 
   #[test]
@@ -1805,7 +1970,7 @@ pub(crate) mod tests {
         stage(&dir, version);
         let activated = installation
           .0
-          .activate(ManagedHarness::Codex, version)
+          .activate(ManagedHarness::Codex.into(), version)
           .await;
         assert!(activated.is_ok());
       }
@@ -1823,7 +1988,7 @@ pub(crate) mod tests {
       stage(&dir, "4.0.0");
       let activated = installation
         .0
-        .activate(ManagedHarness::Codex, "4.0.0")
+        .activate(ManagedHarness::Codex.into(), "4.0.0")
         .await;
       assert!(activated.is_ok());
       assert_eq!(
@@ -1919,6 +2084,7 @@ pub(crate) mod tests {
       HarnessReleases {
         codex: None,
         claude_code: None,
+        bun: None,
       },
     )
     .unwrap();
@@ -1938,6 +2104,7 @@ pub(crate) mod tests {
       HarnessReleases {
         codex: None,
         claude_code: None,
+        bun: None,
       },
     )
     .unwrap();
@@ -1956,7 +2123,7 @@ pub(crate) mod tests {
     let home = Path::new("/private/probe-home");
     let expected_home = Some(home.to_str().unwrap().to_string());
     for harness in ManagedHarness::ALL {
-      let command = probe_command(harness, Path::new("/opt/tool"), home);
+      let command = probe_command(harness.into(), Path::new("/opt/tool"), home);
       let command = command.as_std();
       assert_eq!(command.get_args().collect::<Vec<_>>(), ["--version"]);
       let envs = command

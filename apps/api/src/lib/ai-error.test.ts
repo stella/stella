@@ -171,6 +171,25 @@ describe("classifyAIError", () => {
     expect(classifyAIError(apiCallError(404))).toBe("model_unavailable");
   });
 
+  test("maps a provider 403 naming the model to model_unavailable", () => {
+    const body = { code: "model_not_found", type: "invalid_request_error" };
+
+    expect(classifyAIError({ status: 403, error: body })).toBe(
+      "model_unavailable",
+    );
+    expect(
+      classifyAIError(
+        new Error(`got status: 403. ${JSON.stringify({ error: body })}`),
+      ),
+    ).toBe("model_unavailable");
+    expect(
+      classifyAIError({
+        status: 403,
+        error: { code: "access_denied", type: "invalid_request_error" },
+      }),
+    ).toBe("unknown");
+  });
+
   test("finds a model-not-found 404 through wrapped causes", () => {
     const error = new Error("generation failed", {
       cause: apiCallError(404),

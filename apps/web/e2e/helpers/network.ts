@@ -281,6 +281,48 @@ const reconcileNetworkRecords = ({
   return capturedRecords;
 };
 
+export type ApiActivityWatcher = {
+  waitForQuiet: (options: NetworkQuietOptions) => Promise<"idle" | "timeout">;
+  detach: () => void;
+};
+
+/**
+ * Tracks API activity from Playwright page events alone, so it works in every
+ * browser engine. The collector's byte measurement needs Chromium's protocol;
+ * suites that only wait for the page to settle use this instead.
+ */
+export const watchApiActivity = (
+  page: Page,
+  apiOrigin = new URL(DEFAULT_API_URL).origin,
+): ApiActivityWatcher => {
+  let lastActivityAt = Date.now();
+  const onRequest = (request: Request) => {
+    if (isTrackedApiRequest(request, apiOrigin)) {
+      lastActivityAt = Date.now();
+    }
+  };
+  const onResponse = (response: Response) => {
+    onRequest(response.request());
+  };
+  page.on("request", onRequest);
+  page.on("response", onResponse);
+  page.on("requestfinished", onRequest);
+  page.on("requestfailed", onRequest);
+  return {
+    waitForQuiet: async (quietOptions) =>
+      await waitForQuietPeriod({
+        ...quietOptions,
+        getLastActivityAt: () => lastActivityAt,
+      }),
+    detach: () => {
+      page.off("request", onRequest);
+      page.off("response", onResponse);
+      page.off("requestfinished", onRequest);
+      page.off("requestfailed", onRequest);
+    },
+  };
+};
+
 export const createNetworkCollector = (
   collectorOptions: NetworkCollectorOptions = {},
 ): NetworkCollector => {

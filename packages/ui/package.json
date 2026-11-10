@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.66.0",
+  "version": "0.68.0",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -297,8 +297,8 @@
     "test:browser": "playwright test --config playwright.config.ts",
     "pack:check": "cd ../.. && bun scripts/check-published-exports.ts packages/ui",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/ui",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ui",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/ui",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/ui",
     "prepack": "bun run build"
   },
   "dependencies": {

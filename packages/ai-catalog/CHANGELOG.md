@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.11.0
+
+### Minor Changes
+
+- [#8036](https://github.com/stella/stella/pull/8036) [`a673b9c`](https://github.com/stella/stella/commit/a673b9ce9ae19be276457c14a29969f176e3daba) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer GPT-6.1 Terra. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
 ## 0.10.1
 
 ### Patch Changes

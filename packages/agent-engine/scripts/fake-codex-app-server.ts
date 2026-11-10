@@ -16,7 +16,9 @@ import {
  * A stand-in for `codex app-server` that replays a handwritten transcript
  * over real stdio, so the adapter's process, framing and protocol handling
  * run unmodified in tests without a model provider. Every message it
- * receives is appended to `$FAKE_HARNESS_LOG` for the test to inspect.
+ * receives is appended to `$FAKE_HARNESS_LOG` for the test to inspect, and a
+ * `turn/start` whose input the real server or its model would refuse ends it
+ * with code 96.
  *
  * Usage: `bun scripts/fake-codex-app-server.ts <scenario>`.
  */
@@ -122,6 +124,16 @@ const command = (id: string, status: string, extra: object = {}) => ({
   exitCode: null,
   ...extra,
 });
+
+/** Text a native step carries that chat must never show. */
+export const FAKE_PRIVATE_TEXT = {
+  heredoc: "Tenant owes 4,200 in arrears.",
+  diff: "-Rent is due monthly.\n+Rent is due quarterly.",
+  explanation: "Working through the private plan",
+} as const;
+
+/** A command longer than chat shows. */
+export const FAKE_LONG_COMMAND = `echo ${"y".repeat(400)}`;
 
 /** A connector tool: any MCP server other than the stella binding. */
 export const FAKE_MCP_CALL = {
@@ -321,6 +333,80 @@ const FAKE_SCENARIOS = {
       },
       error: null,
     }),
+    completed(),
+  ],
+  /**
+   * Native steps chat names beyond their kind, as the app server reports
+   * them: the fields stella shows sit next to text it must never forward.
+   */
+  native_tools: [
+    ...freshTurn(),
+    {
+      notify: "turn/plan/updated",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        explanation: FAKE_PRIVATE_TEXT.explanation,
+        plan: [
+          { step: "Read the lease", status: "completed" },
+          { step: "Draft the notice", status: "inProgress" },
+        ],
+      },
+    },
+    item(
+      "completed",
+      command("call-heredoc", "failed", {
+        command: `/bin/zsh -lc "cat > notes.md <<'EOF'\n${FAKE_PRIVATE_TEXT.heredoc}\nEOF"`,
+        aggregatedOutput: "zsh: permission denied",
+        exitCode: 1,
+      }),
+    ),
+    item(
+      "completed",
+      command("call-long", "completed", {
+        command: FAKE_LONG_COMMAND,
+        aggregatedOutput: "ok",
+        exitCode: 0,
+      }),
+    ),
+    item("completed", {
+      type: "fileChange",
+      id: "call-edit",
+      changes: [
+        {
+          path: "/workspace/drafts/lease.md",
+          kind: { type: "update", move_path: null },
+          diff: FAKE_PRIVATE_TEXT.diff,
+        },
+        {
+          path: "/workspace/drafts/notice.md",
+          kind: { type: "add" },
+          diff: FAKE_PRIVATE_TEXT.diff,
+        },
+      ],
+      status: "completed",
+    }),
+    {
+      notify: "turn/plan/updated",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        explanation: null,
+        plan: [
+          { step: "Read the lease", status: "completed" },
+          { step: "Draft the notice", status: "completed" },
+        ],
+      },
+    },
+    // Another turn's plan is not this turn's step.
+    {
+      notify: "turn/plan/updated",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: "turn-other",
+        plan: [{ step: "Elsewhere", status: "pending" }],
+      },
+    },
     completed(),
   ],
   /** Reasoning, an MCP tool call, a command and a streamed answer. */
@@ -806,6 +892,28 @@ const FAKE_SCENARIOS = {
   ],
 } as const satisfies Record<string, readonly FakeStep[]>;
 
+/** A text-only model, beside `gpt-test`, which reads images too. */
+export const FAKE_TEXT_ONLY_MODEL = "gpt-text";
+
+/** What `model/list` answers when a scenario does not script it. */
+const TURN_MODELS = {
+  data: [
+    ["gpt-test", ["text", "image"]],
+    [FAKE_TEXT_ONLY_MODEL, ["text"]],
+  ].map(([id, inputModalities]) => ({
+    id,
+    model: id,
+    displayName: id,
+    description: "",
+    hidden: false,
+    isDefault: id === "gpt-test",
+    supportedReasoningEfforts: [],
+    defaultReasoningEffort: "medium",
+    inputModalities,
+  })),
+  nextCursor: null,
+};
+
 export type FakeScenario = keyof typeof FAKE_SCENARIOS;
 
 const isScenario = (name: string): name is FakeScenario =>
@@ -814,6 +922,33 @@ const isScenario = (name: string): name is FakeScenario =>
 const IncomingSchema = v.looseObject({
   id: v.optional(v.union([v.string(), v.number()])),
   method: v.optional(v.string()),
+});
+
+/**
+ * `turn/start` as the app-server's `TurnStartParams` and `UserInput` define
+ * them. An image is a data URL in a format the models read.
+ */
+const TurnStartParamsSchema = v.looseObject({
+  threadId: v.string(),
+  input: v.array(
+    v.variant("type", [
+      v.strictObject({
+        type: v.literal("text"),
+        text: v.string(),
+        text_elements: v.optional(v.array(v.unknown())),
+      }),
+      v.strictObject({
+        type: v.literal("image"),
+        url: v.pipe(
+          v.string(),
+          v.regex(
+            /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/u,
+          ),
+        ),
+      }),
+      v.strictObject({ type: v.literal("localImage"), path: v.string() }),
+    ]),
+  ),
 });
 
 /** Start `argv` the way `placement` says; its pid. */
@@ -933,6 +1068,9 @@ const run = async (
   });
 
   const skills = skillDiscovery();
+  /** Model listing and skill discovery answer whenever they are asked. */
+  const unscriptedAnswer = (method: string | undefined, params: unknown) =>
+    method === "model/list" ? TURN_MODELS : skills.answer(method, params);
   /** The next request a step scripts; skill discovery answers the rest. */
   const nextRequest = async (expected: string) => {
     for (;;) {
@@ -941,7 +1079,7 @@ const run = async (
       const answer =
         message === null || message.method === expected
           ? null
-          : skills.answer(message.method, message["params"]);
+          : unscriptedAnswer(message.method, message["params"]);
       if (answer === null) {
         return message;
       }
@@ -958,6 +1096,13 @@ const run = async (
       if (message.method !== step.expect) {
         log({ unexpected: message.method, wanted: step.expect });
         process.exit(97);
+      }
+      if (
+        message.method === "turn/start" &&
+        !v.is(TurnStartParamsSchema, message["params"])
+      ) {
+        log({ refusedInput: "turn/start" });
+        process.exit(96);
       }
       write(
         step.error === undefined
@@ -1008,6 +1153,7 @@ if (import.meta.main) {
       pid: process.pid,
       /** What follows the scenario: the launch's own arguments. */
       args: process.argv.slice(3),
+      path: process.env["PATH"],
       /** Where the turn points package managers' caches. */
       packageCache: Object.fromEntries(
         Object.entries(process.env).filter(([name]) =>

@@ -19,6 +19,7 @@ import { bilingualTranslationsRoute } from "@/api/handlers/bilingual-translation
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { catalogueRoute } from "@/api/handlers/catalogue/routes";
+import { chatMcpAppsRoute } from "@/api/handlers/chat/mcp-apps/routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
 import { chatRunOutputsRoute } from "@/api/handlers/chat/run-outputs/routes";
 import {
@@ -90,6 +91,7 @@ import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { signalsRoute } from "@/api/handlers/signals/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
+import { softLawRoute } from "@/api/handlers/soft-law/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { syntheticRoute } from "@/api/handlers/synthetic/routes";
 import { myTasksRoute, tasksRoute } from "@/api/handlers/tasks/routes";
@@ -258,6 +260,7 @@ export const apiRoutes = mount([
       contactsRoute,
       legislationRoute,
       legislationCorpusRoute,
+      softLawRoute,
       publicLegislationRoute,
       publicSanctionsRoute,
       mobileUpdatesRoute,
@@ -271,6 +274,7 @@ export const apiRoutes = mount([
       legalReaderRoute,
       legalResolveRoute,
       chatRoute,
+      chatMcpAppsRoute,
       chatRunOutputsRoute,
       dictationRoute,
       userFilesRoute,

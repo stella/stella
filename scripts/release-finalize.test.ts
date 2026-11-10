@@ -24,6 +24,22 @@ for (const context of ["staging/verified", "main/heavy", "main/pr-depth"]) {
   }
 }
 
+for (const workflow of ["deploy-staging.yml", "main-heavy.yml"]) {
+  test(`a still running ${workflow} proof defers finalization without writes`, () => {
+    const proof = finalize({
+      states: { "staging/verified": "pending", "main/heavy": "missing" },
+      runningProofs: [workflow],
+    });
+    expect(proof.result.exitCode, proof.result.stderr.toString()).toBe(0);
+    expect(proof.result.stderr.toString()).toContain(
+      `waits for the running ${workflow} proof`,
+    );
+    expect(proof.finalSha).toBeNull();
+    expect(proof.pushes).toBe("");
+    expect(proof.publications).toBe("");
+  });
+}
+
 test("green receipts for another SHA create no final tag", () => {
   const proof = finalize({ runSha: "f".repeat(40) });
   expect(proof.result.exitCode).not.toBe(0);

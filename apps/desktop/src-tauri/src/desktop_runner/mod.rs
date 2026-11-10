@@ -44,7 +44,7 @@ use self::sidecar_host::{
 };
 pub(crate) use self::state::RunnerState;
 use crate::harness_installation::HarnessInstallation;
-use crate::harness_release::ManagedHarness;
+use crate::harness_release::{ManagedHarness, ManagedTool};
 use crate::harness_sidecar::{
   HarnessLaunchSettings, ReconnectBackoff, SidecarLaunch, SidecarSettings,
   SkillFolderRef,
@@ -395,11 +395,22 @@ impl LocalHarnesses for ManagedHarnesses {
     let installation = self.app.try_state::<HarnessInstallation>()?;
     let lease = installation.acquire(managed).ok()?;
     let (_variable, config_dir) = lease.config_env();
+    let version = lease.version().to_owned();
+    let executable = lease.executable().to_path_buf();
+    let config_dir = config_dir.to_path_buf();
+    // A run still starts on a computer whose Bun is not installed yet; its
+    // commands then find whatever the computer has.
+    let bun = installation.acquire_tool(ManagedTool::Bun).ok();
+    let tool_path = bun
+      .iter()
+      .filter_map(|bun| bun.executable().parent().map(std::path::PathBuf::from))
+      .collect();
     Some(InstalledHarness {
-      version: lease.version().to_owned(),
-      executable: lease.executable().to_path_buf(),
-      config_dir: config_dir.to_path_buf(),
-      lease: Box::new(lease),
+      version,
+      executable,
+      config_dir,
+      tool_path,
+      lease: Box::new((lease, bun)),
     })
   }
 

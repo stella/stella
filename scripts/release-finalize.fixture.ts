@@ -75,6 +75,8 @@ type ProofFixture = {
     | "fork-alongside"
     | "closed";
   mergeFails?: boolean;
+  /** Proof workflows with a dispatched run of the candidate still running. */
+  runningProofs?: readonly string[];
 };
 const pullState = (pull: ProofFixture["pull"]) => {
   if (pull === "merged") {
@@ -158,6 +160,20 @@ const writeRunFixtures = (root: string, fixture: ProofFixture, sha: string) => {
       },
     ]),
   );
+  for (const [, workflow, title] of contexts) {
+    const running = fixture.runningProofs?.includes(workflow) ?? false;
+    writeFileSync(
+      path.join(root, `workflow-runs-${workflow}.json`),
+      JSON.stringify({
+        workflow_runs: [
+          {
+            display_title: `${title}${sha}`,
+            status: running ? "in_progress" : "completed",
+          },
+        ],
+      }),
+    );
+  }
 };
 
 export const finalize = (fixture: ProofFixture = {}) => {
@@ -218,6 +234,7 @@ case "$*" in
     ${fixture.mergeFails || fixture.pull === "queued" ? 'echo "merge failed" >&2; exit 1' : 'printf \'%s\\n\' "$*" >> "$TEST_ROOT/merges"'} ;;
   'release view '*) printf '%s\\n' '${fixture.rcPublication !== "published"}' ;;
   *statuses?*) cat "$TEST_ROOT/statuses.json" ;;
+  *actions/workflows/*/runs?*) args="$*"; workflow="\u0024{args#*actions/workflows/}"; cat "$TEST_ROOT/workflow-runs-\u0024{workflow%%/*}.json" ;;
   *actions/runs/*/jobs?*) cat "$TEST_ROOT/jobs.json" ;;
   *actions/runs/*) run="\u0024{!#}"; cat "$TEST_ROOT/run-\u0024{run##*/}.json" ;;
   *issues?*) cat "$TEST_ROOT/incidents.json" ;;

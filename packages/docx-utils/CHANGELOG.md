@@ -1,5 +1,11 @@
 # @stll/docx-utils
 
+## 0.3.0
+
+### Minor Changes
+
+- [#7331](https://github.com/stella/stella/pull/7331) [`f0709d0`](https://github.com/stella/stella/commit/f0709d04e3894fdf4ee752a82463ce577eeb65d6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use docx-core ZIP for shared bounded archive loading. Remove the JSZip-specific extraction, repacking and entry-writing helpers.
+
 ## 0.2.0
 
 ### Minor Changes

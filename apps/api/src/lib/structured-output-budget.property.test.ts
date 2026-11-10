@@ -76,6 +76,7 @@ const propertyForKind = (
 ): AIBatchProperty => ({
   id: toSafeId<"property">(`property_${index}`),
   status: "stale",
+  answerShape: "value",
   content: contentForKind(kind),
   dependencies: [],
   tool: {
