@@ -167,7 +167,7 @@ export const AnchorFactsPanel = ({
               onFilterChange={setFilter}
             />
           </ListGroupHeading>
-          <ListGroupAction className="flex-wrap">
+          <ListGroupAction className="max-w-full flex-wrap">
             {canCreate && (
               <Button
                 disabled={extractionBusy}

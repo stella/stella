@@ -11,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { Badge } from "@stll/ui/badge";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -26,6 +27,7 @@ import {
 } from "@stll/ui/dialog";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
+import { XIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import {
   List,
@@ -257,7 +259,10 @@ type DocumentChoicesProps = {
   onToggle: (entityId: string) => void;
 };
 
-/** The matter's readable documents as rows: type, name, size; chosen first. */
+/**
+ * The chosen documents as removable chips that never scroll away, over the
+ * matter's readable documents as rows (type, name, size) in a stable order.
+ */
 const DocumentChoices = ({
   workspaceId,
   picked,
@@ -273,46 +278,76 @@ const DocumentChoices = ({
     return <QueryViewFeedback view={filesView} />;
   }
   const files = filesView.type === "items" ? filesView.items : [];
-  const documents = pickableDocuments(files, picked, search);
+  const documents = pickableDocuments(files, search);
+  const chosen = picked.flatMap((entityId) => {
+    const file = files.find((entry) => entry.entityId === entityId);
+    return file === undefined ? [] : [file];
+  });
   const full = picked.length >= FACT_EXTRACTION_DOCUMENTS_MAX;
   return (
-    <div className="overflow-hidden rounded-xl border">
-      <ScrollArea axis="vertical" className="h-64">
-        <ul className="divide-y">
-          {documents.length === 0 && (
-            <ListEmpty>{t("common.noResults")}</ListEmpty>
-          )}
-          {documents.map((document) => {
-            const checked = picked.includes(document.entityId);
-            return (
-              <li className="px-2" key={document.entityId}>
-                <Label variant="choice">
-                  <Checkbox
-                    checked={checked}
-                    disabled={disabled || (!checked && full)}
-                    onCheckedChange={() => onToggle(document.entityId)}
-                  />
-                  <ListItemMedia>
-                    <DocumentIcon
-                      fileName={document.fileName}
-                      mimeType={document.mimeType}
-                    />
-                  </ListItemMedia>
-                  <ListItemContent>
-                    <ListItemTitle>
-                      <BidiText>{document.name ?? document.fileName}</BidiText>
-                    </ListItemTitle>
-                    <ListItemDescription>
-                      {formatFileSize(document.sizeBytes, format)}
-                    </ListItemDescription>
-                  </ListItemContent>
-                </Label>
-              </li>
-            );
-          })}
+    <>
+      {chosen.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5">
+          {chosen.map((document) => (
+            <li key={document.entityId}>
+              <Badge tone="neutral">
+                <BidiText className="max-w-48 truncate">
+                  {document.name ?? document.fileName}
+                </BidiText>
+                <Button
+                  aria-label={t("common.remove")}
+                  disabled={disabled}
+                  onClick={() => onToggle(document.entityId)}
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  <XIcon />
+                </Button>
+              </Badge>
+            </li>
+          ))}
         </ul>
-      </ScrollArea>
-    </div>
+      )}
+      <div className="overflow-hidden rounded-xl border">
+        <ScrollArea axis="vertical" className="h-64">
+          <ul className="divide-y">
+            {documents.length === 0 && (
+              <ListEmpty>{t("common.noResults")}</ListEmpty>
+            )}
+            {documents.map((document) => {
+              const checked = picked.includes(document.entityId);
+              return (
+                <li className="px-2" key={document.entityId}>
+                  <Label variant="choice">
+                    <Checkbox
+                      checked={checked}
+                      disabled={disabled || (!checked && full)}
+                      onCheckedChange={() => onToggle(document.entityId)}
+                    />
+                    <ListItemMedia>
+                      <DocumentIcon
+                        fileName={document.fileName}
+                        mimeType={document.mimeType}
+                      />
+                    </ListItemMedia>
+                    <ListItemContent>
+                      <ListItemTitle>
+                        <BidiText>
+                          {document.name ?? document.fileName}
+                        </BidiText>
+                      </ListItemTitle>
+                      <ListItemDescription>
+                        {formatFileSize(document.sizeBytes, format)}
+                      </ListItemDescription>
+                    </ListItemContent>
+                  </Label>
+                </li>
+              );
+            })}
+          </ul>
+        </ScrollArea>
+      </div>
+    </>
   );
 };
 

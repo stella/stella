@@ -793,6 +793,30 @@ const MOCK_FACT_STATEMENTS = [
     fact: "The parties agreed in July 2026 that deliveries would start in September.",
     occurredOn: "2026-07",
   },
+  {
+    fact: "On 2 June 2026 the buyer asked for the escrow to run for 18 months.",
+    occurredOn: "2026-06-02",
+  },
+  {
+    fact: "The supplier confirmed on 15 May 2026 that its liability is capped at the fees paid.",
+    occurredOn: "2026-05-15",
+  },
+  {
+    fact: "The insurer issued the product liability certificate on 28 April 2026.",
+    occurredOn: "2026-04-28",
+  },
+  {
+    fact: "The customer withheld the March 2026 invoice pending a quality audit.",
+    occurredOn: "2026-03",
+  },
+  {
+    fact: "The seller's counsel sent the disclosure letter on 18 February 2026.",
+    occurredOn: "2026-02-18",
+  },
+  {
+    fact: "Both parties signed the supply agreement on 1 July 2026.",
+    occurredOn: "2026-07-01",
+  },
 ] as const;
 
 // Picks a statement from the quoted passage, so a passage keeps its fact

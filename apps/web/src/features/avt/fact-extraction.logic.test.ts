@@ -144,22 +144,16 @@ describe("pickableDocuments", () => {
     file("d", "Witness_statement.pdf", PDF_MIME),
   ];
 
-  test("offers only documents a fact extraction can read", () => {
+  test("offers only documents a fact extraction can read, in order", () => {
     expect(
-      pickableDocuments(files, [], "").map(({ entityId }) => entityId),
+      pickableDocuments(files, "").map(({ entityId }) => entityId),
     ).toEqual(["a", "c", "d"]);
   });
 
-  test("keeps chosen documents first, in the order chosen", () => {
+  test("a search narrows the documents by name", () => {
     expect(
-      pickableDocuments(files, ["d", "a"], "").map(({ entityId }) => entityId),
-    ).toEqual(["d", "a", "c"]);
-  });
-
-  test("a search narrows the rest but never hides a chosen document", () => {
-    expect(
-      pickableDocuments(files, ["a"], "supply").map(({ entityId }) => entityId),
-    ).toEqual(["a", "c"]);
+      pickableDocuments(files, "supply").map(({ entityId }) => entityId),
+    ).toEqual(["c"]);
   });
 });
 

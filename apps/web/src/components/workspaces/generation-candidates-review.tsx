@@ -441,7 +441,10 @@ const CandidateBody = ({
         </p>
       )}
       {source !== undefined && source.quote !== null && (
-        <p className="text-foreground mt-1 line-clamp-3 text-sm leading-relaxed text-pretty">
+        <p
+          className="text-foreground mt-1 line-clamp-3 text-sm leading-relaxed text-pretty"
+          dir="auto"
+        >
           <q>
             <BidiText as="span">{source.quote}</BidiText>
           </q>

@@ -92,27 +92,18 @@ type PickableDocument = Pick<
 
 /**
  * The documents a fact extraction can read (DOCX and PDF), narrowed by the
- * search, with the chosen ones first in the order they were chosen so a
- * long matter never scrolls them out of sight.
+ * search, in the matter's order so a row never moves under the pointer.
  */
 export const pickableDocuments = <T extends PickableDocument>(
   files: readonly T[],
-  picked: readonly string[],
   search: string,
 ): T[] => {
   const matches = createSearchQueryMatcher(search);
-  const readable = files.filter(
-    (file) => file.mimeType === DOCX_MIME || file.mimeType === PDF_MIME,
-  );
-  const chosen = picked.flatMap((entityId) => {
-    const file = readable.find((entry) => entry.entityId === entityId);
-    return file === undefined ? [] : [file];
-  });
-  const rest = readable.filter(
+  return files.filter(
     (file) =>
-      !picked.includes(file.entityId) && matches(file.name ?? file.fileName),
+      (file.mimeType === DOCX_MIME || file.mimeType === PDF_MIME) &&
+      matches(file.name ?? file.fileName),
   );
-  return [...chosen, ...rest];
 };
 
 /**
