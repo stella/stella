@@ -4,7 +4,7 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 
-export const typedColumnParam = (value: unknown, column: AnyPgColumn) =>
+const typedColumnParam = (value: unknown, column: AnyPgColumn) =>
   sql`${sql.param(value, column)}::${sql.raw(column.getSQLType())}`;
 
 /** Compare the number PostgreSQL stores, using the column's declared representation. */
