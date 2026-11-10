@@ -1,5 +1,11 @@
 # @stll/chat
 
+## 0.4.3
+
+### Patch Changes
+
+- [#8195](https://github.com/stella/stella/pull/8195) [`0e08bd9`](https://github.com/stella/stella/commit/0e08bd976be878c201d47dd4904640ff9b373bfe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ChatLink` accepts `urlLabel: "written"` to keep a link's own text when that text is a URL, instead of showing the bare host.
+
 ## 0.4.2
 
 ### Patch Changes

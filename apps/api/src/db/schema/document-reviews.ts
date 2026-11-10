@@ -141,6 +141,9 @@ export const documentReviewRuns = p.pgTable(
     // Coarse progress over the expected finding set (see `expectedFindings`).
     total: p.integer().notNull().default(0),
     completed: p.integer().notNull().default(0),
+    // Fixes the run did not stage because the requester could not open every
+    // matter its reference text came from, so the panel can say why.
+    fixesWithheld: p.integer("fixes_withheld").notNull().default(0),
     requestedBy: p
       .text("requested_by")
       .references(() => user.id, { onDelete: "set null" }),

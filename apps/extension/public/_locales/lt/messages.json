@@ -5,8 +5,11 @@
   "adoptUnsupported": {
     "message": "Su stella galima naudoti tik viešus HTTPS puslapius."
   },
+  "usingTabs": {
+    "message": "Naudojama:"
+  },
   "downloadKept": {
-    "message": "Atsisiuntimai, kurie baigėsi, kol stella valdė skirtuką, ir buvo palikti: $COUNT$. Prieš atidarydami patikrinkite, iš kur jie.",
+    "message": "Palikti atsisiuntimai: $COUNT$, prieš atidarydami patikrinkite",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -14,7 +17,7 @@
     }
   },
   "downloadStopped": {
-    "message": "Atsisiuntimai, kuriuos stella sustabdė valdydama skirtuką: $COUNT$.",
+    "message": "Sustabdyti atsisiuntimai: $COUNT$",
     "placeholders": {
       "count": {
         "content": "$1"
@@ -22,7 +25,7 @@
     }
   },
   "downloadsStoppedAndKept": {
-    "message": "Kol stella valdė skirtuką: sustabdyti atsisiuntimai: $STOPPED$. Baigti ir palikti atsisiuntimai (prieš atidarydami patikrinkite, iš kur jie): $KEPT$.",
+    "message": "Sustabdyti atsisiuntimai: $STOPPED$ · palikti: $KEPT$, prieš atidarydami patikrinkite",
     "placeholders": {
       "kept": {
         "content": "$2"
@@ -42,15 +45,10 @@
     "message": "Atverkite stella programos kortelę ir bandykite dar kartą."
   },
   "connectionPurpose": {
-    "message": "Kai paprašysite pokalbyje, „stella“ galės atskirame skirtuke atverti ir skaityti svetaines naudodama jūsų prisijungimus."
+    "message": "Atveria ir skaito svetaines pokalbiui, naudodama jūsų prisijungimus."
   },
   "statusConnected": {
-    "message": "Prisijungta prie $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
+    "message": "Prisijungta"
   },
   "statusNotConnected": {
     "message": "Neprisijungta"
@@ -60,14 +58,6 @@
   },
   "statusOpenStella": {
     "message": "Norėdami prisijungti, atverkite „stella“"
-  },
-  "statusTabHandedOver": {
-    "message": "Skirtukas perduotas „stella“: $ORIGIN$",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
   },
   "allowAndConnect": {
     "message": "Leisti prieigą ir prisijungti"
@@ -84,20 +74,14 @@
   "disconnectTab": {
     "message": "Atsijungti"
   },
-  "disconnectDescription": {
-    "message": "„stella“ nustos naudoti prijungtą skirtuką."
-  },
   "revokeAccess": {
-    "message": "Pašalinti prieigą prie svetainių"
-  },
-  "revokeDescription": {
-    "message": "Pašalina leidimą atverti ir skaityti svetaines."
+    "message": "Pašalinti prieigą"
   },
   "checkingAccess": {
     "message": "Tikrinamas ryšys…"
   },
   "statusConnectedElsewhere": {
-    "message": "„stella“ prijungta kitu adresu"
+    "message": "Prisijungta kitur"
   },
   "connectStellaInstead": {
     "message": "Vietoj to prijungti „stella“ čia"

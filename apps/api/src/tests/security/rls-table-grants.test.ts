@@ -198,7 +198,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // request role has no direct access to this ingestion-owned relation.
   "legislation_work_identifiers",
   "synthetic_session_control",
-  // Guidance ingestion is owner-only until a read capability is introduced.
+  // Guidance is ingestion-owned; reads go through the public-law reader only.
   "soft_law_sources",
   "soft_law_ingestion_attempts",
   "soft_law_documents",
@@ -258,6 +258,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "desktop_runner_commands",
   "desktop_runner_events",
   "desktop_runner_app_calls",
+  "desktop_runner_folder_restores",
   // Better Auth OAuth control-plane state. Request-role access would expose
   // resource policy or let tenant traffic change token authorization rules.
   "oauth_resource",

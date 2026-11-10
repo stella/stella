@@ -777,6 +777,147 @@ describe("suggestions", () => {
   });
 });
 
+describe("a selected range's starting matter", () => {
+  const select = (segments: ActivitySegment[], from: number, to: number) =>
+    manualSuggestion({
+      drafted: [],
+      id: "manual:range",
+      range: { startMs: ms(from), endMs: ms(to) },
+      segments: day(segments).segments,
+    });
+
+  test("a matter holding a minority of the recorded time is not preselected", () => {
+    // 42 minutes of mail no matter claimed, 18 of the lease draft.
+    const manual = select(
+      [
+        segment({ from: 0, to: 42, app: "browser", title: "Training invite" }),
+        segment({ from: 42, to: 60, matterId: "lease", title: "Lease.docx" }),
+      ],
+      0,
+      60,
+    );
+    expect(manual).toMatchObject({
+      matter: null,
+      matterBasis: "mostlyUnmatched",
+      type: "manual",
+    });
+    // The evidence still names the minority matter beside its own row.
+    expect(
+      titleRows(manual).map((row) => [row.label, row.matter?.id ?? null]),
+    ).toEqual([
+      ["Training invite", null],
+      ["Lease.docx", "lease"],
+    ]);
+    expect(
+      appRows(manual).map((row) => [row.label, row.matter?.id ?? null]),
+    ).toEqual([
+      ["Example Browser", null],
+      ["Example Editor", "lease"],
+    ]);
+  });
+
+  test("a matter holding at least half of the recorded time is preselected", () => {
+    const half = select(
+      [
+        segment({ from: 0, to: 30, matterId: "lease" }),
+        segment({ from: 30, to: 60, app: "browser" }),
+      ],
+      0,
+      60,
+    );
+    expect(half).toMatchObject({ matter: { id: "lease" } });
+    expect(half.matterBasis).toBe("majority");
+    // Unrecorded time in the range does not count against the matter.
+    const sparse = select(
+      [
+        segment({ from: 0, to: 12, matterId: "lease" }),
+        segment({ from: 12, to: 20, app: "browser" }),
+      ],
+      0,
+      60,
+    );
+    expect(sparse.matter?.id).toBe("lease");
+  });
+
+  test("time split between matters with no majority preselects none", () => {
+    const manual = select(
+      [
+        segment({ from: 0, to: 25, matterId: "lease" }),
+        segment({ from: 25, to: 45, matterId: "services" }),
+        segment({ from: 45, to: 60, app: "browser" }),
+      ],
+      0,
+      60,
+    );
+    expect(manual).toMatchObject({
+      matter: null,
+      matterBasis: "splitBetweenMatters",
+    });
+  });
+
+  test("a range with nothing recorded preselects no matter", () => {
+    const manual = select(
+      [segment({ from: 0, to: 30, matterId: "lease" })],
+      120,
+      150,
+    );
+    expect(manual).toMatchObject({
+      matter: null,
+      matterBasis: "nothingRecorded",
+      segments: [],
+    });
+  });
+
+  test(
+    "a range starts on a matter exactly when that matter holds at least half its recorded time",
+    () => {
+      const stretch = fc.record({
+        length: fc.integer({ min: 1, max: 20 }),
+        matterId: fc.constantFrom("lease", "services", undefined),
+      });
+      assertProperty(
+        "a range starts on a matter exactly when that matter holds at least half its recorded time",
+        fc.property(
+          fc.array(stretch, { maxLength: 8 }),
+          fc.integer({ min: 0, max: 80 }),
+          fc.integer({ min: 0, max: 80 }),
+          (stretches, from, length) => {
+            let cursor = 0;
+            const segments = stretches.map(({ length: minutes, matterId }) => {
+              const recorded = segment({
+                from: cursor,
+                to: cursor + minutes,
+                matterId,
+              });
+              cursor += minutes;
+              return recorded;
+            });
+            const manual = select(segments, from, from + length);
+            const recordedMs = manual.segments.reduce(
+              (sum, { startMs, endMs }) => sum + endMs - startMs,
+              0,
+            );
+            const matterMs = (id: string) =>
+              manual.segments
+                .filter((recorded) => recorded.matter?.id === id)
+                .reduce((sum, { startMs, endMs }) => sum + endMs - startMs, 0);
+            const majority = ["lease", "services"].some(
+              (id) => recordedMs > 0 && matterMs(id) * 2 >= recordedMs,
+            );
+            expect(manual.matter !== null).toBe(majority);
+            if (manual.matter !== null) {
+              expect(matterMs(manual.matter.id) * 2).toBeGreaterThanOrEqual(
+                recordedMs,
+              );
+            }
+          },
+        ),
+      );
+    },
+    propertyTestTimeout(5000),
+  );
+});
+
 describe("suggestion evidence", () => {
   test("title and app rows share the suggestion's time", () => {
     const [suggestion] = matchedSuggestions(

@@ -52,41 +52,44 @@ describe("findingSeverity", () => {
 describe("toReviewSignalFindings", () => {
   test("keeps playbook findings with weight, sorted by severity, quoting the rationale", () => {
     const longRationale = "x".repeat(REVIEW_QUOTE_MAX_CHARS + 50);
-    const findings = toReviewSignalFindings([
-      playbookFinding({
-        issue: "Liability cap",
-        severity: "medium",
-        verdict: "deviation",
-        rationale: "Cap set at 50% of fees; playbook requires 100%.",
-      }),
-      playbookFinding({
-        issue: "Governing law",
-        severity: "blocker",
-        verdict: "missing",
-        rationale: longRationale,
-      }),
-      playbookFinding({
-        issue: "Term",
-        severity: "low",
-        verdict: "compliant",
-      }),
-      // Graded against a reference standard, not an authored ladder: out of
-      // inbox scope however it is graded.
-      {
-        finding: {
-          positionId: "0198f2a0-5c1e-7a1b-9d3e-4f5a6b7c8d9f",
-          issue: "Payment terms",
-          severity: "blocker",
-          standardSource: "reference",
+    const findings = toReviewSignalFindings(
+      [
+        playbookFinding({
+          issue: "Liability cap",
+          severity: "medium",
           verdict: "deviation",
-          delta: { kind: "language" },
-          extracted: null,
-          rationale: "Net 60 vs Net 30.",
-          citations: [],
-          fix: null,
+          rationale: "Cap set at 50% of fees; playbook requires 100%.",
+        }),
+        playbookFinding({
+          issue: "Governing law",
+          severity: "blocker",
+          verdict: "missing",
+          rationale: longRationale,
+        }),
+        playbookFinding({
+          issue: "Term",
+          severity: "low",
+          verdict: "compliant",
+        }),
+        // Graded against a reference standard, not an authored ladder: out of
+        // inbox scope however it is graded.
+        {
+          finding: {
+            positionId: "0198f2a0-5c1e-7a1b-9d3e-4f5a6b7c8d9f",
+            issue: "Payment terms",
+            severity: "blocker",
+            standardSource: "reference",
+            verdict: "deviation",
+            delta: { kind: "language" },
+            extracted: null,
+            rationale: "Net 60 vs Net 30.",
+            citations: [],
+            fix: null,
+          },
         },
-      },
-    ]);
+      ],
+      { quoteRationale: true },
+    );
     expect(findings.map((f) => [f.title, f.severity])).toEqual([
       ["Governing law", "critical"],
       ["Liability cap", "warning"],
@@ -95,6 +98,21 @@ describe("toReviewSignalFindings", () => {
     expect(findings.at(1)?.quote).toBe(
       "Cap set at 50% of fees; playbook requires 100%.",
     );
+  });
+
+  test("quotes the issue instead of the rationale when the run drew on another matter", () => {
+    const findings = toReviewSignalFindings(
+      [
+        playbookFinding({
+          issue: "Liability cap",
+          severity: "medium",
+          verdict: "deviation",
+          rationale: "The precedent caps liability at 100% of fees.",
+        }),
+      ],
+      { quoteRationale: false },
+    );
+    expect(findings.map((f) => f.quote)).toEqual(["Liability cap"]);
   });
 });
 

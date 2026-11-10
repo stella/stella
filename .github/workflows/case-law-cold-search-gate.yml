@@ -1,0 +1,75 @@
+name: Case-law cold search gate
+
+# First-hit search latency per corpus country on a many-split fixture
+# (apps/api/src/tests/query-perf/case-law-cold-search-gate.ts). Runs on demand and is
+# report-only: nothing depends on it and STELLA_COLD_SEARCH_MODE is not set to
+# enforce, so it cannot hold a release.
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: case-law-cold-search-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cold-search:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      STELLA_COLD_SEARCH_CONTAINER: cold-search-engine
+      STELLA_CORPUS_ENGINE_TEST_ENDPOINT: http://127.0.0.1:7290
+      STELLA_RUN_CORPUS_ENGINE_TESTS: "true"
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        timeout-minutes: 3
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Start corpus engine
+        timeout-minutes: 5
+        run: |
+          image="$(jq -er '.[] | select(.name == "quickwit") | .source' scripts/ci-service-images.json)"
+          bash scripts/retry.sh docker pull "$image"
+          docker volume create cold-search-data
+          docker run --detach --name "$STELLA_COLD_SEARCH_CONTAINER" \
+            --publish 127.0.0.1:7290:7280 \
+            --mount type=volume,source=cold-search-data,target=/quickwit/qwdata \
+            "$image" run
+          curl --fail --silent --show-error --retry 60 --retry-connrefused \
+            --retry-all-errors --retry-delay 1 --retry-max-time 120 --max-time 2 \
+            "$STELLA_CORPUS_ENGINE_TEST_ENDPOINT/health/readyz"
+
+      - name: Measure first-hit searches
+        working-directory: apps/api
+        timeout-minutes: 35
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          STELLA_COLD_SEARCH_DROP_PAGE_CACHE: "true"
+        run: bun --preload ./src/tests/setup-env.ts --preload ./scripts/corpus-engine-test-env.ts src/tests/query-perf/case-law-cold-search-gate.ts
+
+      - name: Corpus engine diagnostics and cleanup
+        if: always()
+        run: |
+          docker logs --tail 200 "$STELLA_COLD_SEARCH_CONTAINER" || true
+          docker rm -f "$STELLA_COLD_SEARCH_CONTAINER" || true
+          docker volume rm cold-search-data || true

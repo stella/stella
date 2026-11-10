@@ -40,7 +40,9 @@ import { createDetached } from "@stll/errors";
 
 import {
   FAKE_CONTEXT_WINDOW,
+  FAKE_LONG_COMMAND,
   FAKE_MCP_CALL,
+  FAKE_PRIVATE_TEXT,
   FAKE_RESUMED_THREAD_ID,
   FAKE_TEXT_ONLY_MODEL,
   FAKE_THREAD_ID,
@@ -482,7 +484,12 @@ describe("Codex adapter over a stdio app-server", () => {
         content: JSON.stringify({ status: "completed" }),
         status: "succeeded",
       });
-      expect(completed[1]?.result.content).toContain("notes.md");
+      // An unrelated command keeps its own result, which never carries its
+      // output.
+      expect(completed[1]?.result.content).not.toContain("notes.md");
+      expect(JSON.parse(completed[1]?.result.content ?? "")).toMatchObject({
+        status: "completed",
+      });
     });
 
     test("a turn whose skills cannot be established does not run", async () => {
@@ -533,6 +540,7 @@ describe("Codex adapter over a stdio app-server", () => {
       model: "gpt-test",
       runId: "run-1",
       threadId: "stella-thread-1",
+      workspaceDir: "/workspace",
       generateId: counter(),
       now: () => 0,
     })) {
@@ -618,7 +626,8 @@ describe("Codex adapter over a stdio app-server", () => {
     }
     const stored = fold(cloud);
     expect(stored.flatMap(({ parts }) => parts).length).toBeGreaterThan(4);
-    expect(fold(local)).toEqual(stored);
+    expect(withoutCommandOutput(stored)).toEqual(fold(local));
+    expect(JSON.stringify(local)).not.toContain("aggregated_output");
   });
 
   test("an approval offers the native decisions and replies with the chosen one verbatim", async () => {
@@ -1145,6 +1154,35 @@ describe("Codex adapter over a stdio app-server", () => {
 });
 
 /** Fold chunks the way persistence does and return what would be stored. */
+/**
+ * A cloud turn's parts as a local turn keeps them: a command's output stays
+ * on the member's computer, so its result keeps only its exit code and
+ * status, in the same order.
+ */
+const withoutCommandOutput = (value: unknown): unknown => {
+  if (typeof value === "string") {
+    if (!value.includes('"aggregated_output"')) {
+      return value;
+    }
+    const { aggregated_output: _output, ...kept } = v.parse(
+      v.record(v.string(), v.unknown()),
+      JSON.parse(value),
+    );
+    return JSON.stringify(kept);
+  }
+  if (Array.isArray(value)) {
+    return value.map(withoutCommandOutput);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "aggregated_output")
+        .map(([key, entry]) => [key, withoutCommandOutput(entry)]),
+    );
+  }
+  return value;
+};
+
 const storedMessages = (chunks: readonly StreamChunk[]) => {
   const processor = new StreamProcessor({ initialMessages: [] });
   for (const chunk of chunks) {
@@ -1164,6 +1202,7 @@ const localChunks = async (events: readonly HarnessEvent[]) => {
     model: "gpt-test",
     runId: "run-1",
     threadId: "stella-thread-1",
+    workspaceDir: "/workspace",
     generateId: () => `result-${(next += 1)}`,
     now: () => 0,
   })) {
@@ -1309,6 +1348,73 @@ describe("Codex items as chat parts", () => {
     expect(
       parts.flatMap((part) => (part.type === "text" ? [part.content] : [])),
     ).toEqual([FAKE_STELLA_ANSWER]);
+  });
+
+  test("a native step shows its command, file names and plan titles, and never the text it carries", async () => {
+    const { events } = await run("native_tools");
+    const parts = storedMessages(await localChunks(events)).flatMap(
+      ({ parts: stored }) => stored,
+    );
+    const calls = parts.flatMap((part) =>
+      part.type === "tool-call"
+        ? [{ id: part.id, name: part.name, input: part.input }]
+        : [],
+    );
+    const plan = (items: string[]) => ({
+      tool: "update_plan",
+      detail: { kind: "plan", items },
+    });
+    expect(calls).toEqual([
+      {
+        id: "turn-1:plan:1",
+        name: "harness_native_tool",
+        input: plan(["Read the lease", "Draft the notice"]),
+      },
+      // A heredoc shows the line that runs it, never the lines it writes.
+      {
+        id: "call-heredoc",
+        name: "command_execution",
+        input: { command: `/bin/zsh -lc "cat > notes.md <<'EOF'…` },
+      },
+      {
+        id: "call-long",
+        name: "command_execution",
+        input: { command: `${FAKE_LONG_COMMAND.slice(0, 299)}…` },
+      },
+      {
+        id: "call-edit",
+        name: "file_change",
+        input: {
+          changes: [
+            { path: "drafts/lease.md", kind: "update" },
+            { path: "drafts/notice.md", kind: "add" },
+          ],
+        },
+      },
+      {
+        id: "turn-1:plan:2",
+        name: "harness_native_tool",
+        input: plan(["Read the lease", "Draft the notice"]),
+      },
+    ]);
+    // A command's exit status stays on its result.
+    expect(
+      parts.find(
+        (part) => part.type === "tool-call" && part.id === "call-heredoc",
+      ),
+    ).toMatchObject({ output: { exit_code: 1, status: "failed" } });
+    // A command's output never leaves, in its call, its result or the part.
+    expect(JSON.stringify(parts)).not.toContain("permission denied");
+    expect(JSON.stringify(parts)).not.toContain("aggregated_output");
+    const callText = JSON.stringify(
+      parts
+        .filter((part) => part.type === "tool-call")
+        .map(({ input }) => input),
+    );
+    for (const text of Object.values(FAKE_PRIVATE_TEXT)) {
+      expect(callText).not.toContain(text);
+    }
+    expect(callText).not.toContain("y".repeat(300));
   });
 
   test("harness-native items become generic activity and never carry the native payload", async () => {

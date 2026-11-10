@@ -10,6 +10,10 @@ import { panic } from "better-result";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
+  CHAT_LOCAL_RUN_INTERRUPT_REASONS,
+  chatLocalRunApprovalReason,
+} from "@stll/api-contract/chat-local-run-tool";
+import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
   CHAT_LOCAL_RUN_QUESTION_TOOL,
@@ -26,6 +30,7 @@ import {
   type HarnessToolCall,
   type HarnessUsage,
 } from "./events";
+import { shownToolInput, shownToolResult } from "./tool-parts";
 
 /**
  * The one mapping from harness events to TanStack stream chunks for local
@@ -52,6 +57,11 @@ export type HarnessChunkContext = {
   model: string;
   runId: string;
   threadId: string;
+  /**
+   * The run's folder: a native step's file names are reported relative to
+   * it.
+   */
+  workspaceDir: string;
   generateId: () => string;
   now: () => number;
 };
@@ -307,8 +317,8 @@ class ChunkMapper {
     }
     this.opened.add(toolCall.id);
     this.unresolved.add(toolCall.id);
-    const args =
-      toolCall.input === undefined ? "{}" : JSON.stringify(toolCall.input);
+    const input = this.shownInput(toolCall);
+    const args = input === undefined ? "{}" : JSON.stringify(input);
     this.push(
       {
         type: EventType.TOOL_CALL_START,
@@ -327,9 +337,13 @@ class ChunkMapper {
         toolCallId: toolCall.id,
         toolCallName: toolCall.name,
         toolName: toolCall.name,
-        input: toolCall.input,
+        input,
       },
     );
+  }
+
+  private shownInput(toolCall: HarnessToolCall) {
+    return shownToolInput(toolCall, this.context.workspaceDir);
   }
 
   private resolveToolCall(
@@ -357,7 +371,16 @@ class ChunkMapper {
     }
     this.ensureSegment();
     this.openToolCall(toolCall);
-    this.resolveToolCall(toolCall.id, result.content, result.status);
+    this.resolveToolCall(
+      toolCall.id,
+      shownToolResult(
+        toolCall,
+        result.content,
+        result.status === "failed",
+        this.context.workspaceDir,
+      ),
+      result.status,
+    );
   }
 
   private text(messageId: string, fullText: string) {
@@ -417,14 +440,14 @@ class ChunkMapper {
           interrupts: [
             {
               id: request.requestId,
-              reason: "tool_call",
+              reason: CHAT_LOCAL_RUN_INTERRUPT_REASONS.approval,
               message: approvalMessage(request),
               toolCallId: request.toolCall.id,
               metadata: {
                 kind: "approval",
-                reason: request.reason,
+                reason: chatLocalRunApprovalReason(request.reason),
                 toolName: request.toolCall.name,
-                input: request.toolCall.input,
+                input: this.shownInput(request.toolCall),
                 approvalKind: request.kind,
                 decisions: request.options.map(({ decision }) => decision),
               },
@@ -459,7 +482,7 @@ class ChunkMapper {
           interrupts: [
             {
               id: request.requestId,
-              reason: "user_input",
+              reason: CHAT_LOCAL_RUN_INTERRUPT_REASONS.question,
               message: request.questions.map(({ prompt }) => prompt).join("\n"),
               toolCallId: request.toolCall.id,
               metadata: {

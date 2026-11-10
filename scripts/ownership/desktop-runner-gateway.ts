@@ -36,6 +36,11 @@ export default {
         reason:
           "Reads the member's computers and harness reports for the chat composer.",
       },
+      {
+        path: "apps/api/src/handlers/chat/turns/local-files-undo.ts",
+        reason:
+          "Asks the turn's computer to undo the turn's file changes and reads where that undo stands.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

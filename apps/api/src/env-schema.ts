@@ -146,6 +146,12 @@ export const envApiServerSchema = {
   GOOGLE_GENERATIVE_AI_API_KEY: v.optional(v.string()),
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
+  /**
+   * Optional GitHub token limited to public repositories, for skill sources a
+   * person links. Never the catalogue token: it is sent for any URL a person
+   * enters.
+   */
+  SKILL_IMPORT_GITHUB_TOKEN: v.optional(v.pipe(v.string(), v.minLength(1))),
   OPENROUTER_API_KEY: v.optional(v.string()),
   OPENROUTER_FAST_TIER_API_KEY: v.optional(v.string()),
   OPENROUTER_FAST_TIER_WIF_POLICY_ID: v.optional(

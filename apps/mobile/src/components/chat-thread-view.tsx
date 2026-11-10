@@ -48,12 +48,15 @@ const EMPTY_PAGE: ChatMessagesPage = {
 export const ChatThreadView = ({
   fresh,
   matterId,
+  shareId,
   source,
   threadId,
 }: {
   fresh: boolean;
   /** The thread's matter; the server refuses a matter's thread read without it. */
   matterId: string | undefined;
+  /** A share from another app a new conversation starts with. */
+  shareId: string | undefined;
   source: AccessTokenSource;
   threadId: string;
 }) => {
@@ -87,6 +90,7 @@ export const ChatThreadView = ({
         matterId={matterId}
         onReload={reload}
         refreshing={refreshing}
+        shareId={shareId}
         source={source}
         threadId={threadId}
       />
@@ -99,6 +103,7 @@ const LoadedThread = ({
   matterId,
   onReload,
   refreshing,
+  shareId,
   source,
   threadId,
 }: {
@@ -106,6 +111,7 @@ const LoadedThread = ({
   matterId: string | undefined;
   onReload: () => void;
   refreshing: boolean;
+  shareId: string | undefined;
   source: AccessTokenSource;
   threadId: string;
 }) => {
@@ -131,6 +137,7 @@ const LoadedThread = ({
       matterId={matterId}
       onReload={onReload}
       refreshing={refreshing}
+      shareId={shareId}
       source={source}
       threadId={threadId}
     />
@@ -149,6 +156,7 @@ const ThreadMessages = ({
   matterId,
   onReload,
   refreshing,
+  shareId,
   source,
   threadId,
 }: {
@@ -156,6 +164,7 @@ const ThreadMessages = ({
   matterId: string | undefined;
   onReload: () => void;
   refreshing: boolean;
+  shareId: string | undefined;
   source: AccessTokenSource;
   threadId: string;
 }) => {
@@ -238,13 +247,16 @@ const ThreadMessages = ({
               {t("greetingSubtitle")}
             </Text>
           </View>
-          {/* The composer says why a send was refused, as in a thread. */}
+          {/* The composer says why a send was refused, as in a thread. A
+              share starts only an empty conversation, so only this one
+              takes it. */}
           <ChatComposer
             busy={turn.busy}
             canStop={turn.canStop}
             onSend={turn.send}
             onStop={turn.stop}
             sendError={turn.sendError}
+            shareId={shareId}
           />
         </View>
       </View>
@@ -296,6 +308,7 @@ const ThreadMessages = ({
           onSend={turn.send}
           onStop={turn.stop}
           sendError={turn.sendError}
+          shareId={undefined}
         />
       </View>
     </View>
