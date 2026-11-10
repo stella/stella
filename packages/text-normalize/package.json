@@ -46,8 +46,8 @@
     "test": "bun test src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/text-normalize",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/text-normalize",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/text-normalize",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/text-normalize",
     "prepack": "bun run build"
   },
   "devDependencies": {

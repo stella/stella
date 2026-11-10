@@ -38,6 +38,7 @@
     "./record-projection": "./src/record-projection.ts",
     "./record-schema": "./src/record-schema.ts",
     "./transcription": "./src/transcription.ts",
+    "./outlook-ai": "./src/outlook-ai.ts",
     "./http-input": "./src/http-input.ts",
     "./mcp-capability-executors": "./src/mcp-capability-executors.ts",
     "./mcp-tool-name": "./src/mcp-tool-name.ts",
@@ -200,8 +201,8 @@
     "test": "bun test src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/api-contract",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/api-contract"
+    "lint": "cd ../.. && bun scripts/lint.ts packages/api-contract",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/api-contract"
   },
   "dependencies": {
     "@stll/agent-input": "workspace:*",

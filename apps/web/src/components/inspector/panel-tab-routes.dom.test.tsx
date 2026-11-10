@@ -156,6 +156,7 @@ afterAll(async () => {
 // signed-in providers is exercised, even when it also serves visitors.
 const routeRoot = new URL("../../routes/", import.meta.url);
 const families: string[] = [];
+const familiesWithoutId: string[] = [];
 for (const path of new Bun.Glob("**/*.tsx").scanSync({
   cwd: routeRoot.pathname,
 })) {
@@ -170,14 +171,19 @@ for (const path of new Bun.Glob("**/*.tsx").scanSync({
     continue;
   }
   const id = /createFileRoute\("([^"]+)"\)/u.exec(source)?.[1];
-  expect(id).toBeDefined();
-  if (id !== undefined) {
+  if (id === undefined) {
+    familiesWithoutId.push(path);
+  } else {
     families.push(id);
   }
 }
-expect(families).toEqual(
-  expect.arrayContaining(["/_protected", "/knowledge", "/law", "/tools"]),
-);
+
+test("every signed-in route family is found by its route id", () => {
+  expect(familiesWithoutId).toEqual([]);
+  expect(families).toEqual(
+    expect.arrayContaining(["/_protected", "/knowledge", "/law", "/tools"]),
+  );
+});
 
 const sourceRoot = new URL("../../", import.meta.url);
 const registrationPaths = [
@@ -207,25 +213,28 @@ const panelFixtures = [
   ...genericPanelFixtures,
   ...knowledgePanelFixtures,
 ];
-expect(
-  getInspectorViews()
-    .map(({ type }) => type)
-    .toSorted(),
-).toEqual(
-  [
-    ...BUILT_IN_KINDS,
-    ...genericPanelFixtures.map(({ viewType }) => viewType),
-    ...knowledgePanelFixtures.map(({ viewType }) => viewType),
-  ].toSorted(),
-);
-for (const tab of [...genericPanelFixtures, ...knowledgePanelFixtures]) {
+
+test("every registered inspector view has a valid panel fixture", () => {
   expect(
     getInspectorViews()
-      .find(({ type }) => type === tab.viewType)
-      ?.validate(tab.payload),
-    tab.viewType,
-  ).toBe(true);
-}
+      .map(({ type }) => type)
+      .toSorted(),
+  ).toEqual(
+    [
+      ...BUILT_IN_KINDS,
+      ...genericPanelFixtures.map(({ viewType }) => viewType),
+      ...knowledgePanelFixtures.map(({ viewType }) => viewType),
+    ].toSorted(),
+  );
+  for (const tab of [...genericPanelFixtures, ...knowledgePanelFixtures]) {
+    expect(
+      getInspectorViews()
+        .find(({ type }) => type === tab.viewType)
+        ?.validate(tab.payload),
+      tab.viewType,
+    ).toBe(true);
+  }
+});
 
 for (const family of families) {
   for (const tab of panelFixtures) {

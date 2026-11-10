@@ -275,7 +275,7 @@ type CensusInput = {
   sources: readonly RouteSource[];
 };
 
-export function findMissingRoutePresentation({
+function findMissingRoutePresentation({
   routeTree,
   sources,
 }: CensusInput): string[] {

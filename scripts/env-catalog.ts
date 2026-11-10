@@ -1492,6 +1492,8 @@ export const TOOLING_ENV_KEYS = new Set([
 
   // Dated guard-rollout healing requests full scope before removing the temporary scope.
   "STELLA_GUARD_SCOPE",
+  // scripts/lint.ts prints the linter command instead of running it.
+  "STELLA_LINT_DRY_RUN",
   // Release-only secret: the short-lived federated Chrome Web Store access token.
   "CHROME_WEB_STORE_ACCESS_TOKEN",
   // The mobile app's Expo config reads its variant and signing from the build.
@@ -1500,6 +1502,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
+  "MOBILE_SHARE_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
   // The fake harness CLIs log how they started and what they receive to the
   // file their tests name; the fake Codex app server also logs its CODEX_HOME.

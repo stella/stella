@@ -351,5 +351,13 @@
     "share": "Jaga",
     "cancel": "Loobu",
     "openFailed": "Linki ei õnnestunud avada."
+  },
+  "share": {
+    "title": "Lisa stellasse",
+    "start": "Alusta",
+    "uploading": "Üleslaadimine: {done}/{total}…",
+    "filesOnly": "Salvestatakse ainult failid; lingid ja tekst jäetakse välja.",
+    "unavailableTitle": "Pole midagi lisada",
+    "unavailable": "Seda jagatud sisu enam pole. Jagage see teisest rakendusest uuesti."
   }
 }

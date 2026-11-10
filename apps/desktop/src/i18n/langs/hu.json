@@ -508,6 +508,8 @@
     "evidenceTitles": "Címek",
     "evidenceApps": "Alkalmazások",
     "rangeEmpty": "Ebben az időszakban semmi sem lett rögzítve.",
+    "rangeMostlyUnmatched": "Az időszak nagyobb része egyik ügyhöz sem tartozik, ezért nincs előre kiválasztott ügy.",
+    "rangeSplitBetweenMatters": "Egyik ügy sem fedi le egymagában az időszak nagyobb részét, ezért nincs előre kiválasztott ügy.",
     "entryStart": "Kezdés",
     "entryEnd": "Befejezés",
     "rangeEndBeforeStart": "Válasszon a kezdésnél későbbi befejezést.",

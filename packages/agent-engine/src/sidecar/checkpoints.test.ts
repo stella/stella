@@ -45,11 +45,6 @@ const isWindows = process.platform === "win32";
 const isRoot = process.getuid?.() === 0;
 
 const roots: string[] = [];
-afterEach(() => {
-  for (const root of roots.splice(0)) {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
 
 /** A run's folder, with its sibling store, and a folder outside both. */
 const place = () => {
@@ -130,6 +125,9 @@ const logLine = (line: string) => {
   logged.push(line);
 };
 afterEach(() => {
+  for (const root of roots.splice(0)) {
+    rmSync(root, { recursive: true, force: true });
+  }
   expect(logged.splice(0)).toEqual([]);
 });
 

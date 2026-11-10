@@ -508,6 +508,8 @@
     "evidenceTitles": "Pavadinimai",
     "evidenceApps": "Programos",
     "rangeEmpty": "Šiuo laikotarpiu nieko neįrašyta.",
+    "rangeMostlyUnmatched": "Didžioji šio laikotarpio dalis nepriklauso jokiai bylai, todėl byla iš anksto nepasirinkta.",
+    "rangeSplitBetweenMatters": "Nė viena byla neapima didžiosios šio laikotarpio dalies, todėl byla iš anksto nepasirinkta.",
     "entryStart": "Pradžia",
     "entryEnd": "Pabaiga",
     "rangeEndBeforeStart": "Nustatykite pabaigą vėlesnę nei pradžia.",

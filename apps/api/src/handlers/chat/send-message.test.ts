@@ -74,21 +74,6 @@ import type { UploadedChatFile } from "./upload-files";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
-beforeEach(() => {
-  compactMessagesForContextMock.mockClear();
-  loadExternalMcpToolsForUserMock.mockClear();
-  loadWebSearchProvidersForOrgMock.mockClear();
-  rollbackUnpersistedChatSideEffectsMock.mockReset();
-  rollbackUnpersistedChatSideEffectsMock.mockImplementation(
-    rollbackUnpersistedChatSideEffectsDefault,
-  );
-  uploadMessageFilesWithRollbackMock.mockReset();
-  uploadMessageFilesWithRollbackMock.mockImplementation(
-    uploadMessageFilesWithRollbackDefault,
-  );
-  upsertChatThreadSearchDocumentMock.mockClear();
-});
-
 let webSearchProviderLoadHook: (() => void) | undefined;
 const loadWebSearchProvidersForOrgMock = mock(async () => {
   webSearchProviderLoadHook?.();
@@ -157,6 +142,18 @@ const sendMessage = createSendMessage({
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  compactMessagesForContextMock.mockClear();
+  loadExternalMcpToolsForUserMock.mockClear();
+  loadWebSearchProvidersForOrgMock.mockClear();
+  rollbackUnpersistedChatSideEffectsMock.mockReset();
+  rollbackUnpersistedChatSideEffectsMock.mockImplementation(
+    rollbackUnpersistedChatSideEffectsDefault,
+  );
+  uploadMessageFilesWithRollbackMock.mockReset();
+  uploadMessageFilesWithRollbackMock.mockImplementation(
+    uploadMessageFilesWithRollbackDefault,
+  );
+  upsertChatThreadSearchDocumentMock.mockClear();
   analytics = installRecordingAnalytics();
 });
 
