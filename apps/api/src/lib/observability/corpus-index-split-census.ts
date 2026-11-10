@@ -27,6 +27,12 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
  */
 type ServedGeneration = { generation: string; cluster: QuickwitCluster };
 
+/**
+ * One budget for the whole census: each index read keeps its own timeout,
+ * but several slow indexes must not hold the scheduler runner for minutes.
+ */
+const SPLIT_CENSUS_DEADLINE_MS = 60_000;
+
 const SPLIT_CENSUS_SINK = failureSink({
   event: "corpus_index.split_census_failed",
   expected: [],
@@ -78,6 +84,7 @@ export const splitCensusAttributes = (
 export const reportCorpusIndexSplitCensus = async (
   generations: readonly ServedGeneration[],
 ): Promise<void> => {
+  const signal = AbortSignal.timeout(SPLIT_CENSUS_DEADLINE_MS);
   const servedByCluster = new Map<QuickwitCluster, Set<string>>();
   for (const { cluster, generation } of generations) {
     const served = servedByCluster.get(cluster) ?? new Set<string>();
@@ -96,6 +103,7 @@ export const reportCorpusIndexSplitCensus = async (
         return generation !== null && served.has(generation);
       },
       observer: "unobserved",
+      signal,
     });
     if (Result.isError(read)) {
       observeFailure(read.error, { sink: SPLIT_CENSUS_SINK });
@@ -106,4 +114,9 @@ export const reportCorpusIndexSplitCensus = async (
   if (counts.length > 0) {
     logger.info("corpus_index.split_census", splitCensusAttributes(counts));
   }
+};
+
+/** Telemetry only: a census failure is observed and never fails its caller. */
+export const observeSplitCensusFailure = (error: unknown): void => {
+  observeFailure(error, { sink: SPLIT_CENSUS_SINK });
 };

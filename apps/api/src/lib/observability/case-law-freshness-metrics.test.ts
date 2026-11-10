@@ -98,3 +98,28 @@ test("the scheduler task reads and emits one report per run", async () => {
   expect(transactions).toBe(2);
   expect(lines).toHaveLength(6);
 });
+
+test("a failed split census read leaves the freshness task successful", async () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  let transactions = 0;
+  const run = reportCaseLawFreshnessTask(
+    asTestRaw<SchedulerTaskContext>({
+      db: asTestRaw({
+        transaction: async () => {
+          transactions += 1;
+          if (transactions === 1) {
+            return await Promise.resolve(report);
+          }
+          throw new Error("census read failed");
+        },
+      }),
+    }),
+  );
+
+  expect(await run).toBeUndefined();
+  expect(transactions).toBe(2);
+  expect(lines).toHaveLength(6);
+});

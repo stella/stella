@@ -1097,6 +1097,16 @@ describe.skipIf(!runEngineTests)(
       expect(counts.value.at(0)?.publishedSplits ?? 0).toBeGreaterThan(1);
     });
 
+    test("the split census ends when its shared deadline has passed", async () => {
+      const counts = await client.readPublishedSplitCounts({
+        includes: (indexId) => indexId === INDEX_ID,
+        observer: "unobserved",
+        signal: AbortSignal.abort(),
+      });
+
+      expect(counts.isErr()).toBe(true);
+    });
+
     test.each(ENTRIES)(
       "a %s entry pages in the same order through both endpoints",
       async (_kind, entry) => {

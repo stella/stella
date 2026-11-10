@@ -522,6 +522,8 @@ export type CorpusIndexPublishedSplitCount = {
 type CorpusIndexPublishedSplitCountsInput = {
   includes: (indexId: string) => boolean;
   observer: RegistryRequestObservation;
+  /** Ends every read of the census at once, so slow indexes share one budget. */
+  signal?: AbortSignal | undefined;
 };
 
 export type CorpusIndexClient = {
@@ -1560,7 +1562,7 @@ const buildClient = (
       catch: toCorpusIndexError,
     }),
 
-  readPublishedSplitCounts: async ({ includes, observer }) => {
+  readPublishedSplitCounts: async ({ includes, observer, signal }) => {
     const read = async (path: string) =>
       await Result.tryPromise({
         try: async () =>
@@ -1570,6 +1572,7 @@ const buildClient = (
             path,
             init: { method: "GET" },
             timeoutMs: ADMIN_TIMEOUT_MS,
+            signal,
           }),
         catch: toCorpusIndexError,
       });
