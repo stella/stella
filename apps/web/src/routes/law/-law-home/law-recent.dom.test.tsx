@@ -1236,8 +1236,18 @@ test("removing a saved query after import failure keeps unrelated local history"
   }
 });
 
-for (const operation of ["clear", "remove"]) {
-  test(`${operation} can be retried after a failed server write without losing local history`, async () => {
+// Literal titles, so the flaky-test quarantine can name each case.
+for (const [operation, title] of [
+  [
+    "clear",
+    "clear can be retried after a failed server write without losing local history",
+  ],
+  [
+    "remove",
+    "remove can be retried after a failed server write without losing local history",
+  ],
+] as const) {
+  test(title, async () => {
     const { userStorageKey } =
       await import("@/lib/account/user-scoped-storage");
     const key = userStorageKey("law_search_history", {

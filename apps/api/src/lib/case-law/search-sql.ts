@@ -8,10 +8,8 @@ import {
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  derivedAiCaseLawSource,
-  redistributableCaseLawSource,
-} from "@/api/lib/case-law/redistribution";
+import { derivedAiCaseLawSource } from "@/api/lib/case-law/derived-ai-source";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import type { LegalSearchEngine } from "@/api/lib/legal-search/types";
 
 /**
