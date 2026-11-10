@@ -336,11 +336,42 @@ export const useCopyControlLabel = (
   return label ?? t("common.copy");
 };
 
-type CopyButtonProps = Omit<
+type CopyButtonElementProps = Omit<
   ComponentProps<typeof Button>,
   "aria-label" | "children" | "onClick"
-> &
-  Omit<CopyControlFeedbackProps, "control">;
+>;
+
+type CopyFeedbackOptions = Omit<CopyControlFeedbackProps, "control">;
+
+type CopyButtonProps = CopyButtonElementProps & CopyFeedbackOptions;
+
+type CopyButtonParts = {
+  buttonProps: CopyButtonElementProps;
+  content: CopyContent | string;
+  control: CopyControlState;
+  /** Names the action by its current label whether or not it is visible. */
+  currentLabel: string;
+  feedback: CopyFeedbackOptions;
+};
+
+const renderCopyButton = ({
+  buttonProps,
+  content,
+  control,
+  currentLabel,
+  feedback,
+}: CopyButtonParts) => (
+  <Button
+    {...buttonProps}
+    aria-label={currentLabel}
+    data-copied={control.copied ? "" : undefined}
+    onClick={() => {
+      detached(control.copy(content), "copy-control.copy");
+    }}
+  >
+    <CopyControlFeedback {...feedback} control={control} />
+  </Button>
+);
 
 type CopyControlButtonProps = CopyButtonProps & {
   control: CopyControlState;
@@ -361,28 +392,14 @@ export const CopyControlButton = ({
   labelClassName,
   ...buttonProps
 }: CopyControlButtonProps) => {
-  // Named by the current label in both shapes, so the action is found by
-  // its name whether or not the label is visible.
   const currentLabel = useCopyControlLabel(control, label);
-  return (
-    <Button
-      {...buttonProps}
-      aria-label={currentLabel}
-      data-copied={control.copied ? "" : undefined}
-      onClick={() => {
-        detached(control.copy(content), "copy-control.copy");
-      }}
-    >
-      <CopyControlFeedback
-        control={control}
-        icon={icon}
-        iconClassName={iconClassName}
-        iconOnly={iconOnly}
-        label={label}
-        labelClassName={labelClassName}
-      />
-    </Button>
-  );
+  return renderCopyButton({
+    buttonProps,
+    content,
+    control,
+    currentLabel,
+    feedback: { icon, iconClassName, iconOnly, label, labelClassName },
+  });
 };
 
 type CopyControlProps = CopyButtonProps & {
@@ -394,10 +411,22 @@ type CopyControlProps = CopyButtonProps & {
  * The app's Copy of a value: the glyph turns into a check and the label into
  * Copied where the reader pressed it; only a failed copy raises a toast.
  */
-export const CopyControl = ({ text, ...props }: CopyControlProps) => {
+export const CopyControl = ({
+  icon,
+  iconClassName,
+  iconOnly,
+  label,
+  labelClassName,
+  text,
+  ...buttonProps
+}: CopyControlProps) => {
   const control = useCopyControl({ payload: text });
-  return (
-    // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread -- CopyControlButton pins its own aria-label, onClick and children after its spread onto Button
-    <CopyControlButton {...props} content={text} control={control} />
-  );
+  const currentLabel = useCopyControlLabel(control, label);
+  return renderCopyButton({
+    buttonProps,
+    content: text,
+    control,
+    currentLabel,
+    feedback: { icon, iconClassName, iconOnly, label, labelClassName },
+  });
 };
