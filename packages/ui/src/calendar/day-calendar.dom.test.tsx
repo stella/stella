@@ -7,6 +7,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import {
+  getMatterColor,
+  getTopicColor,
+  MATTER_SWATCHES,
+} from "../lib/matter-colors";
 import { DayCalendar } from "./day-calendar";
 import type { DayCalendarColumn } from "./day-calendar";
 import {
@@ -395,7 +400,7 @@ describe("DayCalendar", () => {
     await cleanup();
   });
 
-  test("a topic block tints in its topic's swatch without a matter's edge, and switching stays plain", async () => {
+  test("a topic block tints from the topic set without a matter's edge, and switching stays plain", async () => {
     const block = (
       id: string,
       hour: number,
@@ -444,13 +449,22 @@ describe("DayCalendar", () => {
       return element;
     };
 
-    // The tint itself is a `color-mix` the DOM under test drops; the swatch
-    // comes from the matter palette's stable key hash.
+    // The tint itself is a `color-mix` the DOM under test drops; the colour
+    // it mixes from is read back from the block's tone property.
+    const tone = (label: string) =>
+      surface(label).style.getPropertyValue("--day-calendar-tone");
     expect(surface("topic").className).not.toContain("bg-muted");
     expect(surface("topic").className).toBe(surface("same topic").className);
     expect(surface("topic").className).not.toContain("border-s-[3px]");
     expect(surface("matter").className).toContain("border-s-[3px]");
     expect(surface("switching").className).toContain("bg-muted");
+    // A topic takes its stable swatch from the topic set, never a matter's.
+    expect(tone("topic")).toBe(getTopicColor("title:lease"));
+    expect(tone("same topic")).toBe(tone("topic"));
+    expect(tone("matter")).toBe(getMatterColor("lease"));
+    expect(MATTER_SWATCHES.map((swatch) => `var(${swatch})`)).not.toContain(
+      tone("topic"),
+    );
     await cleanup();
   });
 
