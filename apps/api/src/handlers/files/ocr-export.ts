@@ -7,7 +7,11 @@ import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { loadCurrentOcrExport } from "@/api/lib/document-content-provenance";
 import { createOcrSearchablePdfKey } from "@/api/lib/file-key";
-import { lockLiveVersionField } from "@/api/lib/files/live-version-field";
+import {
+  LIVE_VERSION_DELIVERY,
+  lockLiveVersionField,
+  recordLiveVersionDelivery,
+} from "@/api/lib/files/live-version-field";
 import { getS3 } from "@/api/lib/s3";
 import type { SignedDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -123,15 +127,21 @@ export const readOcrExport = async ({
   const text = await row.readText();
   const bytes = new TextEncoder().encode(text);
   const fileName = replaceExtension(row.content.fileName, ".txt");
-  await scopedDb(
-    async (tx) =>
+  const delivery = await recordLiveVersionDelivery({
+    scopedDb,
+    fieldId,
+    workspaceId,
+    record: async (tx) =>
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.DOWNLOAD,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
         resourceId: row.entityId,
         metadata: { fieldId, format },
       }),
-  );
+  });
+  if (delivery === LIVE_VERSION_DELIVERY.withdrawn) {
+    return status(404);
+  }
   return secureDocumentResponse({
     body: bytes,
     contentLength: bytes.byteLength,

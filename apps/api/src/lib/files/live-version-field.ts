@@ -66,8 +66,8 @@ export type LiveVersionLock = LiveVersionLockProof;
  * tombstoned between it and whatever the caller does next. The tombstone locks
  * the entity row for update before it writes `deletedAt`, so while this lock
  * is held it waits, and a tombstone that commits first leaves no live row here.
- * A caller that issues access to the version's objects (a signed link) does so
- * inside the same transaction.
+ * A caller that issues access to the version's objects (a signed link, an
+ * audited delivery of bytes) does so inside the same transaction.
  */
 export const lockLiveVersionField = async (
   tx: Transaction,
@@ -119,3 +119,39 @@ export const lockLiveVersionField = async (
     lock: new LiveVersionLockProof({ tx, entityId: row.entityId }),
   };
 };
+
+export const LIVE_VERSION_DELIVERY = {
+  recorded: "recorded",
+  withdrawn: "withdrawn",
+} as const;
+type LiveVersionDelivery =
+  (typeof LIVE_VERSION_DELIVERY)[keyof typeof LIVE_VERSION_DELIVERY];
+
+type RecordLiveVersionDeliveryOptions = {
+  scopedDb: ScopedDb;
+  fieldId: SafeId<"field">;
+  workspaceId: SafeId<"workspace">;
+  record: (tx: Transaction) => Promise<void>;
+};
+
+/**
+ * Records the delivery of bytes read or derived from a version's file. The
+ * storage read and any transform run before this, outside a lock, so a slow
+ * one never holds a tombstone back; this short transaction then re-checks the
+ * version under its share lock and records the delivery while holding it.
+ * `withdrawn`, with nothing recorded, when the version was tombstoned in the
+ * meantime: the caller discards the bytes and answers as for a missing file.
+ */
+export const recordLiveVersionDelivery = async ({
+  scopedDb,
+  fieldId,
+  workspaceId,
+  record,
+}: RecordLiveVersionDeliveryOptions): Promise<LiveVersionDelivery> =>
+  await scopedDb(async (tx) => {
+    if ((await lockLiveVersionField(tx, fieldId, workspaceId)) === null) {
+      return LIVE_VERSION_DELIVERY.withdrawn;
+    }
+    await record(tx);
+    return LIVE_VERSION_DELIVERY.recorded;
+  });

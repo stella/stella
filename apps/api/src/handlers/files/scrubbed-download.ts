@@ -10,7 +10,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
-import { fileFieldQuery } from "@/api/lib/files/live-version-field";
+import {
+  fileFieldQuery,
+  LIVE_VERSION_DELIVERY,
+  recordLiveVersionDelivery,
+} from "@/api/lib/files/live-version-field";
 import { createFileKey } from "@/api/lib/files/utils";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
@@ -92,16 +96,23 @@ export const readScrubbedDownload = async ({
 
   // Record the DOWNLOAD only once the cleaned bytes exist, matching the
   // presigned and stamped paths: a failed storage read or scrub must not leave
-  // a download in the trail that never happened.
-  await scopedDb(
-    async (tx) =>
+  // a download in the trail that never happened, and a version withdrawn
+  // while it ran answers 404.
+  const delivery = await recordLiveVersionDelivery({
+    scopedDb,
+    fieldId,
+    workspaceId,
+    record: async (tx) =>
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.DOWNLOAD,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
         resourceId: row.entityId,
         metadata: { fieldId, mimeType: content.mimeType, scrubbed: true },
       }),
-  );
+  });
+  if (delivery === LIVE_VERSION_DELIVERY.withdrawn) {
+    return status(404);
+  }
 
   // Copied into its own ArrayBuffer so the body is a plain `BodyInit`; the
   // scrubbers return views whose backing buffer is not statically known.
