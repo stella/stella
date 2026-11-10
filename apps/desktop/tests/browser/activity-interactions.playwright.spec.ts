@@ -1054,12 +1054,15 @@ test("pending drafts protect every deletion in the activity settings", async ({
     enMessages.activity.deleteDay,
     enMessages.activity.deleteAll,
     enMessages.activity.deleteOtherAccountHistory,
-    enMessages.activity.excludeApp.replace("{name}", "Example Editor"),
   ]) {
     await expect(
       page.getByRole("button", { name, exact: true }),
     ).toBeDisabled();
   }
+  // "Nothing" can offer to delete an app's history, so it is protected too.
+  await expect(
+    captureMode(page, "Example Editor", "captureModeNothing"),
+  ).toBeDisabled();
   await expect(
     page.getByText(enMessages.activity.pendingActivityProtected, {
       exact: true,
