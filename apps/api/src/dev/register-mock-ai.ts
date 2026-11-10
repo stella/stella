@@ -758,11 +758,52 @@ const TMPL_SUPPLY_PREFILL_FIXTURE: {
 // lists.generation.extract-facts (apps/api/src/lib/lists/generation/
 // fact-extract.ts). The worker keeps only facts whose quote it can find in
 // the block the fact names, so a fixed answer would ground nothing in a real
-// document. This one answers from the request instead: the opening sentence
-// of each of the first three blocks it is asked about, the second held as
-// contested, so a local run shows included and held facts with sources.
+// document. This one quotes the opening sentence of the first prose blocks
+// it is asked about (headings are skipped) and states a fact in the words a
+// reviewer would write, with a date, so a local run reads like a real one.
+// The second fact of each window is held as contested, so a run shows
+// included and held facts with sources.
 const MOCK_FACTS_PER_WINDOW = 3;
-const MOCK_FACT_MAX = 200;
+const MOCK_QUOTE_MAX = 200;
+// A heading or a label is not a passage a fact can rest on.
+const MOCK_QUOTE_MIN = 40;
+
+const MOCK_FACT_STATEMENTS = [
+  {
+    fact: "On 3 March 2026 the supplier gave 30 days' notice of termination.",
+    occurredOn: "2026-03-03",
+  },
+  {
+    fact: "The buyer paid the first instalment of EUR 250,000 on 14 January 2026.",
+    occurredOn: "2026-01-14",
+  },
+  {
+    fact: "The board approved the share acquisition at its meeting on 9 February 2026.",
+    occurredOn: "2026-02-09",
+  },
+  {
+    fact: "On 20 April 2026 the seller disclosed two pending employment claims.",
+    occurredOn: "2026-04-20",
+  },
+  {
+    fact: "The valuation report of 12 May 2026 put the equity value at EUR 18 million.",
+    occurredOn: "2026-05-12",
+  },
+  {
+    fact: "The parties agreed in July 2026 that deliveries would start in September.",
+    occurredOn: "2026-07",
+  },
+] as const;
+
+// Picks a statement from the block id, so each block keeps its fact across
+// runs and neighbouring blocks get different ones.
+const mockStatementFor = (blockId: string) => {
+  let hash = 0;
+  for (const char of blockId) {
+    hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % 9973;
+  }
+  return MOCK_FACT_STATEMENTS[hash % MOCK_FACT_STATEMENTS.length];
+};
 
 const mockExtractedFacts = (messages: readonly ModelMessage[]) => {
   const request = getLatestUserText([...messages]);
@@ -783,25 +824,30 @@ const mockExtractedFacts = (messages: readonly ModelMessage[]) => {
         .split(/(?<=[.!?])\s/u)
         .at(0)
         ?.trim()
-        .slice(0, MOCK_FACT_MAX);
-      return sentence === undefined || sentence.length < 12
+        .slice(0, MOCK_QUOTE_MAX);
+      return sentence === undefined ||
+        sentence.length < MOCK_QUOTE_MIN ||
+        sentence === sentence.toUpperCase()
         ? []
         : [{ blockId, sentence }];
     })
     .slice(0, MOCK_FACTS_PER_WINDOW)
-    .map(({ blockId, sentence }, index) => ({
-      blockId,
-      quote: sentence,
-      fact: sentence,
-      occurredOn: /\b(?:19|20)\d{2}\b/u.exec(sentence)?.[0] ?? null,
-      evidenceKind: index === 0 ? "document" : "testimony",
-      medium: index === 0 ? "Document" : "Statement",
-      confidence: index === 2 ? "medium" : "high",
-      contestedMeaning:
-        index === 1
-          ? "Mock: the passage could describe more than one event."
-          : null,
-    }));
+    .map(({ blockId, sentence }, index) => {
+      const statement = mockStatementFor(blockId);
+      return {
+        blockId,
+        quote: sentence,
+        fact: statement?.fact ?? sentence,
+        occurredOn: statement?.occurredOn ?? null,
+        evidenceKind: index === 1 ? "testimony" : "document",
+        medium: index === 1 ? "Witness statement" : "Contract",
+        confidence: index === 2 ? "medium" : "high",
+        contestedMeaning:
+          index === 1
+            ? "The passage could describe more than one notice."
+            : null,
+      };
+    });
 };
 
 export const mockStructuredData = (

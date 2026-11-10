@@ -217,14 +217,16 @@ describe("mockStructuredData", () => {
       );
       const { facts } = v.parse(factExtractionSchema, data);
       expect(
-        facts.map(({ blockId, quote, contestedMeaning }) => ({
+        facts.map(({ blockId, quote, fact, contestedMeaning }) => ({
           blockId,
           located: locateQuote(blocks.get(blockId) ?? "", quote) !== null,
+          // A fact restates the passage; it is not the passage again.
+          restated: fact !== quote,
           held: contestedMeaning !== null,
         })),
       ).toEqual([
-        { blockId: "b1", located: true, held: false },
-        { blockId: "b2", located: true, held: true },
+        { blockId: "b1", located: true, restated: true, held: false },
+        { blockId: "b2", located: true, restated: true, held: true },
       ]);
     });
   }

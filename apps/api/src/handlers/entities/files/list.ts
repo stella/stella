@@ -112,6 +112,7 @@ const listFilesHandler = async function* ({
     parentId: SafeId<"entity"> | null;
     fileName: string;
     mimeType: string;
+    sizeBytes: number;
   };
 
   const files: (FileRow & {
@@ -131,6 +132,7 @@ const listFilesHandler = async function* ({
       fieldId: row.fieldId,
       fileName: content.fileName,
       mimeType: content.mimeType,
+      sizeBytes: content.sizeBytes,
     });
   }
 
