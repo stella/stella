@@ -982,8 +982,10 @@ fn a_restore_asked_again_by_a_new_socket_while_it_runs_ends_restored_on_that_soc
     let runner = setup.start(&gateway);
     let mut connection = connect(&gateway, &[], "ready").await;
     connection.send(restore).await;
-    // The resend reaches the host before the holder can answer.
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    until("the host was handed the resend", || {
+      host.restores_asked() == 2
+    })
+    .await;
     assert_eq!(place.received("folder.restore").len(), 1);
 
     // The holder's link drops too; the supervisor asks it again by the same

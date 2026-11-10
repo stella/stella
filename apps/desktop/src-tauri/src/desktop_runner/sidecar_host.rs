@@ -163,6 +163,10 @@ struct Shared {
   /// runs gets no answer of its own, since the one answer goes out on the
   /// socket that is up when it ends.
   restores: Mutex<HashSet<String>>,
+  /// Every restore request the host was handed, repeats included, so a test
+  /// knows a resend arrived before it moves on.
+  #[cfg(test)]
+  restores_asked: std::sync::atomic::AtomicUsize,
 }
 
 /// One per app: the supervisor and its holder connection outlive runner
@@ -177,6 +181,15 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl SidecarHarnessHost {
+  /// How many restore requests the host was handed, repeats included.
+  #[cfg(test)]
+  pub(crate) fn restores_asked(&self) -> usize {
+    self
+      .shared
+      .restores_asked
+      .load(std::sync::atomic::Ordering::SeqCst)
+  }
+
   pub(crate) fn new(
     settings: HostSettings,
     harnesses: Arc<dyn LocalHarnesses>,
@@ -185,6 +198,8 @@ impl SidecarHarnessHost {
       shared: Arc::new(Shared {
         folders: Mutex::new(HashSet::new()),
         restores: Mutex::new(HashSet::new()),
+        #[cfg(test)]
+        restores_asked: std::sync::atomic::AtomicUsize::new(0),
         settings,
         harnesses,
         sidecar: Mutex::new(None),
@@ -831,7 +846,11 @@ impl HarnessHost for SidecarHarnessHost {
       if restoring.contains(&folder_id) {
         return Err(RejectReason::FolderBusy);
       }
-      run_folders::open(&workspace, SystemTime::now())
+      let opened = run_folders::open(&workspace, SystemTime::now());
+      // Held until the folder is recorded as used, so no restore begins in
+      // between.
+      drop(restoring);
+      opened
     };
     if let Err(error) = opened {
       tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "a run's folder could not be made");
@@ -947,7 +966,13 @@ impl HarnessHost for SidecarHarnessHost {
     };
     // The same restore asked again while it runs: its answer comes when it
     // ends, on whichever socket is up then.
-    if !locked(&self.shared.restores).insert(restore.restore_id.clone()) {
+    let fresh = locked(&self.shared.restores).insert(restore.restore_id.clone());
+    #[cfg(test)]
+    self
+      .shared
+      .restores_asked
+      .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    if !fresh {
       return;
     }
     // The holder makes the final call: it refuses a restore of a folder one

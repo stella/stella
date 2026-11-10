@@ -148,11 +148,14 @@ pub(super) fn remove_idle(folders: &Path, now: SystemTime, lock: &FolderLock) {
       let taken = {
         let held = lock.lock().unwrap_or_else(PoisonError::into_inner);
         let restoring = owner_id.is_some_and(|id| held.contains(&id));
-        if restoring || std::fs::symlink_metadata(&owner).is_ok() {
+        let taken = if restoring || std::fs::symlink_metadata(&owner).is_ok() {
           None
         } else {
           take_store(&path)
-        }
+        };
+        // Held until the store is taken, so no run makes the folder between.
+        drop(held);
+        taken
       };
       if let Some(taken) = taken {
         remove_folder(&taken);
@@ -190,6 +193,8 @@ pub(super) fn remove_idle(folders: &Path, now: SystemTime, lock: &FolderLock) {
       } else {
         None
       };
+      // Held until the folder and its store are both gone.
+      drop(held);
       (moved, store)
     };
     if moved {
