@@ -30,9 +30,11 @@ export const useOptimisticWrite = <T extends boolean | string>({
   const changed = useChanged();
   // A saved change holds only over the report it was made against, so the
   // next load's report replaces it rather than being masked by it.
-  const [saved, setSaved] = useState<{ over: T; value: T } | null>(null);
+  const [saved, setSaved] = useState<
+    { type: "none" } | { type: "held"; over: T; value: T }
+  >({ type: "none" });
   const [value, show] = useOptimistic(
-    saved !== null && saved.over === reported ? saved.value : reported,
+    saved.type === "held" && saved.over === reported ? saved.value : reported,
   );
   const [failure, setFailure] = useState<WriteFailure | null>(null);
   const [saving, startSaving] = useTransition();
@@ -46,7 +48,7 @@ export const useOptimisticWrite = <T extends boolean | string>({
       show(next);
       const outcome = await save();
       if (Result.isOk(outcome)) {
-        setSaved({ over: reported, value: next });
+        setSaved({ type: "held", over: reported, value: next });
         changed(kind);
         return;
       }

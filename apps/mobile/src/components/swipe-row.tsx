@@ -69,7 +69,7 @@ export const SwipeRow = ({
     const slide = (reduceMotion: boolean) => {
       Animated.timing(offset, {
         duration: reduceMotion ? 0 : SETTLE_MS,
-        easing: Easing.out(Easing.cubic),
+        easing: Easing.out((progress) => Easing.cubic(progress)),
         toValue: target,
         useNativeDriver: true,
       }).start();
@@ -128,7 +128,7 @@ export const SwipeRow = ({
           return;
         default:
           outcome satisfies never;
-          return panic(`unknown swipe outcome ${String(outcome)}`);
+          panic(`unknown swipe outcome ${String(outcome)}`);
       }
     },
     // Records the touch for the capture above; the row's content keeps it.
