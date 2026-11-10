@@ -158,6 +158,11 @@ struct Shared {
   /// The folders being restored. Held while a run starts in a folder, a
   /// folder is removed, or a restore begins: none of them overlaps another.
   folders: run_folders::FolderLock,
+  /// The restores going on, by the API's restore id. The API sends one again
+  /// on each new socket until it is answered; a copy that arrives while it
+  /// runs gets no answer of its own, since the one answer goes out on the
+  /// socket that is up when it ends.
+  restores: Mutex<HashSet<String>>,
 }
 
 /// One per app: the supervisor and its holder connection outlive runner
@@ -179,6 +184,7 @@ impl SidecarHarnessHost {
     Self {
       shared: Arc::new(Shared {
         folders: Mutex::new(HashSet::new()),
+        restores: Mutex::new(HashSet::new()),
         settings,
         harnesses,
         sidecar: Mutex::new(None),
@@ -939,17 +945,25 @@ impl HarnessHost for SidecarHarnessHost {
       answer.send(FolderRestoreOutcome::Failed);
       return;
     };
+    // The same restore asked again while it runs: its answer comes when it
+    // ends, on whichever socket is up then.
+    if !locked(&self.shared.restores).insert(restore.restore_id.clone()) {
+      return;
+    }
     // The holder makes the final call: it refuses a restore of a folder one
-    // of its runs uses, and a run in a folder it restores.
+    // of its runs uses, and a run in a folder it restores. Another restore
+    // of the folder is another operation, and refused the same way.
     let in_use = locked(&self.shared.runs)
       .values()
       .any(|run| run.folder_id == Some(folder_id));
     if in_use || !locked(&self.shared.folders).insert(folder_id) {
+      locked(&self.shared.restores).remove(&restore.restore_id);
       answer.send(FolderRestoreOutcome::FolderBusy);
       return;
     }
     let Some(sidecar) = self.shared.sidecar() else {
       locked(&self.shared.folders).remove(&folder_id);
+      locked(&self.shared.restores).remove(&restore.restore_id);
       answer.send(FolderRestoreOutcome::Failed);
       return;
     };
@@ -964,6 +978,7 @@ impl HarnessHost for SidecarHarnessHost {
         })
         .await;
       locked(&shared.folders).remove(&folder_id);
+      locked(&shared.restores).remove(&restore.restore_id);
       let outcome = match restored {
         Ok(outcome) => folder_outcome(outcome),
         Err(error) => {

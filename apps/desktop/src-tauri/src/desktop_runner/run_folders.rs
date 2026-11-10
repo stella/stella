@@ -138,10 +138,17 @@ pub(super) fn remove_idle(folders: &Path, now: SystemTime, lock: &FolderLock) {
       .and_then(|name| store_owner(folders, name));
     if let Some(owner) = owner {
       // A store outlives its folder only when an earlier pass stopped
-      // between the two; a folder is always made before its store.
+      // between the two; a folder is always made before its store. A store
+      // whose folder is being restored stays: the restore puts the folder
+      // back from it.
+      let owner_id = owner
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| Uuid::parse_str(name).ok());
       let taken = {
-        let _held = lock.lock().unwrap_or_else(PoisonError::into_inner);
-        if std::fs::symlink_metadata(&owner).is_ok() {
+        let held = lock.lock().unwrap_or_else(PoisonError::into_inner);
+        let restoring = owner_id.is_some_and(|id| held.contains(&id));
+        if restoring || std::fs::symlink_metadata(&owner).is_ok() {
           None
         } else {
           take_store(&path)
@@ -325,6 +332,21 @@ mod tests {
     lock.lock().unwrap().clear();
     remove_idle(&place.0, at(30), &lock);
     assert!(!idle.exists());
+    assert!(!store.exists());
+  }
+
+  #[test]
+  fn checkpoints_of_a_gone_folder_being_restored_stay() {
+    let place = Place::new();
+    let gone = place.folder();
+    let store = store_of(&gone);
+    let folder_id =
+      Uuid::parse_str(gone.file_name().unwrap().to_str().unwrap()).unwrap();
+    let lock = Mutex::new(HashSet::from([folder_id]));
+    remove_idle(&place.0, at(0), &lock);
+    assert!(store.exists());
+    lock.lock().unwrap().clear();
+    remove_idle(&place.0, at(0), &lock);
     assert!(!store.exists());
   }
 

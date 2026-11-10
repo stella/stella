@@ -263,6 +263,7 @@ type RestoreReply = oneshot::Sender<Result<RestoreOutcome, ProbeError>>;
 /// One host message, serialized within the line limit, newline included.
 /// Commands are encoded before they are queued, so the supervisor only ever
 /// writes lines within the limit and a write fails on I/O alone.
+#[derive(Clone)]
 struct HostLine(Vec<u8>);
 
 impl HostLine {
@@ -907,6 +908,14 @@ struct Run {
   claim: Option<Claim>,
 }
 
+/// A folder restore sent to a holder and not answered yet.
+struct PendingRestore {
+  holder: PathBuf,
+  /// Sent again as it was on a new connection to the holder.
+  line: HostLine,
+  reply: RestoreReply,
+}
+
 struct Supervisor {
   settings: SidecarSettings,
   /// Where holders listen; an error leaves every holder unreachable.
@@ -918,8 +927,10 @@ struct Supervisor {
   next_link: u64,
   runs: HashMap<String, Run>,
   probes: HashMap<String, (PathBuf, ProbeReply)>,
-  /// Folder restores waiting for their holder's answer.
-  restores: HashMap<String, (PathBuf, RestoreReply)>,
+  /// Folder restores waiting for their holder's answer. One outlives a dropped
+  /// connection: the holder may still be writing the folder, so it is asked
+  /// again on the next connection and fails only once the holder is gone.
+  restores: HashMap<String, PendingRestore>,
   /// Where reported harness processes go.
   processes: Option<mpsc::Sender<HarnessProcess>>,
 }
@@ -951,7 +962,7 @@ impl Supervisor {
             self.probe(request_id, &line, reply).await;
           }
           Some(Control::Restore { request_id, line, reply }) => {
-            self.restore(request_id, &line, reply).await;
+            self.restore(request_id, line, reply).await;
           }
           Some(Control::Forward { run_id, line }) => {
             self.forward(&run_id, &line).await;
@@ -1290,18 +1301,35 @@ impl Supervisor {
     self.write_line(&dir, line).await;
   }
 
-  async fn restore(
-    &mut self,
-    request_id: String,
-    line: &HostLine,
-    reply: RestoreReply,
-  ) {
+  async fn restore(&mut self, request_id: String, line: HostLine, reply: RestoreReply) {
     let Some(dir) = self.current().await else {
       let _delivered = reply.send(Err(ProbeError::SidecarDown));
       return;
     };
-    self.restores.insert(request_id, (dir.clone(), reply));
-    self.write_line(&dir, line).await;
+    self.write_line(&dir, &line).await;
+    self.restores.insert(
+      request_id,
+      PendingRestore {
+        holder: dir,
+        line,
+        reply,
+      },
+    );
+  }
+
+  /// Ask a holder again for the restores it was sent before its connection
+  /// dropped. The holder answers one still running when it ends, and one it
+  /// finished as `restored`.
+  async fn resend_restores(&mut self, dir: &Path) {
+    let lines: Vec<HostLine> = self
+      .restores
+      .values()
+      .filter(|pending| pending.holder == dir)
+      .map(|pending| pending.line.clone())
+      .collect();
+    for line in lines {
+      self.write_line(dir, &line).await;
+    }
   }
 
   async fn forward(&mut self, run_id: &str, line: &HostLine) {
@@ -1404,6 +1432,7 @@ impl Supervisor {
           if role == LinkRole::Draining {
             self.write(dir, &HostMessage::Drain).await;
           }
+          self.resend_restores(dir).await;
           return;
         }
         Err(OpenError::Gone) => {
@@ -1418,6 +1447,12 @@ impl Supervisor {
     }
     tracing::warn!(target: LOG_TARGET, "harness holder is unreachable; its runs failed");
     self.fail_holder(dir);
+    // A restore fails only once nothing listens for the holder: one that is
+    // alive but unreachable may still be writing the folder, which stays
+    // held until it answers.
+    if gone {
+      self.fail_restores(dir);
+    }
     // As in `discover`: only a holder nothing listens for any more loses its
     // folder. One that is alive but unreachable keeps its secret and
     // endpoint, so a later app can still reach it and resume its runs.
@@ -1475,8 +1510,8 @@ impl Supervisor {
       }
       SidecarMessage::FolderRestored(restored) => {
         match self.restores.remove(&restored.request_id) {
-          Some((_dir, reply)) => {
-            let _delivered = reply.send(Ok(restored.outcome));
+          Some(pending) => {
+            let _delivered = pending.reply.send(Ok(restored.outcome));
           }
           None => {
             tracing::warn!(
@@ -1614,15 +1649,18 @@ impl Supervisor {
         let _delivered = reply.send(Err(ProbeError::SidecarDown));
       }
     }
+  }
+
+  fn fail_restores(&mut self, dir: &Path) {
     let restoring: Vec<String> = self
       .restores
       .iter()
-      .filter(|(_request_id, (holder, _reply))| holder == dir)
-      .map(|(request_id, _restore)| request_id.clone())
+      .filter(|(_request_id, pending)| pending.holder == dir)
+      .map(|(request_id, _pending)| request_id.clone())
       .collect();
     for request_id in restoring {
-      if let Some((_dir, reply)) = self.restores.remove(&request_id) {
-        let _delivered = reply.send(Err(ProbeError::SidecarDown));
+      if let Some(pending) = self.restores.remove(&request_id) {
+        let _delivered = pending.reply.send(Err(ProbeError::SidecarDown));
       }
     }
   }
@@ -1656,6 +1694,8 @@ impl Supervisor {
     self.links.clear();
     for dir in dirs {
       self.fail_holder(&dir);
+      // The holders were told to exit and the app is quitting.
+      self.fail_restores(&dir);
     }
   }
 }
