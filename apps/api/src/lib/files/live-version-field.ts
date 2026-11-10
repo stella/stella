@@ -38,6 +38,28 @@ export const fileFieldQuery = async (
       .limit(1),
   );
 
+type LiveVersion = {
+  tx: Transaction;
+  entityId: SafeId<"entity">;
+};
+
+class LiveVersionLockProof {
+  readonly #version: LiveVersion;
+  constructor(version: LiveVersion) {
+    this.#version = version;
+  }
+  get version(): LiveVersion {
+    return this.#version;
+  }
+}
+
+/**
+ * Proof that `tx` holds a live version's share lock. Only
+ * `lockLiveVersionField` creates one, so whatever demands it (a signed link
+ * to a document's file) runs where a tombstone cannot commit underneath it.
+ */
+export type LiveVersionLock = LiveVersionLockProof;
+
 /**
  * The field of a live version, share-locked with its entity and version until
  * the transaction ends. `fileFieldQuery` alone is a snapshot: a version can be
@@ -80,11 +102,20 @@ export const lockLiveVersionField = async (
           fieldId: fields.id,
           fieldWorkspaceId: fields.workspaceId,
           content: fields.content,
+          versionStamp: entityVersions.stamp,
+          verificationCode: entityVersions.verificationCode,
         })
         .from(entities)
         .innerJoin(entityVersions, eq(entityVersions.entityId, entities.id))
         .innerJoin(fields, eq(fields.entityVersionId, entityVersions.id)),
     where: isNull(entityVersions.deletedAt),
   });
-  return locked.rows.at(0) ?? null;
+  const row = locked.rows.at(0);
+  if (!row) {
+    return null;
+  }
+  return {
+    ...row,
+    lock: new LiveVersionLockProof({ tx, entityId: row.entityId }),
+  };
 };

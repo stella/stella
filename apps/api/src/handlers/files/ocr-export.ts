@@ -91,7 +91,8 @@ export const readOcrExport = async ({
     // and its OCR run are still current. The version's share lock keeps a
     // tombstone from committing until the link is signed and audited.
     const url = await scopedDb(async (tx) => {
-      if ((await lockLiveVersionField(tx, fieldId, workspaceId)) === null) {
+      const locked = await lockLiveVersionField(tx, fieldId, workspaceId);
+      if (locked === null) {
         return null;
       }
       const current = await loadExport(tx);
@@ -100,10 +101,9 @@ export const readOcrExport = async ({
       }
       return await auditedPresignDownload({
         readSessionAuthority,
-        tx,
+        versionLock: locked.lock,
         recordAuditEvent,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: row.entityId,
         userId,
         source,
         s3Key,

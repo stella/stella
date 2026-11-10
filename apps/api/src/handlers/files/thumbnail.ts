@@ -73,10 +73,9 @@ export default createSafeHandler(
             }
             return await auditedPresignDownload({
               readSessionAuthority: ownerSyntheticSessionAuthorityReader,
-              tx,
+              versionLock: row.lock,
               recordAuditEvent,
               resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-              resourceId: row.entityId,
               userId: user.id,
               source: callerDownloadSource(session),
               s3Key: createFileKey({
