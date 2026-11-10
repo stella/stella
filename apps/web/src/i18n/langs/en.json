@@ -6595,6 +6595,7 @@
     "deletedItem": "Deleted: {name}",
     "deletingWorkspace": "Deleting matter",
     "documentSwitcher": {
+      "download": "Download this file",
       "searchPlaceholder": "Find a document…",
       "trigger": "Switch document"
     },

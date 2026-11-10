@@ -6595,6 +6595,7 @@
     "deletedItem": "Eliminado: {name}",
     "deletingWorkspace": "Eliminando asunto",
     "documentSwitcher": {
+      "download": "Descargar este archivo",
       "searchPlaceholder": "Buscar un documento…",
       "trigger": "Cambiar de documento"
     },

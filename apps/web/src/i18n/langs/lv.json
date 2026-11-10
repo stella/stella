@@ -6595,6 +6595,7 @@
     "deletedItem": "Izdzēsts: {name}",
     "deletingWorkspace": "Dzēš lietu",
     "documentSwitcher": {
+      "download": "Lejupielādēt šo failu",
       "searchPlaceholder": "Atrast dokumentu…",
       "trigger": "Pārslēgt dokumentu"
     },

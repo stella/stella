@@ -6595,6 +6595,7 @@
     "deletedItem": "Smazáno: {name}",
     "deletingWorkspace": "Mazání spisu",
     "documentSwitcher": {
+      "download": "Stáhnout tento soubor",
       "searchPlaceholder": "Najít dokument…",
       "trigger": "Přepnout dokument"
     },

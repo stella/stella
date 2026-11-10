@@ -6595,6 +6595,7 @@
     "deletedItem": "Kustutatud: {name}",
     "deletingWorkspace": "Toimiku kustutamine",
     "documentSwitcher": {
+      "download": "Laadi see fail alla",
       "searchPlaceholder": "Otsi dokumenti…",
       "trigger": "Vaheta dokumenti"
     },

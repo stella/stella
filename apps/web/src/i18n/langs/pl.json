@@ -6595,6 +6595,7 @@
     "deletedItem": "Usunięto: {name}",
     "deletingWorkspace": "Usuwanie sprawy",
     "documentSwitcher": {
+      "download": "Pobierz ten plik",
       "searchPlaceholder": "Znajdź dokument…",
       "trigger": "Przełącz dokument"
     },

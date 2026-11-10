@@ -193,6 +193,7 @@ export const PdfBreadcrumb = () => {
           <DocumentSwitcher
             entityId={entityId}
             fieldId={fieldId}
+            fileName={storedName}
             viewId={viewId}
             workspaceId={workspaceId}
           />
