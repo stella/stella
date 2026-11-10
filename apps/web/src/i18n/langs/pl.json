@@ -276,6 +276,10 @@
       "reopened": "Otwarto ponownie, oczekuje na sprawdzenie",
       "reopenedTooltip": "Osoba weryfikująca przeklasyfikowała to twierdzenie jako możliwy do sprawdzenia fakt; porównanie z rzeczywistym rejestrem nadal oczekuje na wykonanie.",
       "sourceCount": "{count, plural, one {# źródło} few {# źródła} many {# źródeł} other {# źródła}}",
+      "unsourced": {
+        "hint": "Do tego faktu nie dołączono jeszcze żadnego dokumentu źródłowego; nośnik i data opisują dowód, ale nie są źródłem.",
+        "label": "Bez źródła"
+      },
       "whyVerdict": "Uzasadnienie rozstrzygnięcia: fakty referencyjne"
     },
     "claimTypes": {

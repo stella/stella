@@ -290,8 +290,34 @@ export const routineUnsettledClaimIds = (
     )
     .map((claim) => claim.id);
 
+type FactStanding = Omit<
+  VerificationRun["factStandings"][number],
+  "factEntityId"
+>;
+
+/** A pinned fact with how it stands on the list now: the footing the
+ *  claim's computed qualifiers read. */
+export type ShownFact = EvidenceFact & { standing: FactStanding };
+
 /** Pinned evidence facts by id, for the detail panel's fact cards. */
 export const evidenceFactsById = (
-  evidence: VerificationRun["evidence"],
-): ReadonlyMap<FactId, EvidenceFact> =>
-  new Map(evidence.facts.map((fact) => [fact.factEntityId, fact]));
+  run: Pick<VerificationRun, "evidence" | "factStandings">,
+): ReadonlyMap<FactId, ShownFact> => {
+  const standings = new Map(
+    run.factStandings.map(({ factEntityId, scoring, sourcing }) => [
+      factEntityId,
+      { scoring, sourcing },
+    ]),
+  );
+  return new Map(
+    run.evidence.facts.map((fact) => [
+      fact.factEntityId,
+      {
+        ...fact,
+        standing:
+          standings.get(fact.factEntityId) ??
+          panic("A pinned fact has no standing in the run read"),
+      },
+    ]),
+  );
+};

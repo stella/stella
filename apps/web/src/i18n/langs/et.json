@@ -276,6 +276,10 @@
       "reopened": "Uuesti avatud, kontroll ootel",
       "reopenedTooltip": "Kontrollija liigitas selle uuesti kontrollitavaks faktiks; reaalajas registrikontroll on veel ootel.",
       "sourceCount": "{count, plural, one {# allikas} other {# allikat}}",
+      "unsourced": {
+        "hint": "Selle faktiga pole veel seotud ühtegi allikdokumenti; meedium ja kuupäev kirjeldavad tõendit, kuid ei ole allikas.",
+        "label": "Allikata"
+      },
       "whyVerdict": "Otsuse põhjendus: ankurfaktid"
     },
     "claimTypes": {

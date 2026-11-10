@@ -143,15 +143,21 @@ export const StateChip = ({ state }: { state: ClaimState }) => {
 export const TypeChip = ({ type }: { type: ClaimType }) => {
   const t = useTranslations();
   const meta = CLAIM_TYPE_META[type];
+  // What the type means is looked up, not read on every claim.
   return (
-    <ReviewStatusBadge size="sm" tone="neutral">
-      {t(meta.labelKey)}
-      {!meta.verifiable && (
-        <span className="border-border border-s ps-1.5">
-          {t("avt.claimTypes.setAside")}
-        </span>
-      )}
-    </ReviewStatusBadge>
+    <Tooltip>
+      <TooltipTrigger render={<span />}>
+        <ReviewStatusBadge size="sm" tone="neutral">
+          {t(meta.labelKey)}
+          {!meta.verifiable && (
+            <span className="border-border border-s ps-1.5">
+              {t("avt.claimTypes.setAside")}
+            </span>
+          )}
+        </ReviewStatusBadge>
+      </TooltipTrigger>
+      <TooltipPopup className="max-w-72">{t(meta.hintKey)}</TooltipPopup>
+    </Tooltip>
   );
 };
 

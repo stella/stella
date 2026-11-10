@@ -226,6 +226,8 @@
   "avt.claimDetail.reopened": "Re-opened, check pending",
   "avt.claimDetail.reopenedTooltip": "A reviewer re-classified this as a checkable fact; a live record check is still pending.",
   "avt.claimDetail.sourceCount": "{count, plural, one {# source} other {# sources}}",
+  "avt.claimDetail.unsourced.hint": "No source document is linked to this fact yet; its medium and date describe the evidence but are not a source.",
+  "avt.claimDetail.unsourced.label": "Unsourced",
   "avt.claimDetail.whyVerdict": "Why this verdict: anchor facts",
   "avt.claimTypes.fact.hint": "Objective, checkable assertion, scored against the record. Includes claims framed as admissions or denials: judged on the underlying proposition, not the bare words.",
   "avt.claimTypes.opinion.hint": "A value judgement or characterisation: no document can confirm or contradict it, so it is set aside, not scored.",

@@ -276,6 +276,10 @@
       "reopened": "Reaberta, verificação pendente",
       "reopenedTooltip": "Um revisor reclassificou isto como um fato verificável; uma verificação ativa contra o registro ainda está pendente.",
       "sourceCount": "{count, plural, one {# fonte} other {# fontes} many {# fontes}}",
+      "unsourced": {
+        "hint": "Nenhum documento de origem está vinculado a este fato ainda; o meio e a data descrevem a prova, mas não são uma fonte.",
+        "label": "Sem fonte"
+      },
       "whyVerdict": "Por que este veredito: fatos-âncora"
     },
     "claimTypes": {

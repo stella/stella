@@ -276,6 +276,10 @@
       "reopened": "Erneut geöffnet, Prüfung ausstehend",
       "reopenedTooltip": "Ein Prüfer hat dies als überprüfbaren Fakt neu klassifiziert; der Live-Abgleich mit dem Bestand steht noch aus.",
       "sourceCount": "{count, plural, one {# Quelle} other {# Quellen}}",
+      "unsourced": {
+        "hint": "Mit diesem Fakt ist noch kein Quelldokument verknüpft; Medium und Datum beschreiben den Beleg, sind aber keine Quelle.",
+        "label": "Ohne Quelle"
+      },
       "whyVerdict": "Begründung des Ergebnisses – Ankerfakten"
     },
     "claimTypes": {

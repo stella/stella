@@ -276,6 +276,10 @@
       "reopened": "Újranyitva, ellenőrzésre vár",
       "reopenedTooltip": "Egy ellenőr ellenőrizhető ténynek minősítette át ezt az állítást; a működő nyilvántartással való összevetés még várat magára.",
       "sourceCount": "{count, plural, one {# forrás} other {# forrás}}",
+      "unsourced": {
+        "hint": "Ehhez a tényhez még nincs forrásdokumentum kapcsolva; a hordozó és a dátum a bizonyítékot írja le, de nem forrás.",
+        "label": "Forrás nélkül"
+      },
       "whyVerdict": "A következtetés indoka: referenciatények"
     },
     "claimTypes": {

@@ -306,7 +306,7 @@ afterAll(async () => {
   await releaseTestDb();
 });
 
-const readQualifiers = async () => {
+const readRun = async () => {
   const run = await testDb.transaction(async (tx: TestDatabaseTransaction) => {
     await tx.execute(sql.raw("RESET ROLE"));
     return await readVerificationRun({
@@ -315,13 +315,19 @@ const readQualifiers = async () => {
       runId,
     });
   });
-  return new Map(
-    (run?.claims ?? []).map((claim) => [
+  if (run === null) {
+    throw new Error("The seeded run is not readable");
+  }
+  return run;
+};
+
+const readQualifiers = async () =>
+  new Map(
+    (await readRun()).claims.map((claim) => [
       claim.id,
       claim.qualifiers.map(({ kind }) => kind),
     ]),
   );
-};
 
 test("qualifiers follow the facts as they stand when the run is read", async () => {
   const before = await readQualifiers();
@@ -373,4 +379,20 @@ test("qualifiers follow the facts as they stand when the run is read", async () 
     .from(legalListClaims)
     .where(eq(legalListClaims.id, claimIds.governedByHeld));
   expect(stored).toEqual([{ qualifiers: [] }]);
+
+  // The read reports the footing it computed them from, for every pinned
+  // fact, so a reader shows what the qualifiers state.
+  const standings = new Map(
+    (await readRun()).factStandings.map(({ factEntityId, ...standing }) => [
+      factEntityId,
+      standing,
+    ]),
+  );
+  expect(Object.fromEntries(standings)).toEqual({
+    [bankRecord]: { scoring: "included", sourcing: "sourced" },
+    [diaryNote]: { scoring: "included", sourcing: "unsourced" },
+    [leaveCalendar]: { scoring: "included", sourcing: "sourced" },
+    [marginNote]: { scoring: "held", sourcing: "unsourced" },
+    [removedEmail]: { scoring: "included", sourcing: "sourced" },
+  });
 });

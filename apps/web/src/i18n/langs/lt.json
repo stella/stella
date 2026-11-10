@@ -276,6 +276,10 @@
       "reopened": "Atverta iš naujo, laukiama patikros",
       "reopenedTooltip": "Tikrintojas perklasifikavo tai kaip patikrinamą faktą; tiesioginė patikra pagal registrą dar neatlikta.",
       "sourceCount": "{count, plural, one {# šaltinis} few {# šaltiniai} many {# šaltinių} other {# šaltinio}}",
+      "unsourced": {
+        "hint": "Prie šio fakto dar nepridėtas joks šaltinio dokumentas; laikmena ir data apibūdina įrodymą, bet nėra šaltinis.",
+        "label": "Be šaltinio"
+      },
       "whyVerdict": "Išvados pagrindimas: atraminiai faktai"
     },
     "claimTypes": {

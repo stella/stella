@@ -276,6 +276,10 @@
       "reopened": "Re-opened, check pending",
       "reopenedTooltip": "A reviewer re-classified this as a checkable fact; a live record check is still pending.",
       "sourceCount": "{count, plural, one {# source} other {# sources}}",
+      "unsourced": {
+        "hint": "No source document is linked to this fact yet; its medium and date describe the evidence but are not a source.",
+        "label": "Unsourced"
+      },
       "whyVerdict": "Why this verdict: anchor facts"
     },
     "claimTypes": {

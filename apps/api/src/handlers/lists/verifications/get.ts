@@ -13,7 +13,9 @@ const config = {
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Read one list verification: the document version it checked, the list " +
-    "facts it checked against as they stood then, and every claim found in " +
+    "facts it checked against as they stood then, how each of those facts " +
+    "stands on the list now (held or included, with or without a source), " +
+    "and every claim found in " +
     "the document with its verdict (state, and a 0-100 support score for " +
     "supported, tension and contradicted), its qualifiers (caveats that " +
     "never change the verdict: the record is not expected to speak to the " +

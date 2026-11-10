@@ -276,6 +276,10 @@
       "reopened": "Reabierta, comprobación pendiente",
       "reopenedTooltip": "Un revisor la reclasificó como hecho comprobable; aún está pendiente la comprobación en vivo del registro.",
       "sourceCount": "{count, plural, one {# fuente} other {# fuentes} many {# fuentes}}",
+      "unsourced": {
+        "hint": "Este hecho aún no tiene ningún documento de origen vinculado; su soporte y su fecha describen la prueba, pero no son una fuente.",
+        "label": "Sin fuente"
+      },
       "whyVerdict": "Motivo de este resultado: hechos de referencia"
     },
     "claimTypes": {

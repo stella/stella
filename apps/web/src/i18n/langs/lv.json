@@ -276,6 +276,10 @@
       "reopened": "Atvērts vēlreiz, gaida pārbaudi",
       "reopenedTooltip": "Pārbaudītājs to pārklasificēja par pārbaudāmu faktu; tiešā pārbaude pret reģistru vēl nav veikta.",
       "sourceCount": "{count, plural, zero {# avotu} one {# avots} other {# avoti}}",
+      "unsourced": {
+        "hint": "Šim faktam vēl nav piesaistīts neviens avota dokuments; nesējs un datums apraksta pierādījumu, taču nav avots.",
+        "label": "Bez avota"
+      },
       "whyVerdict": "Slēdziena pamatojums: enkurfakti"
     },
     "claimTypes": {

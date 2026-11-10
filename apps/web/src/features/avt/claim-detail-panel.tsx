@@ -26,6 +26,7 @@ import {
 } from "@stll/ui/icons";
 import type { ReviewDecisionState } from "@stll/ui/review-decision-actions";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
+import { ReviewStatusDot } from "@stll/ui/review-severity-dot";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -70,18 +71,13 @@ import type {
   ClaimReviewEvent,
   ClaimReviewStatus,
   ClaimState,
-  EvidenceFact,
   FactId,
   RecordConflict,
   VerificationClaim,
 } from "@/features/avt/types";
-import {
-  CLAIM_OVERRIDE_STATES,
-  CLAIM_TYPE_META,
-  STATE_META,
-} from "@/features/avt/types";
+import { CLAIM_OVERRIDE_STATES, STATE_META } from "@/features/avt/types";
 import { useClaimSaveState } from "@/features/avt/use-claim-review-actions";
-import type { DispositionTone } from "@/features/avt/verdict";
+import type { DispositionTone, ShownFact } from "@/features/avt/verdict";
 import {
   confirmLabel,
   dispositionGuidance,
@@ -98,7 +94,7 @@ type ClaimDetailPanelProps = {
   runId: string;
   /** The claim as displayed (see `resolveClaimView`). */
   claim: VerificationClaim;
-  factsById: ReadonlyMap<FactId, EvidenceFact>;
+  factsById: ReadonlyMap<FactId, ShownFact>;
   contested: ReadonlySet<FactId>;
   stepper: MatchStepperState;
   onReviewEvent: (event: ClaimReviewEvent) => void;
@@ -185,9 +181,6 @@ export const ClaimDetailPanel = ({
         >
           {claim.text}
         </blockquote>
-        <p className="text-muted-foreground text-2xs leading-relaxed">
-          {t(CLAIM_TYPE_META[claim.type].hintKey)}
-        </p>
         <QualifierNotes claim={claim} />
 
         {override !== null && (
@@ -653,7 +646,7 @@ const FactCard = ({
   rel,
 }: {
   workspaceId: string;
-  fact: EvidenceFact;
+  fact: ShownFact;
   rel: ClaimFactRelation;
 }) => {
   const t = useTranslations();
@@ -691,7 +684,7 @@ const FactBody = ({
   fact,
 }: {
   workspaceId: string;
-  fact: EvidenceFact;
+  fact: ShownFact;
 }) => {
   const t = useTranslations();
   const source = evidenceQuoteSource(fact.sources);
@@ -712,6 +705,25 @@ const FactBody = ({
         </p>
       )}
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        {/* The fact as it stands now, the footing the claim's qualifiers
+            read. The medium and kind describe the evidence; only a linked
+            document is a source, so a fact without one says so. */}
+        {fact.standing.scoring === "held" && (
+          <span className="text-foreground inline-flex items-center gap-1.5">
+            <ReviewStatusDot tone="warning" />
+            {t("avt.anchorFacts.heldForReview")}
+          </span>
+        )}
+        {fact.standing.sourcing === "unsourced" && (
+          <Tooltip>
+            <TooltipTrigger render={<span />}>
+              {t("avt.claimDetail.unsourced.label")}
+            </TooltipTrigger>
+            <TooltipPopup className="max-w-72">
+              {t("avt.claimDetail.unsourced.hint")}
+            </TooltipPopup>
+          </Tooltip>
+        )}
         <EvidenceFactSource source={source} workspaceId={workspaceId} />
         {fact.evidenceKind !== null && <span>{fact.evidenceKind}</span>}
         <FactDate
@@ -733,7 +745,7 @@ type RecordConflictBlockProps = {
   disabled: boolean;
   conflict: RecordConflict;
   review: ClaimReview | null;
-  factsById: ReadonlyMap<FactId, EvidenceFact>;
+  factsById: ReadonlyMap<FactId, ShownFact>;
   onResolve: (
     resolution: Extract<
       ClaimReviewEvent,

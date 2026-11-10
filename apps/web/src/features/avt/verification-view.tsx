@@ -132,7 +132,7 @@ export const VerificationView = ({
   const claims = run.claims.map(resolveClaimView);
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
   const contested = contestedFactIds(run.evidence.facts);
-  const factsById = evidenceFactsById(run.evidence);
+  const factsById = evidenceFactsById(run);
   const presentation = selectClaimPresentation(run.blocks, claims);
   const readingOrder = presentation.readingOrder;
   const counts = countClaims(run.claims, contested);

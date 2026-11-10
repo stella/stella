@@ -276,6 +276,10 @@
       "reopened": "Znovu otevřeno, čeká na kontrolu",
       "reopenedTooltip": "Kontrolující osoba překlasifikovala toto tvrzení jako ověřitelné; porovnání se živými záznamy dosud neproběhlo.",
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdroje} other {# zdrojů}}",
+      "unsourced": {
+        "hint": "K tomuto faktu zatím není připojen žádný zdrojový dokument; médium a datum důkaz popisují, ale nejsou zdrojem.",
+        "label": "Bez zdroje"
+      },
       "whyVerdict": "Odůvodnění závěru: referenční fakta"
     },
     "claimTypes": {

@@ -276,6 +276,10 @@
       "reopened": "Rouverte, vérification en attente",
       "reopenedTooltip": "Un relecteur a requalifié cette affirmation en fait vérifiable ; une vérification en direct du dossier est encore en attente.",
       "sourceCount": "{count, plural, one {# source} other {# sources} many {# sources}}",
+      "unsourced": {
+        "hint": "Aucun document source n’est encore lié à ce fait ; son support et sa date décrivent la preuve, mais ne constituent pas une source.",
+        "label": "Sans source"
+      },
       "whyVerdict": "Pourquoi ce verdict : faits d’ancrage"
     },
     "claimTypes": {

@@ -276,6 +276,10 @@
       "reopened": "Znovu otvorené, čaká na kontrolu",
       "reopenedTooltip": "Kontrolujúca osoba preklasifikovala toto tvrdenie ako overiteľný fakt; porovnanie so živými záznamami zatiaľ neprebehlo.",
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdrojov} other {# zdroja}}",
+      "unsourced": {
+        "hint": "K tomuto faktu zatiaľ nie je pripojený žiadny zdrojový dokument; médium a dátum dôkaz opisujú, ale nie sú zdrojom.",
+        "label": "Bez zdroja"
+      },
       "whyVerdict": "Odôvodnenie záveru: referenčné fakty"
     },
     "claimTypes": {

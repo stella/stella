@@ -552,6 +552,13 @@ test("a claim's qualifiers show beside its verdict and in its detail, and a sile
     within(notes).getByText(messages.avt.qualifiers.restsOnHeld.hint),
   ).toBeTruthy();
   expect(screen.queryByText("48")).toBeNull();
+  // The fact card shows the same footing: it has no linked source, whatever
+  // its medium says.
+  expect(
+    screen.getByText(messages.avt.claimDetail.unsourced.label),
+  ).toBeTruthy();
+  // What a claim type means is a tooltip on its chip, not panel prose.
+  expect(screen.queryByText(messages.avt.claimTypes.fact.hint)).toBeNull();
   expect(requests).toEqual([]);
 });
 
