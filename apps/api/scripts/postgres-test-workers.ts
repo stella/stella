@@ -143,6 +143,7 @@ type RunPostgresWorkersOptions = PlanPostgresWorkersOptions & {
   }) => Child;
   registerSignal?: (handler: (signal: NodeJS.Signals) => void) => () => void;
   now?: () => number;
+  sleep?: (milliseconds: number) => Promise<void>;
   log?: (message: string) => void;
 };
 
@@ -153,6 +154,69 @@ const databaseUrlWithName = (source: URL, databaseName: string) => {
   const result = new URL(source);
   result.pathname = `/${databaseName}`;
   return result.toString();
+};
+
+// Health probes such as pg_isready hold sub-second sessions. CREATE DATABASE
+// waits five seconds for other sessions before refusing, so only sessions
+// that outlast the same window fail the run.
+const TEMPLATE_CONNECTION_SAMPLES = 10;
+const TEMPLATE_CONNECTION_SAMPLE_INTERVAL_MS = 500;
+
+type AssertTemplateQuietOptions = {
+  admin: PostgresAdmin;
+  sleep: (milliseconds: number) => Promise<void>;
+  template: string;
+};
+
+const assertTemplateQuiet = async ({
+  admin,
+  sleep,
+  template,
+}: AssertTemplateQuietOptions): Promise<void> => {
+  const readForeignConnections = async () => {
+    const foreignRows = await admin.query(
+      "SELECT pid, application_name, client_addr::text FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid() ORDER BY pid",
+      [template],
+    );
+    return foreignRows.flatMap((row) => {
+      if (
+        typeof row !== "object" ||
+        row === null ||
+        !("pid" in row) ||
+        !("application_name" in row) ||
+        !("client_addr" in row)
+      ) {
+        return [];
+      }
+      return [
+        {
+          pid: Number(row.pid),
+          application_name: String(row.application_name),
+          client_addr:
+            typeof row.client_addr === "string" ? row.client_addr : null,
+        },
+      ];
+    });
+  };
+  let foreign = await readForeignConnections();
+  for (
+    let sample = 1;
+    foreign.length > 0 && sample < TEMPLATE_CONNECTION_SAMPLES;
+    sample += 1
+  ) {
+    await sleep(TEMPLATE_CONNECTION_SAMPLE_INTERVAL_MS);
+    foreign = await readForeignConnections();
+  }
+  if (foreign.length > 0) {
+    const connections = foreign.map(
+      ({ pid, application_name, client_addr }) =>
+        `pid=${pid} application_name=${application_name || "<unset>"} client_addr=${client_addr ?? "local"}`,
+    );
+    throw new PostgresTemplateConnectionError({
+      message: `Template database ${template} has foreign connections: ${connections.join("; ")}`,
+      connections,
+    });
+  }
 };
 
 export const runPostgresWorkers = async ({
@@ -178,6 +242,7 @@ export const runPostgresWorkers = async ({
     };
   },
   now = Date.now,
+  sleep = (milliseconds) => Bun.sleep(milliseconds),
   log = console.log,
 }: RunPostgresWorkersOptions): Promise<number> => {
   const templateUrl = new URL(databaseUrl);
@@ -207,39 +272,7 @@ export const runPostgresWorkers = async ({
     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND application_name = $2 AND pid <> pg_backend_pid()",
     [template, applicationName],
   );
-  const foreignRows = await admin.query(
-    "SELECT pid, application_name, client_addr::text FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid() ORDER BY pid",
-    [template],
-  );
-  const foreign = foreignRows.flatMap((row) => {
-    if (
-      typeof row !== "object" ||
-      row === null ||
-      !("pid" in row) ||
-      !("application_name" in row) ||
-      !("client_addr" in row)
-    ) {
-      return [];
-    }
-    return [
-      {
-        pid: Number(row.pid),
-        application_name: String(row.application_name),
-        client_addr:
-          typeof row.client_addr === "string" ? row.client_addr : null,
-      },
-    ];
-  });
-  if (foreign.length > 0) {
-    const connections = foreign.map(
-      ({ pid, application_name, client_addr }) =>
-        `pid=${pid} application_name=${application_name || "<unset>"} client_addr=${client_addr ?? "local"}`,
-    );
-    throw new PostgresTemplateConnectionError({
-      message: `Template database ${template} has foreign connections: ${connections.join("; ")}`,
-      connections,
-    });
-  }
+  await assertTemplateQuiet({ admin, sleep, template });
 
   const clusterFiles = files.filter((file) => clusterExclusivePaths.has(file));
   const plan = planPostgresWorkers({
