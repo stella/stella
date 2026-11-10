@@ -284,6 +284,9 @@ const SubmissionFeedback = ({
 
 type ActivityDayCalendarProps = {
   header: ReactNode;
+  /** A question or note that belongs under the header, such as the
+   * browser question; nothing when absent. */
+  notice?: ReactNode;
   snapshot: ActivityDaySnapshot;
   preferences: ActivityCalendarPreferences;
   onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
@@ -293,6 +296,7 @@ type ActivityDayCalendarProps = {
 
 export const ActivityDayCalendar = ({
   header,
+  notice,
   snapshot,
   preferences,
   onPreferencesChange,
@@ -531,6 +535,7 @@ export const ActivityDayCalendar = ({
           }
         />
       </div>
+      {notice}
       {candidates.type === "failed" ? (
         <div
           role="alert"
@@ -859,6 +864,16 @@ function matterTone(
     : { color: matter.color, matterId: matter.id, type: "matter" };
 }
 
+/** The titles a card's description names: those whose time went to its
+ * matter, the longest first in each app. */
+const matterTitles = (suggestion: ActivitySuggestion, matterId: string) =>
+  suggestion.evidence.flatMap(({ details }) =>
+    details
+      .filter(({ matter }) => matter?.id === matterId)
+      .slice(0, EVIDENCE_DETAIL_LIMIT)
+      .map(({ title }) => title),
+  );
+
 type SuggestionDraftsOptions = {
   drafting: BillingDraftSettingsControl;
   date: string;
@@ -1007,11 +1022,14 @@ function useSuggestionDrafts({
   const [edits, setEdits] = useState<Record<string, SuggestionEdit>>({});
   const [statuses, setStatuses] = useState<Record<string, DraftStatus>>({});
 
-  // The template never exceeds what a time entry accepts.
+  // The template never exceeds what a time entry accepts. A card that starts
+  // on no matter starts with no description: its time is not one matter's
+  // work until the user says whose it is.
   const template = (suggestion: ActivitySuggestion) => {
-    const titles = suggestion.evidence.flatMap(({ details }) =>
-      details.slice(0, EVIDENCE_DETAIL_LIMIT).map(({ title }) => title),
-    );
+    if (suggestion.matter === null) {
+      return "";
+    }
+    const titles = matterTitles(suggestion, suggestion.matter.id);
     const text =
       titles.length > 0
         ? t("narrativeEvidence", {
@@ -1029,7 +1047,8 @@ function useSuggestionDrafts({
   };
   const editFor = (suggestion: ActivitySuggestion): SuggestionEdit =>
     edits[suggestion.id] ?? {
-      billable: true,
+      // Billable time is a matter's time.
+      billable: suggestion.matter !== null,
       matter: suggestion.matter,
       narrative: template(suggestion),
       written: 0,

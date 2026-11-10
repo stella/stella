@@ -45,6 +45,7 @@ import type {
   ActivitySuggestion,
   EvidenceRow,
   RangeEdge,
+  RangeMatterBasis,
 } from "./activity-calendar-logic";
 import { calendarDate } from "./activity-logic";
 import type { ActivityDaySnapshot } from "./activity-types";
@@ -300,10 +301,21 @@ export const ActivitySuggestionCard = ({
           disabled={!editable}
           label={edit.matter?.name ?? t("chooseMatter")}
           // Codes follow the matter's billing format, so a new matter
-          // drops them until it is drafted again.
-          onChoose={(matter) => onEdit({ matter, classification: null })}
+          // drops them until it is drafted again. A card that started on no
+          // matter starts non-billable; the first matter chosen makes it
+          // billable, as every matter's card starts.
+          onChoose={(matter) =>
+            onEdit({
+              matter,
+              classification: null,
+              ...(edit.matter === null ? { billable: true } : {}),
+            })
+          }
         />
       </div>
+      {edit.matter === null ? (
+        <RangeMatterNote suggestion={suggestion} />
+      ) : null}
       <DraftAssistStrip
         view={assist}
         onDraft={onDraft}
@@ -378,7 +390,11 @@ export const ActivitySuggestionCard = ({
           <ShortcutHint label={shortcutLabel(ACCEPT_KEYS)} />
         </Button>
       </div>
-      <Evidence suggestion={suggestion} sourceAppVisuals={sourceAppVisuals} />
+      <Evidence
+        matterId={edit.matter?.id ?? null}
+        sourceAppVisuals={sourceAppVisuals}
+        suggestion={suggestion}
+      />
     </section>
   );
 };
@@ -436,6 +452,31 @@ const SelectedRangeFields = ({
         </p>
       )}
     </div>
+  );
+};
+
+const RANGE_MATTER_NOTES = {
+  majority: null,
+  mostlyUnmatched: "rangeMostlyUnmatched",
+  splitBetweenMatters: "rangeSplitBetweenMatters",
+  // The card already says nothing was recorded.
+  nothingRecorded: null,
+} as const satisfies Record<RangeMatterBasis, string | null>;
+
+/** Why a selected range starts on no matter, when activity was recorded in
+ * it. */
+const RangeMatterNote = ({
+  suggestion,
+}: {
+  suggestion: ActivitySuggestion;
+}) => {
+  const t = useTranslations("activity");
+  if (suggestion.type !== "manual") {
+    return null;
+  }
+  const note = RANGE_MATTER_NOTES[suggestion.matterBasis];
+  return note === null ? null : (
+    <p className="text-muted-foreground text-xs text-pretty">{t(note)}</p>
   );
 };
 
@@ -872,10 +913,15 @@ const EarlierEntries = ({
   );
 };
 
+/** The recorded time behind a card, by title or by app. A row whose time
+ * went to a matter other than the card's names that matter faintly. */
 const Evidence = ({
+  matterId,
   suggestion,
   sourceAppVisuals,
 }: {
+  /** The card's matter, which its own rows need not repeat. */
+  matterId: string | null;
   suggestion: ActivitySuggestion;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
 }) => {
@@ -894,10 +940,18 @@ const Evidence = ({
         <TabsTab value="apps">{t("evidenceApps")}</TabsTab>
       </TabsList>
       <TabsPanel value="titles">
-        <EvidenceRows rows={titles} sourceAppVisuals={sourceAppVisuals} />
+        <EvidenceRows
+          matterId={matterId}
+          rows={titles}
+          sourceAppVisuals={sourceAppVisuals}
+        />
       </TabsPanel>
       <TabsPanel value="apps">
-        <EvidenceRows rows={apps} sourceAppVisuals={sourceAppVisuals} />
+        <EvidenceRows
+          matterId={matterId}
+          rows={apps}
+          sourceAppVisuals={sourceAppVisuals}
+        />
       </TabsPanel>
     </Tabs>
   );
@@ -906,9 +960,11 @@ const Evidence = ({
 const EVIDENCE_ROW_LIMIT = 8;
 
 const EvidenceRows = ({
+  matterId,
   rows,
   sourceAppVisuals,
 }: {
+  matterId: string | null;
   rows: readonly EvidenceRow[];
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
 }) => {
@@ -933,6 +989,16 @@ const EvidenceRows = ({
               · {format.number(row.share, { style: "percent" })}
             </span>
           </div>
+          {row.matter === null || row.matter.id === matterId ? null : (
+            // Under the title, past the icon's width and gap.
+            <TruncatedText
+              className="text-foreground-subtle -mt-0.5 ps-6"
+              data-activity-evidence-matter=""
+              render={<bdi />}
+            >
+              {row.matter.name}
+            </TruncatedText>
+          )}
           <div aria-hidden="true" className="bg-muted h-1 rounded-full">
             <div
               className="bg-foreground-muted h-1 rounded-full"

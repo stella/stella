@@ -3,7 +3,7 @@ import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -16,15 +16,20 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import {
-  EyeOffIcon,
-  FileTextIcon,
-  ShieldAlertIcon,
-  TextIcon,
-  Trash2Icon,
-  XIcon,
-} from "@stll/ui/icons";
+import { ShieldAlertIcon, Trash2Icon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
+import {
+  List,
+  ListGroup,
+  ListGroupDescription,
+  ListGroupHeader,
+  ListGroupHeading,
+  ListGroupTitle,
+  ListItem,
+  ListItemContent,
+  ListItemDescription,
+  ListItemTitle,
+} from "@stll/ui/list";
 import {
   Select,
   SelectItem,
@@ -33,7 +38,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
-import { TruncatedText } from "@stll/ui/truncated-text";
+import { ToggleGroup, ToggleGroupItem } from "@stll/ui/toggle-group";
 
 import type { DesktopMessages } from "../i18n/index";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -61,6 +66,14 @@ import { CaptureDetailsControl } from "./ActivityCaptureDetails";
 import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { useBillingDraftSettings } from "./billing-draft-settings";
+import {
+  CAPTURE_MODES,
+  captureModeApps,
+  captureModeCommands,
+  effectiveCaptureMode,
+  isBrowserApp,
+} from "./capture-modes";
+import type { CaptureMode, CaptureModeCommand } from "./capture-modes";
 
 type ActivitySettingsView =
   | { type: "loading" }
@@ -79,12 +92,11 @@ type ActivityDialog =
 
 type ActivitySettingsCommand =
   | CaptureDetailsCommand
+  | CaptureModeCommand["command"]
   | "activity_delete_all"
   | "activity_delete_day"
   | "activity_delete_other_account_history"
   | "activity_exclude_app"
-  | "activity_remove_app_exclusion"
-  | "activity_set_app_detail_capture"
   | "activity_set_detect_calls"
   | "activity_set_retention";
 
@@ -94,6 +106,12 @@ type RunCommand = (
   onSuccess?: () => void,
   onFailure?: () => void,
 ) => void;
+
+const CAPTURE_MODE_LABEL_KEYS = {
+  titles: "captureModeTitles",
+  appOnly: "captureModeAppOnly",
+  nothing: "captureModeNothing",
+} as const satisfies Record<CaptureMode, keyof DesktopMessages["activity"]>;
 
 const RETENTION_LABEL_KEYS = {
   month: "retentionMonth",
@@ -251,32 +269,6 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
       </div>
       <BillingDraftConsentSettings />
       <CaptureDetailsControl onCommand={onCommand} settings={settings} />
-      {settings.appNameOnlyApps.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          <span className="text-sm">{t("appNameOnlyApps")}</span>
-          <ul className="flex flex-col gap-1">
-            {settings.appNameOnlyApps.map((app) => (
-              <li
-                className="flex items-center justify-between gap-2 text-sm"
-                key={app.identifier}
-              >
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <ActivitySourceIcon
-                    appIdentifier={app.identifier}
-                    sourceAppVisuals={settings.sourceAppVisuals}
-                  />
-                  <TruncatedText render={<bdi />}>{app.name}</TruncatedText>
-                </span>
-                <AppDetailCaptureButton
-                  app={app}
-                  onCommand={onCommand}
-                  mode="appNameOnly"
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm" id="activity-retention-label">
           {t("retention")}
@@ -302,64 +294,38 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
           </SelectPopup>
         </Select>
       </div>
-      <div className="flex flex-col gap-2">
-        <span className="text-sm">{t("excludedApps")}</span>
-        {settings.excludedApps.length === 0 ? (
-          <p className="text-muted-foreground text-xs">{t("noExclusions")}</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {settings.excludedApps.map((app) => (
-              <li
-                className="flex items-center justify-between gap-2 text-sm"
-                key={app.identifier}
-              >
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <ActivitySourceIcon
-                    appIdentifier={app.identifier}
-                    sourceAppVisuals={settings.sourceAppVisuals}
-                  />
-                  <TruncatedText render={<bdi />}>{app.name}</TruncatedText>
-                </span>
-                <Button
-                  aria-label={t("removeExclusion", { name: app.name })}
-                  onClick={() =>
-                    onCommand("activity_remove_app_exclusion", {
-                      identifier: app.identifier,
-                    })
-                  }
-                  size="icon"
-                  title={t("removeExclusion", { name: app.name })}
-                  variant="ghost"
-                >
-                  <XIcon aria-hidden="true" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </section>
   );
 };
 
-type DayAppsProps = SettingsSectionProps & {
+type CaptureModeListProps = SettingsSectionProps & {
   deletionDisabled: boolean;
   onDateChange: (date: string) => void;
   onDeleteDay: () => void;
   onExclude: (app: ActivityAppExclusion) => void;
 };
 
-/** One day's apps with their exclusion controls, and that day's deletion. */
-const DayApps = ({
+/**
+ * What is recorded per app, in words: the chosen day's apps and every app
+ * with a saved choice, each with one segmented choice written from the
+ * saved lists, then that day's deletion. It is the only per-app list, so
+ * the saved lists never show twice.
+ */
+const CaptureModeList = ({
   deletionDisabled,
   onCommand,
   onDateChange,
   onDeleteDay,
   onExclude,
   settings,
-}: DayAppsProps) => {
+}: CaptureModeListProps) => {
   const t = useTranslations("activity");
   const format = useFormatter();
+  const locale = useLocale();
+  // Apps changed here stay listed until another day is chosen, even once
+  // their last saved choice is undone.
+  const [kept, setKept] = useState<ActivityAppExclusion[]>([]);
+  const [pending, setPending] = useState<string | null>(null);
   const days: string[] = [];
   for (
     let day = settings.latestDate;
@@ -371,14 +337,62 @@ const DayApps = ({
   if (!days.includes(settings.date)) {
     days.push(settings.date);
   }
+  const apps = captureModeApps(settings.apps, settings, locale, kept);
+  const keep = (app: ActivityAppExclusion) =>
+    setKept((previous) =>
+      previous.some(({ identifier }) => identifier === app.identifier)
+        ? previous
+        : [...previous, app],
+    );
+  const choose = (app: ActivityAppExclusion, target: CaptureMode) => {
+    if (target === "nothing") {
+      keep(app);
+      onExclude(app);
+      return;
+    }
+    const [first, ...rest] = captureModeCommands(settings, app, target);
+    if (first === undefined) {
+      return;
+    }
+    keep(app);
+    setPending(app.identifier);
+    // One at a time and in order, stopping at the first refusal.
+    const send = (
+      next: CaptureModeCommand,
+      remaining: CaptureModeCommand[],
+    ) => {
+      onCommand(
+        next.command,
+        next.args,
+        () => {
+          const [following, ...after] = remaining;
+          if (following === undefined) {
+            setPending(null);
+            return;
+          }
+          send(following, after);
+        },
+        () => setPending(null),
+      );
+    };
+    send(first, rest);
+  };
   return (
-    <section className="flex flex-col gap-3">
-      <h3 className="text-sm font-semibold" id="activity-day-apps-label">
-        {t("byApp")}
-      </h3>
+    <ListGroup aria-labelledby="activity-capture-modes-label">
+      <ListGroupHeader>
+        <ListGroupHeading>
+          <ListGroupTitle id="activity-capture-modes-label">
+            {t("captureModesTitle")}
+          </ListGroupTitle>
+          <ListGroupDescription>
+            {t("captureModesDescription")}
+          </ListGroupDescription>
+        </ListGroupHeading>
+      </ListGroupHeader>
       <Select
         onValueChange={(day) => {
           if (typeof day === "string") {
+            setKept([]);
             onDateChange(day);
           }
         }}
@@ -397,50 +411,35 @@ const DayApps = ({
           ))}
         </SelectPopup>
       </Select>
-      {settings.apps.length === 0 ? (
-        <p className="text-muted-foreground text-xs">{t("empty")}</p>
-      ) : (
-        <ul
-          aria-labelledby="activity-day-apps-label"
-          className="flex flex-col divide-y rounded-xl border"
+      {settings.captureDetails ? null : (
+        <p
+          className="text-muted-foreground px-1 text-xs text-pretty"
+          id="activity-capture-modes-details-off"
         >
-          {settings.apps.map((app) => (
-            <li
-              className="flex items-center gap-3 px-4 py-2"
-              key={app.identifier}
-            >
-              <ActivitySourceIcon
-                appIdentifier={app.identifier}
-                sourceAppVisuals={settings.sourceAppVisuals}
-              />
-              <TruncatedText className="flex-1 text-sm" render={<bdi />}>
-                {app.name}
-              </TruncatedText>
-              <AppDetailCaptureButton
-                app={app}
-                onCommand={onCommand}
-                mode={
-                  settings.appNameOnlyApps.some(
-                    ({ identifier }) => identifier === app.identifier,
-                  )
-                    ? "appNameOnly"
-                    : "includeDetails"
-                }
-              />
-              <Button
-                disabled={deletionDisabled}
-                aria-label={t("excludeApp", { name: app.name })}
-                onClick={() => onExclude(app)}
-                size="icon"
-                title={t("excludeApp", { name: app.name })}
-                variant="ghost"
-              >
-                <EyeOffIcon aria-hidden="true" />
-              </Button>
-            </li>
-          ))}
-        </ul>
+          {t("captureModesDetailsOff")}
+        </p>
       )}
+      {apps.length === 0 ? (
+        <p className="text-muted-foreground px-1 text-xs">{t("empty")}</p>
+      ) : (
+        <List aria-labelledby="activity-capture-modes-label">
+          {apps.map((app) => (
+            <CaptureModeRow
+              app={app}
+              deletionDisabled={deletionDisabled}
+              key={app.identifier}
+              onChoose={(target) => choose(app, target)}
+              pending={pending === app.identifier}
+              settings={settings}
+            />
+          ))}
+        </List>
+      )}
+      {apps.some((app) => isBrowserApp(settings, app.identifier)) ? (
+        <p className="text-muted-foreground px-1 text-xs text-pretty">
+          {t("browserPrivacyNote")}
+        </p>
+      ) : null}
       <div>
         <Button
           disabled={deletionDisabled}
@@ -451,65 +450,85 @@ const DayApps = ({
           {t("deleteDay")}
         </Button>
       </div>
-    </section>
+    </ListGroup>
   );
 };
 
-type AppDetailCaptureMode = "appNameOnly" | "includeDetails";
-
-type AppDetailCaptureButtonProps = {
+type CaptureModeRowProps = {
   app: ActivityAppExclusion;
-  mode: AppDetailCaptureMode;
-  onCommand: RunCommand;
+  deletionDisabled: boolean;
+  onChoose: (target: CaptureMode) => void;
+  pending: boolean;
+  settings: ActivitySettingsSnapshot;
 };
 
-const AppDetailCaptureButton = ({
+const CaptureModeRow = ({
   app,
-  mode,
-  onCommand,
-}: AppDetailCaptureButtonProps) => {
+  deletionDisabled,
+  onChoose,
+  pending,
+  settings,
+}: CaptureModeRowProps) => {
   const t = useTranslations("activity");
-  switch (mode) {
-    case "appNameOnly":
-      return (
-        <Button
-          size="icon"
-          aria-label={t("recordAppDetails", { name: app.name })}
-          title={t("recordAppDetails", { name: app.name })}
-          onClick={() =>
-            onCommand("activity_set_app_detail_capture", {
-              identifier: app.identifier,
-              name: app.name,
-              mode: "includeDetails",
-            })
+  const mode = effectiveCaptureMode(settings, app.identifier);
+  const browser = isBrowserApp(settings, app.identifier);
+  return (
+    <ListItem>
+      {/* One line while the name keeps its minimum width beside the choice;
+       * the choice wraps under the name only when the row is too narrow,
+       * so the width decides, whatever the locale. A 16px icon instead of
+       * the 32px tile leaves the name room in the 480px window. */}
+      <div className="flex w-full flex-wrap items-center justify-end gap-x-2 gap-y-2">
+        <div className="flex min-w-0 grow basis-20 items-center gap-2">
+          <ActivitySourceIcon
+            appIdentifier={app.identifier}
+            sourceAppVisuals={settings.sourceAppVisuals}
+          />
+          <ListItemContent>
+            <ListItemTitle title={app.name}>{app.name}</ListItemTitle>
+            {browser ? (
+              <ListItemDescription>
+                {t("captureModeBrowser")}
+              </ListItemDescription>
+            ) : null}
+          </ListItemContent>
+        </div>
+        <ToggleGroup<CaptureMode>
+          aria-describedby={
+            settings.captureDetails
+              ? undefined
+              : "activity-capture-modes-details-off"
           }
-          variant="ghost"
+          aria-label={t("captureModeLabel", { name: app.name })}
+          disabled={pending}
+          onValueChange={(next) => {
+            // Pressing the chosen item again empties the group; it still
+            // confirms that choice, which keeps an undecided browser's
+            // "app only" as made.
+            const chosen = next[0] ?? mode;
+            if (chosen !== "nothing" || mode !== "nothing") {
+              onChoose(chosen);
+            }
+          }}
+          size="default"
+          value={[mode]}
         >
-          <FileTextIcon aria-hidden="true" />
-        </Button>
-      );
-    case "includeDetails":
-      return (
-        <Button
-          size="icon"
-          aria-label={t("recordAppNameOnly", { name: app.name })}
-          title={t("recordAppNameOnly", { name: app.name })}
-          onClick={() =>
-            onCommand("activity_set_app_detail_capture", {
-              identifier: app.identifier,
-              name: app.name,
-              mode: "appNameOnly",
-            })
-          }
-          variant="ghost"
-        >
-          <TextIcon aria-hidden="true" />
-        </Button>
-      );
-    default:
-      mode satisfies never;
-      return panic("Unhandled activity app detail capture");
-  }
+          {CAPTURE_MODES.map((option) => (
+            <ToggleGroupItem<CaptureMode>
+              disabled={
+                (option === "titles" && !settings.captureDetails) ||
+                (option === "nothing" && deletionDisabled)
+              }
+              key={option}
+              value={option}
+            >
+              {t(CAPTURE_MODE_LABEL_KEYS[option])}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+    </ListItem>
+  );
 };
 
 type HistoryDeletionProps = {
@@ -982,7 +1001,7 @@ export const ActivitySettingsPane = () => {
         <ErrorLine message={t("incompatibleActivity")} />
       ) : null}
       <RecordingSettings onCommand={runCommand} settings={settings} />
-      <DayApps
+      <CaptureModeList
         deletionDisabled={deletionDisabled}
         onCommand={runCommand}
         onDateChange={(next) => setDate(next === settings.today ? null : next)}

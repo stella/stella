@@ -299,7 +299,11 @@ export const AUDIT_DETAIL_POLICY = {
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION]: {
     default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
-    operations: {},
+    operations: {
+      fact_extraction_started: VERIFICATION_AUDIT_DETAILS,
+      fact_extraction_completed: VERIFICATION_AUDIT_DETAILS,
+      fact_extraction_failed: VERIFICATION_AUDIT_DETAILS,
+    },
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM]: {
     default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },

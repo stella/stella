@@ -46,6 +46,7 @@ import {
   isActivityDaySnapshot,
 } from "./activity-types";
 import type { ActivityDaySnapshot } from "./activity-types";
+import { BrowserQuestion, useBrowserQuestion } from "./ActivityBrowserQuestion";
 import { CaptureDetailsControl } from "./ActivityCaptureDetails";
 import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
 import "./activity-calendar.css";
@@ -56,6 +57,7 @@ import type {
 } from "./ActivityDayCalendar";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import "./welcome-preview.css";
+import type { CaptureModeCommand } from "./capture-modes";
 import previewApps from "./preview-apps.json" with { type: "json" };
 import { useDurationLabel } from "./use-duration-label";
 
@@ -66,6 +68,7 @@ type ActivityView =
 
 type ActivityCommand =
   | CaptureDetailsCommand
+  | CaptureModeCommand["command"]
   | "activity_copy_text"
   | "activity_open_settings"
   | "activity_set_recording_status";
@@ -455,6 +458,7 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
 
 type DayContentProps = {
   header: React.ReactNode;
+  notice: React.ReactNode;
   preferences: ActivityCalendarPreferences;
   onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
   onCommand: RunCommand;
@@ -465,6 +469,7 @@ type DayContentProps = {
 
 const DayContent = ({
   header,
+  notice,
   preferences,
   onPreferencesChange,
   onCommand,
@@ -494,6 +499,7 @@ const DayContent = ({
       key={snapshot.date}
       onReviewStatusChange={onReviewStatusChange}
       header={header}
+      notice={notice}
       snapshot={snapshot}
       preferences={preferences}
       onPreferencesChange={onPreferencesChange}
@@ -643,6 +649,7 @@ const ActivityApp = () => {
   const [reviewStatus, setReviewStatus] =
     useState<ActivityReviewStatus>("editing");
   const view = useActivityDay(date, setError);
+  const browserQuestion = useBrowserQuestion();
   const [preferences, setPreferences] = useState<ActivityCalendarPreferences>({
     granularity: 30,
   });
@@ -737,6 +744,13 @@ const ActivityApp = () => {
         onPreferencesChange={setPreferences}
         reviewVisible={reviewVisible}
         onReviewStatusChange={setReviewStatus}
+        notice={
+          <BrowserQuestion
+            onCommand={runCommand}
+            snapshot={snapshot}
+            state={browserQuestion}
+          />
+        }
         header={
           <DayHeader
             navigationDisabled={reviewStatus === "submitting"}

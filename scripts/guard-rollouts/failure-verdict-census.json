@@ -1,0 +1,11 @@
+{
+  "id": "failure-verdict-census",
+  "type": "changed-lines",
+  "expiresAt": "2026-11-16T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--cwd=apps/api",
+    "test",
+    "./src/lib/workflow/failure-verdict-census.test.ts"
+  ]
+}

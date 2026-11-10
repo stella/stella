@@ -579,7 +579,8 @@
     "file": "apps/api/src/db/backfill-runtime.ts",
     "fingerprint": "50bfcc2ffd217f1505e8d1913b81486e38d334e0f4e30585f7b5b026b786b5a3",
     "count": 1,
-    "reason": "for update in apps/api/src/db/backfill-runtime.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/db/backfill-runtime.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/db/corpus-schema-lane.ts",
@@ -675,25 +676,29 @@
     "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
     "fingerprint": "06c37b46640fba54e095bbff4e60a8194da3ffb0181f4305ac471d2cd8a76f98",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
     "fingerprint": "61be0232e873568c160b23ec220e725e60b24b49f6c8a8b56d4820d6bc1855d0",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
     "fingerprint": "8558042689f21c038ea0a6008447ccea2038cf76a81c833056a7f4c3a046cf81",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts",
     "fingerprint": "d2005604aaa7aafece1889a54d720d50244381c4f4227cf00c720dd03a3bc14c",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/background-replay-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
@@ -729,19 +734,22 @@
     "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
     "fingerprint": "d33b55fb69eb346f147762a78b70e052d5c6662dafe7c1da9df780b808d76f22",
     "count": 1,
-    "reason": "for update in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
     "fingerprint": "df4074ff634a3c4a89a0045d9b6ea7a0c2b1cc98b5c079a8f82aed240ef719c5",
     "count": 1,
-    "reason": "for update in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
     "fingerprint": "e253e8dd45e01ee13520c256846cb8135b62b6b7be85ad6913c904c9328be85a",
     "count": 1,
-    "reason": "for no key update in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for no key update in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
@@ -753,7 +761,8 @@
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts",
     "fingerprint": "39837a6af872f2346b5e9809e4e6b904299d974082cea960ed95180b42e14031",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts",
@@ -765,7 +774,8 @@
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts",
     "fingerprint": "a89aafda741fb3e229e972007ea4b58246c269d8abee7a87ca703e4213c9ef29",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts",
@@ -777,43 +787,50 @@
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
     "fingerprint": "01f7d68efca7f194a30c5921d88b2e307f5d1e81395ab5a73ad17defd2624fb3",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
     "fingerprint": "06c37b46640fba54e095bbff4e60a8194da3ffb0181f4305ac471d2cd8a76f98",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
     "fingerprint": "0df03cc13dd2aefe8d79cebb77d69cb0d1975362a70ad9e537d81a8c85602b27",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
     "fingerprint": "208b70690a73a32b003b6f3cf189b48dfe218d399e933b6b4af416c537948194",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
     "fingerprint": "222965c6270b303b462cb023bd94597c837c73da733d80f65c15792ea61f629c",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
     "fingerprint": "2cdb3186025be612ce1c935742858448c24e2b61cce310d9563aaab2c4e178b3",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
     "fingerprint": "47630a4e1a86a84c4a40f391b0ff99797bac635ac324e78150330080ab06969c",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
@@ -825,25 +842,29 @@
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
     "fingerprint": "714efd31aba75dba04202f8868bc419b6a6a45442f29c6863c8ce5be984741d2",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
     "fingerprint": "7548a127cbdf246a5463b9ebd7498b2be145cca2855d28d0bbb931b0f9bd2668",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
     "fingerprint": "7eac89f6282ac1eb99afdce51d255bc2dccaa59dfee9c3a0ae4bf7e08d43948c",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
     "fingerprint": "a2dd12a33934f213e72be781d26b19a718274580fa6bd0d6f66fd36e025e65a7",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
@@ -855,7 +876,8 @@
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
     "fingerprint": "f0b626726444d20358a861736cfbabf3dbbdabf2f8d3e93fce9f8d448988a475",
     "count": 2,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts",
@@ -867,7 +889,8 @@
     "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-existing.ts",
     "fingerprint": "a9cf01345c0a0493f59f6b501db06acf2fe83a7516a76a010e29ecfc45dcad66",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/pipeline/decision-existing.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/pipeline/decision-existing.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
@@ -879,13 +902,15 @@
     "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
     "fingerprint": "dc43bdb31b09a9149449381c8bcd7e1f6460c4c0db063ea041b6d088226c31da",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
     "fingerprint": "60da0167e1e8232dbf418d1f799ee1496e32daf142bcd7c577eb70d889b160ae",
     "count": 1,
-    "reason": "Pass the relation explicitly to the stored-payload owner in the existing ingestion row lock query; acquisition mode, target and count are unchanged."
+    "reason": "Pass the relation explicitly to the stored-payload owner in the existing ingestion row lock query; acquisition mode, target and count are unchanged.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
@@ -897,7 +922,8 @@
     "file": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
     "fingerprint": "2861239d02a0655f616e1462a6aae28acf62a6136e41a587455775459ca7f3f3",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/source-totals.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/source-totals.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
@@ -909,13 +935,15 @@
     "file": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
     "fingerprint": "eb6178c21356e6fed2d289671b3ef4a17ed151798f29c93a3cc847691ca045cb",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/source-totals.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/source-totals.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/supplement-absorption.ts",
     "fingerprint": "7484821eee39cec20960e8dcc2ecca4035b03d0ecf7062b3757fb27d2047a87d",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/supplement-absorption.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/supplement-absorption.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/supplement-composition.ts",
@@ -945,13 +973,15 @@
     "file": "apps/api/src/handlers/case-law/provisions/citation-count-repair.ts",
     "fingerprint": "2259b40abeeefa01c3b00a70f057036d4c40b032aaba8ab607c21b5c171901ff",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/provisions/citation-count-repair.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/provisions/citation-count-repair.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/provisions/citation-count-repair.ts",
     "fingerprint": "8ea47eb72b831494189375431c4ed79760a631b018301927f577005429428691",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/provisions/citation-count-repair.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/provisions/citation-count-repair.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/case-law/research/column-access.ts",
@@ -969,7 +999,8 @@
     "file": "apps/api/src/handlers/case-law/withdraw-document.ts",
     "fingerprint": "6bb6c1dc2af5478136d18243fbd26d97a253340ef5daf9e30ebff548805e1c18",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/case-law/withdraw-document.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/case-law/withdraw-document.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/handlers/chat/chat-turn-persistence.ts",
@@ -1323,7 +1354,8 @@
     "file": "apps/api/src/handlers/hosted-usage-webhook/dispatch.ts",
     "fingerprint": "b174a0dafa224f23ffbc4986f4c8d202b18ef8b58e2282e067cdb2a0f7054aa7",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/hosted-usage-webhook/dispatch.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/hosted-usage-webhook/dispatch.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/hosted-usage-webhook/dispatch.ts",
@@ -1407,13 +1439,15 @@
     "file": "apps/api/src/handlers/legislation/ingestion.ts",
     "fingerprint": "662bced7c91f85551d06054c6d2d0bd8f5c30bbfa8fce66583f33fbb6cd0a5a5",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/legislation/ingestion.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/legislation/ingestion.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/handlers/legislation/ingestion.ts",
     "fingerprint": "e947825d4cb23a5dbe8fd8d6b9b6e40513465fb16b46de71479e55d105692c41",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/legislation/ingestion.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/legislation/ingestion.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/handlers/legislation/ingestion.ts",
@@ -1431,13 +1465,15 @@
     "file": "apps/api/src/handlers/legislation/withdrawal.ts",
     "fingerprint": "47249739147ed3b4a64497b2dfd731468879ef36d1d093abab74c2f93445ca57",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/legislation/withdrawal.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/legislation/withdrawal.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/handlers/legislation/work-name-backfill.ts",
     "fingerprint": "ac14a741af2180bb6637154f45d570464d667d754327a47f140e89d55b5c8c91",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/legislation/work-name-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/handlers/legislation/work-name-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/handlers/lists/columns/create.ts",
@@ -1460,12 +1496,6 @@
   {
     "file": "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts",
     "fingerprint": "94ceca32ba58c615e8c521dc24cdb555496bae7ef88905dc9f7683d553d57527",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts",
-    "fingerprint": "f18f111e71767c1c423cf0e70b1918593be113200c50c5f9ae9df5a5b568d8a0",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
@@ -1911,7 +1941,8 @@
     "file": "apps/api/src/lib/account-deletion-effect-store.ts",
     "fingerprint": "b9fc8563482b1c2fc013874c40a1d619ebcb85c28e36ccbc85edb3bd2b1dc137",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/account-deletion-effect-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/account-deletion-effect-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/account-deletion-effect-store.ts",
@@ -1929,7 +1960,8 @@
     "file": "apps/api/src/lib/account-deletion-steps.ts",
     "fingerprint": "3c93e860f4bde32e4912b7188e4c0a4098f11a260780a5c5906036415c848daa",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/account-deletion-steps.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/account-deletion-steps.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/account-deletion-steps.ts",
@@ -2013,7 +2045,8 @@
     "file": "apps/api/src/lib/auth.ts",
     "fingerprint": "9a14b7509d10db09c76c4d2f8a82e9da70a9f37fc308a150e1503736badc561c",
     "count": 1,
-    "reason": "for key share in apps/api/src/lib/auth.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for key share in apps/api/src/lib/auth.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/auth.ts",
@@ -2169,25 +2202,29 @@
     "file": "apps/api/src/lib/case-law/provision-state-backfill/backfill.ts",
     "fingerprint": "508c9bd0ba54f9d8e0eadf7d9a616c6cf38f3f8eb9c1a6f822991f0366a7d6ab",
     "count": 1,
-    "reason": "for share in apps/api/src/lib/case-law/provision-state-backfill/backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for share in apps/api/src/lib/case-law/provision-state-backfill/backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/case-law/provision-state-backfill/backfill.ts",
     "fingerprint": "95069cf8262cf0f39f8ad5767a2ac92907237966d8dbadca46a52349feacb167",
     "count": 1,
-    "reason": "for update in apps/api/src/lib/case-law/provision-state-backfill/backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/lib/case-law/provision-state-backfill/backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/case-law/provision-state-backfill/backfill.ts",
     "fingerprint": "cab3edb6a4ba2cd7c31ab263633e0ae42145608de779bd2647ed9e789ad593b7",
     "count": 1,
-    "reason": "for update in apps/api/src/lib/case-law/provision-state-backfill/backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/lib/case-law/provision-state-backfill/backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/case-law/provision-state-backfill/backfill.ts",
     "fingerprint": "fa1b61694b38b60135ea957b158e6bdf28cfc59dea8c24e49d5b47abe832aec1",
     "count": 1,
-    "reason": "for no key update in apps/api/src/lib/case-law/provision-state-backfill/backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for no key update in apps/api/src/lib/case-law/provision-state-backfill/backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/cell-lock.ts",
@@ -2259,7 +2296,8 @@
     "file": "apps/api/src/lib/db/account-row.ts",
     "fingerprint": "aea0ff7d5c0714c61222be5d669285ac5d9f6d87b5b96399baf9fe0f949b6052",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/db/account-row.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/db/account-row.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/db/better-auth-oauth-policy-census.ts",
@@ -2433,7 +2471,8 @@
     "file": "apps/api/src/lib/email/inbound/sender.ts",
     "fingerprint": "e9bb331827391e5e1448a32b51504472740c41ef397353563e06d256d53bce08",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/email/inbound/sender.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/email/inbound/sender.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/email/inbound/sender.ts",
@@ -2481,7 +2520,8 @@
     "file": "apps/api/src/lib/entity-deletion-effect-store.ts",
     "fingerprint": "27b45f626a9cc4803f1cba044b8b34445b66e48e5545e8eefd2ed18ad343ad34",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/entity-deletion-effect-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/entity-deletion-effect-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/entity-deletion-effect-store.ts",
@@ -2499,13 +2539,15 @@
     "file": "apps/api/src/lib/entity-deletion-effect-store.ts",
     "fingerprint": "986cdd737ab5e16c61bd33a97a41d92db9137971c0f6e67423aa4f545bf9d9b0",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/entity-deletion-effect-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/entity-deletion-effect-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/entity-deletion-effect-store.ts",
     "fingerprint": "db96925fe0b901e4644a49c3d58b4b2a5d62e1071b527b38be429140f375aec1",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/entity-deletion-effect-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/entity-deletion-effect-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/entity-deletion-effect-store.ts",
@@ -2559,7 +2601,8 @@
     "file": "apps/api/src/lib/files/organization-file-usage-reconcile.ts",
     "fingerprint": "407f670912b9dbc27b2b5f8f8865d909a800d85d5b02dd60be81595537802baf",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/files/organization-file-usage-reconcile.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/files/organization-file-usage-reconcile.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/files/organization-file-usage-reconcile.ts",
@@ -2577,13 +2620,15 @@
     "file": "apps/api/src/lib/files/organization-file-usage.ts",
     "fingerprint": "427cc0a49d96d0e2242f30eb21bbadfbfd5aa8531f81aa969b13d492a40ea5dc",
     "count": 2,
-    "reason": "builder-for in apps/api/src/lib/files/organization-file-usage.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/files/organization-file-usage.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/files/organization-file-usage.ts",
     "fingerprint": "4363de1fc6c0521fe9a9bf482548ae6c75d9f2698f6fb6639f4b80b1d6b7d29b",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/files/organization-file-usage.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/files/organization-file-usage.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/files/organization-file-usage.ts",
@@ -2607,7 +2652,8 @@
     "file": "apps/api/src/lib/files/organization-file-usage.ts",
     "fingerprint": "654607b6d3086c9384c4449a151bcb6454b7acc37a64ca30e5ace6adf39fb76e",
     "count": 2,
-    "reason": "builder-for in apps/api/src/lib/files/organization-file-usage.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/files/organization-file-usage.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/files/organization-file-usage.ts",
@@ -2715,67 +2761,78 @@
     "file": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts",
     "fingerprint": "2fd0129c61d5132a574077a8ee69c7cfaece9a5625daf8358eada3d853c2a936",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts",
     "fingerprint": "8ca4fc85ecc9fd6680bfa676254a89b54d2aeaa022416c44c05eff9793b60fb7",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts",
     "fingerprint": "8e05158683a5291cec6ee77c9f2337b97d59b2ef031c9618dc2fc2cb1d012ade",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts",
     "fingerprint": "b5b8292c2351e263ad8ac630a4060606c1959f0987391f87dae35605f0496305",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts",
     "fingerprint": "cf19e5033fd36d73bfe68fd44689e2267fe2de0a7dc8fa62958db303d64afafc",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts",
     "fingerprint": "d6fca60483f9faf03d6f387fb86978840a6c96130705c988dae1e60fa5bebb49",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-raw-layout.ts",
     "fingerprint": "7cfb67bd73f88a32ddbd319f3604f4737f6ea12296075247133d4acb3a8c69e6",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-raw-layout.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-raw-layout.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-raw-sweeps.ts",
     "fingerprint": "0a7248ea95bdfd1d82a26a3f0c134f2866185a326ba35b20c380e944e806bb6f",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-raw-sweeps.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-raw-sweeps.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-raw-sweeps.ts",
     "fingerprint": "9760f392cd7643027b4d78410bd7f6c89aada2201e964f4bf61058f44cf265a3",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-raw-sweeps.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/case-law-raw-sweeps.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-search-index.ts",
     "fingerprint": "106aff206b13512ed7c0ece6e1a13fad32c4aef3e80a2e64179b24639147d456",
     "count": 1,
-    "reason": "Pass the relation explicitly to the publication owner in the existing projection write lock query; acquisition mode, target and count are unchanged."
+    "reason": "Pass the relation explicitly to the publication owner in the existing projection write lock query; acquisition mode, target and count are unchanged.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/case-law-search-index.ts",
     "fingerprint": "1216b0764623f970d8df9576ba0eb2695f2b571851d9aa52bc7f115e9f817f2b",
     "count": 1,
-    "reason": "Pass the relation explicitly to the publication owner in the existing projection retry lock query; acquisition mode, target and count are unchanged."
+    "reason": "Pass the relation explicitly to the publication owner in the existing projection retry lock query; acquisition mode, target and count are unchanged.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
@@ -2787,295 +2844,344 @@
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
     "fingerprint": "397adec68dc3997a8d671c53f6180fa2af351e653ab7ae76a42debcbb9dd8787",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-generation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-generation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
     "fingerprint": "ca37bebf42571460c2d2ce98867b4750e6e5344949ee3f3190e79dbc63d02318",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-generation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-generation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
     "fingerprint": "f1478ef9e6ed075774fe03a6eccdf93090599ce271bf7b1450ea87bdc523bb70",
     "count": 2,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-generation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-generation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts",
     "fingerprint": "11358790b71d2efa5f7871dde3060ec587255fbc2063faceb6d3031a5293a17b",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts",
     "fingerprint": "a90d2ded10ae0c428b8aef9758b7d33ee9331d23a8f85d64bdbad558c2e58748",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts",
     "fingerprint": "fd2e3087268553fe9bfd3e7cb7a470c59e11ca3baa57476804189cd3e777a957",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-group-enrollment-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
     "fingerprint": "17f8ca10ef01bced40bfa61106877d08cb0332b1d4c85e84e9abef35385f4754",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
     "fingerprint": "481a28265925f09abab434e08f025ca514464412db224685a0adc44dc44b49ca",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
     "fingerprint": "8e1a540ef8067fc290af7147295d63cce2d7e8d13bc54e3b8f77c0da715a8c33",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
     "fingerprint": "a8fdcbb49ebf048380f683cbc48c7f10d964f34bea0853cfbd6ee5b1e732860e",
     "count": 1,
-    "reason": "Existing case-law bootstrap page transaction; the page now also reads vacated jurisdictions and provision keys inside it, which changes its source fingerprint without changing the acquisition, its order or the count."
+    "reason": "Existing case-law bootstrap page transaction; the page now also reads vacated jurisdictions and provision keys inside it, which changes its source fingerprint without changing the acquisition, its order or the count.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
     "fingerprint": "b924e87fe6905459305c9094d680008f46d1631564c38d0e511352c19c262d8e",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts",
     "fingerprint": "266bf84af947f5c73d80e395ef91e6494dba71cd459b28b1c912f15bc340e299",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts",
     "fingerprint": "790849d977dce42115e942969e4dbf33bd591e59448cf05c496d0644c2389f53",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts",
     "fingerprint": "7675dd07b5b91f11ecc4b0609688758d8cc37e9b14d6a6bb546b69cc5c23304d",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts",
     "fingerprint": "8584691d440daf6421f38802dcd93752838ecc1906ef02e2db91120dff4fe98b",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts",
     "fingerprint": "8e8ce2cdf63dc8da76fabae3dff1b60d191ae6b9c4c92a68dae6d9b57400b603",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts",
     "fingerprint": "e04d4123b6006eae8e689a633f9d47ff292195baa739bbd1878eca210464a856",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts",
     "fingerprint": "efef00567e4c093cb6e5d3895368e9d87c42e321cd91f20413c9bda0f7f5243e",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts",
     "fingerprint": "f5d599452cfd9d2d8f1b0b40d4027db9394b91c8d5e5ebf2beceedc9f0c26d9b",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
     "fingerprint": "44e7acf87d302d0d767b7d2716f27e84d3737d16fab3a695385ef1a0f6301ba8",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
     "fingerprint": "68d3a6e858fcb3879f9cdd31978d230f10ef135ec503ff63340e194218c8ba8b",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
     "fingerprint": "761e4ecb8b45c0479d4099ad94157f0fd84dd5a63cf01a210c4a2cd147076cd9",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
     "fingerprint": "b83037acf467f904c019812c841d388566d31bd9a17363d2c437c3e545668450",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
     "fingerprint": "bfd2a0c0b04f98deff8ecb1f83f25e21706d045b283cfdd3facfe03a8601d967",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
     "fingerprint": "cc4aff75c645cb257d100ddc744fa76aab8639f214c0fa1fb628a77068c6a022",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
     "fingerprint": "e6c664d78a137a10f1e5e89deda30647148466aa533569608173039f83f3f1de",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
     "fingerprint": "fa01a876e5b53f5523444eafef32b00d816819e27d365d9eb916c9d7a532587e",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts",
     "fingerprint": "b13d58fb4880f39fd6b5ba694720e70c6ab776c3783828f85837483351aaf3d5",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts",
     "fingerprint": "fc7a78e79582dd193e555240a3cbf722a620ae81d4f1e9e3303b3642bb16a41b",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "05630a33a4b51af22c93e968069dd831c4d0c33d153a24e4457abaf56b3e86a8",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "0b4971e94cf9f2c50f4541fdbdde97d622488f1ad4fa0c389c57d4d1398f4420",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "193cc3b04f2363197bff28d3208fc0154f52150ee7cc81449c4358e8e65a8856",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "4aea8686d9c32761e3c57591f9694b940d8e64112dd03998c78ad474aba09779",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "524756483fd16f916e2be80430faa9d5515c2731481c0887c7fe6521fb7ae04e",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "5f227d959a6373d5e44649bc3de21120afd273e964de6fbf58e3ad6761027ad1",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "6352330a64dfb8d2240a308da96ff04b41565e6aab78deb33b9c72ac77d8f9a2",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "641404ede5117abf453883a4e5be08a6bb7652c2107fc6471880fb899a072466",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "84e10f55745dba22660b4dc86997c1d98ce2a6c8fc7db0cbaa3ebfb047fcc780",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "86ac38ef215957b5724ceb1039c8c3ffd07f79dd7225e7203c25638705df24e1",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "a5f1da4e0e5be9323536dc7100dcb456dd2752cbb86dd76af106a1d6a411ddd2",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "c5a0bf018c7b041337ad7d005291b9d3438f3988cc41b3ce124453fb83ef6ffe",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "d14a0310d6edd84826f7b6054598011b40a1373db4a38674ae63238bb2361d49",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
     "fingerprint": "e8463a14555e38a20087f2211a03cd6bc4cd5484b3bd0866b3553a0df1cbd6ca",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/deferred-document-source-ownership.ts",
     "fingerprint": "0ac48437e8627501e57e5b67cd637033ea24b80bb0329a3894cbde77f0e6fbb4",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/deferred-document-source-ownership.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/deferred-document-source-ownership.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/deferred-document-source-ownership.ts",
     "fingerprint": "849b022880b40387c05ad689337094f01dcd059434ff359b01dfdc3f4a6ee3ac",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/deferred-document-source-ownership.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/deferred-document-source-ownership.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/reconciliation-store.ts",
     "fingerprint": "3dfb8a4fc67b3efb280e3b06022ca942b5246e91a17b9912030020e2d735ec0b",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/reconciliation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/reconciliation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/reconciliation-store.ts",
     "fingerprint": "4443538937fc6d300354bf363630884b77480bf7a370a339dc60c2c221f45810",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/reconciliation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/reconciliation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/reconciliation-store.ts",
     "fingerprint": "5cd543f6bbcece35c7345572eb17d7d4c814d6f0d4b0120ac98a8224b8cb9da7",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/reconciliation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/reconciliation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/reconciliation-store.ts",
     "fingerprint": "8e451bf94e1f1c3e2a7c54b680ce4aed7e10856edc7031e316094492ba8e3f1e",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/reconciliation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/reconciliation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/sk-document-backfill.ts",
@@ -3087,13 +3193,15 @@
     "file": "apps/api/src/lib/legal-search/soft-law-ingestion-store.ts",
     "fingerprint": "b9ddb28300454eb82117d6be8db31d1bd0280ad9ab8cfa535c05c76f661b28e3",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/soft-law-ingestion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/soft-law-ingestion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/soft-law-ingestion-store.ts",
     "fingerprint": "d72be76ce1d262ea54cf19d2c4108aee509b9a817fe5d906887eb34feba27e9f",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/soft-law-ingestion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/legal-search/soft-law-ingestion-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/legal-search/statute-sitemap-shard-refresh.ts",
@@ -3153,7 +3261,8 @@
     "file": "apps/api/src/lib/lists/sanctions/monitoring-fanout.ts",
     "fingerprint": "07692701eaa30728bf5090dcde9cf084d6d9682def5bf2ece46ea774bc8466ac",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/lists/sanctions/monitoring-fanout.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/lists/sanctions/monitoring-fanout.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/lists/sanctions/monitoring-fanout.ts",
@@ -3165,7 +3274,8 @@
     "file": "apps/api/src/lib/lists/sanctions/monitoring-fanout.ts",
     "fingerprint": "1f8d90443ea6d28bee4edc3bd146075e32d440e8ad85e19665c3a688e6848f85",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/lists/sanctions/monitoring-fanout.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/lists/sanctions/monitoring-fanout.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/lists/sanctions/monitoring-fanout.ts",
@@ -3231,13 +3341,15 @@
     "file": "apps/api/src/lib/lists/sanctions/refresh.ts",
     "fingerprint": "91b84a9cf8b95d0b81417b32d61b14a81aeccacc73adfbc38165e1334d394b6e",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/lists/sanctions/refresh.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/lists/sanctions/refresh.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/lists/sanctions/refresh.ts",
     "fingerprint": "f8003fd4c5a94ae6b3e55f8cd6dc573b02bc34604a22a75a5b2a7b1b23b092f0",
     "count": 4,
-    "reason": "builder-for in apps/api/src/lib/lists/sanctions/refresh.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/lists/sanctions/refresh.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
   },
   {
     "file": "apps/api/src/lib/lists/verification/read-run.ts",
@@ -3315,13 +3427,15 @@
     "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
     "fingerprint": "ba59c9849c1f7b42515a4d446ee534601cad6cd63ed676df4736e5ed10c3ab11",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/machine-api-keys/personal-lifecycle.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/machine-api-keys/personal-lifecycle.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
     "fingerprint": "db6b337e7b9f9780110b5e3fd83c24d0e7b96c3178d30c6726873258b50b05f0",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/machine-api-keys/personal-lifecycle.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/machine-api-keys/personal-lifecycle.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/matter-reference.ts",
@@ -3429,7 +3543,8 @@
     "file": "apps/api/src/lib/organization-storage-teardown.ts",
     "fingerprint": "33d1c6792fd938df33d3cb07e4c16ab85588a984e42cd156e9535c6968f9f8be",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/organization-storage-teardown.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/organization-storage-teardown.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/properties/property-lock.ts",
@@ -3453,7 +3568,8 @@
     "file": "apps/api/src/lib/review-organization/reset.ts",
     "fingerprint": "94bd0c0b2f58f11fc2086985df1df1f53a261673f2353822f3a31444d90658bb",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/review-organization/reset.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/review-organization/reset.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/review-organization/reset.ts",
@@ -3513,7 +3629,8 @@
     "file": "apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts",
     "fingerprint": "39a4e8d62ba9d960e915a5aa143491be6b19f7b632fc7cf0ecf1975c8441aae4",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/chat-turn-reaper.ts",
@@ -3579,43 +3696,50 @@
     "file": "apps/api/src/lib/scheduler/tasks/registration-retention.ts",
     "fingerprint": "3719da8859bbbdb56f675e754efc6095ccf71a8e9b6e1497a7ba9607fe5000fc",
     "count": 1,
-    "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/registration-retention.ts",
     "fingerprint": "4e6fb9cbccc5a8045b0a2d63cc94798e28786fe0394296d71fa65e689bdf2e27",
     "count": 1,
-    "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/registration-retention.ts",
     "fingerprint": "8957edd27ef06603964c60119782a54b1525fd536992ae0b227fc83e129655b0",
     "count": 1,
-    "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/registration-retention.ts",
     "fingerprint": "9fab03e7a0d013ca082a2fe44b0950a4c83368986e0a695b5357ebd05abd9770",
     "count": 1,
-    "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/registration-retention.ts",
     "fingerprint": "e33328c5b4bf37b37e8fe8232c94f47a28b93ad73e9f3581867bfdc66fc03ecb",
     "count": 1,
-    "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/registration-retention.ts",
     "fingerprint": "eba0ee639035961d09cd687e6254b9b8e17b5ac87d3b5929c1f8f4d8920b4fa3",
     "count": 1,
-    "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/lib/scheduler/tasks/registration-retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/template-deletion-cleanup.ts",
     "fingerprint": "7bb75e58d5e8982226e6a8020f3607b41de1edf0e85741e2d02d047a45fcddd0",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/scheduler/tasks/template-deletion-cleanup.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/lib/scheduler/tasks/template-deletion-cleanup.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/template-deletion-cleanup.ts",
@@ -3789,13 +3913,15 @@
     "file": "apps/api/src/lib/usage/action-costs/retention.ts",
     "fingerprint": "0b5cd459130ef7e9dcc867b91a05e247bcdb4a0cf1fd431bc2b9a34d4b46f423",
     "count": 1,
-    "reason": "for update in apps/api/src/lib/usage/action-costs/retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/lib/usage/action-costs/retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/usage/action-costs/retention.ts",
     "fingerprint": "3e5f139940fd111482d21738755d6d2738afb98917890464fe513add26ffb606",
     "count": 1,
-    "reason": "for update in apps/api/src/lib/usage/action-costs/retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/lib/usage/action-costs/retention.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/lib/usage/action-costs/store.ts",
@@ -3889,9 +4015,10 @@
   },
   {
     "file": "apps/api/src/scripts/backfill-citation-keys.ts",
-    "fingerprint": "56d03fa605856c62c913f88011db622573779889bfe620510396a0410108512a",
+    "fingerprint": "f60d34cadf241689187c23d1ebf6d827627487da041239c252cf07b6a8b5cc7f",
     "count": 1,
-    "reason": "for update in apps/api/src/scripts/backfill-citation-keys.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/scripts/backfill-citation-keys.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/scripts/backfill-legislation-work-names.ts",
@@ -3909,7 +4036,8 @@
     "file": "apps/api/src/scripts/backfill-organization-file-usage.helpers.ts",
     "fingerprint": "415323122f10b7783a64d63b6941fefe13c6118f6366c3cc6c5854114040c460",
     "count": 1,
-    "reason": "builder-for in apps/api/src/scripts/backfill-organization-file-usage.helpers.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "builder-for in apps/api/src/scripts/backfill-organization-file-usage.helpers.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/scripts/backfill-organization-file-usage.helpers.ts",
@@ -3939,7 +4067,8 @@
     "file": "apps/api/src/scripts/backfill-source-document-ids.ts",
     "fingerprint": "fdec0a7f62b6272904c3ab8e1bf7386a1e7a619d5d01a569a3dd63922b9736dd",
     "count": 1,
-    "reason": "for update in apps/api/src/scripts/backfill-source-document-ids.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/scripts/backfill-source-document-ids.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/scripts/better-auth-17-backfill.logic.ts",
@@ -3951,19 +4080,22 @@
     "file": "apps/api/src/scripts/better-auth-17-backfill.logic.ts",
     "fingerprint": "68069a9d75f33ec1aa06e60915e8c5778734a90293b667395891f1e297cdce23",
     "count": 1,
-    "reason": "for update in apps/api/src/scripts/better-auth-17-backfill.logic.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/scripts/better-auth-17-backfill.logic.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/scripts/better-auth-17-backfill.logic.ts",
     "fingerprint": "73864aa893fb7553d41191d4ad256c078de1d323e34737820c255de4a7847e52",
     "count": 1,
-    "reason": "for update in apps/api/src/scripts/better-auth-17-backfill.logic.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/scripts/better-auth-17-backfill.logic.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/scripts/better-auth-17-backfill.logic.ts",
     "fingerprint": "bb301d5d9c0f63c7fbef614d47f41e30539ba3037bae0cf9c3fbb1237e990911",
     "count": 1,
-    "reason": "for update in apps/api/src/scripts/better-auth-17-backfill.logic.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/scripts/better-auth-17-backfill.logic.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/scripts/better-auth-17-backfill.logic.ts",
@@ -3975,13 +4107,15 @@
     "file": "apps/api/src/scripts/better-auth-17-backfill.logic.ts",
     "fingerprint": "d6189172e7084d0c9694a986710fbb8b76456df2c68e062f5a27f1022b940293",
     "count": 1,
-    "reason": "for update in apps/api/src/scripts/better-auth-17-backfill.logic.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/scripts/better-auth-17-backfill.logic.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/scripts/better-auth-17-backfill.logic.ts",
     "fingerprint": "d9715c928ae5791a443b3b1fdf07d480f64c4560d5c6f9d97b529bfdec95bd9c",
     "count": 1,
-    "reason": "for update in apps/api/src/scripts/better-auth-17-backfill.logic.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/scripts/better-auth-17-backfill.logic.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/scripts/better-auth-17-backfill.ts",
@@ -4023,7 +4157,8 @@
     "file": "apps/api/src/scripts/corpus-generation.ts",
     "fingerprint": "63f7d8169fdeb868caa4b582e5f54c6c35be98b0bfe0ca7c02eae8b5674eab37",
     "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
+    "reason": "offline corpus script; predates the owner; migrate in a later slice",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/scripts/corpus-generation.ts",
@@ -4131,7 +4266,8 @@
     "file": "apps/api/src/scripts/repair-decision-dates-plan.ts",
     "fingerprint": "7ca145969c6e8e8f96ec167e28e030ba8d998238e0b1aef8e246f1a921057a42",
     "count": 1,
-    "reason": "for update in apps/api/src/scripts/repair-decision-dates-plan.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "for update in apps/api/src/scripts/repair-decision-dates-plan.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "owner"
   },
   {
     "file": "apps/api/src/scripts/repair-legacy-usa-court-ids.ts",
