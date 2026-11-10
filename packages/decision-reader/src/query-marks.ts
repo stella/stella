@@ -217,6 +217,18 @@ export const queryFindTokens = (query: string | undefined): QueryMarkTokens =>
   });
 
 /**
+ * The words a reader typed, folded, in the order typed and with repeats kept:
+ * the phrase a find looks for before it falls back to the words one by one.
+ */
+export const queryFindPhrase = (query: string | undefined): string[] => {
+  if (query === undefined) {
+    return [];
+  }
+  const { text } = foldMarkText(query);
+  return wordSpans(text).map(({ end, start }) => text.slice(start, end));
+};
+
+/**
  * Where a token matches, as an index into the folded text: at the start of a
  * word only, and running to the end of that word.
  *

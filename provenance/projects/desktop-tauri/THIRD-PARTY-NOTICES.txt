@@ -713,7 +713,7 @@ Project: desktop-tauri
 - zerotrie 0.2.4 — Unicode-3.0
 - zerovec 0.11.6 — Unicode-3.0
 - zerovec-derive 0.11.3 — Unicode-3.0
-- zip 9.2.2 — MIT
+- zip 9.3.0 — MIT
 - zlib-rs 0.6.8 — Zlib
 - zmij 1.0.23 — MIT
 - zune-core 0.5.3 — Apache-2.0 OR MIT OR Zlib

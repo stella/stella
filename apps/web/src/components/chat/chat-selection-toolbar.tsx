@@ -22,6 +22,7 @@ import {
 import { SIDE_PANEL_CHAT_STATUS } from "@/components/chat/side-panel-chat-status.logic";
 import { useSidePanelChat } from "@/components/chat/use-request-chat-about";
 import { SelectionToolbar } from "@/components/selection-toolbar";
+import { useSelectionCopy } from "@/components/selection-toolbar-actions";
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import type { SelectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import type { AnswerEditAnchor } from "@/features/chat/answer-edit/answer-edit-api";
@@ -114,6 +115,16 @@ export const ChatSelectionToolbar = ({
   const [confirmAt, setConfirmAt] = useState<SelectionToolbarAnchor | null>(
     null,
   );
+
+  // The bar copies the words selected across this transcript's messages
+  // while it offers its actions.
+  const selectionCopy = useSelectionCopy({
+    ownsSelection: (selection, root) =>
+      selected !== null &&
+      editing === null &&
+      selectedMessageRange(selection, root) !== null,
+    rootRef,
+  });
 
   const refreshEditedAnswer = useCallback(async () => {
     if (editing !== null) {
@@ -361,6 +372,7 @@ export const ChatSelectionToolbar = ({
             actions={actions}
             askInNewChat={askInNewChat}
             quoteInReply={quoteInReply}
+            copy={selectionCopy}
             copyText={selected.quote}
           />
         </div>

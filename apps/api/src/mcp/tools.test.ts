@@ -128,6 +128,7 @@ import type { withTimeout } from "@/api/lib/with-timeout";
 import { CITATION_READ_DETAILS } from "@/api/mcp/case-law-citations-input";
 import { decisionTextVersion } from "@/api/mcp/case-law-decision-read";
 import { CASE_LAW_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/case-law-search-input";
+import { createCompatCorpusContinuation } from "@/api/mcp/compat-corpus";
 import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import {
@@ -1907,6 +1908,8 @@ describe("OpenAI-compatible MCP tools", () => {
       "read_statute",
       "read_statute_provisions",
       "read_provision_history",
+      "search_guidance",
+      "read_guidance",
       "resolve_case_law_decision",
       "resolve_law_citation",
       "list_templates",
@@ -1949,6 +1952,8 @@ describe("OpenAI-compatible MCP tools", () => {
       "read_statute",
       "read_statute_provisions",
       "read_provision_history",
+      "search_guidance",
+      "read_guidance",
       "resolve_case_law_decision",
       "resolve_law_citation",
     ]);
@@ -4266,6 +4271,149 @@ describe("OpenAI-compatible MCP tools", () => {
         payload.partial.decisions.map(({ decisionId }) => decisionId),
       ).toEqual(["dec-fast"]);
       gate.resolve(undefined);
+    });
+
+    test("keeps a phrasing that ran out of time among the pending ones", async () => {
+      const { store } = createFakeContinuationStore();
+      const gate = Promise.withResolvers<undefined>();
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => {
+          if (query === "expired") {
+            return new HttpStatusResponse(503, {
+              code: PUBLIC_READ_TIMEOUT_CODE,
+              message: "Public read timed out. Please try again.",
+            });
+          }
+          if (query === "slow") {
+            await gate.promise;
+          }
+          return answered(query);
+        },
+      );
+      const payload = asTestRaw<{
+        status: string;
+        partial: { finishedQueries: string[]; pendingQueries: string[] };
+      }>(
+        parseToolPayload(
+          await search(contextFor(store, "task-a"), {
+            country: "CZE",
+            queries: ["fast", "expired", "slow"],
+          }),
+        ),
+      );
+      expect(payload.status).toBe("running");
+      expect(payload.partial.finishedQueries).toEqual(["fast"]);
+      expect(payload.partial.pendingQueries).toEqual(["expired", "slow"]);
+      gate.resolve(undefined);
+    });
+
+    describe("the OpenAI-compatible search", () => {
+      const compatContext = (
+        store: ReturnType<typeof createFakeContinuationStore>["store"],
+        deadlineMs: number,
+      ) =>
+        createContext({
+          testDependencies: {
+            compatCorpusContinuation: createCompatCorpusContinuation({
+              store,
+              ownerId: "task-a",
+              limits,
+            }),
+            publicReadResponseDeadlineMs: deadlineMs,
+          },
+        });
+      type CompatPage = {
+        results: { id: string }[];
+        nextCursor: string | null;
+        paginationOutcome?: unknown;
+      };
+      const compatSearch = async (
+        context: AuthorizedMcpRequestContext,
+        args: Record<string, unknown>,
+      ) => await handleMcpToolCall({ args, context, toolName: "search" });
+
+      test("waits for a search that finishes within the wait", async () => {
+        const { store } = createFakeContinuationStore();
+        searchDecisionsHandlerMock.mockImplementation(
+          async ({ body: { query } }: { body: { query: string } }) =>
+            answered(query),
+        );
+        const result = await compatSearch(compatContext(store, 2000), {
+          query: "náhrada",
+        });
+        expect(result.isError).not.toBe(true);
+        const page = asTestRaw<CompatPage>(parseToolPayload(result));
+        expect(page.results.length).toBeGreaterThan(0);
+      });
+
+      test("reads matters under the caller's slot and gives it back before the corpus wait", async () => {
+        const { store } = createFakeContinuationStore();
+        let slots = 0;
+        let slotsDuringMatterRead = -1;
+        let slotsAtCorpusRead = -1;
+        searchDecisionsHandlerMock.mockImplementation(
+          async ({ body: { query } }: { body: { query: string } }) => {
+            slotsAtCorpusRead = slots;
+            return await Promise.resolve(answered(query));
+          },
+        );
+        const context = compatContext(store, 2000);
+        const result = await compatSearch(
+          {
+            ...context,
+            testDependencies: {
+              ...context.testDependencies,
+              getSearchReader: () => ({
+                search: async () => {
+                  slotsDuringMatterRead = slots;
+                  return await Promise.resolve({
+                    hits: [],
+                    facets: { kind: [], workspace: [] },
+                    totalCount: 0,
+                    nextCursor: null,
+                  });
+                },
+                searchContent: mock(async () => ({ hits: [], totalCount: 0 })),
+              }),
+              admitPublicRead: async ({ run }) => {
+                slots += 1;
+                const value = await run(new AbortController().signal);
+                slots -= 1;
+                return Result.ok({ status: "leased" as const, value });
+              },
+            },
+          },
+          { query: "náhrada" },
+        );
+        expect(result.isError).not.toBe(true);
+        expect(slotsDuringMatterRead).toBe(1);
+        expect(slotsAtCorpusRead).toBe(1);
+      });
+
+      test("answers cut short with a cursor that runs the same page again", async () => {
+        const { store } = createFakeContinuationStore();
+        const gate = gatedSearch();
+        const first = await compatSearch(compatContext(store, 5), {
+          query: "náhrada",
+        });
+        expect(first.isError).not.toBe(true);
+        const page = asTestRaw<CompatPage>(parseToolPayload(first));
+        expect(page.results).toEqual([]);
+        expect(page.paginationOutcome).toEqual(
+          SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+        );
+        expect(page.nextCursor).not.toBeNull();
+
+        gate.resolve(undefined);
+        const second = await compatSearch(compatContext(store, 2000), {
+          query: "náhrada",
+          cursor: page.nextCursor,
+        });
+        expect(second.isError).not.toBe(true);
+        expect(
+          asTestRaw<CompatPage>(parseToolPayload(second)).results.length,
+        ).toBeGreaterThan(0);
+      });
     });
 
     test("the response deadline stays under the search budget", () => {

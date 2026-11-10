@@ -572,6 +572,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped connection; the person stays an organization member.",
   "chat_tool_grants.user_id":
     "The person's own organization-scoped tool approvals; every tool call still checks matter access.",
+  "chat_browser_site_grants.user_id":
+    "The person's own organization-scoped browser site approvals; they hold no matter data.",
   "invitation.inviter_id":
     "Organization invitation; the person stays an organization member.",
   "session.user_id":
