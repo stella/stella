@@ -21,6 +21,7 @@ import type {
   DesktopRunnerRunBell,
 } from "@/api/lib/desktop-runner/doorbell";
 import type { RunnerFeatureAccess } from "@/api/lib/desktop-runner/feature-access";
+import { readSessionsWithQueuedFolderRestores } from "@/api/lib/desktop-runner/folder-restores";
 import {
   createRunnerSession,
   type MintRunToken,
@@ -340,6 +341,23 @@ export const createDesktopRunnerGateway = (
       ) {
         await session.deliver();
       }
+    }
+    // A queued restore waits only a short while, so its sockets are read
+    // every sweep; few computers hold one at a time.
+    const restoring = await Result.tryPromise(
+      async () =>
+        await readSessionsWithQueuedFolderRestores(options.db, {
+          instanceId: options.instanceId,
+          now: now(),
+          limit: SWEEP_DELIVERY_BATCH,
+        }),
+    );
+    if (restoring.isErr()) {
+      observeFailure(restoring.error, { sink: LEASE_SWEEP_SINK });
+      return;
+    }
+    for (const sessionId of restoring.value) {
+      await deliverTo(sessionId);
     }
   };
 

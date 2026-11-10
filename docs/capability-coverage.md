@@ -777,9 +777,9 @@ mechanics, and similar), not gaps in coverage.
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
 | assistant_chat | 16 |
-| auth_plumbing | 38 |
+| auth_plumbing | 39 |
 | billing_ui | 1 |
-| chat_thread_ui | 24 |
+| chat_thread_ui | 26 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 26 |
@@ -787,7 +787,7 @@ mechanics, and similar), not gaps in coverage.
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_device | 5 |
-| native_tool_ui | 8 |
+| native_tool_ui | 10 |
 | provider_secret | 34 |
 | public_indexing | 9 |
 | realtime_stream | 9 |

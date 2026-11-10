@@ -47,7 +47,10 @@ import {
 } from "./activity-types";
 import type { ActivityDaySnapshot } from "./activity-types";
 import { BrowserQuestion, useBrowserQuestion } from "./ActivityBrowserQuestion";
-import { CaptureDetailsControl } from "./ActivityCaptureDetails";
+import {
+  CaptureDetailsControl,
+  TitlesAccessStrip,
+} from "./ActivityCaptureDetails";
 import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
 import "./activity-calendar.css";
 import { ActivityDayCalendar } from "./ActivityDayCalendar";
@@ -59,6 +62,7 @@ import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import "./welcome-preview.css";
 import type { CaptureModeCommand } from "./capture-modes";
 import previewApps from "./preview-apps.json" with { type: "json" };
+import { titlesNeedAccessibility } from "./title-capture-logic";
 import { useDurationLabel } from "./use-duration-label";
 
 type ActivityView =
@@ -457,8 +461,9 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
 };
 
 type DayContentProps = {
+  /** The day's one-time question about a browser, if any. */
+  browserQuestion: React.ReactNode;
   header: React.ReactNode;
-  notice: React.ReactNode;
   preferences: ActivityCalendarPreferences;
   onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
   onCommand: RunCommand;
@@ -468,8 +473,8 @@ type DayContentProps = {
 };
 
 const DayContent = ({
+  browserQuestion,
   header,
-  notice,
   preferences,
   onPreferencesChange,
   onCommand,
@@ -478,10 +483,18 @@ const DayContent = ({
   onReviewStatusChange,
 }: DayContentProps) => {
   const t = useTranslations("activity");
+  // One notice at a time: without Accessibility no title is recorded, so a
+  // question about a browser's titles waits until access is fixed.
+  const notice = titlesNeedAccessibility(snapshot) ? (
+    <TitlesAccessStrip onCommand={onCommand} />
+  ) : (
+    browserQuestion
+  );
   if (snapshot.unreadable && !reviewVisible) {
     return (
       <>
         {header}
+        {notice}
         <p className="text-muted-foreground text-sm">{t("unreadableDay")}</p>
       </>
     );
@@ -490,6 +503,7 @@ const DayContent = ({
     return (
       <>
         {header}
+        {notice}
         <p className="text-muted-foreground text-sm">{t("empty")}</p>
       </>
     );
@@ -500,6 +514,7 @@ const DayContent = ({
       onReviewStatusChange={onReviewStatusChange}
       header={header}
       notice={notice}
+      onCaptureCommand={onCommand}
       snapshot={snapshot}
       preferences={preferences}
       onPreferencesChange={onPreferencesChange}
@@ -744,7 +759,7 @@ const ActivityApp = () => {
         onPreferencesChange={setPreferences}
         reviewVisible={reviewVisible}
         onReviewStatusChange={setReviewStatus}
-        notice={
+        browserQuestion={
           <BrowserQuestion
             onCommand={runCommand}
             snapshot={snapshot}

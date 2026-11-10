@@ -4965,6 +4965,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Tiek izmantoti noklusējuma iestatījumi"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} rakstzīmes",
+      "description": "Šie norādījumi attiecas uz visām sarunām ar AI jūsu organizācijā un ir prioritāri pār personīgajām preferencēm. Izmaiņas stājas spēkā no nākamā ziņojuma. Izmantojiet tos atbilstības prasībām, datu apstrādei un formatēšanas standartiem.",
+      "title": "Organizācijas norādījumi",
+      "tooLong": "Norādījumos drīkst būt ne vairāk kā {maxLength} rakstzīmes."
+    },
     "creationEvaluationLimitReached": "Jūs esat izmantojis visus {limit} organizāciju izmēģinājuma periodus. Organizācijas dzēšana neatjauno izmēģinājuma periodu. Izmantojiet esošu organizāciju vai sazinieties ar atbalsta dienestu, lai saņemtu maksas piekļuvi.",
     "creationInvalidName": "Ievadiet derīgu organizācijas nosaukumu (ne vairāk kā {maxLength} rakstzīmes).",
     "creationNotAllowed": "Ar šo kontu nevar izveidot organizācijas.",

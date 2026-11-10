@@ -39,6 +39,7 @@ import {
   chatToolGrants,
   chatTurns,
   desktopPresence,
+  desktopRunnerFolderRestores,
   desktopTimeEntryBatches,
   documentTranslationRuns,
   entities,
@@ -116,6 +117,10 @@ import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
+import {
+  createReadLocalFilesUndo,
+  createUndoLocalFiles,
+} from "@/api/handlers/chat/turns/local-files-undo";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import createClientInvoice from "@/api/handlers/client-invoices/create";
@@ -201,6 +206,9 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_REQUEST_USER_AGENT } from "@/api/lib/business-registries/desktop/request-contract";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createDesktopRunnerControl } from "@/api/lib/desktop-runner/control";
+import { createLocalDoorbell } from "@/api/lib/desktop-runner/doorbell";
+import type { DesktopRunnerDb } from "@/api/lib/desktop-runner/store";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
@@ -758,6 +766,21 @@ const countCzechPresetRates = async (organizationId: SafeId<"organization">) =>
         ),
       )
   ).length;
+
+/** The undo handlers on the test database, as the runner control reads it. */
+const undoControl = () =>
+  createDesktopRunnerControl({
+    db: asTestRaw<DesktopRunnerDb>(testDb),
+    doorbell: createLocalDoorbell(),
+  });
+const readLocalFilesUndo = createReadLocalFilesUndo({ control: undoControl });
+const undoLocalFiles = createUndoLocalFiles({ control: undoControl });
+
+const folderRestoresOfTurn = async (turnId: SafeId<"chatTurn">) =>
+  await testDb
+    .select({ id: desktopRunnerFolderRestores.id })
+    .from(desktopRunnerFolderRestores)
+    .where(eq(desktopRunnerFolderRestores.chatTurnId, turnId));
 
 const readChatTurnRow = async (turnId: SafeId<"chatTurn">) =>
   (
@@ -2780,6 +2803,40 @@ const isolationCases: IsolationCase[] = [
       }),
   },
   {
+    // Runs after the cancel case: the turn ended without a run, so it has
+    // nothing to undo, which its own member is told.
+    name: "chat turn local files undo",
+    runAAgainstB: async ({ workspaceA }) => {
+      const params = { threadId: chatTurnThreadB, turnId: chatTurnB };
+      return {
+        read: await runHandler(readLocalFilesUndo, workspaceA, { params }),
+        undo: await runHandler(undoLocalFiles, workspaceA, { params }),
+        queued: await folderRestoresOfTurn(chatTurnB),
+      };
+    },
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const params = { threadId: chatTurnThreadB, turnId: chatTurnB };
+      return {
+        read: await runHandler(readLocalFilesUndo, sameUserWorkspaceB, {
+          params,
+        }),
+        undo: await runHandler(undoLocalFiles, sameUserWorkspaceB, {
+          params,
+        }),
+      };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "read"))).toBe(404);
+      expect(getStatusCode(recordField(result, "undo"))).toBe(404);
+      expect(recordField(result, "queued")).toEqual([]);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        read: { undoable: false, undo: null },
+        undo: { status: "refused", undo: null, reason: "no_checkpoint" },
+      }),
+  },
+  {
     name: "chat message send",
     runAAgainstB: async ({ workspaceA }) => {
       streamChatStub.mockClear();
@@ -3592,10 +3649,6 @@ testState.beforeAll(async () => {
   ]);
 });
 
-afterAll(async () => {
-  await releaseTestDb();
-});
-
 describe("cross-tenant handler isolation", () => {
   test.each([
     "reader answers across organizations",
@@ -4144,6 +4197,7 @@ const desktopServer = (): TestServer => {
 let desktopRoutes: TestServer | undefined;
 
 afterAll(async () => {
+  await releaseTestDb();
   await desktopRoutes?.stop();
 });
 

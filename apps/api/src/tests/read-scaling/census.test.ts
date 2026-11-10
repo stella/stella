@@ -17,6 +17,7 @@ import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
+import { chatLocalFilesUndoScalingScenario } from "./chat-local-files-undo";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { chatMcpAppBundleScalingScenario } from "./chat-mcp-app-bundle";
 import { claimCommentScalingScenarios } from "./claim-comments";
@@ -42,6 +43,7 @@ import { myOpenTasksScalingScenario } from "./my-open-tasks";
 import { organizationAuditExportScalingScenario } from "./organization-audit-export";
 import { organizationCreateScalingScenario } from "./organization-create";
 import { organizationSlugScalingScenario } from "./organization-slug";
+import { outlookClientMetadataScalingScenario } from "./outlook-client-metadata";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -74,6 +76,7 @@ const measuredApiScenarios = [
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
+  chatLocalFilesUndoScalingScenario,
   chatActiveRunsScalingScenario,
   browserSiteGrantsScalingScenario,
   chatMcpAppBundleScalingScenario,
@@ -83,6 +86,7 @@ const measuredApiScenarios = [
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
   mobileClientMetadataScalingScenario,
+  outlookClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,

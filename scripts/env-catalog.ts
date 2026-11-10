@@ -163,6 +163,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "E2E_DISABLE_AUTH_RATE_LIMIT",
   "SCHEDULED_JOBS_MODE",
   "EXTENSION_ORIGIN",
+  "OUTLOOK_ADDIN_ORIGIN",
   "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
@@ -563,6 +564,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "GitHub token for skill sources a person links. Grant public repositories read-only and no other access; never reuse GITHUB_TOKEN. Unset sends these requests without a token.",
   FRONTEND_URL:
     "Web app origin used for absolute transactional-email links, document verification links, and trusted redirects.",
+  OUTLOOK_ADDIN_ORIGIN:
+    "https origin serving the Outlook add-in's task pane, without a path. Set, the API publishes the add-in's OAuth client and accepts its sign-in callback and browser requests from this origin; unset, the add-in cannot sign in.",
   APPLE_AUTH_CLIENT_ID:
     "Sign in with Apple Services ID used as the OAuth client ID; required when the matching web login flag is enabled.",
   APPLE_AUTH_KEY_ID: "Key ID of the Sign in with Apple private key.",
@@ -888,6 +891,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   EDGAR_USER_AGENT: ENV_CREDENTIAL_KIND.notCredential,
   EMAIL_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   EXTENSION_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
+  OUTLOOK_ADDIN_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
   API_FEATURE_ACCESS_GRANTS: ENV_CREDENTIAL_KIND.notCredential,
   KILL_SWITCHES: ENV_CREDENTIAL_KIND.notCredential,
   API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME:
@@ -1502,6 +1506,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
+  "MOBILE_SHARE_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
   // The fake harness CLIs log how they started and what they receive to the
   // file their tests name; the fake Codex app server also logs its CODEX_HOME.

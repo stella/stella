@@ -32,7 +32,9 @@ const generated = Bun.spawnSync(
   [process.execPath, "--cwd=packages/cli", "run", "codegen:runtime"],
   { cwd: root, stdout: "pipe", stderr: "pipe" },
 );
-expect(generated.exitCode, generated.stderr.toString()).toBe(0);
+if (generated.exitCode !== 0) {
+  throw new Error(`codegen:runtime failed: ${generated.stderr.toString()}`);
+}
 const { generatedToolAnnotations: TOOL_ANNOTATIONS } =
   await import("../packages/cli/src/generated/tool-annotations");
 const outputs = [

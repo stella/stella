@@ -4965,6 +4965,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Kasutusel on vaikeseaded"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} märki",
+      "description": "Need juhised kehtivad kõigile teie organisatsiooni AI-vestlustele ja on isiklikest eelistustest tähtsamad. Muudatused jõustuvad alates järgmisest sõnumist. Kasutage neid nõuetele vastavuse, andmetöötluse ja vorminduse reeglite määramiseks.",
+      "title": "Organisatsiooni juhised",
+      "tooLong": "Juhised võivad sisaldada kuni {maxLength} märki."
+    },
     "creationEvaluationLimitReached": "Olete kasutanud ära kõik {limit} organisatsioonide prooviperioodi. Organisatsiooni kustutamine ei taasta prooviperioodi. Kasutage olemasolevat organisatsiooni või võtke tasulise ligipääsu saamiseks ühendust klienditoega.",
     "creationInvalidName": "Sisesta sobiv organisatsiooni nimi (kuni {maxLength} märki).",
     "creationNotAllowed": "Selle kontoga ei saa organisatsioone luua.",
