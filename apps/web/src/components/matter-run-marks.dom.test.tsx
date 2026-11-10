@@ -201,10 +201,7 @@ describe("MatterRunBadge", () => {
         workspaceId={MATTER_ID}
       />,
     );
-    const trigger = badge(view.container);
-    if (trigger === null) {
-      return panic("The badge did not render");
-    }
+    const trigger = badge(view.container) ?? panic("The badge did not render");
     fireEvent.click(trigger);
 
     const rows = await waitFor(() => {
