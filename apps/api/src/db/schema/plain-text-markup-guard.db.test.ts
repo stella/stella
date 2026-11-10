@@ -103,7 +103,7 @@ const guards = [
         const column =
           columns.find((candidate) => candidate.name === name) ??
           panic(`unknown guarded column ${tableName}.${name}`);
-        return { name, sqlType: String(column.getSQLType()) };
+        return { name, sqlType: column.getSQLType() };
       }),
   };
 });

@@ -2256,10 +2256,8 @@ test("the browser question waits for detail recording", async ({ page }) => {
   });
   await expect(page.locator("[data-activity-browser-question]")).toHaveCount(0);
   await page.evaluate((next) => {
-    const setSnapshot: unknown = Reflect.get(
-      window,
-      "__STELLA_TEST_SET_SNAPSHOT__",
-    );
+    const setSnapshot: ((snapshot: typeof next) => void) | undefined =
+      Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
     if (typeof setSnapshot === "function") {
       setSnapshot(next);
     }
