@@ -1096,10 +1096,8 @@ export const STELLA_TOOL_DEFINITIONS = [
     // at, the passage's bounds, and the next call spelled out.
     description:
       "Read citations with citing passages: cited_by=citers; cites=citations. AND " +
-      "filters: doctrine, polarity. Polarity is stance: unclassified=unread; " +
-      "mixed=disagreeing mentions. polarityEvidence attributes its exact excerpt; " +
-      "citedPart names opinion part; incomplete reasons explain missing " +
-      "text/evidence. doctrine filters reviewed distinguishes/limits, rejected if " +
+      "filters: doctrine, polarity. polarity: unclassified=unread; " +
+      "mixed=disagreeing mentions. doctrine filters reviewed distinguishes/limits, rejected if " +
       "unavailable. doctrine is null when doctrineAvailability=unavailable; " +
       "not_stated doesn't imply followed; unread means none read. " +
       "passage.evidenceQuote is verbatim when text is available. passage.text max " +

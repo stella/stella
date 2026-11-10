@@ -1390,7 +1390,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_case_law_citations",
-    "description": "Read citations with citing passages: cited_by=citers; cites=citations. AND filters: doctrine, polarity. Polarity is stance: unclassified=unread; mixed=disagreeing mentions. polarityEvidence attributes its exact excerpt; citedPart names opinion part; incomplete reasons explain missing text/evidence. doctrine filters reviewed distinguishes/limits, rejected if unavailable. doctrine is null when doctrineAvailability=unavailable; not_stated doesn't imply followed; unread means none read. passage.evidenceQuote is verbatim when text is available. passage.text max 1200 chars; cut if passage.truncated. passage.mention: sole, classified_section (polarity's mention), latest_of_several (may not be). detail, passage_query narrow replies. Pass nextCursor as cursor. url=reader; source_url=publisher.",
+    "description": "Read citations with citing passages: cited_by=citers; cites=citations. AND filters: doctrine, polarity. polarity: unclassified=unread; mixed=disagreeing mentions. doctrine filters reviewed distinguishes/limits, rejected if unavailable. doctrine is null when doctrineAvailability=unavailable; not_stated doesn't imply followed; unread means none read. passage.evidenceQuote is verbatim when text is available. passage.text max 1200 chars; cut if passage.truncated. passage.mention: sole, classified_section (polarity's mention), latest_of_several (may not be). detail, passage_query narrow replies. Pass nextCursor as cursor. url=reader; source_url=publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["decision_id", "direction"],
