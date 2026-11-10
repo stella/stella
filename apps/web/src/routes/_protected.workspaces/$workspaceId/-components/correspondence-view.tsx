@@ -9,7 +9,7 @@ import { Button } from "@stll/ui/button";
 import { RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -140,7 +140,7 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
       </div>
       <div className="flex flex-wrap gap-2">
         {address && (
-          <CopyActionButton
+          <CopyControl
             className="min-h-11"
             iconClassName="size-4"
             size="sm"

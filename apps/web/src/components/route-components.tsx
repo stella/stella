@@ -13,7 +13,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { FEEDBACK_CHANNELS } from "@/components/feedback-dialog.logic";
 import {
   isNetworkError,
@@ -419,7 +419,7 @@ const UnexpectedRouteError = ({
               {visibleErrorReference}
             </bdi>
           </div>
-          <CopyActionButton
+          <CopyControl
             disabled={errorReference === null}
             iconClassName="size-4"
             iconOnly

@@ -24,7 +24,6 @@ import {
   withStatuteListDepth,
 } from "@stll/legal-ast/statute-list";
 import { Button } from "@stll/ui/button";
-import { useCopyConfirmation } from "@stll/ui/copy-button";
 import { CheckIcon } from "@stll/ui/icons";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import {
@@ -962,40 +961,45 @@ const BlockPermalink = ({
 }) => {
   const messages = useReaderMessages();
 
-  const { copyPermalink } = useReaderPresentation();
-  const { copied, copy } = useCopyConfirmation(
-    async () => copyPermalink?.(anchorId) ?? Promise.resolve(false),
-  );
-  if (copyPermalink === undefined) {
+  const { renderPermalinkCopy } = useReaderPresentation();
+  if (renderPermalinkCopy === undefined) {
     return null;
   }
 
-  return (
-    <a
-      aria-label={messages[copied ? "common.copied" : "common.copyLink"]}
-      className={cn(
-        "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden",
-        READER_BLOCK_CHROME_REVEAL_CLASS,
-        PERMALINK_PLACEMENT_CLASS[placement],
-      )}
-      data-reader-chrome=""
-      href={`#${anchorId}`}
-      onClick={(event) => {
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-          return;
-        }
-        event.preventDefault();
-        copy().catch(reportError);
-      }}
-    >
-      {/* The mark turns into a check where the reader clicked; no toast. */}
-      {copied ? (
-        <CheckIcon aria-hidden="true" className="inline size-[0.8em]" />
-      ) : (
-        "¶"
-      )}
-    </a>
-  );
+  return renderPermalinkCopy({
+    anchorId,
+    render: ({ copied, copy }) => (
+      <a
+        aria-label={messages[copied ? "common.copied" : "common.copyLink"]}
+        className={cn(
+          "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden",
+          READER_BLOCK_CHROME_REVEAL_CLASS,
+          PERMALINK_PLACEMENT_CLASS[placement],
+        )}
+        data-reader-chrome=""
+        href={`#${anchorId}`}
+        onClick={(event) => {
+          if (
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          event.preventDefault();
+          copy();
+        }}
+      >
+        {/* The mark turns into a check where the reader clicked; no toast. */}
+        {copied ? (
+          <CheckIcon aria-hidden="true" className="inline size-[0.8em]" />
+        ) : (
+          "¶"
+        )}
+      </a>
+    ),
+  });
 };
 
 const REGEXP_SPECIALS_RE = /[.*+?^${}()|[\]\\]/gu;

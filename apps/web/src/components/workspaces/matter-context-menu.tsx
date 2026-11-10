@@ -9,10 +9,8 @@ import { useState } from "react";
  */
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
@@ -38,9 +36,9 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { contextMenuBelongsTo } from "@/components/context-menu-target";
+import { useCopyControl } from "@/components/copy-control";
 import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
 import { usePermissions } from "@/hooks/use-permissions";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -245,21 +243,11 @@ export const useMatterActions = (
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  // A menu item closes as it copies, so it confirms by toast. The link is
+  // shown nowhere, so no selection the reader copies can be it.
+  const linkCopy = useCopyControl({ confirmation: "toast" });
   const handleCopyLink = async () => {
-    const url = `${window.location.origin}/workspaces/${target.id}`;
-    const copied = await copyToClipboard(url);
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error, {
-        fingerprintKey: "useMatterActions.handleCopyLink:failure",
-        scope: {
-          type: "handler",
-          handlerId: "useMatterActions.handleCopyLink:failure",
-        },
-      });
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
+    await linkCopy.copy(`${window.location.origin}/workspaces/${target.id}`);
   };
 
   const handleDelete = async () => {

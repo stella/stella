@@ -39,7 +39,7 @@ import {
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { COMMUNITY_CHANNELS } from "@/components/feedback-community-items";
 import {
   buildFeedbackRequestBody,
@@ -423,7 +423,7 @@ const FeedbackReceipt = ({ onClose, response }: FeedbackReceiptProps) => {
               {response.receipt}
             </bdi>
           </div>
-          <CopyActionButton
+          <CopyControl
             iconClassName="size-4"
             iconOnly
             label={t("feedback.copyReceipt")}

@@ -145,7 +145,7 @@ import {
 } from "@/components/chat/user-message-edit";
 import type { UserMessageEditActions } from "@/components/chat/user-message-edit";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { DocumentIcon } from "@/components/document-icon";
 import { ProviderSetupGuidanceNotice } from "@/components/provider-diagnostic-content";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
@@ -1391,7 +1391,7 @@ const AssistantMessageActions = ({
         </span>
       )}
       {text && (
-        <CopyActionButton
+        <CopyControl
           className="text-muted-foreground h-6 px-1.5"
           size="xs"
           text={text}

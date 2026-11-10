@@ -1,5 +1,6 @@
-// Passive regression fixture for `copy-feedback-owner/copy-feedback-owner` and
-// `copy-feedback-owner/no-raw-copy-listener`.
+// Passive regression fixture for `copy-feedback-owner/copy-feedback-owner`,
+// `copy-feedback-owner/no-raw-copy-listener` and
+// `copy-feedback-owner/no-raw-clipboard-write`.
 //
 // `oxlint-disable-next-line` directives suppress cases the rules MUST flag; if
 // a rule regresses the directive goes unused and
@@ -10,11 +11,14 @@
 import { CopyFeedback } from "@stll/ui/copy-button";
 
 // expect-clean: copy-feedback-owner/copy-feedback-owner
-const { CopyButton } = await import("@stll/ui/copy-button");
+const { COPIED_RESET_MS } = await import("@stll/ui/copy-button");
 
 declare const confirm: () => void;
 declare const host: HTMLElement;
 declare const copyNoticeText: () => Promise<boolean>;
+declare const NoticeCopy: (props: {
+  onCopy: () => Promise<boolean>;
+}) => null;
 
 // --- Flagged: a hand-written native copy listener ---
 export const _a = () => (
@@ -28,11 +32,21 @@ export const _b = () => (
 // oxlint-disable-next-line copy-feedback-owner/no-raw-copy-listener -- regression fixture for a DOM copy listener
 host.ownerDocument.addEventListener("copy", confirm);
 
+// --- Flagged: a raw clipboard write ---
+export const _c = async () =>
+  // oxlint-disable-next-line copy-feedback-owner/no-raw-clipboard-write -- regression fixture for a direct clipboard write
+  await navigator.clipboard.writeText("Smlouva o dílo");
+// oxlint-disable-next-line copy-feedback-owner/no-raw-clipboard-write -- regression fixture for the legacy copy command
+export const _d = () => host.ownerDocument.execCommand("copy");
+
 // --- Accepted: other events, a component's own onCopy prop ---
 // expect-clean: copy-feedback-owner/no-raw-copy-listener
 host.addEventListener("selectionchange", confirm);
-export const _c = () => (
+export const _e = () => (
   // expect-clean: copy-feedback-owner/no-raw-copy-listener
-  <CopyButton copiedLabel="Copied" label="Copy" onCopy={copyNoticeText} />
+  <NoticeCopy onCopy={copyNoticeText} />
 );
-export const _d = CopyFeedback;
+// expect-clean: copy-feedback-owner/no-raw-clipboard-write
+export const _f = () => host.ownerDocument.execCommand("bold");
+export const _g = COPIED_RESET_MS;
+export const _h = CopyFeedback;

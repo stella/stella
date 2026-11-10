@@ -2991,6 +2991,7 @@ const config = defineConfig({
       rules: {
         "copy-feedback-owner/copy-feedback-owner": "error",
         "copy-feedback-owner/no-raw-copy-listener": "error",
+        "copy-feedback-owner/no-raw-clipboard-write": "error",
       },
     },
     {
@@ -4891,19 +4892,21 @@ const config = defineConfig({
       },
     },
     {
-      // A Copy control confirms through its owner: CopyButton for a fixed
-      // value, useSelectionCopy for selected words, which also confirms the
-      // reader's own Cmd+C. The sanctioned copy listeners and the feedback
-      // owner are listed in the rule; a test fires synthetic events.
+      // Every Copy goes through @/components/copy-control, which writes the
+      // clipboard, holds the one native copy listener and confirms a Copy
+      // when the clipboard holds what it copies. The sanctioned owners are
+      // listed in the rule; a test fires synthetic events.
       files: [
         ...PRODUCT_FRONTEND_FILES,
         "packages/ui/src/**/*.{ts,tsx}",
         "packages/chat/src/**/*.{ts,tsx}",
+        "packages/decision-reader/src/**/*.{ts,tsx}",
       ],
       excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
       rules: {
         "copy-feedback-owner/copy-feedback-owner": "error",
         "copy-feedback-owner/no-raw-copy-listener": "error",
+        "copy-feedback-owner/no-raw-clipboard-write": "error",
       },
     },
     {
