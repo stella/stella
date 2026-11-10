@@ -1,0 +1,5 @@
+{
+  "create-table-references": "The foreign key to case_law_decisions is created with the empty redirect table: a catalog-only SHARE ROW EXCLUSIVE on case_law_decisions with no row scan, bounded by 1s lock_timeout; a lost wait rolls the migration back for the runner's lock-retry ladder.",
+  "row-level-security": "ENABLE RLS applies to the redirect table created empty in the same migration, before anything writes it, under 1s lock_timeout and 30s statement_timeout.",
+  "create-policy": "The three policies apply to the redirect table created empty in the same migration, before anything writes it, under 1s lock_timeout."
+}
