@@ -6,7 +6,7 @@ import {
   parseDesktopLinkStatus,
   signedDesktopLinkStatus,
 } from "@stll/api-contract/desktop-account-link";
-import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
+import { readDesktopLinkProtocol } from "@stll/api-contract/desktop-registry";
 import type {
   DesktopAccountIdentity,
   DesktopLinkFailure,
@@ -121,7 +121,8 @@ export const parseDesktopAccountChallenge = (hash: string) => {
   const protocol = params.get("protocol");
   if (
     [...params].length !== 5 ||
-    protocol !== String(DESKTOP_ACCOUNT_POLICY.linkProtocol) ||
+    !protocol ||
+    readDesktopLinkProtocol(protocol) === null ||
     !correlationId ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
       correlationId,
@@ -262,7 +263,7 @@ const DESKTOP_BRIDGE_RESPONSE_MAX_SKEW_SECONDS = 30;
 /** The challenge fields a bridge status must be signed for. */
 type DesktopConnectionChallenge = Pick<
   DesktopAccountChallenge,
-  "correlationId" | "verifierHash" | "deviceJkt" | "portSecret"
+  "correlationId" | "verifierHash" | "deviceJkt" | "portSecret" | "protocol"
 >;
 
 type VerifyDesktopConnectionOptions = {
@@ -279,11 +280,17 @@ type VerifyDesktopConnectionOptions = {
  */
 export const verifyDesktopConnectionStatus = async ({
   payload,
-  challenge: { correlationId, verifierHash, deviceJkt, portSecret },
+  challenge: { correlationId, verifierHash, deviceJkt, portSecret, protocol },
   nowSeconds,
 }: VerifyDesktopConnectionOptions) => {
-  const status = parseDesktopLinkStatus(payload);
+  // The challenge names the protocol of the app that opened it.
+  const linkProtocol = readDesktopLinkProtocol(protocol);
+  const status =
+    linkProtocol === null
+      ? null
+      : parseDesktopLinkStatus(payload, linkProtocol);
   if (
+    linkProtocol === null ||
     status === null ||
     typeof payload !== "object" ||
     payload === null ||
@@ -321,7 +328,7 @@ export const verifyDesktopConnectionStatus = async ({
     key,
     signature,
     new TextEncoder().encode(
-      `${correlationId}\n${verifierHash}\n${deviceJkt}\n${signedDesktopLinkStatus(status)}\n${payload.timestamp}`,
+      `${correlationId}\n${verifierHash}\n${deviceJkt}\n${signedDesktopLinkStatus(status, linkProtocol)}\n${payload.timestamp}`,
     ),
   );
   return valid ? status : null;

@@ -193,12 +193,15 @@ describe("desktop link redemption over HTTP", () => {
       "6",
       "invalid",
       "7",
+      "8",
     ] as const) {
       test(`${scenario} redemption requires supported protocol ${String(protocol)}`, async () => {
         const fixture = await createRedemptionFixture(scenario, protocol);
         await using server = fixture.serve();
         const response = await server.fetch(fixture.request);
-        if (protocol === "7") {
+        // Protocol 6 stays accepted until a desktop release speaking 7 is
+        // published, so installed desktops keep linking meanwhile.
+        if (protocol === "6" || protocol === "7") {
           expect(DESKTOP_ACCOUNT_POLICY.linkProtocol).toBe(7);
           expect(response.status).toBe(200);
           expect(fixture.grantBodies).toEqual([fixture.body]);

@@ -3,7 +3,10 @@ import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { DesktopLinkStatus } from "@stll/api-contract/desktop-account-link";
-import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
+import {
+  DESKTOP_ACCOUNT_POLICY,
+  DESKTOP_LINK_FAILURE_REASON_PROTOCOL,
+} from "@stll/api-contract/desktop-registry";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { Temporal } from "@stll/time";
 
@@ -15,8 +18,11 @@ globalThis.fetch = Object.assign(async () => Response.json(null), {
   preconnect: originalFetch.preconnect,
 });
 
-const { hasDesktopAccountChallenge, linkDesktopAccount } =
-  await import("@/lib/desktop-bridge");
+const {
+  DesktopBridgeIncompatibleError,
+  hasDesktopAccountChallenge,
+  linkDesktopAccount,
+} = await import("@/lib/desktop-bridge");
 
 afterEach(() => {
   window.history.replaceState(null, "", "/");
@@ -57,25 +63,31 @@ const SIGNED_BY_THE_LOCAL_APP = {
 const signedLine = (status: DesktopLinkStatus) =>
   status.status === "failed" ? `failed:${status.reason}` : status.status;
 
-const signedStatus = (
-  status: DesktopLinkStatus,
-  signature: DesktopSignature,
-) => {
+type SignedReplyOptions = {
+  payload: Readonly<Record<string, string>>;
+  line: string;
+  signature: DesktopSignature;
+};
+
+const signedReply = ({ payload, line, signature }: SignedReplyOptions) => {
   const timestamp = String(
     Math.floor(Temporal.Now.instant().epochMilliseconds / 1000) +
       signature.skewSeconds,
   );
   return Response.json({
     correlationId: challenge.correlationId,
-    ...status,
+    ...payload,
     timestamp,
     proof: new Bun.CryptoHasher("sha256", signature.portSecret)
       .update(
-        `${challenge.correlationId}\n${signature.verifierHash}\n${signature.deviceJkt}\n${signedLine(status)}\n${timestamp}`,
+        `${challenge.correlationId}\n${signature.verifierHash}\n${signature.deviceJkt}\n${line}\n${timestamp}`,
       )
       .digest("hex"),
   });
 };
+
+const signedStatus = (status: DesktopLinkStatus, signature: DesktopSignature) =>
+  signedReply({ payload: status, line: signedLine(status), signature });
 
 const PENDING = { status: "pending" } as const;
 const CONNECTED = { status: "connected" } as const;
@@ -129,11 +141,11 @@ const scriptNetwork = (loopback: LoopbackReply) => {
   return { grants, loopbackRequests };
 };
 
-const openChallenge = () => {
+const openChallenge = (protocol = challenge.protocol) => {
   window.history.replaceState(
     null,
     "",
-    `/settings/account/desktop#desktop-account?${new URLSearchParams(challenge).toString()}`,
+    `/settings/account/desktop#desktop-account?${new URLSearchParams({ ...challenge, protocol }).toString()}`,
   );
 };
 
@@ -288,5 +300,51 @@ describe("a link the app ends", () => {
     });
 
     expect(outcome.isErr()).toBe(true);
+  });
+});
+
+describe("an installed desktop from before failure reasons", () => {
+  const BEFORE_REASONS = String(DESKTOP_LINK_FAILURE_REASON_PROTOCOL - 1);
+
+  test("still connects normally", async () => {
+    const network = scriptNetwork((phase) =>
+      signedStatus(
+        phase === "before-grant" ? PENDING : CONNECTED,
+        SIGNED_BY_THE_LOCAL_APP,
+      ),
+    );
+    openChallenge(BEFORE_REASONS);
+
+    const { opened, outcome } = await linkWithLocalProof();
+
+    expect(outcome.status).toBe("connected");
+    expect(network.grants).toHaveLength(1);
+    expect(opened).toHaveLength(1);
+  });
+
+  test("reports its bare failure as an error and offers no switch", async () => {
+    scriptNetwork((phase) =>
+      phase === "before-grant"
+        ? signedStatus(PENDING, SIGNED_BY_THE_LOCAL_APP)
+        : signedReply({
+            payload: { status: "failed" },
+            line: "failed",
+            signature: SIGNED_BY_THE_LOCAL_APP,
+          }),
+    );
+    openChallenge(BEFORE_REASONS);
+
+    const outcome = await linkDesktopAccount({
+      apiBaseUrl: "https://api.example.test",
+      approval: "local-proof",
+      onDesktopOpening: () => {},
+    });
+
+    // The signed bare failure is a valid answer from that desktop, not an
+    // incompatible one; it carries no reason, so no refusal or switch.
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) {
+      expect(outcome.error).not.toBeInstanceOf(DesktopBridgeIncompatibleError);
+    }
   });
 });

@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { DESKTOP_LINK_FAILURE_REASON_PROTOCOL } from "./desktop-registry";
 import type { DesktopLinkFailure } from "./desktop-rpc.gen";
 
 /**
@@ -39,9 +40,15 @@ export type DesktopLinkStatus =
   | { status: "connected" }
   | { status: "failed"; reason: DesktopLinkFailure };
 
-/** Reads a bridge status; anything outside the contract is `null`. */
+/**
+ * Reads a bridge status from a desktop on link `protocol`; anything outside
+ * the contract is `null`. A desktop older than
+ * `DESKTOP_LINK_FAILURE_REASON_PROTOCOL` reports a failure without a reason,
+ * which reads as `unavailable`.
+ */
 export const parseDesktopLinkStatus = (
   value: unknown,
+  protocol: number,
 ): DesktopLinkStatus | null => {
   if (typeof value !== "object" || value === null || !("status" in value)) {
     return null;
@@ -52,6 +59,11 @@ export const parseDesktopLinkStatus = (
     case "connected":
       return { status: "connected" };
     case "failed":
+      if (protocol < DESKTOP_LINK_FAILURE_REASON_PROTOCOL) {
+        return "reason" in value
+          ? null
+          : { status: "failed", reason: "unavailable" };
+      }
       return "reason" in value && isDesktopLinkFailure(value.reason)
         ? { status: "failed", reason: value.reason }
         : null;
@@ -61,16 +73,22 @@ export const parseDesktopLinkStatus = (
 };
 
 /**
- * The status line the app signs: `pending`, `connected` or `failed:<reason>`,
- * so a page never acts on a reason the app did not sign.
+ * The status line a desktop on link `protocol` signs: `pending`, `connected`
+ * or `failed:<reason>`, so a page never acts on a reason the app did not
+ * sign. An older desktop signs a bare `failed`.
  */
-export const signedDesktopLinkStatus = (status: DesktopLinkStatus) => {
+export const signedDesktopLinkStatus = (
+  status: DesktopLinkStatus,
+  protocol: number,
+) => {
   switch (status.status) {
     case "pending":
     case "connected":
       return status.status;
     case "failed":
-      return `failed:${status.reason}`;
+      return protocol < DESKTOP_LINK_FAILURE_REASON_PROTOCOL
+        ? "failed"
+        : `failed:${status.reason}`;
     default:
       status satisfies never;
       return panic("Unhandled desktop connection status");

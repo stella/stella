@@ -86,6 +86,20 @@ describe("account link challenges", () => {
         parseDesktopAccountChallenge(`#desktop-account?${params.toString()}`),
       ).toBeNull();
     }
+    // The installed desktop from before failure reasons still links; older
+    // and future protocols do not.
+    for (const protocol of ["6", String(DESKTOP_ACCOUNT_POLICY.linkProtocol)]) {
+      const params = new URLSearchParams({ ...challenge, protocol });
+      expect(
+        parseDesktopAccountChallenge(`#desktop-account?${params.toString()}`),
+      ).toEqual({ ...challenge, protocol });
+    }
+    for (const protocol of ["5", "8", "06"]) {
+      const params = new URLSearchParams({ ...challenge, protocol });
+      expect(
+        parseDesktopAccountChallenge(`#desktop-account?${params.toString()}`),
+      ).toBeNull();
+    }
     for (const protocol of ["4", String(DESKTOP_ACCOUNT_POLICY.linkProtocol)]) {
       const params = new URLSearchParams({ ...challenge, protocol });
       params.delete("deviceJkt");
@@ -287,6 +301,36 @@ describe("authenticated account status", () => {
         expect(await verifyDesktopConnectionStatus(invalid)).toBeNull();
       }
     }
+  });
+
+  test("a desktop from before failure reasons signs a bare failure", async () => {
+    const timestamp = "1790851200";
+    const before = { ...challenge, protocol: "6" };
+    const bare = {
+      correlationId: challenge.correlationId,
+      status: "failed",
+      timestamp,
+      proof: new Bun.CryptoHasher("sha256", challenge.portSecret)
+        .update(
+          `${challenge.correlationId}\n${challenge.verifierHash}\n${challenge.deviceJkt}\nfailed\n${timestamp}`,
+        )
+        .digest("hex"),
+    };
+    expect(
+      await verifyDesktopConnectionStatus({
+        payload: bare,
+        challenge: before,
+        nowSeconds: 1_790_851_200,
+      }),
+    ).toEqual({ status: "failed", reason: "unavailable" });
+    // A current desktop must sign its reason, so the same reply is refused.
+    expect(
+      await verifyDesktopConnectionStatus({
+        payload: bare,
+        challenge,
+        nowSeconds: 1_790_851_200,
+      }),
+    ).toBeNull();
   });
 
   test("unsigned status and incomplete proofs are rejected", async () => {
