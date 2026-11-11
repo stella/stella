@@ -1,13 +1,14 @@
 /**
- * The lease start margin stops the cycle, driven through the exported cycle
- * rather than a replica of its loop.
+ * A generation with a long commit window still fills its append requests,
+ * driven through the exported cycle rather than a replica of its loop.
  *
- * Past the margin the deadline branch is true on every advance, so a cycle
- * that keeps buffering emits one request per revision — a batch start, an
- * ingest round trip and a commit each, for what belongs in one capful. The
- * lease here is the shortest the store admits, which is well inside the
- * margin, so the very first revision is margin-led: one request, then the
- * cycle stops and leaves the rest reserved.
+ * The start margin follows the commit window (about 12 minutes for a
+ * 600-second window). A reservation lease shorter than that margin put every
+ * tail inside it from the moment it was reserved, so the cycle flushed its
+ * first revision and stopped: one revision per request, each paying a batch
+ * start, an ingest round trip and a full commit wait. The cycle now derives
+ * its lease from the margin plus the caller's fill window, so even the
+ * shortest fill window lets one request carry every revision it reserved.
  *
  * Payloads are served by the in-process object store, so the reads, the
  * decode and the build are the real ones.
@@ -44,9 +45,9 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const TARGET = {
   family: "legislation",
-  generation: "legislation_v2",
+  generation: "legislation_v3",
 } as const;
-const MANIFEST = CORPUS_INDEX_MANIFESTS.legislation_v2;
+const MANIFEST = CORPUS_INDEX_MANIFESTS.legislation_v3;
 const SOURCE_ID = "0198e331-e578-7000-8000-0000000000b1";
 const REVISIONS = 6;
 const EPOCH = 4n;
@@ -119,8 +120,8 @@ beforeAll(
     });
     await db.insert(legislationSources).values({
       id: toSafeId<"legislationSource">(SOURCE_ID),
-      adapterKey: "margin-stop-collection",
-      name: "Margin stop collection",
+      adapterKey: "long-window-collection",
+      name: "Long commit window collection",
       descriptor: null,
     });
 
@@ -174,7 +175,7 @@ afterAll(async () => {
   fake.stop();
 });
 
-test("a lease inside the start margin appends once and stops", async () => {
+test("a long commit window fills one request with every reserved revision", async () => {
   const revisionCounts = new Map<string, number>();
   const result = await executeCorpusProjectionAppendCycle({
     runInTransaction,
@@ -213,21 +214,18 @@ test("a lease inside the start margin appends once and stops", async () => {
     generation: TARGET.generation,
     scope: CORPUS_PROJECTION_GENERATION_SCOPE,
     limit: REVISIONS,
-    // The shortest lease the store admits, so every advance is inside the
-    // 65s start margin and the first revision is already margin-led.
-    leaseMs: CORPUS_PROJECTION_LEASE_MIN_MS,
+    // The shortest fill window: the lease still covers the generation's
+    // start margin, so buffering is not margin-led from the first revision.
+    fillWindowMs: CORPUS_PROJECTION_LEASE_MIN_MS,
     payloadReadConcurrency: 2,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
   });
 
   expect(result.reserved).toBe(REVISIONS);
-  // One append, not one per revision: the whole point of the stop.
+  // One request carrying every revision, not one request per revision.
   expect(result.requestCount).toBe(1);
-  expect(ingested).toEqual([1]);
-  expect(result.applied).toBe(1);
-
-  // The rest keep their reservations rather than paying a cancellation
-  // statement each; they are inside the margin, so they come back on their own.
+  expect(ingested).toEqual([REVISIONS]);
+  expect(result.applied).toBe(REVISIONS);
   expect(result.cancelled).toBe(0);
 });
