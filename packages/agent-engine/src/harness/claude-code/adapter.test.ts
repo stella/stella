@@ -1295,7 +1295,7 @@ describe("Claude Code approval modes", () => {
     );
     expect(approvals).toHaveLength(2);
     expect(approvals[0]).toMatchObject({
-      toolCall: { input: { host: FAKE_SANDBOX_HOST } },
+      toolCall: { localInput: { host: FAKE_SANDBOX_HOST } },
     });
     expect(answers()[0]).toMatchObject({
       request_id: "cli-1",
