@@ -27,7 +27,7 @@ describe("factTier", () => {
         }
         // The tier is one of the kinds cited, and no cited kind ranks
         // above it.
-        expect(kinds).toContain(tier);
+        expect(kinds.some((kind) => kind === tier)).toBe(true);
         for (const kind of kinds) {
           expect(FACT_TIERS.indexOf(tier)).toBeLessThanOrEqual(
             FACT_TIERS.indexOf(kind),
