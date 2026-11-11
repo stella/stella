@@ -16,7 +16,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { SHAREPOINT_REFUSAL_CODE } from "@stll/api-contract/sharepoint";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions } from "@/api/db/schema";
 import {
   downloadSharepointFile,
@@ -300,7 +300,7 @@ export const importSharepointFile = async ({
   ref,
   target,
 }: ImportFileOptions): Promise<
-  Result<SharepointImportResult, SharepointGraphError | HandlerError<500>>
+  Result<SharepointImportResult, SharepointGraphError | SafeDbError>
 > => {
   const item = await getSharepointDriveItem({ accessToken, ...ref });
   if (Result.isError(item)) {
@@ -337,7 +337,7 @@ export const importSharepointFile = async ({
         ref,
         new HandlerError({
           status: 502,
-          code: "internal_error",
+          code: "upstream_unavailable",
           message: "Microsoft Graph did not report the file's version",
         }),
       ),
@@ -350,13 +350,7 @@ export const importSharepointFile = async ({
     ...ref,
   });
   if (Result.isError(imported)) {
-    return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Failed to read earlier SharePoint imports",
-        cause: imported.error,
-      }),
-    );
+    return Result.err(imported.error);
   }
   const bytes = await downloadSharepointFile({
     accessToken,
@@ -447,13 +441,7 @@ export const importSharepointFile = async ({
       if (Result.isError(authorized)) {
         return DocumentWriteRefusedError.is(authorized.error)
           ? Result.ok(failed(ref, storeFailure(authorized.error)))
-          : Result.err(
-              new HandlerError({
-                status: 500,
-                message: "Failed to authorize the SharePoint version",
-                cause: authorized.error,
-              }),
-            );
+          : Result.err(authorized.error);
       }
       const versioned = await createEntityVersionFromBuffer({
         safeDb: target.safeDb,

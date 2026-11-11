@@ -13,7 +13,7 @@ import {
   type SharepointImportResult,
 } from "@/api/handlers/sharepoint/import-file";
 import { withSharepointGraph } from "@/api/handlers/sharepoint/session";
-import { captureError, detached } from "@/api/lib/analytics/capture";
+import { detached } from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
   createSafeHandler,
@@ -22,7 +22,8 @@ import {
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { broadcastOrganizationResourceSetUpdated } from "@/api/lib/resource-realtime";
 
 const requestBody = v.object({
@@ -66,6 +67,11 @@ const config = {
   mcp: { type: "internal", reason: "provider_secret" },
   body: requestBody,
 } satisfies WorkspaceHandlerConfig;
+
+const uploadFlowsFailure = failureSink({
+  event: "sharepoint_import.upload_flows_failed",
+  expected: [],
+});
 
 const refKey = ({ driveId, itemId }: { driveId: string; itemId: string }) =>
   `${driveId}\u0000${itemId}`;
@@ -134,13 +140,10 @@ const importSharepointFiles = createSafeHandler(
             organizationId,
             fileName: result.name,
           }).catch((error: unknown) => {
-            captureError(
-              error,
-              handlerErrorContext("sharepointImport.uploadFlows", {
-                entityId: result.entityId,
-                workspaceId,
-              }),
-            );
+            observeFailure(error, {
+              sink: uploadFlowsFailure,
+              ctx: { workspaceId },
+            });
           }),
         "sharepoint-import.maybe-start-upload-triggered-flows",
       );

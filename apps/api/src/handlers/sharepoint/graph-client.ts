@@ -770,7 +770,7 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const DOWNLOAD_HOST_SUFFIXES = [".sharepoint.com", ".1drv.com"] as const;
 
 /** A Graph download link this client follows: HTTPS on a Microsoft file host. */
-export const isSharepointDownloadUrl = (url: URL): boolean =>
+const isSharepointDownloadUrl = (url: URL): boolean =>
   url.protocol === "https:" &&
   url.port === "" &&
   DOWNLOAD_HOST_SUFFIXES.some((suffix) => url.hostname.endsWith(suffix));

@@ -804,10 +804,6 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "credential",
   },
-  "POST /v1/sharepoint/imports/:workspaceId": {
-    type: "non-replay",
-    reason: "current-state",
-  },
   "POST /v1/signals/:signalId/acceptances": {
     type: "non-replay",
     reason: "authorization-in-handler",
@@ -1155,6 +1151,11 @@ const CREATE_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason:
       "Money movement keeps its current payment transaction and is never replayed.",
+  },
+  "src/handlers/sharepoint/imports/create.ts": {
+    type: "non-replay",
+    reason:
+      "Each file is re-read from SharePoint and converges on its stored content digest, so a repeat is a no-op without a receipt; the object writes and Graph reads sit outside a scoped replay receipt.",
   },
 } as const satisfies Record<string, { type: "non-replay"; reason: string }>;
 
