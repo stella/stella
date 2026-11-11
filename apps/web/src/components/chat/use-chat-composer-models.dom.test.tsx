@@ -21,7 +21,7 @@ const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { toChatThreadId } = await import("@/lib/chat-thread-ref");
 const { rememberRunTarget, useChatRunOnPreferenceStore } =
-  await import("@/lib/chat-run-on-preference-store");
+  await import("@/features/chat/run-on-preference-store");
 const { useChatComposerModels } = await import("./use-chat-composer-models");
 
 afterEach(() => {

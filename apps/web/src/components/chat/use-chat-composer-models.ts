@@ -34,11 +34,11 @@ import {
   applyChatModelChange,
   localRunnersOptions,
 } from "@/features/chat/queries";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import {
   rememberedRunTarget,
   rememberRunTarget,
-} from "@/lib/chat-run-on-preference-store";
+} from "@/features/chat/run-on-preference-store";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";

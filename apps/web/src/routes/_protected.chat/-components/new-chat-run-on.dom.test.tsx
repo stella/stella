@@ -44,7 +44,7 @@ const { AIAvailabilityProvider } = await import("@/components/require-ai-key");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { useChatDraftStore } = await import("@/lib/chat-draft-store");
 const { rememberRunTarget, useChatRunOnPreferenceStore } =
-  await import("@/lib/chat-run-on-preference-store");
+  await import("@/features/chat/run-on-preference-store");
 const { getChatThreadKey, toChatThreadId } =
   await import("@/lib/chat-thread-ref");
 const { workspacesNavigationOptions } =
