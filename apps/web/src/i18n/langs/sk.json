@@ -5142,6 +5142,7 @@
     },
     "newOrganization": "Nová organizácia",
     "newOrganizationDescription": "Vytvorte organizáciu, ktorej budete vlastníkom.",
+    "organizations": "Organizácie",
     "roles": {
       "admin": "Administrátor",
       "descriptions": {

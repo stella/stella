@@ -5142,6 +5142,7 @@
     },
     "newOrganization": "Új szervezet",
     "newOrganizationDescription": "Hozzon létre egy szervezetet, amelynek Ön lesz a tulajdonosa.",
+    "organizations": "Szervezetek",
     "roles": {
       "admin": "Adminisztrátor",
       "descriptions": {

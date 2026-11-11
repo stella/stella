@@ -5142,6 +5142,7 @@
     },
     "newOrganization": "مؤسسة جديدة",
     "newOrganizationDescription": "أنشئ مؤسسة ستكون مالكها.",
+    "organizations": "المؤسسات",
     "roles": {
       "admin": "المسؤول",
       "descriptions": {

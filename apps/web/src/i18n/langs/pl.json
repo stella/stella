@@ -5142,6 +5142,7 @@
     },
     "newOrganization": "Nowa organizacja",
     "newOrganizationDescription": "Utwórz organizację, której będziesz właścicielem.",
+    "organizations": "Organizacje",
     "roles": {
       "admin": "Administrator",
       "descriptions": {

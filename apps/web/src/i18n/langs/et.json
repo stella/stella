@@ -5142,6 +5142,7 @@
     },
     "newOrganization": "Uus organisatsioon",
     "newOrganizationDescription": "Loo organisatsioon, mille omanikuks saad sina.",
+    "organizations": "Organisatsioonid",
     "roles": {
       "admin": "Administraator",
       "descriptions": {

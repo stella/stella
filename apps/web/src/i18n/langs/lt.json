@@ -5142,6 +5142,7 @@
     },
     "newOrganization": "Nauja organizacija",
     "newOrganizationDescription": "Sukurkite organizaciją, kurios savininkas būsite jūs.",
+    "organizations": "Organizacijos",
     "roles": {
       "admin": "Administratorius",
       "descriptions": {
