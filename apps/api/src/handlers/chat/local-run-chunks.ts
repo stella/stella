@@ -211,7 +211,8 @@ type LocalRunFailure =
   | typeof AI_FAILURE_CODES.local_runner_unavailable
   | typeof AI_FAILURE_CODES.local_runner_turn_too_large
   | typeof AI_FAILURE_CODES.local_runner_not_reached
-  | typeof AI_FAILURE_CODES.local_runner_relinked;
+  | typeof AI_FAILURE_CODES.local_runner_relinked
+  | typeof AI_FAILURE_CODES.local_runner_restoring;
 
 const FAILURE_MESSAGE = {
   [AI_FAILURE_CODES.local_runner_needs_login]:
@@ -226,6 +227,8 @@ const FAILURE_MESSAGE = {
     "The computer did not pick up the turn; it is not connected.",
   [AI_FAILURE_CODES.local_runner_relinked]:
     "The computer was linked again, so the run of its previous link stopped.",
+  [AI_FAILURE_CODES.local_runner_restoring]:
+    "The computer is still undoing an earlier turn's file changes.",
 } as const satisfies Record<LocalRunFailure, string>;
 
 type StoredOutcome = Extract<
@@ -275,7 +278,8 @@ const LOCAL_RUN_REJECTION = {
   at_capacity: AI_FAILURE_CODES.local_runner_unavailable,
   run_too_large: AI_FAILURE_CODES.local_runner_turn_too_large,
   unknown_run: AI_FAILURE_CODES.local_runner_unavailable,
-  folder_busy: AI_FAILURE_CODES.local_runner_unavailable,
+  // The computer is still undoing an earlier turn's file changes.
+  folder_busy: AI_FAILURE_CODES.local_runner_restoring,
 } as const satisfies Record<RejectReason, LocalRunFailure>;
 
 /** A stored chunk as the turn pipeline folds it. */
@@ -1733,8 +1737,11 @@ async function* startLocalRun({
     case "no_computer":
     case "model_unavailable":
     case "approvals_unavailable":
-    case "folder_busy":
       yield* refuse(AI_FAILURE_CODES.local_runner_unavailable);
+      return;
+    case "folder_busy":
+      // An undo of the chat's files is still running on the computer.
+      yield* refuse(AI_FAILURE_CODES.local_runner_restoring);
       return;
     case "too_large":
       yield* refuse(AI_FAILURE_CODES.local_runner_turn_too_large);

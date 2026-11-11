@@ -1855,6 +1855,7 @@
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
       "errorNotReached": "Your computer did not pick up this turn. Make sure stella desktop is open and connected, then try again.",
       "errorRelinked": "stella desktop was linked again on your computer, so this turn stopped. Send it again.",
+      "errorRestoring": "Your computer is still undoing file changes. Send this again in a moment.",
       "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
       "filesNotShared": "Files that could not be shared stay on your computer: {fileNames}",
       "onThisComputer": "{harness} on this computer",

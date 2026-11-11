@@ -216,8 +216,21 @@ const now = () => new Date(clock.now);
 let db: TestDatabase;
 let credentials: Awaited<ReturnType<typeof createRlsDesktopCredentials>>;
 let mintedTokens = 0;
+/** A mint a test holds, to act while a socket composes a page. */
+const mintGate: {
+  held: {
+    reached: PromiseWithResolvers<undefined>;
+    release: Promise<void>;
+  } | null;
+} = { held: null };
 const mintRunToken: MintRunToken = async () => {
   mintedTokens += 1;
+  const held = mintGate.held;
+  if (held !== null) {
+    mintGate.held = null;
+    held.reached.resolve(undefined);
+    await held.release;
+  }
   return await Promise.resolve({
     token: `run-token-${String(mintedTokens)}`,
     expiresAt: new Date(clock.now + 15 * 60_000),
@@ -1332,18 +1345,19 @@ describe("upgrade scaling", () => {
 });
 
 describe("runner identity", () => {
-  test("a relink retires the earlier key and ends its open runs, each with why", async () => {
+  test("a relink retires the earlier key and ends the runs written to it as relinked, accepted or not", async () => {
     const relinked = await createRlsDesktopCredentials(db, ids);
     const desktopId = Bun.randomUUIDv7();
     const before = await openDesktop(second, desktopId);
     await before.hello();
-    // One run the computer took, one it never did.
+    // One run the computer took, one written to it that it never took.
     const taken = await assignRun(desktopId);
     await before.receive("run.start", ofRun(taken));
     before.send({ type: "run.accepted", runId: taken });
     before.send(textEvent(taken, 1, "Working"));
     await before.receive("ack", ofRun(taken));
     const untaken = await assignRun(desktopId);
+    await before.receive("run.start", ofRun(untaken));
     // The same installation in another organization is another account's
     // runner, which a relink here never touches.
     const elsewhere = await openDesktop(
@@ -1363,9 +1377,10 @@ describe("runner identity", () => {
       state: "lost",
       lostReason: "computer_relinked",
     });
+    // Written to the old socket, it may have started: send it again.
     expect(await runState(untaken)).toMatchObject({
       state: "lost",
-      lostReason: "not_reached",
+      lostReason: "computer_relinked",
     });
     const rows = (await runnerRows(owner.userId, owner.organizationId)).filter(
       (row) => row.desktopId === desktopId,
@@ -1476,6 +1491,65 @@ describe("runner identity", () => {
     );
     await admitted.close();
   });
+  test("a relink while the earlier key's socket composes a page sends nothing of it", async () => {
+    const relinked = await createRlsDesktopCredentials(db, ids);
+    const desktopId = Bun.randomUUIDv7();
+    const before = await openDesktop(second, desktopId);
+    await before.hello();
+    const reached = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    mintGate.held = {
+      reached,
+      release: release.promise.then(() => undefined),
+    };
+    const runId = await assignRun(desktopId);
+    // The socket read the run's start and is minting its token.
+    await reached.promise;
+    const after = await openDesktop(
+      first,
+      desktopId,
+      await upgradeRequest(first, desktopId, relinked.a),
+    );
+    await after.hello();
+    release.resolve(undefined);
+    expect(await before.closed).toEqual({
+      code: DESKTOP_RUNNER_CLOSE.superseded.code,
+      reason: DESKTOP_RUNNER_CLOSE.superseded.reason,
+    });
+    expect(before.received.some(ofRun(runId))).toBe(false);
+    expect(await runState(runId)).toMatchObject({
+      state: "lost",
+      lostReason: "not_reached",
+      deliveredAt: null,
+    });
+    await after.close();
+  });
+
+  test("a run the earlier key accepted after the relink stays ended", async () => {
+    const relinked = await createRlsDesktopCredentials(db, ids);
+    const desktopId = Bun.randomUUIDv7();
+    const before = await openDesktop(second, desktopId);
+    await before.hello();
+    const runId = await assignRun(desktopId);
+    await before.receive("run.start", ofRun(runId));
+    const after = await openDesktop(
+      first,
+      desktopId,
+      await upgradeRequest(first, desktopId, relinked.a),
+    );
+    await after.hello();
+    // Written to the old socket, so the member is told to send it again.
+    expect(await runState(runId)).toMatchObject({
+      state: "lost",
+      lostReason: "computer_relinked",
+    });
+    // The old socket's acceptance arrives late: refused, the run stays ended.
+    before.send({ type: "run.accepted", runId });
+    await before.closed;
+    expect((await runState(runId))?.state).toBe("lost");
+    await after.close();
+  });
+
   test("a relink at the installation cap is admitted: the key it replaces holds no place", async () => {
     const relinked = await createRlsDesktopCredentials(db, ids);
     const account = { userId: owner.userId, organizationId: ids.orgB };
@@ -2271,6 +2345,89 @@ describe("outbound frames", () => {
     expect(starts()).toEqual([buffered, waiting]);
     session.close(socket, 1000, "done");
     await gateway.drain();
+  });
+  test("a run.start the socket could not write keeps the pickup window", async () => {
+    // Two runs assigned while no socket wrote them: the next socket's first
+    // page holds both starts.
+    const desktopId = Bun.randomUUIDv7();
+    await insertReadyRunner(desktopId);
+    const written = await assignRun(desktopId);
+    const unwritten = await assignRun(desktopId);
+    const gateway = createDesktopRunnerGateway({
+      db: gatewayDb,
+      doorbell: sharedDoorbell,
+      instanceId: "api-partial-page",
+      authorize: authorizeRunnerWith(credentials.authorizeDesktopAccount),
+      mintRunToken,
+      now,
+      random: () => 0.5,
+      timing: TIMING,
+      isKeyLive,
+      isRunnerEnabled,
+    });
+    await gateway.start();
+    const accepted: { session: ApiSocketSession | null } = { session: null };
+    const server = asTestRaw<HttpServer>({
+      upgrade: (_request: Request, upgrade: { data: ApiSocketData }) => {
+        accepted.session = upgrade.data.session;
+        return true;
+      },
+    });
+    expect(
+      await gateway.upgrade(await upgradeRequest(first, desktopId), server),
+    ).toBeNull();
+    const session =
+      accepted.session ?? panic("the gateway took the upgrade over");
+    const starts: string[] = [];
+    const welcomed = Promise.withResolvers<undefined>();
+    const socket = asTestRaw<ApiServerWebSocket>({
+      send: (text: string) => {
+        const message = v.parse(
+          desktopRunnerServerMessageSchema,
+          JSON.parse(text),
+        );
+        if (message.type === "welcome") {
+          welcomed.resolve(undefined);
+        }
+        if (message.type !== "run.start") {
+          return 1;
+        }
+        starts.push(message.runId);
+        // Bun buffers the first start; the socket takes nothing more.
+        return -1;
+      },
+      close: () => undefined,
+      ping: () => undefined,
+    });
+    session.open(socket);
+    clock.now += 1000;
+    session.message(socket, JSON.stringify(helloFrame()));
+    await welcomed.promise;
+    await waitForExternalState({
+      description: "the first page was written",
+      read: async () => {
+        const run = await runState(written);
+        return run === null || run.deliveredAt === null ? null : run;
+      },
+    });
+    expect(starts).toEqual([written]);
+    expect((await runState(unwritten))?.deliveredAt).toBeNull();
+
+    clock.now += DESKTOP_RUNNER_LIMITS.unacceptedRunMs + 1;
+    await gateway.sweep();
+    expect(await runState(unwritten)).toMatchObject({
+      state: "lost",
+      deliveredAt: null,
+    });
+    expect((await runState(written))?.state).not.toBe("lost");
+    session.close(socket, 1000, "done");
+    await gateway.drain();
+    // Ends the written run, so its installation makes room for later ones.
+    await db
+      .update(desktopRunnerRuns)
+      .set({ state: "lost" })
+      .where(eq(desktopRunnerRuns.runId, written));
+    await retireRunner(desktopId);
   });
 });
 
@@ -4311,6 +4468,8 @@ describe("chat turns on a computer", () => {
       ["harness_needs_login", "local_runner_needs_login"],
       ["harness_unavailable", "local_runner_unavailable"],
       ["run_too_large", "local_runner_turn_too_large"],
+      // An undo of the chat's files still runs on the computer: send again.
+      ["folder_busy", "local_runner_restoring"],
     ] as const) {
       const chatThreadId = await newThread();
       const turn = collect(

@@ -94,6 +94,8 @@ const AI_ERROR_RETRYABLE = {
   local_runner_not_reached: true,
   // The relinked computer takes the turn when it is sent again.
   local_runner_relinked: true,
+  // The undo finishes in a moment; the turn runs when sent again.
+  local_runner_restoring: true,
   loop_detected: false,
   deadline_exceeded: true,
   model_unavailable: false,
@@ -120,6 +122,7 @@ export const AI_ERROR_FAILURE_CODE = {
   local_runner_turn_too_large: "provider-error",
   local_runner_not_reached: "provider-error",
   local_runner_relinked: "provider-error",
+  local_runner_restoring: "provider-error",
   loop_detected: "provider-error",
   deadline_exceeded: "provider-error",
   model_unavailable: "provider-error",

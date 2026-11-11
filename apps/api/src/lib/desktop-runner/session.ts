@@ -37,18 +37,20 @@ import {
 import {
   claimRunnerSession,
   type DesktopRunnerDb,
+  markRunStartsSending,
   type PendingCommand,
   persistRunMessage,
+  readPendingCommands,
   recordHarnessStatus,
   recordRunAccepted,
   recordRunRejected,
   releaseRunnerSession,
+  releaseUnsentRunStarts,
   renewRunnerSession,
   type RunHolder,
   type RunnerBinding,
   type RunTransition,
   type SequencedRunMessage,
-  takePendingCommands,
 } from "@/api/lib/desktop-runner/store";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -472,38 +474,95 @@ const deliverPending = async (
       return;
     }
     // db-await-in-loop: keyset page per iteration; the page is the batch
-    const pending = await takePendingCommands(state.context.db, {
-      binding: state.binding,
-      sessionId: state.sessionId,
-      afterId: state.deliveredThrough,
-      limit: COMMAND_PAGE_SIZE,
-      now: state.context.now(),
-    });
-    if (pending.type === "superseded") {
-      close(state, DESKTOP_RUNNER_CLOSE.superseded);
+    const page = await deliverPage(state, held);
+    if (page !== "full") {
       return;
     }
-    for (const command of pending.commands) {
-      const resend =
-        command.kind !== DESKTOP_RUNNER_SERVER_MESSAGE.runStart ||
-        !held.has(command.runId);
-      const sent = resend
-        ? send(state, await outgoing(state, command))
-        : "sent";
+  }
+};
+
+/**
+ * One page of the socket's queue: read, composed (tokens minted), then
+ * checked at the send boundary and written with nothing awaited in between,
+ * so a relink that retires this socket's key, or ends a run, lands before
+ * the check and nothing of it goes out. A `run.start` whose run ended since
+ * the read is skipped; one recorded as delivered that never went out (the
+ * socket closed or filled up) is released, so it keeps the pickup window.
+ * `full` when another page may follow.
+ */
+const deliverPage = async (
+  state: SessionState,
+  held: ReadonlySet<string>,
+): Promise<"full" | "done"> => {
+  const { db } = state.context;
+  const pending = await readPendingCommands(db, {
+    binding: state.binding,
+    sessionId: state.sessionId,
+    afterId: state.deliveredThrough,
+    limit: COMMAND_PAGE_SIZE,
+  });
+  if (pending.type === "superseded") {
+    close(state, DESKTOP_RUNNER_CLOSE.superseded);
+    return "done";
+  }
+  const composed: {
+    command: PendingCommand;
+    message: DesktopRunnerServerMessage | null;
+  }[] = [];
+  for (const command of pending.commands) {
+    const resend =
+      command.kind !== DESKTOP_RUNNER_SERVER_MESSAGE.runStart ||
+      !held.has(command.runId);
+    composed.push({
+      command,
+      message: resend ? await outgoing(state, command) : null,
+    });
+  }
+  const starts = composed.flatMap(({ command, message }) =>
+    message !== null && command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runStart
+      ? [command.runId]
+      : [],
+  );
+  const now = state.context.now();
+  const boundary = await markRunStartsSending(db, {
+    binding: state.binding,
+    sessionId: state.sessionId,
+    runIds: starts,
+    now,
+  });
+  if (boundary.type === "superseded") {
+    close(state, DESKTOP_RUNNER_CLOSE.superseded);
+    return "done";
+  }
+  const unsent = new Set(boundary.open);
+  const written = (() => {
+    for (const { command, message } of composed) {
+      const ended =
+        message !== null &&
+        command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runStart &&
+        !boundary.open.has(command.runId);
+      const sent = message === null || ended ? "sent" : send(state, message);
       if (sent === "closed") {
-        return;
+        return "stopped";
       }
+      unsent.delete(command.runId);
       // A buffered frame was taken; the next command waits for the drain.
       state.deliveredThrough = command.id;
       if (sent === "backpressure") {
         state.backpressured = true;
-        return;
+        return "stopped";
       }
     }
-    if (pending.commands.length < COMMAND_PAGE_SIZE) {
-      return;
-    }
-  }
+    return "all";
+  })();
+  await releaseUnsentRunStarts(db, {
+    binding: state.binding,
+    runIds: [...unsent],
+    now,
+  });
+  return written === "all" && pending.commands.length === COMMAND_PAGE_SIZE
+    ? "full"
+    : "done";
 };
 
 const deliver = async (state: SessionState) => {
@@ -687,6 +746,11 @@ const onHello = async (
   state.claimed = true;
   if (claim.previous !== null) {
     context.ringPrevious(claim.previous);
+  }
+  // A socket still open under a key this claim retired reads its queue at
+  // once, finds itself retired and closes, instead of at its next heartbeat.
+  for (const retired of claim.retired) {
+    context.ringPrevious(retired);
   }
   // The socket may have closed while the claim was stored: then nothing is
   // scheduled or minted for it.

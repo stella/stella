@@ -1855,6 +1855,7 @@
       "errorNeedsLogin": "Programavimo agentas jūsų kompiuteryje prašo prisijungti iš naujo. Prisijunkite per stella desktop ir bandykite dar kartą.",
       "errorNotReached": "Jūsų kompiuteris neperėmė šio atsakymo. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
       "errorRelinked": "stella desktop jūsų kompiuteryje buvo susietas iš naujo, todėl šis atsakymas sustojo. Išsiųskite jį dar kartą.",
+      "errorRestoring": "Jūsų kompiuteris dar atšaukia failų pakeitimus. Po akimirkos išsiųskite tai dar kartą.",
       "errorUnavailable": "Jūsų kompiuteris nustojo apdoroti šį atsakymą. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
       "filesNotShared": "Failai, kurių nepavyko bendrinti, lieka jūsų kompiuteryje: {fileNames}",
       "onThisComputer": "{harness} šiame kompiuteryje",

@@ -376,6 +376,18 @@
       }
     },
     {
+      "name": "local_runner_restoring",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_restoring"
+      },
+      "expected": {
+        "kind": "local_runner_restoring",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
       "name": "local_runner_turn_too_large",
       "origin": "local-runner",
       "evidence": {

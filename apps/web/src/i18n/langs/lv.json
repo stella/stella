@@ -1855,6 +1855,7 @@
       "errorNeedsLogin": "Programmēšanas aģents jūsu datorā prasa pieteikties vēlreiz. Piesakieties lietotnē stella desktop un mēģiniet vēlreiz.",
       "errorNotReached": "Jūsu dators nepārņēma šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
       "errorRelinked": "stella desktop jūsu datorā tika saistīts no jauna, tāpēc šī atbilde apstājās. Nosūtiet to vēlreiz.",
+      "errorRestoring": "Jūsu dators vēl atsauc failu izmaiņas. Pēc brīža nosūtiet to vēlreiz.",
       "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
       "filesNotShared": "Faili, kurus neizdevās kopīgot, paliek jūsu datorā: {fileNames}",
       "onThisComputer": "{harness} šajā datorā",

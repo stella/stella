@@ -1855,6 +1855,7 @@
       "errorNeedsLogin": "Programovací agent ve vašem počítači vyžaduje nové přihlášení. Přihlaste se přes stella desktop a zkuste to znovu.",
       "errorNotReached": "Váš počítač tuto odpověď nepřevzal. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
       "errorRelinked": "stella desktop byl ve vašem počítači znovu propojen, takže se tato odpověď zastavila. Odešlete ji znovu.",
+      "errorRestoring": "Váš počítač ještě vrací změny souborů. Odešlete to znovu za chvíli.",
       "errorUnavailable": "Váš počítač přestal tuto odpověď zpracovávat. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
       "filesNotShared": "Soubory, které se nepodařilo sdílet, zůstávají ve vašem počítači: {fileNames}",
       "onThisComputer": "{harness} v tomto počítači",

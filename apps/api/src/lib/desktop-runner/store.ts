@@ -4,6 +4,7 @@ import {
   asc,
   desc,
   eq,
+  exists,
   gt,
   inArray,
   isNotNull,
@@ -180,6 +181,8 @@ type ClaimSessionResult =
       type: "claimed";
       /** The socket this one replaces, to be told it is no longer current. */
       previous: { sessionId: string; instanceId: string } | null;
+      /** Sockets of the keys this claim retired, to be told at once. */
+      retired: RunHolder[];
       /** The runs the desktop listed that are bound to it, after reconciling. */
       held: HeldRun[];
     }
@@ -255,7 +258,7 @@ const retireEarlierDeviceKeys = async (
   tx: Transaction,
   binding: RunnerBinding,
   now: Date,
-) => {
+): Promise<RunHolder[]> => {
   // audit: skip - runner socket bookkeeping; the run's caller audits the work
   const retired = await tx
     .update(runner)
@@ -269,9 +272,13 @@ const retireEarlierDeviceKeys = async (
         ne(runner.connection, "retired"),
       ),
     )
-    .returning({ deviceJkt: runner.deviceJkt });
+    .returning({
+      deviceJkt: runner.deviceJkt,
+      sessionId: runner.sessionId,
+      instanceId: runner.instanceId,
+    });
   if (retired.length === 0) {
-    return;
+    return [];
   }
   const deviceJkts = retired.map(({ deviceJkt }) => deviceJkt);
   const ofRetired = and(
@@ -282,12 +289,17 @@ const retireEarlierDeviceKeys = async (
   );
   // An account holds few installations and keys, each with few open runs.
   const open = await tx
-    .select({ runId: runs.runId, acceptedAt: runs.acceptedAt })
+    .select({ runId: runs.runId, deliveredAt: runs.deliveredAt })
     .from(runs)
     .where(and(ofRetired, inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES)));
+  // A run written to the old key's socket may have started on the computer
+  // before the relink: sending it again is what the member can do.
   for (const [lostReason, ids] of [
-    ["not_reached", open.filter(({ acceptedAt }) => acceptedAt === null)],
-    ["computer_relinked", open.filter(({ acceptedAt }) => acceptedAt !== null)],
+    ["not_reached", open.filter(({ deliveredAt }) => deliveredAt === null)],
+    [
+      "computer_relinked",
+      open.filter(({ deliveredAt }) => deliveredAt !== null),
+    ],
   ] as const) {
     await transitionLifecycleBatch({
       tx,
@@ -305,6 +317,11 @@ const retireEarlierDeviceKeys = async (
     deviceJkts,
     now,
   });
+  // The sockets still open under a retired key, to be told at once.
+  return retired.map(({ sessionId, instanceId }) => ({
+    sessionId,
+    instanceId,
+  }));
 };
 
 /**
@@ -349,7 +366,7 @@ export const claimRunnerSession = async (
       return { type: "retired" };
     }
     // Before the cap is read: the keys a relink replaces hold no place.
-    await retireEarlierDeviceKeys(tx, binding, now);
+    const retired = await retireEarlierDeviceKeys(tx, binding, now);
     if (existing === undefined) {
       const registered = await countRunners(tx, binding);
       if (registered >= limits.maxRunnersPerAccount) {
@@ -477,6 +494,7 @@ export const claimRunnerSession = async (
         existing.sessionId === sessionId
           ? null
           : { sessionId: existing.sessionId, instanceId: existing.instanceId },
+      retired,
       held: held.map((row) => ({
         ...row,
         workspaceIds: row.workspaceIds.map(brandPersistedWorkspaceId),
@@ -1231,12 +1249,140 @@ export type PendingCommand = {
   readonly workspaceIds: readonly SafeId<"workspace">[];
 };
 
+type PendingCommandsOptions = SessionOptions & {
+  afterId: number;
+  limit: number;
+};
+
+type PendingCommandsResult =
+  { type: "current"; commands: PendingCommand[] } | { type: "superseded" };
+
 /**
- * Record that these runs' `run.start` is being written to this socket, before
- * it is: from then on their computer may be running them, so they keep the
- * recovery window rather than the unaccepted one. The first write is kept.
+ * Commands queued after `afterId` for the open runs bound to this socket, in
+ * queue order. A socket that is no longer the desktop's current one, or whose
+ * key a relink retired, gets none: the commands are read in the same
+ * statement that matches this socket's connected session on the runner row,
+ * so a takeover committed at any point leaves the superseded socket without
+ * them.
  */
-const recordRunsDelivered = async (
+export const readPendingCommands = async (
+  db: DesktopRunnerDb,
+  { binding, sessionId, afterId, limit }: PendingCommandsOptions,
+): Promise<PendingCommandsResult> => {
+  const current = and(
+    runnerKey(binding),
+    eq(runner.sessionId, sessionId),
+    eq(runner.connection, "connected"),
+  );
+  const rows = await db
+    .select({
+      id: desktopRunnerCommands.id,
+      runId: desktopRunnerCommands.runId,
+      kind: desktopRunnerCommands.kind,
+      payload: desktopRunnerCommands.payload,
+      workspaceIds: runs.workspaceIds,
+    })
+    .from(desktopRunnerCommands)
+    .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
+    .innerJoin(runner, current)
+    .where(
+      and(
+        boundTo(binding),
+        inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+        gt(desktopRunnerCommands.id, afterId),
+      ),
+    )
+    .orderBy(asc(desktopRunnerCommands.id))
+    .limit(limit);
+  if (rows.length === 0) {
+    // No command in a snapshot where this socket was current, or none at all
+    // because it was not: the runner row says which.
+    const [row] = await db
+      .select({ sessionId: runner.sessionId })
+      .from(runner)
+      .where(current)
+      .limit(1);
+    if (row === undefined) {
+      return { type: "superseded" };
+    }
+  }
+  return {
+    type: "current",
+    commands: rows.map((row) => ({
+      ...row,
+      workspaceIds: row.workspaceIds.map(brandPersistedWorkspaceId),
+    })),
+  };
+};
+
+type StartsSendingOptions = SessionOptions & {
+  runIds: readonly string[];
+  now: Date;
+};
+
+type StartsSending =
+  | { type: "superseded" }
+  /** The runs still open, each now recorded as delivered. */
+  | { type: "current"; open: ReadonlySet<string> };
+
+/**
+ * The send boundary of a page of `run.start`s, checked right before its
+ * frames go out: whether this socket is still its key's connected one (a
+ * relink retires it), and which of the runs are still open. Those runs record
+ * that they are delivered, since their computer may be running them from
+ * then on; the first record is kept.
+ */
+export const markRunStartsSending = async (
+  db: DesktopRunnerDb,
+  { binding, sessionId, runIds, now }: StartsSendingOptions,
+): Promise<StartsSending> => {
+  const current = and(
+    runnerKey(binding),
+    eq(runner.sessionId, sessionId),
+    eq(runner.connection, "connected"),
+  );
+  // A relink ends the run's row in its own transaction; this update waits
+  // for that row and then finds it ended, so no ended run is marked.
+  const marked =
+    runIds.length === 0
+      ? []
+      : // audit: skip - runner socket bookkeeping; the run's caller audits the work
+        await db
+          .update(runs)
+          .set({
+            deliveredAt: sql`coalesce(${runs.deliveredAt}, ${now}::timestamptz)`,
+          })
+          .where(
+            and(
+              inArray(runs.runId, [...runIds]),
+              boundTo(binding),
+              inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+              exists(
+                db
+                  .select({ one: sql`1` })
+                  .from(runner)
+                  .where(current),
+              ),
+            ),
+          )
+          .returning({ runId: runs.runId });
+  const [row] = await db
+    .select({ sessionId: runner.sessionId })
+    .from(runner)
+    .where(current)
+    .limit(1);
+  if (row === undefined) {
+    return { type: "superseded" };
+  }
+  return { type: "current", open: new Set(marked.map(({ runId }) => runId)) };
+};
+
+/**
+ * The runs of a page whose `run.start` was recorded as delivered at `now`
+ * but never went out (the socket closed or filled up first): they are not
+ * delivered, so they keep the short pickup window.
+ */
+export const releaseUnsentRunStarts = async (
   db: DesktopRunnerDb,
   {
     binding,
@@ -1250,80 +1396,14 @@ const recordRunsDelivered = async (
   // audit: skip - runner socket bookkeeping; the run's caller audits the work
   await db
     .update(runs)
-    .set({
-      deliveredAt: sql`coalesce(${runs.deliveredAt}, ${now}::timestamptz)`,
-    })
-    .where(and(inArray(runs.runId, [...runIds]), boundTo(binding)));
-};
-
-type PendingCommandsOptions = SessionOptions & {
-  afterId: number;
-  limit: number;
-  now: Date;
-};
-
-type PendingCommandsResult =
-  { type: "current"; commands: PendingCommand[] } | { type: "superseded" };
-
-/**
- * Commands queued after `afterId` for the open runs bound to this socket, in
- * queue order, taken to be written to it: each run whose `run.start` is among
- * them records that it was delivered before any frame goes out, since its
- * computer may be running it from then on. A socket that is no longer the
- * desktop's current one gets none: the commands are read in the same
- * statement that matches this socket's session on the runner row, so a
- * takeover committed at any point leaves the superseded socket without them.
- */
-export const takePendingCommands = async (
-  db: DesktopRunnerDb,
-  { binding, sessionId, afterId, limit, now }: PendingCommandsOptions,
-): Promise<PendingCommandsResult> => {
-  const rows = await db
-    .select({
-      id: desktopRunnerCommands.id,
-      runId: desktopRunnerCommands.runId,
-      kind: desktopRunnerCommands.kind,
-      payload: desktopRunnerCommands.payload,
-      workspaceIds: runs.workspaceIds,
-    })
-    .from(desktopRunnerCommands)
-    .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
-    .innerJoin(runner, and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+    .set({ deliveredAt: null })
     .where(
       and(
+        inArray(runs.runId, [...runIds]),
         boundTo(binding),
-        inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
-        gt(desktopRunnerCommands.id, afterId),
+        sql`${runs.deliveredAt} = ${now}::timestamptz`,
       ),
-    )
-    .orderBy(asc(desktopRunnerCommands.id))
-    .limit(limit);
-  if (rows.length === 0) {
-    // No command in a snapshot where this socket was current, or none at all
-    // because it was not: the runner row says which.
-    const [current] = await db
-      .select({ sessionId: runner.sessionId })
-      .from(runner)
-      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
-      .limit(1);
-    if (current === undefined) {
-      return { type: "superseded" };
-    }
-  }
-  await recordRunsDelivered(db, {
-    binding,
-    runIds: rows
-      .filter(({ kind }) => kind === "run.start")
-      .map(({ runId }) => runId),
-    now,
-  });
-  return {
-    type: "current",
-    commands: rows.map((row) => ({
-      ...row,
-      workspaceIds: row.workspaceIds.map(brandPersistedWorkspaceId),
-    })),
-  };
+    );
 };
 
 type QueuedCommandsOptions = {

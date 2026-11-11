@@ -1855,6 +1855,7 @@
       "errorNeedsLogin": "L’agent de code de votre ordinateur vous demande de vous reconnecter. Connectez-vous depuis stella desktop, puis réessayez.",
       "errorNotReached": "Votre ordinateur n'a pas pris en charge cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
       "errorRelinked": "stella desktop a été associé à nouveau sur votre ordinateur, cette réponse s'est donc arrêtée. Renvoyez-la.",
+      "errorRestoring": "Votre ordinateur annule encore des modifications de fichiers. Renvoyez ceci dans un instant.",
       "errorUnavailable": "Votre ordinateur a cessé de traiter cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez.",
       "filesNotShared": "Les fichiers qui n'ont pas pu être partagés restent sur votre ordinateur : {fileNames}",
       "onThisComputer": "{harness} sur cet ordinateur",
