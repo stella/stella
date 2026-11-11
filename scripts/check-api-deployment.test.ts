@@ -1777,7 +1777,7 @@ test("target-owned journeys require their harness before setup and execution", (
       }
     }
   }
-  expect(guardedJobs).toBe(4);
+  expect(guardedJobs).toBe(5);
 });
 
 test("journey reports upload from the directory the journey run writes", () => {
@@ -1880,7 +1880,7 @@ test("journey reports upload from the directory the journey run writes", () => {
       uploads += 1;
     }
   }
-  expect(uploads).toBe(4);
+  expect(uploads).toBe(5);
 });
 
 describe("deployment environment verification", () => {
