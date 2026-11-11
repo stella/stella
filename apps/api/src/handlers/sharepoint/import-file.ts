@@ -94,6 +94,8 @@ export type SharepointImportResult = {
     }
   | { status: "unchanged"; entityId: SafeId<"entity">; name: string }
   | { status: "failed"; code: string; message: string }
+  /** Not started within this request's time budget; send it again. */
+  | { status: "deferred" }
 );
 
 type ImportTarget = {

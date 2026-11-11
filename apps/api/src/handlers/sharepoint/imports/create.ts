@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { SHAREPOINT_IMPORT_MAX_ITEMS } from "@stll/api-contract/sharepoint";
+import { Temporal } from "@stll/time";
 
 import {
   sharepointDriveIdSchema,
@@ -60,8 +61,10 @@ const config = {
   description:
     "Copy SharePoint or OneDrive files into a matter as documents, read with " +
     "the caller's own Microsoft grant. Each file is a one-way snapshot: " +
-    "importing it again adds a version only when it changed in SharePoint. " +
-    "Returns one result per file; a failed file does not stop the others.",
+    "importing it again adds a version only when its content changed in " +
+    "SharePoint, otherwise it is a no-op. Returns one result per file; a " +
+    "failed file does not stop the others, and files the request had no " +
+    "time left for come back deferred: send those again.",
   permissions: { workspace: ["read"], entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "provider_secret" },
@@ -88,6 +91,14 @@ const startUploadFlows = (
   );
 };
 
+/**
+ * How long one request keeps starting files. The load balancer drops a
+ * response that stays silent for 60 s, so files not started by then come
+ * back `deferred` for the caller to send again; the import is idempotent, so
+ * a resend converges.
+ */
+const SHAREPOINT_IMPORT_TIME_BUDGET_MS = 40_000;
+
 const refKey = ({ driveId, itemId }: { driveId: string; itemId: string }) =>
   `${driveId}\u0000${itemId}`;
 
@@ -107,6 +118,7 @@ const importSharepointFiles = createSafeHandler(
     const organizationId = session.activeOrganizationId;
     const refs = [...new Map(items.map((ref) => [refKey(ref), ref])).values()];
     const workspace = await getWorkspaceAccess(workspaceId);
+    const startedAtMs = Temporal.Now.instant().epochMilliseconds;
 
     const results = yield* Result.await(
       withSharepointGraph({
@@ -118,6 +130,13 @@ const importSharepointFiles = createSafeHandler(
             const imported: SharepointImportResult[] = [];
             // db-await-in-loop: one file at a time bounds memory to a single document; the request caps files at SHAREPOINT_IMPORT_MAX_ITEMS
             for (const ref of refs) {
+              if (
+                Temporal.Now.instant().epochMilliseconds - startedAtMs >
+                SHAREPOINT_IMPORT_TIME_BUDGET_MS
+              ) {
+                imported.push({ ...ref, status: "deferred" });
+                continue;
+              }
               const result = yield* Result.await(
                 importSharepointFile({
                   accessToken,
