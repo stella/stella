@@ -209,7 +209,8 @@ type LocalRunFailure =
   | typeof AI_FAILURE_CODES.local_runner_needs_login
   | typeof AI_FAILURE_CODES.local_runner_limit_reached
   | typeof AI_FAILURE_CODES.local_runner_unavailable
-  | typeof AI_FAILURE_CODES.local_runner_turn_too_large;
+  | typeof AI_FAILURE_CODES.local_runner_turn_too_large
+  | typeof AI_FAILURE_CODES.local_runner_not_reached;
 
 const FAILURE_MESSAGE = {
   [AI_FAILURE_CODES.local_runner_needs_login]:
@@ -220,6 +221,8 @@ const FAILURE_MESSAGE = {
     "The computer stopped running the turn.",
   [AI_FAILURE_CODES.local_runner_turn_too_large]:
     "The conversation is too long to hand to the computer.",
+  [AI_FAILURE_CODES.local_runner_not_reached]:
+    "The computer did not pick up the turn; it is not connected.",
 } as const satisfies Record<LocalRunFailure, string>;
 
 type StoredOutcome = Extract<
@@ -879,7 +882,7 @@ export const LOCAL_RUN_OUTPUTS_INSTRUCTIONS = `Files meant for the member go in 
 const caughtUpStep = (
   run: DesktopRunnerRunView | null,
 ):
-  | { type: "wait"; computer: ChatLocalRunComputerEvent["status"] }
+  | { type: "wait"; computer: ChatLocalRunComputerEvent }
   | { type: "read" }
   | { type: "fail"; code: LocalRunFailure } => {
   if (run === null) {
@@ -895,15 +898,35 @@ const caughtUpStep = (
             : LOCAL_RUN_REJECTION[run.rejectReason],
       };
     case "lost":
-      return { type: "fail", code: AI_FAILURE_CODES.local_runner_unavailable };
+      return {
+        type: "fail",
+        // No computer picked the run up in time, or the one that took it
+        // never came back.
+        code:
+          run.acceptedAt === null
+            ? AI_FAILURE_CODES.local_runner_not_reached
+            : AI_FAILURE_CODES.local_runner_unavailable,
+      };
     case "finished":
       return { type: "read" };
     case "assigned":
-    case "running":
-      return { type: "wait", computer: "connected" };
     case "waiting_for_computer":
-      // A computer that is away resumes the run when it reconnects.
-      return { type: "wait", computer: "waiting" };
+      // Until a computer accepts the run (an assigned one never was), the
+      // turn waits for one to pick it up, counted from the run's creation;
+      // the gateway ends it as lost once none did in time
+      // (`unacceptedRunMs`). A computer that took it and is away resumes it
+      // when it reconnects.
+      return run.acceptedAt === null
+        ? {
+            type: "wait",
+            computer: {
+              status: "delivering",
+              since: run.createdAt.toISOString(),
+            },
+          }
+        : { type: "wait", computer: { status: "waiting" } };
+    case "running":
+      return { type: "wait", computer: { status: "connected" } };
     default:
       run.state satisfies never;
       return panic("Unknown desktop runner run state");
@@ -1047,6 +1070,12 @@ type ReadRunOptions = {
   toolCalls: LocalRunToolCalls;
   chatRunId: string;
   abortSignal: AbortSignal;
+  /**
+   * When the turn was sent, for a run just started: the chat shows it waits
+   * for the computer to pick the run up until it did. `null` when reading on
+   * a run the computer already took.
+   */
+  deliveringSince: string | null;
 };
 
 /**
@@ -1067,26 +1096,26 @@ const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
 };
 
 /**
- * Tells the chat when its computer went away or came back. Only a change is
- * sent, so a long wait adds one event to the run log, not one per poll; the
- * run's start goes first when none went out yet.
+ * Tells the chat while its run waits for the computer to pick it up, once it
+ * did, and when the computer went away or came back. Only a change is sent,
+ * so a long wait adds one event to the run log, not one per poll; the run's
+ * start goes first when none went out yet.
  */
 const computerStatusChunks = (start: () => Generator<PublicStreamChunk>) => {
-  /** Whether the turn last told the chat its computer is away. */
-  let away = false;
+  /** What the turn last told the chat; a read starts with nothing to show. */
+  let told: ChatLocalRunComputerEvent["status"] = "connected";
   return function* (
-    status: ChatLocalRunComputerEvent["status"],
+    event: ChatLocalRunComputerEvent,
   ): Generator<PublicStreamChunk> {
-    const nowAway = status === "waiting";
-    if (nowAway === away) {
+    if (event.status === told) {
       return;
     }
-    away = nowAway;
+    told = event.status;
     yield* start();
     yield {
       type: EventType.CUSTOM,
       name: CHAT_LOCAL_RUN_COMPUTER_EVENT,
-      value: { status } satisfies ChatLocalRunComputerEvent,
+      value: event,
       timestamp: nowMs(),
     };
   };
@@ -1349,6 +1378,7 @@ async function* readRunChunks({
   toolCalls,
   chatRunId,
   abortSignal,
+  deliveringSince,
 }: ReadRunOptions): AsyncGenerator<PublicStreamChunk> {
   const { control, owner } = context;
   const rewrite: RewriteContext = {
@@ -1414,6 +1444,9 @@ async function* readRunChunks({
   abortSignal.addEventListener("abort", onCut, { once: true });
   const listener = context.runBell.listen(runnerRunId);
   try {
+    if (deliveringSince !== null) {
+      yield* computer({ status: "delivering", since: deliveringSince });
+    }
     for (;;) {
       if (abortSignal.aborted) {
         await stopRun();
@@ -1433,8 +1466,9 @@ async function* readRunChunks({
         return;
       }
       if (page.value.items.length > 0) {
-        // Anything the computer stored since it was away means it is back.
-        yield* computer("connected");
+        // Anything the computer stored means it has the run, and is back
+        // when it was away.
+        yield* computer({ status: "connected" });
       }
       for (const item of page.value.items) {
         position = item.seq;
@@ -1637,6 +1671,7 @@ async function* startLocalRun({
       workspaceIds: context.workspaceIds,
       chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
     });
+  const sentAt = new Date(nowMs()).toISOString();
   let started = await start(input.messages);
   const latest = input.messages.at(-1);
   if (
@@ -1673,6 +1708,7 @@ async function* startLocalRun({
         toolCalls: new Map(),
         chatRunId: input.chatRunId,
         abortSignal: input.abortSignal,
+        deliveringSince: sentAt,
       });
       return;
     case "harness_unavailable":
@@ -1903,6 +1939,7 @@ async function* resumeLocalRun({
     toolCalls: calls.value,
     chatRunId: input.chatRunId,
     abortSignal: input.abortSignal,
+    deliveringSince: null,
   });
 }
 

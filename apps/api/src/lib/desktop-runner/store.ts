@@ -10,6 +10,7 @@ import {
   isNull,
   lt,
   max,
+  ne,
   notExists,
   or,
   type SQL,
@@ -233,6 +234,46 @@ const evictIdleRunners = async (
 };
 
 /**
+ * The account's other device keys naming this installation, retired once a
+ * socket of the installation claims it under a new key (a relink): their
+ * runners stop taking runs, a socket still open under one is closed at its
+ * next heartbeat as superseded, and their open runs move to the claiming key.
+ * The reconciliation that follows then offers again what no computer
+ * accepted and settles what one did, so no run waits on a key the computer
+ * no longer connects with. Another account naming the same installation is
+ * never touched: an installation id is the desktop's own claim.
+ */
+const retireEarlierDeviceKeys = async (
+  tx: Transaction,
+  binding: RunnerBinding,
+) => {
+  const earlier = and(
+    eq(runner.userId, binding.userId),
+    eq(runner.organizationId, binding.organizationId),
+    eq(runner.desktopId, binding.desktopId),
+    ne(runner.deviceJkt, binding.deviceJkt),
+  );
+  // audit: skip - runner socket bookkeeping; the run's caller audits the work
+  await tx
+    .update(runner)
+    .set({ connection: "disconnected" })
+    .where(and(earlier, eq(runner.connection, "connected")));
+  // audit: skip - runner socket bookkeeping; the run's caller audits the work
+  await tx
+    .update(runs)
+    .set({ deviceJkt: binding.deviceJkt })
+    .where(
+      and(
+        eq(runs.userId, binding.userId),
+        eq(runs.organizationId, binding.organizationId),
+        eq(runs.desktopId, binding.desktopId),
+        ne(runs.deviceJkt, binding.deviceJkt),
+        inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+      ),
+    );
+};
+
+/**
  * Make this socket the desktop's current one and reconcile its runs with what
  * the desktop says it holds: a held open run is running again, an unaccepted
  * one it does not hold is offered again, and an accepted one it does not hold
@@ -314,6 +355,7 @@ export const claimRunnerSession = async (
         ],
         set: values,
       });
+    await retireEarlierDeviceKeys(tx, binding);
     const heldIds = new Set(hello.activeRuns.map(({ runId }) => runId));
     const openIds = (
       await tx
@@ -495,10 +537,18 @@ export const renewRunnerSession = async (
 ): Promise<RenewResult> =>
   await withAggregateTransaction(db, async (tx) => {
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
+    // A runner retired by a newer device key of its installation is no
+    // longer current, whichever socket holds it.
     const seen = await tx
       .update(runner)
       .set({ lastSeenAt: now })
-      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+      .where(
+        and(
+          runnerKey(binding),
+          eq(runner.sessionId, sessionId),
+          eq(runner.connection, "connected"),
+        ),
+      )
       .returning({ sessionId: runner.sessionId });
     if (seen.length === 0) {
       return { type: "superseded" };
@@ -982,18 +1032,41 @@ export const expireRunLeases = async (
     },
   });
 
-type ExpireAbandonedOptions = { now: Date; abandonedMs: number; limit: number };
+type ExpireAbandonedOptions = {
+  now: Date;
+  abandonedMs: number;
+  unacceptedMs: number;
+  limit: number;
+};
 
 /**
- * End runs nobody accepted within the abandon window, and runs whose computer
- * has not come back within it, as `lost`. A run is never handed to another
- * computer, so this is how the API ends one its desktop no longer serves.
+ * End runs no computer accepted within the unaccepted window, and accepted
+ * runs whose computer has not come back within the abandon window, as `lost`.
+ * A run is never handed to another computer, so this is how the API ends one
+ * its desktop no longer serves. A run is counted from its creation while it
+ * is unaccepted: a heartbeat renews its lease, and however its delivery went
+ * (a lost ring, a socket that never read it), the turn learns in bounded time
+ * that its computer did not pick it up.
  */
 export const expireAbandonedRuns = async (
   db: DesktopRunnerDb,
-  { now, abandonedMs, limit }: ExpireAbandonedOptions,
+  { now, abandonedMs, unacceptedMs, limit }: ExpireAbandonedOptions,
 ): Promise<string[]> => {
-  const cutoff = new Date(now.getTime() - abandonedMs);
+  const abandonedBefore = new Date(now.getTime() - abandonedMs);
+  const unacceptedBefore = new Date(now.getTime() - unacceptedMs);
+  const ended = () =>
+    or(
+      and(
+        inArray(runs.state, ["assigned", "waiting_for_computer"]),
+        isNull(runs.acceptedAt),
+        sql`${runs.createdAt} <= ${unacceptedBefore}::timestamptz`,
+      ),
+      and(
+        eq(runs.state, "waiting_for_computer"),
+        isNotNull(runs.acceptedAt),
+        sql`${runs.updatedAt} <= ${abandonedBefore}::timestamptz`,
+      ),
+    );
   return await withSkipLockedBatch({
     database: db,
     limit,
@@ -1001,19 +1074,7 @@ export const expireAbandonedRuns = async (
       tx
         .select({ runId: runs.runId })
         .from(runs)
-        .where(
-          or(
-            // A heartbeat renews an assigned run's lease, so its age counts.
-            and(
-              eq(runs.state, "assigned"),
-              sql`${runs.createdAt} <= ${cutoff}::timestamptz`,
-            ),
-            and(
-              eq(runs.state, "waiting_for_computer"),
-              sql`${runs.updatedAt} <= ${cutoff}::timestamptz`,
-            ),
-          ),
-        )
+        .where(ended())
         .orderBy(asc(runs.updatedAt))
         .limit(limit)
         .$dynamic(),
@@ -1029,18 +1090,7 @@ export const expireAbandonedRuns = async (
         moves: {
           state: { from: ["assigned", "waiting_for_computer"], to: "lost" },
         },
-        guard: guarded(
-          or(
-            and(
-              eq(runs.state, "assigned"),
-              sql`${runs.createdAt} <= ${cutoff}::timestamptz`,
-            ),
-            and(
-              eq(runs.state, "waiting_for_computer"),
-              sql`${runs.updatedAt} <= ${cutoff}::timestamptz`,
-            ),
-          ),
-        ),
+        guard: guarded(ended()),
         set: { updatedAt: now },
         recordTransitionAuditEvent: skipRunAudit,
       });
@@ -1615,6 +1665,9 @@ export type DesktopRunnerRunView = {
   readonly harnessSessionId: string | null;
   readonly ackSeq: number;
   readonly leaseExpiresAt: Date;
+  readonly createdAt: Date;
+  /** When the computer accepted the run; `null` while none picked it up. */
+  readonly acceptedAt: Date | null;
 };
 
 /** One run of `owner`, or `null` when it has none by that id. */
@@ -1635,6 +1688,8 @@ export const readRun = async (
         harnessSessionId: runs.harnessSessionId,
         ackSeq: runs.ackSeq,
         leaseExpiresAt: runs.leaseExpiresAt,
+        createdAt: runs.createdAt,
+        acceptedAt: runs.acceptedAt,
       })
       .from(runs)
       .where(

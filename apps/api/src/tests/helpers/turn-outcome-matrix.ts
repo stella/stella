@@ -189,6 +189,7 @@ export const AI_ERROR_KIND_SHAPES = {
   local_runner_limit_reached: LOCAL_RUNNER_REPORTED,
   local_runner_unavailable: LOCAL_RUNNER_REPORTED,
   local_runner_turn_too_large: LOCAL_RUNNER_REPORTED,
+  local_runner_not_reached: LOCAL_RUNNER_REPORTED,
   unknown: ["mid-stream-error"],
 } as const satisfies Record<AIErrorKind, NotAShape | readonly ResponseShape[]>;
 

@@ -63,10 +63,16 @@ export type DesktopRunnerLimits = {
   /** Installations (installation id and device key) per account and organization. */
   readonly maxRunnersPerAccount: number;
   /**
-   * How long a run may wait to be accepted, or for its computer to return,
-   * before the API ends it as lost.
+   * How long a run the computer accepted may wait for it to return before the
+   * API ends it as lost.
    */
   readonly abandonedRunMs: number;
+  /**
+   * How long a run may wait for its computer to accept it before the API ends
+   * it as lost: a computer that did not pick it up by then is not connected,
+   * and the turn says so rather than waiting on.
+   */
+  readonly unacceptedRunMs: number;
   /** Sequenced messages (events, approval requests, the final one) one run may store. */
   readonly maxMessagesPerRun: number;
   /** UTF-8 bytes of sequenced messages one run may store. */
@@ -84,6 +90,7 @@ export type DesktopRunnerLimits = {
 export const DESKTOP_RUNNER_LIMITS = {
   maxRunnersPerAccount: 10,
   abandonedRunMs: 24 * 60 * 60_000,
+  unacceptedRunMs: 2 * 60_000,
   maxMessagesPerRun: 20_000,
   maxMessageBytesPerRun: 64 * 1024 * 1024,
   maxCommandsPerRun: 2000,

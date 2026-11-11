@@ -189,8 +189,8 @@ const cancelEndedChatTurnRuns = async ({
 };
 
 /**
- * The runs the API ends on a sweep: those nobody accepted or whose computer
- * stayed away, those whose leases lapsed, those past retention, and those
+ * The runs the API ends on a sweep: those no computer picked up in time or
+ * whose computer stayed away, those whose leases lapsed, those past retention, and those
  * whose chat turn ended without them.
  */
 const endRuns = async ({
@@ -211,6 +211,7 @@ const endRuns = async ({
       await expireAbandonedRuns(db, {
         now,
         abandonedMs: limits.abandonedRunMs,
+        unacceptedMs: limits.unacceptedRunMs,
         limit: EXPIRY_BATCH,
       }),
   );
