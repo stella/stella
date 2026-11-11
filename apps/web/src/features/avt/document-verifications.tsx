@@ -241,6 +241,17 @@ const DocumentRow = ({
         )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {/* Before the switch, so every row's switch lines up. */}
+        {explainsTestimony && (
+          <Button
+            aria-label={t("avt.documents.testimonyAbout")}
+            size="icon-xs"
+            tooltip={t("avt.documents.testimonyLine")}
+            variant="ghost"
+          >
+            <InfoIcon />
+          </Button>
+        )}
         <Label variant="choice">
           <Switch
             checked={sourceKind === "testimony"}
@@ -252,16 +263,6 @@ const DocumentRow = ({
           />
           {t("avt.documents.testimony")}
         </Label>
-        {explainsTestimony && (
-          <Button
-            aria-label={t("avt.documents.testimonyAbout")}
-            size="icon-xs"
-            tooltip={t("avt.documents.testimonyLine")}
-            variant="ghost"
-          >
-            <InfoIcon />
-          </Button>
-        )}
         {latest !== null && (
           <Button
             onClick={() => onOpenRun(latest.id)}
