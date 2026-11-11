@@ -278,3 +278,89 @@ test.each<[string, string]>([
     expect(await requests.at(1)?.json()).toEqual({ listId, ...target });
   },
 );
+
+const openRange = async (messages: typeof english) => {
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.scope.verifyParagraphs }),
+  );
+  const popup = await screen.findByRole("dialog");
+  const input = within(popup).getByLabelText(
+    messages.inspector.metadata.documentProperties.keys.paragraphs,
+  );
+  const submit = within(popup).getByRole("button", {
+    name: messages.common.verify,
+  });
+  return { popup, input, submit };
+};
+
+test.each<[string, keyof typeof english.avt.scope.errors]>([
+  ["136-82", "reversed"],
+  ["82 to 136", "garbage"],
+  ["1-900", "tooWide"],
+])(
+  "a range typed as %s is refused beside the field and never sent",
+  async (typed, reason) => {
+    const { messages } = mountDocuments();
+    const { popup, input, submit } = await openRange(messages);
+    fireEvent.change(input, { target: { value: typed } });
+    const error = within(popup).getByText(messages.avt.scope.errors[reason]);
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(input.getAttribute("aria-describedby")).toBe(error.id);
+    fireEvent.click(submit);
+    // The refusal is decided on submit, before anything is sent.
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(requests).toHaveLength(0);
+  },
+);
+
+test("an empty range asks for paragraphs instead of verifying everything", async () => {
+  const { messages } = mountDocuments();
+  const { popup, submit } = await openRange(messages);
+  expect(
+    within(popup).queryByText(messages.avt.scope.errors.required),
+  ).toBeNull();
+  fireEvent.click(submit);
+  expect(
+    within(popup).getByText(messages.avt.scope.errors.required),
+  ).toBeTruthy();
+  expect(requests).toHaveLength(0);
+});
+
+test("a typed range starts a run over those paragraphs only", async () => {
+  answers.push(Response.json({ runId }));
+  const { opened, messages } = mountDocuments();
+  const { input, submit } = await openRange(messages);
+  fireEvent.change(input, { target: { value: " 82 – 136 " } });
+  fireEvent.click(submit);
+  await waitFor(() => expect(opened).toEqual([runId]));
+  expect(await requests.at(0)?.json()).toEqual({
+    listId,
+    ...target,
+    paragraphs: "82-136",
+  });
+});
+
+test("a range the document does not have is said beside the field, not as a toast", async () => {
+  answers.push(
+    Response.json(
+      {
+        code: "verification_paragraphs_not_found",
+        message: "Paragraph 136 is not in this document.",
+        hint: "Its paragraphs run from 1 to 120. Use the numbers the document prints.",
+      },
+      { status: 422 },
+    ),
+  );
+  const { opened, messages } = mountDocuments();
+  const { popup, input, submit } = await openRange(messages);
+  fireEvent.change(input, { target: { value: "82-136" } });
+  fireEvent.click(submit);
+  await within(popup).findByText(messages.avt.scope.errors.notFound);
+  expect(notice).not.toHaveBeenCalled();
+  expect(opened).toEqual([]);
+  // Editing the range clears the server's answer about the old one.
+  fireEvent.change(input, { target: { value: "82-120" } });
+  expect(
+    within(popup).queryByText(messages.avt.scope.errors.notFound),
+  ).toBeNull();
+});

@@ -744,6 +744,7 @@ export const readVerificationRun = async ({
     fileFieldId: run.fileFieldId,
     entityVersionId: run.entityVersionId,
     evidence: run.evidence,
+    scope: run.scope,
     // How each pinned fact stands on the list now: what the computed
     // qualifiers read, so a reader shows the same footing they state.
     factStandings: [...standings].map(([factEntityId, standing]) => ({

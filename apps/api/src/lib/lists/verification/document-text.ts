@@ -12,6 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { readPdfPageTexts } from "@/api/lib/files/pdf-page-text";
+import type { PdfLineBox } from "@/api/lib/files/pdf-page-text";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { readS3ObjectBounded } from "@/api/lib/s3";
@@ -22,11 +23,24 @@ type VerificationBlockSource =
   | { type: "docx-block"; blockId: string }
   | { type: "pdf-page"; pageNumber: number };
 
+/**
+ * What the reader saw of a block's shape, which paragraph scoping reads
+ * (`paragraph-scope.ts`): a DOCX paragraph's shown label (Word's automatic
+ * `82.` is not in its text) and whether it is a heading, or a PDF page's line
+ * boxes, one per line of its text. Never sent to the model, never stored.
+ */
+export type VerificationBlockStructure =
+  | { type: "docx-paragraph"; label: string | null; heading: boolean }
+  | { type: "pdf-lines"; boxes: readonly PdfLineBox[] | null };
+
 export type VerificationBlock = {
   /** The id the model cites: the Folio block id, or `P<page>` for a PDF. */
   id: string;
   text: string;
   source: VerificationBlockSource;
+  /** Absent on a block built from plain text: it reads as unlabelled
+   *  prose, and a PDF page's lines as lines without geometry. */
+  structure?: VerificationBlockStructure;
 };
 
 type VerificationFile = {
@@ -54,7 +68,9 @@ const readPdfBlocks = async (
   bytes: Uint8Array,
 ): Promise<VerificationBlock[]> => {
   const blocks: VerificationBlock[] = [];
-  for (const { pageNumber, text } of await readPdfPageTexts({ bytes })) {
+  for (const { pageNumber, text, lineBoxes } of await readPdfPageTexts({
+    bytes,
+  })) {
     if (text.trim().length === 0) {
       continue;
     }
@@ -62,6 +78,7 @@ const readPdfBlocks = async (
       id: pdfPageId(pageNumber),
       text,
       source: { type: "pdf-page", pageNumber },
+      structure: { type: "pdf-lines", boxes: lineBoxes },
     });
   }
   return blocks;
@@ -90,6 +107,11 @@ export const readVerificationDocument = async ({
         id: block.id,
         text: block.text,
         source: { type: "docx-block", blockId: block.id },
+        structure: {
+          type: "docx-paragraph",
+          label: block.displayLabel ?? null,
+          heading: block.headingLevel !== undefined,
+        },
       }));
     return blocks.length === 0 ? { type: "no-text" } : { type: "read", blocks };
   }

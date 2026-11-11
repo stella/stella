@@ -142,6 +142,42 @@ export const VERIFICATION_RUN_ERROR_CODES = [
 export type VerificationRunErrorCode =
   (typeof VERIFICATION_RUN_ERROR_CODES)[number];
 
+/**
+ * How a run counts the paragraphs of its range: by the numbers the document
+ * prints on them (`82.`, `82)`, `[82]`, or Word's own numbering), which is
+ * what a lawyer cites, or, in a document that numbers none, by position.
+ */
+export const PARAGRAPH_NUMBERINGS = ["document", "ordinal"] as const;
+export type ParagraphNumbering = (typeof PARAGRAPH_NUMBERINGS)[number];
+
+/** A point in the text a run read: a block by the id the run stores it
+ *  under, and a UTF-16 offset into that block's text. */
+export type VerificationScopeEdge = { blockId: string; offset: number };
+
+export const VERIFICATION_SCOPE_KINDS = ["whole", "paragraphs"] as const;
+
+/**
+ * What a run checks: the whole document, or an inclusive range of its
+ * paragraphs. A range is resolved once, when the run starts, to the text
+ * from the start of paragraph `from` to the start of the paragraph after
+ * `to` (`start` inclusive, `end` exclusive, in whole-document coordinates).
+ * Only claims inside it are extracted and graded.
+ */
+export type VerificationScope =
+  | { kind: "whole" }
+  | {
+      kind: "paragraphs";
+      from: number;
+      to: number;
+      numbering: ParagraphNumbering;
+      start: VerificationScopeEdge;
+      end: VerificationScopeEdge;
+    };
+
+export const WHOLE_DOCUMENT_SCOPE = {
+  kind: "whole",
+} as const satisfies VerificationScope;
+
 /** At most one run per document may hold these (partial unique index). */
 export const VERIFICATION_RUN_ACTIVE_STATUSES = [
   "queued",

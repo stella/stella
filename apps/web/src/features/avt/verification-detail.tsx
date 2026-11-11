@@ -18,6 +18,8 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
+import { ScopeMark } from "@/features/avt/paragraph-scope";
+import { scopeParagraphs } from "@/features/avt/paragraph-scope.logic";
 import { verificationRunOptions } from "@/features/avt/queries";
 import { RunCarryOverControl } from "@/features/avt/run-carry-over";
 import { RunHistoryPicker } from "@/features/avt/run-history-picker";
@@ -85,6 +87,7 @@ export const VerificationDetail = ({
             <TruncatedText>{documentName}</TruncatedText>
           </h2>
         )}
+        {run !== undefined && <ScopeMark scope={run.scope} />}
         {run !== undefined && (
           // The run's date and what it carried wrap together, never apart.
           <div className="ms-auto flex items-center gap-1">
@@ -172,6 +175,7 @@ const RunBody = ({
               fileFieldId={currentFileFieldId}
               listId={listId}
               onOpenRun={onOpenRun}
+              paragraphs={scopeParagraphs(run.scope)}
               workspaceId={workspaceId}
             />
           )}
@@ -193,7 +197,9 @@ const RunBody = ({
           </p>
           {run.claims.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              {t("avt.runs.noClaims")}
+              {run.scope.kind === "whole"
+                ? t("avt.runs.noClaims")
+                : t("avt.scope.noClaims")}
             </p>
           ) : (
             <VerificationView ref={view} run={run} workspaceId={workspaceId} />
@@ -213,6 +219,9 @@ type VerifyAgainProps = {
   listId: string;
   entityId: string;
   fileFieldId: string;
+  /** The failed run's paragraph range, tried again as it was; null for the
+   *  whole document. */
+  paragraphs: string | null;
   onOpenRun: (runId: string) => void;
 };
 
@@ -221,6 +230,7 @@ const VerifyAgain = ({
   listId,
   entityId,
   fileFieldId,
+  paragraphs,
   onOpenRun,
 }: VerifyAgainProps) => {
   const t = useTranslations();
@@ -231,7 +241,11 @@ const VerifyAgain = ({
     onStarted: onOpenRun,
   });
   const confirmation = verification.sizeConfirmation;
-  const target = { entityId, fileFieldId };
+  const target = {
+    entityId,
+    fileFieldId,
+    ...(paragraphs === null ? {} : { paragraphs }),
+  };
 
   return (
     <>

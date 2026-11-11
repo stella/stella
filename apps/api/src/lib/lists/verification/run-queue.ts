@@ -46,13 +46,16 @@ import type {
   ClaimGrade,
   VerificationEvidence,
   VerificationRunErrorCode,
+  VerificationScope,
 } from "@/api/lib/lists/verification/contract";
 import { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
+import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import {
   ListVerificationAccessRevokedError,
   VERIFICATION_MODEL_TASK,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
+import { scopePassages } from "@/api/lib/lists/verification/paragraph-scope";
 import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
 import {
   checkVerificationDispatchBudget,
@@ -414,6 +417,7 @@ type ClaimedRun = {
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
   contentSha256: string;
+  scope: VerificationScope;
 };
 
 /** Conditional `queued -> running`: the loser of a double delivery updates
@@ -445,6 +449,7 @@ const claimRun = async ({
       fileFieldId: legalListVerificationRuns.fileFieldId,
       entityVersionId: legalListVerificationRuns.entityVersionId,
       contentSha256: legalListVerificationRuns.contentSha256,
+      scope: legalListVerificationRuns.scope,
     });
   return rows.at(0) ?? null;
 };
@@ -607,6 +612,17 @@ const resolveRunningActorAccess = async (
       }),
   );
 
+/** The text a run reads, or null when it may read none: too many blocks,
+ *  or a stored range that no longer lands in the document (a range never
+ *  widens to the whole document). */
+const runPassages = (
+  blocks: readonly VerificationBlock[],
+  scope: VerificationScope,
+) =>
+  blocks.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX
+    ? null
+    : scopePassages(blocks, scope);
+
 /** Trusted process-local I/O boundaries; never sourced from queued data. */
 type VerificationExecutionBoundaries = {
   readDocument?: typeof readVerificationDocument;
@@ -653,7 +669,8 @@ const executeRun = async ({
   if (document.type === "no-text") {
     return "no_text";
   }
-  if (document.blocks.length > VERIFICATION_LIMITS.BLOCKS_PER_RUN_MAX) {
+  const passages = runPassages(document.blocks, run.scope);
+  if (passages === null || passages.length === 0) {
     return "extraction_failed";
   }
 
@@ -747,7 +764,7 @@ const executeRun = async ({
     abortSignal,
   };
 
-  const extracted = await extractClaims({ blocks: document.blocks, deps });
+  const extracted = await extractClaims({ passages, deps });
   if (Result.isError(extracted)) {
     if (extracted.error.cause instanceof ListVerificationRunCapError) {
       return "run_limit_reached";
@@ -766,7 +783,7 @@ const executeRun = async ({
               text: claim.text,
               context: {
                 text:
-                  document.blocks.at(claim.blockIndex)?.text ??
+                  passages.at(claim.blockIndex)?.block.text ??
                   panic(
                     "An extracted claim names a block outside the document",
                   ),
@@ -823,7 +840,7 @@ const executeRun = async ({
       tx,
       runId: actor.runId,
       workspaceId: actor.workspaceId,
-      blocks: document.blocks,
+      blocks: passages.map((passage) => passage.block),
       claims: rows,
     });
   });

@@ -26,6 +26,7 @@ type StartVerificationRunArgs = {
     | "entityVersionId"
     | "contentSha256"
     | "evidence"
+    | "scope"
     | "requestedBy"
   >;
   caps?: VerificationRunCaps;
