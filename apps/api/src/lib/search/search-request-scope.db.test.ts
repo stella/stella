@@ -197,10 +197,12 @@ const noLanguageAlternates = async () =>
   await Promise.resolve({ alternatesFor: () => [] });
 
 const search = async (scopedDb: ScopedDb, query: GlobalSearchQuery) =>
-  await searchGlobal(query, {
-    scopedDb,
-    readLanguageAlternates: noLanguageAlternates,
-  });
+  (
+    await searchGlobal(query, {
+      scopedDb,
+      readLanguageAlternates: noLanguageAlternates,
+    })
+  ).unwrap();
 
 const entityHitsById = (hits: readonly GlobalSearchHit[]) =>
   new Map(
@@ -452,7 +454,7 @@ describe("search reads follow the request scope", () => {
           accessibleWorkspaceIds: widened,
         },
         scopedDb,
-      ),
+      ).then((read) => read.unwrap()),
       createPgFtsSearchReader(scopedDb).search({
         query: "memo",
         organizationId,
@@ -487,7 +489,7 @@ describe("search reads follow the request scope", () => {
           accessibleWorkspaceIds: [openMatter, secondMatter],
         },
         scopedDb,
-      ),
+      ).then((read) => read.unwrap()),
       createPgFtsSearchReader(scopedDb).searchContent({
         query: "memo",
         organizationId,

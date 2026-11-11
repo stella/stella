@@ -123,6 +123,40 @@ export const chatLocalHarnessOptions = (
 };
 
 /**
+ * Whether the member's computers can take a turn on `target` now, read as
+ * the Run on menu reads them (the harness option a send is routed by):
+ * `ready`; why its harness cannot (offline, signed out); `model_unavailable`
+ * when the ready harness no longer offers the model, which the API would
+ * refuse; `not_allowed` when the member may not run turns on a computer.
+ */
+export type LocalRunTargetState =
+  | { type: "ready" }
+  | {
+      type: "harness";
+      option: Exclude<ChatLocalHarnessOption, { state: "ready" }>;
+    }
+  | { type: "model_unavailable" }
+  | { type: "not_allowed" };
+
+export const localRunTargetState = (
+  readiness: ChatLocalRunReadiness,
+  target: ChatLocalRunTarget,
+): LocalRunTargetState => {
+  const option = chatLocalHarnessOptions(readiness)?.find(
+    ({ harness }) => harness === target.harness,
+  );
+  if (option === undefined) {
+    return { type: "not_allowed" };
+  }
+  if (option.state !== "ready") {
+    return { type: "harness", option };
+  }
+  return option.models.some(({ id }) => id === target.model)
+    ? { type: "ready" }
+    : { type: "model_unavailable" };
+};
+
+/**
  * The name a harness reports for the thread's model, from any computer whose
  * last report offers it. A disconnected computer's report still names the
  * model correctly, so the composer keeps the name while the computer is away;

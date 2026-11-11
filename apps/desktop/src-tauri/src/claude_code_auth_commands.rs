@@ -153,10 +153,13 @@ pub fn manage(app: &AppHandle) {
       }),
     },
   );
-  app.manage(auth);
+  app.manage(auth.clone());
   let installed = app.clone();
   tauri::async_runtime::spawn(async move {
+    // Only a real install change is told here (a lease is not one), so a
+    // window's status read cannot announce a change that reads it again.
     while installs.changed().await.is_ok() {
+      auth.invalidate();
       crate::logging::best_effort(
         installed.emit(CHANGED_EVENT, ()),
         "Claude Code connection change was not announced",

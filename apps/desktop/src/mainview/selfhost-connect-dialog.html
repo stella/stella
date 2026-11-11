@@ -197,7 +197,10 @@
       const webOrigin = params.get("webOrigin") || "";
       const apiBaseUrl = params.get("apiBaseUrl") || "";
       const handoffMode = params.get("mode") === "handoff";
-      const accountMode = params.get("mode") === "account";
+      const switchMode = params.get("mode") === "switch";
+      // A switch names the account it connects the same way a connection
+      // does; only its wording and default answer differ.
+      const accountMode = params.get("mode") === "account" || switchMode;
 
       document.documentElement.lang = params.get("lang") || "en";
       document.documentElement.dir = params.get("dir") || "ltr";
@@ -230,6 +233,16 @@
       document.getElementById("apiBaseUrl").textContent = accountMode
         ? params.get("organizationName")
         : apiBaseUrl;
+
+      if (switchMode) {
+        document.title = strings.switchWindowTitle;
+        document.getElementById("title").textContent = strings.switchTitle;
+        document.getElementById("subtitle").textContent = params.get("message");
+        document.getElementById("connectBtn").textContent =
+          strings.switchConfirm;
+        // Switching ends the current link, so Cancel is the default answer.
+        document.getElementById("cancelBtn").focus();
+      }
 
       if (handoffMode) {
         document.title = strings.handoffWindowTitle;

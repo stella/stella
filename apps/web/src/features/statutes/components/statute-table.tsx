@@ -31,6 +31,7 @@ import {
   ShapesIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -390,17 +391,18 @@ const StatuteActCell = ({ statute }: { statute: StatuteListItem }) => {
         </BidiText>
       )}
       {name !== null && (
-        <BidiText
-          as="span"
+        <TruncatedText
           className={cn(
-            "line-clamp-2 wrap-break-word whitespace-normal",
+            "wrap-break-word whitespace-normal",
             number === null
               ? "text-foreground font-medium group-hover/act:underline"
               : "text-muted-foreground text-xs",
           )}
+          lines={2}
+          render={<BidiText as="span" />}
         >
           <HighlightedText columnId="act" text={name} />
-        </BidiText>
+        </TruncatedText>
       )}
     </Link>
   );

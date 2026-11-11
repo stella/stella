@@ -17,8 +17,8 @@ import {
 export const SKILL_FILE_NAME = "SKILL.md";
 
 export const SKILL_PACKAGE_LIMITS = {
-  archiveFilesMax: 100,
-  archiveUncompressedMaxBytes: 6 * 1024 * 1024,
+  archiveFilesMax: 1000,
+  archiveUncompressedMaxBytes: 50 * 1024 * 1024,
   bodyMaxChars: 80_000,
   compatibilityMaxChars: 500,
   descriptionMaxChars: 1024,
@@ -29,7 +29,7 @@ export const SKILL_PACKAGE_LIMITS = {
   metadataValueMaxChars: 512,
   resourceMaxChars: 100_000,
   resourcePathMaxChars: 512,
-  resourcesPerSkillMax: 50,
+  resourcesPerSkillMax: 500,
   versionMaxChars: 64,
 } as const;
 

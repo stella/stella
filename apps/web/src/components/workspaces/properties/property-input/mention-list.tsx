@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { MentionOption } from "@/components/workspaces/properties/property-input/custom-mention";
@@ -87,7 +88,7 @@ export const MentionList = ({
               size="sm"
               variant="ghost"
             >
-              <span className="truncate">{item.label}</span>
+              <TruncatedText>{item.label}</TruncatedText>
             </Button>
           ))}
         </div>

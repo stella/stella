@@ -79,6 +79,7 @@ import {
   wsOrganizationScopedRequestPolicies,
   wsOrganizationUserPolicies,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 } from "@/api/db/rls";
 import type {
   BankAccount,
@@ -593,6 +594,7 @@ export {
   wsDataScopePolicies,
   wsOrganizationScopedRequestPolicies,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 };
 
 export type {

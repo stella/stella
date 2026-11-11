@@ -366,6 +366,7 @@ describe("a Polish signature by title and name", () => {
     "Prezes Urzędu ustalił następujący stan faktyczny:",
     "Prezes Urzędu ustalił, co następuje:",
     "Prezes Urzędu Ochrony Konkurencji i Konsumentów zważył, co następuje.",
+    "Prezes Urzędu zważył, co następuje",
     "Prezes Urzędu zakwestionował następujące postanowienia wzorca umowy zamówienie:",
     "Sędzia Jan Kowalski wskazał, że apelacja jest zasadna.",
     // Titles with no name, or a head-matter line naming the bench.

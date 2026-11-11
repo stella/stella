@@ -66,6 +66,12 @@
     "wave": "stored-document-objects-dry-run"
   },
   {
+    "source": "hu-bhgy",
+    "parserVersion": 29,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
     "source": "pl-courts",
     "parserVersion": 34,
     "type": "pending-enrolment-wave",
