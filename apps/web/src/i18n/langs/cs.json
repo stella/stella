@@ -242,6 +242,14 @@
       "title": "Referenční fakta"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Referenční fakta si odporují",
+        "conflictCount": "{count, plural, one {# rozpor} few {# rozpory} other {# rozporů} many {# rozporu}}",
+        "gap": "<strong>Toto tvrzení nepokrývá žádný referenční fakt.</strong> Jde o mezeru v záznamech, nikoli o slabý závěr: zatím není s čím tvrzení porovnat.",
+        "notVerifiable": "<strong>Nejde o ověřitelné tvrzení.</strong> Takové tvrzení nelze rozhodnout žádným dokumentem: jde například o hypotetickou situaci, předpověď, prohlášení o úmyslu, právní závěr nebo příliš neurčité tvrzení. Odkládá se bez hodnocení.",
+        "supportCount": "{count, plural, one {# podpůrný fakt} few {# podpůrné fakty} other {# podpůrných faktů} many {# podpůrného faktu}}",
+        "verdictWithheld": "Závěr nevydán"
+      },
       "escalatedReview": "Předáno týmu pro důkazy; dokud nebude vyřešen související rozpor, nelze zde žádný závěr potvrdit ani zpochybnit.",
       "flagDispute": "Označit rozpor",
       "humanReview": "Lidská kontrola",
@@ -277,17 +285,12 @@
       },
       "reopened": "Znovu otevřeno, čeká na kontrolu",
       "reopenedTooltip": "Kontrolující osoba překlasifikovala toto tvrzení jako ověřitelné; porovnání se živými záznamy dosud neproběhlo.",
-      "score": {
-        "anchorFactsDisagree": "Referenční fakta si odporují",
-        "conflictCount": "{count, plural, one {# rozpor} few {# rozpory} other {# rozporů} many {# rozporu}}",
-        "noCoverage": "<strong>Záznamy o tom mlčí.</strong> Žádný referenční fakt v databázi se tohoto tvrzení netýká. Nejde o nízké hodnocení: zatím jednoduše není s čím tvrzení porovnat.",
-        "notVerifiable": "<strong>Nejde o ověřitelné tvrzení.</strong> Takové tvrzení nelze rozhodnout žádným dokumentem: jde například o hypotetickou situaci, předpověď, prohlášení o úmyslu, právní závěr nebo příliš neurčité tvrzení. Odkládá se bez hodnocení.",
-        "outOf100": "<strong>/ 100</strong> míra podpory",
-        "supportCount": "{count, plural, one {# podpůrný fakt} few {# podpůrné fakty} other {# podpůrných faktů} many {# podpůrného faktu}}",
-        "verdictWithheld": "Závěr nevydán"
-      },
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdroje} other {# zdrojů}}",
-      "whyScore": "Odůvodnění hodnocení: referenční fakta"
+      "unsourced": {
+        "hint": "K tomuto faktu zatím není připojen žádný zdrojový dokument; médium a datum důkaz popisují, ale nejsou zdrojem.",
+        "label": "Bez zdroje"
+      },
+      "whyVerdict": "Odůvodnění závěru: referenční fakta"
     },
     "claimTypes": {
       "fact": {
@@ -319,8 +322,11 @@
       "nocover": "Žádný referenční fakt se tohoto tvrzení netýká, takže je nelze s ničím porovnat. Schválení je nepovinné.",
       "notverifiable": "Odloženo jako neověřitelné; schválení je nepovinné. Pokud lze tvrzení ve skutečnosti ověřit, znovu je otevřete níže.",
       "recordconflict": "Dva důkazní materiály ve spise si odporují. Výše určete, který je rozhodující, nebo věc označte pro tým pro důkazy; nástroj nerozhodne za vás.",
+      "restsOnHeld": "Fakt, o který se tento závěr opírá, je pozastaven ke kontrole; potvrďte, že závěr platí i bez něj, nebo tvrzení po vyřešení faktu ověřte znovu.",
+      "scopeMismatch": "Citovaný fakt má jiný rozsah než tvrzení. Než závěr potvrdíte, zvažte, zda tvrzení v jeho znění skutečně rozhoduje.",
       "supported": "Záznamy toto tvrzení potvrzují. Svým schválením potvrdíte, že je nástroj vyložil správně; není třeba žádný hodnotící úsudek.",
-      "tension": "Záznamy toto tvrzení podporují jen částečně. Než bude možné závěr potvrdit, zvažte výše uvedená podpůrná a odporující fakta."
+      "tension": "Záznamy toto tvrzení podporují jen částečně. Než bude možné závěr potvrdit, zvažte výše uvedená podpůrná a odporující fakta.",
+      "unsourcedOnly": "Záznamy toto tvrzení potvrzují, ale jen prostřednictvím faktů, které zatím nemají zdroj. Svým schválením potvrdíte, že je nástroj vyložil správně; fakta zůstanou označena jako bez zdroje."
     },
     "documents": {
       "claimSummary": "V rozporu: {contradicted} · Částečný rozpor: {tension} · Rozpor v záznamech: {conflicts}",
@@ -372,6 +378,25 @@
       "count": "{count, plural, one {# shoda} few {# shody} other {# shod} many {# shody}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Výhrady",
+      "recordSilent": {
+        "hint": "Od záznamů se k této otázce žádný údaj neočekává, chybějící pokrytí proto není mezerou.",
+        "label": "Záznamy mlčí"
+      },
+      "restsOnHeld": {
+        "hint": "Fakt, o který se závěr opírá, je nyní vyloučen z hodnocení.",
+        "label": "Opírá se o vyloučený fakt"
+      },
+      "scopeMismatch": {
+        "hint": "Citovaný fakt se týká jiného období, okruhu osob, místa nebo veličiny než tvrzení.",
+        "label": "Jiný rozsah"
+      },
+      "unsourcedOnly": {
+        "hint": "Žádný fakt, o který se závěr opírá, zatím nemá zdroj.",
+        "label": "Jen bez zdroje"
+      }
+    },
     "review": {
       "disputed": "Zpochybněno · {decidedAt}",
       "reviewed": "{origin, select, bulk {Přijato jako rutinní} other {Zkontrolováno}} · {decidedAt}",
@@ -417,7 +442,8 @@
       },
       "nocover": {
         "chip": "Bez pokrytí",
-        "label": "Toto tvrzení nepokrývá žádný referenční fakt"
+        "label": "Toto tvrzení nepokrývá žádný referenční fakt",
+        "silentChip": "Bez pokrytí · záznamy mlčí"
       },
       "notverifiable": {
         "chip": "Neověřitelné",

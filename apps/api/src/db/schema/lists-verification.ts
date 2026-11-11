@@ -18,6 +18,7 @@ import type {
   RecordConflict,
   VerificationEvidence,
 } from "@/api/lib/lists/verification/contract";
+import type { GraderClaimQualifier } from "@/api/lib/lists/verification/qualifiers";
 import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
 
 import {
@@ -64,6 +65,10 @@ const SCORED_CLAIM_STATE_SQL_VALUES = quoted(SCORED_CLAIM_STATES);
 const REVIEW_EVENT_KIND_SQL_VALUES = quoted(CLAIM_REVIEW_EVENT_KINDS);
 const NOTVERIFIABLE_SQL = sql.raw(`'${CLAIM_STATE.NOTVERIFIABLE}'`);
 const RECORDCONFLICT_SQL = sql.raw(`'${CLAIM_STATE.RECORDCONFLICT}'`);
+const NOCOVER_SQL = sql.raw(`'${CLAIM_STATE.NOCOVER}'`);
+const RECORD_SILENT_SQL = sql.raw(
+  `'${"record-silent" satisfies GraderClaimQualifier["kind"]}'`,
+);
 
 const verificationBudgetOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner)
   FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_verification_budgets'::regclass)`;
@@ -385,6 +390,9 @@ export const legalListClaims = p.pgTable(
     anchor: jsonb().$type<ClaimAnchor>().notNull(),
     refs: jsonb().$type<ClaimRef[]>().notNull().default([]),
     recordConflict: jsonb("record_conflict").$type<RecordConflict>(),
+    // Caveats the grader gave with the verdict. Qualifiers computed from the
+    // facts as they stand now are never stored.
+    qualifiers: jsonb().$type<GraderClaimQualifier[]>().notNull().default([]),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -440,6 +448,14 @@ export const legalListClaims = p.pgTable(
     p.check(
       "legal_list_claims_refs_shape_check",
       sql`jsonb_typeof(${table.refs}) = 'array'`,
+    ),
+    // Only missing coverage can be explained by a record that is not
+    // expected to speak to the point.
+    p.check(
+      "legal_list_claims_qualifiers_check",
+      sql`jsonb_typeof(${table.qualifiers}) = 'array'
+        AND (${table.state} = ${NOCOVER_SQL}
+          OR NOT ${table.qualifiers} @> jsonb_build_array(jsonb_build_object('kind', ${RECORD_SILENT_SQL})))`,
     ),
     p.check(
       "legal_list_claims_anchor_shape_check",

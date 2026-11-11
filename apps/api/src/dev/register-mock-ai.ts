@@ -26,6 +26,10 @@ import {
   mockAiContinuousChunks,
 } from "@/api/dev/mock-ai-cancellation";
 import {
+  mockClaimGrades,
+  mockExtractedClaims,
+} from "@/api/dev/mock-ai-list-verification";
+import {
   mockAiStreamKindChunks,
   mockAiStreamKindOf,
 } from "@/api/dev/mock-ai-stream-kinds";
@@ -941,6 +945,21 @@ export const mockStructuredData = (
     JSON.stringify(properties["facts"]).includes("contestedMeaning")
   ) {
     return { facts: mockExtractedFacts(messages) };
+  }
+
+  // lists.verification.extract and lists.verification.grade — answered from
+  // the request (apps/api/src/dev/mock-ai-list-verification.ts).
+  if (
+    "claims" in properties &&
+    JSON.stringify(properties["claims"]).includes("framing")
+  ) {
+    return { claims: mockExtractedClaims(getLatestUserText([...messages])) };
+  }
+  if (
+    "grades" in properties &&
+    JSON.stringify(properties["grades"]).includes("qualifiers")
+  ) {
+    return { grades: mockClaimGrades(getLatestUserText([...messages])) };
   }
 
   // playbook.verdict — tier-match. Return a plain "deviation" with no `matched`

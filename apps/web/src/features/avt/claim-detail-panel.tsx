@@ -1,7 +1,8 @@
 /**
- * AVT claim detail: the score broken into supporting and conflicting facts,
+ * AVT claim detail: the verdict with its qualifiers, the facts it rests on,
  * the confidence signal, record-conflict resolution, and the human-review
- * layer. Every reviewer action is recorded against the claim on the server.
+ * layer. A verdict shows as its category only; its 0-100 score stays in the
+ * API and exports. Every reviewer action is recorded against the claim on the server.
  */
 
 import * as React from "react";
@@ -25,6 +26,7 @@ import {
 } from "@stll/ui/icons";
 import type { ReviewDecisionState } from "@stll/ui/review-decision-actions";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
+import { ReviewStatusDot } from "@stll/ui/review-severity-dot";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -40,6 +42,12 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { ClaimComments } from "@/features/avt/claim-comments";
+import {
+  isRecordSilent,
+  QualifierChips,
+  QualifierNotes,
+  VerdictChip,
+} from "@/features/avt/claim-qualifiers";
 import { FactDate } from "@/features/avt/fact-date";
 import { EvidenceFactSource } from "@/features/avt/fact-source";
 import { evidenceQuoteSource } from "@/features/avt/fact-source.logic";
@@ -54,8 +62,6 @@ import {
   RECORD_CONFLICT_VAR,
   SaveIndicator,
   STATE_COLOR,
-  StateChip,
-  stateHue,
   TypeChip,
 } from "@/features/avt/state-chip";
 import type {
@@ -65,18 +71,13 @@ import type {
   ClaimReviewEvent,
   ClaimReviewStatus,
   ClaimState,
-  EvidenceFact,
   FactId,
   RecordConflict,
   VerificationClaim,
 } from "@/features/avt/types";
-import {
-  CLAIM_OVERRIDE_STATES,
-  CLAIM_TYPE_META,
-  STATE_META,
-} from "@/features/avt/types";
+import { CLAIM_OVERRIDE_STATES, STATE_META } from "@/features/avt/types";
 import { useClaimSaveState } from "@/features/avt/use-claim-review-actions";
-import type { DispositionTone } from "@/features/avt/verdict";
+import type { DispositionTone, ShownFact } from "@/features/avt/verdict";
 import {
   confirmLabel,
   dispositionGuidance,
@@ -93,7 +94,7 @@ type ClaimDetailPanelProps = {
   runId: string;
   /** The claim as displayed (see `resolveClaimView`). */
   claim: VerificationClaim;
-  factsById: ReadonlyMap<FactId, EvidenceFact>;
+  factsById: ReadonlyMap<FactId, ShownFact>;
   contested: ReadonlySet<FactId>;
   stepper: MatchStepperState;
   onReviewEvent: (event: ClaimReviewEvent) => void;
@@ -119,7 +120,10 @@ export const ClaimDetailPanel = ({
   const conflicts = claim.refs.filter((ref) => ref.rel === "conflicts");
   const contestedClaim = isContested(claim, contested);
   const settled = isSettled(review);
-  const guidance = dispositionGuidance({ state, refs: claim.refs }, contested);
+  const guidance = dispositionGuidance(
+    { state, refs: claim.refs, qualifiers: claim.qualifiers },
+    contested,
+  );
   // Escalating a record conflict hands it to the evidence team: there is no
   // verdict left for this reviewer to confirm or dispute until it is
   // resolved, so those controls go inactive rather than settling the claim.
@@ -135,7 +139,8 @@ export const ClaimDetailPanel = ({
       <div className="space-y-3 border-b p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <StateChip state={state} />
+            <VerdictChip claim={claim} state={state} />
+            <QualifierChips claim={claim} />
             <TypeChip type={claim.type} />
             {review?.reopened === true && (
               <Tooltip>
@@ -179,9 +184,7 @@ export const ClaimDetailPanel = ({
         >
           {claim.text}
         </blockquote>
-        <p className="text-muted-foreground text-2xs leading-relaxed">
-          {t(CLAIM_TYPE_META[claim.type].hintKey)}
-        </p>
+        <QualifierNotes claim={claim} />
 
         {override !== null && (
           <p className="text-muted-foreground text-2xs flex items-start gap-1.5 leading-relaxed">
@@ -195,10 +198,9 @@ export const ClaimDetailPanel = ({
           </p>
         )}
 
-        <ScoreSection
+        <VerdictBasis
+          claim={claim}
           conflictCount={conflicts.length}
-          state={verdict.state}
-          score={verdict.score}
           supportCount={supports.length}
         />
       </div>
@@ -225,7 +227,7 @@ export const ClaimDetailPanel = ({
           {claim.refs.length > 0 && verdict.state !== "recordconflict" && (
             <section className="space-y-2">
               <h3 className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
-                {t("avt.claimDetail.whyScore")}
+                {t("avt.claimDetail.whyVerdict")}
               </h3>
               {[...supports, ...conflicts].map((ref) => {
                 const fact = factsById.get(ref.factEntityId);
@@ -281,7 +283,7 @@ export const ClaimDetailPanel = ({
             <div className="flex flex-wrap items-center gap-2">
               <DecisionStatus review={review} />
               <ReviewDecisionActions
-                acceptLabel={t(confirmLabel(state))}
+                acceptLabel={t(confirmLabel(state, guidance.tone))}
                 disabled={isEscalated || !canReview}
                 onAccept={() => setStatus("reviewed")}
                 onReject={() => setStatus("disputed")}
@@ -571,94 +573,74 @@ const DISPOSITION_TONE_STYLE: Record<DispositionTone, DispositionToneStyle> = {
   },
 };
 
-type ScoreSectionProps = {
-  state: ClaimState;
-  score: number | null;
+type VerdictBasisProps = {
+  claim: VerificationClaim;
   supportCount: number;
   conflictCount: number;
 };
 
-const ScoreSection = ({
-  state,
-  score,
+/** What the tool's verdict rests on, in words: how many facts support and
+ *  conflict with it, or why there is no verdict to weigh. */
+const VerdictBasis = ({
+  claim,
   supportCount,
   conflictCount,
-}: ScoreSectionProps) => {
-  const format = useFormatter();
+}: VerdictBasisProps) => {
   const t = useTranslations();
-
-  if (state === "nocover") {
-    return (
-      <p className="text-muted-foreground bg-muted rounded-md p-3 text-sm leading-relaxed">
-        {t.rich("avt.claimDetail.score.noCoverage", {
-          strong: (chunks) => <b>{chunks}</b>,
-        })}
-      </p>
-    );
-  }
-
-  if (state === "notverifiable") {
-    return (
-      <p className="text-muted-foreground bg-muted rounded-md p-3 text-sm leading-relaxed">
-        {t.rich("avt.claimDetail.score.notVerifiable", {
-          strong: (chunks) => <b>{chunks}</b>,
-        })}
-      </p>
-    );
-  }
-
-  if (state === "recordconflict" || score === null) {
-    return (
-      <div className="flex items-end gap-3.5">
-        <div
-          aria-hidden="true"
-          className="text-4xl leading-none font-semibold"
-          style={{ color: RECORD_CONFLICT_VAR }}
-        >
-          —
-        </div>
-        <div className="text-muted-foreground pb-1 text-xs">
-          <b className="text-foreground">
-            {t("avt.claimDetail.score.verdictWithheld")}
-          </b>
-          <br />
-          {t("avt.claimDetail.score.anchorFactsDisagree")}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-end gap-3.5">
-        <div className="text-4xl leading-none font-semibold tabular-nums">
-          {format.number(score)}
-        </div>
-        <div className="text-muted-foreground pb-1 text-xs">
-          {t.rich("avt.claimDetail.score.outOf100", {
+  const { state } = claim.verdict;
+  switch (state) {
+    case "nocover": {
+      // A silent record needs nothing added; its verdict chip and caveat
+      // already say so.
+      return isRecordSilent(state, claim) ? null : (
+        <p className="text-muted-foreground bg-muted rounded-md p-3 text-sm leading-relaxed">
+          {t.rich("avt.claimDetail.basis.gap", {
+            strong: (chunks) => <b className="text-foreground">{chunks}</b>,
+          })}
+        </p>
+      );
+    }
+    case "notverifiable": {
+      return (
+        <p className="text-muted-foreground bg-muted rounded-md p-3 text-sm leading-relaxed">
+          {t.rich("avt.claimDetail.basis.notVerifiable", {
             strong: (chunks) => <b>{chunks}</b>,
           })}
+        </p>
+      );
+    }
+    case "recordconflict": {
+      return (
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          <b style={{ color: RECORD_CONFLICT_VAR }}>
+            {t("avt.claimDetail.basis.verdictWithheld")}
+          </b>
+          <br />
+          {t("avt.claimDetail.basis.anchorFactsDisagree")}
+        </p>
+      );
+    }
+    case "supported":
+    case "tension":
+    case "contradicted": {
+      return (
+        <div className="text-muted-foreground flex gap-3.5 text-xs tabular-nums">
+          <span>
+            {t("avt.claimDetail.basis.supportCount", { count: supportCount })}
+          </span>
+          <span>
+            {t("avt.claimDetail.basis.conflictCount", {
+              count: conflictCount,
+            })}
+          </span>
         </div>
-      </div>
-      <div className="bg-muted h-2 overflow-hidden rounded-full border">
-        <div
-          className="h-full rounded-full"
-          style={{
-            backgroundColor: stateHue(state),
-            width: `${String(score)}%`,
-          }}
-        />
-      </div>
-      <div className="text-muted-foreground flex gap-3.5 text-xs">
-        <span>
-          {t("avt.claimDetail.score.supportCount", { count: supportCount })}
-        </span>
-        <span>
-          {t("avt.claimDetail.score.conflictCount", { count: conflictCount })}
-        </span>
-      </div>
-    </div>
-  );
+      );
+    }
+    default: {
+      state satisfies never;
+      return panic(`Unhandled claim state: ${String(state)}`);
+    }
+  }
 };
 
 const FactCard = ({
@@ -667,7 +649,7 @@ const FactCard = ({
   rel,
 }: {
   workspaceId: string;
-  fact: EvidenceFact;
+  fact: ShownFact;
   rel: ClaimFactRelation;
 }) => {
   const t = useTranslations();
@@ -705,7 +687,7 @@ const FactBody = ({
   fact,
 }: {
   workspaceId: string;
-  fact: EvidenceFact;
+  fact: ShownFact;
 }) => {
   const t = useTranslations();
   const source = evidenceQuoteSource(fact.sources);
@@ -726,6 +708,25 @@ const FactBody = ({
         </p>
       )}
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        {/* The fact as it stands now, the footing the claim's qualifiers
+            read. The medium and kind describe the evidence; only a linked
+            document is a source, so a fact without one says so. */}
+        {fact.standing.scoring === "held" && (
+          <span className="text-foreground inline-flex items-center gap-1.5">
+            <ReviewStatusDot tone="warning" />
+            {t("avt.anchorFacts.heldForReview")}
+          </span>
+        )}
+        {fact.standing.sourcing === "unsourced" && (
+          <Tooltip>
+            <TooltipTrigger render={<span />}>
+              {t("avt.claimDetail.unsourced.label")}
+            </TooltipTrigger>
+            <TooltipPopup className="max-w-72">
+              {t("avt.claimDetail.unsourced.hint")}
+            </TooltipPopup>
+          </Tooltip>
+        )}
         <EvidenceFactSource source={source} workspaceId={workspaceId} />
         {fact.evidenceKind !== null && <span>{fact.evidenceKind}</span>}
         <FactDate
@@ -747,7 +748,7 @@ type RecordConflictBlockProps = {
   disabled: boolean;
   conflict: RecordConflict;
   review: ClaimReview | null;
-  factsById: ReadonlyMap<FactId, EvidenceFact>;
+  factsById: ReadonlyMap<FactId, ShownFact>;
   onResolve: (
     resolution: Extract<
       ClaimReviewEvent,

@@ -18,9 +18,10 @@ import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry"
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type { ClaimReviewEventPayload } from "@/api/lib/lists/verification/contract";
 import {
+  qualifiersOfClaim,
   readClaimReviews,
   readClaimsForBulkReview,
-  readContestedFactIds,
+  readRunAttentionInputs,
   serializeClaimReview,
 } from "@/api/lib/lists/verification/read-run";
 import {
@@ -45,8 +46,10 @@ const config = {
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Mark the routine claims among `claimIds` reviewed in one action. A claim " +
-    "is routine when its verdict is not a conflict and no fact it rests on " +
-    "has a contested meaning; those need an individual decision and are " +
+    "is routine when its verdict is not a conflict, no fact it rests on has " +
+    "a contested meaning, and it carries no qualifier that asks for " +
+    "judgement (a cited fact of a different scope, or one now held out of " +
+    "scoring); those need an individual decision and are " +
     "refused. Claims that already have a status are left as they are. Returns " +
     "the review of every claim that was marked.",
   permissions: { entity: ["update"] },
@@ -72,12 +75,12 @@ const createBulkClaimReviews = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const contested = await readContestedFactIds({
+        const inputs = await readRunAttentionInputs({
           tx,
           workspaceId,
           runId,
         });
-        if (contested === null) {
+        if (inputs === null) {
           return { type: "not-found" } as const;
         }
         const claims = await readClaimsForBulkReview({
@@ -107,15 +110,16 @@ const createBulkClaimReviews = createSafeHandler(
               VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX
           );
         });
-        const attention = toMark.filter((claim) =>
-          needsAttention(
-            reviewedView(
-              claim,
-              before.get(claim.id)?.review ?? EMPTY_CLAIM_REVIEW,
-            ),
-            contested,
-          ),
-        );
+        const attention = toMark.filter((claim) => {
+          const review = before.get(claim.id)?.review ?? EMPTY_CLAIM_REVIEW;
+          return needsAttention(
+            {
+              ...reviewedView(claim, review),
+              qualifiers: qualifiersOfClaim(claim, review, inputs.standings),
+            },
+            inputs.contested,
+          );
+        });
         if (attention.length > 0) {
           return {
             type: "needs-attention",

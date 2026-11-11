@@ -39,6 +39,7 @@ export const makeFact = (
 type MakeClaimArgs = {
   suffix: number;
   verdict: ClaimVerdict;
+  qualifiers?: VerificationClaim["qualifiers"];
   type?: VerificationClaim["type"];
   refs?: VerificationClaim["refs"];
   review?: ClaimReview | null;
@@ -48,6 +49,7 @@ type MakeClaimArgs = {
 export const makeClaim = ({
   suffix,
   verdict,
+  qualifiers = [],
   type = "fact",
   refs = [],
   review = null,
@@ -63,6 +65,7 @@ export const makeClaim = ({
   type,
   framing: "asserted",
   verdict,
+  qualifiers,
   text: `Claim ${String(suffix)}`,
   anchor,
   refs,
@@ -78,6 +81,12 @@ export const makeRun = (
   fileFieldId: toSafeId<"field">(uuid(9002)),
   entityVersionId: toSafeId<"entityVersion">(uuid(9003)),
   evidence: { listId: toSafeId<"legalList">(uuid(9004)), facts },
+  factStandings: facts.map((fact) => ({
+    factEntityId: fact.factEntityId,
+    scoring: "included" as const,
+    sourcing:
+      fact.sources.length > 0 ? ("sourced" as const) : ("unsourced" as const),
+  })),
   status: "completed",
   errorCode: null,
   pipelineVersion: 1,

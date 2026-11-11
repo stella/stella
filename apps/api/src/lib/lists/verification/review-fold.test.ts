@@ -10,6 +10,10 @@ import type {
   RecordConflict,
 } from "@/api/lib/lists/verification/contract";
 import {
+  CLAIM_QUALIFIERS,
+  QUALIFIER_REVIEW,
+} from "@/api/lib/lists/verification/qualifiers";
+import {
   contestedFactIds,
   EMPTY_CLAIM_REVIEW,
   foldClaimReview,
@@ -241,23 +245,52 @@ describe("needsAttention over the reviewed view", () => {
   const refsTo = (factEntityId: typeof FACT_A) =>
     [{ factEntityId, rel: "supports" }] as const;
 
+  const none = [] as const;
+
   test("a conflict verdict or a contested fact needs a human", () => {
-    expect(needsAttention({ state: "contradicted", refs: [] }, contested)).toBe(
-      true,
-    );
     expect(
-      needsAttention({ state: "supported", refs: refsTo(FACT_B) }, contested),
+      needsAttention(
+        { state: "contradicted", refs: [], qualifiers: none },
+        contested,
+      ),
     ).toBe(true);
     expect(
-      needsAttention({ state: "supported", refs: refsTo(FACT_A) }, contested),
+      needsAttention(
+        { state: "supported", refs: refsTo(FACT_B), qualifiers: none },
+        contested,
+      ),
+    ).toBe(true);
+    expect(
+      needsAttention(
+        { state: "supported", refs: refsTo(FACT_A), qualifiers: none },
+        contested,
+      ),
     ).toBe(false);
     expect(
       needsAttention(
-        { state: "notverifiable", refs: refsTo(FACT_B) },
+        { state: "notverifiable", refs: refsTo(FACT_B), qualifiers: none },
         contested,
       ),
     ).toBe(false);
   });
+
+  // Each qualifier's own review decides a clean verdict: a held or
+  // differently scoped footing needs a human, a disclosed caveat does not.
+  test.each(CLAIM_QUALIFIERS)(
+    "a clean verdict qualified %s follows that qualifier's review",
+    (kind) => {
+      expect(
+        needsAttention(
+          {
+            state: "supported",
+            refs: refsTo(FACT_A),
+            qualifiers: [{ review: QUALIFIER_REVIEW[kind] }],
+          },
+          contested,
+        ),
+      ).toBe(QUALIFIER_REVIEW[kind] === "needs-judgement");
+    },
+  );
 
   test("a governed conflict takes the governing record's verdict", () => {
     const claim = {
@@ -282,7 +315,9 @@ describe("needsAttention over the reviewed view", () => {
       { ...EMPTY_CLAIM_REVIEW, reopened: true },
     );
     expect(view).toEqual({ state: "nocover", refs: [] });
-    expect(needsAttention(view, contested)).toBe(false);
+    expect(needsAttention({ ...view, qualifiers: none }, contested)).toBe(
+      false,
+    );
   });
 
   test("contested facts are the ones with an interpretation note", () => {

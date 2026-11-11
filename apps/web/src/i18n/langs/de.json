@@ -242,6 +242,14 @@
       "title": "Ankerfakten"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Ankerfakten widersprechen sich",
+        "conflictCount": "{count, plural, one {# Widerspruch} other {# Widersprüche}}",
+        "gap": "<strong>Kein Ankerfakt deckt diese Behauptung ab.</strong> Das ist eine Lücke im Bestand, kein schwaches Ergebnis: Es gibt bislang nichts, womit sich die Behauptung abgleichen ließe.",
+        "notVerifiable": "<strong>Keine überprüfbare Aussage.</strong> Eine solche Aussage könnte durch kein Dokument abschließend geklärt werden – etwa eine kontrafaktische Annahme, Prognose, Absichtsbekundung, rechtliche Schlussfolgerung oder eine zu unbestimmte Behauptung. Sie wird zurückgestellt statt bewertet.",
+        "supportCount": "{count, plural, one {# Stützung} other {# Stützungen}}",
+        "verdictWithheld": "Ergebnis zurückgehalten"
+      },
       "escalatedReview": "An das Belegteam eskaliert – hier kann kein Ergebnis bestätigt oder beanstandet werden, bis der zugrunde liegende Widerspruch geklärt ist.",
       "flagDispute": "Beanstandung markieren",
       "humanReview": "Menschliche Prüfung",
@@ -277,17 +285,12 @@
       },
       "reopened": "Erneut geöffnet, Prüfung ausstehend",
       "reopenedTooltip": "Ein Prüfer hat dies als überprüfbaren Fakt neu klassifiziert; der Live-Abgleich mit dem Bestand steht noch aus.",
-      "score": {
-        "anchorFactsDisagree": "Ankerfakten widersprechen sich",
-        "conflictCount": "{count, plural, one {# Widerspruch} other {# Widersprüche}}",
-        "noCoverage": "<strong>Der Bestand enthält hierzu nichts.</strong> Kein Ankerfakt in der Datenbank betrifft diese Behauptung. Das unterscheidet sich von einer niedrigen Bewertung – es gibt bislang schlicht nichts, womit sie abgeglichen werden könnte.",
-        "notVerifiable": "<strong>Keine überprüfbare Aussage.</strong> Eine solche Aussage könnte durch kein Dokument abschließend geklärt werden – etwa eine kontrafaktische Annahme, Prognose, Absichtsbekundung, rechtliche Schlussfolgerung oder eine zu unbestimmte Behauptung. Sie wird zurückgestellt statt bewertet.",
-        "outOf100": "<strong>/ 100</strong> Stützungsgrad",
-        "supportCount": "{count, plural, one {# Stützung} other {# Stützungen}}",
-        "verdictWithheld": "Ergebnis zurückgehalten"
-      },
       "sourceCount": "{count, plural, one {# Quelle} other {# Quellen}}",
-      "whyScore": "Begründung der Bewertung – Ankerfakten"
+      "unsourced": {
+        "hint": "Mit diesem Fakt ist noch kein Quelldokument verknüpft; Medium und Datum beschreiben den Beleg, sind aber keine Quelle.",
+        "label": "Ohne Quelle"
+      },
+      "whyVerdict": "Begründung des Ergebnisses – Ankerfakten"
     },
     "claimTypes": {
       "fact": {
@@ -319,8 +322,11 @@
       "nocover": "Kein Ankerfakt betrifft diese Behauptung; sie kann daher mit nichts abgeglichen werden. Die Freigabe ist optional.",
       "notverifiable": "Als nicht überprüfbar zurückgestellt – die Freigabe ist optional. Öffnen Sie die Behauptung unten erneut, falls sie doch überprüfbar ist.",
       "recordconflict": "Zwei Anlagen im Bestand widersprechen sich. Klären Sie oben, welche maßgeblich ist, oder markieren Sie den Fall für das Belegteam – das Tool entscheidet nicht für Sie.",
+      "restsOnHeld": "Ein Fakt, auf dem dieses Ergebnis beruht, ist zur Prüfung zurückgestellt; bestätigen Sie, dass das Ergebnis auch ohne ihn trägt, oder prüfen Sie die Behauptung erneut, sobald der Fakt geklärt ist.",
+      "scopeMismatch": "Ein zitierter Fakt hat einen anderen Umfang als die Behauptung. Wägen Sie ab, ob er die Behauptung in ihrem Wortlaut klärt, bevor das Ergebnis steht.",
       "supported": "Der Bestand bestätigt dies. Mit Ihrer Freigabe bestätigen Sie, dass das Tool ihn richtig gelesen hat – eine Ermessensentscheidung ist nicht erforderlich.",
-      "tension": "Der Bestand stützt dies nur teilweise. Wägen Sie die oben aufgeführten stützenden und widersprechenden Fakten ab, bevor das Ergebnis Bestand hat."
+      "tension": "Der Bestand stützt dies nur teilweise. Wägen Sie die oben aufgeführten stützenden und widersprechenden Fakten ab, bevor das Ergebnis Bestand hat.",
+      "unsourcedOnly": "Der Bestand bestätigt dies, jedoch nur über Fakten ohne Quelle. Mit Ihrer Freigabe bestätigen Sie, dass das Tool sie richtig gelesen hat; die Fakten bleiben als ohne Quelle markiert."
     },
     "documents": {
       "claimSummary": "Widersprochen: {contradicted} · Teilweise widersprochen: {tension} · Bestandswiderspruch: {conflicts}",
@@ -372,6 +378,25 @@
       "count": "{count, plural, one {# Treffer} other {# Treffer}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Vorbehalte",
+      "recordSilent": {
+        "hint": "Vom Bestand ist zu diesem Punkt keine Aussage zu erwarten; die fehlende Abdeckung ist daher keine Lücke.",
+        "label": "Bestand schweigt"
+      },
+      "restsOnHeld": {
+        "hint": "Ein Fakt, auf dem dieses Ergebnis beruht, ist jetzt aus der Bewertung ausgeschlossen.",
+        "label": "Beruht auf ausgeschlossenem Fakt"
+      },
+      "scopeMismatch": {
+        "hint": "Ein zitierter Fakt betrifft einen anderen Zeitraum, Personenkreis, Ort oder eine andere Messgröße als die Behauptung.",
+        "label": "Abweichender Umfang"
+      },
+      "unsourcedOnly": {
+        "hint": "Kein Fakt, auf dem dieses Ergebnis beruht, hat bisher eine Quelle.",
+        "label": "Nur ohne Quelle"
+      }
+    },
     "review": {
       "disputed": "Beanstandet · {decidedAt}",
       "reviewed": "{origin, select, bulk {Als routinemäßig übernommen} other {Geprüft}} · {decidedAt}",
@@ -417,7 +442,8 @@
       },
       "nocover": {
         "chip": "Keine Abdeckung",
-        "label": "Kein Ankerfakt deckt diese Behauptung ab"
+        "label": "Kein Ankerfakt deckt diese Behauptung ab",
+        "silentChip": "Keine Abdeckung · Bestand schweigt"
       },
       "notverifiable": {
         "chip": "Nicht überprüfbar",

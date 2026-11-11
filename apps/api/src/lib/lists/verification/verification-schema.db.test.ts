@@ -135,6 +135,50 @@ describe("verification claims", () => {
   });
 });
 
+describe("verification claim qualifiers", () => {
+  const silent = [
+    { kind: "record-silent", explanation: "Background." },
+  ] as const;
+
+  test("only missing coverage is explained by a silent record", async () => {
+    for (const state of ["supported", "tension", "contradicted"] as const) {
+      await rejects(claim({ state, qualifiers: [...silent] }));
+    }
+    await testDb.insert(legalListClaims).values(
+      claim({
+        state: "nocover",
+        score: null,
+        refs: [],
+        qualifiers: [...silent],
+      }),
+    );
+  });
+
+  test("a scope mismatch may sit beside a scored verdict", async () => {
+    await testDb.insert(legalListClaims).values(
+      claim({
+        state: "tension",
+        score: 40,
+        qualifiers: [
+          { kind: "scope-mismatch", explanation: "The fact covers 2020." },
+        ],
+      }),
+    );
+  });
+
+  test("qualifiers are stored as a list", async () => {
+    const outcome = await testDb
+      .execute(
+        sql`UPDATE ${legalListClaims} SET qualifiers = '{}'::jsonb WHERE run_id = ${runId}`,
+      )
+      .then(
+        () => "stored",
+        () => "rejected",
+      );
+    expect(outcome).toBe("rejected");
+  });
+});
+
 describe("verification source text", () => {
   test("one ordinal belongs to one block in a run", async () => {
     const scopedQuery = createScopedQuery(testDb);

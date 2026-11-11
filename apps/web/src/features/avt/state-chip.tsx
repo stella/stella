@@ -62,7 +62,9 @@ type StateColor = {
    *  and line. */
   mark: { variant: TextMarkVariant; tone: TextMarkTone };
   /** Classes the marked words take besides the mark: the verdicts that say
-   *  nothing about the claim read muted. */
+   *  nothing about the claim read muted. Missing coverage is a gap to fill
+   *  and reads at full strength, unless the record is silent on the point
+   *  (`isRecordSilent`). */
   markTextClass: string;
 };
 
@@ -93,7 +95,7 @@ export const STATE_COLOR: Record<ClaimState, StateColor> = {
     tone: "neutral",
     textClass: "text-muted-foreground",
     mark: { variant: "dotted", tone: "muted" },
-    markTextClass: "text-muted-foreground",
+    markTextClass: "",
   },
   recordconflict: {
     icon: SplitIcon,
@@ -143,15 +145,21 @@ export const StateChip = ({ state }: { state: ClaimState }) => {
 export const TypeChip = ({ type }: { type: ClaimType }) => {
   const t = useTranslations();
   const meta = CLAIM_TYPE_META[type];
+  // What the type means is looked up, not read on every claim.
   return (
-    <ReviewStatusBadge size="sm" tone="neutral">
-      {t(meta.labelKey)}
-      {!meta.verifiable && (
-        <span className="border-border border-s ps-1.5">
-          {t("avt.claimTypes.setAside")}
-        </span>
-      )}
-    </ReviewStatusBadge>
+    <Tooltip>
+      <TooltipTrigger render={<span />}>
+        <ReviewStatusBadge size="sm" tone="neutral">
+          {t(meta.labelKey)}
+          {!meta.verifiable && (
+            <span className="border-border border-s ps-1.5">
+              {t("avt.claimTypes.setAside")}
+            </span>
+          )}
+        </ReviewStatusBadge>
+      </TooltipTrigger>
+      <TooltipPopup className="max-w-72">{t(meta.hintKey)}</TooltipPopup>
+    </Tooltip>
   );
 };
 

@@ -242,6 +242,14 @@
       "title": "Fatos-âncora"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Fatos-âncora divergem",
+        "conflictCount": "{count, plural, one {# conflito} other {# conflitos} many {# conflitos}}",
+        "gap": "<strong>Nenhum fato-âncora cobre esta alegação.</strong> É uma lacuna no registro, não um veredito fraco: ainda não há nada contra o que verificá-la.",
+        "notVerifiable": "<strong>Não é uma asserção verificável.</strong> É o tipo de afirmação que nenhum documento poderia jamais resolver: um contrafactual, uma previsão, uma declaração de intenção, uma conclusão jurídica ou uma alegação vaga demais para ser verificada. Deixada de lado em vez de pontuada.",
+        "supportCount": "{count, plural, one {# sustentação} other {# sustentações} many {# sustentações}}",
+        "verdictWithheld": "Veredito retido"
+      },
       "escalatedReview": "Escalado para a equipe de evidências; não há veredito a confirmar ou disputar aqui até que o conflito subjacente seja resolvido.",
       "flagDispute": "Sinalizar disputa",
       "humanReview": "Revisão humana",
@@ -277,17 +285,12 @@
       },
       "reopened": "Reaberta, verificação pendente",
       "reopenedTooltip": "Um revisor reclassificou isto como um fato verificável; uma verificação ativa contra o registro ainda está pendente.",
-      "score": {
-        "anchorFactsDisagree": "Fatos-âncora divergem",
-        "conflictCount": "{count, plural, one {# conflito} other {# conflitos} many {# conflitos}}",
-        "noCoverage": "<strong>O registro é silente.</strong> Nenhum fato-âncora na base de dados trata desta alegação. Isso é diferente de uma pontuação baixa: significa que ainda não há nada contra o que verificá-la.",
-        "notVerifiable": "<strong>Não é uma asserção verificável.</strong> É o tipo de afirmação que nenhum documento poderia jamais resolver: um contrafactual, uma previsão, uma declaração de intenção, uma conclusão jurídica ou uma alegação vaga demais para ser verificada. Deixada de lado em vez de pontuada.",
-        "outOf100": "<strong>/ 100</strong> pontuação de sustentação",
-        "supportCount": "{count, plural, one {# sustentação} other {# sustentações} many {# sustentações}}",
-        "verdictWithheld": "Veredito retido"
-      },
       "sourceCount": "{count, plural, one {# fonte} other {# fontes} many {# fontes}}",
-      "whyScore": "Por que esta pontuação: fatos-âncora"
+      "unsourced": {
+        "hint": "Nenhum documento de origem está vinculado a este fato ainda; o meio e a data descrevem a prova, mas não são uma fonte.",
+        "label": "Sem fonte"
+      },
+      "whyVerdict": "Por que este veredito: fatos-âncora"
     },
     "claimTypes": {
       "fact": {
@@ -319,8 +322,11 @@
       "nocover": "Nenhum fato-âncora trata desta alegação, então não há contra o que confirmá-la. A aprovação é opcional.",
       "notverifiable": "Deixada de lado como não verificável; a aprovação é opcional. Reabra abaixo se ela for de fato verificável.",
       "recordconflict": "Dois documentos no registro divergem. Resolva acima qual prevalece ou sinalize para a equipe de evidências; a ferramenta não escolherá por você.",
+      "restsOnHeld": "Um fato em que este veredito se baseia está retido para revisão; confirme que o veredito se sustenta sem ele ou verifique a alegação novamente quando o fato estiver resolvido.",
+      "scopeMismatch": "Um fato citado tem escopo diferente do da alegação. Avalie se ele resolve a alegação tal como está redigida antes que o veredito prevaleça.",
       "supported": "O registro confirma esta alegação. Sua aprovação atesta que a ferramenta a leu corretamente; nenhum julgamento é necessário.",
-      "tension": "O registro sustenta esta alegação apenas em parte. Pese os fatos favoráveis e conflitantes acima antes que o veredito seja mantido."
+      "tension": "O registro sustenta esta alegação apenas em parte. Pese os fatos favoráveis e conflitantes acima antes que o veredito seja mantido.",
+      "unsourcedOnly": "O registro confirma isto, mas apenas por meio de fatos ainda sem fonte. Sua aprovação confirma que a ferramenta os leu corretamente; os fatos continuam marcados como sem fonte."
     },
     "documents": {
       "claimSummary": "Contradita: {contradicted} · Em tensão: {tension} · Conflito no registro: {conflicts}",
@@ -372,6 +378,25 @@
       "count": "{count, plural, one {# correspondência} other {# correspondências} many {# correspondências}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Ressalvas",
+      "recordSilent": {
+        "hint": "Não se espera que o registro trate deste ponto, por isso a falta de cobertura não é uma lacuna.",
+        "label": "Registro silente"
+      },
+      "restsOnHeld": {
+        "hint": "Um fato em que este veredito se baseia agora está excluído da pontuação.",
+        "label": "Baseia-se em fato excluído"
+      },
+      "scopeMismatch": {
+        "hint": "Um fato citado trata de período, população, local ou medida diferentes dos da alegação.",
+        "label": "Escopo divergente"
+      },
+      "unsourcedOnly": {
+        "hint": "Nenhum fato em que este veredito se baseia tem fonte ainda.",
+        "label": "Somente sem fonte"
+      }
+    },
     "review": {
       "disputed": "Em disputa · {decidedAt}",
       "reviewed": "{origin, select, bulk {Aceita como rotina} other {Revisada}} · {decidedAt}",
@@ -417,7 +442,8 @@
       },
       "nocover": {
         "chip": "Sem cobertura",
-        "label": "Nenhum fato-âncora cobre esta alegação"
+        "label": "Nenhum fato-âncora cobre esta alegação",
+        "silentChip": "Sem cobertura · registro silente"
       },
       "notverifiable": {
         "chip": "Não verificável",

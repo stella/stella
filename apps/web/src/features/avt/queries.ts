@@ -137,6 +137,10 @@ export const verificationRunOptions = (workspaceId: string, runId: string) =>
         .get({ fetch: { signal } });
       return unwrapApiResponse(response);
     },
+    // Some of a claim's qualifiers are read against the list as it stands
+    // (a fact that gained a source, a fact now held), so a run is read again
+    // whenever it is opened rather than shown as cached.
+    staleTime: 0,
     // Kept polling while the tab is hidden, so a reviewer who starts a run
     // and switches away comes back to the claims that landed meanwhile.
     refetchIntervalInBackground: true,

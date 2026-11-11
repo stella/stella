@@ -145,7 +145,8 @@ export const VERIFICATION_RUN_ACTIVE_STATUSES = [
   "running",
 ] as const satisfies readonly VerificationRunStatus[];
 
-export const VERIFICATION_PIPELINE_VERSION = 2;
+/** 3: grades carry qualifiers (record silent, scope mismatch). */
+export const VERIFICATION_PIPELINE_VERSION = 3;
 
 export type VerificationEvidenceSource = {
   sourceEntityId: SafeId<"entity">;

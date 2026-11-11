@@ -242,6 +242,14 @@
       "title": "Referenciatények"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "A referenciatények ellentmondanak egymásnak",
+        "conflictCount": "{count, plural, one {# ellentmondás} other {# ellentmondás}}",
+        "gap": "<strong>Egyetlen referenciatény sem fedi le ezt az állítást.</strong> Ez hézag a nyilvántartásban, nem gyenge következtetés: egyelőre nincs mihez viszonyítani az állítást.",
+        "notVerifiable": "<strong>Nem ellenőrizhető állítás.</strong> Ezt a fajta állítást egyetlen irat sem döntheti el: például feltételezés, előrejelzés, szándéknyilatkozat, jogi következtetés vagy túl homályos állítás. Pontozás helyett félretesszük.",
+        "supportCount": "{count, plural, one {# alátámasztó tény} other {# alátámasztó tény}}",
+        "verdictWithheld": "Következtetés visszatartva"
+      },
       "escalatedReview": "Továbbítva a bizonyítékkezelő csapatnak; az alapul szolgáló ellentmondás feloldásáig itt nincs megerősíthető vagy vitatható következtetés.",
       "flagDispute": "Vita megjelölése",
       "humanReview": "Emberi ellenőrzés",
@@ -277,17 +285,12 @@
       },
       "reopened": "Újranyitva, ellenőrzésre vár",
       "reopenedTooltip": "Egy ellenőr ellenőrizhető ténynek minősítette át ezt az állítást; a működő nyilvántartással való összevetés még várat magára.",
-      "score": {
-        "anchorFactsDisagree": "A referenciatények ellentmondanak egymásnak",
-        "conflictCount": "{count, plural, one {# ellentmondás} other {# ellentmondás}}",
-        "noCoverage": "<strong>A nyilvántartás nem tartalmaz erre vonatkozó adatot.</strong> Az adatbázis egyetlen referenciaténye sem foglalkozik ezzel az állítással. Ez nem gyenge értékelést jelent: egyelőre nincs mihez viszonyítani az állítást.",
-        "notVerifiable": "<strong>Nem ellenőrizhető állítás.</strong> Ezt a fajta állítást egyetlen irat sem döntheti el: például feltételezés, előrejelzés, szándéknyilatkozat, jogi következtetés vagy túl homályos állítás. Pontozás helyett félretesszük.",
-        "outOf100": "<strong>/ 100</strong> alátámasztottsági pontszám",
-        "supportCount": "{count, plural, one {# alátámasztó tény} other {# alátámasztó tény}}",
-        "verdictWithheld": "Következtetés visszatartva"
-      },
       "sourceCount": "{count, plural, one {# forrás} other {# forrás}}",
-      "whyScore": "A pontszám indoka: referenciatények"
+      "unsourced": {
+        "hint": "Ehhez a tényhez még nincs forrásdokumentum kapcsolva; a hordozó és a dátum a bizonyítékot írja le, de nem forrás.",
+        "label": "Forrás nélkül"
+      },
+      "whyVerdict": "A következtetés indoka: referenciatények"
     },
     "claimTypes": {
       "fact": {
@@ -319,8 +322,11 @@
       "nocover": "Egyetlen referenciatény sem foglalkozik ezzel az állítással, ezért nincs mihez viszonyítani. A jóváhagyás nem kötelező.",
       "notverifiable": "Nem ellenőrizhetőként félretéve; a jóváhagyás nem kötelező. Ha mégis ellenőrizhető, nyissa újra alább.",
       "recordconflict": "Az ügyirat két bizonyítéka ellentmond egymásnak. Fent válassza ki az irányadó bizonyítékot, vagy jelezze a bizonyítékkezelő csapatnak; az eszköz nem dönt Ön helyett.",
+      "restsOnHeld": "A következtetés alapjául szolgáló egyik tény felülvizsgálatra vár; erősítse meg, hogy a következtetés nélküle is megáll, vagy ellenőrizze újra az állítást, miután a tény tisztázódott.",
+      "scopeMismatch": "Egy hivatkozott tény hatóköre eltér az állításétól. Mielőtt a következtetés megáll, mérlegelje, hogy eldönti-e az állítást a megfogalmazása szerint.",
       "supported": "A nyilvántartás megerősíti ezt az állítást. Jóváhagyásával azt igazolja, hogy az eszköz helyesen értelmezte; nincs szükség mérlegelésre.",
-      "tension": "A nyilvántartás csak részben támasztja alá ezt az állítást. A következtetés jóváhagyása előtt mérlegelje a fenti alátámasztó és ellentmondó tényeket."
+      "tension": "A nyilvántartás csak részben támasztja alá ezt az állítást. A következtetés jóváhagyása előtt mérlegelje a fenti alátámasztó és ellentmondó tényeket.",
+      "unsourcedOnly": "A nyilvántartás ezt alátámasztja, de csak még forrás nélküli tényeken keresztül. Jóváhagyásával megerősíti, hogy az eszköz helyesen értelmezte őket; a tények forrás nélküliként jelölve maradnak."
     },
     "documents": {
       "claimSummary": "Cáfolt: {contradicted} · Részben ellentmondó: {tension} · Nyilvántartási ellentmondás: {conflicts}",
@@ -372,6 +378,25 @@
       "count": "{count, plural, one {# találat} other {# találat}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Fenntartások",
+      "recordSilent": {
+        "hint": "A nyilvántartástól nem várható, hogy erről a kérdésről szóljon, így a lefedettség hiánya nem hézag.",
+        "label": "A nyilvántartás hallgat"
+      },
+      "restsOnHeld": {
+        "hint": "A következtetés alapjául szolgáló egyik tény most ki van hagyva a pontozásból.",
+        "label": "Kihagyott tényen alapul"
+      },
+      "scopeMismatch": {
+        "hint": "Egy hivatkozott tény más időszakra, körre, helyre vagy mértékre vonatkozik, mint az állítás.",
+        "label": "Eltérő hatókör"
+      },
+      "unsourcedOnly": {
+        "hint": "A következtetés alapjául szolgáló tények egyikének sincs még forrása.",
+        "label": "Csak forrás nélkül"
+      }
+    },
     "review": {
       "disputed": "Vitatott · {decidedAt}",
       "reviewed": "{origin, select, bulk {Rutinként elfogadva} other {Ellenőrzött}} · {decidedAt}",
@@ -417,7 +442,8 @@
       },
       "nocover": {
         "chip": "Nincs lefedettség",
-        "label": "Egyetlen referenciatény sem fedi le ezt az állítást"
+        "label": "Egyetlen referenciatény sem fedi le ezt az állítást",
+        "silentChip": "Nincs lefedettség · a nyilvántartás hallgat"
       },
       "notverifiable": {
         "chip": "Nem ellenőrizhető",
