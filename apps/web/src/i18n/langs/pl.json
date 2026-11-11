@@ -2612,6 +2612,7 @@
     "or": "Lub",
     "organization": "Organizacja",
     "organizationName": "Nazwa organizacji",
+    "organizations": "Organizacje",
     "page": "Strona {page}",
     "paymentRetryNotice": "Problem z płatnością. Zaktualizuj metodę płatności do {date}, aby zachować dostęp.",
     "pin": "Przypnij",
@@ -2918,7 +2919,6 @@
       "vatPayerUnknown": "Nieznany",
       "year": "Rok"
     },
-    "filterOrganizations": "Organizacje",
     "filterPersons": "Osoby",
     "import": {
       "confirmAction": "Potwierdź import",

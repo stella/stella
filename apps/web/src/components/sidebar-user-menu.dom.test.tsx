@@ -58,18 +58,32 @@ const accessFor = (role: Role) => ({
   usage: true,
 });
 
-const renderUserMenu = async (role: Role) => {
+const ACTIVE_ORGANIZATION = {
+  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  id: USER.activeOrganizationId,
+  name: "Example organization",
+  slug: "example-organization",
+};
+
+const OTHER_ORGANIZATION = {
+  createdAt: new Date("2026-02-01T00:00:00.000Z"),
+  id: "organization-other",
+  name: "Other organization",
+  slug: "other-organization",
+};
+
+const renderUserMenu = async (
+  role: Role,
+  organizations: readonly (typeof ACTIVE_ORGANIZATION)[] = [
+    ACTIVE_ORGANIZATION,
+  ],
+) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   queryClient.setQueryData(roleOptions.queryKey, role);
   queryClient.setQueryData(organizationListOptions(USER.id).queryKey, [
-    {
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      id: USER.activeOrganizationId,
-      name: "Example organization",
-      slug: "example-organization",
-    },
+    ...organizations,
   ]);
 
   const root = createRootRoute({
@@ -130,6 +144,47 @@ test.each<Role>(["member", "admin", "owner"])(
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/settings"),
     );
+  },
+);
+
+test.each([
+  { count: 1, organizations: [ACTIVE_ORGANIZATION] },
+  { count: 2, organizations: [ACTIVE_ORGANIZATION, OTHER_ORGANIZATION] },
+])(
+  "$count organization(s) are listed in the menu itself, the active one checked with the role",
+  async ({ organizations }) => {
+    const { menu } = await renderUserMenu("owner", organizations);
+    const group = within(menu).getByRole("group", {
+      name: messages.common.organizations,
+    });
+    const rows = within(group).getAllByRole("menuitemradio");
+
+    expect(
+      rows.map((row) => ({
+        hasName: row.textContent.includes(
+          organizations[rows.indexOf(row)]!.name,
+        ),
+        hasRole: row.textContent.includes(messages.organization.roles.owner),
+      })),
+    ).toEqual(
+      organizations.map(({ id }) => ({
+        hasName: true,
+        hasRole: id === USER.activeOrganizationId,
+      })),
+    );
+    expect(rows.map((row) => row.getAttribute("aria-checked"))).toEqual(
+      organizations.map(({ id }) => String(id === USER.activeOrganizationId)),
+    );
+    expect(
+      within(menu).queryAllByRole("menuitem", {
+        name: new RegExp(ACTIVE_ORGANIZATION.name, "u"),
+      }),
+    ).toHaveLength(0);
+    expect(
+      within(menu).getByRole("menuitem", {
+        name: messages.organization.newOrganization,
+      }),
+    ).toBeDefined();
   },
 );
 

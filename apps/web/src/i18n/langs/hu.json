@@ -2612,6 +2612,7 @@
     "or": "Vagy",
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
+    "organizations": "Szervezetek",
     "page": "{page}. oldal",
     "paymentRetryNotice": "Fizetési probléma. A hozzáférés megtartásához frissítse a fizetési módját eddig: {date}.",
     "pin": "Rögzítés",
@@ -2918,7 +2919,6 @@
       "vatPayerUnknown": "Ismeretlen",
       "year": "Év"
     },
-    "filterOrganizations": "Szervezetek",
     "filterPersons": "Személyek",
     "import": {
       "confirmAction": "Importálás megerősítése",

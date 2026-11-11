@@ -2612,6 +2612,7 @@
     "or": "Alebo",
     "organization": "Organizácia",
     "organizationName": "Názov organizácie",
+    "organizations": "Organizácie",
     "page": "Stránka {page}",
     "paymentRetryNotice": "Problém s platbou. Ak chcete zachovať prístup, aktualizujte spôsob platby do {date}.",
     "pin": "Pripnúť",
@@ -2918,7 +2919,6 @@
       "vatPayerUnknown": "Neznámy",
       "year": "Rok"
     },
-    "filterOrganizations": "Organizácie",
     "filterPersons": "Osoby",
     "import": {
       "confirmAction": "Potvrdiť import",

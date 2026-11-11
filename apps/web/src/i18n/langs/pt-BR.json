@@ -2612,6 +2612,7 @@
     "or": "Ou",
     "organization": "Organização",
     "organizationName": "Nome da organização",
+    "organizations": "Organizações",
     "page": "Página {page}",
     "paymentRetryNotice": "Problema com o pagamento. Atualize sua forma de pagamento até {date} para manter o acesso.",
     "pin": "Fixar",
@@ -2918,7 +2919,6 @@
       "vatPayerUnknown": "Desconhecido",
       "year": "Ano"
     },
-    "filterOrganizations": "Organizações",
     "filterPersons": "Pessoas",
     "import": {
       "confirmAction": "Confirmar importação",

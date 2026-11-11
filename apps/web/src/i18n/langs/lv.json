@@ -2612,6 +2612,7 @@
     "or": "Vai",
     "organization": "Organizācija",
     "organizationName": "Organizācijas nosaukums",
+    "organizations": "Organizācijas",
     "page": "{page}. lapa",
     "paymentRetryNotice": "Maksājuma problēma. Lai saglabātu piekļuvi, atjauniniet maksājuma veidu līdz {date}.",
     "pin": "Piespraust",
@@ -2918,7 +2919,6 @@
       "vatPayerUnknown": "Nav zināms",
       "year": "Gads"
     },
-    "filterOrganizations": "Organizācijas",
     "filterPersons": "Personas",
     "import": {
       "confirmAction": "Apstiprināt importu",
