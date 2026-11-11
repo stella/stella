@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { alias, QueryBuilder } from "drizzle-orm/pg-core";
+import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
 import {
@@ -18,7 +18,6 @@ import { classifyFailure } from "@stll/errors";
 import {
   chatMessages,
   chatThreads,
-  chatTurns,
   workspaces as workspacesTable,
 } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
@@ -33,13 +32,16 @@ import {
   readChatThreadContexts,
 } from "@/api/handlers/chat/threads/list-context";
 import type { ChatThreadContext } from "@/api/handlers/chat/threads/list-context";
+import {
+  LATEST_ANSWER,
+  UNREAD_BESIDE_LATEST_ANSWER,
+} from "@/api/handlers/chat/threads/reader-state";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
 import type { PublicDecisionBadge } from "@/api/lib/case-law/decision-badges";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
-import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import {
   paginationCursorSchema,
   resourceIdSchema,
@@ -161,42 +163,6 @@ const config = {
     ),
   }),
 } satisfies HandlerConfig;
-
-/** Turn statuses that leave an answer for the reader to read. */
-const ANSWERED_TURN_STATUSES = [
-  "completed",
-  "failed",
-] as const satisfies readonly ChatTurnStatus[];
-
-/**
- * The thread's latest answer, by one backward step through
- * chat_turns_org_user_thread_created_idx per row; a later turn stopped or
- * interrupted before answering leaves it in place.
- */
-const LATEST_ANSWER = new QueryBuilder()
-  .select({ settledAt: chatTurns.settledAt })
-  .from(chatTurns)
-  .where(
-    and(
-      eq(chatTurns.organizationId, chatThreads.organizationId),
-      eq(chatTurns.userId, chatThreads.userId),
-      eq(chatTurns.threadId, chatThreads.id),
-      sql`${chatTurns.status} IN (${sql.join(
-        ANSWERED_TURN_STATUSES.map((status) => sql`${status}`),
-        sql`, `,
-      )})`,
-    ),
-  )
-  .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
-  .limit(1)
-  .as("latest_answer");
-
-/**
- * Whether the reader has an answer to read; null last_read_at is an explicit
- * "mark unread". Both sides are columns compared in the database at their
- * stored precision.
- */
-const UNREAD = sql<boolean>`coalesce(${chatThreads.lastReadAt} IS NULL OR ${LATEST_ANSWER.settledAt} > ${chatThreads.lastReadAt}::timestamptz, false)`;
 
 const readerStatesOf = ({
   pinnedAt,
@@ -345,7 +311,10 @@ export const createGetThreads = ({
           }
 
           let listQuery = tx
-            .select({ ...THREAD_LIST_PROJECTION, unread: UNREAD })
+            .select({
+              ...THREAD_LIST_PROJECTION,
+              unread: UNREAD_BESIDE_LATEST_ANSWER,
+            })
             .from(chatThreads)
             .leftJoin(
               workspacesTable,
