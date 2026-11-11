@@ -155,7 +155,7 @@ test.each([
   async ({ organizations }) => {
     const { menu } = await renderUserMenu("owner", organizations);
     const group = within(menu).getByRole("group", {
-      name: messages.organization.organizations,
+      name: messages.common.organizations,
     });
     const rows = within(group).getAllByRole("menuitemradio");
 

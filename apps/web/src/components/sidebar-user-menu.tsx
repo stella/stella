@@ -382,7 +382,7 @@ const OrganizationMenuSection = ({
     <>
       <QueryViewFeedback view={organizationsView} />
       <MenuGroup>
-        <MenuGroupLabel>{t("organization.organizations")}</MenuGroupLabel>
+        <MenuGroupLabel>{t("common.organizations")}</MenuGroupLabel>
         <MenuRadioGroup value={activeOrganizationId}>
           {organizations.map((organization) => (
             <MenuRadioItem

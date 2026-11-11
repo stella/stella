@@ -2561,6 +2561,7 @@
     "or": "Nebo",
     "organization": "Organizace",
     "organizationName": "Název organizace",
+    "organizations": "Organizace",
     "page": "Stránka {page}",
     "paymentRetryNotice": "Problém s platbou. Pro zachování přístupu aktualizujte platební metodu do {date}.",
     "pin": "Připnout",
@@ -2867,7 +2868,6 @@
       "vatPayerUnknown": "Neznámý",
       "year": "Rok"
     },
-    "filterOrganizations": "Organizace",
     "filterPersons": "Osoby",
     "import": {
       "confirmAction": "Potvrdit import",
@@ -5142,7 +5142,6 @@
     },
     "newOrganization": "Nová organizace",
     "newOrganizationDescription": "Vytvořte organizaci, jejímž vlastníkem budete.",
-    "organizations": "Organizace",
     "roles": {
       "admin": "Administrátor",
       "descriptions": {

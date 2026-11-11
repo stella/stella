@@ -2561,6 +2561,7 @@
     "or": "Arba",
     "organization": "Organizacija",
     "organizationName": "Organizacijos pavadinimas",
+    "organizations": "Organizacijos",
     "page": "{page} psl.",
     "paymentRetryNotice": "Mokėjimo problema. Kad išlaikytumėte prieigą, atnaujinkite mokėjimo būdą iki {date}.",
     "pin": "Prisegti",
@@ -2867,7 +2868,6 @@
       "vatPayerUnknown": "Nežinoma",
       "year": "Metai"
     },
-    "filterOrganizations": "Organizacijos",
     "filterPersons": "Asmenys",
     "import": {
       "confirmAction": "Patvirtinti importą",
@@ -5142,7 +5142,6 @@
     },
     "newOrganization": "Nauja organizacija",
     "newOrganizationDescription": "Sukurkite organizaciją, kurios savininkas būsite jūs.",
-    "organizations": "Organizacijos",
     "roles": {
       "admin": "Administratorius",
       "descriptions": {

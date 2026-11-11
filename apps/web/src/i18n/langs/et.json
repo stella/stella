@@ -2561,6 +2561,7 @@
     "or": "Või",
     "organization": "Organisatsioon",
     "organizationName": "Organisatsiooni nimi",
+    "organizations": "Organisatsioonid",
     "page": "Lehekülg {page}",
     "paymentRetryNotice": "Makseprobleem. Juurdepääsu säilitamiseks uuendage oma makseviisi hiljemalt {date}.",
     "pin": "Kinnita",
@@ -2867,7 +2868,6 @@
       "vatPayerUnknown": "Teadmata",
       "year": "Aasta"
     },
-    "filterOrganizations": "Organisatsioonid",
     "filterPersons": "Isikud",
     "import": {
       "confirmAction": "Kinnita import",
@@ -5142,7 +5142,6 @@
     },
     "newOrganization": "Uus organisatsioon",
     "newOrganizationDescription": "Loo organisatsioon, mille omanikuks saad sina.",
-    "organizations": "Organisatsioonid",
     "roles": {
       "admin": "Administraator",
       "descriptions": {

@@ -2561,6 +2561,7 @@
     "or": "Or",
     "organization": "Organization",
     "organizationName": "Organization name",
+    "organizations": "Organizations",
     "page": "Page {page}",
     "paymentRetryNotice": "Payment issue. Update your payment method by {date} to keep access.",
     "pin": "Pin",
@@ -2867,7 +2868,6 @@
       "vatPayerUnknown": "Unknown",
       "year": "Year of birth"
     },
-    "filterOrganizations": "Organizations",
     "filterPersons": "Persons",
     "import": {
       "confirmAction": "Confirm import",
@@ -5142,7 +5142,6 @@
     },
     "newOrganization": "New organization",
     "newOrganizationDescription": "Create an organization that you will own.",
-    "organizations": "Organizations",
     "roles": {
       "admin": "Admin",
       "descriptions": {

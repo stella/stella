@@ -2561,6 +2561,7 @@
     "or": "أو",
     "organization": "المؤسسة",
     "organizationName": "اسم المؤسسة",
+    "organizations": "المؤسسات",
     "page": "الصفحة {page}",
     "paymentRetryNotice": "هناك مشكلة في الدفع. حدّث طريقة الدفع بحلول {date} للحفاظ على إمكانية الوصول.",
     "pin": "تثبيت",
@@ -2867,7 +2868,6 @@
       "vatPayerUnknown": "غير معروف",
       "year": "السنة"
     },
-    "filterOrganizations": "المؤسسات",
     "filterPersons": "الأشخاص",
     "import": {
       "confirmAction": "تأكيد الاستيراد",
@@ -5142,7 +5142,6 @@
     },
     "newOrganization": "مؤسسة جديدة",
     "newOrganizationDescription": "أنشئ مؤسسة ستكون مالكها.",
-    "organizations": "المؤسسات",
     "roles": {
       "admin": "المسؤول",
       "descriptions": {

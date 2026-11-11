@@ -2561,6 +2561,7 @@
     "or": "O",
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
+    "organizations": "Organizaciones",
     "page": "Página {page}",
     "paymentRetryNotice": "Problema con el pago. Actualiza tu método de pago antes del {date} para mantener el acceso.",
     "pin": "Fijar",
@@ -2867,7 +2868,6 @@
       "vatPayerUnknown": "Desconocido",
       "year": "Año"
     },
-    "filterOrganizations": "Organizaciones",
     "filterPersons": "Personas",
     "import": {
       "confirmAction": "Confirmar importación",
@@ -5142,7 +5142,6 @@
     },
     "newOrganization": "Nueva organización",
     "newOrganizationDescription": "Crea una organización de la que serás propietario.",
-    "organizations": "Organizaciones",
     "roles": {
       "admin": "Administrador",
       "descriptions": {
