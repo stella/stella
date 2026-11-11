@@ -622,8 +622,15 @@ const POL_DOCKET_PATTERNS = [
   PL_UOKIK_DECISION_NUMBER_RE,
 ] as const;
 const EU_DOCKET_PATTERNS = [
-  /^(?:(?:case|vec|věc|sprawa|affaire|rechtssache|causa|asunto) )?[ctf]-\d{1,4}\/\d{2}(?: p)?$/iu,
+  /^(?:(?:case|vec|věc|sprawa|affaire|rechtssache|causa|asunto) )?[ctf]-\d{1,4}\/\d{2}(?: ?p(?:\([ir]\))?)?$/iu,
 ] as const;
+/**
+ * The mark of an appeal to the Court of Justice (`C-121/25 P`), of an appeal
+ * against an order on intervention (`P(I)`) or on interim relief (`P(R)`).
+ * It names the procedure, not another case: the Court numbers a case once,
+ * so `C-121/25 P` keys as the case its judgment is stored under, `C-121/25`.
+ */
+const EU_APPEAL_MARK_RE = / ?p(?:\([ir]\))?$/iu;
 /**
  * A case the Court of Justice numbered before the Court of First Instance
  * was set up in 1989 carries no court letter (`120/78`). Bare, that is any
@@ -944,7 +951,9 @@ export const DECISION_DOCKET_GRAMMARS = {
   EU: createDecisionDocketGrammar({
     filingYearRule: { type: "none-in-format" },
     canonicalize: (folded) =>
-      canonicalDocketKey(folded.replace(EU_DOCKET_LEAD_RE, "")),
+      canonicalDocketKey(
+        folded.replace(EU_DOCKET_LEAD_RE, "").replace(EU_APPEAL_MARK_RE, ""),
+      ),
     format: formatEuDocket,
     jurisdiction: "EU",
     ownScopePatterns: EU_OWN_SCOPE_DOCKET_PATTERNS,
