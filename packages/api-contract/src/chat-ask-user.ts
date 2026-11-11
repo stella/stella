@@ -14,6 +14,12 @@ export const askUserQuestionSchema = v.strictObject({
   options: v.optional(
     v.pipe(
       v.array(v.string()),
+      // An answer names the options it ticks, so two equal labels could not
+      // be told apart.
+      v.check(
+        (options) => new Set(options).size === options.length,
+        "Each option must be different.",
+      ),
       v.description(
         "Suggested options (A/B/C style). The user can also write their " +
           "own answer.",
@@ -82,22 +88,25 @@ export const askUserAnswerValues = (
   "selected" in answer ? answer.selected : [answer.answer];
 
 /**
- * Why `answers` cannot answer `questions`, or `null`. Ticked options must be
- * options of a multiple-choice question at the same position, each once:
- * this list can decide which documents the model may read, so it has to be
- * exact. A typed `answer` is the user's own words and is not checked.
+ * Why `answers` cannot answer `questions`, or `null`. There is one answer per
+ * question, in order. Ticked options must be options of a multiple-choice
+ * question, each once: this list can decide which documents the model may
+ * read, so it has to be exact. A typed `answer` is the user's own words.
  */
 export const askUserAnswersRefusal = (
   questions: readonly AskUserQuestion[],
   answers: readonly AskUserAnswer[],
 ): string | null => {
-  for (const [index, answer] of answers.entries()) {
+  if (answers.length !== questions.length) {
+    return `Expected ${String(questions.length)} answers, got ${String(answers.length)}.`;
+  }
+  for (const [index, question] of questions.entries()) {
+    const answer = answers.at(index);
+    if (answer?.question !== question.question) {
+      return `Answer ${String(index + 1)} is for a different question.`;
+    }
     if (!("selected" in answer)) {
       continue;
-    }
-    const question = questions.at(index);
-    if (question === undefined) {
-      return `Answer ${String(index + 1)} has no question.`;
     }
     if (askUserSelectionOf(question) !== ASK_USER_SELECTION.multiple) {
       return `Question ${String(index + 1)} takes one answer, not a selection.`;

@@ -42,7 +42,10 @@ export const createOrgTools = (_context: OrgToolsContext) => ({
       "(no `options`) for genuinely open-ended answers like " +
       "names, dates, free text. Once the user answers, " +
       "synthesize their input into a plan and execute it.",
-    inputSchema: toTanStackToolSchema(askUserInputSchema),
+    inputSchema: toTanStackToolSchema(askUserInputSchema, {
+      nullUnionStrategy: "json-schema",
+      omitValidationActions: ["check"],
+    }),
     outputSchema: toTanStackToolSchema(askUserOutputSchema),
   }),
 });

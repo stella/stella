@@ -1659,16 +1659,19 @@ describe("validateMessage", () => {
         },
       ],
     } as const;
-    const validateAnswers = (answers: AskUserAnswer[]) =>
+    const validateAnswers = (
+      answers: AskUserAnswer[],
+      callInput: unknown = input,
+    ) =>
       validateToolCallParts({
         message: {
           id: chatMessageId("msg_ask_user_answers"),
           role: "assistant",
           parts: [
             {
-              arguments: JSON.stringify(input),
+              arguments: JSON.stringify(callInput),
               id: "ask-user-answers",
-              input,
+              input: callInput,
               name: "ask-user",
               output: { answers },
               state: "complete",
@@ -1702,11 +1705,41 @@ describe("validateMessage", () => {
       ).toBe(true);
     });
 
+    const refusal = (answers: AskUserAnswer[], callInput: unknown = input) => {
+      const result = validateAnswers(answers, callInput);
+      return Result.isError(result) ? result.error.message : null;
+    };
+
+    test("refuses answers that are not one per question, in order", () => {
+      expect(refusal([])).toBe(
+        "Invalid answers for ask-user: Expected 2 answers, got 0.",
+      );
+      expect(
+        refusal([
+          documents(["NDA C"]),
+          side,
+          { question: "Anything else?", answer: "No" },
+        ]),
+      ).toBe("Invalid answers for ask-user: Expected 2 answers, got 3.");
+      expect(refusal([side, documents(["NDA C"])])).toBe(
+        "Invalid answers for ask-user: Answer 1 is for a different question.",
+      );
+    });
+
+    test("refuses a question that offers the same option twice", () => {
+      const [documentsQuestion, sideQuestion] = input.questions;
+      expect(
+        refusal([documents(["NDA C"]), side], {
+          ...input,
+          questions: [
+            { ...documentsQuestion, options: ["NDA C", "NDA C"] },
+            sideQuestion,
+          ],
+        }),
+      ).toBe("Invalid chat tool input for ask-user");
+    });
+
     test("refuses a selection that is not exactly the question's options", () => {
-      const refusal = (answers: AskUserAnswer[]) => {
-        const result = validateAnswers(answers);
-        return Result.isError(result) ? result.error.message : null;
-      };
       expect(
         refusal([documents(["Lease A (Matter 1)", "Lease D"]), side]),
       ).toBe(
@@ -1722,9 +1755,6 @@ describe("validateMessage", () => {
         ]),
       ).toBe(
         "Invalid answers for ask-user: Question 2 takes one answer, not a selection.",
-      );
-      expect(refusal([documents(["NDA C"]), side, documents(["NDA C"])])).toBe(
-        "Invalid answers for ask-user: Answer 3 has no question.",
       );
       expect(refusal([documents([]), side])).toBe(
         "Invalid chat tool output for ask-user",
