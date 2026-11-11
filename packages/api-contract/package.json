@@ -59,6 +59,7 @@
     "./chat-secret": "./src/chat-secret.ts",
     "./chat-tool-grants": "./src/chat-tool-grants.ts",
     "./chat-tool-policy": "./src/chat-tool-policy.ts",
+    "./chat-tool-result-retention": "./src/chat-tool-result-retention.ts",
     "./visual-theme": "./src/visual-theme.ts",
     "./visual-sandbox": "./src/visual-sandbox.ts",
     "./visual-bridge-policy": "./src/visual-bridge-policy.ts",
