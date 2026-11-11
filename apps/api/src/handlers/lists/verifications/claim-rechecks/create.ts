@@ -59,8 +59,10 @@ const config = {
     "who asked and the facts it read; the run's own grade is kept. A new " +
     "grade withdraws the claim's earlier status, override, reopening and " +
     "record-conflict resolution. Returns the claim as it now reads, with " +
-    "`recheck` naming the grade it replaced. Repeat a request with the same " +
-    "`requestKey` to read its outcome again. A claim set aside as not " +
+    "`recheck` naming the grade it replaced. Repeating a request with the " +
+    "same `requestKey` grades nothing again: it returns `replayed: true` and " +
+    "the claim as it reads now, which later review actions may have " +
+    "changed, not the first response. A claim set aside as not " +
     "verifiable is reopened first.",
   permissions: { workspace: ["read"], entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

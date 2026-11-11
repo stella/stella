@@ -80,7 +80,8 @@ type GapScope = {
   listId: string;
 };
 
-/** The list's facts a claim can be pointed at: held facts are never read. */
+/** The list's facts: every one (`facts`, which names what is linked), and
+ *  those a claim can be pointed at (`linkable`): held facts are never read. */
 const useLinkableFacts = ({
   workspaceId,
   listId,
@@ -104,12 +105,9 @@ const useLinkableFacts = ({
   const pages = query.data === undefined ? [] : query.data.pages;
   const facts = pages
     .flatMap((page) => page.items)
-    .filter(
-      (item) =>
-        item.itemType === LIST_ITEM_TYPE.FACT &&
-        item.factDetails?.scoring !== "held",
-    );
-  return { query, facts };
+    .filter((item) => item.itemType === LIST_ITEM_TYPE.FACT);
+  const linkable = facts.filter((item) => item.factDetails?.scoring !== "held");
+  return { query, facts, linkable };
 };
 
 type GapActionsProps = GapScope & {
@@ -229,7 +227,7 @@ const LinkFactPicker = ({
   const t = useTranslations();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
-  const { query: facts, facts: linkable } = useLinkableFacts({
+  const { query: facts, linkable } = useLinkableFacts({
     workspaceId,
     listId,
     enabled: open,

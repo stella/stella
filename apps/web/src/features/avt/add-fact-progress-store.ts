@@ -10,11 +10,14 @@ type FactSourceInput = {
 
 export type AddFactInput = { statement: string; source: FactSourceInput };
 
-/** How far adding a fact got: added to the list, sourced, linked. */
+/** How far adding a fact got: added to the list, sourced, linked. Its
+ *  re-check's key is chosen once, so a retry whose re-check already landed
+ *  replays it instead of grading the claim again. */
 export type AddedFact = {
   input: AddFactInput;
   entityId: string;
   step: "added" | "sourced" | "linked";
+  recheckKey: string;
 };
 
 type AddFactProgressStore = {

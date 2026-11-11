@@ -25,6 +25,7 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
 
@@ -64,6 +65,12 @@ export const useClaimGapActions = ({
     );
   };
 
+  const postRecheck = async (requestKey: string) =>
+    await invokeCapability(
+      "lists.verifications.claim-rechecks.create",
+      async (request) =>
+        lists["claim-rechecks"].post({ ...ids, requestKey }, request),
+    );
   // The key is kept while a re-check fails, so asking again cannot grade
   // the claim twice; a re-check that landed frees it for the next one.
   const recheckClaim = async () =>
@@ -71,15 +78,8 @@ export const useClaimGapActions = ({
       await submit.run({
         operation: `claim-recheck:${runId}:${claimId}`,
         body: ids,
-        send: async (body, replay) =>
-          await invokeCapability(
-            "lists.verifications.claim-rechecks.create",
-            async (request) =>
-              lists["claim-rechecks"].post(
-                { ...body, requestKey: replay.headers["Idempotency-Key"] },
-                request,
-              ),
-          ),
+        send: async (_body, replay) =>
+          await postRecheck(replay.headers["Idempotency-Key"]),
       }),
     );
 
@@ -170,6 +170,7 @@ export const useClaimGapActions = ({
         input: { statement, source },
         entityId,
         step: previous?.step ?? "added",
+        recheckKey: previous?.recheckKey ?? createUuid(),
       };
       record(added);
       if (added.step === "added") {
@@ -213,7 +214,8 @@ export const useClaimGapActions = ({
         added = { ...added, step: "linked" };
         record(added);
       }
-      await recheckClaim();
+      // The addition's own key, kept with it across claims and retries.
+      unwrapApiResponse(await postRecheck(added.recheckKey));
       record(null);
     },
     onSettled: refresh,

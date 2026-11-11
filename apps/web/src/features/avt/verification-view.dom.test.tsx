@@ -1741,6 +1741,50 @@ test("linking a fact records the link as a review event and calls no model", asy
   });
 });
 
+test("a linked fact held since keeps its name, though it can no longer be linked", async () => {
+  const seeded = seededRun();
+  const held = {
+    ...listFact(9, "A note held since it was linked."),
+    factDetails: {
+      occurredOn: null,
+      occurredOnPrecision: null,
+      evidenceKind: null,
+      medium: null,
+      confidence: null,
+      interpretationNote: null,
+      scoring: "held",
+    },
+  } satisfies ListItem;
+  const run = {
+    ...seeded,
+    claims: seeded.claims.map((claim, index) =>
+      index === 3
+        ? {
+            ...claim,
+            review: {
+              ...EMPTY_CLAIM_REVIEW,
+              linkedFactIds: [toSafeId<"entity">(held.id)],
+              linksChanged: true,
+              eventCount: 1,
+            },
+          }
+        : claim,
+    ),
+  } satisfies VerificationRun;
+  answerSignedIn(
+    new Map([
+      [
+        `GET /v1/lists/${workspaceId}/${seeded.evidence.listId}/items`,
+        () => Response.json({ items: [held], nextCursor: null, limit: 100 }),
+      ],
+    ]),
+  );
+  await mount(run, true);
+  selectClaim(4);
+  expect(await screen.findByText(held.name)).toBeTruthy();
+  expect(screen.queryByText(messages.avt.gap.factOffList)).toBeNull();
+});
+
 test("a claim whose links changed since its grade says so, and re-check is what calls the model", async () => {
   const seeded = seededRun();
   const notice = listFact(8, "The lender's notice letter is dated 3 June.");
@@ -1815,6 +1859,7 @@ test("an addition that failed midway finishes as first submitted, its fields hel
   const addedFactId = "0199a3c4-5b6d-7e8f-9a0b-000000009203";
   const lists = `/v1/lists/${workspaceId}`;
   let sourceWrites = 0;
+  let recheckWrites = 0;
   const seen = answerSignedIn(
     new Map([
       [
@@ -1845,7 +1890,12 @@ test("an addition that failed midway finishes as first submitted, its fields hel
       ],
       [
         `POST ${lists}/claim-rechecks`,
-        () => Response.json({ replayed: false, claim: seeded.claims.at(3) }),
+        () => {
+          recheckWrites += 1;
+          return recheckWrites === 1
+            ? Response.json({ error: "unavailable" }, { status: 503 })
+            : Response.json({ replayed: false, claim: seeded.claims.at(3) });
+        },
       ],
     ]),
   );
@@ -1915,11 +1965,14 @@ test("an addition that failed midway finishes as first submitted, its fields hel
   expect(
     within(reopened).getByRole("combobox", { name: messages.common.document }),
   ).toHaveProperty("disabled", true);
-  fireEvent.click(
-    within(reopened).getByRole("button", {
-      name: messages.avt.gap.sheet.submit,
-    }),
-  );
+  const finish = within(reopened).getByRole("button", {
+    name: messages.avt.gap.sheet.submit,
+  });
+  fireEvent.click(finish);
+  await waitFor(() => expect(recheckWrites).toBe(1));
+  // The re-check failed too; trying again re-sends that same re-check.
+  await waitFor(() => expect(finish).toHaveProperty("disabled", false));
+  fireEvent.click(finish);
   await waitFor(() =>
     expect(seen.map(({ method, path }) => `${method} ${path}`)).toEqual([
       `PUT /v1/tasks/${workspaceId}`,
@@ -1929,8 +1982,13 @@ test("an addition that failed midway finishes as first submitted, its fields hel
       `POST ${lists}/item-sources`,
       `POST ${lists}/claim-reviews`,
       `POST ${lists}/claim-rechecks`,
+      `POST ${lists}/claim-rechecks`,
     ]),
   );
+  // One key for the addition's re-check, so a re-check that landed but lost
+  // its answer is replayed, not graded again.
+  expect(seen.at(6)?.body).toMatchObject({ requestKey: expect.any(String) });
+  expect(seen.at(7)?.body).toEqual(seen.at(6)?.body);
   // The fact was added once, and sourced from the document first chosen.
   expect(seen.at(4)?.body).toMatchObject({
     itemEntityId: addedFactId,
