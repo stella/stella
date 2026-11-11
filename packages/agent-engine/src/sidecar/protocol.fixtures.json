@@ -121,6 +121,7 @@
         "workspaceDir": "C:\\data\\runs\\0b6f5c8e",
         "attachments": [],
         "cacheDir": "C:\\data\\agent-package-cache",
+        "unreadablePaths": ["C:\\data\\agent-runs", "C:\\data"],
         "skillFolders": [
           {
             "name": "fixture-skill",
@@ -166,6 +167,7 @@
         "workspaceDir": "/data/runs/0b6f5c8e",
         "attachments": [],
         "cacheDir": "/data/agent-package-cache",
+        "unreadablePaths": ["/data/runs", "/data", "/home/member/.ssh"],
         "skillFolders": [],
         "toolPath": [],
         "model": "gpt-test",

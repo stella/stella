@@ -211,6 +211,7 @@ fn run_start(model: &str) -> SidecarRunStart {
     launch: HarnessLaunchSettings::default(),
     workspace_dir: "/data/runs/1".to_owned(),
     cache_dir: "/data/agent-package-cache".to_owned(),
+    unreadable_paths: vec!["/data/runs".to_owned(), "/data".to_owned()],
     model: model.to_owned(),
     instructions: String::new(),
     messages: vec![

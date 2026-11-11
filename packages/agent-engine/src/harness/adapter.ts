@@ -74,6 +74,14 @@ export type HarnessTurnInput = {
    * the computer's runs; writable inside every harness sandbox.
    */
   cacheDir: string;
+  /**
+   * Absolute paths the turn's sandboxed commands may not read: every chat's
+   * folder, the desktop's own data and the member's credential stores, as
+   * the desktop names them. The adapter re-opens inside them only what the
+   * turn itself needs, such as its workspace, cache and tools, where the
+   * harness's sandbox can limit reads.
+   */
+  unreadablePaths: readonly string[];
   /** Skills the harness loads for the turn, through its own mechanism. */
   skillFolders: readonly HarnessSkillFolder[];
   /**

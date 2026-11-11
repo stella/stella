@@ -12,6 +12,7 @@
 mod client;
 mod harness;
 mod journal;
+mod read_limits;
 mod run_folders;
 mod sidecar_host;
 #[cfg(all(test, unix))]
@@ -349,6 +350,7 @@ fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
       },
       workspaces: data.join(RUNS_DIRECTORY),
       package_cache: data.join(PACKAGE_CACHE_DIRECTORY),
+      unreadable: read_limits::unreadable_paths(&data, dirs::home_dir().as_deref()),
       probe_interval: sidecar_host::PROBE_INTERVAL,
     },
     Arc::new(ManagedHarnesses { app: app.clone() }),

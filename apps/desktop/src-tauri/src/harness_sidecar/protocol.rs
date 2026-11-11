@@ -209,6 +209,10 @@ pub(crate) struct SidecarRunStart {
   pub(crate) workspace_dir: String,
   /// The computer's package-manager cache, writable in every sandbox.
   pub(crate) cache_dir: String,
+  /// What the run's sandboxed commands may not read, apart from the paths
+  /// the run itself is handed: every chat's folder, the app's own data and
+  /// the member's credential stores.
+  pub(crate) unreadable_paths: Vec<String>,
   pub(crate) model: String,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,

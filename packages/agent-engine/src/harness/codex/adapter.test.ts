@@ -177,6 +177,7 @@ const turnInput = (
   cacheDir: CACHE_DIR,
   skillFolders: [],
   toolPath: [],
+  unreadablePaths: [],
   ...overrides,
 });
 

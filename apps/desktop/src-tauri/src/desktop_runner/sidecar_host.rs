@@ -118,6 +118,9 @@ pub(crate) struct HostSettings {
   pub(crate) workspaces: PathBuf,
   /// The package-manager cache every run on this computer shares.
   pub(crate) package_cache: PathBuf,
+  /// What a run's commands may not read besides the chat folders, which no
+  /// run reads but for its own; the harness re-opens what its turn needs.
+  pub(crate) unreadable: Vec<PathBuf>,
   pub(crate) probe_interval: Duration,
 }
 
@@ -252,6 +255,17 @@ impl Shared {
 
   fn workspace(&self, folder_id: Uuid) -> PathBuf {
     self.settings.workspaces.join(folder_id.to_string())
+  }
+}
+
+impl HostSettings {
+  /// What a run may not read: every chat's folder, of which the harness
+  /// re-opens the run's own, then the paths the app named.
+  fn unreadable_paths(&self) -> Vec<String> {
+    std::iter::once(&self.workspaces)
+      .chain(&self.unreadable)
+      .map(|path| path.to_string_lossy().into_owned())
+      .collect()
   }
 }
 
@@ -886,6 +900,7 @@ impl HarnessHost for SidecarHarnessHost {
       launch: credentials.map(|held| held.settings).unwrap_or_default(),
       workspace_dir: workspace.to_string_lossy().into_owned(),
       cache_dir: package_cache.to_string_lossy().into_owned(),
+      unreadable_paths: self.shared.settings.unreadable_paths(),
       skill_folders: skill_folders_within(
         SKILL_FOLDER_BUDGET,
         Arc::clone(&self.shared.harnesses),

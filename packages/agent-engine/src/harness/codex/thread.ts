@@ -152,6 +152,9 @@ const threadParams = (
         NETWORK_ACCESS[input.policy.network],
       // Package caches live outside the workspace; the temp directory and
       // `/tmp` stay writable, as tools that make scratch files expect.
+      // The turn's `unreadablePaths` are not applied: this sandbox mode
+      // lets commands read the whole disk, and Codex's permission profiles,
+      // which can deny reads, replace the mode instead of adding to it.
       "sandbox_workspace_write.writable_roots": [input.cacheDir],
       "sandbox_workspace_write.exclude_tmpdir_env_var": false,
       "sandbox_workspace_write.exclude_slash_tmp": false,

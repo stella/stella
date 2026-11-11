@@ -151,6 +151,7 @@ const MAX_MODELS = 100;
 const MAX_RUN_MESSAGES = 1000;
 const MAX_RUN_SKILL_FOLDERS = 32;
 const MAX_RUN_TOOL_DIRECTORIES = 8;
+const MAX_RUN_UNREADABLE_PATHS = 64;
 const MAX_LAUNCH_ENTRIES = 32;
 /** Process ids are unsigned 32-bit on every platform the desktop runs on. */
 const MAX_PID = 4_294_967_295;
@@ -311,6 +312,15 @@ export const sidecarHostMessageSchema = v.variant("type", [
     workspaceDir: absolutePathSchema,
     /** The computer's package-manager cache, writable in every sandbox. */
     cacheDir: absolutePathSchema,
+    /**
+     * What the run's sandboxed commands may not read, apart from the paths
+     * the run itself is handed: every chat's folder, the app's own data and
+     * the member's credential stores.
+     */
+    unreadablePaths: v.pipe(
+      v.array(absolutePathSchema),
+      v.maxLength(MAX_RUN_UNREADABLE_PATHS),
+    ),
     model: modelIdSchema,
     instructions: v.pipe(v.string(), v.maxLength(65_536)),
     messages: v.pipe(

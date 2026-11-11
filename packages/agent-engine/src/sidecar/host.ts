@@ -838,6 +838,7 @@ export class SidecarHost {
       threadId: message.threadId,
       workspaceDir: message.workspaceDir,
       cacheDir: message.cacheDir,
+      unreadablePaths: message.unreadablePaths,
       skillFolders: message.skillFolders,
       toolPath: message.toolPath,
       model: message.model,

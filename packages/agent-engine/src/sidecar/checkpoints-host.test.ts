@@ -165,6 +165,7 @@ const runStart = (at: Place): SidecarRunStart => ({
   attachments: [],
   skillFolders: [],
   toolPath: [],
+  unreadablePaths: [],
   harnessSessionId: null,
   policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
