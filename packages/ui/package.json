@@ -132,6 +132,10 @@
     "./review-severity-dot": "./src/review/review-severity-dot.tsx",
     "./review-status-badge": "./src/review/review-status-badge.tsx",
     "./text-mark": "./src/review/text-mark.tsx",
+    "./run-state-mark": {
+      "react-native": "./src/components/run-state-mark.native.tsx",
+      "default": "./src/components/run-state-mark.tsx"
+    },
     "./scroll-area": "./src/components/scroll-area.tsx",
     "./horizontal-scroller": "./src/components/horizontal-scroller.tsx",
     "./scroll-to-top": "./src/components/scroll-to-top.tsx",

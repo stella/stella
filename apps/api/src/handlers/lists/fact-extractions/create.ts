@@ -37,6 +37,7 @@ import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declar
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { LIST_OR_DOCUMENT_NOT_FOUND } from "@/api/lib/lists/fact-tiers";
 import { failGenerationRun } from "@/api/lib/lists/generation/run-persistence";
 import { enqueueFactExtractionRun } from "@/api/lib/lists/generation/run-queue";
 import { VERIFICATION_MODEL_TASK } from "@/api/lib/lists/verification/model-call";
@@ -324,7 +325,7 @@ const createFactExtraction = createSafeHandler(
         return Result.err(
           new HandlerError({
             status: 404,
-            code: "list_or_document_not_found",
+            code: LIST_OR_DOCUMENT_NOT_FOUND,
             message: "List or document not found",
           }),
         );

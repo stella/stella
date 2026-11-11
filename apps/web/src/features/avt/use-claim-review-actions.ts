@@ -38,6 +38,20 @@ const claimReviewMutationKey = ({ workspaceId, runId }: RunScope) =>
 type RecordVariables = { targetIds: [ClaimId]; event: ClaimReviewEvent };
 type BulkVariables = { targetIds: ClaimId[] };
 
+/**
+ * Whether a recorded event changes the qualifiers the server reads for the
+ * claim. Governing a record conflict moves the verdict onto the chosen fact,
+ * whose standing (no source, held) the claim then carries, so the run is
+ * read again; every other event leaves what the verdict rests on alone.
+ */
+const QUALIFIER_READ_AFTER = {
+  status: "kept",
+  override: "kept",
+  note: "kept",
+  reopen: "kept",
+  "record-conflict": "reread",
+} as const satisfies Record<ClaimReviewEvent["kind"], "kept" | "reread">;
+
 type PreviousReviews = {
   previous: { claimId: ClaimId; review: ClaimReview | null }[];
 };
@@ -124,12 +138,15 @@ export const useClaimReviewActions = (scope: RunScope) => {
       await applyOptimistic(targetIds, (review) =>
         predictClaimReview(review, event, { at: now(), actorId }),
       ),
-    onSuccess: ({ claimId, review }) => {
+    onSuccess: async ({ claimId, review }, { event }) => {
       queryClient.setQueryData(runKey, (current) =>
         current === undefined
           ? current
           : withClaimReviews(current, [{ claimId, review }]),
       );
+      if (QUALIFIER_READ_AFTER[event.kind] === "reread") {
+        await queryClient.invalidateQueries({ queryKey: runKey });
+      }
     },
     onError: (error, _variables, context) => rollback(error, context),
   });

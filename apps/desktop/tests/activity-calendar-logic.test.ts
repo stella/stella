@@ -18,6 +18,8 @@ import {
   nextSuggestion,
   segmentTitles,
   shortSegmentThresholdMs,
+  suggestionPieces,
+  suggestionSummary,
   titleRows,
   TOPIC_BRIDGE_GAP_MS,
   undraftedParts,
@@ -945,6 +947,166 @@ describe("suggestion evidence", () => {
       "Lease draft",
       "Land registry",
     ]);
+  });
+});
+
+describe("suggestion pieces", () => {
+  const onlySuggestion = (segments: ActivitySegment[]) => {
+    const [suggestion] = matchedSuggestions(day(segments).groups, new Set());
+    if (!suggestion) {
+      throw new TypeError("The fixture must produce a suggestion");
+    }
+    return suggestion;
+  };
+
+  test("each piece counts its own recorded time, and the card's summary adds them up", () => {
+    const suggestion = onlySuggestion([
+      segment({ from: 0, to: 30, matterId: "lease", title: "Lease draft" }),
+      // A two-minute pause keeps one piece but is not time worked.
+      segment({ from: 32, to: 40, matterId: "lease", title: "Lease draft" }),
+      segment({ from: 120, to: 188, matterId: "lease", title: "Annex" }),
+    ]);
+    const pieces = suggestionPieces(suggestion);
+    expect(pieces).toEqual([
+      { startMs: ms(0), endMs: ms(40), minutes: 38 },
+      { startMs: ms(120), endMs: ms(188), minutes: 68 },
+    ]);
+    expect(suggestionSummary(suggestion)).toEqual({
+      count: 2,
+      minutes: 106,
+      tenths: suggestion.roundedTenths,
+      type: "pieces",
+    });
+  });
+
+  test("a suggestion in one piece keeps its range in the summary", () => {
+    const suggestion = onlySuggestion([
+      segment({ from: 10, to: 55, matterId: "lease", title: "Lease draft" }),
+    ]);
+    expect(suggestionSummary(suggestion)).toEqual({
+      endMs: ms(55),
+      minutes: 45,
+      startMs: ms(10),
+      tenths: 8,
+      type: "range",
+    });
+  });
+
+  test("a selected range's pieces are the parts no entry covers, at full length", () => {
+    const suggestion = manualSuggestion({
+      drafted: [{ start: at(20), end: at(30) }],
+      id: "manual:test",
+      range: { startMs: ms(0), endMs: ms(60) },
+      segments: [],
+    });
+    expect(suggestionPieces(suggestion).map(({ minutes }) => minutes)).toEqual([
+      20, 30,
+    ]);
+    expect(suggestionSummary(suggestion)).toMatchObject({
+      count: 2,
+      minutes: 50,
+      type: "pieces",
+    });
+  });
+
+  test(
+    "pieces round together: their minutes add up to the rounded total and each is within a minute of its time",
+    () => {
+      assertProperty(
+        "pieces round together: their minutes add up to the rounded total and each is within a minute of its time",
+        fc.property(
+          // Seconds worked in each piece; pieces sit ten minutes apart, so
+          // each is its own.
+          fc.array(fc.integer({ min: 1, max: 90 * 60 }), {
+            minLength: 1,
+            maxLength: 8,
+          }),
+          (seconds) => {
+            let from = 0;
+            const segments = seconds.map((length) => {
+              const piece = segment({
+                from,
+                to: from + length / 60,
+                matterId: "lease",
+                title: "Lease draft",
+              });
+              from += length / 60 + 10;
+              return piece;
+            });
+            const pieces = suggestionPieces(onlySuggestion(segments));
+            expect(pieces).toHaveLength(seconds.length);
+            const totalSeconds = seconds.reduce((sum, value) => sum + value, 0);
+            expect(pieces.reduce((sum, { minutes }) => sum + minutes, 0)).toBe(
+              Math.round(totalSeconds / 60),
+            );
+            for (const [index, piece] of pieces.entries()) {
+              expect(
+                Math.abs(piece.minutes - (seconds[index] ?? 0) / 60),
+              ).toBeLessThan(1);
+            }
+          },
+        ),
+      );
+    },
+    propertyTestTimeout(5000),
+  );
+});
+
+describe("untitled time in the Titles tab", () => {
+  test("an app's time without a title is its own row, so the tab adds up to the suggestion", () => {
+    const [suggestion] = matchedSuggestions(
+      day([
+        segment({ from: 0, to: 30, matterId: "lease", title: "Lease draft" }),
+        segment({ from: 30, to: 38, app: "browser", matterId: "lease" }),
+        // A title that only repeats the app's name is no title.
+        segment({
+          from: 38,
+          to: 40,
+          app: "browser",
+          matterId: "lease",
+          title: "Example Browser",
+        }),
+      ]).groups,
+      new Set(),
+    );
+    if (!suggestion) {
+      throw new TypeError("The fixture must produce a suggestion");
+    }
+    const rows = titleRows(suggestion);
+    expect(
+      rows.map(({ appIdentifier, durationMs, label, type }) => ({
+        appIdentifier,
+        durationMs,
+        label,
+        type,
+      })),
+    ).toEqual([
+      {
+        appIdentifier: "com.example.editor",
+        durationMs: 30 * MINUTE,
+        label: "Lease draft",
+        type: "named",
+      },
+      {
+        appIdentifier: "com.example.browser",
+        durationMs: 10 * MINUTE,
+        label: "Example Browser",
+        type: "untitled",
+      },
+    ]);
+    expect(rows.reduce((sum, { share }) => sum + share, 0)).toBeCloseTo(1);
+  });
+
+  test("a fully titled suggestion has no untitled row", () => {
+    const [suggestion] = matchedSuggestions(
+      day([
+        segment({ from: 0, to: 30, matterId: "lease", title: "Lease draft" }),
+      ]).groups,
+      new Set(),
+    );
+    expect(suggestion && titleRows(suggestion).map(({ type }) => type)).toEqual(
+      ["named"],
+    );
   });
 });
 

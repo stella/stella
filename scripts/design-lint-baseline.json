@@ -346,7 +346,7 @@
     "apps/web/src/routes/_protected.workspaces/$workspaceId/expenses.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx": 2,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx": 4,
-    "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx": 4,
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx": 3,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/timesheets.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/workflows.tsx": 2,

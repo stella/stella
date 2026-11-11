@@ -118,6 +118,8 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
           governingStates: ["supported", "contradicted"],
         },
       },
+      qualifiers: [],
+      suggestedGoverningFactId: null,
       text,
       anchor: { type: "docx-block", blockId: "b1", start: 0, end: text.length },
       refs: [],
@@ -134,6 +136,11 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
           fact(competingFactId, "The payment notice records 28 July 2021."),
         ],
       },
+      factStandings: [governingFactId, competingFactId].map((factEntityId) => ({
+        factEntityId,
+        scoring: "included",
+        tier: "unsourced",
+      })),
       status: "completed",
       errorCode: null,
       pipelineVersion: 1,
@@ -231,7 +238,9 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
 
     await page.goto(
       `/workspaces/${workspace.id}/${workspace.viewId}?run=${run.id}`,
-      { waitUntil: "commit" },
+      {
+        waitUntil: "commit",
+      },
     );
     await expect(
       page.getByText("Verdict withheld", { exact: true }),
@@ -338,6 +347,8 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
           score: state === "supported" ? 90 : 10,
           recordConflict: null,
         },
+        qualifiers: [],
+        suggestedGoverningFactId: null,
         text,
         anchor: {
           type: "pdf-page",
@@ -376,6 +387,7 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
       fileFieldId: uuid(9102),
       entityVersionId: uuid(9103),
       evidence: { listId: uuid(9104), facts: [] },
+      factStandings: [],
       status: "completed",
       errorCode: null,
       pipelineVersion: 1,
@@ -458,7 +470,9 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
 
     await page.goto(
       `/workspaces/${workspace.id}/${workspace.viewId}?run=${run.id}`,
-      { waitUntil: "commit" },
+      {
+        waitUntil: "commit",
+      },
     );
     await page.getByRole("tab", { name: "Original", exact: true }).click();
 

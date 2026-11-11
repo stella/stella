@@ -194,12 +194,27 @@ const ListItemContent = ({
   />
 );
 
+const listItemTitleVariants = cva("text-foreground text-sm font-medium", {
+  defaultVariants: { variant: "name" },
+  variants: {
+    variant: {
+      /** A name: one line, truncated at the end. */
+      name: "truncate",
+      /** A statement a reader must see whole to judge (a proposed fact): up
+       *  to two lines, then clamped. */
+      statement: "line-clamp-2 text-pretty wrap-break-word",
+    },
+  },
+});
+
 const ListItemTitle = ({
   className,
+  variant,
   ...props
-}: React.ComponentProps<"span">) => (
+}: React.ComponentProps<"span"> &
+  VariantProps<typeof listItemTitleVariants>) => (
   <span
-    className={cn("text-foreground truncate text-sm font-medium", className)}
+    className={cn(listItemTitleVariants({ variant }), className)}
     data-slot="list-item-title"
     dir="auto"
     {...props}
@@ -212,6 +227,8 @@ const listItemDescriptionVariants = cva("text-muted-foreground text-xs", {
     variant: {
       /** Prose, clamped to one line so long provider copy cannot widen the row. */
       text: "line-clamp-1 wrap-break-word",
+      /** Prose that genuinely needs a second line (a reason, an error). */
+      paragraph: "line-clamp-2 wrap-break-word",
       /** A URL or command: monospace, left-to-right, truncated at the end. */
       code: "truncate font-mono",
     },
@@ -219,8 +236,8 @@ const listItemDescriptionVariants = cva("text-muted-foreground text-xs", {
 });
 
 /**
- * Secondary line. Pass `line-clamp-2` when two lines are genuinely needed;
- * never `whitespace-nowrap`.
+ * Secondary line. Use the `paragraph` variant when two lines are genuinely
+ * needed; never `whitespace-nowrap`.
  */
 const ListItemDescription = ({
   className,

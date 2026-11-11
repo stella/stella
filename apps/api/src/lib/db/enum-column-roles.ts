@@ -259,6 +259,9 @@ export const ENUM_COLUMN_ROLES = {
   desktop_runner_events: {
     type: ATTRIBUTE,
   },
+  desktop_runner_folder_restores: {
+    reason: ATTRIBUTE,
+  },
   desktop_runner_runs: {
     harness: ATTRIBUTE,
     outcome: ATTRIBUTE,
@@ -428,6 +431,10 @@ export const ENUM_COLUMN_ROLES = {
   },
   legal_list_items: {
     entity_feature_gate: ATTRIBUTE,
+  },
+  legal_list_source_documents: {
+    entity_feature_gate: ATTRIBUTE,
+    source_kind: ATTRIBUTE,
   },
   legal_list_verification_blocks: {
     entity_feature_gate: ATTRIBUTE,

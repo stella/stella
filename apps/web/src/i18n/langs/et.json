@@ -212,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "Ankurfaktide registrist",
+      "addFact": "Lisa fakt",
+      "addFactPlaceholder": "Sõnastage fakt nii, nagu see tõenditest nähtub",
       "addInterpretationNote": "Lisa tõlgendusmärkus",
+      "busyLine": "Teie heaks kiidetud faktid ilmuvad siia.",
+      "confidenceLevels": {
+        "high": "Kõrge kindlus",
+        "low": "Madal kindlus",
+        "medium": "Keskmine kindlus"
+      },
       "description": "Kindlad tõendid, nagu e-kirjad, sõnumid, pangadokumendid ja kokkulepitud asjaolud, mis on eraldatud ankurfaktide registrisse, mille põhjal väiteid kontrollitakse. Vaadake fakte üle, muutke neid või lisage käsitsi.",
       "editInterpretationNote": "Muuda tõlgendusmärkust",
-      "empty": "Märkige selle loendi üksused faktideks, mille alusel dokumente kontrollitakse.",
-      "extractionAndReview": "Eraldamine ja kontroll",
-      "factCount": "{count, plural, one {# fakt} other {# fakti}}",
+      "emptyLine": "Eraldage faktid toimiku dokumentidest või lisage üks käsitsi.",
+      "emptyTitle": "Ankurfakte veel pole",
       "heldDescription": "Nende väljavõtete <strong>tähendus on tõepoolest ebaselge</strong>: sisu on esialgne või kinnitamata, mitte lihtsalt käsitsi kirjutatud. Neid ei hinnata enne, kui kontrollija need kinnitab, muudab või uuesti sisestab. Loetavat allikat ei suunata kunagi kontrolli üksnes selle kandja tõttu.",
+      "heldFilter": "{count, plural, one {# kontrolli ootel} other {# kontrolli ootel}}",
       "heldForReview": "Kontrolli ootel",
+      "hideSources": "Peida allikad",
       "holdOutOfScoring": "Jäta hindamisest välja",
       "inScoring": "Hindamises",
       "includeInScoring": "Kaasa hindamisse",
@@ -228,10 +238,18 @@
       "interpretiveConfidence": "Tõlgenduse kindlus",
       "openList": "Ava loend",
       "record": "Ankurfaktide register",
-      "setConfidence": "Määra kindlus",
+      "showSources": "Näita allikaid",
       "title": "Ankurfaktid"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Ankurfaktid on vastuolus",
+        "conflictCount": "{count, plural, one {# vastuolu} other {# vastuolu}}",
+        "gap": "<strong>Ükski ankurfakt seda väidet ei kata.</strong> See on lünk registris, mitte nõrk otsus: praegu pole väidet millegi põhjal kontrollida.",
+        "notVerifiable": "<strong>Väide pole kontrollitav.</strong> Ükski dokument ei saaks sellist väidet tõendada: see on vastandolukord, ennustus, kavatsusavaldus, õiguslik järeldus või kontrollimiseks liiga ebamäärane väide. Jätke see hindamise asemel kõrvale.",
+        "supportCount": "{count, plural, one {# toetav asjaolu} other {# toetavat asjaolu}}",
+        "verdictWithheld": "Otsus tegemata"
+      },
       "escalatedReview": "Edastatud tõendite töörühmale: siin pole otsust, mida kinnitada või vaidlustada, enne kui aluseks olev vastuolu on lahendatud.",
       "flagDispute": "Märgi vaidlus",
       "humanReview": "Inimkontroll",
@@ -253,11 +271,13 @@
       "overrideTooltip": "Kontrollija on salvestanud teistsuguse otsuse. Allpool kuvatakse tööriista enda muutmata analüüs.",
       "overrideVerdict": "Asenda otsus",
       "recordConflict": {
+        "confirmGoverningRecord": "Kinnita määravana",
         "description": "Kaks ankurfakti käsitlevad sama asjaolu, <strong>{subject}</strong>, kuid on omavahel vastuolus. Mõlemad pärinevad <strong>suure kindlusega</strong> allikatest, seega pole küsimus usaldusväärsuses: register ise on vastuoluline. AVT jätab otsuse tegemata ega hinda väidet, sest ühe kande eelistamine teisele on otsustus, mille peate ise tegema ja dokumenteerima; tööriist ei tohi seda teha vaikimisi.",
         "escalatedNotice": "Edastatud tõendite töörühmale. Registri vastuolu jääb avatuks ja arvestusse, kuni valitakse aluseks olev kanne.",
         "flagForEvidenceTeam": "Edasta tõendite töörühmale",
         "governed": "<strong>{value}</strong> on aluseks: väidet hinnatakse selle kande põhjal. Teine kanne jääb registrisse alles.",
         "reconcile": "Kooskõlasta register",
+        "suggestedNotice": "Dokumendi andmeid soovitatakse eelistada tunnistaja kirjeldusele. Kinnitage need või valige teine kirje.",
         "title": "Vastuolulised tõendid registris",
         "treatAsGoverningRecord": "Käsita aluseks olevana"
       },
@@ -267,17 +287,8 @@
       },
       "reopened": "Uuesti avatud, kontroll ootel",
       "reopenedTooltip": "Kontrollija liigitas selle uuesti kontrollitavaks faktiks; reaalajas registrikontroll on veel ootel.",
-      "score": {
-        "anchorFactsDisagree": "Ankurfaktid on vastuolus",
-        "conflictCount": "{count, plural, one {# vastuolu} other {# vastuolu}}",
-        "noCoverage": "<strong>Register selle kohta teavet ei sisalda.</strong> Ükski andmebaasi ankurfakt ei käsitle seda väidet. See erineb nõrgast hindest: praegu pole väidet millegi põhjal kontrollida.",
-        "notVerifiable": "<strong>Väide pole kontrollitav.</strong> Ükski dokument ei saaks sellist väidet tõendada: see on vastandolukord, ennustus, kavatsusavaldus, õiguslik järeldus või kontrollimiseks liiga ebamäärane väide. Jätke see hindamise asemel kõrvale.",
-        "outOf100": "<strong>/ 100</strong> toetuse hinne",
-        "supportCount": "{count, plural, one {# toetav asjaolu} other {# toetavat asjaolu}}",
-        "verdictWithheld": "Otsus tegemata"
-      },
       "sourceCount": "{count, plural, one {# allikas} other {# allikat}}",
-      "whyScore": "Hinde põhjendus: ankurfaktid"
+      "whyVerdict": "Otsuse põhjendus: ankurfaktid"
     },
     "claimTypes": {
       "fact": {
@@ -309,17 +320,66 @@
       "nocover": "Ükski ankurfakt ei käsitle seda väidet, seega pole seda millegi põhjal kontrollida. Kinnitamine on vabatahtlik.",
       "notverifiable": "Kõrvale jäetud kui kontrollimatu; kinnitamine on vabatahtlik. Kui väidet saab tegelikult kontrollida, avage see allpool uuesti.",
       "recordconflict": "Registri kaks tõendit on vastuolus. Otsustage eespool, kumb on aluseks, või edastage asi tõendite töörühmale; tööriist ei vali teie eest.",
+      "restsOnHeld": "Fakt, millele see otsus tugineb, on ülevaatuseks peatatud; kinnitage, et otsus kehtib ka ilma selleta, või kontrollige väidet uuesti, kui fakt on selgunud.",
+      "scopeMismatch": "Viidatud fakti ulatus erineb väite omast. Enne kui otsus jääb kehtima, kaaluge, kas see lahendab väite selle sõnastuses.",
       "supported": "Register kinnitab seda väidet. Teie kinnitus näitab, et tööriist tõlgendas seda õigesti; kaalutlusotsust pole vaja.",
-      "tension": "Register toetab seda vaid osaliselt. Enne otsuse kinnitamist kaaluge eespool toodud toetavaid ja vastuolulisi fakte."
+      "tension": "Register toetab seda vaid osaliselt. Enne otsuse kinnitamist kaaluge eespool toodud toetavaid ja vastuolulisi fakte.",
+      "testimonyOnly": "Materjal kinnitab seda, kuid ükski dokumendi kirje seda ei toeta: see põhineb ütlustel. Kinnitusega kinnitate, et tööriist luges seda õigesti; tulemus jääb märgituks ütlustel põhinevana.",
+      "unsourcedOnly": "Register kinnitab seda, kuid ainult faktide kaudu, millel pole veel allikat. Teie kinnitus näitab, et tööriist luges neid õigesti; faktid jäävad allikata märgituks."
     },
     "documents": {
       "claimSummary": "Vastuolus: {contradicted} · Osaliselt vastuolus: {tension} · Registri vastuolu: {conflicts}",
       "empty": "Laadige dokument selle kontrollimiseks toimikusse üles.",
+      "kindsLoadFailed": "Ei õnnestunud laadida, kas need dokumendid on ütlused.",
       "notVerified": "Veel kontrollimata",
       "otherList": "Kontrollitud teise loendi alusel",
       "sizeConfirmTitle": "Kas kontrollida seda dokumenti?",
       "statusLoadFailed": "Nende dokumentide kontrolli olekut ei õnnestunud laadida.",
+      "testimony": "Ütlus",
+      "testimonyAbout": "Ütlustest",
+      "testimonyLine": "Märkige tunnistajate ütlused, vestlusmärkmed ja ärakirjad ütlusteks. Neist võetud faktid loetakse inimese kirjelduseks, mitte dokumenteeritud andmeteks.",
       "verifyAgain": "Kontrolli uuesti"
+    },
+    "extraction": {
+      "busy": "Lõpetage esmalt käimasolev eraldamine ja selle kontroll.",
+      "confirmStart": "{units, plural, one {Käivita, # ühik} other {Käivita, # ühikut}}",
+      "dialogDescription": "Te nõustute iga faktiga või keeldute sellest enne, kui see registrisse lisatakse.",
+      "dialogTitle": "Eralda faktid dokumentidest",
+      "documentsChosen": "{count, plural, one {Valitud #, kuni {max}} other {Valitud #, kuni {max}}}",
+      "documentsLabel": "Loetavad dokumendid",
+      "errors": {
+        "accessRevoked": "Faktide eraldamine peatati, sest juurdepääs pole saadaval.",
+        "aiUnavailable": "Dokumentide lugemiseks pole ühtegi AI-mudelit saadaval. Kontrollige organisatsiooni AI seadeid.",
+        "documentMissing": "Valitud dokumenti või loendit enam pole. Laadige leht uuesti ja valige uuesti.",
+        "enqueueFailed": "Faktide eraldamist ei õnnestunud käivitada. Proovige uuesti.",
+        "extractionFailed": "Nendest dokumentidest ei õnnestunud fakte eraldada.",
+        "internal": "Faktide eraldamine ebaõnnestus ootamatult.",
+        "noText": "Valitud dokumentidest ei õnnestunud teksti lugeda.",
+        "sourceUnavailable": "Dokumenti muudeti või see eemaldati pärast eraldamise algust. Valige dokumendid uuesti.",
+        "unsupportedFormat": "Fakte saab lugeda ainult DOCX-failidest, PDF-idest ja PDF-versiooniga failidest."
+      },
+      "extractFromDocuments": "Eralda dokumentidest",
+      "failedTitle": "Faktide eraldamine ebaõnnestus",
+      "instructionLabel": "Mida otsida (valikuline)",
+      "instructionPlaceholder": "Näiteks: poolte vahelised maksed ja nende ajad",
+      "nothingFound": "Valitud dokumentidest ei leitud ühtegi fakti.",
+      "proposedTitle": "Pakutud faktid",
+      "queued": "Ootab käivitamist.",
+      "reviewed": "{proposed, plural, one {# pakutud faktist} other {# pakutud faktist}} on vastu võetud {accepted}.",
+      "runSize": "{available, plural, one {See käivitus kasutab umbes {estimated} teie # saadaolevast ühikust.} other {See käivitus kasutab umbes {estimated} teie # saadaolevast ühikust.}}",
+      "running": "Dokumente loetakse. Pakutud faktid ilmuvad siia kontrollimiseks.",
+      "startFailed": "Faktide eraldamist ei õnnestunud käivitada",
+      "submit": "{count, plural, =0 {Eralda faktid} one {Eralda faktid # dokumendist} other {Eralda faktid # dokumendist}}"
+    },
+    "factTier": {
+      "testimony": {
+        "hint": "Selle fakti kõik tagasi lükkamata allikad on ütlused: tunnistaja ütlus, vestlusmärge või ärakiri.",
+        "label": "Ütlus"
+      },
+      "unsourced": {
+        "hint": "Selle faktiga pole seotud ühtegi tagasi lükkamata allikdokumenti; meedium ja kuupäev kirjeldavad tõendit, kuid ei ole allikas.",
+        "label": "Allikata"
+      }
     },
     "guidance": {
       "escalate": "Edasta edasi",
@@ -330,6 +390,29 @@
     "matches": {
       "count": "{count, plural, one {# vaste} other {# vastet}}",
       "position": "{current}/{total}"
+    },
+    "qualifiers": {
+      "heading": "Reservatsioonid",
+      "recordSilent": {
+        "hint": "Registrilt ei eeldata selle küsimuse kohta teavet, seega puuduv katvus ei ole lünk.",
+        "label": "Register vaikib"
+      },
+      "restsOnHeld": {
+        "hint": "Fakt, millele see otsus tugineb, on nüüd hindamisest välja jäetud.",
+        "label": "Tugineb välja jäetud faktile"
+      },
+      "scopeMismatch": {
+        "hint": "Viidatud fakt käsitleb väitest erinevat ajavahemikku, rühma, kohta või mõõdikut.",
+        "label": "Erinev ulatus"
+      },
+      "testimonyOnly": {
+        "hint": "Ükski dokumendi kirje ei toeta fakte, millel see tulemus põhineb, ja vähemalt üks neist on ütlus.",
+        "label": "Ainult ütlused"
+      },
+      "unsourcedOnly": {
+        "hint": "Ühelgi faktil, millele see otsus tugineb, pole veel allikat.",
+        "label": "Ainult allikata"
+      }
     },
     "review": {
       "disputed": "Vaidlustatud · {decidedAt}",
@@ -376,7 +459,8 @@
       },
       "nocover": {
         "chip": "Katvus puudub",
-        "label": "Ükski ankurfakt ei käsitle seda väidet"
+        "label": "Ükski ankurfakt ei käsitle seda väidet",
+        "silentChip": "Katvus puudub · register vaikib"
       },
       "notverifiable": {
         "chip": "Kontrollimatu",
@@ -1692,6 +1776,28 @@
     "loadEarlierMessages": "Laadi varasemad sõnumid",
     "loadEarlierMessagesError": "Varasemate sõnumite laadimine ebaõnnestus",
     "loadingEarlierMessages": "Varasemate sõnumite laadimine…",
+    "localFilesUndo": {
+      "action": "Võta failimuudatused tagasi",
+      "computer": {
+        "failed": "Tagasivõtmine ei jõudnud teie arvutis lõpule. Mõni fail võib olla juba muutunud, seega kontrollige vestluse kausta.",
+        "folderBusy": "Seda kausta kasutab teie arvutis praegu üks käivitus. Proovige uuesti, kui see on lõppenud.",
+        "noCheckpoint": "Teie arvutis pole selle sammu-eelsetest failidest salvestatud koopiat, seega midagi tagasi ei võetud.",
+        "notNewest": "Teie arvutis on selles kaustas uuemad muudatused, seega midagi tagasi ei võetud."
+      },
+      "confirm": "Võta muudatused tagasi",
+      "confirmDescription": "Failid, mida see samm teie arvutis oma kaustas muutis, taastatakse sammu-eelsesse olekusse. Tagasi võetakse ainult selle sammu muudatused; varasemate sammude muudatused jäävad alles.",
+      "confirmTitle": "Kas võtta selle sammu failimuudatused tagasi?",
+      "expired": "Teie arvuti ei vastanud õigel ajal. Proovige uuesti.",
+      "pending": "Teie arvutis võetakse failimuudatusi tagasi",
+      "refused": {
+        "desktopOffline": "Teie arvuti on võrguühenduseta. Avage stella töölauarakendus ja proovige uuesti.",
+        "desktopUpdateRequired": "Teie arvutis olev stella töölauarakendus on muudatuste tagasivõtmiseks liiga vana. Uuendage seda ja proovige uuesti.",
+        "noCheckpoint": "Selle sammu jaoks pole failidest salvestatud koopiat, mille juurde naasta.",
+        "notNewest": "Tagasi saab võtta ainult kõige uuema sammu failimuudatused.",
+        "threadBusy": "See vestlus alles töötab. Proovige uuesti, kui see on lõppenud."
+      },
+      "restored": "Failimuudatused on tagasi võetud"
+    },
     "localRun": {
       "cloud": "stella pilv",
       "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
@@ -2424,6 +2530,8 @@
     "loading": "Laadimine",
     "logTime": "Salvesta aeg",
     "low": "Madal",
+    "markAsRead": "Märgi loetuks",
+    "markAsUnread": "Märgi lugemata",
     "matter": "Toimik",
     "matters": "Toimikud",
     "medium": "Keskmine",
@@ -2540,6 +2648,7 @@
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
     "unknownUser": "Tundmatu kasutaja",
     "unpin": "Eemalda kinnitamine",
+    "unread": "Lugemata",
     "unsavedChanges": "Salvestamata muudatused",
     "unsavedChangesClose": "Salvestamata muudatused. Loobumiseks sulge uuesti",
     "unsavedChangesEscape": "Salvestamata muudatused. Loobumiseks vajuta uuesti Esc",
@@ -4705,6 +4814,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Nõustumine: {done}/{total}…"
+    },
     "sources": {
       "add": "Lisa allikas",
       "documentRequired": "Vali dokument.",
@@ -4965,6 +5077,12 @@
       "selectModelForEachRole": "Lisa teenusepakkuja ja vali iga kategooria jaoks mudel.",
       "selectedProvider": "{provider}",
       "usingDefaults": "Kasutusel on vaikeseaded"
+    },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} märki",
+      "description": "Need juhised kehtivad kõigile teie organisatsiooni AI-vestlustele ja on isiklikest eelistustest tähtsamad. Muudatused jõustuvad alates järgmisest sõnumist. Kasutage neid nõuetele vastavuse, andmetöötluse ja vorminduse reeglite määramiseks.",
+      "title": "Organisatsiooni juhised",
+      "tooLong": "Juhised võivad sisaldada kuni {maxLength} märki."
     },
     "creationEvaluationLimitReached": "Olete kasutanud ära kõik {limit} organisatsioonide prooviperioodi. Organisatsiooni kustutamine ei taasta prooviperioodi. Kasutage olemasolevat organisatsiooni või võtke tasulise ligipääsu saamiseks ühendust klienditoega.",
     "creationInvalidName": "Sisesta sobiv organisatsiooni nimi (kuni {maxLength} märki).",

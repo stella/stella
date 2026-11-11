@@ -145,7 +145,8 @@ export const VERIFICATION_RUN_ACTIVE_STATUSES = [
   "running",
 ] as const satisfies readonly VerificationRunStatus[];
 
-export const VERIFICATION_PIPELINE_VERSION = 2;
+/** 3: grades carry qualifiers (record silent, scope mismatch). */
+export const VERIFICATION_PIPELINE_VERSION = 3;
 
 export type VerificationEvidenceSource = {
   sourceEntityId: SafeId<"entity">;
@@ -219,6 +220,11 @@ export type ClaimReviewEventPayload =
   | {
       kind: "record-conflict";
       resolution: RecordConflictResolution | null;
+      /** The record the system suggested should govern when the reviewer
+       *  acted, so history shows suggestion beside choice; null when it
+       *  suggested none. Absent on events recorded before suggestions
+       *  existed, when nothing was suggested either. */
+      suggestedFactEntityId?: SafeId<"entity"> | null;
     };
 
 export const VERIFICATION_LIMITS = {
