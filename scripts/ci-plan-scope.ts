@@ -333,6 +333,7 @@ const desktopRustRequired = (files: readonly string[]) =>
     "apps/desktop/src/i18n/langs/*",
     "apps/desktop/src/activity/preview-apps.json",
     "apps/desktop/src/clipboard/clipboard-types.ts",
+    "packages/api-contract/src/desktop-account-link.fixtures.json",
     "packages/api-contract/src/desktop-account-policy.json",
     "packages/api-contract/src/desktop-feature-access.json",
     "packages/api-contract/src/desktop-handoff.ts",
