@@ -16,6 +16,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { SHAREPOINT_REFUSAL_CODE } from "@stll/api-contract/sharepoint";
 import { fetchWithTimeout } from "@stll/fetch";
 import { readBodyJsonWithIdleDeadline } from "@stll/fetch/body-reader";
@@ -272,9 +273,11 @@ export type SharepointGraphError = HandlerError<
  * the result is clamped so a broken value cannot park a client for hours.
  */
 export const parseRetryAfterMs = (header: string | null): number => {
-  const trimmed = header?.trim() ?? "";
-  const seconds = /^\d{1,6}$/u.test(trimmed) ? Number(trimmed) : 0;
-  return seconds === 0
+  const seconds = parseIntegerToken(header?.trim(), {
+    sign: "unsigned",
+    min: 1,
+  }).unwrapOr(null);
+  return seconds === null
     ? RETRY_AFTER_DEFAULT_MS
     : Math.min(seconds * 1000, RETRY_AFTER_MAX_MS);
 };
