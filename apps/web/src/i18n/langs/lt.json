@@ -421,13 +421,14 @@
         "statements": "Pareiškimai"
       },
       "empty": "Šiame sąraše dar nėra faktų ar patikrintų dokumentų.",
+      "factCount": "{count, plural, one {# faktas} few {# faktai} many {# fakto} other {# faktų}}",
       "factOverflow": "Rodoma pirmųjų šio sąrašo faktų: {count}.",
       "filters": {
+        "allSources": "Visi šaltiniai",
         "allVerdicts": "Visos išvados",
-        "anyFooting": "Bet koks pagrindas",
         "conflicts": "Prieštaravimai",
-        "footing": "Pagrindas",
         "heldFacts": "Sulaikyti faktai",
+        "source": "Filtruoti pagal šaltinį",
         "verdict": "Filtruoti pagal išvadą"
       },
       "held": "Sulaikyta",

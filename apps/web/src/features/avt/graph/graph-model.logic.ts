@@ -102,9 +102,9 @@ export const mergeGraphPages = (
 /** Which claims the graph shows: all, the conflicts, or one verdict. */
 export type VerdictFilter = "all" | "conflicts" | ClaimState;
 
-/** Which facts the graph shows by footing. A document's record is the
- *  expected footing, so it is never a filter of its own. */
-export type TierFilter = "any" | Exclude<GraphFactTier, "document">;
+/** Which facts the graph shows by where they come from: a document's
+ *  record, testimony, or no source. */
+export type TierFilter = "any" | GraphFactTier;
 
 export type GraphFilters = {
   verdict: VerdictFilter;
@@ -284,7 +284,7 @@ export const neighbourhoodOf = (
 export const GRAPH_GEOMETRY = {
   claimHeight: 56,
   factHeight: 56,
-  sourceHeight: 36,
+  sourceHeight: 44,
   gap: 8,
   /** Between the claims of one document and the next. */
   groupGap: 24,

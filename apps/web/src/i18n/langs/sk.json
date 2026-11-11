@@ -421,13 +421,14 @@
         "statements": "Vyhlásenia"
       },
       "empty": "Tento zoznam zatiaľ nemá žiadne fakty ani overené dokumenty.",
+      "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktu} other {# faktov}}",
       "factOverflow": "Zobrazuje sa prvých {count} faktov tohto zoznamu.",
       "filters": {
+        "allSources": "Všetky zdroje",
         "allVerdicts": "Všetky závery",
-        "anyFooting": "Akýkoľvek podklad",
         "conflicts": "Rozpory",
-        "footing": "Podklad",
         "heldFacts": "Pozastavené fakty",
+        "source": "Filtrovať podľa zdroja",
         "verdict": "Filtrovať podľa záveru"
       },
       "held": "Pozastavené",

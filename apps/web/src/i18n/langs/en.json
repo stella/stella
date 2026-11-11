@@ -421,13 +421,14 @@
         "statements": "Statements"
       },
       "empty": "This list has no facts or verified documents yet.",
+      "factCount": "{count, plural, one {# fact} other {# facts}}",
       "factOverflow": "Showing the first {count} facts of this list.",
       "filters": {
+        "allSources": "All sources",
         "allVerdicts": "All verdicts",
-        "anyFooting": "Any footing",
         "conflicts": "Conflicts",
-        "footing": "Footing",
         "heldFacts": "Held facts",
+        "source": "Filter by source",
         "verdict": "Filter by verdict"
       },
       "held": "Held",

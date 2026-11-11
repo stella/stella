@@ -39,7 +39,7 @@ const filtersArbitrary: fc.Arbitrary<GraphFilters> = fc.record({
     "recordconflict",
     "notverifiable",
   ),
-  tier: fc.constantFrom("any", "testimony", "unsourced"),
+  tier: fc.constantFrom("any", "document", "testimony", "unsourced"),
   showHeld: fc.boolean(),
 });
 

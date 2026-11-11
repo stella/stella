@@ -421,13 +421,14 @@
         "statements": "Déclarations"
       },
       "empty": "Cette liste ne contient encore aucun fait ni document vérifié.",
+      "factCount": "{count, plural, one {# fait} many {# faits} other {# faits}}",
       "factOverflow": "Affichage des {count} premiers faits de cette liste.",
       "filters": {
+        "allSources": "Toutes les sources",
         "allVerdicts": "Tous les verdicts",
-        "anyFooting": "Tout fondement",
         "conflicts": "Conflits",
-        "footing": "Fondement",
         "heldFacts": "Faits en attente de relecture",
+        "source": "Filtrer par source",
         "verdict": "Filtrer par verdict"
       },
       "held": "En attente de relecture",

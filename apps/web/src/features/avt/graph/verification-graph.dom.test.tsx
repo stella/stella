@@ -212,14 +212,56 @@ test("a record conflict draws both records from its claim", async () => {
   );
 });
 
-test("clicking a claim opens the review's claim panel for it", async () => {
+test("sources stay quiet until focused, and one document heads the claims", async () => {
+  const page = graphPage();
+  await mount("graph", {
+    ...page,
+    statements: page.statements.slice(0, 1),
+    claims: page.claims.filter((claim) => claim.statementId === statementId(1)),
+    citations: page.citations.filter(
+      (edge) => edge.claimId !== graphClaimId(4),
+    ),
+  });
+  // No source links at rest; each fact names its source on its card.
+  expect(canvas().querySelectorAll("path:not([data-edge])")).toHaveLength(0);
+  expect(node(`fact:${graphFactId(2)}`).textContent).toContain(
+    "Ledger export.pdf",
+  );
+  // A single document is the claims column's heading, not a column.
+  expect(canvas().querySelector('[data-node^="statement:"]')).toBeNull();
+  expect(canvas().textContent).toContain("Witness statement.docx");
+  // Focusing a source draws its facts' links and names how many there are.
+  const source = node(`source:${sourceId(2)}`);
+  expect(source.textContent).toContain("1 fact");
+  fireEvent.click(source);
+  expect(canvas().querySelectorAll("path:not([data-edge])")).toHaveLength(1);
+  expect(dimmed(node(`fact:${graphFactId(2)}`))).toBe(false);
+  expect(dimmed(node(`fact:${graphFactId(1)}`))).toBe(true);
+});
+
+test("clicking a claim docks the review's claim panel beside the focused graph", async () => {
   await mount("graph");
   fireEvent.click(node(`claim:${graphClaimId(2)}`));
-  const dialog = await screen.findByRole("dialog");
-  expect(within(dialog).getByText(messages.avt.graph.claimTitle)).toBeTruthy();
+  const pane = await screen.findByRole("complementary", {
+    name: messages.avt.graph.claimTitle,
+  });
+  expect(within(pane).getAllByText(GRAPH_TEXT.payment).length).toBeGreaterThan(
+    0,
+  );
+  // No backdrop: the graph stays, focused on the claim and its two records.
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(dimmed(node(`claim:${graphClaimId(2)}`))).toBe(false);
+  expect(dimmed(node(`fact:${graphFactId(3)}`))).toBe(false);
+  expect(dimmed(node(`claim:${graphClaimId(1)}`))).toBe(true);
+  fireEvent.click(
+    within(pane).getAllByRole("button", { name: messages.common.close })[0] ??
+      panic("The docked panel has no close button"),
+  );
   expect(
-    within(dialog).getAllByText(GRAPH_TEXT.payment).length,
-  ).toBeGreaterThan(0);
+    screen.queryByRole("complementary", {
+      name: messages.avt.graph.claimTitle,
+    }),
+  ).toBeNull();
 });
 
 // The filters narrow one model, which the list form draws without the

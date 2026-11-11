@@ -421,13 +421,14 @@
         "statements": "Nyilatkozatok"
       },
       "empty": "Ez a lista még nem tartalmaz tényeket vagy ellenőrzött iratokat.",
+      "factCount": "{count, plural, one {# tény} other {# tény}}",
       "factOverflow": "A lista első {count} ténye látható.",
       "filters": {
+        "allSources": "Minden forrás",
         "allVerdicts": "Minden következtetés",
-        "anyFooting": "Bármely alap",
         "conflicts": "Ellentmondások",
-        "footing": "Alap",
         "heldFacts": "Visszatartott tények",
+        "source": "Szűrés forrás szerint",
         "verdict": "Szűrés következtetés szerint"
       },
       "held": "Visszatartva",

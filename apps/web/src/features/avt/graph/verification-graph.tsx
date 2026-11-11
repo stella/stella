@@ -28,15 +28,14 @@ import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 
 import {
-  sourceLocatorPage,
-  useOpenSourceDocument,
-} from "@/components/workspaces/list-source";
-import {
   GraphCanvas,
   TIER_LABEL_KEYS,
 } from "@/features/avt/graph/graph-canvas";
 import type { OpenedClaim } from "@/features/avt/graph/graph-claim-sheet";
-import { GraphClaimSheet } from "@/features/avt/graph/graph-claim-sheet";
+import {
+  GraphClaimPane,
+  GraphClaimSheet,
+} from "@/features/avt/graph/graph-claim-sheet";
 import { GraphList } from "@/features/avt/graph/graph-list";
 import type {
   GraphFilters,
@@ -142,24 +141,17 @@ export const VerificationGraph = ({
     );
   }
   return (
-    <>
-      <GraphBody
-        hasMore={query.hasNextPage}
-        loadingMore={query.isFetchingNextPage}
-        model={model}
-        onLoadMore={() =>
-          detached(query.fetchNextPage(), "avt-graph.load-more")
-        }
-        onOpenClaim={claimPanel.open}
-        onReview={onReview}
-        workspaceId={workspaceId}
-      />
-      <GraphClaimSheet
-        onClose={claimPanel.close}
-        opened={claimPanel.opened}
-        workspaceId={workspaceId}
-      />
-    </>
+    <GraphBody
+      hasMore={query.hasNextPage}
+      loadingMore={query.isFetchingNextPage}
+      model={model}
+      onLoadMore={() => detached(query.fetchNextPage(), "avt-graph.load-more")}
+      onCloseClaim={claimPanel.close}
+      onOpenClaim={claimPanel.open}
+      onReview={onReview}
+      opened={claimPanel.opened}
+      workspaceId={workspaceId}
+    />
   );
 };
 
@@ -171,6 +163,10 @@ type GraphBodyProps = {
   onLoadMore: () => void;
   onOpenClaim: (claim: { statementId: string; id: string }) => void;
   onReview: () => void;
+  /** The claim whose panel is open, docked beside the canvas on a wide
+   *  screen and in a sheet on a narrow one. */
+  opened: OpenedClaim | null;
+  onCloseClaim: () => void;
 };
 
 const GraphBody = ({
@@ -181,11 +177,12 @@ const GraphBody = ({
   onLoadMore,
   onOpenClaim,
   onReview,
+  opened,
+  onCloseClaim,
 }: GraphBodyProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const isMobile = useIsMobile();
-  const openSourceDocument = useOpenSourceDocument(workspaceId);
   const [filters, setFilters] = React.useState<GraphFilters>(
     DEFAULT_GRAPH_FILTERS,
   );
@@ -210,24 +207,9 @@ const GraphBody = ({
         }
         return;
       }
-      case "source": {
-        // The place the focused fact cites, else the first fact's.
-        const edges = shown.provenance.filter(
-          (edge) => edge.sourceId === ref.id,
-        );
-        const edge =
-          edges.find(
-            (item) =>
-              activeFocus?.kind === "fact" && item.factId === activeFocus.id,
-          ) ?? edges.at(0);
-        openSourceDocument(
-          ref.id,
-          edge === undefined ? undefined : sourceLocatorPage(edge.locator),
-        );
-        return;
-      }
       case "statement":
-      case "fact": {
+      case "fact":
+      case "source": {
         setFocus(
           activeFocus !== null &&
             activeFocus.kind === ref.kind &&
@@ -276,35 +258,51 @@ const GraphBody = ({
         </div>
       )}
       {!nothingShown && isMobile && (
-        <GraphList
-          model={shown}
-          onOpenClaim={onOpenClaim}
-          workspaceId={workspaceId}
-        />
+        <>
+          <GraphList
+            model={shown}
+            onOpenClaim={onOpenClaim}
+            workspaceId={workspaceId}
+          />
+          <GraphClaimSheet
+            onClose={onCloseClaim}
+            opened={opened}
+            workspaceId={workspaceId}
+          />
+        </>
       )}
       {!nothingShown && !isMobile && (
         <>
-          <div className="bg-background overflow-hidden rounded-xl border">
-            <ScrollArea
-              className="max-h-[calc(100dvh-13rem)] min-h-64"
-              viewportRef={viewportRef}
-            >
-              <div className="p-3">
-                <GraphCanvas
-                  focus={activeFocus}
-                  layout={layout}
-                  model={shown}
-                  neighbourhood={neighbourhood}
-                  onNode={onNode}
-                  viewport={
-                    viewport.height === 0
-                      ? null
-                      : { top: viewport.top, height: viewport.height }
-                  }
-                  width={Math.max(0, viewport.width - FRAME_PADDING)}
-                />
-              </div>
-            </ScrollArea>
+          <div className="flex items-start gap-3">
+            <div className="bg-background min-w-0 flex-1 overflow-hidden rounded-xl border">
+              <ScrollArea
+                className="max-h-[calc(100dvh-13rem)] min-h-64"
+                viewportRef={viewportRef}
+              >
+                <div className="p-3">
+                  <GraphCanvas
+                    focus={activeFocus}
+                    layout={layout}
+                    model={shown}
+                    neighbourhood={neighbourhood}
+                    onNode={onNode}
+                    viewport={
+                      viewport.height === 0
+                        ? null
+                        : { top: viewport.top, height: viewport.height }
+                    }
+                    width={Math.max(0, viewport.width - FRAME_PADDING)}
+                  />
+                </div>
+              </ScrollArea>
+            </div>
+            {opened !== null && (
+              <GraphClaimPane
+                onClose={onCloseClaim}
+                opened={opened}
+                workspaceId={workspaceId}
+              />
+            )}
           </div>
           {/* The same graph for the keyboard and screen readers; shown when
               focus moves into it. */}
@@ -356,8 +354,14 @@ const ANY = "any";
 const isVerdictFilter = (value: string): value is VerdictFilter =>
   value === ALL || value === "conflicts" || isClaimState(value);
 
+/** The source filter names a footing as the review does. */
+const SOURCE_FILTER_LABEL_KEYS = {
+  document: "common.documents",
+  ...TIER_LABEL_KEYS,
+} as const;
+
 const isTierFilter = (value: string): value is TierFilter =>
-  value === ANY || Object.hasOwn(TIER_LABEL_KEYS, value);
+  value === ANY || Object.hasOwn(SOURCE_FILTER_LABEL_KEYS, value);
 
 type GraphFilterBarProps = {
   filters: GraphFilters;
@@ -420,7 +424,7 @@ const GraphFilterBar = ({ filters, onChange }: GraphFilterBarProps) => {
         value={filters.tier}
       >
         <SelectTrigger
-          aria-label={t("avt.graph.filters.footing")}
+          aria-label={t("avt.graph.filters.source")}
           className="w-auto min-w-32"
           size="sm"
         >
@@ -428,7 +432,10 @@ const GraphFilterBar = ({ filters, onChange }: GraphFilterBarProps) => {
         </SelectTrigger>
         <SelectPopup>
           <SelectItem value={ANY}>
-            {t("avt.graph.filters.anyFooting")}
+            {t("avt.graph.filters.allSources")}
+          </SelectItem>
+          <SelectItem value="document">
+            {t(SOURCE_FILTER_LABEL_KEYS.document)}
           </SelectItem>
           <SelectItem value="testimony">
             {t("avt.factTier.testimony.label")}

@@ -20,6 +20,7 @@ import { Button } from "@stll/ui/button";
 import { CheckIcon, FileTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { SourceLocatorLabel } from "@/components/workspaces/list-source";
 import { useFactDateText } from "@/features/avt/fact-date";
 import type {
   GraphCitation,
@@ -48,39 +49,57 @@ export const TIER_LABEL_KEYS = {
 
 /** Space between columns, where the links run. */
 const GUTTER = 64;
-/** Below this the columns stop shrinking and the canvas scrolls sideways
- *  inside its frame; narrower screens get the list form instead. */
-const CANVAS_MIN_WIDTH = 880;
 /** Rows drawn above and below the visible part of a long column. */
 const OVERSCAN = 480;
 /** The column labels' row, above the first node. */
 const HEADER_HEIGHT = 32;
 
-const COLUMN_SHARES = {
-  statement: 0.15,
-  claim: 0.3,
-  fact: 0.32,
-  source: 0.23,
+/**
+ * The columns' shares of the width, and the width below which they stop
+ * shrinking and the canvas scrolls sideways inside its frame (narrower
+ * screens get the list form instead). One document needs no column of its
+ * own: it heads the claims.
+ */
+const COLUMN_PLANS = {
+  documents: {
+    minWidth: 880,
+    shares: { statement: 0.15, claim: 0.3, fact: 0.32, source: 0.23 },
+  },
+  single: {
+    minWidth: 680,
+    shares: { statement: 0, claim: 0.36, fact: 0.38, source: 0.26 },
+  },
 } as const;
 
 type Column = { x: number; width: number };
-type Columns = Record<keyof typeof COLUMN_SHARES, Column> & { total: number };
+type Columns = Record<
+  keyof (typeof COLUMN_PLANS)["documents"]["shares"],
+  Column
+> & { total: number };
 
 /** Where each column starts and how wide it is, from the reading start. */
-const columnsFor = (available: number): Columns => {
-  const total = Math.max(available, CANVAS_MIN_WIDTH);
-  const content = total - 3 * GUTTER;
+const columnsFor = (
+  available: number,
+  plan: keyof typeof COLUMN_PLANS,
+): Columns => {
+  const { minWidth, shares } = COLUMN_PLANS[plan];
+  const drawn = Object.values(shares).filter((share) => share > 0).length;
+  const total = Math.max(available, minWidth);
+  const content = total - (drawn - 1) * GUTTER;
   let x = 0;
   const place = (share: number): Column => {
+    if (share === 0) {
+      return { x, width: 0 };
+    }
     const column = { x, width: Math.floor(content * share) };
     x += column.width + GUTTER;
     return column;
   };
   return {
-    statement: place(COLUMN_SHARES.statement),
-    claim: place(COLUMN_SHARES.claim),
-    fact: place(COLUMN_SHARES.fact),
-    source: place(COLUMN_SHARES.source),
+    statement: place(shares.statement),
+    claim: place(shares.claim),
+    fact: place(shares.fact),
+    source: place(shares.source),
     total,
   };
 };
@@ -146,9 +165,25 @@ export const GraphCanvas = ({
   onNode,
 }: GraphCanvasProps) => {
   const t = useTranslations();
-  const dateText = useFactDateText();
-  const columns = columnsFor(width);
+  const single = layout.columns.statements.length <= 1;
+  const columns = columnsFor(width, single ? "single" : "documents");
   const height = layout.height + HEADER_HEIGHT;
+  // Each fact names where it comes from on its own card; the links to the
+  // sources are drawn only around a focus.
+  const sourceNames = new Map(
+    model.sources.map((source) => [source.id, source.name]),
+  );
+  const firstSource = new Map<string, GraphModel["provenance"][number]>();
+  const factsPerSource = new Map<string, number>();
+  for (const edge of model.provenance) {
+    if (!firstSource.has(edge.factId)) {
+      firstSource.set(edge.factId, edge);
+    }
+    factsPerSource.set(
+      edge.sourceId,
+      (factsPerSource.get(edge.sourceId) ?? 0) + 1,
+    );
+  }
 
   const visible = (box: NodeBox | undefined) =>
     box !== undefined &&
@@ -201,10 +236,10 @@ export const GraphCanvas = ({
     if (from === undefined || to === undefined) {
       return [];
     }
-    if (!visible(from) && !visible(to)) {
+    const key = provenanceEdgeKey(edge);
+    if (neighbourhood === null || !neighbourhood.edges.has(key)) {
       return [];
     }
-    const key = provenanceEdgeKey(edge);
     return [
       <path
         className="stroke-muted-foreground"
@@ -216,8 +251,8 @@ export const GraphCanvas = ({
         )}
         fill="none"
         key={`${key}|${JSON.stringify(edge.locator)}`}
-        opacity={edgeLit(key) ? 0.45 : 0.08}
-        strokeWidth={1}
+        opacity={0.6}
+        strokeWidth={1.25}
       />,
     ];
   });
@@ -229,7 +264,7 @@ export const GraphCanvas = ({
       data-testid="avt-graph-canvas"
       style={{ width: columns.total, height }}
     >
-      <ColumnLabels columns={columns} model={model} />
+      <ColumnLabels columns={columns} model={model} single={single} />
       <svg
         className="pointer-events-none absolute inset-0 rtl:-scale-x-100"
         height={height}
@@ -239,62 +274,63 @@ export const GraphCanvas = ({
         {citationPaths}
       </svg>
 
-      {layout.columns.statements.map((statement) => {
-        const ref = { kind: "statement", id: statement.id } as const;
-        const key = nodeKey(ref);
-        const box = boxOf(ref);
-        if (box === undefined || !visible(box)) {
-          return null;
-        }
-        return (
-          <div
-            className="absolute flex gap-2"
-            key={key}
-            style={{
-              insetInlineStart: columns.statement.x,
-              top: HEADER_HEIGHT + box.y,
-              width: columns.statement.width,
-              height: box.height,
-            }}
-          >
-            <Button
-              className="min-w-0 flex-1 self-start"
-              data-dimmed={lit(key) ? undefined : "true"}
-              data-node={key}
-              onClick={() => onNode(ref)}
-              tabIndex={-1}
-              variant="plain"
+      {!single &&
+        layout.columns.statements.map((statement) => {
+          const ref = { kind: "statement", id: statement.id } as const;
+          const key = nodeKey(ref);
+          const box = boxOf(ref);
+          if (box === undefined || !visible(box)) {
+            return null;
+          }
+          return (
+            <div
+              className="absolute flex gap-2"
+              key={key}
+              style={{
+                insetInlineStart: columns.statement.x,
+                top: HEADER_HEIGHT + box.y,
+                width: columns.statement.width,
+                height: box.height,
+              }}
             >
+              <Button
+                className="min-w-0 flex-1 self-start"
+                data-dimmed={lit(key) ? undefined : "true"}
+                data-node={key}
+                onClick={() => onNode(ref)}
+                tabIndex={-1}
+                variant="plain"
+              >
+                <span
+                  className={cn(
+                    "flex flex-col items-start gap-0.5 rounded-md px-1.5 py-1 text-start text-xs transition-opacity duration-150 select-none",
+                    "hover:bg-muted/60",
+                    isFocus(ref) && "bg-muted",
+                    !lit(key) && "opacity-25",
+                  )}
+                >
+                  <BidiText
+                    as="span"
+                    className="line-clamp-2 font-medium [overflow-wrap:anywhere]"
+                  >
+                    {statement.name}
+                  </BidiText>
+                  <span className="text-muted-foreground tabular-nums">
+                    {t("avt.graph.claimCount", { count: statement.claimCount })}
+                  </span>
+                </span>
+              </Button>
+              {/* The document spans its claims: a bracket, not a link. */}
               <span
+                aria-hidden="true"
                 className={cn(
-                  "flex flex-col items-start gap-0.5 rounded-md px-1.5 py-1 text-start text-xs transition-opacity duration-150 select-none",
-                  "hover:bg-muted/60",
-                  isFocus(ref) && "bg-muted",
+                  "border-border w-2 shrink-0 rounded-e-sm border-y border-e transition-opacity duration-150",
                   !lit(key) && "opacity-25",
                 )}
-              >
-                <BidiText
-                  as="span"
-                  className="line-clamp-2 font-medium [overflow-wrap:anywhere]"
-                >
-                  {statement.name}
-                </BidiText>
-                <span className="text-muted-foreground tabular-nums">
-                  {t("avt.graph.claimCount", { count: statement.claimCount })}
-                </span>
-              </span>
-            </Button>
-            {/* The document spans its claims: a bracket, not a link. */}
-            <span
-              aria-hidden="true"
-              className={cn(
-                "border-border w-2 shrink-0 rounded-e-sm border-y border-e transition-opacity duration-150",
-                !lit(key) && "opacity-25",
-              )}
-            />
-          </div>
-        );
-      })}
+              />
+            </div>
+          );
+        })}
 
       {layout.columns.claims.map((claim) => {
         const ref = { kind: "claim", id: claim.id } as const;
@@ -343,15 +379,7 @@ export const GraphCanvas = ({
         if (box === undefined || !visible(box)) {
           return null;
         }
-        const date =
-          fact.occurredOn === null || fact.occurredOnPrecision === null
-            ? null
-            : dateText(fact.occurredOn, fact.occurredOnPrecision);
-        const notes = [
-          fact.tier === "document" ? null : t(TIER_LABEL_KEYS[fact.tier]),
-          fact.held ? t("avt.graph.held") : null,
-          fact.listed ? null : t("avt.graph.offList"),
-        ].filter((note) => note !== null);
+        const source = firstSource.get(fact.id);
         return (
           <GraphNode
             box={box}
@@ -366,23 +394,17 @@ export const GraphCanvas = ({
               !fact.listed && "border-dashed",
             )}
           >
-            <BidiText
-              as="span"
-              className={cn(
-                "leading-snug [overflow-wrap:anywhere]",
-                notes.length === 0 && date === null
-                  ? "line-clamp-2"
-                  : "line-clamp-1",
-                fact.held && "text-muted-foreground",
-              )}
-            >
-              {fact.text}
-            </BidiText>
-            {(date !== null || notes.length > 0) && (
-              <span className="text-muted-foreground truncate">
-                {[date, ...notes].filter((part) => part !== null).join(" · ")}
-              </span>
-            )}
+            <FactCardText
+              fact={fact}
+              source={
+                source === undefined
+                  ? null
+                  : {
+                      name: sourceNames.get(source.sourceId) ?? null,
+                      locator: source.locator,
+                    }
+              }
+            />
           </GraphNode>
         );
       })}
@@ -403,19 +425,91 @@ export const GraphCanvas = ({
             key={key}
             nodeKey={key}
             onClick={() => onNode(ref)}
-            surfaceClassName="flex-row items-center gap-1.5"
+            surfaceClassName="flex-row items-center gap-2"
           >
             <FileTextIcon
               aria-hidden="true"
               className="text-muted-foreground size-3.5 shrink-0"
             />
-            <BidiText as="span" className="truncate">
-              {source.name}
-            </BidiText>
+            <span className="flex min-w-0 flex-col">
+              <BidiText as="span" className="truncate">
+                {source.name}
+              </BidiText>
+              <span className="text-muted-foreground tabular-nums">
+                {t("avt.graph.factCount", {
+                  count: factsPerSource.get(source.id) ?? 0,
+                })}
+              </span>
+            </span>
           </GraphNode>
         );
       })}
     </div>
+  );
+};
+
+type FactCardTextProps = {
+  fact: GraphModel["facts"][number];
+  source: {
+    name: string | null;
+    locator: GraphModel["provenance"][number]["locator"];
+  } | null;
+};
+
+/** A fact's words, then one muted line: when it happened, where it comes
+ *  from, and what qualifies it. */
+const FactCardText = ({ fact, source }: FactCardTextProps) => {
+  const t = useTranslations();
+  const dateText = useFactDateText();
+  const date =
+    fact.occurredOn === null || fact.occurredOnPrecision === null
+      ? null
+      : dateText(fact.occurredOn, fact.occurredOnPrecision);
+  const notes = [
+    fact.tier === "document" ? null : t(TIER_LABEL_KEYS[fact.tier]),
+    fact.held ? t("avt.graph.held") : null,
+    fact.listed ? null : t("avt.graph.offList"),
+  ].filter((note) => note !== null);
+  const details: { key: string; content: React.ReactNode }[] = [
+    ...(date === null ? [] : [{ key: "date", content: date }]),
+    ...(source === null
+      ? []
+      : [
+          {
+            key: "source",
+            content: (
+              <SourceLocatorLabel
+                documentName={source.name}
+                locator={source.locator}
+              />
+            ),
+          },
+        ]),
+    ...notes.map((note) => ({ key: note, content: note })),
+  ];
+  return (
+    <>
+      <BidiText
+        as="span"
+        className={cn(
+          "leading-snug [overflow-wrap:anywhere]",
+          details.length === 0 ? "line-clamp-2" : "line-clamp-1",
+          fact.held && "text-muted-foreground",
+        )}
+      >
+        {fact.text}
+      </BidiText>
+      {details.length > 0 && (
+        <span className="text-muted-foreground truncate">
+          {details.map(({ key, content }, index) => (
+            <React.Fragment key={key}>
+              {index > 0 && " · "}
+              {content}
+            </React.Fragment>
+          ))}
+        </span>
+      )}
+    </>
   );
 };
 
@@ -475,50 +569,65 @@ const GraphNode = ({
 const ColumnLabels = ({
   columns,
   model,
+  single,
 }: {
   columns: Columns;
   model: GraphModel;
+  /** One document heads the claims instead of a column of its own. */
+  single: boolean;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const statement = model.statements.at(0);
   const labels = [
-    {
-      key: "statement",
-      column: columns.statement,
-      label: t("avt.graph.columns.statements"),
-      count: model.statements.length,
-    },
-    {
-      key: "claim",
-      column: columns.claim,
-      label: t("avt.graph.columns.claims"),
-      count: model.claims.length,
-    },
+    ...(single
+      ? []
+      : [
+          {
+            key: "statement",
+            column: columns.statement,
+            label: t("avt.graph.columns.statements"),
+            tally: format.number(model.statements.length),
+          },
+        ]),
+    single && statement !== undefined
+      ? {
+          key: "claim",
+          column: columns.claim,
+          label: statement.name,
+          tally: t("avt.graph.claimCount", { count: statement.claimCount }),
+        }
+      : {
+          key: "claim",
+          column: columns.claim,
+          label: t("avt.graph.columns.claims"),
+          tally: format.number(model.claims.length),
+        },
     {
       key: "fact",
       column: columns.fact,
       label: t("avt.anchorFacts.title"),
-      count: model.facts.length,
+      tally: format.number(model.facts.length),
     },
     {
       key: "source",
       column: columns.source,
       label: t("avt.graph.columns.sources"),
-      count: model.sources.length,
+      tally: format.number(model.sources.length),
     },
-  ] as const;
+  ];
   return (
     <>
-      {labels.map(({ key, column, label, count }) => (
+      {labels.map(({ key, column, label, tally }) => (
         <div
-          className="text-muted-foreground absolute top-0 flex items-baseline gap-1.5 px-1.5 text-xs font-medium"
+          className="text-muted-foreground absolute top-0 flex min-w-0 items-baseline gap-1.5 px-1.5 text-xs font-medium"
           key={key}
           style={{ insetInlineStart: column.x, width: column.width }}
         >
-          <span>{label}</span>
-          <span className="tabular-nums opacity-70">
-            {format.number(count)}
-          </span>
+          <BidiText as="span" className="truncate">
+            {label}
+          </BidiText>
+          <span className="shrink-0 tabular-nums opacity-70">{tally}</span>
         </div>
       ))}
     </>

@@ -7,6 +7,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { XIcon } from "@stll/ui/icons";
 import { Sheet, SheetPopup, SheetTitle } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
 
@@ -69,6 +71,47 @@ export const GraphClaimSheet = ({
         </SheetPopup>
       )}
     </Sheet>
+  );
+};
+
+type GraphClaimPaneProps = {
+  workspaceId: string;
+  opened: OpenedClaim;
+  onClose: () => void;
+};
+
+/**
+ * The claim panel docked beside the canvas on a wide screen: no backdrop,
+ * so the focused neighbourhood stays in view and another claim can be
+ * opened straight from the graph.
+ */
+export const GraphClaimPane = ({
+  workspaceId,
+  opened,
+  onClose,
+}: GraphClaimPaneProps) => {
+  const t = useTranslations();
+  return (
+    <aside
+      aria-label={t("avt.graph.claimTitle")}
+      className="bg-background relative flex h-[calc(100dvh-13rem)] min-h-64 w-[min(28rem,40%)] shrink-0 flex-col overflow-hidden rounded-xl border"
+    >
+      <Button
+        aria-label={t("common.close")}
+        className="absolute end-2 top-2 z-10"
+        onClick={onClose}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <XIcon />
+      </Button>
+      <ClaimSheetBody
+        claimId={opened.claimId}
+        key={`${opened.runId}:${opened.claimId}`}
+        runId={opened.runId}
+        workspaceId={workspaceId}
+      />
+    </aside>
   );
 };
 

@@ -421,13 +421,14 @@
         "statements": "Prohlášení"
       },
       "empty": "Tento seznam zatím nemá žádná fakta ani ověřené dokumenty.",
+      "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktu} other {# faktů}}",
       "factOverflow": "Zobrazuje se prvních {count} faktů tohoto seznamu.",
       "filters": {
+        "allSources": "Všechny zdroje",
         "allVerdicts": "Všechny závěry",
-        "anyFooting": "Jakýkoli podklad",
         "conflicts": "Rozpory",
-        "footing": "Podklad",
         "heldFacts": "Pozastavená fakta",
+        "source": "Filtrovat podle zdroje",
         "verdict": "Filtrovat podle závěru"
       },
       "held": "Pozastaveno",

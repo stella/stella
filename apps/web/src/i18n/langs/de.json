@@ -421,13 +421,14 @@
         "statements": "Erklärungen"
       },
       "empty": "Diese Liste enthält noch keine Fakten oder geprüften Dokumente.",
+      "factCount": "{count, plural, one {# Fakt} other {# Fakten}}",
       "factOverflow": "Die ersten {count} Fakten dieser Liste werden angezeigt.",
       "filters": {
+        "allSources": "Alle Quellen",
         "allVerdicts": "Alle Ergebnisse",
-        "anyFooting": "Jede Grundlage",
         "conflicts": "Widersprüche",
-        "footing": "Grundlage",
         "heldFacts": "Zurückgestellte Fakten",
+        "source": "Nach Quelle filtern",
         "verdict": "Nach Ergebnis filtern"
       },
       "held": "Zurückgestellt",

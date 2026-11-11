@@ -421,13 +421,14 @@
         "statements": "Avaldused"
       },
       "empty": "Selles loendis pole veel fakte ega kontrollitud dokumente.",
+      "factCount": "{count, plural, one {# fakt} other {# fakti}}",
       "factOverflow": "Kuvatakse selle loendi esimesed {count} fakti.",
       "filters": {
+        "allSources": "Kõik allikad",
         "allVerdicts": "Kõik otsused",
-        "anyFooting": "Mis tahes alus",
         "conflicts": "Vastuolud",
-        "footing": "Alus",
         "heldFacts": "Kontrolli ootel faktid",
+        "source": "Filtreeri allika järgi",
         "verdict": "Filtreeri otsuse järgi"
       },
       "held": "Kontrolli ootel",

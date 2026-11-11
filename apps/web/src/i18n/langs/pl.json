@@ -421,13 +421,14 @@
         "statements": "Oświadczenia"
       },
       "empty": "Ta lista nie ma jeszcze żadnych faktów ani zweryfikowanych dokumentów.",
+      "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktów} other {# faktu}}",
       "factOverflow": "Wyświetlane jest pierwszych {count} faktów z tej listy.",
       "filters": {
+        "allSources": "Wszystkie źródła",
         "allVerdicts": "Wszystkie rozstrzygnięcia",
-        "anyFooting": "Dowolna podstawa",
         "conflicts": "Sprzeczności",
-        "footing": "Podstawa",
         "heldFacts": "Wstrzymane fakty",
+        "source": "Filtruj według źródła",
         "verdict": "Filtruj według rozstrzygnięcia"
       },
       "held": "Wstrzymany",

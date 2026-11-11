@@ -421,13 +421,14 @@
         "statements": "الإفادات"
       },
       "empty": "لا تحتوي هذه القائمة على وقائع أو مستندات تم التحقق منها بعد.",
+      "factCount": "{count, plural, zero {لا وقائع} one {واقعة واحدة} two {واقعتان} few {# وقائع} many {# واقعة} other {# واقعة}}",
       "factOverflow": "تُعرض أول {count} واقعة من هذه القائمة.",
       "filters": {
+        "allSources": "جميع المصادر",
         "allVerdicts": "جميع النتائج",
-        "anyFooting": "أي أساس",
         "conflicts": "التعارضات",
-        "footing": "الأساس",
         "heldFacts": "الوقائع المحجوزة",
+        "source": "التصفية حسب المصدر",
         "verdict": "التصفية حسب النتيجة"
       },
       "held": "محجوزة",

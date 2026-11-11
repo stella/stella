@@ -421,13 +421,14 @@
         "statements": "Paziņojumi"
       },
       "empty": "Šajā sarakstā vēl nav faktu vai pārbaudītu dokumentu.",
+      "factCount": "{count, plural, zero {# fakti} one {# fakts} other {# fakti}}",
       "factOverflow": "Rāda pirmos {count} šī saraksta faktus.",
       "filters": {
+        "allSources": "Visi avoti",
         "allVerdicts": "Visi slēdzieni",
-        "anyFooting": "Jebkurš pamats",
         "conflicts": "Pretrunas",
-        "footing": "Pamats",
         "heldFacts": "Aizturētie fakti",
+        "source": "Filtrēt pēc avota",
         "verdict": "Filtrēt pēc slēdziena"
       },
       "held": "Aizturēts",
