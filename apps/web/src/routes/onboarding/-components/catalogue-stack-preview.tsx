@@ -2,6 +2,7 @@ import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
@@ -188,9 +189,9 @@ const Row = ({
         tone={tone === "baseline" ? "foreground" : "muted"}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="text-foreground truncate text-sm" dir="auto">
+        <TruncatedText className="text-foreground text-sm" dir="auto">
           {labelKey ? t(labelKey) : entry.displayName}
-        </span>
+        </TruncatedText>
         {entry.jurisdictions.length > 0 && (
           <span className="text-muted-foreground text-3xs">
             {entry.jurisdictions.join(" · ")}

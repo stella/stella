@@ -25,6 +25,7 @@ import { claimCommentScalingScenarios } from "./claim-comments";
 import { reviewHistoryScalingScenarios } from "./claim-review-history";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
+import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
@@ -74,6 +75,7 @@ const measuredApiScenarios = [
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  decisionAnchorRedirectsScalingScenario,
   decisionFilterValidationScalingScenario,
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,

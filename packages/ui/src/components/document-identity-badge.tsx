@@ -14,6 +14,7 @@ import type {
   IdentityLabels,
 } from "./document-identity-badge.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
+import { TruncatedText } from "./truncated-text";
 
 export const DocumentIdentityBadge = ({
   identity,
@@ -119,10 +120,14 @@ function referenceLabelMark(
       data-kind={kind}
       dir="ltr"
     >
-      <bdi className={cn("min-w-0 truncate", classes.short)}>
+      {/* The badge's title tooltip, or the tab around it, names the document
+          in full, so a cut label adds no hint of its own. */}
+      <TruncatedText className={classes.short} hint={false} render={<bdi />}>
         {labels.short}
-      </bdi>
-      <bdi className={cn("min-w-0 truncate", classes.long)}>{labels.long}</bdi>
+      </TruncatedText>
+      <TruncatedText className={classes.long} hint={false} render={<bdi />}>
+        {labels.long}
+      </TruncatedText>
     </span>
   );
 }

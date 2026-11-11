@@ -57,7 +57,8 @@ the default provider chain (see `getTanStackTextModelById`).
   answers `ask-user` from a script: does the model ask side, governing law,
   and language before drafting, search only matters the user named, read only
   the contracts the user confirmed, ask only where the contracts disagree,
-  set `scope.perspective` only for a side that maps to one, and never resend
+  set `scope.perspective` only for a side that maps to one, save one
+  position first and later ones in groups of at most five, and never resend
   an unchanged position? A scenario's follow-up messages run as later turns
   over the conversation so far, so a user who declines contracts and asks for
   their matters mid-flow is scored too. Each scenario runs on two surfaces

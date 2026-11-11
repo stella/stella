@@ -302,6 +302,34 @@ describe("declared decision docket grammars", () => {
     );
   });
 
+  test("an appeal to the Court of Justice keys as the case it is stored under", () => {
+    // A judgment's stored docket comes from its CELEX number, which carries
+    // no appeal mark; a lawyer cites the appeal as the Court prints it.
+    const scoped = (docket: string) =>
+      parseDecisionDocket(docket, { grammar: DECISION_DOCKET_GRAMMARS.EU });
+    for (const [cited, formatted, stored] of [
+      ["C-121/25 P", "C-121/25 P", "C-121/25"],
+      ["Case C-121/25 P", "C-121/25 P", "C-121/25"],
+      ["C-32/22 P(I)", "C-32/22 P(I)", "C-32/22"],
+      ["c-32/22 p(r)", "C-32/22 P(R)", "C-32/22"],
+    ] as const) {
+      const parsed = scoped(cited);
+      expect([cited, parsed?.formatted]).toEqual([cited, formatted]);
+      expect([cited, parsed?.canonical]).toEqual([
+        cited,
+        scoped(stored)?.canonical,
+      ]);
+    }
+    // The court letter still names the case: an appeal never keys as the
+    // General Court judgment it challenges.
+    expect(scoped("C-121/25 P")?.canonical).not.toBe(
+      scoped("T-121/25")?.canonical,
+    );
+    for (const text of ["C-121/25 PP", "C-121/25 P(X)", "C-121/25 Q"]) {
+      expect(scoped(text), text).toBeNull();
+    }
+  });
+
   test("a Court of Justice case numbered before 1989 is read only under the EU scope", () => {
     // The Court numbered its cases without a letter until the Court of First
     // Instance was set up, and a stored row keeps the docket as printed.

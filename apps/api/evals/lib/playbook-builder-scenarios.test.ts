@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { loadSkill } from "@stll/skills";
+
 import { isRecord } from "@/api/lib/type-guards";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
@@ -9,6 +11,7 @@ import type { InternalToolResult } from "@/api/mcp/tool-types";
 import {
   answerMatterTool,
   BUILDER_SCENARIOS,
+  MAX_POSITIONS_PER_LATER_SAVE,
   scoreScenario,
 } from "./playbook-builder-scenarios";
 import type {
@@ -124,6 +127,14 @@ const event = (
   error: null,
 });
 
+const positionsNamed = (count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    issue: `Position ${String(index + 1)}`,
+  }));
+
+const saveOnePosition = (turn: number) =>
+  event(turn, "save_playbook", { positions: positionsNamed(1) });
+
 const ask = (turn: number, ...questions: string[]) =>
   event(turn, "ask-user", {}, questions);
 /** One question answered by picking from `options`. */
@@ -148,13 +159,13 @@ const readChosenMatter = (turn: number): BuilderEvent[] => [
   ),
   read(turn, keller),
   read(turn, brandt),
-  event(turn, "save_playbook"),
+  saveOnePosition(turn),
 ];
 
 /** The run the `contracts-later` scenario describes, on the MCP surface. */
 const contractsLaterRun = (): BuilderEvent[] => [
   ask(1, ...OPENING_QUESTIONS),
-  event(1, "save_playbook"),
+  saveOnePosition(1),
   event(2, "list_matters"),
   askWith(2, WHICH_MATTERS, MATTER_OPTIONS),
   ...readChosenMatter(2),
@@ -246,13 +257,57 @@ describe("contracts-later scoring", () => {
     ]);
   });
 
-  test("saving several positions in one call is a defect", () => {
+  test("the skill states the cap the eval scores", () => {
+    expect(loadSkill("playbook-builder").body).toContain(
+      `at most ${String(MAX_POSITIONS_PER_LATER_SAVE)} positions`,
+    );
+  });
+
+  test("a later save may group settled positions up to the cap", () => {
     const events = contractsLaterRun();
-    events[1] = event(1, "save_playbook", {
-      positions: [{ issue: "Liability cap" }, { issue: "Payment" }],
+    events[events.length - 1] = event(2, "save_playbook", {
+      positions: positionsNamed(MAX_POSITIONS_PER_LATER_SAVE),
+    });
+    expect(score("contracts-later", events)).toEqual([]);
+  });
+
+  test("a later save over the cap is a defect", () => {
+    const events = contractsLaterRun();
+    const count = MAX_POSITIONS_PER_LATER_SAVE + 1;
+    events[events.length - 1] = event(2, "save_playbook", {
+      positions: positionsNamed(count),
     });
     expect(score("contracts-later", events)).toEqual([
-      "saved 2 positions in one call",
+      `saved ${String(count)} positions in one call; the cap is ${String(MAX_POSITIONS_PER_LATER_SAVE)}`,
+    ]);
+  });
+
+  test("a first save of several positions is a defect", () => {
+    const events = contractsLaterRun();
+    events[1] = event(1, "save_playbook", { positions: positionsNamed(2) });
+    expect(score("contracts-later", events)).toEqual([
+      "first save carried 2 positions; the skill starts with one",
+    ]);
+  });
+
+  test("a refused save is not the first save", () => {
+    const events = contractsLaterRun();
+    events.splice(
+      1,
+      1,
+      { ...saveOnePosition(1), error: "validation_error" },
+      event(1, "save_playbook", { positions: positionsNamed(2) }),
+    );
+    expect(score("contracts-later", events)).toEqual([
+      "first save carried 2 positions; the skill starts with one",
+    ]);
+  });
+
+  test("a first save without positions is a defect", () => {
+    const events = contractsLaterRun();
+    events[1] = event(1, "save_playbook", { positions: [] });
+    expect(score("contracts-later", events)).toEqual([
+      "first save carried 0 positions; the skill starts with one",
     ]);
   });
 });
@@ -340,7 +395,7 @@ describe("perspective scoring", () => {
         "Which governing law applies?",
         "What language should the playbook use?",
       ),
-      event(1, "save_playbook"),
+      saveOnePosition(1),
     ];
     expect(
       scoreScenario(scenario("no-documents"), {
@@ -364,7 +419,7 @@ const GROUNDING_OPTIONS = [
 ];
 const groundingLaterRun = (): BuilderEvent[] => [
   ask(1, ...OPENING_QUESTIONS),
-  event(1, "save_playbook"),
+  saveOnePosition(1),
   event(1, "save_playbook"),
   askWith(1, GROUNDING_QUESTION, GROUNDING_OPTIONS),
   event(1, "list_matters"),
