@@ -101,7 +101,7 @@ export const useSetSourceKind = (scope: ListScope) => {
     mutationKey: [...listKey, "set"],
     mutationFn: async ({ documentId, sourceKind }: SetKindVariables) =>
       unwrapApiResponse(
-        await sourceDocumentsApi(scope.workspaceId).put({
+        await sourceDocumentsApi(scope.workspaceId).patch({
           listId: toSafeId<"legalList">(scope.listId),
           documentEntityId: toSafeId<"entity">(documentId),
           sourceKind,

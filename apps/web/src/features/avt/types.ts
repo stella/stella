@@ -38,7 +38,7 @@ export type FactId = EvidenceFact["factEntityId"];
 export type FactTier = VerificationRun["factStandings"][number]["tier"];
 /** What a document is to a list's facts: a record or a person's account. */
 export type SourceKind =
-  ListsRoutes["source-documents"]["put"]["body"]["sourceKind"];
+  ListsRoutes["source-documents"]["patch"]["body"]["sourceKind"];
 
 export type ClaimReviewEvent =
   ListsRoutes["claim-reviews"]["post"]["body"]["event"];

@@ -98,7 +98,7 @@ beforeEach(() => {
           return Response.json(null);
         }
         if (
-          request.method === "PUT" &&
+          request.method === "PATCH" &&
           new URL(request.url).pathname.endsWith("/source-documents")
         ) {
           const body: unknown = await request.json();

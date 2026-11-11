@@ -25,7 +25,7 @@ export const createListVerificationRoutes = (
     {
       "/item-sources": { PATCH: verifyItemSource },
       "/item-fact-details": { PUT: updateFactDetails },
-      "/source-documents": { PUT: updateSourceDocumentKind },
+      "/source-documents": { PATCH: updateSourceDocumentKind },
       "/source-documents/kinds": { POST: readSourceDocumentKinds },
       "/claim-reviews": { POST: createClaimReview },
       "/claim-reviews/bulk": { POST: createBulkClaimReviews },

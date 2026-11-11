@@ -29,11 +29,7 @@ const bodySchema = v.object({
 });
 
 const config = {
-  contract: "replace",
-  precondition: {
-    type: "deferred",
-    baselineId: "apps/api/src/handlers/lists/source-documents/update.ts",
-  },
+  contract: "patch",
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Set what one document is to a list's facts: `testimony` when it is a " +
