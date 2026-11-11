@@ -1,3 +1,5 @@
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import type {
   BusinessRegistrySearchCapabilities,
   BusinessRegistrySlug,
@@ -27,13 +29,13 @@ export const DESKTOP_LINK_FAILURE_REASON_PROTOCOL = 7;
 
 /** A link protocol the page and the API still accept, or `null`. */
 export const readDesktopLinkProtocol = (value: string | null) => {
-  const protocol = Number(value);
-  return value !== null &&
-    String(protocol) === value &&
-    protocol >= DESKTOP_ACCOUNT_LINK_PROTOCOL.minimum &&
-    protocol <= DESKTOP_ACCOUNT_LINK_PROTOCOL.current
-    ? protocol
-    : null;
+  const parsed = parseIntegerToken(value, {
+    sign: "unsigned",
+    min: DESKTOP_ACCOUNT_LINK_PROTOCOL.minimum,
+    max: DESKTOP_ACCOUNT_LINK_PROTOCOL.current,
+  });
+  // The app spells its protocol canonically; `07` is not protocol 7.
+  return parsed.isOk() && String(parsed.value) === value ? parsed.value : null;
 };
 export const DESKTOP_ACCOUNT_PROTOCOL_HEADER =
   "X-Stella-Desktop-Account-Protocol";

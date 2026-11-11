@@ -1878,19 +1878,26 @@ async fn redeem_browser_connection(
     correlation_id,
   } = pending;
   let state = app.state::<AccountState>();
-  let saved = foreground_account(&state).await?;
-  let plan =
-    plan_redemption(&key, saved.as_deref(), &api_base_url, &expected_identity)?;
-  // A switch never presents the current credential, and releases the request
-  // lease now: ending the current link takes it again after the member answers.
+  let current_request = foreground_account(&state).await?;
+  let plan = plan_redemption(
+    &key,
+    current_request.as_deref(),
+    &api_base_url,
+    &expected_identity,
+  )?;
+  // Only a connection presents the current credential and keeps its request
+  // lease. A switch releases the lease now: ending the current link takes it
+  // again after the member answers.
   let saved = match plan {
-    Redemption::AlreadyLinked => return Ok(()),
-    Redemption::Connect => saved,
-    Redemption::Fresh(_) | Redemption::Replace { .. } => {
-      drop(saved);
+    Redemption::Connect => current_request,
+    Redemption::AlreadyLinked | Redemption::Fresh(_) | Redemption::Replace { .. } => {
+      drop(current_request);
       None
     }
   };
+  if matches!(plan, Redemption::AlreadyLinked) {
+    return Ok(());
+  }
   let device_key = key.device_key();
   let client =
     crate::http_client::DesktopHttpClient::new(crate::http_client::HttpClientOptions {
