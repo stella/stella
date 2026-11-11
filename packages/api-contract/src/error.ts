@@ -174,6 +174,7 @@ export type ApiFileSecurityRejectionDetails = Omit<
  * and the client that branches on it cannot drift apart.
  */
 export const API_VERSION_CONFLICT_ERROR_CODE = "version_conflict" as const;
+export const DOCUMENT_TOO_LARGE_ERROR_CODE = "document_too_large" as const;
 
 /** A document already holds `DOCX_SUGGESTIONS_PENDING_MAX` pending suggestions. */
 export const DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE =

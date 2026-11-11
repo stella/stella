@@ -108,8 +108,8 @@ describe("skill package format", () => {
     expect(limit).toBeGreaterThan(
       SKILL_PACKAGE_LIMITS.resourceModelContextMaxChars,
     );
-    // A file at the cap fits one pack.
-    expect(limit).toBeLessThanOrEqual(
+    // Every file at the cap, in its widest UTF-8 form, fits one pack.
+    expect(limit * 4).toBeLessThanOrEqual(
       SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes,
     );
     const validate = (content: string) =>

@@ -28,6 +28,7 @@ import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { TEXT_MARK_TONE_COLOR } from "@stll/ui/text-mark";
 import type { TextMarkTone, TextMarkVariant } from "@stll/ui/text-mark";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { SaveState } from "@/features/avt/save-state.logic";
@@ -238,9 +239,9 @@ export const HeldStatus = ({ note }: { note: string | null }) => {
         {t("avt.anchorFacts.heldForReview")}
       </ListItemStatus>
       {note !== null && note !== "" && (
-        <span className="text-muted-foreground line-clamp-1 min-w-0" dir="auto">
+        <TruncatedText className="text-muted-foreground min-w-0" dir="auto">
           {note}
-        </span>
+        </TruncatedText>
       )}
     </div>
   );

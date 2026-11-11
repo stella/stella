@@ -26,18 +26,15 @@ export type StructureFidelityCensus = v.InferOutput<
 export const STRUCTURE_FIDELITY_BASELINE_PATH =
   "apps/api/src/handlers/case-law/ingestion/parsers/structure-fidelity-baseline.json";
 
+// A finding is its fixture, rule and text, counted. The anchor stays in the
+// baseline to locate it but is not identity: anchors follow how ingestion
+// mints them, and a new minting scheme must not read as new findings.
 const countsOf = (census: StructureFidelityCensus) => {
   const counts = new Map<string, number>();
   for (const [adapter, fixtures] of Object.entries(census)) {
     for (const [fixture, findings] of Object.entries(fixtures)) {
-      for (const { rule, anchorId, excerpt } of findings) {
-        const identity = JSON.stringify([
-          adapter,
-          fixture,
-          rule,
-          anchorId,
-          excerpt,
-        ]);
+      for (const { rule, excerpt } of findings) {
+        const identity = JSON.stringify([adapter, fixture, rule, excerpt]);
         counts.set(identity, (counts.get(identity) ?? 0) + 1);
       }
     }

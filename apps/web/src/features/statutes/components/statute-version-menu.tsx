@@ -8,6 +8,7 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
@@ -125,9 +126,9 @@ export const StatuteVersionMenu = ({
       <PopoverTrigger
         render={
           <Button size="sm" variant="ghost">
-            <span className="max-w-52 truncate tabular-nums">
+            <TruncatedText className="max-w-52 tabular-nums">
               {versionLabel(currentVersion)}
-            </span>
+            </TruncatedText>
             <ChevronDownIcon className="size-3.5" />
           </Button>
         }

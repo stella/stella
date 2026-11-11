@@ -20,7 +20,11 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
+import {
+  documentReviewFindingDecisions,
+  documentReviewFindings,
+  documentReviewRuns,
+} from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
@@ -292,6 +296,25 @@ const decisionsOf = async (runId: SafeId<"documentReviewRun">) =>
       decidedAt: documentReviewFindings.decidedAt,
     })
     .from(documentReviewFindings)
+    .where(eq(documentReviewFindings.runId, runId));
+
+/** The decision history of one run's findings, as stored. */
+const historyOf = async (runId: SafeId<"documentReviewRun">) =>
+  await testDb
+    .select({
+      baseline: eq(
+        documentReviewFindingDecisions.id,
+        documentReviewFindings.id,
+      ).mapWith(Boolean),
+      decision: documentReviewFindingDecisions.decision,
+      actorId: documentReviewFindingDecisions.actorId,
+      createdAt: documentReviewFindingDecisions.createdAt,
+    })
+    .from(documentReviewFindingDecisions)
+    .innerJoin(
+      documentReviewFindings,
+      eq(documentReviewFindings.id, documentReviewFindingDecisions.findingId),
+    )
     .where(eq(documentReviewFindings.runId, runId));
 
 beforeAll(async () => {
@@ -639,6 +662,17 @@ describe("document review run persistence", () => {
     expect(await decisionsOf(repeatRun)).toEqual([
       { decision: "accepted", decidedBy: ids.userA1, decidedAt },
     ]);
+    // The inherited decision arrives with its history: one baseline event,
+    // keyed by the finding, with the original decider and moment. A decided
+    // finding without one is what the online repair reads as pending.
+    expect(await historyOf(repeatRun)).toEqual([
+      {
+        baseline: true,
+        decision: "accepted",
+        actorId: ids.userA1,
+        createdAt: decidedAt,
+      },
+    ]);
 
     // A run whose finding quotes different text inherits nothing: that is the
     // one a reviewer has to read again.
@@ -663,6 +697,7 @@ describe("document review run persistence", () => {
     expect(await decisionsOf(changedRun)).toEqual([
       { decision: "open", decidedBy: null, decidedAt: null },
     ]);
+    expect(await historyOf(changedRun)).toEqual([]);
   });
 
   test("defaults a committed finding to undecided", async () => {

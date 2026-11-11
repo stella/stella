@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -1144,9 +1145,7 @@ function SkillFileTree({
           );
         }
         return (
-          <span className="overflow-hidden text-ellipsis whitespace-pre">
-            {node.name}
-          </span>
+          <TruncatedText className="whitespace-pre">{node.name}</TruncatedText>
         );
       }}
       selectedId={selectedId}

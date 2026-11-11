@@ -1007,7 +1007,7 @@ export const FILE_SIZE_LIMIT_BYTES = {
   /** Structured data imports (clause JSON, contact sheets). */
   dataImport: 10 * 1024 * 1024,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */
-  skillPack: 2 * 1024 * 1024,
+  skillPack: 50 * 1024 * 1024,
   /** One file uploaded into an existing skill as a resource. */
   skillResource: SKILL_RESOURCE_UPLOAD_MAX_BYTES,
   /** Chat context file attachments. */

@@ -412,7 +412,12 @@ const indexOfFirst = (
 
 const isSave = ({ name }: BuilderEvent) => name === SAVE_PLAYBOOK;
 
-/** Positions a save call carries; the skill saves one per call. */
+/**
+ * Positions one save after the first may carry. The skill states the same cap,
+ * and a test holds the two together.
+ */
+export const MAX_POSITIONS_PER_LATER_SAVE = 5;
+
 const positionCount = (input: unknown): number => {
   if (typeof input !== "object" || input === null || !("positions" in input)) {
     return 0;
@@ -643,7 +648,7 @@ const savesInsideScripts = (events: readonly BuilderEvent[]): string[] =>
 /**
  * Defects of the calls every scenario shares (the saved text and sources are
  * scored beside these in `scoreScenario`): one playbook, enough positions, no
- * resends,
+ * resends, a first save of one position and later saves within the cap,
  * no matter read or script refused, no save written inside a script, no work
  * handed to subagents, no search for starter playbooks, side options that
  * each name one role, and on the chat surface no read written before its
@@ -690,10 +695,20 @@ const commonDefects = ({
   if (resent.length > 0) {
     defects.push(`resent unchanged positions: ${resent.join(", ")}`);
   }
-  for (const save of events.filter(isSave)) {
-    const count = positionCount(save.input);
-    if (count > 1) {
-      defects.push(`saved ${String(count)} positions in one call`);
+  // A refused save stored nothing, so the first save is the first accepted one.
+  const [first, ...later] = events
+    .filter((event) => isSave(event) && event.error === null)
+    .map(({ input }) => positionCount(input));
+  if (first !== undefined && first !== 1) {
+    defects.push(
+      `first save carried ${String(first)} positions; the skill starts with one`,
+    );
+  }
+  for (const count of later) {
+    if (count > MAX_POSITIONS_PER_LATER_SAVE) {
+      defects.push(
+        `saved ${String(count)} positions in one call; the cap is ${String(MAX_POSITIONS_PER_LATER_SAVE)}`,
+      );
     }
   }
   return defects;

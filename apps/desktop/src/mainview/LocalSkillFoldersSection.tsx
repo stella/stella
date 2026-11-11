@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useNativeStatus } from "./AgentSubscriptionsSection";
 import {
@@ -83,9 +84,9 @@ export const LocalSkillFoldersSection = ({
       {folders.map(({ path, skillName, problem }) => (
         <div className="flex items-center justify-between gap-4" key={path}>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">
+            <TruncatedText className="text-sm font-medium" render={<p />}>
               {skillName ?? t("unusable")}
-            </p>
+            </TruncatedText>
             <p className="text-muted-foreground text-xs break-all">{path}</p>
             {problem === null ? null : (
               <p className="text-destructive text-xs">
