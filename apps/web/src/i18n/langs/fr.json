@@ -212,14 +212,24 @@
   },
   "avt": {
     "anchorFacts": {
+      "about": "À propos du dossier de faits d’ancrage",
+      "addFact": "Ajouter un fait",
+      "addFactPlaceholder": "Énoncez le fait tel que les preuves l’établissent",
       "addInterpretationNote": "Ajouter une note d’interprétation",
+      "busyLine": "Les faits que vous acceptez apparaissent ici.",
+      "confidenceLevels": {
+        "high": "Confiance élevée",
+        "low": "Confiance faible",
+        "medium": "Confiance moyenne"
+      },
       "description": "Preuves tangibles (courriels, messages, relevés bancaires, faits convenus) extraites dans le dossier de faits d’ancrage auquel les affirmations sont confrontées. Relisez, modifiez ou ajoutez des faits à la main.",
       "editInterpretationNote": "Modifier la note d’interprétation",
-      "empty": "Marquez des éléments de cette liste comme des faits auxquels confronter les documents.",
-      "extractionAndReview": "Extraction et relecture",
-      "factCount": "{count, plural, one {# fait} other {# faits} many {# faits}}",
+      "emptyLine": "Extrayez des faits des documents du dossier ou ajoutez-en un à la main.",
+      "emptyTitle": "Aucun fait d’ancrage pour l’instant",
       "heldDescription": "Le sens de ces extractions est <strong>réellement incertain</strong> : leur contenu est provisoire ou non confirmé, et pas simplement manuscrit. Elles sont exclues du scoring jusqu’à ce qu’un relecteur les confirme, les modifie ou les requalifie. Une source lisible n’est jamais mise en attente pour son seul support.",
+      "heldFilter": "{count, plural, one {# en attente de relecture} many {# en attente de relecture} other {# en attente de relecture}}",
       "heldForReview": "En attente de relecture",
+      "hideSources": "Masquer les sources",
       "holdOutOfScoring": "Exclure de la notation",
       "inScoring": "Pris en compte",
       "includeInScoring": "Inclure dans la notation",
@@ -228,10 +238,18 @@
       "interpretiveConfidence": "Confiance interprétative",
       "openList": "Ouvrir la liste",
       "record": "Dossier de faits d’ancrage",
-      "setConfidence": "Définir la confiance",
+      "showSources": "Afficher les sources",
       "title": "Faits d’ancrage"
     },
     "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Les faits d’ancrage se contredisent",
+        "conflictCount": "{count, plural, one {# contradiction} other {# contradictions} many {# contradictions}}",
+        "gap": "<strong>Aucun fait d’ancrage ne couvre cette affirmation.</strong> C’est une lacune du dossier, pas un verdict faible : il n’y a encore rien pour la vérifier.",
+        "notVerifiable": "<strong>Pas une assertion vérifiable.</strong> C’est le genre de déclaration qu’aucun document ne pourra jamais trancher : un contrefactuel, une prédiction, une déclaration d’intention, une conclusion juridique ou une affirmation trop vague pour être vérifiée. Écartée plutôt que notée.",
+        "supportCount": "{count, plural, one {# soutien} other {# soutiens} many {# soutiens}}",
+        "verdictWithheld": "Verdict suspendu"
+      },
       "escalatedReview": "Transmis à l’équipe chargée des preuves ; aucun verdict à confirmer ou à contester ici tant que le conflit sous-jacent n’est pas résolu.",
       "flagDispute": "Signaler un désaccord",
       "humanReview": "Relecture humaine",
@@ -253,11 +271,13 @@
       "overrideTooltip": "Un relecteur a consigné un verdict différent. L’analyse ci-dessous est celle de l’outil, inchangée.",
       "overrideVerdict": "Remplacer le verdict",
       "recordConflict": {
+        "confirmGoverningRecord": "Confirmer comme déterminant",
         "description": "Deux faits d’ancrage portent sur le même point (<strong>{subject}</strong>), mais se contredisent. Les deux sources sont à <strong>confiance élevée</strong> ; ce n’est donc pas un problème de fiabilité : le dossier lui-même est incohérent. AVT s’abstient de rendre un verdict plutôt que de noter l’affirmation, car choisir un enregistrement plutôt que l’autre est un jugement qu’il vous revient de prendre et de consigner, pas une décision que l’outil devrait prendre en silence.",
         "escalatedNotice": "Signalé à l’équipe chargée des preuves. Le conflit de dossier reste ouvert et comptabilisé tant qu’un enregistrement faisant foi n’est pas choisi.",
         "flagForEvidenceTeam": "Signaler à l’équipe chargée des preuves",
         "governed": "<strong>{value}</strong> fait foi : l’affirmation est jugée par rapport à cet enregistrement. L’autre enregistrement reste consigné.",
         "reconcile": "Réconcilier le dossier",
+        "suggestedNotice": "Le document probant est suggéré plutôt que le récit d’un témoin. Confirmez-le ou choisissez l’autre élément.",
         "title": "Preuves contradictoires dans le dossier",
         "treatAsGoverningRecord": "Considérer comme faisant foi"
       },
@@ -267,17 +287,8 @@
       },
       "reopened": "Rouverte, vérification en attente",
       "reopenedTooltip": "Un relecteur a requalifié cette affirmation en fait vérifiable ; une vérification en direct du dossier est encore en attente.",
-      "score": {
-        "anchorFactsDisagree": "Les faits d’ancrage se contredisent",
-        "conflictCount": "{count, plural, one {# contradiction} other {# contradictions} many {# contradictions}}",
-        "noCoverage": "<strong>Le dossier est muet.</strong> Aucun fait d’ancrage de la base ne traite de cette affirmation. Ce n’est pas un score faible : cela signifie qu’il n’y a encore rien pour la vérifier.",
-        "notVerifiable": "<strong>Pas une assertion vérifiable.</strong> C’est le genre de déclaration qu’aucun document ne pourra jamais trancher : un contrefactuel, une prédiction, une déclaration d’intention, une conclusion juridique ou une affirmation trop vague pour être vérifiée. Écartée plutôt que notée.",
-        "outOf100": "<strong>/ 100</strong> score de soutien",
-        "supportCount": "{count, plural, one {# soutien} other {# soutiens} many {# soutiens}}",
-        "verdictWithheld": "Verdict suspendu"
-      },
       "sourceCount": "{count, plural, one {# source} other {# sources} many {# sources}}",
-      "whyScore": "Pourquoi ce score : faits d’ancrage"
+      "whyVerdict": "Pourquoi ce verdict : faits d’ancrage"
     },
     "claimTypes": {
       "fact": {
@@ -309,17 +320,66 @@
       "nocover": "Aucun fait d’ancrage ne traite de cette affirmation ; il n’y a donc rien pour la confirmer. La validation est facultative.",
       "notverifiable": "Écartée comme non vérifiable ; la validation est facultative. Rouvrez-la ci-dessous si elle est en réalité vérifiable.",
       "recordconflict": "Deux pièces du dossier se contredisent. Déterminez ci-dessus laquelle fait foi, ou signalez-le à l’équipe chargée des preuves ; l’outil ne choisira pas à votre place.",
+      "restsOnHeld": "Un fait sur lequel repose ce verdict est en attente de vérification ; confirmez que le verdict tient sans lui, ou revérifiez l’affirmation une fois le fait tranché.",
+      "scopeMismatch": "Un fait cité a une portée différente de celle de l’affirmation. Appréciez s’il tranche l’affirmation telle qu’elle est formulée avant que le verdict ne soit retenu.",
       "supported": "Le dossier confirme cette affirmation. Votre validation atteste que l’outil l’a bien lue ; aucun jugement à rendre.",
-      "tension": "Le dossier n’étaye cette affirmation qu’en partie. Pesez les faits favorables et contraires ci-dessus avant que le verdict soit retenu."
+      "tension": "Le dossier n’étaye cette affirmation qu’en partie. Pesez les faits favorables et contraires ci-dessus avant que le verdict soit retenu.",
+      "testimonyOnly": "Le dossier le confirme, mais aucun document probant ne l’étaie : il repose sur des témoignages. Votre validation confirme que l’outil l’a lu correctement ; le verdict reste signalé comme reposant sur des témoignages.",
+      "unsourcedOnly": "Le dossier l’affirme, mais seulement au moyen de faits encore sans source. Votre validation confirme que l’outil les a bien lus ; les faits restent marqués sans source."
     },
     "documents": {
       "claimSummary": "Contredite : {contradicted} · En tension : {tension} · Conflit de dossier : {conflicts}",
       "empty": "Téléversez un document dans ce dossier pour le vérifier.",
+      "kindsLoadFailed": "Impossible de charger si ces documents sont des témoignages.",
       "notVerified": "Pas encore vérifié",
       "otherList": "Vérifié par rapport à une autre liste",
       "sizeConfirmTitle": "Vérifier ce document ?",
       "statusLoadFailed": "Impossible de charger l’état de vérification de ces documents.",
+      "testimony": "Témoignage",
+      "testimonyAbout": "À propos des témoignages",
+      "testimonyLine": "Marquez comme témoignage les déclarations de témoins, les notes d’entretien et les transcriptions. Les faits qui en sont tirés comptent comme le récit d’une personne, non comme un document probant.",
       "verifyAgain": "Vérifier à nouveau"
+    },
+    "extraction": {
+      "busy": "Terminez d’abord l’extraction en cours et sa relecture.",
+      "confirmStart": "{units, plural, one {Lancer, # unité} many {Lancer, # unités} other {Lancer, # unités}}",
+      "dialogDescription": "Vous acceptez ou refusez chaque fait avant qu’il n’entre dans le dossier.",
+      "dialogTitle": "Extraire des faits de documents",
+      "documentsChosen": "{count, plural, one {# choisi, jusqu’à {max}} many {# choisis, jusqu’à {max}} other {# choisis, jusqu’à {max}}}",
+      "documentsLabel": "Documents à lire",
+      "errors": {
+        "accessRevoked": "L’extraction des faits s’est arrêtée, car l’accès n’est pas disponible.",
+        "aiUnavailable": "Aucun modèle d’IA n’est disponible pour lire les documents. Vérifiez les paramètres d’IA de l’organisation.",
+        "documentMissing": "Un document choisi ou la liste n’existe plus. Rechargez la page et choisissez à nouveau.",
+        "enqueueFailed": "L’extraction des faits n’a pas pu être lancée. Réessayez.",
+        "extractionFailed": "Les faits de ces documents n’ont pas pu être extraits.",
+        "internal": "L’extraction des faits a échoué de manière inattendue.",
+        "noText": "Aucun texte n’a pu être lu dans les documents choisis.",
+        "sourceUnavailable": "Un document a été modifié ou supprimé après le début de l’extraction. Choisissez à nouveau les documents.",
+        "unsupportedFormat": "Seuls les fichiers DOCX, les PDF et les fichiers disposant d’une version PDF peuvent être lus pour en extraire des faits."
+      },
+      "extractFromDocuments": "Extraire des documents",
+      "failedTitle": "Échec de l’extraction des faits",
+      "instructionLabel": "Ce qu’il faut rechercher (facultatif)",
+      "instructionPlaceholder": "Par exemple : les paiements entre les parties et leurs dates",
+      "nothingFound": "Aucun fait n’a été trouvé dans les documents choisis.",
+      "proposedTitle": "Faits proposés",
+      "queued": "En attente de démarrage.",
+      "reviewed": "{accepted} sur {proposed, plural, one {# fait proposé} many {# faits proposés} other {# faits proposés}} acceptés.",
+      "runSize": "{available, plural, one {Cette exécution utilise environ {estimated} de votre # unité disponible.} many {Cette exécution utilise environ {estimated} de vos # unités disponibles.} other {Cette exécution utilise environ {estimated} de vos # unités disponibles.}}",
+      "running": "Lecture des documents. Les faits proposés apparaîtront ici pour relecture.",
+      "startFailed": "Impossible de lancer l’extraction des faits",
+      "submit": "{count, plural, =0 {Extraire des faits} one {Extraire des faits de # document} many {Extraire des faits de # documents} other {Extraire des faits de # documents}}"
+    },
+    "factTier": {
+      "testimony": {
+        "hint": "Toutes les sources non rejetées de ce fait sont des témoignages : une déclaration de témoin, une note d’entretien ou une transcription.",
+        "label": "Témoignage"
+      },
+      "unsourced": {
+        "hint": "Aucun document source non rejeté n’est lié à ce fait ; son support et sa date décrivent la preuve, mais ne constituent pas une source.",
+        "label": "Sans source"
+      }
     },
     "guidance": {
       "escalate": "Faire remonter",
@@ -327,13 +387,87 @@
       "optional": "Facultatif",
       "readyToConfirm": "Prête à confirmer"
     },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Acceptée de routine",
+        "conflictReopened": "Résolution de la contradiction retirée",
+        "escalated": "Signalée à l’équipe chargée des preuves",
+        "governed": "Élément faisant foi choisi",
+        "noteCleared": "Note supprimée",
+        "noteSaved": "Note enregistrée",
+        "overridden": "Verdict remplacé",
+        "overrideWithdrawn": "Remplacement du verdict retiré",
+        "reopened": "Rouverte en tant qu’affirmation vérifiable",
+        "statusCleared": "Statut d’examen retiré",
+        "statusDisputed": "Désaccord signalé",
+        "statusNeedsEvidence": "Marquée comme nécessitant des preuves",
+        "statusReviewed": "Marquée comme examinée"
+      },
+      "empty": "Aucune action d’examen pour l’instant.",
+      "filters": {
+        "allKinds": "Toute action",
+        "allReviewers": "Tout examinateur",
+        "kind": "Filtrer par action",
+        "reviewer": "Filtrer par examinateur"
+      },
+      "formerMember": "Ancien membre",
+      "kinds": {
+        "override": "Verdicts remplacés",
+        "recordConflict": "Résolutions de contradictions",
+        "reopen": "Réouvertures",
+        "status": "Changements de statut"
+      },
+      "noMatches": "Aucune action ne correspond à ces filtres.",
+      "noStatus": "Aucun statut",
+      "none": "Aucune action pour l’instant",
+      "reasonUnrecorded": "Aucune raison enregistrée : l’action date d’avant l’obligation de motiver.",
+      "runButton": "Historique de l’examen",
+      "runTitle": "Historique de l’examen"
+    },
     "matches": {
       "count": "{count, plural, one {# correspondance} other {# correspondances} many {# correspondances}}",
       "position": "{current}/{total}"
     },
+    "qualifiers": {
+      "heading": "Réserves",
+      "recordSilent": {
+        "hint": "Le dossier n’a pas vocation à traiter ce point : l’absence de couverture n’est donc pas une lacune.",
+        "label": "Dossier muet"
+      },
+      "restsOnHeld": {
+        "hint": "Un fait sur lequel repose ce verdict est désormais exclu de la notation.",
+        "label": "Repose sur un fait exclu"
+      },
+      "scopeMismatch": {
+        "hint": "Un fait cité porte sur une période, une population, un lieu ou une mesure autres que ceux de l’affirmation.",
+        "label": "Portée différente"
+      },
+      "testimonyOnly": {
+        "hint": "Aucun document probant n’étaie les faits sur lesquels repose ce verdict, et au moins l’un d’eux est un témoignage.",
+        "label": "Témoignages seulement"
+      },
+      "unsourcedOnly": {
+        "hint": "Aucun fait sur lequel repose ce verdict n’a encore de source.",
+        "label": "Uniquement sans source"
+      }
+    },
+    "reason": {
+      "escalate": "Pourquoi l’équipe chargée des preuves en a-t-elle besoin ?",
+      "govern": "Pourquoi cet élément fait-il foi ?",
+      "override": "Pourquoi le verdict est-il « {verdict} » ?",
+      "placeholder": "Indiquez la raison ; elle reste dans l’historique de l’affirmation",
+      "reopen": "Pourquoi cette affirmation est-elle vérifiable ?",
+      "required": "Indiquez une raison pour l’enregistrer.",
+      "unresolveConflict": "Pourquoi retirer cette résolution ?",
+      "withdrawOverride": "Pourquoi revenir au verdict de l’outil ?"
+    },
     "review": {
-      "disputed": "Désaccord signalé · {decidedAt}",
-      "reviewed": "{origin, select, bulk {Acceptée de routine} other {Examinée}} · {decidedAt}",
+      "decided": "{status, select, disputed {Désaccord signalé} needsEvidence {Preuves requises} other {{origin, select, bulk {Acceptée de routine} other {Examinée}}}} · {decidedAt}",
+      "status": {
+        "disputed": "Désaccord signalé",
+        "needsEvidence": "Preuves requises",
+        "reviewed": "Examinée"
+      },
       "undo": "Annuler la décision"
     },
     "runs": {
@@ -376,7 +510,8 @@
       },
       "nocover": {
         "chip": "Sans couverture",
-        "label": "Aucun fait d’ancrage ne couvre cette affirmation"
+        "label": "Aucun fait d’ancrage ne couvre cette affirmation",
+        "silentChip": "Sans couverture · dossier muet"
       },
       "notverifiable": {
         "chip": "Non vérifiable",
@@ -399,7 +534,7 @@
       "acceptRoutine": "Accepter {count, plural, one {# affirmation de routine} other {# affirmations de routine} many {# affirmations de routine}}",
       "attentionComplete": "<strong>Toutes les affirmations nécessitant un jugement ont été traitées.</strong> {count, plural, one {La # détermination de routine ne nécessite pas d’examen individuel.} other {Les # déterminations de routine ne nécessitent pas d’examen individuel.} many {Les # déterminations de routine ne nécessitent pas d’examen individuel.}}",
       "attentionOpen": "<strong>{count, plural, one {# affirmation requiert} other {# affirmations requièrent} many {# affirmations requièrent}} votre jugement</strong> : contradictions et interprétations contestées. {routineCount, plural, one {L’autre # est de routine et ne nécessite pas de validation individuelle.} other {Les # autres sont de routine et ne nécessitent pas de validation individuelle.} many {Les # autres sont de routine et ne nécessitent pas de validation individuelle.}}",
-      "claimAnnouncement": " ({state}{contested, select, true {, contestée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} other {}})",
+      "claimAnnouncement": " ({state}{contested, select, true {, contestée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} needsEvidence {, preuves requises} other {}})",
       "documentView": {
         "label": "Affichage du document",
         "original": "Original",
@@ -1691,6 +1826,28 @@
     "loadEarlierMessages": "Charger les messages précédents",
     "loadEarlierMessagesError": "Impossible de charger les messages précédents",
     "loadingEarlierMessages": "Chargement des messages précédents…",
+    "localFilesUndo": {
+      "action": "Annuler les modifications de fichiers",
+      "computer": {
+        "failed": "L’annulation ne s’est pas terminée sur votre ordinateur. Certains fichiers ont peut-être déjà été modifiés ; vérifiez le dossier de la conversation.",
+        "folderBusy": "Une exécution sur votre ordinateur utilise ce dossier. Réessayez quand elle sera terminée.",
+        "noCheckpoint": "Votre ordinateur n’a pas de copie enregistrée des fichiers d’avant cette étape ; rien n’a été annulé.",
+        "notNewest": "Votre ordinateur a des modifications plus récentes dans ce dossier ; rien n’a été annulé."
+      },
+      "confirm": "Annuler les modifications",
+      "confirmDescription": "Les fichiers que cette étape a modifiés dans son dossier sur votre ordinateur reviennent à leur état d’avant l’étape. Seules les modifications de cette étape sont annulées ; celles des étapes précédentes restent.",
+      "confirmTitle": "Annuler les modifications de fichiers de cette étape ?",
+      "expired": "Votre ordinateur n’a pas répondu à temps. Réessayez.",
+      "pending": "Annulation des modifications de fichiers sur votre ordinateur",
+      "refused": {
+        "desktopOffline": "Votre ordinateur est hors ligne. Ouvrez l’application de bureau stella et réessayez.",
+        "desktopUpdateRequired": "L’application de bureau stella de votre ordinateur est trop ancienne pour annuler des modifications. Mettez-la à jour et réessayez.",
+        "noCheckpoint": "Cette étape n’a pas de copie enregistrée des fichiers à laquelle revenir.",
+        "notNewest": "Seules les modifications de fichiers de l’étape la plus récente peuvent être annulées.",
+        "threadBusy": "Une réponse est encore en cours dans cette conversation. Réessayez quand elle sera terminée."
+      },
+      "restored": "Modifications de fichiers annulées"
+    },
     "localRun": {
       "cloud": "Cloud stella",
       "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",
@@ -2423,6 +2580,8 @@
     "loading": "Chargement",
     "logTime": "Saisir le temps",
     "low": "Faible",
+    "markAsRead": "Marquer comme lu",
+    "markAsUnread": "Marquer comme non lu",
     "matter": "Dossier",
     "matters": "Dossiers",
     "medium": "Moyenne",
@@ -2453,6 +2612,7 @@
     "or": "Ou",
     "organization": "Organisation",
     "organizationName": "Nom de l'organisation",
+    "organizations": "Organisations",
     "page": "Page n° {page}",
     "paymentRetryNotice": "Problème de paiement. Mettez à jour votre moyen de paiement avant le {date} pour conserver votre accès.",
     "pin": "Épingler",
@@ -2539,6 +2699,7 @@
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",
     "unknownUser": "Utilisateur inconnu",
     "unpin": "Désépingler",
+    "unread": "Non lu",
     "unsavedChanges": "Modifications non enregistrées",
     "unsavedChangesClose": "Modifications non enregistrées. Fermez à nouveau pour les abandonner",
     "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
@@ -2758,7 +2919,6 @@
       "vatPayerUnknown": "Inconnu",
       "year": "Année"
     },
-    "filterOrganizations": "Organisations",
     "filterPersons": "Personnes",
     "import": {
       "confirmAction": "Confirmer l'importation",
@@ -4704,6 +4864,9 @@
     }
   },
   "lists": {
+    "candidates": {
+      "accepting": "Acceptation de {done} sur {total}…"
+    },
     "sources": {
       "add": "Ajouter une source",
       "documentRequired": "Sélectionnez un document.",

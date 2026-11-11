@@ -432,6 +432,10 @@ export const ENUM_COLUMN_ROLES = {
   legal_list_items: {
     entity_feature_gate: ATTRIBUTE,
   },
+  legal_list_source_documents: {
+    entity_feature_gate: ATTRIBUTE,
+    source_kind: ATTRIBUTE,
+  },
   legal_list_verification_blocks: {
     entity_feature_gate: ATTRIBUTE,
     kind: ATTRIBUTE,

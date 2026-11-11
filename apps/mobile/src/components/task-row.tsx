@@ -59,16 +59,17 @@ export const TaskRow = ({
 
   return (
     <SwipeRow
-      action={
-        saving
+      actions={{
+        leading: saving
           ? null
           : {
               icon: closed ? RotateCcwIcon : CircleCheckIcon,
               label: statusLabel,
               name: "changeStatus",
               run: change,
-            }
-      }
+            },
+        trailing: null,
+      }}
     >
       {(accessibility) => (
         <Link

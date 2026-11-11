@@ -1531,7 +1531,7 @@ impl Supervisor {
         tracing::warn!(
           target: LOG_TARGET,
           reason = rejected.reason.wire_name(),
-          message_type = rejected.message_type.as_deref().unwrap_or(""),
+          message_type = HostMessage::logged_tag(rejected.message_type.as_deref()),
           "harness holder rejected a message"
         );
         // A run start the holder refused, for any reason, never begins. The

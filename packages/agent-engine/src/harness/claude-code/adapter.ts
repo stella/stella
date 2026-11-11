@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract/desktop-runner";
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
+import type { ProtocolLog } from "../../protocol-log";
 import {
   type HarnessAdapter,
   type HarnessAuth,
@@ -96,6 +97,8 @@ export type ClaudeCodeHarnessAdapterOptions = {
   requestTimeoutMs: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
+  /** Where the CLI's protocol lines go, redacted. */
+  protocolLog: ProtocolLog;
   /** The platform the CLI runs on, which decides whether it can sandbox. */
   platform: NodeJS.Platform;
 };
@@ -390,6 +393,7 @@ const connect = async ({
   };
   const started = startClaudeCli({
     launch: options.launch,
+    protocolLog: options.protocolLog,
     args,
     detached: createDetached(options.onBackgroundError),
     deadlines: {
