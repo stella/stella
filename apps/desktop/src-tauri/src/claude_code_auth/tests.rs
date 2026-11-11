@@ -143,7 +143,19 @@ fn desktop_environment() -> Vec<(OsString, OsString)> {
   environment
 }
 
+/// A fixture whose status is read on every call, so a test sees each change
+/// the stand-in CLI makes at once.
 fn fixture(sign_in_timeout: Duration) -> (Fixture, ClaudeCodeAuth) {
+  fixture_with(ClaudeCodeAuthConfig {
+    sign_in_timeout,
+    command_timeout: Duration::from_secs(10),
+    status_ttl: Duration::ZERO,
+    retry_after: Duration::ZERO,
+    max_retry_after: Duration::ZERO,
+  })
+}
+
+fn fixture_with(config: ClaudeCodeAuthConfig) -> (Fixture, ClaudeCodeAuth) {
   let dir = TempDir::new();
   let executable = dir.path().join("claude");
   let mut file = crate::local_store::create_harness_file(&executable, true).unwrap();
@@ -159,10 +171,7 @@ fn fixture(sign_in_timeout: Duration) -> (Fixture, ClaudeCodeAuth) {
     let opened = Arc::clone(&opened);
     let changes = Arc::clone(&changes);
     ClaudeCodeAuth::new(
-      ClaudeCodeAuthConfig {
-        sign_in_timeout,
-        command_timeout: Duration::from_secs(10),
-      },
+      config,
       ClaudeCodeAuthHooks {
         launch: Box::new(move || {
           if !installed.load(Ordering::SeqCst) {
@@ -276,12 +285,7 @@ fn the_status_follows_what_the_cli_reports() {
     assert_eq!(auth.status().await, SIGNED_IN);
 
     fixture.write("report", "Not signed in");
-    assert_eq!(
-      auth.status().await,
-      ClaudeCodeStatus::Failed {
-        reason: ClaudeCodeFailure::Unavailable
-      }
-    );
+    assert_eq!(auth.status().await, ClaudeCodeStatus::Unknown);
 
     fixture.installed.store(false, Ordering::SeqCst);
     assert_eq!(auth.status().await, ClaudeCodeStatus::NotInstalled);
@@ -594,4 +598,94 @@ fn an_api_key_sign_in_never_counts_as_the_subscription() {
   ] {
     assert_eq!(cli::parse_status(report.as_bytes()), sign_in, "{report}");
   }
+}
+
+/// Reads stand for a minute and failures wait their backoff, as in the app.
+fn cached_fixture(
+  command_timeout: Duration,
+  retry_after: Duration,
+) -> (Fixture, ClaudeCodeAuth) {
+  fixture_with(ClaudeCodeAuthConfig {
+    sign_in_timeout: Duration::from_secs(60),
+    command_timeout,
+    status_ttl: Duration::from_secs(60),
+    retry_after,
+    max_retry_after: retry_after.saturating_mul(4),
+  })
+}
+
+#[test]
+fn concurrent_status_reads_share_one_cli_run_and_its_answer_stands() {
+  run(|| async {
+    let (fixture, auth) =
+      cached_fixture(Duration::from_secs(10), Duration::from_secs(60));
+    fixture.mark("status-stall");
+    let readers: Vec<_> = (0..8)
+      .map(|_| {
+        let auth = auth.clone();
+        tokio::spawn(async move { auth.status().await })
+      })
+      .collect();
+    written(&fixture, "status-pid").await;
+    std::fs::remove_file(fixture.home().join("status-stall")).unwrap();
+    for reader in readers {
+      assert_eq!(reader.await.unwrap(), ClaudeCodeStatus::SignedOut);
+    }
+    assert_eq!(fixture.calls("auth status --json"), 1);
+
+    // Within its time the answer stands; a sign-in change reads again.
+    fixture.mark("signed-in");
+    assert_eq!(auth.status().await, ClaudeCodeStatus::SignedOut);
+    assert_eq!(fixture.calls("auth status --json"), 1);
+    auth.invalidate();
+    assert!(signed_in(&auth.status().await));
+    assert_eq!(fixture.calls("auth status --json"), 2);
+  });
+}
+
+#[test]
+fn a_status_read_that_times_out_reports_unknown_and_kills_the_cli() {
+  run(|| async {
+    let (fixture, auth) =
+      cached_fixture(Duration::from_millis(300), Duration::from_secs(60));
+    fixture.mark("status-stall");
+    assert_eq!(auth.status().await, ClaudeCodeStatus::Unknown);
+    assert!(!fixture.running("status-pid"));
+    assert_eq!(fixture.calls("auth status --json"), 1);
+  });
+}
+
+#[test]
+fn a_failed_status_read_waits_its_backoff_before_the_cli_runs_again() {
+  run(|| async {
+    let (fixture, auth) =
+      cached_fixture(Duration::from_secs(10), Duration::from_secs(60));
+    fixture.write("report", "Not signed in");
+    for _ in 0..5 {
+      assert_eq!(auth.status().await, ClaudeCodeStatus::Unknown);
+    }
+    assert_eq!(fixture.calls("auth status --json"), 1);
+
+    // An install or sign-in change reads again at once.
+    std::fs::remove_file(fixture.home().join("report")).unwrap();
+    auth.invalidate();
+    assert_eq!(auth.status().await, ClaudeCodeStatus::SignedOut);
+    assert_eq!(fixture.calls("auth status --json"), 2);
+  });
+}
+
+#[test]
+fn the_backoff_doubles_from_its_first_wait_up_to_its_ceiling() {
+  let config = ClaudeCodeAuthConfig {
+    sign_in_timeout: Duration::from_secs(60),
+    command_timeout: Duration::from_secs(10),
+    status_ttl: Duration::from_secs(60),
+    retry_after: Duration::from_secs(15),
+    max_retry_after: Duration::from_secs(100),
+  };
+  let waits: Vec<u64> = (1..=6)
+    .map(|failures| config.backoff(failures).as_secs())
+    .collect();
+  assert_eq!(waits, [15, 30, 60, 100, 100, 100]);
+  assert_eq!(config.backoff(u32::MAX).as_secs(), 100);
 }

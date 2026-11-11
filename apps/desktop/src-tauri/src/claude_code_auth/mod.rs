@@ -39,6 +39,13 @@ pub(crate) struct ClaudeCodeAuthConfig {
   pub sign_in_timeout: Duration,
   /// How long a status read or a sign-out may take.
   pub command_timeout: Duration,
+  /// How long a sign-in the CLI reported is shown before it is asked again.
+  /// A sign-in, a sign-out or an install change reads it again at once.
+  pub status_ttl: Duration,
+  /// How long after a status read that failed the CLI is first asked again;
+  /// each further failure doubles it, up to `max_retry_after`.
+  pub retry_after: Duration,
+  pub max_retry_after: Duration,
 }
 
 impl ClaudeCodeAuthConfig {
@@ -46,7 +53,19 @@ impl ClaudeCodeAuthConfig {
     Self {
       sign_in_timeout: Duration::from_secs(10 * 60),
       command_timeout: Duration::from_secs(30),
+      status_ttl: Duration::from_secs(60),
+      retry_after: Duration::from_secs(15),
+      max_retry_after: Duration::from_secs(10 * 60),
     }
+  }
+
+  /// The wait after `failures` status reads in a row failed.
+  fn backoff(&self, failures: u32) -> Duration {
+    let doublings = failures.saturating_sub(1).min(16);
+    self
+      .retry_after
+      .saturating_mul(1 << doublings)
+      .min(self.max_retry_after)
   }
 }
 
@@ -72,6 +91,9 @@ pub enum ClaudeCodeStatus {
   },
   /// Signed in with an API key, which local agents do not use.
   ApiKey,
+  /// The sign-in could not be read (the CLI did not answer in time, or
+  /// could not start). It is read again only after a growing wait.
+  Unknown,
   Failed {
     reason: ClaudeCodeFailure,
   },
@@ -129,6 +151,27 @@ struct Inner {
   next_attempt: AtomicU64,
   /// Serializes the commands that change the sign-in.
   changing: tokio::sync::Mutex<()>,
+  /// One status read at a time: a caller that waited for it takes its
+  /// answer from `reads` instead of starting the CLI again.
+  reading: tokio::sync::Mutex<()>,
+  reads: Mutex<Reads>,
+}
+
+/// The last status read and how long it stands.
+#[derive(Default)]
+struct Reads {
+  /// Bumped when the sign-in may have changed; a read started before that
+  /// is not kept.
+  generation: u64,
+  last: Option<LastRead>,
+  /// Status reads that failed in a row.
+  failures: u32,
+}
+
+struct LastRead {
+  /// `None` when the CLI could not be read.
+  sign_in: Option<SignIn>,
+  until: tokio::time::Instant,
 }
 
 struct Attempt {
@@ -163,7 +206,63 @@ impl ClaudeCodeAuth {
       failure: Mutex::new(None),
       next_attempt: AtomicU64::new(1),
       changing: tokio::sync::Mutex::new(()),
+      reading: tokio::sync::Mutex::new(()),
+      reads: Mutex::new(Reads::default()),
     }))
+  }
+
+  /// The sign-in may have changed (a sign-in ended, a sign-out, an install
+  /// change): the next status reads the CLI again, without waiting out a
+  /// failure's backoff.
+  pub(crate) fn invalidate(&self) {
+    if let Ok(mut reads) = self.0.reads.lock() {
+      reads.generation += 1;
+      reads.last = None;
+      reads.failures = 0;
+    }
+  }
+
+  /// The sign-in the CLI reports, read at most once per `status_ttl` and,
+  /// after a failure, not before its backoff; `None` when it could not be
+  /// read. Concurrent callers share one read.
+  async fn current_sign_in(&self, launch: Option<ClaudeCodeLaunch>) -> Option<SignIn> {
+    let _reading = self.0.reading.lock().await;
+    let generation = {
+      let Ok(reads) = self.0.reads.lock() else {
+        return None;
+      };
+      if let Some(last) = &reads.last
+        && tokio::time::Instant::now() < last.until
+      {
+        return last.sign_in.clone();
+      }
+      reads.generation
+    };
+    let read = match &launch {
+      Some(launch) => self
+        .read_sign_in(launch, std::future::pending())
+        .await
+        .ok()
+        .flatten(),
+      None => None,
+    };
+    drop(launch);
+    if let Ok(mut reads) = self.0.reads.lock()
+      && reads.generation == generation
+    {
+      let wait = if read.is_some() {
+        reads.failures = 0;
+        self.0.config.status_ttl
+      } else {
+        reads.failures = reads.failures.saturating_add(1);
+        self.0.config.backoff(reads.failures)
+      };
+      reads.last = Some(LastRead {
+        sign_in: read.clone(),
+        until: tokio::time::Instant::now() + wait,
+      });
+    }
+    read
   }
 
   /// The sign-in as the CLI reports it, with a sign-in in progress or the
@@ -172,15 +271,12 @@ impl ClaudeCodeAuth {
     if let Some(signing_in) = self.signing_in() {
       return signing_in;
     }
-    let read = match (self.0.hooks.launch)() {
+    let launch = match (self.0.hooks.launch)() {
       Err(LaunchError::NotInstalled) => return ClaudeCodeStatus::NotInstalled,
       Err(LaunchError::Unavailable) => None,
-      Ok(launch) => self
-        .read_sign_in(&launch, std::future::pending())
-        .await
-        .ok()
-        .flatten(),
+      Ok(launch) => Some(launch),
     };
+    let read = self.current_sign_in(launch).await;
     // A sign-in that started while the CLI answered is what the user sees.
     if let Some(signing_in) = self.signing_in() {
       return signing_in;
@@ -193,9 +289,7 @@ impl ClaudeCodeAuth {
       (Some(SignIn::ApiKey), _) => ClaudeCodeStatus::ApiKey,
       (Some(SignIn::None), Some(reason)) => ClaudeCodeStatus::Failed { reason },
       (Some(SignIn::None), None) => ClaudeCodeStatus::SignedOut,
-      (None, _) => ClaudeCodeStatus::Failed {
-        reason: ClaudeCodeFailure::Unavailable,
-      },
+      (None, _) => ClaudeCodeStatus::Unknown,
     }
   }
 
@@ -289,6 +383,7 @@ impl ClaudeCodeAuth {
     if !current {
       return;
     }
+    self.invalidate();
     if let AttemptEnd::Settled(Err(reason)) = end
       && let Ok(mut failure) = self.0.failure.lock()
     {
@@ -454,6 +549,7 @@ impl ClaudeCodeAuth {
     {
       failure.take();
     }
+    self.invalidate();
     (self.0.hooks.changed)();
     signed_out
   }

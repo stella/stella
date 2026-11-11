@@ -770,7 +770,9 @@
         "notCompleted": "Prisijungimas nebuvo baigtas. Bandykite dar kartą.",
         "timedOut": "Prisijungimas užtruko per ilgai. Bandykite dar kartą.",
         "unavailable": "Šiame kompiuteryje nepavyko paleisti Claude Code. Bandykite dar kartą."
-      }
+      },
+      "unknown": "Nepavyko patikrinti prisijungimo prie Claude Code. Po akimirkos patikrinkite dar kartą.",
+      "checkAgain": "Tikrinti dar kartą"
     },
     "install": {
       "notInstalled": "{name} šiame kompiuteryje dar neįdiegtas.",

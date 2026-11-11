@@ -770,7 +770,9 @@
         "notCompleted": "Prihlásenie sa nedokončilo. Skúste to znova.",
         "timedOut": "Prihlásenie trvalo príliš dlho. Skúste to znova.",
         "unavailable": "Claude Code sa na tomto počítači nepodarilo spustiť. Skúste to znova."
-      }
+      },
+      "unknown": "Prihlásenie do Claude Code sa nepodarilo overiť. O chvíľu to overte znova.",
+      "checkAgain": "Overiť znova"
     },
     "install": {
       "notInstalled": "{name} ešte nie je na tomto počítači nainštalovaný.",

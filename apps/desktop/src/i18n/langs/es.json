@@ -770,7 +770,9 @@
         "notCompleted": "El inicio de sesión no se completó. Inténtalo de nuevo.",
         "timedOut": "El inicio de sesión tardó demasiado. Inténtalo de nuevo.",
         "unavailable": "No se pudo iniciar Claude Code en este ordenador. Inténtalo de nuevo."
-      }
+      },
+      "unknown": "No se pudo comprobar el inicio de sesión de Claude Code. Vuelve a comprobarlo en un momento.",
+      "checkAgain": "Comprobar de nuevo"
     },
     "install": {
       "notInstalled": "{name} aún no está instalado en este ordenador.",
