@@ -488,6 +488,8 @@ const ComposerModelsSubmenu = ({
     <MenuSub onOpenChange={setOpen} open={open}>
       <MenuSubTrigger
         {...guideAnchor(GUIDE_ANCHORS.chatMenuModels, guideAnchorsEnabled)}
+        // Until the stored choice is known, nothing can be picked on it.
+        disabled={models.state === "loading"}
       >
         <CpuIcon />
         {t("chat.composerMenu.models")}

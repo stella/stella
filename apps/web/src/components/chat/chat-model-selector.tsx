@@ -77,7 +77,8 @@ export const ChatModelSelector = ({
                 ? "bg-accent text-accent-foreground hover:text-accent-foreground gap-1.5"
                 : "text-muted-foreground hover:text-foreground gap-1.5",
             )}
-            disabled={disabled}
+            // Until the stored choice is known, nothing can be picked on it.
+            disabled={disabled || models.state === "loading"}
             onFocus={() => setDetailsRequested(true)}
             onMouseEnter={() => setDetailsRequested(true)}
             size="xs"

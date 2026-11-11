@@ -129,10 +129,6 @@ import {
 } from "@/components/chat/chat-edit-mode-menu";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
-import {
-  CHAT_RUN_ON_CLOUD_ONLY,
-  chatRunOnTarget,
-} from "@/components/chat/chat-model-options-menu";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
   isApprovalPart,
@@ -151,7 +147,7 @@ import {
   getCreateDocumentDraftPersistence,
 } from "@/components/chat/create-document-draft-runtime";
 import { DockedComposerPending } from "@/components/chat/docked-composer";
-import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
+import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -169,7 +165,6 @@ import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
-  applyChatModelChange,
   chatThreadOptions,
   fileChatThreadOptions,
   materializeFileChatThread,
@@ -207,7 +202,6 @@ import {
   matchReservedChatCommand,
   runReservedChatCommand,
 } from "@/lib/reserved-chat-commands";
-import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
 
 type ActiveFile = {
@@ -1489,31 +1483,17 @@ const FileChatOverlayInner = ({
     onActiveDraftChatBound?.(chatThreadId);
     return undefined;
   }, [chatThreadId, hasPersistedDraftChatBinding, onActiveDraftChatBound]);
-  // Persists the composer (+) menu's Models submenu selection into this
-  // thread's cache, mirroring `ChatThreadPage`'s wiring so the file-chat (+)
-  // menu keeps the same functionality as the main chat's.
-  const modelSelection = useChatModelSelection({
-    onPersisted: ({ model, reasoningEffort }) => {
-      applyChatModelChange({
-        model,
-        reasoningEffort,
-        queryClient,
-        queryKey: threadQueryOptions.queryKey,
-        threadId: toSafeId<"chatThread">(threadRef.threadId),
-      });
-    },
-    threadRef,
-  });
-  // A file chat's turns edit the open document through this page's review
-  // queue, which only stella's own models drive, so it offers no Run on.
-  const composerModels = {
+  // The same owner of the model choice as the chat page. A file chat's turns
+  // edit the open document through this page's review queue, which only
+  // stella's own models drive, so it offers no Run on.
+  const composer = useChatComposerModels({
     activeOrganizationId,
     threadRef,
-    selectedModel: data.model,
-    selectedReasoningEffort: data.reasoningEffort,
-    selectModel: modelSelection.selectModel,
-    runTarget: CHAT_RUN_ON_CLOUD_ONLY,
-  };
+    stored: data,
+    queryKey: threadQueryOptions.queryKey,
+    runOn: "cloud_only",
+  });
+  const composerModels = composer.models;
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: chatThreadContext,
@@ -1620,7 +1600,7 @@ const FileChatOverlayInner = ({
       // Don't let a model just chosen from the (+) Models submenu race the
       // send: wait for its PATCH to settle (already toasted on failure) and
       // abort so the request can't run against the previous thread model.
-      if (Result.isError(await modelSelection.awaitPendingSelection())) {
+      if (Result.isError(await composer.awaitPendingSelection())) {
         return CHAT_SEND_KEPT;
       }
 
@@ -2258,7 +2238,7 @@ const FileChatOverlayInner = ({
     if (!(await ensureAIAvailable())) {
       return CHAT_SEND_KEPT;
     }
-    if (Result.isError(await modelSelection.awaitPendingSelection())) {
+    if (Result.isError(await composer.awaitPendingSelection())) {
       return CHAT_SEND_KEPT;
     }
     const newThreadRef: ChatThreadRef =
@@ -2706,9 +2686,7 @@ const FileChatOverlayInner = ({
                     }
                     // Same model-race guard as the composer send path.
                     if (
-                      Result.isError(
-                        await modelSelection.awaitPendingSelection(),
-                      )
+                      Result.isError(await composer.awaitPendingSelection())
                     ) {
                       return CHAT_SEND_KEPT;
                     }
@@ -2770,7 +2748,7 @@ const FileChatOverlayInner = ({
                   },
                 }
               : {}),
-            runTarget: chatRunOnTarget(composerModels.runTarget),
+            runTarget: composer.runTarget,
             threadRef,
             webSearch: {
               available: data.webSearchAvailable,

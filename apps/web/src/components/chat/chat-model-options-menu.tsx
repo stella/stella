@@ -68,11 +68,16 @@ export const EFFORT_LABEL_KEY = {
 export type ComposerModelsMenuProps = {
   activeOrganizationId: string;
   threadRef: ChatThreadRef;
+  /**
+   * `loading` until the stored choice is known; the menu is disabled until
+   * then, so no pick composes on a choice not yet read.
+   */
+  state: "loading" | "ready";
   /** Current per-thread override ("provider::modelId"), or null when the
    *  thread uses the org default. */
   selectedModel: string | null;
   selectedReasoningEffort: ReasoningEffort | null;
-  /** Persist the chosen model (see `useChatModelSelection`). Fire-and-forget
+  /** Persist the chosen model (see `useChatComposerModels`). Fire-and-forget
    *  here: the caller's own send path is what awaits the outcome via
    *  `awaitPendingSelection`, not this menu. */
   selectModel: (selection: {

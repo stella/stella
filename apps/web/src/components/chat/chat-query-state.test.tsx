@@ -60,6 +60,7 @@ const models = {
     scope: "global",
     threadId: toChatThreadId("thread-query-state"),
   },
+  state: "ready",
   selectedModel: "provider::explicit-model",
   selectedReasoningEffort: null,
   selectModel: () => {},

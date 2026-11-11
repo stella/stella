@@ -89,7 +89,7 @@ const sendEntryPoints = {
 // saying why where it does: a new one is added here once its surface really
 // cannot run turns on the member's computer.
 const runOnPatterns = {
-  cloudOnly: /\bCHAT_RUN_ON_CLOUD_ONLY\b/gu,
+  cloudOnly: /\brunOn: "cloud_only"/gu,
   noModels: /\bmodels=\{null\}/gu,
   // A `/new` handoff that starts its thread on stella.
   newThreadOnStella: /\bgetRunTarget: undefined\b/gu,
@@ -97,13 +97,11 @@ const runOnPatterns = {
 const runOnDeclines = {
   // The file chat edits the open document through the page's review queue.
   "components/ai-suggestions/file-chat-overlay.tsx": {
-    cloudOnly: 2,
+    cloudOnly: 1,
     newThreadOnStella: 1,
   },
   // Ask AI from search has no composer to choose in.
   "components/search-dialog.tsx": { newThreadOnStella: 1 },
-  // Its definition.
-  "components/chat/chat-model-options-menu.tsx": { cloudOnly: 1 },
   // The placeholder shown until the live panel has read its thread.
   "components/inspector/chat-tab-panel.tsx": { noModels: 1 },
   "routes/dev/-components/chat-composer-reference-playground.tsx": {

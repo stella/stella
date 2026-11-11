@@ -2,8 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type { ReasoningEffort } from "@stll/ai-catalog";
 import {
   type ChatLocalRunTarget,
+  type ChatRunTarget,
   chatRunTargetSchema,
 } from "@stll/api-contract/chat-run-target";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
@@ -13,7 +15,7 @@ const previousFetch = globalThis.fetch;
 
 const { act, cleanup, renderHook, waitFor } =
   await import("@testing-library/react");
-const { QueryClient, QueryClientProvider, queryOptions } =
+const { QueryClient, QueryClientProvider, queryOptions, useQuery } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
@@ -82,32 +84,43 @@ const serve = () => {
   return { patches, releaseNext };
 };
 
-/** The composer over a thread that runs on stella with Auto. */
-const renderComposer = () => {
+/** What a thread stores about its turns, as the composer reads it. */
+type StoredChoice = {
+  model: string | null;
+  reasoningEffort: ReasoningEffort | null;
+  runTarget?: ChatRunTarget;
+};
+
+/** A thread that runs on stella with Auto. */
+const AUTO_ON_STELLA: StoredChoice = { model: null, reasoningEffort: null };
+
+/** Each composer's first read of its stored choice, by the id in its key. */
+const storedReads = new Map<string, Promise<StoredChoice>>();
+
+/** The composer over a thread whose stored choice the query reads. */
+const renderComposer = (
+  initial: Promise<StoredChoice> = Promise.resolve(AUTO_ON_STELLA),
+) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
+  const readId = Bun.randomUUIDv7();
+  storedReads.set(readId, initial);
   const stored = queryOptions({
-    queryKey: ["composer-models-test", threadRef.threadId],
-    queryFn: () => ({
-      model: null as string | null,
-      reasoningEffort: null,
-      runTarget: undefined as ChatLocalRunTarget | undefined,
-    }),
-  });
-  queryClient.setQueryData(stored.queryKey, {
-    model: null,
-    reasoningEffort: null,
-    runTarget: undefined,
+    queryKey: ["composer-models-test", threadRef.threadId, readId] as const,
+    queryFn: async ({ queryKey }): Promise<StoredChoice> =>
+      await (storedReads.get(queryKey[2]) ?? Promise.resolve(AUTO_ON_STELLA)),
   });
   return renderHook(
-    () =>
-      useChatComposerModels({
+    () => {
+      const { data } = useQuery(stored);
+      return useChatComposerModels({
         activeOrganizationId: ORGANIZATION_ID,
         threadRef,
-        stored: queryClient.getQueryData(stored.queryKey),
+        stored: data,
         queryKey: stored.queryKey,
-      }),
+      });
+    },
     {
       wrapper: ({ children }) => (
         <QueryClientProvider client={queryClient}>
@@ -120,9 +133,34 @@ const renderComposer = () => {
   );
 };
 
+/** The composer once its stored choice is read. */
+const renderReadyComposer = async () => {
+  const view = renderComposer();
+  await waitFor(() => expect(view.result.current.models.state).toBe("ready"));
+  return view;
+};
+
+test("the menus stay disabled, and nothing is written, until the stored choice is read", async () => {
+  const server = serve();
+  const read = Promise.withResolvers<StoredChoice>();
+  const { result } = renderComposer(read.promise);
+  expect(result.current.models.state).toBe("loading");
+  act(() => {
+    result.current.models.selectModel({
+      model: CLOUD_MODEL,
+      reasoningEffort: null,
+    });
+  });
+  expect(server.patches).toEqual([]);
+
+  read.resolve({ model: CLOUD_MODEL, reasoningEffort: null });
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
+  expect(result.current.models.selectedModel).toBe(CLOUD_MODEL);
+});
+
 test("a send right after choosing the computer carries it, once the choice is stored", async () => {
   const server = serve();
-  const { result } = renderComposer();
+  const { result } = await renderReadyComposer();
   const { models, awaitPendingSelection, getRunTarget } = result.current;
   const runOn = models.runTarget;
   if (runOn.type !== "choice") {
@@ -145,7 +183,7 @@ test("a send right after choosing the computer carries it, once the choice is st
 
 test("a model chosen just before the computer is kept by the write that follows", async () => {
   const server = serve();
-  const { result } = renderComposer();
+  const { result } = await renderReadyComposer();
   const { models, awaitPendingSelection } = result.current;
   const runOn = models.runTarget;
   if (runOn.type !== "choice") {
@@ -161,7 +199,24 @@ test("a model chosen just before the computer is kept by the write that follows"
   (await awaitPendingSelection()).unwrap();
 
   expect(server.patches).toEqual([
-    { model: CLOUD_MODEL, reasoningEffort: null },
+    { model: CLOUD_MODEL, reasoningEffort: null, runTarget: { kind: "cloud" } },
     { model: CLOUD_MODEL, reasoningEffort: null, runTarget: CODEX },
   ]);
+});
+
+test("a menu opened while the computer is being written shows the computer", async () => {
+  const server = serve();
+  const { result } = await renderReadyComposer();
+  const runOn = result.current.models.runTarget;
+  if (runOn.type !== "choice") {
+    throw new Error("The composer offers no Run on choice");
+  }
+  act(() => {
+    runOn.select(CODEX);
+  });
+  // The write is still held: what a menu opened now reads.
+  const pending = result.current.models.runTarget;
+  expect(pending.type === "choice" && pending.selected).toEqual(CODEX);
+  await server.releaseNext();
+  (await result.current.awaitPendingSelection()).unwrap();
 });

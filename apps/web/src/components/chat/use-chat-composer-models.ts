@@ -1,20 +1,34 @@
-import { useRef } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import {
   type DataTag,
   type QueryKey,
   useQueryClient,
 } from "@tanstack/react-query";
+import type { Result } from "better-result";
+import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
-import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_CLOUD_RUN_TARGET,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 
-import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
+import {
+  CHAT_RUN_ON_CLOUD_ONLY,
+  type ComposerModelsMenuProps,
+} from "@/components/chat/chat-model-options-menu";
 import { effectiveRunTarget } from "@/components/chat/chat-run-target-menu.logic";
 import {
-  type ChatModelSelection,
-  useChatModelSelection,
-} from "@/components/chat/use-chat-model-selection";
+  type ModelPersistError,
+  writeChatThreadModel,
+} from "@/components/chat/chat-thread-model-write";
+import {
+  type ComposerChoice,
+  type ComposerChoiceOwner,
+  type ComposerChoiceSuperseded,
+  createComposerChoice,
+} from "@/components/chat/composer-choice";
 import { useEffectiveRunTarget } from "@/components/chat/use-effective-run-target";
 import {
   applyChatModelChange,
@@ -22,7 +36,7 @@ import {
 } from "@/features/chat/queries";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 /** What the thread, or the draft that becomes it, stores about its turns. */
@@ -37,8 +51,14 @@ type UseChatComposerModelsOptions = {
   threadRef: ChatThreadRef;
   /** The stored choice; `undefined` while a draft's read is pending. */
   stored: StoredChatModels | undefined;
-  /** The cache entry `stored` was read from, updated once a choice lands. */
+  /** The cache entry `stored` was read from; every stored write lands there. */
   queryKey: DataTag<QueryKey, StoredChatModels, Error>;
+  /**
+   * `cloud_only` for a surface whose turns need tools only stella's own
+   * models drive in this page (the file chat's review queue): its menu offers
+   * no Run on, and its turns run on stella whatever the thread stores.
+   */
+  runOn?: "choice" | "cloud_only";
 };
 
 export type ChatComposerModels = {
@@ -46,115 +66,119 @@ export type ChatComposerModels = {
   models: ComposerModelsMenuProps;
   /** Where the next turn runs, as the menu shows it. */
   runTarget: ChatRunTarget;
-  /** `runTarget` read at send time, for the chat runtime's context. */
+  /** Where the next turn runs, read at send time after `awaitPendingSelection`. */
   getRunTarget: () => ChatRunTarget;
-  /** Gate a send on the latest choice having landed. */
-  awaitPendingSelection: ChatModelSelection["awaitPendingSelection"];
+  /** Gate a send on every choice so far being stored; an error was shown. */
+  awaitPendingSelection: () => Promise<
+    Result<void, ModelPersistError | ComposerChoiceSuperseded>
+  >;
 };
 
+const choiceOf = (stored: StoredChatModels): ComposerChoice => ({
+  model: stored.model,
+  reasoningEffort: stored.reasoningEffort,
+  runTarget: stored.runTarget ?? CHAT_CLOUD_RUN_TARGET,
+});
+
 /**
- * The one owner of a chat composer's model and of where its turns run, for
- * a new chat's draft and an existing thread alike. A choice is stored on the
- * thread (a draft's row is created by it), so the first send carries what
- * the menu shows and a reload shows the same choice.
- *
- * Each choice is written whole (model, effort and run target) on top of the
- * newest one not yet stored, and the writes go out in order, so a model
- * chosen just before a run target, or the other way round, is kept. A send
- * waits for the newest write (`awaitPendingSelection`) and then reads the run
- * target from the cache that write updated, never from a render that may not
- * have caught up.
+ * A chat composer's model and where its turns run, for a new chat's draft
+ * and an existing thread alike, owned by one `createComposerChoice`: the
+ * menus and a send read the member's newest pick, every write carries the
+ * whole choice and lands in the stored choice in order, and a failed write
+ * shows the stored choice again. The menus stay disabled until the stored
+ * choice is known, so no pick composes on a choice not yet read.
  */
 export const useChatComposerModels = ({
   activeOrganizationId,
   threadRef,
   stored,
   queryKey,
+  runOn = "choice",
 }: UseChatComposerModelsOptions): ChatComposerModels => {
+  const t = useTranslations();
   const queryClient = useQueryClient();
-  const runTarget = useEffectiveRunTarget(
-    activeOrganizationId,
-    stored?.runTarget,
+  const threadId = toSafeId<"chatThread">(threadRef.threadId);
+  // The owner reads these at the time it writes; their identity is stable.
+  const write = useLatestCallback(
+    async (choice: ComposerChoice) =>
+      await writeChatThreadModel(threadRef, choice),
   );
-  /** The newest choice still being written, and for which thread. */
-  const pendingChoiceRef = useRef<{
-    threadId: string;
-    choice: StoredChatModels;
-  } | null>(null);
-  const storedNow = () => queryClient.getQueryData(queryKey);
-  const getRunTarget = useLatestCallback((): ChatRunTarget =>
-    effectiveRunTarget(
-      storedNow()?.runTarget,
+  const applyStored = useLatestCallback((choice: ComposerChoice) => {
+    applyChatModelChange({ ...choice, queryClient, queryKey, threadId });
+  });
+  const refetch = useLatestCallback(async () => {
+    await queryClient.refetchQueries({ queryKey, exact: true });
+  });
+  const failed = useLatestCallback((error: ModelPersistError) => {
+    notifyUserError(error, t("common.somethingWentWrong"));
+  });
+  // One owner per thread: a draft rotated by `/new` starts from its own.
+  // Created once per thread and kept, as the cache of a pure lookup.
+  const [owners] = useState(
+    () => new Map<string, ComposerChoiceOwner<ModelPersistError>>(),
+  );
+  const owner =
+    owners.get(threadId) ??
+    (() => {
+      const created = createComposerChoice<ModelPersistError>({
+        write,
+        stored: applyStored,
+        refetch,
+        failed,
+      });
+      owners.set(threadId, created);
+      return created;
+    })();
+  const desired = useSyncExternalStore(owner.subscribe, owner.desired);
+  const shown =
+    desired ?? (stored === undefined ? undefined : choiceOf(stored));
+  const choiceTarget = useEffectiveRunTarget(
+    activeOrganizationId,
+    runOn === "choice" ? shown?.runTarget : undefined,
+  );
+  const runTarget = runOn === "choice" ? choiceTarget : CHAT_CLOUD_RUN_TARGET;
+  const getRunTarget = useLatestCallback((): ChatRunTarget => {
+    if (runOn === "cloud_only") {
+      return CHAT_CLOUD_RUN_TARGET;
+    }
+    const current = queryClient.getQueryData(queryKey);
+    return effectiveRunTarget(
+      owner.desired()?.runTarget ?? current?.runTarget,
       queryClient.getQueryData(
         localRunnersOptions(activeOrganizationId).queryKey,
       ),
-    ),
-  );
-  const selection = useChatModelSelection({
-    onPersisted: ({ model, reasoningEffort, runTarget: persisted }) => {
-      applyChatModelChange({
-        model,
-        reasoningEffort,
-        runTarget: persisted,
-        queryClient,
-        queryKey,
-        threadId: toSafeId<"chatThread">(threadRef.threadId),
-      });
-    },
-    threadRef,
-  });
-  const choose = (change: Partial<StoredChatModels>) => {
-    const pending = pendingChoiceRef.current;
-    const current = storedNow();
-    const base =
-      pending?.threadId === threadRef.threadId
-        ? pending.choice
-        : {
-            model: current?.model ?? null,
-            reasoningEffort: current?.reasoningEffort ?? null,
-            runTarget: current?.runTarget,
-          };
-    const next = {
-      threadId: threadRef.threadId,
-      choice: { ...base, ...change },
-    };
-    pendingChoiceRef.current = next;
-    const { model, reasoningEffort, runTarget: target } = next.choice;
-    selection.selectModel({
-      model,
-      reasoningEffort,
-      ...(target === undefined ? {} : { runTarget: target }),
-    });
-    detached(
-      (async () => {
-        // Stored or refused, this choice is no longer pending: the selection
-        // reports a refused write, and the next choice composes on what the
-        // server stores.
-        const settled = await selection.awaitPendingSelection();
-        if (pendingChoiceRef.current === next) {
-          pendingChoiceRef.current = null;
-        }
-        return settled;
-      })(),
-      "use-chat-composer-models.settle-choice",
     );
+  });
+  const pick = (change: Partial<ComposerChoice>) => {
+    const current = queryClient.getQueryData(queryKey);
+    if (current === undefined) {
+      return;
+    }
+    owner.pick(choiceOf(current), change);
   };
   return {
     models: {
       activeOrganizationId,
       threadRef,
-      selectedModel: stored?.model ?? null,
-      selectedReasoningEffort: stored?.reasoningEffort ?? null,
-      selectModel: ({ model, reasoningEffort }) =>
-        choose({ model, reasoningEffort }),
-      runTarget: {
-        type: "choice",
-        selected: runTarget,
-        select: (target) => choose({ runTarget: target }),
+      state: stored === undefined ? "loading" : "ready",
+      selectedModel: shown?.model ?? null,
+      selectedReasoningEffort: shown?.reasoningEffort ?? null,
+      selectModel: ({ model, reasoningEffort }) => {
+        pick({ model, reasoningEffort });
       },
+      runTarget:
+        runOn === "choice"
+          ? {
+              type: "choice",
+              selected: runTarget,
+              select: (target) => {
+                pick({ runTarget: target });
+              },
+            }
+          : CHAT_RUN_ON_CLOUD_ONLY,
     },
     runTarget,
     getRunTarget,
-    awaitPendingSelection: selection.awaitPendingSelection,
+    awaitPendingSelection: owner.settled,
   };
 };

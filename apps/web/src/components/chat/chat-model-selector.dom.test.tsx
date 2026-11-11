@@ -110,6 +110,7 @@ const renderSelector = (selected: ChatRunTarget) => {
                 scope: "global",
                 threadId: toChatThreadId("thread-local-run"),
               },
+              state: "ready",
               selectedModel: null,
               selectedReasoningEffort: null,
               selectModel: () => undefined,
