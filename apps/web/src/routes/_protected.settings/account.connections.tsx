@@ -111,7 +111,7 @@ function ConnectionsPage() {
       </div>
       {!isSearching && <AssistantSetup />}
       {showIntegrations && <IntegrationsGroup integrations={integrations} />}
-      {sharepoint.visible && <SharepointGroup access={sharepoint.access} />}
+      {sharepoint.visible && <SharepointGroup state={sharepoint.state} />}
       {showApps && <AppsGroup apps={apps} />}
       {!isSearching && <BrowserExtensionGroup />}
       {showSites && <BrowserSitesGroup sites={sites} />}

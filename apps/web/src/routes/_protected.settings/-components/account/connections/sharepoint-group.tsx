@@ -28,6 +28,7 @@ import {
   ListItemTitle,
 } from "@stll/ui/list";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   SHAREPOINT_ACCESS,
   SHAREPOINT_CONNECTION_STATE,
@@ -35,6 +36,7 @@ import {
   sharepointConnectionState,
 } from "@/features/sharepoint/sharepoint-access.logic";
 import {
+  type SharepointAccessView,
   useSharepointAccess,
   useSharepointConnect,
   useSharepointDisconnect,
@@ -43,45 +45,61 @@ import type { SharepointConnection } from "@/features/sharepoint/sharepoint-quer
 import { matchesConnectionQuery } from "@/lib/account/connections.logic";
 import { formatRelativeTime } from "@/lib/relative-time";
 
-type ShownSharepointAccess = Exclude<
-  SharepointAccess,
-  { type: typeof SHAREPOINT_ACCESS.unavailable }
->;
+type FailedSharepointRead = Extract<SharepointAccessView, { type: "error" }>;
+
+/** What the row shows: the gate's answer, or a read that failed. */
+type SharepointRowState =
+  | Exclude<SharepointAccess, { type: typeof SHAREPOINT_ACCESS.unavailable }>
+  | { type: "failed"; read: FailedSharepointRead };
 
 export type SharepointConnectionRow =
-  { visible: false } | { visible: true; access: ShownSharepointAccess };
+  { visible: false } | { visible: true; state: SharepointRowState };
+
+const rowState = (access: SharepointAccessView): SharepointRowState | null => {
+  switch (access.type) {
+    case "pending":
+    case "empty":
+      return null;
+    case "error":
+      return { type: "failed", read: access };
+    case "items":
+      return access.items.type === SHAREPOINT_ACCESS.unavailable
+        ? null
+        : access.items;
+    default:
+      access satisfies never;
+      return panic("Unknown SharePoint gate view");
+  }
+};
 
 /**
- * The member's SharePoint row, when the deployment offers SharePoint and the
- * row matches the search. Until the gate is known nothing is shown.
+ * The member's SharePoint row, when the deployment offers SharePoint (or the
+ * gate could not be read) and the row matches the search. Nothing is shown
+ * while the gate is loading or when the deployment does not offer it.
  */
 export const useSharepointConnectionRow = (
   query: string,
 ): SharepointConnectionRow => {
   const t = useTranslations();
-  const access = useSharepointAccess();
-  if (access === null || access.type === SHAREPOINT_ACCESS.unavailable) {
+  const state = rowState(useSharepointAccess());
+  if (state === null) {
     return { visible: false };
   }
   const accountLabel =
-    access.type === SHAREPOINT_ACCESS.enabled
-      ? (access.connection?.accountLabel ?? "")
+    state.type === SHAREPOINT_ACCESS.enabled
+      ? (state.connection?.accountLabel ?? "")
       : "";
   return matchesConnectionQuery(query, [
     t("sharepoint.title"),
     t("sharepoint.description"),
     accountLabel,
   ])
-    ? { visible: true, access }
+    ? { visible: true, state }
     : { visible: false };
 };
 
 /** The member's own Microsoft connection for SharePoint and OneDrive. */
-export const SharepointGroup = ({
-  access,
-}: {
-  access: ShownSharepointAccess;
-}) => {
+export const SharepointGroup = ({ state }: { state: SharepointRowState }) => {
   const t = useTranslations();
   return (
     <ListGroup aria-label={t("sharepoint.title")}>
@@ -90,27 +108,45 @@ export const SharepointGroup = ({
           <ListItemMedia>
             <LibraryIcon />
           </ListItemMedia>
-          {access.type === SHAREPOINT_ACCESS.disabled ? (
-            <>
-              <ListItemContent>
-                <ListItemTitle>{t("sharepoint.title")}</ListItemTitle>
-                <ListItemDescription>
-                  {t("sharepoint.askAdmin")}
-                </ListItemDescription>
-              </ListItemContent>
-              <ListItemActions>
-                <ListItemStatus>
-                  {t("settings.connections.turnedOff")}
-                </ListItemStatus>
-              </ListItemActions>
-            </>
-          ) : (
-            <SharepointConnectionContent connection={access.connection} />
-          )}
+          <SharepointRowContent state={state} />
         </ListItem>
       </List>
     </ListGroup>
   );
+};
+
+const SharepointRowContent = ({ state }: { state: SharepointRowState }) => {
+  const t = useTranslations();
+  switch (state.type) {
+    case "failed":
+      return (
+        <ListItemContent>
+          <ListItemTitle>{t("sharepoint.title")}</ListItemTitle>
+          <QueryViewFeedback view={state.read} />
+        </ListItemContent>
+      );
+    case SHAREPOINT_ACCESS.disabled:
+      return (
+        <>
+          <ListItemContent>
+            <ListItemTitle>{t("sharepoint.title")}</ListItemTitle>
+            <ListItemDescription>
+              {t("sharepoint.askAdmin")}
+            </ListItemDescription>
+          </ListItemContent>
+          <ListItemActions>
+            <ListItemStatus>
+              {t("settings.connections.turnedOff")}
+            </ListItemStatus>
+          </ListItemActions>
+        </>
+      );
+    case SHAREPOINT_ACCESS.enabled:
+      return <SharepointConnectionContent connection={state.connection} />;
+    default:
+      state satisfies never;
+      return panic("Unknown SharePoint row state");
+  }
 };
 
 const SharepointConnectionContent = ({

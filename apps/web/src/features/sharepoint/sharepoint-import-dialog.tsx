@@ -52,6 +52,7 @@ import { Loader } from "@stll/ui/loader";
 import { SearchField } from "@stll/ui/search-field";
 import { stellaToast } from "@stll/ui/toast";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -106,6 +107,16 @@ import {
 
 const SITE_SEARCH_DEBOUNCE_MS = 300;
 
+/**
+ * The API imports the files one after another, and each one may wait on
+ * Microsoft for its metadata and its download before it is scanned and
+ * stored. A minute per file covers that, so the request outlives the
+ * client's 30-second default.
+ */
+const SHAREPOINT_IMPORT_TIMEOUT_PER_FILE_MS = 60_000;
+const SHAREPOINT_IMPORT_TIMEOUT_MS =
+  SHAREPOINT_IMPORT_MAX_ITEMS * SHAREPOINT_IMPORT_TIMEOUT_PER_FILE_MS;
+
 type SharepointImportDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -153,10 +164,17 @@ const SharepointImportDialogBody = ({
     if (summary !== null) {
       return <ImportResults onClose={onClose} summary={summary} />;
     }
-    if (access === null) {
+    if (access.type === "error") {
+      return (
+        <PanelMessage>
+          <QueryViewFeedback view={access} />
+        </PanelMessage>
+      );
+    }
+    if (access.type !== "items") {
       return <PanelLoader />;
     }
-    if (access.type !== SHAREPOINT_ACCESS.enabled) {
+    if (access.items.type !== SHAREPOINT_ACCESS.enabled) {
       // The entry point is hidden in this state; an admin turned it off while
       // the dialog was open.
       return (
@@ -165,7 +183,7 @@ const SharepointImportDialogBody = ({
         </PanelMessage>
       );
     }
-    const state = sharepointConnectionState(access.connection);
+    const state = sharepointConnectionState(access.items.connection);
     switch (state) {
       case SHAREPOINT_CONNECTION_STATE.notConnected:
         return (
@@ -318,10 +336,13 @@ const SharepointBrowser = ({
   const importFiles = useMutation({
     mutationFn: async (files: readonly SharepointSelectedFile[]) =>
       unwrapApiResponse(
-        await api.sharepoint.imports({ workspaceId }).post({
-          items: files.map(({ driveId, itemId }) => ({ driveId, itemId })),
-          parentId,
-        }),
+        await api.sharepoint.imports({ workspaceId }).post(
+          {
+            items: files.map(({ driveId, itemId }) => ({ driveId, itemId })),
+            parentId,
+          },
+          { fetch: { timeoutMs: SHAREPOINT_IMPORT_TIMEOUT_MS } },
+        ),
       ),
     onSuccess: async ({ results }, files) => {
       const summary = summarizeSharepointImport(files, results);
@@ -334,6 +355,11 @@ const SharepointBrowser = ({
     },
     onError: async (error) => {
       notifyUserError(error, t("errors.actionFailed"));
+      // A failed or timed-out request may still have stored some files before
+      // it ended, so the matter's documents are read again either way.
+      await queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      });
       // A lost grant shows the connect prompt in place of the picker.
       const refusal = browseRefusal(error).type;
       if (refusal === "not-connected" || refusal === "reconnect-required") {

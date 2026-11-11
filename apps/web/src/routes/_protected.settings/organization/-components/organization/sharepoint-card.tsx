@@ -7,6 +7,7 @@ import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { Switch } from "@stll/ui/switch";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SHAREPOINT_ACCESS } from "@/features/sharepoint/sharepoint-access.logic";
 import { useSharepointAccess } from "@/features/sharepoint/sharepoint-hooks";
 import { sharepointKeys } from "@/features/sharepoint/sharepoint-queries";
@@ -24,12 +25,32 @@ const DISABLE_CONFIRMATION = "SharePoint";
  * Microsoft sign-in.
  */
 export const SharepointCard = () => {
+  const t = useTranslations();
   const access = useSharepointAccess();
-  if (access === null || access.type === SHAREPOINT_ACCESS.unavailable) {
+  if (access.type === "error") {
+    // The admin expects the switch here: say the read failed and offer a
+    // retry instead of letting the section vanish.
+    return (
+      <section className="flex flex-col gap-3">
+        <h2 className="text-base font-semibold">{t("sharepoint.title")}</h2>
+        <Frame>
+          <FramePanel>
+            <QueryViewFeedback view={access} />
+          </FramePanel>
+        </Frame>
+      </section>
+    );
+  }
+  if (
+    access.type !== "items" ||
+    access.items.type === SHAREPOINT_ACCESS.unavailable
+  ) {
     return null;
   }
   return (
-    <SharepointEnablement enabled={access.type === SHAREPOINT_ACCESS.enabled} />
+    <SharepointEnablement
+      enabled={access.items.type === SHAREPOINT_ACCESS.enabled}
+    />
   );
 };
 

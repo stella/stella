@@ -23,7 +23,11 @@ export const SharepointImportMenuItem = ({
   const t = useTranslations();
   const access = useSharepointAccess();
   const canCreate = usePermissions({ entity: ["create"] });
-  if (!canCreate || access?.type !== SHAREPOINT_ACCESS.enabled) {
+  if (
+    !canCreate ||
+    access.type !== "items" ||
+    access.items.type !== SHAREPOINT_ACCESS.enabled
+  ) {
     return null;
   }
   return (

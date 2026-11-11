@@ -11,7 +11,6 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 
-import type { SharepointAccess } from "./sharepoint-access.logic";
 import {
   sharepointAccessOptions,
   sharepointKeys,
@@ -24,17 +23,21 @@ export const useSharepointViewer = (): SharepointViewer => {
 };
 
 /**
- * The SharePoint gate for the signed-in member, or `null` while it is unknown.
- * An unknown gate shows nothing: with the deployment flag off, no SharePoint
- * surface may appear, and a failed read cannot tell the flag's state.
+ * The SharePoint gate for the signed-in member as a query view: pending, a
+ * failed read, or the answer (404 unavailable, 403 disabled, or enabled).
+ * Only an enabled answer offers SharePoint. A surface people expect (the
+ * connections row, the organization switch) shows a failed read with a retry;
+ * every other surface stays hidden until the gate is known.
  */
-export const useSharepointAccess = (): SharepointAccess | null => {
+export const useSharepointAccess = () => {
   const view = queryView(
     useQuery(sharepointAccessOptions(useSharepointViewer())),
   );
   useQueryViewError(view, "useSharepointAccess:query");
-  return view.type === "items" ? view.items : null;
+  return view;
 };
+
+export type SharepointAccessView = ReturnType<typeof useSharepointAccess>;
 
 /**
  * Starts Microsoft consent: the API mints the authorize URL and the browser

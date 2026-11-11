@@ -61,16 +61,25 @@ const ROOT_ITEMS = [
   },
 ];
 
-type Connection = { status: "connected" | "reconnect_required" } | null;
+type Connection =
+  { status: "connected" | "reconnect_required" } | null | "unreadable";
 
 const mount = ({ connection }: { connection: Connection }) => {
   const imports: unknown[] = [];
   const childrenRequests: string[] = [];
+  let connectionReads = 0;
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = new Request(input, init);
       const { pathname } = new URL(request.url);
       if (pathname.endsWith("/sharepoint/connection")) {
+        connectionReads += 1;
+        if (connection === "unreadable") {
+          return Response.json(
+            { code: "internal_server_error", message: "Database unavailable" },
+            { status: 500 },
+          );
+        }
         return Response.json({
           connection:
             connection === null
@@ -162,7 +171,7 @@ const mount = ({ connection }: { connection: Connection }) => {
       </IntlProvider>
     </QueryClientProvider>,
   );
-  return { imports, childrenRequests };
+  return { imports, childrenRequests, connectionReads: () => connectionReads };
 };
 
 const picker = messages.sharepoint.picker;
@@ -248,4 +257,18 @@ test("an expired Microsoft sign-in offers reconnect", async () => {
   expect(
     screen.getByRole("button", { name: messages.common.reconnect }),
   ).toBeDefined();
+});
+
+test("a connection status that cannot be read says so and offers a retry", async () => {
+  const server = mount({ connection: "unreadable" });
+
+  const retry = await screen.findByRole("button", {
+    name: messages.common.retry,
+  });
+  expect(screen.getByText(messages.common.somethingWentWrong)).toBeDefined();
+  expect(screen.queryByText(picker.notConnected)).toBeNull();
+  expect(screen.queryByRole("button", { name: picker.myOneDrive })).toBeNull();
+
+  fireEvent.click(retry);
+  await waitFor(() => expect(server.connectionReads()).toBe(2));
 });
