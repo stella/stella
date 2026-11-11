@@ -459,6 +459,30 @@ test("a grade overtaken by a newer re-check is not recorded over it", async () =
   expect(events.at(-1)?.payload).toMatchObject({ requestKey: "newer" });
 });
 
+test("a grade whose access was withdrawn while grading records nothing", async () => {
+  const count = (await recheckEvents(gapClaim)).length;
+  const withdrawn = asTestRaw<typeof generateTanStackObjectForTask>(
+    async (request: unknown) => {
+      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+        [LEGAL_LISTS_FEATURE_ID]: grants[LEGAL_LISTS_FEATURE_ID],
+      } satisfies FeatureAccessGrants);
+      return await fakeGrader().generate(asTestRaw(request));
+    },
+  );
+  try {
+    expect(
+      await recheck({
+        claimId: gapClaim,
+        requestKey: "withdrawn",
+        generateObjectForTask: withdrawn,
+      }),
+    ).toEqual({ type: "access-revoked" });
+  } finally {
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", grants);
+  }
+  expect(await recheckEvents(gapClaim)).toHaveLength(count);
+});
+
 test("an organization at its daily limit is refused before any model call", async () => {
   await testDb
     .update(legalListVerificationBudgets)

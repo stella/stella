@@ -5,13 +5,19 @@
  * that fails leaves the fact and the link in place, so it can be asked again.
  */
 
-import * as React from "react";
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
+import type {
+  AddedFact,
+  AddFactInput,
+} from "@/features/avt/add-fact-progress-store";
+import {
+  addFactProgressKey,
+  useAddFactProgress,
+} from "@/features/avt/add-fact-progress-store";
 import { avtKeys } from "@/features/avt/queries";
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
@@ -27,23 +33,6 @@ type GapScope = {
   runId: string;
   listId: string;
   claimId: string;
-};
-
-/** Where a new fact comes from: a document, a page of it, and the words.
- *  The document's live version is read when the source is written. */
-type FactSourceInput = {
-  documentId: string;
-  pageNumber: number | null;
-  quote: string | null;
-};
-
-export type AddFactInput = { statement: string; source: FactSourceInput };
-
-/** How far adding a fact got: added to the list, sourced, linked. */
-type AddedFact = {
-  input: AddFactInput;
-  entityId: string;
-  step: "added" | "sourced" | "linked";
 };
 
 type LinkInput = { factEntityId: string; change: "link" | "unlink" };
@@ -132,26 +121,32 @@ export const useClaimGapActions = ({
     mutationKey: ["avt", workspaceId, "claim-link", runId, claimId],
     mutationFn: async (input: LinkInput) => {
       await changeLink(input);
-      // A link changes no verdict until the claim is checked again.
-      if (input.change === "link") {
-        await recheckClaim();
-      }
+      // A link or unlink changes no verdict until the claim is checked
+      // again, so every change is followed by a re-check.
+      await recheckClaim();
     },
     onSettled: refresh,
     onError: (error) => notifyUserError(error, t("avt.gap.linkFailed")),
   });
 
-  // The steps a failed attempt already took, so trying again neither adds
-  // the fact twice nor sources it twice.
-  const added = React.useRef<AddedFact | null>(null);
-  // What a started addition wrote, which the sheet holds fixed until it
-  // finishes: trying again completes that fact, never a changed one.
-  const [resume, setResume] = React.useState<AddFactInput | null>(null);
+  // The steps a failed attempt already took, kept outside this panel, so
+  // trying again (now or after visiting another claim) neither adds the
+  // fact twice nor sources it twice. What it wrote is held fixed in the
+  // sheet until it finishes: a retry completes that fact, never a changed
+  // one.
+  const progressKey = addFactProgressKey({ workspaceId, runId, claimId });
+  const resume = useAddFactProgress(
+    (state) => state.progress[progressKey]?.input ?? null,
+  );
+  const record = (added: AddedFact | null) => {
+    useAddFactProgress.getState().record(progressKey, added);
+  };
 
   const addFact = useMutation({
     mutationKey: ["avt", workspaceId, "claim-add-fact", runId, claimId],
     mutationFn: async (submitted: AddFactInput) => {
-      const previous = added.current;
+      const previous: AddedFact | undefined =
+        useAddFactProgress.getState().progress[progressKey];
       const { statement, source } = previous?.input ?? submitted;
       // The task endpoint takes no idempotency key; the capability header
       // declares the write.
@@ -173,13 +168,13 @@ export const useClaimGapActions = ({
             ),
           )
         ).entityId;
-      added.current = {
+      let added: AddedFact = {
         input: { statement, source },
         entityId,
         step: previous?.step ?? "added",
       };
-      setResume(added.current.input);
-      if (added.current.step === "added") {
+      record(added);
+      if (added.step === "added") {
         // The live version at submission rather than a stale pick, read
         // inside the attempt so the sheet stays busy until it is written.
         const document = await queryClient.query({
@@ -212,15 +207,16 @@ export const useClaimGapActions = ({
               ),
           }),
         );
-        added.current = { ...added.current, step: "sourced" };
+        added = { ...added, step: "sourced" };
+        record(added);
       }
-      if (added.current.step === "sourced") {
+      if (added.step === "sourced") {
         await changeLink({ factEntityId: entityId, change: "link" });
-        added.current = { ...added.current, step: "linked" };
+        added = { ...added, step: "linked" };
+        record(added);
       }
       await recheckClaim();
-      added.current = null;
-      setResume(null);
+      record(null);
     },
     onSettled: refresh,
     onError: (error) => notifyUserError(error, t("avt.gap.addFactFailed")),

@@ -1847,15 +1847,39 @@ test("an addition that failed midway finishes as first submitted, its fields hel
   });
   fireEvent.click(save);
   await waitFor(() => expect(sourceWrites).toBe(1));
-  // The fact exists; what it was submitted with is held for the retry.
   await waitFor(() =>
     expect(within(sheet).getByLabelText(messages.common.fact)).toHaveProperty(
       "disabled",
       true,
     ),
   );
-  expect(picker).toHaveProperty("disabled", true);
-  fireEvent.click(save);
+  // Leaving for another claim and coming back keeps the started fact.
+  fireEvent.click(
+    within(sheet).getByRole("button", { name: messages.common.cancel }),
+  );
+  selectClaim(2);
+  selectClaim(4);
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.avt.gap.addFact }),
+  );
+  const reopened = await screen.findByRole("dialog", {
+    name: messages.avt.gap.sheet.title,
+  });
+  // What it was submitted with is held for the retry.
+  const statement = within(reopened).getByLabelText(messages.common.fact);
+  expect(statement).toHaveProperty("disabled", true);
+  expect(statement).toHaveProperty(
+    "value",
+    seeded.claims.at(3)?.text ?? panic("Missing seeded claim"),
+  );
+  expect(
+    within(reopened).getByRole("combobox", { name: messages.common.document }),
+  ).toHaveProperty("disabled", true);
+  fireEvent.click(
+    within(reopened).getByRole("button", {
+      name: messages.avt.gap.sheet.submit,
+    }),
+  );
   await waitFor(() =>
     expect(seen.map(({ method, path }) => `${method} ${path}`)).toEqual([
       `PUT /v1/tasks/${workspaceId}`,

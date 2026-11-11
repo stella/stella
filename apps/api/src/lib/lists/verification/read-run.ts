@@ -269,9 +269,9 @@ const factsWithRechecks = (
   return { listId: evidence.listId, facts: [...facts.values()] };
 };
 
-/** What deciding which claims need attention reads of a run: the facts whose
- *  meaning is contested, and how every fact its claims can rest on stands
- *  now. `null` when the workspace holds no such run. */
+/** What deciding which claims need attention reads of a run: the facts it
+ *  pinned (and which of them are contested), and how every fact its claims
+ *  can rest on stands now. `null` when the workspace holds no such run. */
 export const readRunAttentionInputs = async (args: ReadVerificationRunArgs) => {
   const pinned = await readRunEvidenceForGrading(args);
   if (pinned === null) {
@@ -286,7 +286,8 @@ export const readRunAttentionInputs = async (args: ReadVerificationRunArgs) => {
     }),
   );
   return {
-    contested: contestedFactIds(evidence),
+    pinned,
+    contested: contestedFactIds(pinned),
     standings: await readFactStandings({
       tx: args.tx,
       workspaceId: args.workspaceId,
@@ -294,6 +295,25 @@ export const readRunAttentionInputs = async (args: ReadVerificationRunArgs) => {
     }),
   };
 };
+
+/**
+ * The contested facts as a claim's own grade read them: a re-checked
+ * claim by the facts its latest re-check read, every other one by the
+ * run's pinned facts. The browser's triage reads them the same way.
+ */
+export const contestedFactIdsOfClaim = (
+  inputs: Pick<
+    NonNullable<Awaited<ReturnType<typeof readRunAttentionInputs>>>,
+    "pinned" | "contested"
+  >,
+  review: ClaimReview,
+): ReadonlySet<SafeId<"entity">> =>
+  review.recheck === null
+    ? inputs.contested
+    : contestedFactIds({
+        listId: inputs.pinned.listId,
+        facts: applyFactChanges(inputs.pinned.facts, review.recheck.facts),
+      });
 
 type PresentRecheckArgs = {
   claim: QualifiedClaimRow;

@@ -13,6 +13,7 @@ import { useTranslations } from "use-intl";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
+import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
 import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
@@ -48,6 +49,7 @@ import { Textarea } from "@stll/ui/textarea";
 
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { MatterDocumentPicker } from "@/components/workspaces/matter-document-picker";
+import type { AddFactInput } from "@/features/avt/add-fact-progress-store";
 import { isRecordSilent } from "@/features/avt/claim-qualifiers";
 import { EMPTY_CLAIM_REVIEW } from "@/features/avt/claim-review.logic";
 import { STATE_COLOR } from "@/features/avt/state-chip";
@@ -58,7 +60,6 @@ import type {
   VerificationClaim,
 } from "@/features/avt/types";
 import { STATE_META } from "@/features/avt/types";
-import type { AddFactInput } from "@/features/avt/use-claim-gap-actions";
 import { useClaimGapActions } from "@/features/avt/use-claim-gap-actions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -405,7 +406,9 @@ type AddFactFormProps = {
   onSubmit: (input: AddFactInput) => Promise<void>;
 };
 
-type FormErrors = Partial<Record<"statement" | "document" | "page", string>>;
+type FormErrors = Partial<
+  Record<"statement" | "document" | "page" | "passage", string>
+>;
 
 const AddFactForm = ({
   workspaceId,
@@ -462,6 +465,11 @@ const AddFactForm = ({
         pageNumber === undefined && {
           page: t("lists.sources.invalidPage"),
         }),
+      ...(quote.trim().length > LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH && {
+        passage: t("lists.sources.quoteTooLong", {
+          limit: format.number(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH),
+        }),
+      }),
     };
   };
 
@@ -536,7 +544,7 @@ const AddFactForm = ({
               </FieldError>
             </Field>
           )}
-          <Field name="passage">
+          <Field invalid={errors.passage !== undefined} name="passage">
             <FieldLabel>{t("avt.gap.sheet.passage")}</FieldLabel>
             <Textarea
               disabled={fixed}
@@ -544,6 +552,9 @@ const AddFactForm = ({
               placeholder={t("avt.gap.sheet.passageHint")}
               value={quote}
             />
+            <FieldError match={errors.passage !== undefined} role="alert">
+              {errors.passage}
+            </FieldError>
           </Field>
         </div>
       </SheetPanel>
@@ -672,7 +683,13 @@ export const LinkedFacts = ({
       {linkedIds.length > 0 && read.isSuccess && (
         <ul className="divide-y rounded-md border">
           {linkedIds.map((factId) => {
-            const name = names.get(factId) ?? t("avt.gap.factOffList");
+            // A fact on a page not read yet is still on the list; only a
+            // complete read can say it is gone.
+            const name =
+              names.get(factId) ??
+              (read.hasNextPage
+                ? t("common.loading")
+                : t("avt.gap.factOffList"));
             return (
               <li className="flex items-start gap-2 p-2 ps-3" key={factId}>
                 <span
@@ -700,6 +717,23 @@ export const LinkedFacts = ({
           })}
         </ul>
       )}
+      {read.isSuccess &&
+        read.hasNextPage &&
+        linkedIds.some((factId) => !names.has(factId)) && (
+          <Button
+            className="w-full"
+            disabled={read.isFetchingNextPage}
+            onClick={() =>
+              detached(read.fetchNextPage(), "avt.linked-facts-next-page")
+            }
+            size="sm"
+            variant="ghost"
+          >
+            {read.isFetchingNextPage
+              ? t("common.loading")
+              : t("common.loadMore")}
+          </Button>
+        )}
     </section>
   );
 };

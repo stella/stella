@@ -334,6 +334,17 @@ const recordRecheck = async ({
     if (admitted.eventCount !== input.eventCount) {
       return { type: "superseded" };
     }
+    // Access is read again with the write: a grant withdrawn while the
+    // claim was graded records nothing and withdraws no decision.
+    const access = await resolveListVerificationAccess({
+      tx,
+      organizationId: args.organizationId,
+      workspaceId: args.workspaceId,
+      userId: args.userId,
+    });
+    if (access.status === "unavailable") {
+      return { type: "access-revoked" };
+    }
     const payload = {
       kind: "recheck",
       requestKey: args.requestKey,

@@ -39,8 +39,8 @@ const bodySchema = v.object({
     v.maxLength(VERIFICATION_LIMITS.REQUEST_KEY_MAX),
     v.description(
       "A key you choose for this re-check. Sending the same key again " +
-        "returns the claim as the first request left it, without grading " +
-        "it twice.",
+        "grades nothing twice: it returns replayed true and the claim as it " +
+        "reads now, which later review actions may have changed.",
     ),
   ),
 });

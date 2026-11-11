@@ -139,13 +139,9 @@ export const VerificationView = ({
   // and the detail panel agree about what each claim currently is.
   const claims = run.claims.map(resolveClaimView);
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
-  // A re-check can rest a claim on a fact the run never pinned.
-  const contested = contestedFactIds([
-    ...run.evidence.facts,
-    ...run.claims.flatMap((claim) =>
-      claim.recheck === null ? [] : claim.recheck.facts,
-    ),
-  ]);
+  // The run's pinned reading; a re-checked claim reads its own re-check's
+  // facts instead (`isContested`).
+  const contested = contestedFactIds(run.evidence.facts);
   const presentation = selectClaimPresentation(run.blocks, claims);
   const readingOrder = presentation.readingOrder;
   const counts = countClaims(run.claims, contested);
@@ -677,7 +673,12 @@ const claimMatchesFilter = (
     case "needsreview": {
       return (
         needsAttention(
-          { state, refs: claim.refs, qualifiers: claim.qualifiers },
+          {
+            state,
+            refs: claim.refs,
+            qualifiers: claim.qualifiers,
+            recheck: claim.recheck,
+          },
           contested,
         ) && !isSettled(claim.review)
       );

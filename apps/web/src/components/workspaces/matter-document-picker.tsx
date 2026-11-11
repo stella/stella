@@ -194,7 +194,7 @@ const SingleDocumentPicker = ({
   return (
     <div className="flex w-full flex-col gap-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <Combobox<DocumentOption>
+      <Combobox
         autoHighlight
         disabled={disabled}
         filter={matchesComboboxItem}

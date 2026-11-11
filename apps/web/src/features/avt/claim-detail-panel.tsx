@@ -154,7 +154,12 @@ export const ClaimDetailPanel = ({
   const contestedClaim = isContested(claim, contested);
   const settled = isSettled(review);
   const guidance = dispositionGuidance(
-    { state, refs: claim.refs, qualifiers: claim.qualifiers },
+    {
+      state,
+      refs: claim.refs,
+      qualifiers: claim.qualifiers,
+      recheck: claim.recheck,
+    },
     contested,
   );
   // Escalating a record conflict hands it to the evidence team: there is no
@@ -223,7 +228,7 @@ export const ClaimDetailPanel = ({
           supportCount={supports.length}
         />
         {claim.recheck !== null && (
-          <RecheckSummary recheck={claim.recheck} state={state} />
+          <RecheckSummary recheck={claim.recheck} state={claim.verdict.state} />
         )}
       </div>
 

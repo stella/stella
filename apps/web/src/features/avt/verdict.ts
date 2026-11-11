@@ -43,6 +43,7 @@ type TriageTarget = {
   state: ClaimState;
   refs: VerificationClaim["refs"];
   qualifiers: VerificationClaim["qualifiers"];
+  recheck: VerificationClaim["recheck"];
 };
 
 /** The server decides the review each qualifier asks for; a qualifier that
@@ -52,11 +53,20 @@ const judgementQualifier = ({ qualifiers }: Pick<TriageTarget, "qualifiers">) =>
   // footing last, so the last one is the one the reviewer must settle first.
   qualifiers.findLast((qualifier) => qualifier.review === "needs-judgement");
 
-/** True when any fact this claim cites carries an interpretation caveat. */
+/**
+ * True when any fact this claim cites carries an interpretation caveat, as
+ * the claim's own grade read it: a re-checked claim by the facts its
+ * re-check read, every other one by the run's pinned facts. The server
+ * holds bulk acceptance to the same reading.
+ */
 export const isContested = (
-  { refs }: Pick<TriageTarget, "refs">,
+  { refs, recheck }: Pick<TriageTarget, "refs" | "recheck">,
   contested: ReadonlySet<FactId>,
-): boolean => refs.some((ref) => contested.has(ref.factEntityId));
+): boolean => {
+  const flagged =
+    recheck === null ? contested : contestedFactIds(recheck.facts);
+  return refs.some((ref) => flagged.has(ref.factEntityId));
+};
 
 /**
  * A claim NEEDS ATTENTION if its verdict is a conflict (contradicted, in
@@ -346,7 +356,12 @@ export const countClaims = (
     const settled = isSettled(claim.review);
     if (
       needsAttention(
-        { state, refs: claim.refs, qualifiers: claim.qualifiers },
+        {
+          state,
+          refs: claim.refs,
+          qualifiers: claim.qualifiers,
+          recheck: claim.recheck,
+        },
         contested,
       )
     ) {
@@ -386,6 +401,7 @@ export const routineUnsettledClaimIds = (
             state: effectiveState(claim, claim.review),
             refs: claim.refs,
             qualifiers: claim.qualifiers,
+            recheck: claim.recheck,
           },
           contested,
         ) && (claim.review?.status ?? null) === null,
