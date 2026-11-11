@@ -1878,26 +1878,24 @@ async fn redeem_browser_connection(
     correlation_id,
   } = pending;
   let state = app.state::<AccountState>();
-  let current_request = foreground_account(&state).await?;
-  let plan = plan_redemption(
-    &key,
-    current_request.as_deref(),
-    &api_base_url,
-    &expected_identity,
-  )?;
-  // Only a connection presents the current credential and keeps its request
-  // lease. A switch releases the lease now: ending the current link takes it
-  // again after the member answers.
-  let saved = match plan {
-    Redemption::Connect => current_request,
+  let saved = foreground_account(&state).await?;
+  let plan =
+    plan_redemption(&key, saved.as_deref(), &api_base_url, &expected_identity)?;
+  if matches!(plan, Redemption::AlreadyLinked) {
+    drop(saved);
+    return Ok(());
+  }
+  // Only a connection presents the current credential. A switch redeems with
+  // its own key, and `saved` is dropped before the member is asked, so ending
+  // the current link can take the request lease again.
+  let bearer = match plan {
+    Redemption::Connect => saved
+      .as_ref()
+      .map(|account| account.credential.key.as_str()),
     Redemption::AlreadyLinked | Redemption::Fresh(_) | Redemption::Replace { .. } => {
-      drop(current_request);
       None
     }
   };
-  if matches!(plan, Redemption::AlreadyLinked) {
-    return Ok(());
-  }
   let device_key = key.device_key();
   let client =
     crate::http_client::DesktopHttpClient::new(crate::http_client::HttpClientOptions {
@@ -1917,9 +1915,7 @@ async fn redeem_browser_connection(
       expected_organization_id: &expected_identity.organization_id,
       device_jkt: &device_jkt,
     },
-    bearer: saved
-      .as_ref()
-      .map(|account| account.credential.key.as_str()),
+    bearer,
   })?;
   let response = redeem_request
     .send()
@@ -1949,9 +1945,7 @@ async fn redeem_browser_connection(
         || current.identity.user_id != identity.user_id
         || current.identity.organization_id != identity.organization_id
         || current.api_base_url != api_base_url
-        || saved
-          .as_ref()
-          .is_none_or(|saved| saved.credential.key != current.credential.key)
+        || bearer.is_none_or(|bearer| bearer != current.credential.key)
       {
         return Err("Desktop connection does not match".into());
       }
