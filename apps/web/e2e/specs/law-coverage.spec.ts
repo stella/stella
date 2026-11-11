@@ -11,6 +11,8 @@ import {
 import path from "node:path";
 import type * as v from "valibot";
 
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+
 import type { envWebClientSchema } from "../../src/env-schema";
 import { expect, test } from "../helpers/test";
 
@@ -189,7 +191,10 @@ for (const locale of ["en", "ar"]) {
         waitUntil: "domcontentloaded",
       });
       const navigation = page.getByRole("navigation");
-      await expect(navigation.locator("a")).toHaveCount(8);
+      // The fixture lists every declared jurisdiction, so each gets an anchor.
+      await expect(navigation.locator("a")).toHaveCount(
+        CASE_LAW_JURISDICTIONS.length,
+      );
       const country = page.locator("#country-cze");
       const heading = country.getByRole("heading", { level: 2 });
       const expectHeadingBelowNavigation = async () => {
